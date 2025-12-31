@@ -13,6 +13,7 @@ import {
   List,
   Alert,
   Popconfirm,
+  Popover,
   message
 } from "antd";
 import {
@@ -24,7 +25,8 @@ import {
   DeleteOutlined,
   ClockCircleOutlined,
   CheckCircleOutlined,
-  ExclamationCircleOutlined
+  ExclamationCircleOutlined,
+  SyncOutlined
 } from "@ant-design/icons";
 import { processingService, ProcessingJob } from '../services/processingService';
 
@@ -46,21 +48,33 @@ export const ProcessingJobs: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [selectedJob, setSelectedJob] = useState<ProcessingJob | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [reprocessingJobs, setReprocessingJobs] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    loadJobs();
+    loadJobs(true); // Show loading on initial load
+
+    // Auto-refresh every 5 seconds (without loading spinner)
+    const interval = setInterval(() => {
+      loadJobs(false);
+    }, 5000);
+
+    return () => clearInterval(interval);
   }, []);
 
-  const loadJobs = async () => {
+  const loadJobs = async (showLoading = false) => {
     try {
-      setLoading(true);
+      if (showLoading) {
+        setLoading(true);
+      }
       const jobsData = await processingService.getProcessingJobs();
       setJobs(jobsData);
     } catch (error) {
       console.error('Error loading jobs:', error);
       message.error('Failed to load processing jobs');
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
     }
   };
 
@@ -89,8 +103,40 @@ export const ProcessingJobs: React.FC = () => {
     }
   };
 
+  const handleReprocessJob = async (jobId: string) => {
+    try {
+      console.log(`Starting reprocessing for job ${jobId}`);
+
+      // Mark this job as being reprocessed
+      setReprocessingJobs(prev => new Set(prev).add(jobId));
+
+      const result = await processingService.reprocessJob(jobId);
+      console.log('Reprocessing job created:', result);
+
+      message.success(`Reprocessing started! Watch for the new "Reprocessing" job in the list.`);
+
+      // Reload jobs to show the new reprocessing job
+      await loadJobs();
+
+      // Remove from reprocessing set
+      setReprocessingJobs(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(jobId);
+        return newSet;
+      });
+    } catch (error) {
+      console.error('Failed to start reprocessing:', error);
+      message.error(`Failed to start reprocessing: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setReprocessingJobs(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(jobId);
+        return newSet;
+      });
+    }
+  };
+
   const refreshJobs = () => {
-    loadJobs();
+    loadJobs(true); // Show loading when manually refreshing
     message.info('Refreshing job status...');
   };
 
@@ -115,11 +161,42 @@ export const ProcessingJobs: React.FC = () => {
       title: 'Status',
       dataIndex: 'status',
       key: 'status',
-      render: (status: string) => (
-        <Tag color={processingService.getStatusColor(status)} icon={getStatusIcon(status)}>
-          {status.toUpperCase()}
-        </Tag>
-      ),
+      render: (status: string, record: ProcessingJob) => {
+        const tag = (
+          <Tag color={processingService.getStatusColor(status)} icon={getStatusIcon(status)}>
+            {status.toUpperCase()}
+          </Tag>
+        );
+
+        // Show error details in popover for failed jobs
+        if (status === 'failed' && record.error_log && Array.isArray(record.error_log) && record.error_log.length > 0) {
+          const errors = record.error_log as string[];
+          const errorContent = (
+            <div style={{ maxWidth: 400 }}>
+              <Text strong>Error Details:</Text>
+              <div style={{ marginTop: 8, maxHeight: 300, overflowY: 'auto' }}>
+                {errors.map((error: string, index: number) => (
+                  <Alert
+                    key={index}
+                    description={error}
+                    type="error"
+                    showIcon
+                    style={{ marginBottom: index < errors.length - 1 ? 8 : 0 }}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+
+          return (
+            <Popover content={errorContent} title="Job Failed" trigger="hover">
+              <span style={{ cursor: 'pointer' }}>{tag}</span>
+            </Popover>
+          );
+        }
+
+        return tag;
+      },
     },
     {
       title: 'Progress',
@@ -227,6 +304,18 @@ export const ProcessingJobs: React.FC = () => {
             </Tooltip>
           )}
           
+          {record.status === 'completed' && record.job_type.toLowerCase().includes('extraction') && (
+            <Tooltip title={reprocessingJobs.has(record.id) ? "Starting reprocessing..." : "Reprocess with Categorization"}>
+              <Button
+                type="text"
+                icon={<SyncOutlined spin={reprocessingJobs.has(record.id)} />}
+                onClick={() => handleReprocessJob(record.id)}
+                disabled={reprocessingJobs.has(record.id)}
+                loading={reprocessingJobs.has(record.id)}
+              />
+            </Tooltip>
+          )}
+
           {(record.status === 'completed' || record.status === 'failed') && (
             <Popconfirm
               title="Are you sure you want to delete this job?"

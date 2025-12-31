@@ -15,6 +15,12 @@ export interface Email {
   mailbox_id: string;
   body_text?: string;
   body_html?: string;
+  // New tagging fields
+  tags?: string[];
+  is_spam?: boolean;
+  is_marketing?: boolean;
+  priority_score?: number;
+  sender_type?: string;
 }
 
 export interface EmailFilters {
@@ -23,12 +29,41 @@ export interface EmailFilters {
   mailbox?: string;
   dateRange?: [string, string] | null;
   isOutbound?: string;
+  // New tag-based filters
+  tags?: string[];
+  isSpam?: boolean;
+  isMarketing?: boolean;
+  minPriority?: number;
+  maxPriority?: number;
 }
 
 export const emailService = {
   // Get emails with filters and pagination
   async getEmails(filters: EmailFilters = {}, page = 1, pageSize = 20): Promise<{ emails: Email[]; totalCount: number }> {
     try {
+      // For category filter, we need to use a subquery approach
+      // Get email IDs that match the category filter first
+      let emailIds: string[] | null = null;
+      if (filters.category) {
+        const { data: categoryData, error: categoryError } = await supabaseClient
+          .from('email_categories')
+          .select('email_id')
+          .eq('category', filters.category);
+
+        if (categoryError) {
+          console.error('Error fetching category filter:', categoryError);
+          throw categoryError;
+        }
+
+        emailIds = categoryData?.map(item => item.email_id) || [];
+        console.log(`Category filter "${filters.category}": ${emailIds.length} emails`);
+
+        if (emailIds.length === 0) {
+          // No emails match this category
+          return { emails: [], totalCount: 0 };
+        }
+      }
+
       // Build the query to join emails with mailboxes and categories
       let query = supabaseClient
         .from('emails')
@@ -46,16 +81,17 @@ export const emailService = {
           body_html,
           mailbox_id,
           mailboxes!inner(name),
-          email_categories(category)
+          email_categories(category, tag_type)
         `, { count: 'exact' });
 
-      // Apply filters
-      if (filters.search) {
-        query = query.or(`subject.ilike.%${filters.search}%,sender_email.ilike.%${filters.search}%,sender_name.ilike.%${filters.search}%`);
+      // Apply category filter via email IDs
+      if (emailIds !== null) {
+        query = query.in('id', emailIds);
       }
 
-      if (filters.category) {
-        query = query.eq('email_categories.category', filters.category);
+      // Apply other filters
+      if (filters.search) {
+        query = query.or(`subject.ilike.%${filters.search}%,sender_email.ilike.%${filters.search}%,sender_name.ilike.%${filters.search}%`);
       }
 
       if (filters.mailbox) {
@@ -72,13 +108,13 @@ export const emailService = {
         query = query.gte('sent_date', filters.dateRange[0]).lte('sent_date', filters.dateRange[1]);
       }
 
+      // Order by sent date descending
+      query = query.order('sent_date', { ascending: false });
+
       // Add pagination
       const from = (page - 1) * pageSize;
       const to = from + pageSize - 1;
       query = query.range(from, to);
-
-      // Order by sent date descending
-      query = query.order('sent_date', { ascending: false });
 
       const { data, error, count } = await query;
 
@@ -88,22 +124,47 @@ export const emailService = {
       }
 
       // Transform the data to match expected format
-      const emails: Email[] = (data || []).map(item => ({
-        id: item.id,
-        subject: item.subject,
-        sender_email: item.sender_email,
-        sender_name: item.sender_name,
-        sent_date: item.sent_date,
-        category: item.email_categories?.[0]?.category || 'unassigned',
-        is_outbound: item.is_outbound,
-        is_reply: item.is_reply,
-        folder_path: item.folder_path,
-        message_size: item.message_size,
-        body_text: item.body_text,
-        body_html: item.body_html,
-        mailbox_id: item.mailbox_id,
-        mailbox_name: (item as any).mailboxes?.name || 'Unknown'
-      }));
+      const emails: Email[] = (data || []).map(item => {
+        // Extract tags and metadata from email_categories
+        const categories = item.email_categories || [];
+        const tags = categories
+          .filter((cat: any) => !cat.category.startsWith('_meta_'))
+          .map((cat: any) => cat.category);
+
+        // Extract metadata
+        const isSpam = categories.some((cat: any) => cat.category === '_meta_spam');
+        const isMarketing = categories.some((cat: any) => cat.category === '_meta_marketing');
+
+        // Extract priority score
+        const priorityTag = categories.find((cat: any) => cat.category.startsWith('_meta_priority_'));
+        const priorityScore = priorityTag ? parseInt(priorityTag.category.replace('_meta_priority_', '')) : 5;
+
+        // Extract sender type
+        const senderTag = categories.find((cat: any) => cat.category.startsWith('_meta_sender_'));
+        const senderType = senderTag ? senderTag.category.replace('_meta_sender_', '') : 'unknown';
+
+        return {
+          id: item.id,
+          subject: item.subject,
+          sender_email: item.sender_email,
+          sender_name: item.sender_name,
+          sent_date: item.sent_date,
+          category: categories[0]?.category || 'unassigned',
+          is_outbound: item.is_outbound,
+          is_reply: item.is_reply,
+          folder_path: item.folder_path,
+          message_size: item.message_size,
+          body_text: item.body_text,
+          body_html: item.body_html,
+          mailbox_id: item.mailbox_id,
+          mailbox_name: (item as any).mailboxes?.name || 'Unknown',
+          tags,
+          is_spam: isSpam,
+          is_marketing: isMarketing,
+          priority_score: priorityScore,
+          sender_type: senderType
+        };
+      });
 
       return {
         emails,
@@ -135,7 +196,7 @@ export const emailService = {
           body_html,
           mailbox_id,
           mailboxes!inner(name),
-          email_categories(category)
+          email_categories(category, tag_type)
         `)
         .eq('id', id)
         .single();
@@ -147,13 +208,31 @@ export const emailService = {
 
       if (!data) return null;
 
+      // Extract tags and metadata from email_categories
+      const categories = data.email_categories || [];
+      const tags = categories
+        .filter((cat: any) => !cat.category.startsWith('_meta_'))
+        .map((cat: any) => cat.category);
+
+      // Extract metadata
+      const isSpam = categories.some((cat: any) => cat.category === '_meta_spam');
+      const isMarketing = categories.some((cat: any) => cat.category === '_meta_marketing');
+
+      // Extract priority score
+      const priorityTag = categories.find((cat: any) => cat.category.startsWith('_meta_priority_'));
+      const priorityScore = priorityTag ? parseInt(priorityTag.category.replace('_meta_priority_', '')) : 5;
+
+      // Extract sender type
+      const senderTag = categories.find((cat: any) => cat.category.startsWith('_meta_sender_'));
+      const senderType = senderTag ? senderTag.category.replace('_meta_sender_', '') : 'unknown';
+
       return {
         id: data.id,
         subject: data.subject,
         sender_email: data.sender_email,
         sender_name: data.sender_name,
         sent_date: data.sent_date,
-        category: data.email_categories?.[0]?.category || 'unassigned',
+        category: categories[0]?.category || 'unassigned',
         is_outbound: data.is_outbound,
         is_reply: data.is_reply,
         folder_path: data.folder_path,
@@ -161,7 +240,12 @@ export const emailService = {
         body_text: data.body_text,
         body_html: data.body_html,
         mailbox_id: data.mailbox_id,
-        mailbox_name: (data as any).mailboxes?.name || 'Unknown'
+        mailbox_name: (data as any).mailboxes?.name || 'Unknown',
+        tags,
+        is_spam: isSpam,
+        is_marketing: isMarketing,
+        priority_score: priorityScore,
+        sender_type: senderType
       };
     } catch (error) {
       console.error('Error fetching email:', error);
@@ -169,26 +253,35 @@ export const emailService = {
     }
   },
 
-  // Get email categories for filter dropdown
+  // Get email categories for filter dropdown (exclude metadata tags)
   async getEmailCategories(): Promise<string[]> {
     try {
+      // Fetch all categories without server-side filtering
       const { data, error } = await supabaseClient
         .from('email_categories')
-        .select('category')
-        .not('category', 'is', null);
+        .select('category');
 
       if (error) {
         console.error('Error fetching email categories:', error);
-        return ['unassigned', 'system', 'spam', 'marketing', 'transactional', 'conversation'];
+        return ['spam', 'marketing', 'inbox', 'sent', 'trash'];
       }
 
-      // Get unique categories
-      const categorySet = new Set(data?.map(item => item.category).filter(Boolean));
-      const categories = Array.from(categorySet);
-      return categories.sort();
+      console.log('Raw data from Supabase:', data?.length, 'rows'); // Debug
+
+      // Get unique categories (tags), filter out nulls and metadata client-side
+      const categorySet = new Set(
+        data?.map(item => item.category)
+          .filter(Boolean)
+          .filter(cat => !cat.startsWith('_meta_'))
+      );
+      const categories = Array.from(categorySet).sort();
+
+      console.log('Loaded categories:', categories); // Debug log
+
+      return categories;
     } catch (error) {
       console.error('Error fetching email categories:', error);
-      return ['unassigned', 'system', 'spam', 'marketing', 'transactional', 'conversation'];
+      return ['spam', 'marketing', 'inbox', 'sent', 'trash'];
     }
   },
 

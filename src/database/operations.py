@@ -1,4 +1,4 @@
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, Iterator, Union
 from datetime import datetime
 import logging
 from uuid import uuid4
@@ -87,7 +87,179 @@ class EmailOperations:
             'failed': failed,
             'errors': errors
         }
-    
+
+    def stream_insert_emails(
+        self,
+        emails: Union[Iterator[Dict], List[Dict]],
+        mailbox_id: str = None,
+        batch_size: int = 5000,
+        checkpoint_callback=None,
+        skip_duplicates: bool = True
+    ) -> Dict:
+        """
+        Insert emails from an iterator/generator with streaming support.
+        Memory-efficient for large datasets (millions of emails).
+
+        Args:
+            emails: Iterator or generator yielding normalized email dictionaries
+            mailbox_id: Mailbox ID (uses instance default if not provided)
+            batch_size: Number of emails per batch (default 5000 for large files)
+            checkpoint_callback: Optional callback(processed_count, last_message_id) for progress tracking
+            skip_duplicates: Skip emails that already exist in database
+
+        Returns:
+            Dict with processing statistics
+        """
+        mailbox_id = mailbox_id or self.mailbox_id
+        if not mailbox_id:
+            raise ValueError("mailbox_id is required")
+
+        total = 0
+        success = 0
+        failed = 0
+        skipped = 0
+        errors = []
+        current_batch = []
+        last_message_id = None
+
+        logger.info(f"Starting streaming insert with batch_size={batch_size}, skip_duplicates={skip_duplicates}")
+
+        try:
+            for email in emails:
+                total += 1
+                last_message_id = email.get('message_id', f'unknown_{total}')
+
+                # Skip duplicates if enabled
+                if skip_duplicates and email.get('message_id'):
+                    if self.email_exists(email['message_id'], mailbox_id):
+                        skipped += 1
+                        if total % 100 == 0:  # Log more frequently
+                            logger.info(f"📊 Processed {total} emails ({skipped} skipped duplicates)")
+                        continue
+
+                current_batch.append(email)
+
+                # Log progress for every email during small tests
+                if total <=20:
+                    logger.info(f"📧 Email {total}: {email.get('subject', 'No subject')[:60]}")
+
+                # Insert when batch is full
+                if len(current_batch) >= batch_size:
+                    result = self._insert_batch(current_batch, mailbox_id, total // batch_size)
+                    success += result['success']
+                    failed += result['failed']
+                    errors.extend(result['errors'])
+
+                    # Checkpoint callback for resumability
+                    if checkpoint_callback:
+                        checkpoint_callback(total, last_message_id)
+
+                    # Clear batch to free memory
+                    current_batch = []
+
+                    logger.info(f"Progress: {total} emails processed ({success} inserted, {failed} failed, {skipped} skipped)")
+
+            # Insert remaining emails in final batch
+            if current_batch:
+                result = self._insert_batch(current_batch, mailbox_id, (total // batch_size) + 1)
+                success += result['success']
+                failed += result['failed']
+                errors.extend(result['errors'])
+
+                if checkpoint_callback:
+                    checkpoint_callback(total, last_message_id)
+
+            # Update folder counts after all inserts
+            try:
+                self.update_folder_counts()
+            except Exception as e:
+                logger.warning(f"Failed to update folder counts: {e}")
+
+            logger.info(f"Streaming insert completed: {total} total, {success} inserted, {failed} failed, {skipped} skipped")
+
+            return {
+                'total': total,
+                'success': success,
+                'failed': failed,
+                'skipped': skipped,
+                'errors': errors[:100]  # Limit errors to first 100 to avoid memory issues
+            }
+
+        except Exception as e:
+            logger.error(f"Streaming insert failed at email {total}: {e}")
+            raise
+
+    def _insert_batch(self, batch: List[Dict], mailbox_id: str, batch_num: int) -> Dict:
+        """
+        Internal method to insert a single batch
+
+        Returns:
+            Dict with success, failed counts and errors
+        """
+        success = 0
+        failed = 0
+        errors = []
+
+        try:
+            # Prepare batch data
+            prepared_batch = []
+            for email in batch:
+                prepared_email = self._prepare_email_for_insert(email, mailbox_id)
+                if prepared_email:
+                    prepared_batch.append(prepared_email)
+                else:
+                    failed += 1
+
+            if not prepared_batch:
+                logger.warning(f"Batch {batch_num}: No valid emails to insert")
+                return {'success': 0, 'failed': len(batch), 'errors': [f"Batch {batch_num}: No valid emails"]}
+
+            # Insert batch with retry logic
+            max_retries = 3
+            inserted_emails = []
+            for attempt in range(max_retries):
+                try:
+                    result = self.client.table('emails').insert(prepared_batch).execute()
+
+                    if result.data:
+                        success = len(prepared_batch)
+                        inserted_emails = result.data
+                        logger.debug(f"Batch {batch_num}: Inserted {success} emails")
+                        break
+                    else:
+                        if attempt == max_retries - 1:
+                            failed = len(batch)
+                            errors.append(f"Batch {batch_num}: No data returned from insert")
+
+                except Exception as e:
+                    if attempt == max_retries - 1:
+                        failed = len(batch)
+                        error_msg = f"Batch {batch_num} failed after {max_retries} attempts: {str(e)}"
+                        errors.append(error_msg)
+                        logger.error(error_msg)
+                    else:
+                        logger.warning(f"Batch {batch_num} attempt {attempt + 1} failed, retrying: {e}")
+                        import time
+                        time.sleep(1)  # Brief pause before retry
+
+            # Insert tags into email_categories for successfully inserted emails
+            if inserted_emails:
+                self._insert_email_tags(batch, inserted_emails)
+                # Ensure folder entries exist in folders table
+                self._ensure_folders_exist(batch, mailbox_id)
+
+        except Exception as e:
+            failed = len(batch)
+            error_msg = f"Batch {batch_num} preparation failed: {str(e)}"
+            errors.append(error_msg)
+            logger.error(error_msg)
+
+        return {
+            'success': success,
+            'failed': failed,
+            'errors': errors
+        }
+
     def _prepare_email_for_insert(self, email: Dict, mailbox_id: str) -> Optional[Dict]:
         """
         Prepare email data for database insertion
@@ -138,11 +310,183 @@ class EmailOperations:
             logger.error(f"Failed to prepare email for insert: {e}")
             return None
     
+    def _insert_email_tags(self, original_emails: List[Dict], inserted_emails: List[Dict]):
+        """
+        Insert email tags into email_categories table
+
+        Args:
+            original_emails: Original email dicts with tags
+            inserted_emails: Emails returned from database insert (with email_id)
+        """
+        try:
+            category_inserts = []
+
+            # Match original emails with inserted emails by message_id
+            for orig_email, inserted_email in zip(original_emails, inserted_emails):
+                email_id = inserted_email.get('id')
+                if not email_id:
+                    continue
+
+                # Get tags from original email
+                tags = orig_email.get('tags', [])
+                is_spam = orig_email.get('is_spam', False)
+                is_marketing = orig_email.get('is_marketing', False)
+                priority_score = orig_email.get('priority_score', 5)
+                sender_type = orig_email.get('sender_type', 'unknown')
+
+                # Insert each tag as a category
+                for tag in tags:
+                    category_inserts.append({
+                        'email_id': email_id,
+                        'category': tag,
+                        'confidence': 1.0,  # Rule-based tags have 100% confidence
+                        'detection_method': 'rule_based',
+                        'tag_type': self._classify_tag_type(tag),
+                    })
+
+                # Insert special metadata tags
+                if is_spam:
+                    category_inserts.append({
+                        'email_id': email_id,
+                        'category': '_meta_spam',
+                        'confidence': 1.0,
+                        'detection_method': 'rule_based',
+                        'tag_type': 'metadata',
+                    })
+
+                if is_marketing:
+                    category_inserts.append({
+                        'email_id': email_id,
+                        'category': '_meta_marketing',
+                        'confidence': 1.0,
+                        'detection_method': 'rule_based',
+                        'tag_type': 'metadata',
+                    })
+
+                # Insert priority as metadata
+                category_inserts.append({
+                    'email_id': email_id,
+                    'category': f'_meta_priority_{priority_score}',
+                    'confidence': 1.0,
+                    'detection_method': 'rule_based',
+                    'tag_type': 'metadata',
+                })
+
+                # Insert sender type
+                if sender_type:
+                    category_inserts.append({
+                        'email_id': email_id,
+                        'category': f'_meta_sender_{sender_type}',
+                        'confidence': 1.0,
+                        'detection_method': 'rule_based',
+                        'tag_type': 'metadata',
+                    })
+
+            # Batch insert all categories
+            if category_inserts:
+                # Insert in chunks of 1000
+                chunk_size = 1000
+                for i in range(0, len(category_inserts), chunk_size):
+                    chunk = category_inserts[i:i + chunk_size]
+                    try:
+                        self.client.table('email_categories').insert(chunk).execute()
+                    except Exception as e:
+                        logger.warning(f"Failed to insert tag chunk: {e}")
+
+                logger.debug(f"Inserted {len(category_inserts)} tag entries for {len(inserted_emails)} emails")
+
+        except Exception as e:
+            logger.error(f"Failed to insert email tags: {e}")
+            # Don't raise - tags are non-critical
+
+    def _classify_tag_type(self, tag: str) -> str:
+        """Classify tag into type categories"""
+        if tag in ['inbound', 'outbound']:
+            return 'direction'
+        elif tag in ['new_thread', 'reply', 'forward']:
+            return 'thread_type'
+        elif tag in ['inbox', 'sent', 'spam', 'trash', 'archive', 'drafts']:
+            return 'folder'
+        elif tag in ['spam', 'marketing', 'system', 'automated']:
+            return 'classification'
+        elif tag.startswith('sender_'):
+            return 'sender_type'
+        elif tag in ['high_priority', 'low_priority', 'urgent']:
+            return 'priority'
+        else:
+            return 'content'
+
+    def _ensure_folders_exist(self, emails: List[Dict], mailbox_id: str):
+        """
+        Ensure folder entries exist in folders table for all unique folders in emails
+
+        Args:
+            emails: List of email dicts with folder_path
+            mailbox_id: Mailbox ID
+        """
+        try:
+            # Collect unique folder paths from emails
+            folder_paths = set()
+            for email in emails:
+                folder_path = email.get('folder_path')
+                if folder_path:
+                    folder_paths.add(folder_path)
+
+            if not folder_paths:
+                return
+
+            # Map folder names to folder types
+            folder_type_map = {
+                'Inbox': 'inbox',
+                'INBOX': 'inbox',
+                'Sent': 'sent',
+                'Sent Items': 'sent',
+                'Spam': 'spam',
+                'Junk': 'spam',
+                'Trash': 'trash',
+                'Deleted Items': 'trash',
+                'Drafts': 'drafts',
+                'Archive': 'archive',
+                'Archived': 'archive'
+            }
+
+            # Check which folders already exist
+            existing_folders = set()
+            try:
+                result = self.client.table('folders').select('folder_path').eq('mailbox_id', mailbox_id).execute()
+                if result.data:
+                    existing_folders = {f['folder_path'] for f in result.data}
+            except Exception as e:
+                logger.warning(f"Failed to check existing folders: {e}")
+
+            # Create missing folders
+            new_folders = []
+            for folder_path in folder_paths:
+                if folder_path not in existing_folders:
+                    folder_type = folder_type_map.get(folder_path, 'user')
+                    new_folders.append({
+                        'folder_path': folder_path,
+                        'mailbox_id': mailbox_id,
+                        'folder_type': folder_type,
+                        'message_count': 0
+                    })
+
+            if new_folders:
+                try:
+                    self.client.table('folders').insert(new_folders).execute()
+                    logger.info(f"Created {len(new_folders)} folder entries")
+                except Exception as e:
+                    logger.warning(f"Failed to create folders: {e}")
+
+        except Exception as e:
+            logger.error(f"Failed to ensure folders exist: {e}")
+            # Don't raise - folder creation is non-critical
+
     def _ensure_utf8(self, text: str) -> str:
         """Ensure text is valid UTF-8"""
         if not isinstance(text, str):
             return str(text) if text is not None else ''
-        
+
         try:
             # Test if already valid UTF-8
             text.encode('utf-8')

@@ -1,0 +1,10 @@
+# Ignore script outputs and temporary files
+*.log
+*.out
+*.tmp
+*.pyc
+__pycache__/
+.DS_Store
+
+# Keep the directory structure
+!.gitignore

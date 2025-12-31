@@ -105,12 +105,16 @@ export const MailboxList: React.FC = () => {
       key: 'mailbox_type',
       render: (type: string) => {
         const colors = {
-          outlook: 'blue',
           mbox: 'green',
-          imap: 'orange',
-          pop3: 'purple'
+          pst: 'blue',
+          olm: 'purple'
         };
-        return <Tag color={colors[type as keyof typeof colors]}>{type.toUpperCase()}</Tag>;
+        const labels = {
+          mbox: 'MBOX (Universal)',
+          pst: 'PST (Outlook Windows)',
+          olm: 'OLM (Outlook Mac)'
+        };
+        return <Tag color={colors[type as keyof typeof colors]}>{labels[type as keyof typeof labels] || type.toUpperCase()}</Tag>;
       },
     },
     {
@@ -228,44 +232,33 @@ export const MailboxCreate: React.FC = () => {
   const [form] = Form.useForm();
   const [loading, setLoading] = React.useState(false);
   const [testing, setTesting] = React.useState(false);
-  const [selectedType, setSelectedType] = React.useState('outlook');
+  const [selectedType, setSelectedType] = React.useState('mbox');
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const onFinish = async (values: any) => {
     try {
       setLoading(true);
-      
+
       // Build connection config based on mailbox type
       const connectionConfig: any = {};
-      
-      if (values.mailbox_type === 'mbox') {
+
+      // All file-based types (MBOX, PST, OLM) use file_path
+      if (['mbox', 'pst', 'olm'].includes(values.mailbox_type)) {
         connectionConfig.file_path = values.file_path;
-      } else if (values.mailbox_type === 'imap') {
-        connectionConfig.server = values.imap_server;
-        connectionConfig.port = values.imap_port || 993;
-        connectionConfig.use_ssl = values.use_ssl !== false;
-        connectionConfig.username = values.username;
-        connectionConfig.password = values.password;
-      } else if (values.mailbox_type === 'pop3') {
-        connectionConfig.server = values.pop3_server;
-        connectionConfig.port = values.pop3_port || 995;
-        connectionConfig.use_ssl = values.use_ssl !== false;
-        connectionConfig.username = values.username;
-        connectionConfig.password = values.password;
-      } else if (values.mailbox_type === 'outlook') {
-        connectionConfig.oauth_config = {
-          client_id: values.client_id,
-          tenant_id: values.tenant_id
-        };
       }
-      
+
       const mailboxData: any = {
         name: values.name,
-        email_address: values.email_address,
         mailbox_type: values.mailbox_type,
         is_active: values.is_active,
         connection_config: connectionConfig
       };
-      
+
+      // Only add email_address if provided
+      if (values.email_address) {
+        mailboxData.email_address = values.email_address;
+      }
+
       await mailboxService.createMailbox(mailboxData);
       message.success("Mailbox created successfully");
       navigate('/mailboxes');
@@ -287,26 +280,10 @@ export const MailboxCreate: React.FC = () => {
       if (apiBaseUrl) {
         // Build connection config
         const connectionConfig: any = {};
-        
-        if (values.mailbox_type === 'mbox') {
+
+        // All file-based types (MBOX, PST, OLM) use file_path
+        if (['mbox', 'pst', 'olm'].includes(values.mailbox_type)) {
           connectionConfig.file_path = values.file_path;
-        } else if (values.mailbox_type === 'imap') {
-          connectionConfig.server = values.imap_server;
-          connectionConfig.port = values.imap_port || 993;
-          connectionConfig.use_ssl = values.use_ssl !== false;
-          connectionConfig.username = values.username;
-          connectionConfig.password = values.password;
-        } else if (values.mailbox_type === 'pop3') {
-          connectionConfig.server = values.pop3_server;
-          connectionConfig.port = values.pop3_port || 995;
-          connectionConfig.use_ssl = values.use_ssl !== false;
-          connectionConfig.username = values.username;
-          connectionConfig.password = values.password;
-        } else if (values.mailbox_type === 'outlook') {
-          connectionConfig.oauth_config = {
-            client_id: values.client_id,
-            tenant_id: values.tenant_id
-          };
         }
 
         const response = await fetch(`${apiBaseUrl}/mailboxes/test/test-connection`, {
@@ -329,10 +306,10 @@ export const MailboxCreate: React.FC = () => {
         message.success(result.message || 'Connection test successful!');
       } else {
         // Fallback to basic validation
-        if (values.mailbox_type === 'mbox' && !values.file_path) {
-          throw new Error('File path is required for MBOX');
+        if (['mbox', 'pst', 'olm'].includes(values.mailbox_type) && !values.file_path) {
+          throw new Error('File path is required for file-based mailboxes');
         }
-        
+
         await new Promise(resolve => setTimeout(resolve, 2000));
         message.success('Connection test successful!');
       }
@@ -342,13 +319,20 @@ export const MailboxCreate: React.FC = () => {
       setTesting(false);
     }
   };
-  
-  const selectFile = () => {
-    // In a real implementation, this would open a file browser
-    // For now, just show a prompt
-    const path = prompt('Enter the full path to your MBOX file:', '/path/to/mailbox.mbox');
-    if (path) {
-      form.setFieldValue('file_path', path);
+
+  const handleFileBrowse = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      // In browser environment, we get a File object with a path
+      // For local files, we can show the name, but the actual path depends on the backend
+      const filePath = (file as any).path || file.name;
+      form.setFieldValue('file_path', filePath);
     }
   };
 
@@ -370,7 +354,7 @@ export const MailboxCreate: React.FC = () => {
           onFinish={onFinish}
           initialValues={{
             is_active: true,
-            mailbox_type: 'outlook',
+            mailbox_type: 'mbox',
           }}
         >
           <Form.Item
@@ -383,13 +367,12 @@ export const MailboxCreate: React.FC = () => {
 
           <Form.Item
             name="email_address"
-            label="Email Address"
+            label="Email Address (Optional)"
             rules={[
-              { required: true, message: 'Please enter an email address' },
               { type: 'email', message: 'Please enter a valid email address' },
             ]}
           >
-            <Input placeholder="user@domain.com" />
+            <Input placeholder="user@domain.com (optional)" />
           </Form.Item>
 
           <Form.Item
@@ -397,153 +380,57 @@ export const MailboxCreate: React.FC = () => {
             label="Mailbox Type"
             rules={[{ required: true, message: 'Please select a mailbox type' }]}
           >
-            <Select 
+            <Select
               placeholder="Select mailbox type"
               onChange={setSelectedType}
             >
-              <Option value="outlook">Outlook/Office 365</Option>
-              <Option value="mbox">MBOX File</Option>
-              <Option value="imap">IMAP</Option>
-              <Option value="pop3">POP3</Option>
+              <Option value="mbox">MBOX (Universal Format)</Option>
+              <Option value="pst">PST (Outlook Windows)</Option>
+              <Option value="olm">OLM (Outlook Mac)</Option>
             </Select>
           </Form.Item>
-          
-          {/* MBOX Configuration */}
-          {selectedType === 'mbox' && (
+
+          {/* File Configuration - for all file-based types */}
+          {['mbox', 'pst', 'olm'].includes(selectedType) && (
             <>
-              <Divider>MBOX File Configuration</Divider>
-              <Form.Item
-                name="file_path"
-                label="MBOX File Path"
-                rules={[{ required: true, message: 'Please specify the MBOX file path' }]}
-              >
-                <Input.Group compact>
-                  <Input 
-                    style={{ width: 'calc(100% - 100px)' }} 
-                    placeholder="/path/to/mailbox.mbox"
-                  />
-                  <Button 
-                    style={{ width: '100px' }} 
-                    icon={<FolderOpenOutlined />} 
-                    onClick={selectFile}
-                  >
-                    Browse
-                  </Button>
-                </Input.Group>
-              </Form.Item>
-            </>
-          )}
-          
-          {/* IMAP Configuration */}
-          {selectedType === 'imap' && (
-            <>
-              <Divider>IMAP Configuration</Divider>
-              <Form.Item
-                name="imap_server"
-                label="IMAP Server"
-                rules={[{ required: true, message: 'Please enter IMAP server' }]}
-              >
-                <Input placeholder="imap.gmail.com" />
-              </Form.Item>
-              <Form.Item
-                name="imap_port"
-                label="Port"
-                initialValue={993}
-              >
-                <InputNumber min={1} max={65535} style={{ width: '100%' }} />
-              </Form.Item>
-              <Form.Item
-                name="use_ssl"
-                label="Use SSL"
-                valuePropName="checked"
-                initialValue={true}
-              >
-                <Switch />
-              </Form.Item>
-              <Form.Item
-                name="username"
-                label="Username"
-                rules={[{ required: true, message: 'Please enter username' }]}
-              >
-                <Input placeholder="username or email" />
-              </Form.Item>
-              <Form.Item
-                name="password"
-                label="Password"
-                rules={[{ required: true, message: 'Please enter password' }]}
-              >
-                <Input.Password placeholder="password" />
-              </Form.Item>
-            </>
-          )}
-          
-          {/* POP3 Configuration */}
-          {selectedType === 'pop3' && (
-            <>
-              <Divider>POP3 Configuration</Divider>
-              <Form.Item
-                name="pop3_server"
-                label="POP3 Server"
-                rules={[{ required: true, message: 'Please enter POP3 server' }]}
-              >
-                <Input placeholder="pop.gmail.com" />
-              </Form.Item>
-              <Form.Item
-                name="pop3_port"
-                label="Port"
-                initialValue={995}
-              >
-                <InputNumber min={1} max={65535} style={{ width: '100%' }} />
-              </Form.Item>
-              <Form.Item
-                name="use_ssl"
-                label="Use SSL"
-                valuePropName="checked"
-                initialValue={true}
-              >
-                <Switch />
-              </Form.Item>
-              <Form.Item
-                name="username"
-                label="Username"
-                rules={[{ required: true, message: 'Please enter username' }]}
-              >
-                <Input placeholder="username or email" />
-              </Form.Item>
-              <Form.Item
-                name="password"
-                label="Password"
-                rules={[{ required: true, message: 'Please enter password' }]}
-              >
-                <Input.Password placeholder="password" />
-              </Form.Item>
-            </>
-          )}
-          
-          {/* Outlook Configuration */}
-          {selectedType === 'outlook' && (
-            <>
-              <Divider>Outlook/Office 365 Configuration</Divider>
-              <Alert 
-                message="OAuth 2.0 Configuration Required" 
-                description="You'll need to register an application in Azure AD to get these credentials."
-                type="info" 
+              <Divider>File Configuration</Divider>
+              <Alert
+                message={`${selectedType.toUpperCase()} File Archive`}
+                description={
+                  selectedType === 'mbox' ? 'Universal email format (Gmail export, Thunderbird, Apple Mail)' :
+                  selectedType === 'pst' ? 'Windows Outlook archive file with native folder structure' :
+                  'Mac Outlook archive file with folder hierarchy'
+                }
+                type="info"
                 style={{ marginBottom: 16 }}
               />
               <Form.Item
-                name="client_id"
-                label="Application (Client) ID"
-                rules={[{ required: true, message: 'Please enter client ID' }]}
+                name="file_path"
+                label={`${selectedType.toUpperCase()} File Path`}
+                rules={[{ required: true, message: `Please specify the ${selectedType.toUpperCase()} file path` }]}
               >
-                <Input placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+                <Input
+                  placeholder={`/path/to/archive.${selectedType}`}
+                  prefix={<FolderOpenOutlined />}
+                  suffix={
+                    <Button
+                      size="small"
+                      type="link"
+                      onClick={handleFileBrowse}
+                      icon={<FolderOpenOutlined />}
+                    >
+                      Browse
+                    </Button>
+                  }
+                />
               </Form.Item>
-              <Form.Item
-                name="tenant_id"
-                label="Directory (Tenant) ID"
-                rules={[{ required: true, message: 'Please enter tenant ID' }]}
-              >
-                <Input placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
-              </Form.Item>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={`.${selectedType}`}
+                style={{ display: 'none' }}
+                onChange={handleFileSelect}
+              />
             </>
           )}
 
@@ -562,12 +449,12 @@ export const MailboxCreate: React.FC = () => {
               <Button type="primary" htmlType="submit" loading={loading}>
                 Create Mailbox
               </Button>
-              <Button 
-                type="default" 
+              <Button
+                type="default"
                 icon={<CheckCircleOutlined />}
                 onClick={testConnection}
                 loading={testing}
-                disabled={selectedType === 'mbox' && !form.getFieldValue('file_path')}
+                disabled={['mbox', 'pst', 'olm'].includes(selectedType) && !form.getFieldValue('file_path')}
               >
                 Test Connection
               </Button>
@@ -670,13 +557,12 @@ export const MailboxEdit: React.FC = () => {
 
           <Form.Item
             name="email_address"
-            label="Email Address"
+            label="Email Address (Optional)"
             rules={[
-              { required: true, message: 'Please enter an email address' },
               { type: 'email', message: 'Please enter a valid email address' },
             ]}
           >
-            <Input placeholder="user@domain.com" />
+            <Input placeholder="user@domain.com (optional)" />
           </Form.Item>
 
           <Form.Item
@@ -685,10 +571,9 @@ export const MailboxEdit: React.FC = () => {
             rules={[{ required: true, message: 'Please select a mailbox type' }]}
           >
             <Select placeholder="Select mailbox type">
-              <Option value="outlook">Outlook/Office 365</Option>
-              <Option value="mbox">MBOX File</Option>
-              <Option value="imap">IMAP</Option>
-              <Option value="pop3">POP3</Option>
+              <Option value="mbox">MBOX (Universal Format)</Option>
+              <Option value="pst">PST (Outlook Windows)</Option>
+              <Option value="olm">OLM (Outlook Mac)</Option>
             </Select>
           </Form.Item>
 

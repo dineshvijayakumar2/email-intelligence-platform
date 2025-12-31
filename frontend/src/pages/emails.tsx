@@ -165,17 +165,28 @@ export const EmailList: React.FC = () => {
       ),
     },
     {
-      title: 'Category',
-      dataIndex: 'category',
-      key: 'category',
-      width: '15%',
-      render: (category: string) => (
-        <Tag color={getCategoryColor(category)}>
-          {getCategoryLabel(category)}
-        </Tag>
+      title: 'Tags',
+      dataIndex: 'tags',
+      key: 'tags',
+      width: '20%',
+      render: (tags: string[]) => (
+        <Space wrap size={[4, 4]}>
+          {tags && tags.length > 0 ? (
+            tags.slice(0, 4).map(tag => (
+              <Tag key={tag} color={getCategoryColor(tag)} style={{ margin: 0 }}>
+                {getCategoryLabel(tag)}
+              </Tag>
+            ))
+          ) : (
+            <Tag color="default">No tags</Tag>
+          )}
+          {tags && tags.length > 4 && (
+            <Tooltip title={tags.slice(4).map(t => getCategoryLabel(t)).join(', ')}>
+              <Tag color="default" style={{ margin: 0 }}>+{tags.length - 4}</Tag>
+            </Tooltip>
+          )}
+        </Space>
       ),
-      filters: categories.map(cat => ({ text: getCategoryLabel(cat), value: cat })),
-      onFilter: (value: any, record: Email) => record.category === value,
     },
     {
       title: 'Mailbox',
@@ -237,13 +248,17 @@ export const EmailList: React.FC = () => {
           📧 Emails
         </Title>
         <Text type="secondary">
-          Browse and analyze your email data with advanced filtering
+          Showing {totalCount} email{totalCount !== 1 ? 's' : ''}
+          {filters.category && ` in ${getCategoryLabel(filters.category)}`}
+          {filters.mailbox && ` from ${filters.mailbox}`}
+          {filters.isOutbound && ` (${filters.isOutbound})`}
+          {filters.search && ` matching "${filters.search}"`}
         </Text>
       </div>
 
       {/* Filters */}
       <Card title={<Space><FilterOutlined />Filters</Space>} size="small">
-        <Space wrap>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <Search
             placeholder="Search emails..."
             allowClear
@@ -252,56 +267,65 @@ export const EmailList: React.FC = () => {
             onChange={(e) => handleFilterChange('search', e.target.value)}
             prefix={<SearchOutlined />}
           />
-          
-          <Select
-            placeholder="Category"
-            allowClear
-            style={{ width: 150 }}
-            value={filters.category}
-            onChange={(value) => handleFilterChange('category', value)}
-          >
-            {categories.map(category => (
-              <Option key={category} value={category}>
-                {getCategoryLabel(category)}
-              </Option>
-            ))}
-          </Select>
 
-          <Select
-            placeholder="Mailbox"
-            allowClear
-            style={{ width: 150 }}
-            value={filters.mailbox}
-            onChange={(value) => handleFilterChange('mailbox', value)}
-          >
-            {mailboxes.map(mailbox => (
-              <Option key={mailbox} value={mailbox}>
-                {mailbox}
-              </Option>
-            ))}
-          </Select>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <Text type="secondary" style={{ fontSize: '12px' }}>Category:</Text>
+            <Select
+              placeholder="All"
+              allowClear
+              style={{ width: 150 }}
+              value={filters.category}
+              onChange={(value) => handleFilterChange('category', value)}
+            >
+              {categories.map(category => (
+                <Option key={category} value={category}>
+                  {getCategoryLabel(category)}
+                </Option>
+              ))}
+            </Select>
+          </div>
 
-          <Select
-            placeholder="Direction"
-            allowClear
-            style={{ width: 120 }}
-            value={filters.isOutbound}
-            onChange={(value) => handleFilterChange('isOutbound', value)}
-          >
-            <Option value="inbound">Inbound</Option>
-            <Option value="outbound">Outbound</Option>
-          </Select>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <Text type="secondary" style={{ fontSize: '12px' }}>Mailbox:</Text>
+            <Select
+              placeholder="All"
+              allowClear
+              style={{ width: 150 }}
+              value={filters.mailbox}
+              onChange={(value) => handleFilterChange('mailbox', value)}
+            >
+              {mailboxes.map(mailbox => (
+                <Option key={mailbox} value={mailbox}>
+                  {mailbox}
+                </Option>
+              ))}
+            </Select>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <Text type="secondary" style={{ fontSize: '12px' }}>Direction:</Text>
+            <Select
+              placeholder="All"
+              allowClear
+              style={{ width: 120 }}
+              value={filters.isOutbound}
+              onChange={(value) => handleFilterChange('isOutbound', value)}
+            >
+              <Option value="inbound">Inbound</Option>
+              <Option value="outbound">Outbound</Option>
+            </Select>
+          </div>
 
           <RangePicker
             placeholder={['Start Date', 'End Date']}
             style={{ width: 250 }}
-            onChange={(dates, dateStrings) => 
+            onChange={(dates, dateStrings) =>
               handleFilterChange('dateRange', dates ? dateStrings as [string, string] : null)
             }
           />
 
           <Button onClick={clearFilters}>Clear Filters</Button>
-        </Space>
+        </div>
       </Card>
 
       {/* Email Table */}

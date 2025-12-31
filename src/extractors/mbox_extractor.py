@@ -1,4 +1,5 @@
 import mailbox
+import email
 from email import message_from_binary_file
 from email.header import decode_header
 from email.utils import parsedate_tz, mktime_tz
@@ -29,9 +30,11 @@ class MBOXExtractor(BaseExtractor):
         self.mbox = None
         
     def connect(self) -> bool:
-        """Open MBOX file"""
+        """Open MBOX file - using direct file access for speed"""
         try:
-            self.mbox = mailbox.mbox(self.file_path)
+            # Don't use mailbox.mbox() - it's too slow for large files
+            # We'll read the file directly in extract_emails()
+            self.mbox = self.file_path  # Just store the path
             logger.info(f"Opened MBOX file: {self.file_path}")
             return True
         except Exception as e:
@@ -67,40 +70,93 @@ class MBOXExtractor(BaseExtractor):
             date_to: End date filter
             max_emails: Maximum emails to extract
         """
-        if not self.mbox:
-            raise RuntimeError("Not connected. Call connect() first.")
-        
+        # Direct file reading - much faster than mailbox.mbox()
         self.stats['start_time'] = datetime.now()
-        
+        logger.info(f"Starting email extraction (max_emails={max_emails})...")
+
         try:
             extracted = 0
-            
-            for idx, message in enumerate(self.mbox):
-                if max_emails and extracted >= max_emails:
-                    break
-                
-                try:
-                    email_data = self._parse_message(message, idx)
-                    
-                    # Apply date filters
-                    if date_from or date_to:
-                        sent_date = email_data.get('sent_date')
-                        if sent_date:
-                            if date_from and sent_date < date_from:
-                                continue
-                            if date_to and sent_date > date_to:
-                                continue
-                    
-                    standardized = self._standardize_email(email_data)
-                    self._update_stats(True)
-                    extracted += 1
-                    yield standardized
-                    
-                except Exception as e:
-                    self._update_stats(False, str(e))
-                    logger.warning(f"Failed to parse message {idx}: {e}")
-                    continue
-            
+
+            # Read file directly, splitting on "From " lines
+            with open(self.mbox, 'r', encoding='utf-8', errors='replace') as f:
+                current_message_lines = []
+                message_count = 0
+
+                for line in f:
+                    # MBOX format: messages start with "From " at beginning of line
+                    if line.startswith('From ') and current_message_lines:
+                        # Process the previous message
+                        message_text = ''.join(current_message_lines)
+                        try:
+                            message = email.message_from_string(message_text)
+                            email_data = self._parse_message(message, message_count)
+
+                            # Apply date filters
+                            should_include = True
+                            if date_from or date_to:
+                                sent_date = email_data.get('sent_date')
+                                if sent_date:
+                                    if date_from and sent_date < date_from:
+                                        should_include = False
+                                    if date_to and sent_date > date_to:
+                                        should_include = False
+
+                            if should_include:
+                                standardized = self._standardize_email(email_data)
+                                self._update_stats(True)
+                                extracted += 1
+
+                                # Log first few emails
+                                if extracted <= 10:
+                                    subject = email_data.get('subject', 'No subject')[:50]
+                                    logger.info(f"✉️  Extracted email {extracted}: {subject}")
+
+                                yield standardized
+
+                                if max_emails and extracted >= max_emails:
+                                    logger.info(f"✓ Reached limit of {max_emails} emails")
+                                    break
+
+                        except Exception as e:
+                            self._update_stats(False, str(e))
+                            logger.warning(f"⚠️  Failed to parse message {message_count}: {e}")
+
+                        # Start new message
+                        current_message_lines = [line]
+                        message_count += 1
+
+                        # Log progress
+                        if message_count > 0 and message_count % 1000 == 0:
+                            logger.info(f"🔍 Scanned {message_count:,} messages, extracted {extracted:,} emails...")
+                    else:
+                        current_message_lines.append(line)
+
+                    # Early exit if we've extracted enough
+                    if max_emails and extracted >= max_emails:
+                        break
+
+                # Process final message
+                if current_message_lines and (not max_emails or extracted < max_emails):
+                    message_text = ''.join(current_message_lines)
+                    try:
+                        message = email.message_from_string(message_text)
+                        email_data = self._parse_message(message, message_count)
+
+                        standardized = self._standardize_email(email_data)
+                        self._update_stats(True)
+                        extracted += 1
+
+                        # Log final email if needed
+                        if extracted <= 10:
+                            subject = email_data.get('subject', 'No subject')[:50]
+                            logger.info(f"✉️  Extracted email {extracted}: {subject}")
+
+                        yield standardized
+
+                    except Exception as e:
+                        self._update_stats(False, str(e))
+                        logger.warning(f"⚠️  Failed to parse final message: {e}")
+
             logger.info(f"MBOX extraction completed. Processed: {self.stats['success']} emails")
             
         except Exception as e:
@@ -123,7 +179,7 @@ class MBOXExtractor(BaseExtractor):
             'received_date': self._parse_date(msg.get('Received')),
             'body_text': self._get_body_text(msg),
             'body_html': self._get_body_html(msg),
-            'folder_path': 'MBOX Archive',
+            'folder_path': None,  # Generic MBOX - folder will be inferred by normalizer
             'is_outbound': False,  # Will be determined by normalizer
             'is_reply': self._is_reply(msg),
             'raw_headers': dict(msg.items())
@@ -306,7 +362,6 @@ class MBOXExtractor(BaseExtractor):
     
     def disconnect(self):
         """Close MBOX file"""
-        if self.mbox:
-            self.mbox.close()
-            self.mbox = None
-            logger.info("Closed MBOX file")
+        # Since we read the file directly in extract_emails(), nothing to close here
+        self.mbox = None
+        logger.info("MBOX extractor disconnected")

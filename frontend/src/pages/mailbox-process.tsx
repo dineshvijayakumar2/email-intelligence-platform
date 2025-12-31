@@ -199,8 +199,8 @@ export const MailboxProcess: React.FC = () => {
           </Descriptions.Item>
         </Descriptions>
 
-        {/* Show connection config for different types */}
-        {mailbox.mailbox_type === 'mbox' && mailbox.connection_config?.file_path && (
+        {/* Show connection config for file-based types */}
+        {['mbox', 'pst', 'olm'].includes(mailbox.mailbox_type) && mailbox.connection_config?.file_path && (
           <div style={{ marginTop: 16 }}>
             <Text strong>File Path:</Text>
             <div style={{ marginTop: 8 }}>

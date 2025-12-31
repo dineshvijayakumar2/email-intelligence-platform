@@ -21,27 +21,46 @@ class EmailNormalizer:
     
     def normalize(self, raw_email: Dict) -> Dict:
         """Normalize raw email data"""
-        
+
+        # Determine is_outbound first (needed for folder inference)
+        is_outbound = self._determine_outbound(raw_email)
+
+        # Clean basic fields
+        sender_email = self._clean_email(raw_email.get('sender_email', ''))
+        recipients = self._clean_recipients(raw_email.get('recipients', []))
+        subject = self._clean_subject(raw_email.get('subject', ''))
+        body_text = self._clean_body_text(raw_email.get('body_text', ''))
+
+        # Infer or normalize folder path
+        folder_path = self._infer_folder_path(
+            provided_folder=raw_email.get('folder_path'),
+            is_outbound=is_outbound,
+            sender_email=sender_email,
+            recipients=recipients,
+            subject=subject,
+            body_text=body_text
+        )
+
         normalized = {
             'message_id': self._clean_message_id(raw_email.get('message_id')),
             'thread_id': self._determine_thread_id(raw_email),
-            'folder_path': self._normalize_folder_path(raw_email.get('folder_path', 'INBOX')),
-            'sender_email': self._clean_email(raw_email.get('sender_email', '')),
+            'folder_path': folder_path,
+            'sender_email': sender_email,
             'sender_name': self._clean_text(raw_email.get('sender_name', '')),
-            'recipients': self._clean_recipients(raw_email.get('recipients', [])),
+            'recipients': recipients,
             'cc_list': self._clean_recipients(raw_email.get('cc_list', [])),
             'bcc_list': self._clean_recipients(raw_email.get('bcc_list', [])),
-            'subject': self._clean_subject(raw_email.get('subject', '')),
-            'body_text': self._clean_body_text(raw_email.get('body_text', '')),
+            'subject': subject,
+            'body_text': body_text,
             'body_html': raw_email.get('body_html', ''),
             'sent_date': raw_email.get('sent_date'),
             'received_date': raw_email.get('received_date'),
-            'is_outbound': self._determine_outbound(raw_email),
+            'is_outbound': is_outbound,
             'is_reply': self._determine_reply(raw_email),
             'message_size': self._calculate_size(raw_email),
             'raw_headers': raw_email.get('raw_headers', {})
         }
-        
+
         return normalized
     
     def _clean_message_id(self, message_id: str) -> str:
@@ -84,24 +103,88 @@ class EmailNormalizer:
         """Normalize folder path"""
         if not folder_path:
             return 'INBOX'
-        
+
         # Handle common folder name variations
         folder_map = {
             'inbox': 'INBOX',
             'sent items': 'Sent',
-            'sent mail': 'Sent', 
+            'sent mail': 'Sent',
             'outbox': 'Sent',
             'deleted items': 'Trash',
             'junk email': 'Spam',
             'spam': 'Spam',
             'drafts': 'Drafts'
         }
-        
+
         normalized = folder_path.strip()
         lower_folder = normalized.lower()
-        
+
         return folder_map.get(lower_folder, normalized)
-    
+
+    def _infer_folder_path(self, provided_folder: str, is_outbound: bool,
+                           sender_email: str, recipients: List[Dict],
+                           subject: str, body_text: str) -> str:
+        """
+        Universal folder inference for all mailbox formats
+
+        Priority:
+        1. If folder provided by extractor (PST/OLM/IMAP) → use it
+        2. If no folder (generic MBOX) → infer from email characteristics
+
+        Args:
+            provided_folder: Folder from extractor (None for generic MBOX)
+            is_outbound: Whether email was sent by user
+            sender_email: Sender email address
+            recipients: List of recipients
+            subject: Email subject
+            body_text: Email body text
+
+        Returns:
+            Normalized folder path
+        """
+        # If extractor provided a folder, normalize and use it
+        if provided_folder and provided_folder not in ['MBOX Archive', 'Archive', 'Unknown', '']:
+            return self._normalize_folder_path(provided_folder)
+
+        # Otherwise, infer folder from email characteristics
+        # This handles: generic MBOX, missing folder data, etc.
+
+        # 1. Check if outbound (sent by user)
+        if is_outbound:
+            # Check if it's a draft (no recipients or very incomplete)
+            if not recipients or len(recipients) == 0:
+                return 'Drafts'
+            else:
+                return 'Sent'
+
+        # 2. Check for spam indicators
+        spam_indicators = [
+            'viagra', 'cialis', 'lottery', 'winner', 'nigerian prince',
+            'click here now', 'limited time offer', 'act now',
+            'you have won', 'claim your prize', 'free money'
+        ]
+        subject_lower = subject.lower()
+        body_lower = body_text.lower()[:1000]  # Check first 1000 chars
+
+        if any(indicator in subject_lower or indicator in body_lower
+               for indicator in spam_indicators):
+            return 'Spam'
+
+        # Check for all caps subject (common spam indicator)
+        if len(subject) > 10 and subject.isupper():
+            return 'Spam'
+
+        # 3. Check for system/automated emails → could be in Updates/Notifications
+        system_senders = ['noreply@', 'no-reply@', 'donotreply@', 'automated@',
+                         'system@', 'notification@']
+        if any(sender_email.startswith(sender) for sender in system_senders):
+            # These could go to a separate folder, but defaulting to Inbox for now
+            # Future: Add 'Updates' or 'Notifications' folder
+            return 'Inbox'
+
+        # 4. Default: Inbox for received emails
+        return 'Inbox'
+
     def _clean_email(self, email: str) -> str:
         """Clean and validate email address"""
         if not email:

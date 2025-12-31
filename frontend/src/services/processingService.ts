@@ -209,11 +209,41 @@ export const processingService = {
     }
   },
 
+  // Reprocess emails to add categorization
+  async reprocessJob(jobId: string): Promise<ProcessingJob> {
+    try {
+      const apiBaseUrl = process.env.REACT_APP_API_BASE_URL;
+
+      if (!apiBaseUrl) {
+        throw new Error('API base URL not configured');
+      }
+
+      const response = await fetch(`${apiBaseUrl}/processing-jobs/${jobId}/reprocess`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      return result;
+    } catch (error) {
+      console.error('Error reprocessing job:', error);
+      throw error;
+    }
+  },
+
   // Get job status labels
   getJobTypeLabel(jobType: string): string {
     const labels = {
       mbox_extraction: 'MBOX Extraction',
       outlook_extraction: 'Outlook Extraction',
+      extraction: 'Email Extraction',
+      reprocessing: 'Reprocessing (Categorization)',
       categorization: 'Email Categorization',
       enrichment: 'AI Enrichment',
       cleanup: 'Data Cleanup'

@@ -3,8 +3,8 @@ import { supabaseClient } from '../supabase';
 export interface Mailbox {
   id: string;
   name: string;
-  email_address: string;
-  mailbox_type: 'outlook' | 'mbox' | 'imap' | 'pop3';
+  email_address?: string;
+  mailbox_type: 'mbox' | 'pst' | 'olm';
   is_active: boolean;
   total_emails: number;
   last_sync_at: string | null;
@@ -14,21 +14,12 @@ export interface Mailbox {
 
 export interface CreateMailboxData {
   name: string;
-  email_address: string;
-  mailbox_type: 'outlook' | 'mbox' | 'imap' | 'pop3';
+  email_address?: string;
+  mailbox_type: 'mbox' | 'pst' | 'olm';
   is_active: boolean;
   connection_config?: Record<string, any>;
-  // Additional fields for form (will be moved to connection_config)
+  // File path for file-based mailboxes (MBOX/PST/OLM)
   file_path?: string;
-  imap_server?: string;
-  imap_port?: number;
-  pop3_server?: string;
-  pop3_port?: number;
-  use_ssl?: boolean;
-  username?: string;
-  password?: string;
-  client_id?: string;
-  tenant_id?: string;
 }
 
 export const mailboxService = {
@@ -36,15 +27,19 @@ export const mailboxService = {
   async getMailboxes(): Promise<Mailbox[]> {
     const { data, error } = await supabaseClient
       .from('mailboxes')
-      .select('*')
+      .select('*, emails(count)')
       .order('created_at', { ascending: false });
-    
+
     if (error) {
       console.error('Error fetching mailboxes:', error);
       throw error;
     }
-    
-    return data || [];
+
+    // Transform to include actual email count
+    return (data || []).map(mailbox => ({
+      ...mailbox,
+      total_emails: (mailbox as any).emails?.[0]?.count || 0
+    }));
   },
 
   // Get a single mailbox by ID
