@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from supabase import create_client, Client
 import asyncio
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import random
 import logging
 
@@ -94,7 +94,7 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()}
 
 # Mailbox endpoints
 @app.post("/api/mailboxes/{mailbox_id}/test-connection")
@@ -123,7 +123,7 @@ async def test_connection(mailbox_id: str, connection_test: ConnectionTest):
             "success": True,
             "message": f"{mailbox_type.upper()} connection test successful",
             "details": validation_result['details'],
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
     except HTTPException:
@@ -165,7 +165,7 @@ async def start_processing(mailbox_id: str, config: ProcessingJobConfig, backgro
             "total_records": config.total_records,
             "processed_records": 0,
             "failed_records": 0,
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
             "started_at": None,
             "completed_at": None,
             "error_log": []
@@ -219,7 +219,7 @@ async def process_emails_real(job_id: str, config: ProcessingJobConfig):
             logger.error(error_msg)
             await update_job_status(job_id, "failed", {
                 "error_log": [error_msg],
-                "completed_at": datetime.utcnow().isoformat()
+                "completed_at": datetime.now(timezone.utc).isoformat()
             })
             return
 
@@ -246,7 +246,7 @@ async def process_emails_real(job_id: str, config: ProcessingJobConfig):
         logger.error(error_msg, exc_info=True)
         await update_job_status(job_id, "failed", {
             "error_log": [error_msg],
-            "completed_at": datetime.utcnow().isoformat()
+            "completed_at": datetime.now(timezone.utc).isoformat()
         })
 
 async def update_job_status(job_id: str, status: str, updates: Dict[str, Any]):
@@ -292,14 +292,14 @@ async def generate_sample_emails(job_id: str, count: int):
             "subject": random.choice(subjects),
             "sender_email": random.choice(senders),
             "sender_name": random.choice(senders).split('@')[0].title(),
-            "sent_date": (datetime.utcnow() - timedelta(days=random.randint(1, 30))).isoformat(),
-            "received_date": datetime.utcnow().isoformat(),
+            "sent_date": (datetime.now(timezone.utc) - timedelta(days=random.randint(1, 30))).isoformat(),
+            "received_date": datetime.now(timezone.utc).isoformat(),
             "is_outbound": random.choice([True, False]),
             "is_reply": random.choice([True, False]),
             "folder_path": "INBOX",
             "message_size": random.randint(1024, 50000),
             "body_text": f"This is a sample email body for email {i+1}. Generated for POC demonstration.",
-            "created_at": datetime.utcnow().isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat()
         }
         
         # Insert email
@@ -313,7 +313,7 @@ async def generate_sample_emails(job_id: str, count: int):
                 "category": random.choice(categories),
                 "confidence": round(random.uniform(0.7, 1.0), 2),
                 "detection_method": "ai_classifier",
-                "created_at": datetime.utcnow().isoformat()
+                "created_at": datetime.now(timezone.utc).isoformat()
             }
             
             get_supabase().table('email_categories').insert(category_data).execute()
@@ -330,10 +330,23 @@ async def get_processing_jobs():
         
         jobs = []
         for job in result.data:
+            # Calculate progress safely, handling None and 0
+            total = job.get('total_records') or 0
+            processed = job.get('processed_records') or 0
+
+            if total > 0:
+                progress = round((processed / total) * 100)
+            elif job.get('status') == 'completed':
+                progress = 100  # If completed but no total_records, show 100%
+            else:
+                progress = 0  # Pending or running without total_records yet
+
             job_data = {
                 **job,
                 "mailbox_name": job.get('mailboxes', {}).get('name') if job.get('mailboxes') else 'Unknown Mailbox',
-                "progress": 0 if job['total_records'] == 0 else round((job['processed_records'] / job['total_records']) * 100)
+                "progress": progress,
+                "total_records": total,  # Ensure it's not None
+                "processed_records": processed  # Ensure it's not None
             }
             # Remove the nested mailboxes object
             if 'mailboxes' in job_data:
@@ -355,9 +368,9 @@ async def get_processing_jobs():
                 "total_records": 1000,
                 "processed_records": 1000,
                 "failed_records": 0,
-                "started_at": (datetime.utcnow() - timedelta(hours=1)).isoformat(),
-                "completed_at": datetime.utcnow().isoformat(),
-                "created_at": (datetime.utcnow() - timedelta(hours=1)).isoformat(),
+                "started_at": (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat(),
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "created_at": (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat(),
                 "error_log": [],
                 "progress": 100
             }
@@ -382,7 +395,7 @@ async def control_job(job_id: str, action: str):
         update_data = {"status": new_status}
         
         if action == "stop":
-            update_data["completed_at"] = datetime.utcnow().isoformat()
+            update_data["completed_at"] = datetime.now(timezone.utc).isoformat()
             
         get_supabase().table('processing_jobs').update(update_data).eq('id', job_id).execute()
         
@@ -428,7 +441,7 @@ async def reprocess_emails(job_id: str, background_tasks: BackgroundTasks):
             "total_records": 0,  # Will be updated
             "processed_records": 0,
             "failed_records": 0,
-            "created_at": datetime.utcnow().isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat()
         }
 
         result = get_supabase().table('processing_jobs').insert(reprocess_job_data).execute()
@@ -482,7 +495,7 @@ async def run_reprocessing(job_id: str, mailbox_id: str):
 
         # Update status to running
         await update_job_status(job_id, "running", {
-            "started_at": datetime.utcnow().isoformat()
+            "started_at": datetime.now(timezone.utc).isoformat()
         })
 
         # Initialize normalizer and tagger
@@ -686,7 +699,7 @@ async def run_reprocessing(job_id: str, mailbox_id: str):
         await update_job_status(job_id, "completed", {
             "processed_records": processed,
             "failed_records": failed,
-            "completed_at": datetime.utcnow().isoformat()
+            "completed_at": datetime.now(timezone.utc).isoformat()
         })
 
         logger.info(f"Reprocessing job {job_id} completed. Processed: {processed}, Failed: {failed}")
@@ -696,7 +709,7 @@ async def run_reprocessing(job_id: str, mailbox_id: str):
         logger.error(error_msg, exc_info=True)
         await update_job_status(job_id, "failed", {
             "error_log": [error_msg],
-            "completed_at": datetime.utcnow().isoformat()
+            "completed_at": datetime.now(timezone.utc).isoformat()
         })
 
 # Email analysis endpoints for dashboard
@@ -710,7 +723,7 @@ async def get_dashboard_stats():
         emails_count = sb.table('emails').select('id', count='exact').execute()
         mailboxes_count = sb.table('mailboxes').select('id', count='exact').execute()
 
-        today = datetime.utcnow().date().isoformat()
+        today = datetime.now(timezone.utc).date().isoformat()
         today_emails = sb.table('emails').select('id', count='exact').gte('sent_date', today).execute()
 
         processing_jobs_count = sb.table('processing_jobs').select('id', count='exact').in_('status', ['pending', 'running']).execute()
