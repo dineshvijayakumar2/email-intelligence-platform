@@ -8,8 +8,8 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE TABLE mailboxes (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name TEXT NOT NULL,
-  email_address TEXT UNIQUE NOT NULL,
-  mailbox_type TEXT NOT NULL CHECK (mailbox_type IN ('outlook', 'mbox', 'imap', 'pop3')),
+  email_address TEXT UNIQUE,  -- Optional: not required for file-based mailboxes (MBOX/PST/OLM)
+  mailbox_type TEXT NOT NULL CHECK (mailbox_type IN ('mbox', 'pst', 'olm')),  -- File-based formats only
   connection_config JSONB,
   is_active BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -17,6 +17,10 @@ CREATE TABLE mailboxes (
   last_sync_at TIMESTAMPTZ,
   total_emails INTEGER DEFAULT 0
 );
+
+-- Add helpful column comments
+COMMENT ON COLUMN mailboxes.email_address IS 'Optional email address - not required for file-based mailboxes (MBOX/PST/OLM)';
+COMMENT ON COLUMN mailboxes.mailbox_type IS 'Mailbox type: mbox (universal), pst (Windows Outlook), or olm (Mac Outlook)';
 
 -- Main emails table
 CREATE TABLE emails (

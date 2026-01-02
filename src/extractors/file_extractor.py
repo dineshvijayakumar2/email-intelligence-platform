@@ -46,28 +46,64 @@ class FileExtractor(BaseExtractor):
         Raises:
             FileNotFoundError: If file doesn't exist
             ValueError: If file type is not supported
+            PermissionError: If file is locked or no read permission
+            RuntimeError: If initialization fails
         """
         self.file_path = file_path
 
+        # Check file exists with helpful error message
         if not os.path.exists(file_path):
-            raise FileNotFoundError(f"File not found: {file_path}")
+            raise FileNotFoundError(
+                f"File not found: {file_path}\n"
+                f"Please verify:\n"
+                f"  - Path is correct\n"
+                f"  - File location is accessible (network drives, cloud storage, etc.)\n"
+                f"  - You have read permissions"
+            )
 
         # Detect file type
-        self.file_type = self._detect_file_type(file_path)
-        logger.info(f"Detected file type: {self.file_type}")
+        try:
+            self.file_type = self._detect_file_type(file_path)
+            logger.info(f"Detected file type: {self.file_type}")
+        except Exception as e:
+            raise RuntimeError(f"Failed to detect file type for {file_path}: {e}") from e
 
-        # Create appropriate extractor
-        if self.file_type == 'mbox':
-            self.extractor = MBOXExtractor()
-        elif self.file_type == 'pst':
-            self.extractor = PSTExtractor()
-        elif self.file_type == 'olm':
-            self.extractor = OLMExtractor()
-        else:
-            raise ValueError(f"Unsupported file type: {self.file_type}")
+        # Prepare connection config
+        connection_config = {'file_path': file_path}
+        connection_config.update(kwargs)
 
-        # Connect using specific extractor
-        self.extractor.connect(file_path, **kwargs)
+        # Create appropriate extractor with connection config
+        try:
+            if self.file_type == 'mbox':
+                self.extractor = MBOXExtractor(connection_config)
+            elif self.file_type == 'pst':
+                self.extractor = PSTExtractor(connection_config)
+            elif self.file_type == 'olm':
+                self.extractor = OLMExtractor(connection_config)
+            else:
+                raise ValueError(f"Unsupported file type: {self.file_type}")
+
+            # Connect using specific extractor (file_path already in connection_config)
+            logger.info(f"Initializing {self.file_type.upper()} extractor...")
+            self.extractor.connect(**kwargs)
+            logger.info(f"{self.file_type.upper()} extractor initialized successfully")
+
+        except PermissionError as e:
+            raise PermissionError(
+                f"Permission denied: {file_path}\n"
+                f"Possible causes:\n"
+                f"  - File is locked by another process\n"
+                f"  - Insufficient read permissions\n"
+                f"  - File is open in another application"
+            ) from e
+        except Exception as e:
+            # Generic error with context
+            logger.error(f"Failed to initialize {self.file_type} extractor: {e}", exc_info=True)
+            raise RuntimeError(
+                f"Failed to initialize {self.file_type} extractor\n"
+                f"File: {file_path}\n"
+                f"Error: {str(e)}"
+            ) from e
 
     def _detect_file_type(self, file_path: str) -> str:
         """

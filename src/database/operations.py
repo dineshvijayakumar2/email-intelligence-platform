@@ -725,20 +725,30 @@ class EmailOperations:
                 'failed_records': failed_records,
                 'status': status
             }
-            
+
             if error_log:
                 update_data['error_log'] = error_log
-            
-            if status in ['completed', 'failed']:
+
+            # Set started_at when job first transitions to running
+            if status == 'running':
+                # Check if started_at is not already set
+                existing_job = self.client.table('processing_jobs').select('started_at').eq('id', job_id).execute()
+                if existing_job.data and not existing_job.data[0].get('started_at'):
+                    update_data['started_at'] = datetime.now().isoformat()
+                    logger.info(f"Job {job_id} started at {update_data['started_at']}")
+
+            # Set completed_at when job finishes
+            if status in ['completed', 'failed', 'stopped']:
                 update_data['completed_at'] = datetime.now().isoformat()
-            
+                logger.info(f"Job {job_id} finished with status {status} at {update_data['completed_at']}")
+
             self.client.table('processing_jobs')\
                 .update(update_data)\
                 .eq('id', job_id)\
                 .execute()
-            
-            logger.debug(f"Updated job {job_id}: {processed_records} processed")
-            
+
+            logger.debug(f"Updated job {job_id}: status={status}, processed={processed_records}, failed={failed_records}")
+
         except Exception as e:
             logger.error(f"Failed to update job progress: {e}")
     

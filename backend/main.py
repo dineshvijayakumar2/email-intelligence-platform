@@ -134,15 +134,29 @@ async def test_connection(mailbox_id: str, connection_test: ConnectionTest):
 @app.post("/api/mailboxes/{mailbox_id}/process")
 async def start_processing(mailbox_id: str, config: ProcessingJobConfig, background_tasks: BackgroundTasks):
     """Start email processing for a mailbox"""
-    
+
     try:
         # Get mailbox info
         mailbox_result = get_supabase().table('mailboxes').select('*').eq('id', mailbox_id).execute()
         if not mailbox_result.data:
             raise HTTPException(status_code=404, detail="Mailbox not found")
-            
+
         mailbox = mailbox_result.data[0]
-        
+
+        # Check for existing active jobs for this mailbox
+        existing_jobs = get_supabase().table('processing_jobs').select('id, status').eq(
+            'mailbox_id', mailbox_id
+        ).in_('status', ['pending', 'running']).execute()
+
+        if existing_jobs.data:
+            active_job = existing_jobs.data[0]
+            raise HTTPException(
+                status_code=409,  # Conflict
+                detail=f"A job is already {active_job['status']} for this mailbox. "
+                       f"Please wait for it to complete or stop it first. "
+                       f"Job ID: {active_job['id']}"
+            )
+
         # Create processing job
         job_data = {
             "job_type": config.job_type,
