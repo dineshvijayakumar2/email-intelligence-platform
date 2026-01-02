@@ -489,13 +489,21 @@ async def run_reprocessing(job_id: str, mailbox_id: str):
         normalizer = EmailNormalizer()
         tagger = EmailTagger()
 
-        # Get all emails for this mailbox
         sb = get_supabase()
-        result = sb.table('emails').select('*').eq('mailbox_id', mailbox_id).execute()
-        emails = result.data
 
-        total_emails = len(emails)
+        # Get total count first (lightweight query)
+        count_result = sb.table('emails').select('id', count='exact').eq('mailbox_id', mailbox_id).execute()
+        total_emails = count_result.count or 0
         logger.info(f"Found {total_emails} emails to reprocess")
+
+        if total_emails == 0:
+            logger.warning(f"No emails found for mailbox {mailbox_id}")
+            await update_job_status(job_id, "completed", {
+                "total_records": 0,
+                "processed_records": 0,
+                "failed_records": 0
+            })
+            return
 
         # Update total records
         await update_job_status(job_id, "running", {
@@ -506,10 +514,18 @@ async def run_reprocessing(job_id: str, mailbox_id: str):
         failed = 0
         folders_to_create = set()
 
-        # Process in batches
+        # Process in batches using pagination (avoid loading all emails into memory)
         batch_size = 100
-        for i in range(0, total_emails, batch_size):
-            batch = emails[i:i + batch_size]
+        offset = 0
+
+        while offset < total_emails:
+            # Fetch one batch at a time from database
+            logger.info(f"Fetching batch: offset={offset}, limit={batch_size}")
+            result = sb.table('emails').select('*').eq('mailbox_id', mailbox_id).range(offset, offset + batch_size - 1).execute()
+            batch = result.data
+
+            if not batch:
+                break  # No more emails
 
             for email in batch:
                 try:
@@ -604,13 +620,16 @@ async def run_reprocessing(job_id: str, mailbox_id: str):
                     logger.error(f"Failed to reprocess email {email['id']}: {str(e)}")
                     failed += 1
 
-            # Update progress
+            # Update progress after each batch
             await update_job_status(job_id, "running", {
                 "processed_records": processed,
                 "failed_records": failed
             })
 
-            logger.info(f"Reprocessing progress: {processed}/{total_emails}")
+            logger.info(f"Reprocessing progress: {processed}/{total_emails} (batch offset: {offset})")
+
+            # Move to next batch
+            offset += batch_size
 
         # Step 3: Ensure all folders exist in folders table
         logger.info(f"Creating {len(folders_to_create)} folder entries...")
