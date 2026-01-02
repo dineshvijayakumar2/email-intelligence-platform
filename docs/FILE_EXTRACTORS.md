@@ -252,11 +252,16 @@ folders (
 
 ## Performance Comparison
 
-| Format | 1M Emails | Folder Extraction | Memory Usage |
-|--------|-----------|-------------------|--------------|
-| **MBOX** | ~30 min | Inferred (fast) | ~50MB |
-| **PST** | ~20 min | Native (instant) | ~100MB |
-| **OLM** | ~35 min | XML parse (fast) | ~75MB |
+| Format | 1M Emails | Folder Extraction | Memory Usage | Disk Space |
+|--------|-----------|-------------------|--------------|------------|
+| **MBOX** | ~30 min | Inferred (fast) | ~50MB | 0 (direct read) |
+| **PST** | ~20 min | Native (instant) | ~100MB | 0 (direct read) |
+| **OLM** | ~35 min | XML parse (fast) | ~75MB | ~100MB temp/MBOX |
+
+**All extractors use streaming for memory efficiency:**
+- MBOX: Line-by-line file reading
+- PST: pypff internal streaming
+- OLM: ZIP streaming with on-demand MBOX extraction
 
 ---
 

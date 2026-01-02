@@ -1,8 +1,15 @@
 """
-PST File Extractor for Windows Outlook Archives
+PST File Extractor for Windows Outlook Archives - Streaming Implementation
 
 Extracts emails from PST files with full folder hierarchy support.
 Requires: pypff library (pip install pypff-python)
+
+STREAMING APPROACH:
+- Uses pypff library which streams PST contents internally
+- Never loads entire PST database into memory
+- Recursively traverses folder tree on-demand
+- Uses generator pattern (yield) for memory-efficient processing
+- Suitable for multi-GB PST files
 """
 
 import logging

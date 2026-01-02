@@ -140,6 +140,7 @@ class EmailProcessor:
 
         except Exception as e:
             logger.error(f"Failed to initialize extractor: {e}")
+            logger.exception("Full traceback:")  # This will log the full stack trace
             return False
 
     def process_emails(
