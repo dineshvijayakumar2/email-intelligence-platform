@@ -24,7 +24,7 @@ References:
 import logging
 import zipfile
 import xml.etree.ElementTree as ET
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Iterator, Optional, List
 from pathlib import Path
 
@@ -36,48 +36,57 @@ logger = logging.getLogger(__name__)
 class OLMExtractor(BaseExtractor):
     """Extract emails from OLM (Mac Outlook) XML-based archives"""
 
-    def __init__(self):
-        """Initialize OLM extractor"""
-        super().__init__(connection_config={})
-        self.file_path = None
+    def __init__(self, connection_config: Dict):
+        """Initialize OLM extractor
+
+        Args:
+            connection_config: Dict with 'file_path' key
+        """
+        super().__init__(connection_config=connection_config)
+        self.source_type = "olm"
+        self.file_path = connection_config.get('file_path')
         self.zip_file = None
         self.message_files = []  # List of message XML file paths
         self.folder_structure = {}  # Maps folder paths to message counts
 
-    def connect(self, file_path: str, **kwargs):
+    def connect(self, **kwargs) -> bool:
         """
         Open OLM ZIP archive for streaming access
 
-        Args:
-            file_path: Path to OLM file
+        Returns:
+            True if connection successful
 
         Raises:
+            ValueError: If file_path not in connection_config
             FileNotFoundError: If file doesn't exist
             zipfile.BadZipFile: If file is not a valid ZIP
+            ConnectionError: If failed to open OLM file
         """
-        self.file_path = file_path
+        if not self.file_path:
+            raise ValueError("file_path not provided in connection_config")
 
-        if not Path(file_path).exists():
-            raise FileNotFoundError(f"OLM file not found: {file_path}")
+        if not Path(self.file_path).exists():
+            raise FileNotFoundError(f"OLM file not found: {self.file_path}")
 
         try:
             # Open ZIP file for streaming (no extraction)
-            self.zip_file = zipfile.ZipFile(file_path, 'r')
-            logger.info(f"Opened OLM ZIP archive: {file_path}")
+            self.zip_file = zipfile.ZipFile(self.file_path, 'r')
+            logger.info(f"Connected to OLM ZIP archive: {self.file_path}")
 
             # Build index of message files and folder structure
             self._index_messages()
 
             logger.info(f"Found {len(self.message_files)} messages in {len(self.folder_structure)} folders")
+            return True
 
         except zipfile.BadZipFile as e:
             logger.error(f"Invalid OLM file (not a ZIP archive): {e}")
-            raise
+            raise ConnectionError(f"OLM connection failed: not a valid ZIP file") from e
         except Exception as e:
-            logger.error(f"Failed to open OLM file: {e}")
+            logger.error(f"Failed to connect to OLM file: {e}")
             if self.zip_file:
                 self.zip_file.close()
-            raise
+            raise ConnectionError(f"OLM connection failed: {e}") from e
 
     def _index_messages(self):
         """
@@ -136,39 +145,49 @@ class OLMExtractor(BaseExtractor):
 
         return '/'.join(folder_parts)
 
-    def extract_emails(self, max_emails: int = 0) -> Iterator[Dict]:
+    def extract_emails(self, max_emails: Optional[int] = None) -> Iterator[Dict]:
         """
         Extract emails from OLM archive by streaming XML files
 
+        NO date filtering - that belongs in the pipeline, not the extractor!
+
         Args:
-            max_emails: Maximum emails to extract (0 = unlimited)
+            max_emails: Maximum emails to extract (None = unlimited)
 
         Yields:
-            Email dictionaries with standardized fields
+            Standardized email dictionaries with folder_path from OLM structure
         """
         if not self.zip_file:
             raise RuntimeError("OLM file not opened. Call connect() first.")
 
-        extracted = 0
+        self._mark_start()
 
-        for message_path in self.message_files:
-            try:
-                # Parse message XML directly from ZIP (no disk extraction)
-                email_dict = self._parse_message_xml(message_path)
+        try:
+            extracted = 0
 
-                if email_dict:
-                    yield email_dict
-                    extracted += 1
+            for message_path in self.message_files:
+                try:
+                    # Parse message XML directly from ZIP (no disk extraction)
+                    email_dict = self._parse_message_xml(message_path)
 
-                    if max_emails > 0 and extracted >= max_emails:
-                        logger.info(f"Reached max_emails limit: {max_emails}")
-                        return
+                    if email_dict:
+                        yield email_dict
+                        extracted += 1
+                        self.stats['emails_extracted'] = extracted
 
-            except Exception as e:
-                logger.warning(f"Failed to parse {message_path}: {e}")
-                continue
+                        if max_emails and extracted >= max_emails:
+                            logger.info(f"Reached max_emails limit: {max_emails}")
+                            break
 
-        logger.info(f"OLM extraction completed. Extracted {extracted} emails")
+                except Exception as e:
+                    logger.warning(f"Failed to parse {message_path}: {e}")
+                    self.stats['errors'].append(f"Parse error in {message_path}: {e}")
+                    continue
+
+            logger.info(f"OLM extraction completed. Extracted {extracted} emails")
+
+        finally:
+            self._mark_end()
 
     def _parse_message_xml(self, message_path: str) -> Optional[Dict]:
         """
@@ -178,7 +197,7 @@ class OLMExtractor(BaseExtractor):
             message_path: Path to message XML file within ZIP
 
         Returns:
-            Email dictionary or None if parsing fails
+            Standardized email dictionary or None if parsing fails
         """
         try:
             # Read XML from ZIP (in-memory, no disk extraction)
@@ -221,6 +240,10 @@ class OLMExtractor(BaseExtractor):
             if not body_text:
                 body_text = self._get_text(email_elem, 'OPFMessageCopyPreview', '')
 
+            # Threading information
+            in_reply_to = self._get_text(email_elem, 'OPFMessageCopyInReplyTo', '')
+            references = self._get_text(email_elem, 'OPFMessageCopyReferences', '')  # If available
+
             # Determine if outbound
             is_outbound_str = self._get_text(email_elem, 'OPFMessageIsOutgoing', '0')
             is_outbound = is_outbound_str == '1e0' or is_outbound_str == '1'
@@ -230,10 +253,16 @@ class OLMExtractor(BaseExtractor):
                 is_outbound = self._is_sent_folder(folder_path)
 
             # Check if reply
-            is_reply = self._is_reply(subject, email_elem)
+            is_reply = bool(in_reply_to) or (subject and subject.lower().startswith(('re:', 'aw:', 'fwd:', 'fw:')))
 
-            # Build standardized email dict
-            email_dict = {
+            # Extract attachments
+            attachments = self._extract_attachments(email_elem)
+
+            # Get message size (rough estimate from body lengths)
+            message_size = len(body_text) + len(body_html)
+
+            # Build raw email dict with OLM-specific data
+            raw_email = {
                 'message_id': message_id,
                 'subject': subject,
                 'sender_email': sender_email,
@@ -248,19 +277,29 @@ class OLMExtractor(BaseExtractor):
                 'folder_path': folder_path,
                 'is_outbound': is_outbound,
                 'is_reply': is_reply,
+                'message_size': message_size,
                 'raw_headers': {
                     'olm_path': message_path,
                     'thread_topic': self._get_text(email_elem, 'OPFMessageCopyThreadTopic', ''),
                     'thread_index': self._get_text(email_elem, 'OPFMessageCopyThreadIndex', ''),
-                    'in_reply_to': self._get_text(email_elem, 'OPFMessageCopyInReplyTo', ''),
+                    'In-Reply-To': in_reply_to,
+                    'References': references,
                     'priority': self._get_text(email_elem, 'OPFMessageGetPriority', '3'),
-                }
+                },
+                # Threading fields
+                'in_reply_to': in_reply_to,
+                'references': references,
+                # Attachments
+                'attachments': attachments
             }
 
-            return email_dict
+            # Use BaseExtractor's standardization
+            source_path = message_path  # Full ZIP path as source
+            return self._standardize_email(raw_email, source_path)
 
         except Exception as e:
             logger.warning(f"Failed to parse OLM message {message_path}: {e}")
+            self.stats['errors'].append(f"Parse error: {e}")
             return None
 
     def _get_text(self, parent: ET.Element, tag: str, default: str = '') -> str:
@@ -333,20 +372,49 @@ class OLMExtractor(BaseExtractor):
             logger.debug(f"Could not parse datetime '{date_str}': {e}")
             return None
 
-    def _is_sent_folder(self, folder_path: str) -> bool:
-        """Check if folder is a Sent folder"""
-        sent_indicators = ['sent', 'sent items', 'sent mail', 'outbox']
-        return any(indicator in folder_path.lower() for indicator in sent_indicators)
+    def _extract_attachments(self, email_elem: ET.Element) -> List[Dict]:
+        """
+        Extract attachment metadata from OLM XML
 
-    def _is_reply(self, subject: str, email_elem: ET.Element) -> bool:
-        """Check if message is a reply"""
-        # Check subject
-        if subject and subject.lower().startswith(('re:', 'aw:', 'fwd:', 'fw:')):
-            return True
+        OLM attachments are typically referenced in OPFMessageCopyAttachmentList
 
-        # Check InReplyTo field
-        in_reply_to = self._get_text(email_elem, 'OPFMessageCopyInReplyTo', '')
-        return bool(in_reply_to)
+        Args:
+            email_elem: XML email element
+
+        Returns:
+            List of attachment dictionaries
+        """
+        attachments = []
+
+        try:
+            # Look for attachment list element
+            attach_list = email_elem.find('OPFMessageCopyAttachmentList')
+            if attach_list is None:
+                return attachments
+
+            # Find all attachment entries
+            for i, attach_elem in enumerate(attach_list.findall('.//messageAttachment')):
+                try:
+                    filename = attach_elem.get('OPFAttachmentName', f'attachment_{i}')
+                    # Size might not always be available in OLM XML
+                    size_str = attach_elem.get('OPFAttachmentContentLength', '0')
+                    size = int(size_str) if size_str.isdigit() else 0
+
+                    attachments.append({
+                        'id': f'olm-att-{i}',
+                        'filename': filename,
+                        'size': size,
+                        'mime_type': attach_elem.get('OPFAttachmentContentType', ''),
+                        'storage_pointer': f'attachment_{i}'
+                    })
+
+                except Exception as e:
+                    logger.warning(f"Failed to extract attachment {i}: {e}")
+
+        except Exception as e:
+            logger.debug(f"No attachments found or error extracting: {e}")
+
+        return attachments
 
     def disconnect(self):
         """Close ZIP file"""
@@ -406,10 +474,10 @@ def main():
     print(f"File: {olm_path}")
     print(f"Max emails: {max_emails}\n")
 
-    extractor = OLMExtractor()
+    extractor = OLMExtractor({'file_path': olm_path})
 
     try:
-        extractor.connect(olm_path)
+        extractor.connect()
 
         # Show folders
         print("\nFolders found:")

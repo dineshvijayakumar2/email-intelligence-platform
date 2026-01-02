@@ -13,8 +13,8 @@ STREAMING APPROACH:
 """
 
 import logging
-from datetime import datetime
-from typing import Dict, Iterator, Optional
+from datetime import datetime, timezone
+from typing import Dict, Iterator, Optional, List
 from pathlib import Path
 
 from .base_extractor import BaseExtractor
@@ -25,11 +25,16 @@ logger = logging.getLogger(__name__)
 class PSTExtractor(BaseExtractor):
     """Extract emails from PST (Outlook) files"""
 
-    def __init__(self):
-        """Initialize PST extractor"""
-        super().__init__(connection_config={})
+    def __init__(self, connection_config: Dict):
+        """Initialize PST extractor
+
+        Args:
+            connection_config: Dict with 'file_path' key
+        """
+        super().__init__(connection_config=connection_config)
+        self.source_type = "pst"
         self.pst_file = None
-        self.file_path = None
+        self.file_path = connection_config.get('file_path')
 
         # Check if pypff is available
         try:
@@ -39,47 +44,58 @@ class PSTExtractor(BaseExtractor):
             logger.error("pypff library not installed. Install with: pip install pypff-python")
             raise ImportError("pypff library required for PST extraction")
 
-    def connect(self, file_path: str, **kwargs):
+    def connect(self, **kwargs) -> bool:
         """
         Open PST file
 
-        Args:
-            file_path: Path to PST file
-        """
-        self.file_path = file_path
+        Returns:
+            True if connection successful
 
-        if not Path(file_path).exists():
-            raise FileNotFoundError(f"PST file not found: {file_path}")
+        Raises:
+            FileNotFoundError: If PST file doesn't exist
+            ConnectionError: If failed to open PST file
+        """
+        if not self.file_path:
+            raise ValueError("file_path not provided in connection_config")
+
+        if not Path(self.file_path).exists():
+            raise FileNotFoundError(f"PST file not found: {self.file_path}")
 
         try:
             self.pst_file = self.pypff.file()
-            self.pst_file.open(file_path)
-            logger.info(f"Opened PST file: {file_path}")
+            self.pst_file.open(self.file_path)
+            logger.info(f"Connected to PST file: {self.file_path}")
 
             root = self.pst_file.get_root_folder()
             logger.info(f"PST root folder: {root.name if root else 'Unknown'}")
+            return True
 
         except Exception as e:
-            logger.error(f"Failed to open PST file: {e}")
-            raise
+            logger.error(f"Failed to connect to PST file: {e}")
+            raise ConnectionError(f"PST connection failed: {e}") from e
 
-    def extract_emails(self, max_emails: int = 0) -> Iterator[Dict]:
+    def extract_emails(self, max_emails: Optional[int] = None) -> Iterator[Dict]:
         """
         Extract emails from PST file with folder hierarchy
 
+        NO date filtering - that belongs in the pipeline, not the extractor!
+
         Args:
-            max_emails: Maximum emails to extract (0 = unlimited)
+            max_emails: Maximum emails to extract (None = unlimited)
 
         Yields:
-            Email dictionaries with folder_path from PST structure
+            Standardized email dictionaries with folder_path from PST structure
         """
         if not self.pst_file:
             raise RuntimeError("PST file not opened. Call connect() first.")
+
+        self._mark_start()
 
         try:
             root_folder = self.pst_file.get_root_folder()
             if not root_folder:
                 logger.error("No root folder found in PST")
+                self._mark_end()
                 return
 
             extracted = 0
@@ -88,8 +104,9 @@ class PSTExtractor(BaseExtractor):
             for email in self._extract_from_folder(root_folder, ""):
                 yield email
                 extracted += 1
+                self.stats['emails_extracted'] = extracted
 
-                if max_emails > 0 and extracted >= max_emails:
+                if max_emails and extracted >= max_emails:
                     logger.info(f"Reached max_emails limit: {max_emails}")
                     break
 
@@ -97,7 +114,10 @@ class PSTExtractor(BaseExtractor):
 
         except Exception as e:
             logger.error(f"PST extraction failed: {e}")
+            self.stats['errors'].append(str(e))
             raise
+        finally:
+            self._mark_end()
 
     def _extract_from_folder(self, folder, parent_path: str) -> Iterator[Dict]:
         """
@@ -149,18 +169,29 @@ class PSTExtractor(BaseExtractor):
             folder_path: Folder path from PST structure
 
         Returns:
-            Email dictionary or None if parsing fails
+            Standardized email dictionary or None if parsing fails
         """
         try:
-            # Extract basic fields
-            email_dict = {
+            # Extract threading information from headers
+            headers = self._extract_headers(message)
+            in_reply_to = headers.get('In-Reply-To', '')
+            references = headers.get('References', '')
+
+            # Parse recipients with CC/BCC separation
+            recipients, cc_list, bcc_list = self._parse_recipients_with_type(message.get_recipients())
+
+            # Extract attachments
+            attachments = self._extract_attachments(message)
+
+            # Build raw email dict with PST-specific data
+            raw_email = {
                 'message_id': self._get_message_id(message),
                 'subject': message.subject or '',
                 'sender_email': self._extract_email_from_string(message.sender_name or ''),
                 'sender_name': message.sender_name or '',
-                'recipients': self._parse_recipients(message.get_recipients()),
-                'cc_list': [],  # TODO: Extract CC from recipients
-                'bcc_list': [],  # TODO: Extract BCC from recipients
+                'recipients': recipients,
+                'cc_list': cc_list,
+                'bcc_list': bcc_list,
                 'sent_date': self._convert_filetime(message.delivery_time),
                 'received_date': self._convert_filetime(message.client_submit_time),
                 'body_text': message.plain_text_body or '',
@@ -168,13 +199,22 @@ class PSTExtractor(BaseExtractor):
                 'folder_path': folder_path,  # Real folder from PST structure!
                 'is_outbound': self._is_sent_folder(folder_path),
                 'is_reply': self._is_reply(message),
-                'raw_headers': self._extract_headers(message)
+                'raw_headers': headers,
+                'message_size': message.size if hasattr(message, 'size') else 0,
+                # Threading fields
+                'in_reply_to': in_reply_to,
+                'references': references,
+                # Attachments
+                'attachments': attachments
             }
 
-            return email_dict
+            # Use BaseExtractor's standardization
+            source_path = f"{folder_path}/{self._get_message_id(message)}"
+            return self._standardize_email(raw_email, source_path)
 
         except Exception as e:
             logger.warning(f"Failed to parse PST message: {e}")
+            self.stats['errors'].append(f"Parse error: {e}")
             return None
 
     def _get_message_id(self, message) -> str:
@@ -205,27 +245,90 @@ class PSTExtractor(BaseExtractor):
         except Exception:
             return None
 
-    def _parse_recipients(self, recipients) -> list:
-        """Parse PST recipients to list of dicts"""
-        recipient_list = []
+    def _parse_recipients_with_type(self, recipients):
+        """
+        Parse PST recipients and separate into TO/CC/BCC lists
+
+        Args:
+            recipients: pypff recipients object
+
+        Returns:
+            Tuple of (to_list, cc_list, bcc_list)
+        """
+        to_list = []
+        cc_list = []
+        bcc_list = []
 
         if not recipients:
-            return recipient_list
+            return to_list, cc_list, bcc_list
 
         try:
             for recipient in recipients:
                 email = recipient.email_address or ''
                 name = recipient.name or ''
 
-                if email:
-                    recipient_list.append({
-                        'email': email.lower(),
-                        'name': name
-                    })
+                if not email:
+                    continue
+
+                recipient_dict = {
+                    'email': email.lower(),
+                    'name': name
+                }
+
+                # Check recipient type (MAPI property)
+                # MAPI_TO = 1, MAPI_CC = 2, MAPI_BCC = 3
+                recipient_type = getattr(recipient, 'type', 1)  # Default to TO
+
+                if recipient_type == 2:
+                    cc_list.append(recipient_dict)
+                elif recipient_type == 3:
+                    bcc_list.append(recipient_dict)
+                else:
+                    to_list.append(recipient_dict)
+
         except Exception as e:
             logger.warning(f"Failed to parse recipients: {e}")
 
-        return recipient_list
+        return to_list, cc_list, bcc_list
+
+    def _extract_attachments(self, message) -> List[Dict]:
+        """
+        Extract attachment metadata from PST message
+
+        Args:
+            message: pypff message object
+
+        Returns:
+            List of attachment dictionaries
+        """
+        attachments = []
+
+        try:
+            num_attachments = message.get_number_of_attachments()
+
+            for i in range(num_attachments):
+                try:
+                    attachment = message.get_attachment(i)
+
+                    # Get attachment properties
+                    filename = attachment.name or f'attachment_{i}'
+                    size = attachment.size if hasattr(attachment, 'size') else 0
+
+                    attachments.append({
+                        'id': f'pst-att-{i}',
+                        'filename': filename,
+                        'size': size,
+                        'mime_type': '',  # PST doesn't reliably store MIME type
+                        'storage_pointer': f'attachment_{i}'  # Index for retrieval
+                    })
+
+                except Exception as e:
+                    logger.warning(f"Failed to extract attachment {i}: {e}")
+
+        except Exception as e:
+            logger.warning(f"Failed to get attachments: {e}")
+
+        return attachments
 
     def _extract_email_from_string(self, text: str) -> str:
         """Extract email address from string"""
@@ -235,11 +338,6 @@ class PSTExtractor(BaseExtractor):
         import re
         match = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', text)
         return match.group(0).lower() if match else ''
-
-    def _is_sent_folder(self, folder_path: str) -> bool:
-        """Check if folder is a Sent folder"""
-        sent_indicators = ['sent', 'sent items', 'sent mail', 'outbox']
-        return any(indicator in folder_path.lower() for indicator in sent_indicators)
 
     def _is_reply(self, message) -> bool:
         """Check if message is a reply"""
