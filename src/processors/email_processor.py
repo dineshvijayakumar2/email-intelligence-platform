@@ -206,7 +206,7 @@ class EmailProcessor:
                 # Job was stopped by user
                 self.db_ops.update_job_progress(
                     job_id=job_id,
-                    processed_records=result['success'],
+                    processed_records=result['total'],  # Total emails processed (not just inserted)
                     failed_records=result['failed'],
                     status='stopped'
                 )
@@ -215,11 +215,11 @@ class EmailProcessor:
                 # Job completed normally
                 self.db_ops.update_job_progress(
                     job_id=job_id,
-                    processed_records=result['success'],
+                    processed_records=result['total'],  # Total emails processed (not just inserted)
                     failed_records=result['failed'],
                     status='completed'
                 )
-                logger.info(f"Processing completed for job {job_id}: {result}")
+                logger.info(f"Processing completed for job {job_id}: {result} ({result['skipped']} skipped as duplicates)")
 
             # TODO: Implement categorization in Stage 2
             if enable_categorization:
