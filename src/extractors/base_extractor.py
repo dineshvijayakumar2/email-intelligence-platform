@@ -1,19 +1,48 @@
+"""
+Base Extractor - Stable Contract for All Email Format Adapters
+
+This is the core abstraction that all format-specific extractors (MBOX, PST, OLM, etc.)
+must implement. It defines the minimal, stable interface that the rest of the system
+depends on.
+
+Design principles:
+1. Format adapters (extractors) are thin - they parse and yield standardized emails
+2. Cross-cutting concerns (date filtering, dedup, indexing) live in the pipeline
+3. All extractors speak the same language (standardized email dict)
+4. Shared logic lives here to avoid duplication
+"""
+
 from abc import ABC, abstractmethod
-from typing import Iterator, Dict, Optional, List
+from typing import Iterator, Dict, Optional, List, Any
+from datetime import datetime, timezone
 import logging
-from datetime import datetime
+import hashlib
 
 logger = logging.getLogger(__name__)
 
+
 class BaseExtractor(ABC):
-    """Abstract base class for email extractors"""
-    
-    def __init__(self, connection_config: Dict):
+    """
+    Abstract base class for email extractors
+
+    Contract:
+    - __init__(connection_config) stores configuration
+    - connect(**kwargs) establishes connection to source
+    - extract_emails(max_emails) yields standardized email dicts
+    - get_folders() returns folder metadata for UI
+    - disconnect() cleans up resources
+    """
+
+    def __init__(self, connection_config: Dict[str, Any]):
         """
         Initialize extractor with connection configuration
-        
+
         Args:
-            connection_config: Configuration for connecting to email source
+            connection_config: Dict with connection details
+                - file_path: Path to email file (for file-based formats)
+                - url: Cloud URL (for cloud sources)
+                - credentials: Auth details (for remote sources)
+                - format-specific options
         """
         self.config = connection_config
         self.stats = {
@@ -23,61 +52,138 @@ class BaseExtractor(ABC):
             'start_time': None,
             'end_time': None
         }
-    
+        self.source_type = None  # Set by subclass: "mbox", "pst", "olm", etc.
+
     @abstractmethod
-    def connect(self) -> bool:
-        """Connect to email source"""
-        pass
-    
-    @abstractmethod
-    def extract_emails(
-        self, 
-        folder_name: Optional[str] = None,
-        date_from: Optional[datetime] = None,
-        date_to: Optional[datetime] = None,
-        max_emails: Optional[int] = None
-    ) -> Iterator[Dict]:
+    def connect(self, **kwargs) -> bool:
         """
-        Extract emails and yield as dictionaries
-        
+        Establish connection to email source
+
+        Returns:
+            True if connection successful
+
+        Raises:
+            ConnectionError: If connection fails
+        """
+        pass
+
+    @abstractmethod
+    def extract_emails(self, max_emails: Optional[int] = None) -> Iterator[Dict]:
+        """
+        Extract emails and yield as standardized dictionaries
+
+        This should ONLY parse and normalize - no date filtering, no deduplication.
+        Those concerns belong in the pipeline layer.
+
         Args:
-            folder_name: Specific folder to extract from (None for all)
-            date_from: Extract emails from this date
-            date_to: Extract emails until this date
-            max_emails: Maximum number of emails to extract
-            
+            max_emails: Maximum number of emails to extract (None = all)
+
         Yields:
-            Dict: Email data in standardized format
+            Dict: Standardized email dictionary (see _standardize_email for schema)
         """
         pass
-    
+
     @abstractmethod
     def get_folders(self) -> List[Dict]:
-        """Get list of available folders"""
+        """
+        Get list of available folders from source
+
+        Returns:
+            List of folder dicts with:
+                - id: Unique folder identifier
+                - name: Display name
+                - path: Full folder path
+                - message_count: Number of messages (optional)
+                - type: Folder type hint (inbox, sent, drafts, etc.)
+        """
         pass
-    
+
     @abstractmethod
-    def disconnect(self):
-        """Clean up connection"""
+    def disconnect(self) -> None:
+        """Clean up connection and resources"""
         pass
-    
+
+    # =========================================================================
+    # Stats and Lifecycle Methods
+    # =========================================================================
+
     def get_stats(self) -> Dict:
         """Return extraction statistics"""
         return self.stats
-    
-    def _standardize_email(self, raw_email: Dict) -> Dict:
+
+    def _mark_start(self):
+        """Mark extraction start time"""
+        self.stats['start_time'] = datetime.now(timezone.utc)
+        logger.info(f"Starting {self.source_type} extraction at {self.stats['start_time']}")
+
+    def _mark_end(self):
+        """Mark extraction end time"""
+        self.stats['end_time'] = datetime.now(timezone.utc)
+        duration = (self.stats['end_time'] - self.stats['start_time']).total_seconds()
+        logger.info(f"Completed {self.source_type} extraction in {duration:.2f}s - "
+                   f"Total: {self.stats['total']}, Success: {self.stats['success']}, "
+                   f"Failed: {self.stats['failed']}")
+
+    def _update_stats(self, success: bool, error: str = None):
+        """Update extraction statistics"""
+        self.stats['total'] += 1
+        if success:
+            self.stats['success'] += 1
+        else:
+            self.stats['failed'] += 1
+            if error:
+                logger.error(f"Extraction error: {error}")
+
+    # =========================================================================
+    # Standardization - The Core Contract
+    # =========================================================================
+
+    def _standardize_email(self, raw_email: Dict, source_path: str = None) -> Dict:
         """
-        Standardize email format across different extractors
-        
-        Returns standardized email dict with fields:
-        - message_id, subject, sender_email, sender_name
-        - recipients, cc_list, bcc_list
-        - sent_date, received_date
-        - body_text, body_html
-        - folder_path, is_outbound, is_reply
-        - raw_headers, message_size
+        Convert raw format-specific email to standardized schema
+
+        Standard Email Schema:
+        ----------------------
+        REQUIRED FIELDS:
+        - message_id: Unique message identifier
+        - subject: Email subject
+        - sender_email: Sender email address (normalized)
+        - sender_name: Sender display name
+        - recipients: List[{email, name}]
+        - cc_list: List[{email, name}]
+        - bcc_list: List[{email, name}]
+        - sent_date: datetime when sent
+        - received_date: datetime when received
+        - body_text: Plain text body
+        - body_html: HTML body
+        - folder_path: Folder location
+        - is_outbound: True if sent by user
+        - is_reply: True if reply/forward
+        - raw_headers: Dict of original headers
+        - message_size: Size in bytes
+
+        RECOMMENDED FIELDS (for future):
+        - attachments: List[{id, filename, size, mime_type, storage_pointer}]
+        - source: Format type ("mbox", "pst", "olm")
+        - source_path: Location within source (offset, ZIP entry, folder+id)
+        - thread_key: Threading identifier (Message-Id/In-Reply-To based)
+
+        Args:
+            raw_email: Format-specific email dict
+            source_path: Optional path within source for debugging
+
+        Returns:
+            Standardized email dict
         """
+        # Generate thread key for future threading support
+        thread_key = self._generate_thread_key(
+            raw_email.get('message_id'),
+            raw_email.get('in_reply_to'),
+            raw_email.get('references')
+        )
+
         return {
+            # Required fields
             'message_id': raw_email.get('message_id', ''),
             'subject': raw_email.get('subject', ''),
             'sender_email': self._clean_email(raw_email.get('sender_email', '')),
@@ -85,29 +191,48 @@ class BaseExtractor(ABC):
             'recipients': self._normalize_recipients(raw_email.get('recipients', [])),
             'cc_list': self._normalize_recipients(raw_email.get('cc_list', [])),
             'bcc_list': self._normalize_recipients(raw_email.get('bcc_list', [])),
-            'sent_date': raw_email.get('sent_date'),
-            'received_date': raw_email.get('received_date'),
+            'sent_date': self._normalize_datetime(raw_email.get('sent_date')),
+            'received_date': self._normalize_datetime(raw_email.get('received_date')),
             'body_text': raw_email.get('body_text', ''),
             'body_html': raw_email.get('body_html', ''),
             'folder_path': raw_email.get('folder_path', 'INBOX'),
             'is_outbound': raw_email.get('is_outbound', False),
             'is_reply': raw_email.get('is_reply', False),
             'raw_headers': raw_email.get('raw_headers', {}),
-            'message_size': len(raw_email.get('body_text', ''))
+            'message_size': len(raw_email.get('body_text', '')),
+
+            # Recommended fields
+            'attachments': raw_email.get('attachments', []),
+            'source': self.source_type,
+            'source_path': source_path or raw_email.get('source_path', ''),
+            'thread_key': thread_key
         }
-    
+
+    # =========================================================================
+    # Shared Helper Methods
+    # =========================================================================
+
     def _clean_email(self, email: str) -> str:
         """Clean and normalize email address"""
-        return email.lower().strip() if email else ''
-    
-    def _normalize_recipients(self, recipients) -> List[Dict]:
-        """Normalize recipients to standard format"""
+        if not email:
+            return ''
+        return email.lower().strip()
+
+    def _normalize_recipients(self, recipients: Any) -> List[Dict]:
+        """
+        Normalize recipients to standard format: List[{email, name}]
+
+        Handles:
+        - String: "user@domain.com"
+        - List of strings: ["user1@domain.com", "user2@domain.com"]
+        - List of dicts: [{"email": "user@domain.com", "name": "User"}]
+        """
         if not recipients:
             return []
-        
+
         if isinstance(recipients, str):
             return [{'email': self._clean_email(recipients), 'name': ''}]
-        
+
         normalized = []
         for recipient in recipients:
             if isinstance(recipient, str):
@@ -120,15 +245,138 @@ class BaseExtractor(ABC):
                     'email': self._clean_email(recipient.get('email', '')),
                     'name': recipient.get('name', '')
                 })
-        
+
         return normalized
-    
-    def _update_stats(self, success: bool, error: str = None):
-        """Update extraction statistics"""
-        self.stats['total'] += 1
-        if success:
-            self.stats['success'] += 1
+
+    def _normalize_datetime(self, dt: Any, default_tz=timezone.utc) -> Optional[datetime]:
+        """
+        Normalize datetime to consistent format with timezone
+
+        Args:
+            dt: datetime object, string, or None
+            default_tz: Default timezone if none specified
+
+        Returns:
+            datetime object with timezone or None
+        """
+        if dt is None:
+            return None
+
+        if isinstance(dt, datetime):
+            # Ensure timezone awareness
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=default_tz)
+            return dt
+
+        # If string, try to parse (subclasses can override for format-specific parsing)
+        if isinstance(dt, str):
+            try:
+                parsed = datetime.fromisoformat(dt)
+                if parsed.tzinfo is None:
+                    parsed = parsed.replace(tzinfo=default_tz)
+                return parsed
+            except Exception as e:
+                logger.debug(f"Could not parse datetime '{dt}': {e}")
+                return None
+
+        return None
+
+    def _is_sent_folder(self, folder_path: str) -> bool:
+        """
+        Check if folder is a Sent folder
+
+        Common indicators across all email systems
+        """
+        if not folder_path:
+            return False
+
+        sent_indicators = [
+            'sent', 'sent items', 'sent mail', 'sent messages',
+            'outbox', 'envoyé', 'enviados', 'gesendete'  # International
+        ]
+        folder_lower = folder_path.lower()
+        return any(indicator in folder_lower for indicator in sent_indicators)
+
+    def _is_reply_subject(self, subject: str) -> bool:
+        """
+        Check if subject indicates reply or forward
+
+        Handles international reply/forward prefixes
+        """
+        if not subject:
+            return False
+
+        subject_lower = subject.lower().strip()
+        reply_prefixes = [
+            're:', 'aw:',  # Reply (English, German)
+            'fwd:', 'fw:', 'wg:',  # Forward (English, German)
+            'sv:',  # Reply (Swedish)
+            'vs:',  # Reply (Finnish)
+        ]
+        return any(subject_lower.startswith(prefix) for prefix in reply_prefixes)
+
+    def _generate_thread_key(self, message_id: str, in_reply_to: str = None,
+                            references: str = None) -> str:
+        """
+        Generate thread key for email threading
+
+        Uses Message-ID and In-Reply-To to group related emails
+
+        Args:
+            message_id: Message-ID header
+            in_reply_to: In-Reply-To header
+            references: References header
+
+        Returns:
+            Thread key (hash of conversation root)
+        """
+        # Use In-Reply-To as thread root if available
+        if in_reply_to:
+            root = in_reply_to.strip()
+        # Otherwise use first reference
+        elif references:
+            refs = references.split()
+            root = refs[0] if refs else message_id
+        # Otherwise this starts a new thread
         else:
-            self.stats['failed'] += 1
-            if error:
-                logger.error(f"Extraction error: {error}")
+            root = message_id
+
+        if not root:
+            return ''
+
+        # Hash to fixed-length key
+        return hashlib.sha256(root.encode()).hexdigest()[:16]
+
+    def _extract_message_id(self, headers: Dict) -> str:
+        """
+        Extract Message-ID from headers
+
+        Tries multiple common header formats
+        """
+        for key in ['Message-ID', 'Message-Id', 'message-id']:
+            if key in headers:
+                msg_id = headers[key]
+                # Strip angle brackets if present
+                return msg_id.strip('<>')
+        return ''
+
+    def _calculate_message_size(self, body_text: str = '', body_html: str = '',
+                                attachments: List = None) -> int:
+        """
+        Calculate approximate message size
+
+        Args:
+            body_text: Plain text body
+            body_html: HTML body
+            attachments: List of attachment dicts with 'size' field
+
+        Returns:
+            Size in bytes
+        """
+        size = len(body_text) + len(body_html)
+
+        if attachments:
+            for att in attachments:
+                size += att.get('size', 0)
+
+        return size
