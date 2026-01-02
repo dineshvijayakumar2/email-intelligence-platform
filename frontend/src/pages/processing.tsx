@@ -142,6 +142,15 @@ export const ProcessingJobs: React.FC = () => {
 
   const columns = [
     {
+      title: 'Job ID',
+      dataIndex: 'id',
+      key: 'id',
+      width: 100,
+      render: (id: string) => (
+        <Text code style={{ fontSize: 11 }}>{id.substring(0, 8)}</Text>
+      ),
+    },
+    {
       title: 'Job Type',
       dataIndex: 'job_type',
       key: 'job_type',
@@ -217,6 +226,22 @@ export const ProcessingJobs: React.FC = () => {
               {failed_records > 0 && (
                 <span style={{ color: '#ff4d4f' }}> ({failed_records} failed)</span>
               )}
+            </Text>
+          </Space>
+        );
+      },
+    },
+    {
+      title: 'Created',
+      dataIndex: 'created_at',
+      key: 'created_at',
+      render: (date: string) => {
+        if (!date) return '-';
+        return (
+          <Space direction="vertical" size="small">
+            <Text>{new Date(date).toLocaleDateString()}</Text>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {new Date(date).toLocaleTimeString()}
             </Text>
           </Space>
         );

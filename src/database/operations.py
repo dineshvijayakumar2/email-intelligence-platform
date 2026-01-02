@@ -169,8 +169,12 @@ class EmailOperations:
                 current_batch.append(email)
 
                 # Log progress for every email during small tests
-                if total <=20:
+                if total <= 20:
                     logger.info(f"📧 Email {total}: {email.get('subject', 'No subject')[:60]}")
+
+                # Update progress periodically (every 10 emails) for better UX on small jobs
+                if checkpoint_callback and total % 10 == 0:
+                    checkpoint_callback(total, last_message_id)
 
                 # Insert when batch is full
                 if len(current_batch) >= batch_size:
