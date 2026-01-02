@@ -1,5 +1,5 @@
 from typing import List, Dict, Optional, Tuple, Iterator, Union
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 from uuid import uuid4
 import json
@@ -695,7 +695,7 @@ class EmailOperations:
                 'job_type': job_type,
                 'status': 'pending',
                 'total_records': total_records,
-                'started_at': datetime.now().isoformat()
+                'started_at': datetime.now(timezone.utc).isoformat()
             }
             
             if mailbox_id:
@@ -734,12 +734,12 @@ class EmailOperations:
                 # Check if started_at is not already set
                 existing_job = self.client.table('processing_jobs').select('started_at').eq('id', job_id).execute()
                 if existing_job.data and not existing_job.data[0].get('started_at'):
-                    update_data['started_at'] = datetime.now().isoformat()
+                    update_data['started_at'] = datetime.now(timezone.utc).isoformat()
                     logger.info(f"Job {job_id} started at {update_data['started_at']}")
 
             # Set completed_at when job finishes
             if status in ['completed', 'failed', 'stopped']:
-                update_data['completed_at'] = datetime.now().isoformat()
+                update_data['completed_at'] = datetime.now(timezone.utc).isoformat()
                 logger.info(f"Job {job_id} finished with status {status} at {update_data['completed_at']}")
 
             self.client.table('processing_jobs')\
@@ -795,7 +795,7 @@ class EmailOperations:
                 'earliest_date': earliest_date,
                 'latest_date': latest_date,
                 'folder_count': folder_count,
-                'last_updated': datetime.now().isoformat()
+                'last_updated': datetime.now(timezone.utc).isoformat()
             }
             
         except Exception as e:
