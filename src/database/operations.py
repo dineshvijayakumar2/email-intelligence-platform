@@ -14,14 +14,34 @@ class EmailOperations:
     def __init__(self, mailbox_id: str = None, use_service_key: bool = True):
         """
         Initialize email operations
-        
+
         Args:
             mailbox_id: Default mailbox ID for operations
             use_service_key: Use service role key for write operations
         """
         self.client = SupabaseClient.get_client(use_service_key=use_service_key)
         self.mailbox_id = mailbox_id
-    
+
+    def should_stop_job(self, job_id: str) -> bool:
+        """
+        Check if a job should be stopped
+
+        Args:
+            job_id: Job ID to check
+
+        Returns:
+            True if job status is 'stopped', 'cancelled', or 'failed'
+        """
+        try:
+            result = self.client.table('processing_jobs').select('status').eq('id', job_id).execute()
+            if result.data and len(result.data) > 0:
+                status = result.data[0]['status']
+                return status in ['stopped', 'cancelled', 'failed']
+            return False
+        except Exception as e:
+            logger.warning(f"Failed to check job status: {e}")
+            return False
+
     def batch_insert_emails(self, emails: List[Dict], mailbox_id: str = None, batch_size: int = 100) -> Dict:
         """
         Insert emails in batches with error handling
@@ -94,7 +114,8 @@ class EmailOperations:
         mailbox_id: str = None,
         batch_size: int = 5000,
         checkpoint_callback=None,
-        skip_duplicates: bool = True
+        skip_duplicates: bool = True,
+        job_id: str = None
     ) -> Dict:
         """
         Insert emails from an iterator/generator with streaming support.
@@ -106,9 +127,10 @@ class EmailOperations:
             batch_size: Number of emails per batch (default 5000 for large files)
             checkpoint_callback: Optional callback(processed_count, last_message_id) for progress tracking
             skip_duplicates: Skip emails that already exist in database
+            job_id: Optional job ID for cancellation checks
 
         Returns:
-            Dict with processing statistics
+            Dict with processing statistics including 'stopped' flag
         """
         mailbox_id = mailbox_id or self.mailbox_id
         if not mailbox_id:
@@ -121,11 +143,18 @@ class EmailOperations:
         errors = []
         current_batch = []
         last_message_id = None
+        was_stopped = False
 
         logger.info(f"Starting streaming insert with batch_size={batch_size}, skip_duplicates={skip_duplicates}")
 
         try:
             for email in emails:
+                # Check if job should be stopped (check every 100 emails to minimize DB queries)
+                if job_id and total % 100 == 0:
+                    if self.should_stop_job(job_id):
+                        logger.warning(f"Job {job_id} stopped by user at email {total}")
+                        was_stopped = True
+                        break
                 total += 1
                 last_message_id = email.get('message_id', f'unknown_{total}')
 
@@ -175,13 +204,17 @@ class EmailOperations:
             except Exception as e:
                 logger.warning(f"Failed to update folder counts: {e}")
 
-            logger.info(f"Streaming insert completed: {total} total, {success} inserted, {failed} failed, {skipped} skipped")
+            if was_stopped:
+                logger.info(f"Streaming insert STOPPED by user: {total} total, {success} inserted, {failed} failed, {skipped} skipped")
+            else:
+                logger.info(f"Streaming insert completed: {total} total, {success} inserted, {failed} failed, {skipped} skipped")
 
             return {
                 'total': total,
                 'success': success,
                 'failed': failed,
                 'skipped': skipped,
+                'stopped': was_stopped,
                 'errors': errors[:100]  # Limit errors to first 100 to avoid memory issues
             }
 

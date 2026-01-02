@@ -191,24 +191,35 @@ class EmailProcessor:
             raw_emails = self.extractor.extract_emails(max_emails=max_emails)
             normalized_emails = self._normalize_email_stream(raw_emails)
 
-            # Stream insert to database
+            # Stream insert to database (with cancellation support)
             result = self.db_ops.stream_insert_emails(
                 emails=normalized_emails,
                 mailbox_id=self.mailbox_id,
                 batch_size=batch_size,
                 checkpoint_callback=checkpoint_callback,
-                skip_duplicates=skip_duplicates
+                skip_duplicates=skip_duplicates,
+                job_id=job_id  # Pass job_id for cancellation checks
             )
 
-            # Update job to completed
-            self.db_ops.update_job_progress(
-                job_id=job_id,
-                processed_records=result['success'],
-                failed_records=result['failed'],
-                status='completed'
-            )
-
-            logger.info(f"Processing completed for job {job_id}: {result}")
+            # Update job status based on result
+            if result.get('stopped', False):
+                # Job was stopped by user
+                self.db_ops.update_job_progress(
+                    job_id=job_id,
+                    processed_records=result['success'],
+                    failed_records=result['failed'],
+                    status='stopped'
+                )
+                logger.warning(f"Processing stopped by user for job {job_id}: {result}")
+            else:
+                # Job completed normally
+                self.db_ops.update_job_progress(
+                    job_id=job_id,
+                    processed_records=result['success'],
+                    failed_records=result['failed'],
+                    status='completed'
+                )
+                logger.info(f"Processing completed for job {job_id}: {result}")
 
             # TODO: Implement categorization in Stage 2
             if enable_categorization:
