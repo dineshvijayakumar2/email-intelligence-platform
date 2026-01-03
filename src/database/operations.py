@@ -149,9 +149,9 @@ class EmailOperations:
 
         try:
             for email in emails:
-                # Check if job should be stopped (check every 10 emails for responsiveness)
+                # Check if job should be stopped (check every 5 emails for quick responsiveness)
                 # Also check at start (total=0) for immediate response
-                if job_id and (total == 0 or total % 10 == 0):
+                if job_id and (total == 0 or total % 5 == 0):
                     if self.should_stop_job(job_id):
                         logger.warning(f"Job {job_id} stopped by user at email {total}")
                         was_stopped = True
@@ -179,6 +179,12 @@ class EmailOperations:
 
                 # Insert when batch is full
                 if len(current_batch) >= batch_size:
+                    # Check one more time before expensive batch insert
+                    if job_id and self.should_stop_job(job_id):
+                        logger.warning(f"Job {job_id} stopped before batch insert at email {total}")
+                        was_stopped = True
+                        break
+
                     result = self._insert_batch(current_batch, mailbox_id, total // batch_size)
                     success += result['success']
                     failed += result['failed']
