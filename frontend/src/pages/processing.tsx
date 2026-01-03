@@ -38,7 +38,8 @@ const getStatusIcon = (status: string) => {
     running: <PlayCircleOutlined />,
     completed: <CheckCircleOutlined />,
     failed: <ExclamationCircleOutlined />,
-    paused: <PauseCircleOutlined />
+    paused: <PauseCircleOutlined />,
+    stopped: <StopOutlined />
   };
   return icons[status as keyof typeof icons] || <ClockCircleOutlined />;
 };
@@ -281,6 +282,7 @@ export const ProcessingJobs: React.FC = () => {
           <Text type="secondary">
             {minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`}
             {status === 'running' && ' (ongoing)'}
+            {status === 'stopped' && ' (stopped)'}
           </Text>
         );
       },

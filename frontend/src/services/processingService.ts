@@ -5,7 +5,7 @@ export interface ProcessingJob {
   job_type: string;
   mailbox_id: string;
   mailbox_name?: string;
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'paused';
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'paused' | 'stopped';
   total_records: number;
   processed_records: number;
   failed_records: number;
@@ -257,7 +257,8 @@ export const processingService = {
       running: 'blue',
       completed: 'green',
       failed: 'red',
-      paused: 'default'
+      paused: 'default',
+      stopped: 'volcano'  // Orange-red for manually stopped jobs
     };
     return colors[status as keyof typeof colors] || 'default';
   },
