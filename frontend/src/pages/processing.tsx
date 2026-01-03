@@ -270,14 +270,25 @@ export const ProcessingJobs: React.FC = () => {
       render: (_: any, record: ProcessingJob) => {
         const { started_at, completed_at, status } = record;
         if (!started_at) return '-';
-        
+
+        // For terminal states (completed/failed/stopped), require completed_at
+        // Otherwise old jobs would show ever-increasing duration
+        const terminalStates = ['completed', 'failed', 'stopped'];
+        if (terminalStates.includes(status) && !completed_at) {
+          return <Text type="secondary">-</Text>;
+        }
+
         const start = new Date(started_at);
-        const end = completed_at ? new Date(completed_at) : new Date();
+        // Only use current time for running jobs; otherwise use completed_at
+        const end = completed_at ? new Date(completed_at) : (status === 'running' ? new Date() : null);
+
+        if (!end) return <Text type="secondary">-</Text>;
+
         const duration = Math.round((end.getTime() - start.getTime()) / 1000);
-        
+
         const minutes = Math.floor(duration / 60);
         const seconds = duration % 60;
-        
+
         return (
           <Text type="secondary">
             {minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`}
