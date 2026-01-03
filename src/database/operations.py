@@ -149,8 +149,9 @@ class EmailOperations:
 
         try:
             for email in emails:
-                # Check if job should be stopped (check every 100 emails to minimize DB queries)
-                if job_id and total % 100 == 0:
+                # Check if job should be stopped (check every 10 emails for responsiveness)
+                # Also check at start (total=0) for immediate response
+                if job_id and (total == 0 or total % 10 == 0):
                     if self.should_stop_job(job_id):
                         logger.warning(f"Job {job_id} stopped by user at email {total}")
                         was_stopped = True

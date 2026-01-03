@@ -387,13 +387,13 @@ async def control_job(job_id: str, action: str):
     try:
         status_map = {
             "pause": "paused",
-            "resume": "running", 
-            "stop": "failed"
+            "resume": "running",
+            "stop": "stopped"  # Fixed: was "failed"
         }
-        
+
         new_status = status_map[action]
         update_data = {"status": new_status}
-        
+
         if action == "stop":
             update_data["completed_at"] = datetime.now(timezone.utc).isoformat()
             
