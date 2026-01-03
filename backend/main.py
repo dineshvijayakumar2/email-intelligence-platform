@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 import random
 import logging
 
-# Version: 1.0.1 - Auto-restart trigger (update this to restart backend)
+# Version: 1.0.2 - Enhanced progress logging
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from src.processors.email_processor import EmailProcessor

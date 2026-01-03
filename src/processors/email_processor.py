@@ -184,7 +184,7 @@ class EmailProcessor:
                 processed_records=processed_count,
                 status='running'
             )
-            logger.debug(f"Checkpoint: {processed_count} emails processed, last: {last_message_id}")
+            logger.info(f"Progress update: {processed_count} emails processed (job {job_id})")
 
         try:
             # Extract and normalize emails
