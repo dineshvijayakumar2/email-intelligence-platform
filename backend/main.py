@@ -217,10 +217,17 @@ async def process_emails_real(job_id: str, config: ProcessingJobConfig):
         if not processor.initialize_extractor(config.mailbox_type):
             error_msg = f"Failed to initialize {config.mailbox_type} extractor"
             logger.error(error_msg)
-            await update_job_status(job_id, "failed", {
-                "error_log": [error_msg],
-                "completed_at": datetime.now(timezone.utc).isoformat()
-            })
+
+            # Check if job was already stopped (don't override stopped status)
+            job_result = get_supabase().table('processing_jobs').select('status').eq('id', job_id).execute()
+            if job_result.data and job_result.data[0].get('status') not in ['stopped', 'cancelled']:
+                await update_job_status(job_id, "failed", {
+                    "error_log": [error_msg],
+                    "completed_at": datetime.now(timezone.utc).isoformat()
+                })
+            else:
+                logger.warning(f"Extractor initialization failed after job was stopped: {error_msg}")
+
             return
 
         # Process emails with streaming
@@ -244,10 +251,17 @@ async def process_emails_real(job_id: str, config: ProcessingJobConfig):
     except Exception as e:
         error_msg = f"Processing error: {str(e)}"
         logger.error(error_msg, exc_info=True)
-        await update_job_status(job_id, "failed", {
-            "error_log": [error_msg],
-            "completed_at": datetime.now(timezone.utc).isoformat()
-        })
+
+        # Check if job was already stopped (don't override stopped status)
+        job_result = get_supabase().table('processing_jobs').select('status').eq('id', job_id).execute()
+        if job_result.data and job_result.data[0].get('status') in ['stopped', 'cancelled']:
+            logger.warning(f"Exception occurred after job was stopped: {error_msg}")
+        else:
+            # Not stopped - genuine failure
+            await update_job_status(job_id, "failed", {
+                "error_log": [error_msg],
+                "completed_at": datetime.now(timezone.utc).isoformat()
+            })
 
 async def update_job_status(job_id: str, status: str, updates: Dict[str, Any]):
     """Update job status in database and memory"""
@@ -707,10 +721,17 @@ async def run_reprocessing(job_id: str, mailbox_id: str):
     except Exception as e:
         error_msg = f"Reprocessing error: {str(e)}"
         logger.error(error_msg, exc_info=True)
-        await update_job_status(job_id, "failed", {
-            "error_log": [error_msg],
-            "completed_at": datetime.now(timezone.utc).isoformat()
-        })
+
+        # Check if job was already stopped (don't override stopped status)
+        job_result = get_supabase().table('processing_jobs').select('status').eq('id', job_id).execute()
+        if job_result.data and job_result.data[0].get('status') in ['stopped', 'cancelled']:
+            logger.warning(f"Reprocessing exception occurred after job was stopped: {error_msg}")
+        else:
+            # Not stopped - genuine failure
+            await update_job_status(job_id, "failed", {
+                "error_log": [error_msg],
+                "completed_at": datetime.now(timezone.utc).isoformat()
+            })
 
 # Email analysis endpoints for dashboard
 @app.get("/api/dashboard/stats")
