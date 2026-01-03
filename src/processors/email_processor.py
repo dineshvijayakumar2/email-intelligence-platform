@@ -202,7 +202,25 @@ class EmailProcessor:
             )
 
             # Update job status based on result
-            if result.get('stopped', False):
+            # Double-check current status - don't override if already stopped/cancelled
+            current_status = None
+            try:
+                job_result = self.db_ops.client.table('processing_jobs').select('status').eq('id', job_id).execute()
+                if job_result.data:
+                    current_status = job_result.data[0].get('status')
+            except Exception as e:
+                logger.warning(f"Failed to check current job status: {e}")
+
+            if current_status in ['stopped', 'cancelled']:
+                # Job was already stopped - preserve that status
+                logger.info(f"Job {job_id} already has status '{current_status}', preserving it")
+                self.db_ops.update_job_progress(
+                    job_id=job_id,
+                    processed_records=result['total'],
+                    failed_records=result['failed'],
+                    status=current_status  # Keep current status
+                )
+            elif result.get('stopped', False):
                 # Job was stopped by user
                 self.db_ops.update_job_progress(
                     job_id=job_id,
