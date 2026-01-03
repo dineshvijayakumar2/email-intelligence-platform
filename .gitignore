@@ -58,6 +58,13 @@ yarn-error.log*
 *.pem
 *.key
 *.cert
+
+# Troubleshooting, migrations, and test scripts (temporary/local)
+scripts/troubleshooting/
+scripts/migrations/
+tests/
+**/test_*.py
+**/test_*.js
 # Frontend
 frontend/node_modules/
 frontend/build/
