@@ -231,13 +231,18 @@ class EmailProcessor:
             error_msg = f"Processing failed: {str(e)}"
             logger.error(error_msg)
 
-            # Update job to failed
-            self.db_ops.update_job_progress(
-                job_id=job_id,
-                processed_records=0,
-                status='failed',
-                error_log=[error_msg]
-            )
+            # Check if job was already stopped (don't override stopped status)
+            if self.db_ops.should_stop_job(job_id):
+                # Job was stopped/cancelled - keep that status, just log the error
+                logger.warning(f"Exception occurred after job was stopped: {error_msg}")
+            else:
+                # Job wasn't stopped - this is a genuine failure
+                self.db_ops.update_job_progress(
+                    job_id=job_id,
+                    processed_records=0,
+                    status='failed',
+                    error_log=[error_msg]
+                )
 
             raise
 
