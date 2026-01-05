@@ -100,26 +100,68 @@ class EmailNormalizer:
         return self._clean_message_id(email.get('message_id', ''))
     
     def _normalize_folder_path(self, folder_path: str) -> str:
-        """Normalize folder path"""
-        if not folder_path:
-            return 'INBOX'
+        """
+        Normalize folder path to consistent proper case
 
-        # Handle common folder name variations
+        Converts various folder name formats to standard names:
+        - INBOX/inbox → Inbox
+        - SENT/sent/Sent Items → Sent
+        - SPAM/spam/Junk → Spam
+        etc.
+        """
+        if not folder_path:
+            return 'Inbox'
+
+        # Handle common folder name variations (case-insensitive)
         folder_map = {
-            'inbox': 'INBOX',
+            # Inbox variations
+            'inbox': 'Inbox',
+            'mail': 'Inbox',
+
+            # Sent variations
+            'sent': 'Sent',
             'sent items': 'Sent',
             'sent mail': 'Sent',
             'outbox': 'Sent',
+
+            # Archive variations
+            'archive': 'Archive',
+            'archived': 'Archive',
+            'all mail': 'Archive',
+
+            # Trash variations
+            'trash': 'Trash',
+            'deleted': 'Trash',
             'deleted items': 'Trash',
-            'junk email': 'Spam',
+
+            # Spam variations
             'spam': 'Spam',
-            'drafts': 'Drafts'
+            'junk': 'Spam',
+            'junk email': 'Spam',
+            'junk e-mail': 'Spam',
+
+            # Draft variations
+            'draft': 'Drafts',
+            'drafts': 'Drafts',
+
+            # Other common Gmail labels
+            'important': 'Important',
+            'starred': 'Starred',
+            'muted': 'Muted',
+            'snoozed': 'Snoozed',
+            'chats': 'Chats',
         }
 
         normalized = folder_path.strip()
         lower_folder = normalized.lower()
 
-        return folder_map.get(lower_folder, normalized)
+        # Return mapped folder or keep original with proper capitalization
+        mapped = folder_map.get(lower_folder)
+        if mapped:
+            return mapped
+
+        # If not in map, return original with first letter capitalized
+        return normalized
 
     def _infer_folder_path(self, provided_folder: str, is_outbound: bool,
                            sender_email: str, recipients: List[Dict],
@@ -128,11 +170,11 @@ class EmailNormalizer:
         Universal folder inference for all mailbox formats
 
         Priority:
-        1. If folder provided by extractor (PST/OLM/IMAP) → use it
-        2. If no folder (generic MBOX) → infer from email characteristics
+        1. If folder provided by extractor (PST/OLM/Gmail labels) → use it
+        2. If no folder or generic placeholder → infer from email characteristics
 
         Args:
-            provided_folder: Folder from extractor (None for generic MBOX)
+            provided_folder: Folder from extractor (may be None or generic)
             is_outbound: Whether email was sent by user
             sender_email: Sender email address
             recipients: List of recipients
@@ -140,21 +182,29 @@ class EmailNormalizer:
             body_text: Email body text
 
         Returns:
-            Normalized folder path
+            Normalized folder path (never returns generic placeholders)
         """
-        # If extractor provided a folder, normalize and use it
-        if provided_folder and provided_folder not in ['MBOX Archive', 'Archive', 'Unknown', '']:
-            return self._normalize_folder_path(provided_folder)
+        # Generic placeholders that should trigger inference
+        generic_folders = ['MBOX Archive', 'Archive', 'Unknown', '', None, 'INBOX']
+
+        # If extractor provided a real folder (not generic), normalize and use it
+        if provided_folder and provided_folder not in generic_folders:
+            normalized = self._normalize_folder_path(provided_folder)
+            logger.debug(f"Using provided folder: {provided_folder} → {normalized}")
+            return normalized
 
         # Otherwise, infer folder from email characteristics
-        # This handles: generic MBOX, missing folder data, etc.
+        # This handles: generic MBOX, missing folder data, unknown sources
+        logger.debug(f"Inferring folder for email (provided: {provided_folder}, outbound: {is_outbound})")
 
         # 1. Check if outbound (sent by user)
         if is_outbound:
             # Check if it's a draft (no recipients or very incomplete)
             if not recipients or len(recipients) == 0:
+                logger.debug("  → Inferred: Drafts (no recipients)")
                 return 'Drafts'
             else:
+                logger.debug("  → Inferred: Sent (outbound email)")
                 return 'Sent'
 
         # 2. Check for spam indicators
@@ -163,26 +213,28 @@ class EmailNormalizer:
             'click here now', 'limited time offer', 'act now',
             'you have won', 'claim your prize', 'free money'
         ]
-        subject_lower = subject.lower()
-        body_lower = body_text.lower()[:1000]  # Check first 1000 chars
+        subject_lower = subject.lower() if subject else ''
+        body_lower = body_text.lower()[:1000] if body_text else ''
 
         if any(indicator in subject_lower or indicator in body_lower
                for indicator in spam_indicators):
+            logger.debug("  → Inferred: Spam (spam indicators found)")
             return 'Spam'
 
         # Check for all caps subject (common spam indicator)
-        if len(subject) > 10 and subject.isupper():
+        if subject and len(subject) > 10 and subject.isupper():
+            logger.debug("  → Inferred: Spam (all caps subject)")
             return 'Spam'
 
         # 3. Check for system/automated emails → could be in Updates/Notifications
         system_senders = ['noreply@', 'no-reply@', 'donotreply@', 'automated@',
                          'system@', 'notification@']
-        if any(sender_email.startswith(sender) for sender in system_senders):
-            # These could go to a separate folder, but defaulting to Inbox for now
-            # Future: Add 'Updates' or 'Notifications' folder
+        if sender_email and any(sender_email.startswith(sender) for sender in system_senders):
+            logger.debug("  → Inferred: Inbox (system sender)")
             return 'Inbox'
 
         # 4. Default: Inbox for received emails
+        logger.debug("  → Inferred: Inbox (default)")
         return 'Inbox'
 
     def _clean_email(self, email: str) -> str:
