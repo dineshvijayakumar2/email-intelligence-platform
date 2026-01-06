@@ -54,10 +54,22 @@ export const MailboxProcess: React.FC = () => {
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
-    if (currentJob && ['pending', 'running'].includes(currentJob.status)) {
+    if (currentJob) {
+      // Determine polling frequency based on job status
+      let pollInterval = 5000; // Default: 5 seconds
+
+      if (['pending', 'running'].includes(currentJob.status)) {
+        pollInterval = 2000; // Active jobs: poll every 2 seconds for quick updates
+      } else if (currentJob.status === 'paused') {
+        pollInterval = 10000; // Paused jobs: poll every 10 seconds (less frequent)
+      } else {
+        // Completed/failed/stopped: no polling needed
+        return;
+      }
+
       interval = setInterval(() => {
         loadJobHistory();
-      }, 2000); // Poll every 2 seconds
+      }, pollInterval);
     }
     return () => {
       if (interval) clearInterval(interval);

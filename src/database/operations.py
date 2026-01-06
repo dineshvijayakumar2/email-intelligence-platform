@@ -42,6 +42,61 @@ class EmailOperations:
             logger.warning(f"Failed to check job status: {e}")
             return False
 
+    def get_job_status(self, job_id: str) -> str:
+        """
+        Get the current status of a job
+
+        Args:
+            job_id: Job ID to check
+
+        Returns:
+            Job status string or 'unknown' if not found
+        """
+        try:
+            result = self.client.table('processing_jobs').select('status').eq('id', job_id).execute()
+            if result.data and len(result.data) > 0:
+                return result.data[0]['status']
+            return 'unknown'
+        except Exception as e:
+            logger.warning(f"Failed to get job status: {e}")
+            return 'unknown'
+
+    def wait_while_paused(self, job_id: str) -> bool:
+        """
+        Wait while job is paused, checking every 5 seconds for status changes
+
+        Args:
+            job_id: Job ID to check
+
+        Returns:
+            True if resumed (status changed to 'running'), False if stopped/cancelled/failed
+        """
+        import time
+
+        logger.info(f"Job {job_id} is paused, entering wait state...")
+        check_count = 0
+
+        while True:
+            check_count += 1
+            status = self.get_job_status(job_id)
+
+            if status == 'running':
+                logger.info(f"Job {job_id} resumed from pause after {check_count} checks")
+                return True
+            elif status in ['stopped', 'cancelled', 'failed']:
+                logger.info(f"Job {job_id} stopped while paused (status: {status})")
+                return False
+            elif status == 'paused':
+                # Still paused, wait before checking again
+                # Log less frequently to avoid spam (every 6th check = every 30 seconds)
+                if check_count % 6 == 1:
+                    logger.info(f"Job {job_id} still paused (waited {check_count * 5} seconds)...")
+                time.sleep(5)  # Check every 5 seconds instead of 2
+            else:
+                # Unknown status, treat as stopped
+                logger.warning(f"Job {job_id} has unexpected status while paused: {status}")
+                return False
+
     def batch_insert_emails(self, emails: List[Dict], mailbox_id: str = None, batch_size: int = 100) -> Dict:
         """
         Insert emails in batches with error handling
@@ -149,13 +204,28 @@ class EmailOperations:
 
         try:
             for email in emails:
-                # Check if job should be stopped (check every 5 emails for quick responsiveness)
+                # Check if job should be stopped or paused (check every 5 emails for quick responsiveness)
                 # Also check at start (total=0) for immediate response
                 if job_id and (total == 0 or total % 5 == 0):
                     if self.should_stop_job(job_id):
                         logger.warning(f"Job {job_id} stopped by user at email {total}")
                         was_stopped = True
                         break
+
+                    # Check if job is paused
+                    status = self.get_job_status(job_id)
+                    if status == 'paused':
+                        logger.info(f"Job {job_id} paused at email {total}, waiting for resume...")
+
+                        if not self.wait_while_paused(job_id):
+                            # Job was stopped/cancelled while paused
+                            logger.warning(f"Job {job_id} stopped while paused")
+                            was_stopped = True
+                            break
+
+                        # Job resumed, continue processing
+                        logger.info(f"Job {job_id} resumed, continuing from email {total}...")
+
                 total += 1
                 last_message_id = email.get('message_id', f'unknown_{total}')
 
@@ -173,9 +243,18 @@ class EmailOperations:
                 if total <= 20:
                     logger.info(f"📧 Email {total}: {email.get('subject', 'No subject')[:60]}")
 
-                # Update progress periodically (every 10 emails) for better UX on small jobs
-                if checkpoint_callback and total % 10 == 0:
-                    checkpoint_callback(total, last_message_id)
+                # Update progress more frequently for better UX
+                # - First email: immediate update
+                # - First 100 emails: every 5 emails
+                # - After 100: every 10 emails
+                # Send total examined count (includes processed, skipped, and pending batch)
+                if checkpoint_callback:
+                    should_update = (total == 1) or \
+                                    (total <= 100 and total % 5 == 0) or \
+                                    (total > 100 and total % 10 == 0)
+                    if should_update:
+                        # Use 'total' which includes all emails examined (new, skipped, batched)
+                        checkpoint_callback(total, last_message_id)
 
                 # Insert when batch is full
                 if len(current_batch) >= batch_size:
@@ -184,6 +263,16 @@ class EmailOperations:
                         logger.warning(f"Job {job_id} stopped before batch insert at email {total}")
                         was_stopped = True
                         break
+
+                    # Check if paused before batch insert
+                    if job_id:
+                        status = self.get_job_status(job_id)
+                        if status == 'paused':
+                            logger.info(f"Job {job_id} paused before batch insert, waiting...")
+                            if not self.wait_while_paused(job_id):
+                                logger.warning(f"Job {job_id} stopped while paused before batch insert")
+                                was_stopped = True
+                                break
 
                     result = self._insert_batch(current_batch, mailbox_id, total // batch_size)
                     success += result['success']
@@ -243,20 +332,29 @@ class EmailOperations:
         success = 0
         failed = 0
         errors = []
+        validation_errors = []
 
         try:
             # Prepare batch data
             prepared_batch = []
-            for email in batch:
+            for idx, email in enumerate(batch):
                 prepared_email = self._prepare_email_for_insert(email, mailbox_id)
                 if prepared_email:
                     prepared_batch.append(prepared_email)
                 else:
                     failed += 1
+                    # Track which email failed and why
+                    subject = email.get('subject', 'No subject')[:50]
+                    sender = email.get('sender_email', 'Unknown')
+                    validation_errors.append(f"Email '{subject}' from {sender}: Missing required fields (message_id or sender_email)")
+
+            if validation_errors:
+                errors.extend(validation_errors[:5])  # Add first 5 validation errors
 
             if not prepared_batch:
                 logger.warning(f"Batch {batch_num}: No valid emails to insert")
-                return {'success': 0, 'failed': len(batch), 'errors': [f"Batch {batch_num}: No valid emails"]}
+                error_summary = f"Batch {batch_num}: All {len(batch)} emails failed validation"
+                return {'success': 0, 'failed': len(batch), 'errors': [error_summary] + validation_errors[:3]}
 
             # Insert batch with retry logic
             max_retries = 3
@@ -278,7 +376,22 @@ class EmailOperations:
                 except Exception as e:
                     if attempt == max_retries - 1:
                         failed = len(batch)
-                        error_msg = f"Batch {batch_num} failed after {max_retries} attempts: {str(e)}"
+                        # Extract specific error details
+                        error_type = type(e).__name__
+                        error_detail = str(e)
+
+                        # Common database errors and their meanings
+                        if 'duplicate' in error_detail.lower() or 'unique' in error_detail.lower():
+                            error_msg = f"Batch {batch_num}: Duplicate key violation - emails may already exist in database"
+                        elif 'foreign key' in error_detail.lower():
+                            error_msg = f"Batch {batch_num}: Foreign key constraint - mailbox_id may be invalid"
+                        elif 'null value' in error_detail.lower():
+                            error_msg = f"Batch {batch_num}: Required field is NULL/missing"
+                        elif 'timeout' in error_detail.lower():
+                            error_msg = f"Batch {batch_num}: Database timeout - batch may be too large or database is slow"
+                        else:
+                            error_msg = f"Batch {batch_num} failed after {max_retries} attempts: {error_type} - {error_detail[:200]}"
+
                         errors.append(error_msg)
                         logger.error(error_msg)
                     else:
@@ -727,29 +840,51 @@ class EmailOperations:
         processed_records: int,
         failed_records: int = 0,
         status: str = 'running',
-        error_log: List[str] = None
+        error_log: List[str] = None,
+        update_status: bool = True
     ):
-        """Update processing job progress"""
+        """Update processing job progress
+
+        Args:
+            job_id: Job ID to update
+            processed_records: Number of records processed
+            failed_records: Number of failed records
+            status: Job status (only used if update_status=True)
+            error_log: List of error messages
+            update_status: If False, only update counts, preserve current status
+        """
         try:
             update_data = {
                 'processed_records': processed_records,
-                'failed_records': failed_records,
-                'status': status
+                'failed_records': failed_records
             }
+
+            # Only update status if requested
+            if update_status:
+                # CRITICAL SAFEGUARD: Never override 'stopped' or 'cancelled' status with 'failed'
+                # Check current status before attempting to set to 'failed'
+                if status == 'failed':
+                    current_job = self.client.table('processing_jobs').select('status').eq('id', job_id).execute()
+                    if current_job.data and current_job.data[0].get('status') in ['stopped', 'cancelled']:
+                        logger.warning(f"Prevented overriding '{current_job.data[0]['status']}' status with 'failed' for job {job_id}")
+                        # Don't update status to failed, just update the records and error log
+                        status = current_job.data[0]['status']  # Keep the current status
+
+                update_data['status'] = status
 
             if error_log:
                 update_data['error_log'] = error_log
 
-            # Set started_at when job first transitions to running
-            if status == 'running':
+            # Set started_at when job first transitions to running (only if updating status)
+            if update_status and status == 'running':
                 # Check if started_at is not already set
                 existing_job = self.client.table('processing_jobs').select('started_at').eq('id', job_id).execute()
                 if existing_job.data and not existing_job.data[0].get('started_at'):
                     update_data['started_at'] = datetime.now(timezone.utc).isoformat()
                     logger.info(f"Job {job_id} started at {update_data['started_at']}")
 
-            # Set completed_at when job finishes
-            if status in ['completed', 'failed', 'stopped']:
+            # Set completed_at when job finishes (only if updating status)
+            if update_status and status in ['completed', 'failed', 'stopped']:
                 update_data['completed_at'] = datetime.now(timezone.utc).isoformat()
                 logger.info(f"Job {job_id} finished with status {status} at {update_data['completed_at']}")
 
@@ -758,7 +893,10 @@ class EmailOperations:
                 .eq('id', job_id)\
                 .execute()
 
-            logger.debug(f"Updated job {job_id}: status={status}, processed={processed_records}, failed={failed_records}")
+            if update_status:
+                logger.debug(f"Updated job {job_id}: status={status}, processed={processed_records}, failed={failed_records}")
+            else:
+                logger.info(f"Progress: Job {job_id} - {processed_records} processed, {failed_records} failed")
 
         except Exception as e:
             logger.error(f"Failed to update job progress: {e}")

@@ -25,21 +25,49 @@ export interface CreateMailboxData {
 export const mailboxService = {
   // Get all mailboxes
   async getMailboxes(): Promise<Mailbox[]> {
-    const { data, error } = await supabaseClient
-      .from('mailboxes')
-      .select('*, emails(count)')
-      .order('created_at', { ascending: false });
+    try {
+      // Fetch mailboxes first
+      const { data: mailboxData, error: mailboxError } = await supabaseClient
+        .from('mailboxes')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('Error fetching mailboxes:', error);
+      if (mailboxError) {
+        console.error('Error fetching mailboxes:', mailboxError);
+        throw mailboxError;
+      }
+
+      if (!mailboxData || mailboxData.length === 0) {
+        return [];
+      }
+
+      // Fetch email counts for all mailboxes in parallel
+      const mailboxesWithCounts = await Promise.all(
+        mailboxData.map(async (mailbox) => {
+          try {
+            const { count, error: countError } = await supabaseClient
+              .from('emails')
+              .select('*', { count: 'exact', head: true })
+              .eq('mailbox_id', mailbox.id);
+
+            if (countError) {
+              console.warn(`Failed to get count for mailbox ${mailbox.id}:`, countError);
+              return { ...mailbox, total_emails: 0 };
+            }
+
+            return { ...mailbox, total_emails: count || 0 };
+          } catch (err) {
+            console.warn(`Error counting emails for mailbox ${mailbox.id}:`, err);
+            return { ...mailbox, total_emails: 0 };
+          }
+        })
+      );
+
+      return mailboxesWithCounts;
+    } catch (error) {
+      console.error('Error in getMailboxes:', error);
       throw error;
     }
-
-    // Transform to include actual email count
-    return (data || []).map(mailbox => ({
-      ...mailbox,
-      total_emails: (mailbox as any).emails?.[0]?.count || 0
-    }));
   },
 
   // Get a single mailbox by ID

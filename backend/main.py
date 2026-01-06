@@ -11,16 +11,35 @@ import json
 from datetime import datetime, timedelta, timezone
 import random
 import logging
+from concurrent.futures import ThreadPoolExecutor
 
-# Version: 1.0.2 - Enhanced progress logging
+# Version: 1.2.0 - Email count estimation + folder/tag separation + Redis
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from src.processors.email_processor import EmailProcessor
+from src.database.redis_client import JobProgressManager, JobQueueManager, RedisClient
 
-# Configure logging
+# Configure logging to both file and console
+import logging.handlers
+
+# Create logs directory if it doesn't exist
+log_dir = os.path.join(os.path.dirname(__file__), 'logs')
+os.makedirs(log_dir, exist_ok=True)
+
+# Configure root logger
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        # File handler - rotates when file reaches 10MB, keeps 5 backup files
+        logging.handlers.RotatingFileHandler(
+            os.path.join(log_dir, 'backend.log'),
+            maxBytes=10*1024*1024,  # 10MB
+            backupCount=5
+        ),
+        # Console handler - also output to terminal
+        logging.StreamHandler()
+    ]
 )
 logger = logging.getLogger(__name__)
 
@@ -30,6 +49,104 @@ load_dotenv(dotenv_path=dotenv_path)
 logger.info(f"Loading environment variables from: {dotenv_path}")
 
 app = FastAPI(title="Email Intelligence API", version="1.0.0")
+
+# Configure thread pool for concurrent job processing
+# Allows up to 20 concurrent background jobs (file processing is I/O bound)
+# This ensures multiple mailboxes can be processed simultaneously
+executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="email_processor")
+
+# Initialize Redis managers
+try:
+    progress_manager = JobProgressManager()
+    queue_manager = JobQueueManager()
+    logger.info("Redis managers initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize Redis managers: {e}")
+    logger.warning("Falling back to database-only mode (Redis unavailable)")
+    progress_manager = None
+    queue_manager = None
+
+# Initialize shared progress tracker (used by email processor)
+# Force backend restart
+try:
+    import sys
+    src_path = os.path.join(os.path.dirname(__file__), '..', 'src')
+    if src_path not in sys.path:
+        sys.path.insert(0, src_path)
+
+    from utils.progress_tracker import initialize_progress_managers
+    initialize_progress_managers(progress_manager, queue_manager)
+    logger.info("Shared progress tracker initialized")
+except Exception as e:
+    logger.error(f"Failed to initialize shared progress tracker: {e}")
+
+def sync_redis_to_database():
+    """Sync all Redis progress to database before shutdown"""
+    if not progress_manager:
+        return
+
+    try:
+        active_jobs = progress_manager.get_all_active_jobs()
+        logger.info(f"Syncing {len(active_jobs)} jobs from Redis to database...")
+
+        for job_id in active_jobs:
+            try:
+                progress = progress_manager.get_progress(job_id)
+                if progress:
+                    get_supabase().table('processing_jobs').update({
+                        'processed_records': progress['processed'],
+                        'failed_records': progress['failed']
+                    }).eq('id', job_id).execute()
+                    logger.info(f"Synced job {job_id}: {progress['processed']} processed")
+            except Exception as e:
+                logger.error(f"Failed to sync job {job_id} to database: {e}")
+    except Exception as e:
+        logger.error(f"Failed to sync Redis to database: {e}")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup on server shutdown"""
+    logger.info("Syncing all Redis progress to database...")
+    sync_redis_to_database()
+    logger.info("Shutting down thread pool executor...")
+    executor.shutdown(wait=True)
+    logger.info("Thread pool executor shut down successfully")
+
+def get_job_progress(job_id: str) -> dict:
+    """Get progress from Redis (fast) or database (fallback)"""
+    if progress_manager:
+        progress = progress_manager.get_progress(job_id)
+        if progress:
+            return progress
+
+    # Fallback to database
+    return {"processed": 0, "failed": 0}
+
+def update_job_progress_redis(job_id: str, processed: int, failed: int = 0, sync_to_db: bool = False):
+    """
+    Update job progress in Redis
+
+    Args:
+        job_id: Job ID
+        processed: Number of emails processed
+        failed: Number of failed emails
+        sync_to_db: If True, also sync to database immediately
+
+    Returns:
+        True if should sync to database (every 100 emails or 30 seconds)
+    """
+    if not progress_manager:
+        # Redis not available, always sync to DB
+        return True
+
+    # Update Redis
+    progress_manager.update_progress(job_id, processed, failed)
+
+    # Determine if we should sync to database
+    # Sync every 100 emails to reduce DB load but ensure persistence
+    should_sync = sync_to_db or (processed > 0 and processed % 100 == 0)
+
+    return should_sync
 
 # Enable CORS
 app.add_middleware(
@@ -208,6 +325,11 @@ async def process_emails_real(job_id: str, config: ProcessingJobConfig):
     try:
         logger.info(f"Starting REAL email processing for job {job_id}")
 
+        # Immediately update status to 'running' so user sees it's active
+        await update_job_status(job_id, "running", {
+            "started_at": datetime.now(timezone.utc).isoformat()
+        })
+
         # Initialize processor with actual configuration
         processor = EmailProcessor(
             mailbox_id=config.mailbox_id,
@@ -215,6 +337,7 @@ async def process_emails_real(job_id: str, config: ProcessingJobConfig):
         )
 
         # Initialize the extractor
+        logger.info(f"Initializing {config.mailbox_type} extractor for job {job_id}...")
         if not processor.initialize_extractor(config.mailbox_type):
             error_msg = f"Failed to initialize {config.mailbox_type} extractor"
             logger.error(error_msg)
@@ -231,11 +354,29 @@ async def process_emails_real(job_id: str, config: ProcessingJobConfig):
 
             return
 
+        # Get total email count for progress estimation (fast, doesn't process emails)
+        try:
+            total_emails = processor.extractor.get_email_count()
+            if total_emails:
+                logger.info(f"Estimated total emails in mailbox: {total_emails}")
+                # Update job with accurate total_records
+                get_supabase().table('processing_jobs').update({
+                    'total_records': total_emails
+                }).eq('id', job_id).execute()
+                # Update Redis cache too
+                if progress_manager:
+                    progress_manager.update_progress(job_id, 0, 0, total_records=total_emails)
+            else:
+                logger.warning("Could not estimate total email count - using config value or None")
+        except Exception as e:
+            logger.warning(f"Failed to get email count (will proceed without estimate): {e}")
+
         # Process emails with streaming
-        # Run in thread pool to avoid blocking event loop
+        # Run in dedicated thread pool to avoid blocking event loop
+        # Using custom executor allows multiple concurrent jobs
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(
-            None,
+            executor,  # Custom thread pool with 20 workers
             processor.process_emails,
             job_id,
             config.total_records,  # max_emails (None for all)
@@ -345,6 +486,13 @@ async def get_processing_jobs():
         
         jobs = []
         for job in result.data:
+            # Get real-time progress from Redis (faster than database)
+            redis_progress = get_job_progress(job['id'])
+            if redis_progress['processed'] > job.get('processed_records', 0):
+                # Redis has more recent data than database
+                job['processed_records'] = redis_progress['processed']
+                job['failed_records'] = redis_progress['failed']
+
             # Calculate progress safely, handling None and 0
             total = job.get('total_records') or 0
             processed = job.get('processed_records') or 0
@@ -547,6 +695,25 @@ async def run_reprocessing(job_id: str, mailbox_id: str):
         offset = 0
 
         while offset < total_emails:
+            # Check if job should be stopped or paused
+            job_status_result = sb.table('processing_jobs').select('status').eq('id', job_id).execute()
+            if job_status_result.data:
+                current_status = job_status_result.data[0]['status']
+
+                if current_status in ['stopped', 'cancelled', 'failed']:
+                    logger.info(f"Reprocessing job {job_id} stopped at offset {offset}")
+                    break
+
+                if current_status == 'paused':
+                    logger.info(f"Reprocessing job {job_id} paused at offset {offset}, waiting...")
+                    # Wait for resume or stop
+                    from src.database.operations import DatabaseOperations
+                    db_ops = DatabaseOperations(mailbox_id=mailbox_id)
+                    if not db_ops.wait_while_paused(job_id):
+                        logger.info(f"Reprocessing job {job_id} stopped while paused")
+                        break
+                    logger.info(f"Reprocessing job {job_id} resumed")
+
             # Fetch one batch at a time from database
             logger.info(f"Fetching batch: offset={offset}, limit={batch_size}")
             result = sb.table('emails').select('*').eq('mailbox_id', mailbox_id).range(offset, offset + batch_size - 1).execute()
@@ -555,10 +722,14 @@ async def run_reprocessing(job_id: str, mailbox_id: str):
             if not batch:
                 break  # No more emails
 
+            # OPTIMIZED: Process entire batch with bulk operations instead of individual queries
+            batch_folder_updates = []
+            batch_email_ids = []
+            all_category_inserts = []
+
             for email in batch:
                 try:
                     # Step 1: Re-normalize email with new folder inference
-                    # The email from DB already has all fields, we just need to infer folder
                     inferred_folder = normalizer._infer_folder_path(
                         provided_folder=None,  # Force inference
                         is_outbound=email.get('is_outbound', False),
@@ -568,14 +739,14 @@ async def run_reprocessing(job_id: str, mailbox_id: str):
                         body_text=email.get('body_text', '')
                     )
 
-                    # Update folder_path if it changed
+                    # Collect folder updates for bulk operation
                     old_folder = email.get('folder_path', '')
                     if inferred_folder != old_folder:
-                        sb.table('emails').update({
+                        batch_folder_updates.append({
+                            'id': email['id'],
                             'folder_path': inferred_folder
-                        }).eq('id', email['id']).execute()
+                        })
                         email['folder_path'] = inferred_folder  # Update for tagging
-                        logger.debug(f"Updated folder: {old_folder} -> {inferred_folder}")
 
                     # Track folders that need to exist
                     folders_to_create.add(inferred_folder)
@@ -583,15 +754,13 @@ async def run_reprocessing(job_id: str, mailbox_id: str):
                     # Step 2: Tag the email (with updated folder_path)
                     tag_result = tagger.tag_email(email)
 
-                    # Delete existing tags for this email
-                    sb.table('email_categories').delete().eq('email_id', email['id']).execute()
+                    # Collect email ID for bulk delete
+                    batch_email_ids.append(email['id'])
 
-                    # Insert new tags
-                    category_inserts = []
-
+                    # Collect all category inserts for bulk operation
                     # Add regular tags
                     for tag in tag_result.get('tags', []):
-                        category_inserts.append({
+                        all_category_inserts.append({
                             'email_id': email['id'],
                             'category': tag,
                             'confidence': 1.0,
@@ -601,7 +770,7 @@ async def run_reprocessing(job_id: str, mailbox_id: str):
 
                     # Add metadata tags
                     if tag_result.get('is_spam'):
-                        category_inserts.append({
+                        all_category_inserts.append({
                             'email_id': email['id'],
                             'category': '_meta_spam',
                             'confidence': 1.0,
@@ -610,7 +779,7 @@ async def run_reprocessing(job_id: str, mailbox_id: str):
                         })
 
                     if tag_result.get('is_marketing'):
-                        category_inserts.append({
+                        all_category_inserts.append({
                             'email_id': email['id'],
                             'category': '_meta_marketing',
                             'confidence': 1.0,
@@ -620,7 +789,7 @@ async def run_reprocessing(job_id: str, mailbox_id: str):
 
                     # Add priority
                     priority_score = tag_result.get('priority_score', 5)
-                    category_inserts.append({
+                    all_category_inserts.append({
                         'email_id': email['id'],
                         'category': f'_meta_priority_{priority_score}',
                         'confidence': 1.0,
@@ -630,7 +799,7 @@ async def run_reprocessing(job_id: str, mailbox_id: str):
 
                     # Add sender type
                     sender_type = tag_result.get('sender_type', 'unknown')
-                    category_inserts.append({
+                    all_category_inserts.append({
                         'email_id': email['id'],
                         'category': f'_meta_sender_{sender_type}',
                         'confidence': 1.0,
@@ -638,15 +807,38 @@ async def run_reprocessing(job_id: str, mailbox_id: str):
                         'tag_type': 'metadata',
                     })
 
-                    # Batch insert tags
-                    if category_inserts:
-                        sb.table('email_categories').insert(category_inserts).execute()
-
                     processed += 1
 
                 except Exception as e:
-                    logger.error(f"Failed to reprocess email {email['id']}: {str(e)}")
+                    logger.error(f"Failed to reprocess email {email.get('id', 'unknown')}: {str(e)}")
                     failed += 1
+
+            # Perform bulk database operations for the entire batch
+            try:
+                # Bulk update folder paths (if any changed)
+                if batch_folder_updates:
+                    for update in batch_folder_updates:
+                        sb.table('emails').update({
+                            'folder_path': update['folder_path']
+                        }).eq('id', update['id']).execute()
+                    logger.info(f"Updated {len(batch_folder_updates)} folder paths")
+
+                # Bulk delete old categories for all emails in batch
+                if batch_email_ids:
+                    sb.table('email_categories').delete().in_('email_id', batch_email_ids).execute()
+                    logger.info(f"Deleted old categories for {len(batch_email_ids)} emails")
+
+                # Bulk insert new categories in chunks (Supabase has limits)
+                if all_category_inserts:
+                    chunk_size = 1000
+                    for i in range(0, len(all_category_inserts), chunk_size):
+                        chunk = all_category_inserts[i:i + chunk_size]
+                        sb.table('email_categories').insert(chunk).execute()
+                    logger.info(f"Inserted {len(all_category_inserts)} new categories")
+
+            except Exception as e:
+                logger.error(f"Bulk operation failed for batch at offset {offset}: {str(e)}")
+                # Don't fail the whole job, just log and continue
 
             # Update progress after each batch
             await update_job_status(job_id, "running", {
@@ -752,11 +944,11 @@ async def get_dashboard_stats():
         
         return {
             "totalEmails": emails_count.count or 0,
-            "totalMailboxes": mailboxes_count.count or 0, 
+            "totalMailboxes": mailboxes_count.count or 0,
             "todayEmails": today_emails.count or 0,
             "processingJobs": processing_jobs_count.count or 0
         }
-        
+
     except Exception as e:
         # Return mock data if database unavailable
         return {
@@ -765,6 +957,69 @@ async def get_dashboard_stats():
             "todayEmails": 45,
             "processingJobs": 1
         }
+
+@app.get("/api/emails/folders")
+async def get_folder_names():
+    """Get distinct folder names from emails for filter dropdown"""
+
+    try:
+        sb = get_supabase()
+
+        logger.info("Fetching distinct folder names...")
+
+        # First, get total count to verify data
+        count_result = sb.table('emails').select('id', count='exact').execute()
+        total_emails = count_result.count or 0
+        logger.info(f"Total emails in database: {total_emails}")
+
+        # Fetch all emails in batches
+        # IMPORTANT: Supabase may have varying limits, so we loop until we get all emails
+        all_folders = set()
+        page = 0
+        page_size = 1000  # Request size
+        total_fetched = 0
+
+        while total_fetched < total_emails:
+            from_idx = page * page_size
+            to_idx = from_idx + page_size - 1
+
+            logger.info(f"Fetching page {page} (rows {from_idx}-{to_idx})")
+
+            # Supabase range() is INCLUSIVE on both ends
+            result = sb.table('emails').select('folder_path').range(from_idx, to_idx).execute()
+
+            if not result.data or len(result.data) == 0:
+                logger.warning(f"No data returned for page {page}, stopping")
+                break
+
+            batch_size = len(result.data)
+            total_fetched += batch_size
+            logger.info(f"Page {page}: Got {batch_size} rows, total fetched: {total_fetched}/{total_emails}")
+
+            # Add to set
+            for row in result.data:
+                folder = row.get('folder_path')
+                if folder:
+                    all_folders.add(folder)
+
+            logger.info(f"Unique folders so far: {len(all_folders)} - {sorted(all_folders)}")
+
+            # Continue to next page
+            page += 1
+
+            # Safety limit
+            if page > 100:
+                logger.warning(f"Hit safety limit of 100 pages (100k emails)")
+                break
+
+        folders_list = sorted(list(all_folders))
+        logger.info(f"✓ Found {len(folders_list)} unique folders from {total_fetched} emails: {folders_list}")
+
+        return folders_list
+
+    except Exception as e:
+        logger.error(f"Error fetching folder names: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to fetch folders: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

@@ -76,6 +76,35 @@ class MBOXExtractor(BaseExtractor):
             logger.error(f"Failed to connect to MBOX file: {e}")
             raise ConnectionError(f"MBOX connection failed: {e}")
 
+    def get_email_count(self) -> Optional[int]:
+        """
+        Quickly count total emails in MBOX file by counting "From " lines
+
+        This is much faster than parsing all emails, used for progress estimation.
+
+        Returns:
+            Total email count or None if count fails
+        """
+        if not self.file_path:
+            return None
+
+        try:
+            count = 0
+            logger.info(f"Counting emails in {self.file_path}...")
+
+            with open(self.file_path, 'r', encoding='utf-8', errors='replace') as f:
+                for line in f:
+                    # MBOX format: each message starts with "From " (note the space)
+                    if line.startswith('From '):
+                        count += 1
+
+            logger.info(f"Found {count} emails in MBOX file")
+            return count
+
+        except Exception as e:
+            logger.error(f"Failed to count emails in MBOX file: {e}")
+            return None
+
     def extract_emails(self, max_emails: Optional[int] = None) -> Iterator[Dict]:
         """
         Extract emails from MBOX file

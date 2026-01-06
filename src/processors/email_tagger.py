@@ -62,10 +62,10 @@ class EmailTagger:
         tags.append(thread_type)
         metadata['thread_type'] = thread_type
 
-        # Folder category
+        # Folder category (metadata only, NOT a tag - folder is separate from tags)
         folder_category = self._tag_folder(email)
-        tags.append(folder_category)
         metadata['folder_category'] = folder_category
+        # NOTE: We do NOT add folder to tags - folder_path column should be used instead
 
         # Spam detection
         is_spam, spam_reason = self._detect_spam(email)

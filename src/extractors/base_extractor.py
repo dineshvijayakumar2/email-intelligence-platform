@@ -103,6 +103,20 @@ class BaseExtractor(ABC):
         """Clean up connection and resources"""
         pass
 
+    def get_email_count(self) -> Optional[int]:
+        """
+        Get total number of emails in source (fast estimation)
+
+        This method should be implemented by subclasses to provide a quick count
+        of total emails without processing them. Used for progress estimation.
+
+        Returns:
+            Total email count or None if not available/not implemented
+        """
+        # Default implementation returns None (not implemented)
+        # Subclasses should override with format-specific counting
+        return None
+
     # =========================================================================
     # Stats and Lifecycle Methods
     # =========================================================================

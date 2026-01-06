@@ -61,10 +61,12 @@ export const EmailList: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [categories, setCategories] = useState<string[]>([]);
   const [mailboxes, setMailboxes] = useState<string[]>([]);
+  const [folders, setFolders] = useState<string[]>([]);
   const [filters, setFilters] = useState<EmailFilters>({
     search: '',
     category: '',
     mailbox: '',
+    folder: '',
     dateRange: null,
     isOutbound: '',
   });
@@ -98,12 +100,14 @@ export const EmailList: React.FC = () => {
 
   const loadFilterOptions = async () => {
     try {
-      const [categoriesData, mailboxesData] = await Promise.all([
+      const [categoriesData, mailboxesData, foldersData] = await Promise.all([
         emailService.getEmailCategories(),
         emailService.getMailboxNames(),
+        emailService.getFolderNames(),
       ]);
       setCategories(categoriesData);
       setMailboxes(mailboxesData);
+      setFolders(foldersData);
     } catch (error) {
       console.error('Error loading filter options:', error);
     }
@@ -134,10 +138,18 @@ export const EmailList: React.FC = () => {
       search: '',
       category: '',
       mailbox: '',
+      folder: '',
       dateRange: null,
       isOutbound: '',
     });
     setCurrentPage(1);
+  };
+
+  // Filter out folder-based tags (folders should be in folder_path column)
+  const filterContentTags = (tags: string[]) => {
+    if (!tags) return [];
+    const folderTags = ['inbox', 'sent', 'spam', 'trash', 'archive', 'drafts', 'other'];
+    return tags.filter(tag => !folderTags.includes(tag.toLowerCase()));
   };
 
   const columns = [
@@ -145,7 +157,7 @@ export const EmailList: React.FC = () => {
       title: 'Subject',
       dataIndex: 'subject',
       key: 'subject',
-      width: '40%',
+      width: '30%',
       ellipsis: true,
       render: (text: string, record: Email) => (
         <Space direction="vertical" size="small">
@@ -168,43 +180,72 @@ export const EmailList: React.FC = () => {
       title: 'Tags',
       dataIndex: 'tags',
       key: 'tags',
-      width: '20%',
-      render: (tags: string[]) => (
-        <Space wrap size={[4, 4]}>
-          {tags && tags.length > 0 ? (
-            tags.slice(0, 4).map(tag => (
-              <Tag key={tag} color={getCategoryColor(tag)} style={{ margin: 0 }}>
-                {getCategoryLabel(tag)}
-              </Tag>
-            ))
-          ) : (
-            <Tag color="default">No tags</Tag>
-          )}
-          {tags && tags.length > 4 && (
-            <Tooltip title={tags.slice(4).map(t => getCategoryLabel(t)).join(', ')}>
-              <Tag color="default" style={{ margin: 0 }}>+{tags.length - 4}</Tag>
-            </Tooltip>
-          )}
-        </Space>
-      ),
+      width: '18%',
+      render: (tags: string[]) => {
+        const contentTags = filterContentTags(tags);
+        return (
+          <Space wrap size={[4, 4]}>
+            {contentTags && contentTags.length > 0 ? (
+              contentTags.slice(0, 3).map(tag => (
+                <Tag key={tag} color={getCategoryColor(tag)} style={{ margin: 0 }}>
+                  {getCategoryLabel(tag)}
+                </Tag>
+              ))
+            ) : (
+              <Tag color="default">No tags</Tag>
+            )}
+            {contentTags && contentTags.length > 3 && (
+              <Tooltip title={contentTags.slice(3).map(t => getCategoryLabel(t)).join(', ')}>
+                <Tag color="default" style={{ margin: 0 }}>+{contentTags.length - 3}</Tag>
+              </Tooltip>
+            )}
+          </Space>
+        );
+      },
+    },
+    {
+      title: 'Folder',
+      dataIndex: 'folder_path',
+      key: 'folder_path',
+      width: '12%',
+      render: (folder: string) => {
+        // Determine folder icon/color based on common folder names
+        const folderLower = (folder || '').toLowerCase();
+        let color = 'default';
+        if (folderLower.includes('inbox')) color = 'blue';
+        else if (folderLower.includes('sent')) color = 'green';
+        else if (folderLower.includes('spam') || folderLower.includes('junk')) color = 'red';
+        else if (folderLower.includes('trash') || folderLower.includes('deleted')) color = 'volcano';
+        else if (folderLower.includes('archive')) color = 'geekblue';
+        else if (folderLower.includes('draft')) color = 'orange';
+
+        return (
+          <Tag color={color} style={{ maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {folder || 'INBOX'}
+          </Tag>
+        );
+      },
     },
     {
       title: 'Mailbox',
       dataIndex: 'mailbox_name',
       key: 'mailbox_name',
-      width: '15%',
+      width: '12%',
+      ellipsis: true,
       render: (name: string) => (
-        <Space>
-          <MailOutlined />
-          <Text>{name}</Text>
-        </Space>
+        <Tooltip title={name}>
+          <Space>
+            <MailOutlined />
+            <Text ellipsis>{name}</Text>
+          </Space>
+        </Tooltip>
       ),
     },
     {
       title: 'Date',
       dataIndex: 'sent_date',
       key: 'sent_date',
-      width: '15%',
+      width: '13%',
       render: (date: string) => (
         <Space direction="vertical" size="small">
           <Text>{new Date(date).toLocaleDateString()}</Text>
@@ -219,7 +260,7 @@ export const EmailList: React.FC = () => {
       title: 'Size',
       dataIndex: 'message_size',
       key: 'message_size',
-      width: '10%',
+      width: '8%',
       render: (size: number) => {
         const kb = (size / 1024).toFixed(1);
         return <Text type="secondary">{kb} KB</Text>;
@@ -251,6 +292,7 @@ export const EmailList: React.FC = () => {
           Showing {totalCount} email{totalCount !== 1 ? 's' : ''}
           {filters.category && ` in ${getCategoryLabel(filters.category)}`}
           {filters.mailbox && ` from ${filters.mailbox}`}
+          {filters.folder && ` in folder "${filters.folder}"`}
           {filters.isOutbound && ` (${filters.isOutbound})`}
           {filters.search && ` matching "${filters.search}"`}
         </Text>
@@ -297,6 +339,23 @@ export const EmailList: React.FC = () => {
               {mailboxes.map(mailbox => (
                 <Option key={mailbox} value={mailbox}>
                   {mailbox}
+                </Option>
+              ))}
+            </Select>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <Text type="secondary" style={{ fontSize: '12px' }}>Folder:</Text>
+            <Select
+              placeholder="All"
+              allowClear
+              style={{ width: 150 }}
+              value={filters.folder}
+              onChange={(value) => handleFilterChange('folder', value)}
+            >
+              {folders.map(folder => (
+                <Option key={folder} value={folder}>
+                  {folder}
                 </Option>
               ))}
             </Select>
@@ -381,10 +440,21 @@ export const EmailList: React.FC = () => {
                   {selectedEmail.is_outbound ? 'Outbound' : 'Inbound'}
                 </Tag>
               </Descriptions.Item>
-              <Descriptions.Item label="Category" span={2}>
-                <Tag color={getCategoryColor(selectedEmail.category || 'unassigned')}>
-                  {getCategoryLabel(selectedEmail.category || 'unassigned')}
-                </Tag>
+              <Descriptions.Item label="Tags" span={3}>
+                <Space wrap size={[4, 4]}>
+                  {selectedEmail.tags && filterContentTags(selectedEmail.tags).length > 0 ? (
+                    filterContentTags(selectedEmail.tags).map(tag => (
+                      <Tag key={tag} color={getCategoryColor(tag)}>
+                        {getCategoryLabel(tag)}
+                      </Tag>
+                    ))
+                  ) : (
+                    <Tag color="default">No content tags</Tag>
+                  )}
+                </Space>
+              </Descriptions.Item>
+              <Descriptions.Item label="Folder" span={2}>
+                <Tag color="blue">{selectedEmail.folder_path}</Tag>
               </Descriptions.Item>
               <Descriptions.Item label="Reply">
                 {selectedEmail.is_reply ? 'Yes' : 'No'}
@@ -397,9 +467,6 @@ export const EmailList: React.FC = () => {
               </Descriptions.Item>
               <Descriptions.Item label="Size">
                 {(selectedEmail.message_size / 1024).toFixed(1)} KB
-              </Descriptions.Item>
-              <Descriptions.Item label="Folder" span={2}>
-                {selectedEmail.folder_path}
               </Descriptions.Item>
               <Descriptions.Item label="Mailbox">
                 {selectedEmail.mailbox_name}

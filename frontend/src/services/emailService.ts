@@ -27,6 +27,7 @@ export interface EmailFilters {
   search?: string;
   category?: string;
   mailbox?: string;
+  folder?: string;
   dateRange?: [string, string] | null;
   isOutbound?: string;
   // New tag-based filters
@@ -100,6 +101,10 @@ export const emailService = {
 
       if (filters.mailbox) {
         query = query.eq('mailboxes.name', filters.mailbox);
+      }
+
+      if (filters.folder) {
+        query = query.eq('folder_path', filters.folder);
       }
 
       if (filters.isOutbound === 'outbound') {
@@ -221,6 +226,10 @@ export const emailService = {
 
         if (filters.mailbox) {
           query = query.eq('mailboxes.name', filters.mailbox);
+        }
+
+        if (filters.folder) {
+          query = query.eq('folder_path', filters.folder);
         }
 
         if (filters.isOutbound === 'outbound') {
@@ -427,6 +436,28 @@ export const emailService = {
       return data?.map(item => item.name) || [];
     } catch (error) {
       console.error('Error fetching mailbox names:', error);
+      return [];
+    }
+  },
+
+  // Get folder names for filter dropdown
+  async getFolderNames(): Promise<string[]> {
+    try {
+      // Use backend endpoint for efficient DISTINCT query
+      const response = await fetch('http://localhost:8000/api/emails/folders');
+
+      if (!response.ok) {
+        console.error('Error fetching folder names:', response.statusText);
+        return [];
+      }
+
+      const folders = await response.json();
+
+      console.log('Loaded folders from backend:', folders); // Debug log
+
+      return folders;
+    } catch (error) {
+      console.error('Error fetching folder names:', error);
       return [];
     }
   }

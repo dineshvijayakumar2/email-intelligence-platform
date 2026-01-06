@@ -170,21 +170,54 @@ class EmailProcessor:
         logger.info(f"Starting email processing for job {job_id}")
         logger.info(f"Config: max_emails={max_emails}, batch_size={batch_size}, skip_duplicates={skip_duplicates}")
 
-        # Update job status to running
-        self.db_ops.update_job_progress(
-            job_id=job_id,
-            processed_records=0,
-            status='running'
-        )
+        # Note: Job status is already set to 'running' in process_emails_real before initialization
+        # This ensures user sees the job is active immediately, not after initialization completes
 
         def checkpoint_callback(processed_count: int, last_message_id: str):
-            """Callback for progress updates"""
-            self.db_ops.update_job_progress(
-                job_id=job_id,
-                processed_records=processed_count,
-                status='running'
-            )
-            logger.info(f"Progress update: {processed_count} emails processed (job {job_id})")
+            """Callback for progress updates
+
+            Uses shared progress tracker for Redis-based real-time tracking.
+            Only syncs to database every 100 emails to reduce DB load.
+            """
+            try:
+                # Use shared progress tracker (initialized by backend)
+                from utils.progress_tracker import update_job_progress
+
+                should_sync_db = update_job_progress(job_id, processed_count, 0)
+
+                # Only write to database if Redis says it's time (every 100 emails)
+                if should_sync_db:
+                    self.db_ops.update_job_progress(
+                        job_id=job_id,
+                        processed_records=processed_count,
+                        failed_records=0,
+                        update_status=False
+                    )
+                    logger.info(f"[Progress] Synced {processed_count} emails to DB for job {job_id}")
+                else:
+                    logger.debug(f"[Progress] Redis updated: {processed_count} emails (no DB sync yet)")
+
+            except ImportError as e:
+                logger.warning(f"Shared progress tracker not available, using direct DB updates: {e}")
+                # Fallback: direct database update (Redis not available)
+                self.db_ops.update_job_progress(
+                    job_id=job_id,
+                    processed_records=processed_count,
+                    failed_records=0,
+                    update_status=False
+                )
+            except Exception as e:
+                logger.warning(f"Failed to update progress (Redis or DB): {e}")
+                # Try database as last resort
+                try:
+                    self.db_ops.update_job_progress(
+                        job_id=job_id,
+                        processed_records=processed_count,
+                        failed_records=0,
+                        update_status=False
+                    )
+                except Exception as db_error:
+                    logger.error(f"Complete progress update failure: {db_error}")
 
         try:
             # Extract and normalize emails
@@ -216,7 +249,7 @@ class EmailProcessor:
                 logger.info(f"Job {job_id} already has status '{current_status}', preserving it")
                 self.db_ops.update_job_progress(
                     job_id=job_id,
-                    processed_records=result['total'],
+                    processed_records=result['total'],  # Total emails examined (includes new, skipped, failed)
                     failed_records=result['failed'],
                     status=current_status  # Keep current status
                 )
@@ -224,7 +257,7 @@ class EmailProcessor:
                 # Job was stopped by user
                 self.db_ops.update_job_progress(
                     job_id=job_id,
-                    processed_records=result['total'],  # Total emails processed (not just inserted)
+                    processed_records=result['total'],  # Total emails examined (includes new, skipped, failed)
                     failed_records=result['failed'],
                     status='stopped'
                 )
@@ -233,11 +266,14 @@ class EmailProcessor:
                 # Job completed normally
                 self.db_ops.update_job_progress(
                     job_id=job_id,
-                    processed_records=result['total'],  # Total emails processed (not just inserted)
+                    processed_records=result['total'],  # Total emails examined (includes new, skipped, failed)
                     failed_records=result['failed'],
-                    status='completed'
+                    status='completed',
+                    error_log=result.get('errors', []) if result['failed'] > 0 else None
                 )
-                logger.info(f"Processing completed for job {job_id}: {result} ({result['skipped']} skipped as duplicates)")
+                logger.info(f"Processing completed for job {job_id}: {result['total']} examined ({result['success']} inserted, {result['skipped']} skipped duplicates, {result['failed']} failed)")
+                if result['failed'] > 0 and result.get('errors'):
+                    logger.warning(f"Job {job_id} had {result['failed']} failures. First few errors: {result['errors'][:3]}")
 
             # TODO: Implement categorization in Stage 2
             if enable_categorization:

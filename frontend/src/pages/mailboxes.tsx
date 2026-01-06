@@ -48,16 +48,34 @@ export const MailboxList: React.FC = () => {
     loadMailboxes();
   }, []);
 
-  const loadMailboxes = async () => {
+  const loadMailboxes = async (retryCount = 0) => {
+    let shouldStopLoading = true;
+
     try {
       setLoading(true);
       const data = await mailboxService.getMailboxes();
       setMailboxes(data);
     } catch (error) {
       console.error('Error loading mailboxes:', error);
-      message.error('Failed to load mailboxes');
+
+      // Retry up to 2 times with exponential backoff for transient errors
+      if (retryCount < 2) {
+        const delay = Math.pow(2, retryCount) * 500; // 500ms, 1000ms
+        console.log(`Retrying in ${delay}ms... (attempt ${retryCount + 1}/2)`);
+        shouldStopLoading = false; // Keep loading spinner while retrying
+        setTimeout(() => loadMailboxes(retryCount + 1), delay);
+        return;
+      }
+
+      // Only show error after retries exhausted and if we have no mailboxes to display
+      // This prevents error flash when data eventually loads successfully
+      if (mailboxes.length === 0) {
+        message.error('Failed to load mailboxes. Please check your connection and try again.');
+      }
     } finally {
-      setLoading(false);
+      if (shouldStopLoading) {
+        setLoading(false);
+      }
     }
   };
 
