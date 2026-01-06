@@ -444,7 +444,8 @@ export const emailService = {
   async getFolderNames(): Promise<string[]> {
     try {
       // Use backend endpoint for efficient DISTINCT query
-      const response = await fetch('http://localhost:8000/api/emails/folders');
+      const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || '/api';
+      const response = await fetch(`${apiBaseUrl}/emails/folders`);
 
       if (!response.ok) {
         console.error('Error fetching folder names:', response.statusText);

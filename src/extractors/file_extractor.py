@@ -3,10 +3,12 @@ Unified File Extractor - Auto-detects and extracts from MBOX/PST/OLM files
 
 This is the main entry point for file-based email extraction.
 Automatically detects file format and delegates to appropriate extractor.
+Supports cloud storage (S3, Google Drive) and local files.
 """
 
 import logging
 import os
+import sys
 from pathlib import Path
 from typing import Dict, Iterator, Optional, List
 
@@ -14,6 +16,10 @@ from .mbox_extractor import MBOXExtractor
 from .pst_extractor import PSTExtractor
 from .olm_extractor import OLMExtractor
 from .base_extractor import BaseExtractor
+
+# Add src to path for storage imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
+from src.storage import StorageManager
 
 logger = logging.getLogger(__name__)
 
@@ -26,21 +32,34 @@ class FileExtractor(BaseExtractor):
     - MBOX files (universal format)
     - PST files (Windows Outlook archives)
     - OLM files (Mac Outlook archives)
+
+    Storage backends:
+    - Local filesystem
+    - AWS S3 (s3://bucket/path)
+    - Google Drive (gdrive://file_id or https://drive.google.com/...)
     """
 
     def __init__(self):
         """Initialize file extractor"""
         super().__init__(connection_config={})
         self.file_path = None
+        self.file_uri = None  # Original URI (may be cloud storage)
         self.file_type = None
         self.extractor = None
+        self.storage_manager = StorageManager()
 
     def connect(self, file_path: str, **kwargs):
         """
         Connect to email file with auto-detection
+        Supports local files, S3, and Google Drive
 
         Args:
-            file_path: Path to email archive file
+            file_path: Path or URI to email archive file
+                      Examples:
+                      - /path/to/file.mbox (local)
+                      - s3://bucket/path/file.mbox (S3)
+                      - gdrive://file_id (Google Drive)
+                      - https://drive.google.com/file/d/FILE_ID/view (Google Drive)
             **kwargs: Additional arguments passed to specific extractor
 
         Raises:
@@ -49,17 +68,28 @@ class FileExtractor(BaseExtractor):
             PermissionError: If file is locked or no read permission
             RuntimeError: If initialization fails
         """
-        self.file_path = file_path
+        self.file_uri = file_path
 
-        # Check file exists with helpful error message
-        if not os.path.exists(file_path):
+        # Use storage manager to get local file path
+        # This handles cloud storage downloads automatically
+        try:
+            logger.info(f"Resolving file URI: {file_path}")
+            self.file_path = self.storage_manager.get_file(file_path)
+            logger.info(f"Local file path: {self.file_path}")
+        except FileNotFoundError as e:
             raise FileNotFoundError(
                 f"File not found: {file_path}\n"
                 f"Please verify:\n"
-                f"  - Path is correct\n"
-                f"  - File location is accessible (network drives, cloud storage, etc.)\n"
-                f"  - You have read permissions"
-            )
+                f"  - Path/URI is correct\n"
+                f"  - File location is accessible (cloud storage credentials configured)\n"
+                f"  - You have read permissions\n"
+                f"Error: {str(e)}"
+            ) from e
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to access file: {file_path}\n"
+                f"Error: {str(e)}"
+            ) from e
 
         # Detect file type
         try:
@@ -184,10 +214,14 @@ class FileExtractor(BaseExtractor):
         yield from self.extractor.extract_emails(max_emails)
 
     def disconnect(self):
-        """Disconnect and cleanup"""
+        """Disconnect from email file and cleanup cloud storage temp files"""
         if self.extractor:
             self.extractor.disconnect()
             self.extractor = None
+
+        # Cleanup any temporary files from cloud storage
+        if self.storage_manager:
+            self.storage_manager.cleanup()
 
     def get_stats(self) -> Dict:
         """Get extraction statistics"""
