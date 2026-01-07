@@ -102,6 +102,28 @@ CREATE TABLE processing_jobs (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- User integrations for OAuth2 token storage (Google Drive, etc.)
+CREATE TABLE user_integrations (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id TEXT NOT NULL,  -- User identifier (string format for flexibility)
+  provider TEXT NOT NULL CHECK (provider IN ('google_drive', 'microsoft', 'dropbox')),
+  access_token TEXT NOT NULL,     -- Current access token
+  refresh_token TEXT NOT NULL,    -- Long-lived refresh token
+  token_expires_at TIMESTAMPTZ,   -- When access token expires
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  
+  -- Ensure one integration per user per provider
+  UNIQUE(user_id, provider)
+);
+
+-- Add helpful comments
+COMMENT ON TABLE user_integrations IS 'Stores OAuth2 tokens and integration status for external services like Google Drive';
+COMMENT ON COLUMN user_integrations.user_id IS 'User identifier (string format for flexibility)';
+COMMENT ON COLUMN user_integrations.provider IS 'Service provider (google_drive, microsoft, etc.)';
+COMMENT ON COLUMN user_integrations.access_token IS 'Short-lived access token for API calls';
+COMMENT ON COLUMN user_integrations.refresh_token IS 'Long-lived token for refreshing access tokens';
+
 -- Performance indexes
 CREATE INDEX idx_emails_sent_date ON emails(sent_date);
 CREATE INDEX idx_emails_sender ON emails(sender_email);
@@ -113,6 +135,7 @@ CREATE INDEX idx_emails_mailbox_id ON emails(mailbox_id);
 CREATE INDEX idx_emails_mailbox_date ON emails(mailbox_id, sent_date);
 CREATE INDEX idx_folders_mailbox_id ON folders(mailbox_id);
 CREATE INDEX idx_processing_jobs_mailbox ON processing_jobs(mailbox_id);
+CREATE INDEX idx_user_integrations_user_provider ON user_integrations(user_id, provider);
 
 -- Full-text search indexes
 CREATE INDEX idx_emails_subject_fts ON emails USING gin(to_tsvector('english', subject));
@@ -134,6 +157,9 @@ $$ language 'plpgsql';
 
 CREATE TRIGGER update_emails_updated_at BEFORE UPDATE
     ON emails FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_user_integrations_updated_at BEFORE UPDATE
+    ON user_integrations FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Full-text search function
 CREATE OR REPLACE FUNCTION search_emails(search_query TEXT, limit_count INTEGER DEFAULT 100)

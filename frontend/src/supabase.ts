@@ -1,8 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 
-// Replace these with your actual Supabase URL and anon key
-// These should be in environment variables in production
-const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || "https://pimoidzoxjzdzcccjneg.supabase.co";
-const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY || "your-anon-key-here";
+// Use centralized environment variables (loaded by Vite from root .env files)
+const supabaseUrl = import.meta.env.SUPABASE_URL || "https://pimoidzoxjzdzcccjneg.supabase.co";
+const supabaseAnonKey = import.meta.env.SUPABASE_ANON_KEY || "REMOVED_ANON_KEY";
 
 export const supabaseClient = createClient(supabaseUrl, supabaseAnonKey);

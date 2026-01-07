@@ -44,9 +44,12 @@ class PSTExtractor(BaseExtractor):
             logger.error("pypff library not installed. Install with: pip install pypff-python")
             raise ImportError("pypff library required for PST extraction")
 
-    def connect(self, **kwargs) -> bool:
+    def connect(self, access_token: Optional[str] = None, **kwargs) -> bool:
         """
         Open PST file
+
+        Args:
+            access_token: Google Drive OAuth2 access token (if needed for Google Drive files)
 
         Returns:
             True if connection successful
@@ -55,8 +58,8 @@ class PSTExtractor(BaseExtractor):
             FileNotFoundError: If PST file doesn't exist
             ConnectionError: If failed to open PST file
         """
-        if not self.file_path:
-            raise ValueError("file_path not provided in connection_config")
+        # Get the effective file path (local or downloaded from Google Drive)
+        self.file_path = self.get_effective_file_path(access_token)
 
         if not Path(self.file_path).exists():
             raise FileNotFoundError(f"PST file not found: {self.file_path}")
@@ -362,7 +365,7 @@ class PSTExtractor(BaseExtractor):
         return headers
 
     def disconnect(self):
-        """Close PST file"""
+        """Close PST file and cleanup temporary files"""
         if self.pst_file:
             try:
                 self.pst_file.close()
@@ -371,6 +374,9 @@ class PSTExtractor(BaseExtractor):
                 logger.warning(f"Error closing PST file: {e}")
             finally:
                 self.pst_file = None
+        
+        # Cleanup any temporary Google Drive files
+        self.cleanup_temp_files()
 
     def get_stats(self) -> Dict:
         """Get extraction statistics"""

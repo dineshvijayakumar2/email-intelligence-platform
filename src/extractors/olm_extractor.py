@@ -40,18 +40,21 @@ class OLMExtractor(BaseExtractor):
         """Initialize OLM extractor
 
         Args:
-            connection_config: Dict with 'file_path' key
+            connection_config: Dict with 'file_path' or Google Drive config
         """
         super().__init__(connection_config=connection_config)
         self.source_type = "olm"
-        self.file_path = connection_config.get('file_path')
+        self.file_path = None  # Will be set in connect()
         self.zip_file = None
         self.message_files = []  # List of message XML file paths
         self.folder_structure = {}  # Maps folder paths to message counts
 
-    def connect(self, **kwargs) -> bool:
+    def connect(self, access_token: Optional[str] = None, **kwargs) -> bool:
         """
         Open OLM ZIP archive for streaming access
+
+        Args:
+            access_token: Google Drive OAuth2 access token (if needed for Google Drive files)
 
         Returns:
             True if connection successful
@@ -62,8 +65,8 @@ class OLMExtractor(BaseExtractor):
             zipfile.BadZipFile: If file is not a valid ZIP
             ConnectionError: If failed to open OLM file
         """
-        if not self.file_path:
-            raise ValueError("file_path not provided in connection_config")
+        # Get the effective file path (local or downloaded from Google Drive)
+        self.file_path = self.get_effective_file_path(access_token)
 
         if not Path(self.file_path).exists():
             raise FileNotFoundError(f"OLM file not found: {self.file_path}")
@@ -417,7 +420,7 @@ class OLMExtractor(BaseExtractor):
         return attachments
 
     def disconnect(self):
-        """Close ZIP file"""
+        """Close ZIP file and cleanup temporary files"""
         if self.zip_file:
             try:
                 self.zip_file.close()
@@ -426,6 +429,9 @@ class OLMExtractor(BaseExtractor):
                 logger.warning(f"Error closing ZIP file: {e}")
             finally:
                 self.zip_file = None
+        
+        # Cleanup any temporary Google Drive files
+        self.cleanup_temp_files()
 
     def get_stats(self) -> Dict:
         """Get extraction statistics"""

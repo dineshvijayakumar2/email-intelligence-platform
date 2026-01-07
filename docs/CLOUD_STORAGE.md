@@ -7,7 +7,7 @@ This document explains how to configure and use cloud storage backends for email
 The Email Intelligence POC supports multiple storage backends:
 - **Local Filesystem** - Traditional file paths
 - **AWS S3** - Amazon S3 buckets
-- **Google Drive** - Google Drive files
+- **Google Drive** - Google Drive files (with OAuth2 frontend integration)
 - Azure Blob Storage (coming soon)
 
 ## Supported URI Formats
@@ -28,6 +28,9 @@ s3://bucket-name/path/to/file.mbox
 gdrive://1abc234def567890  (File ID)
 https://drive.google.com/file/d/1abc234def567890/view
 ```
+
+**Note**: Google Drive integration has been upgraded to industry-standard OAuth2 flow.  
+See **[GOOGLE_DRIVE_INTEGRATION.md](./GOOGLE_DRIVE_INTEGRATION.md)** for complete setup instructions.
 
 ## Configuration
 
@@ -71,36 +74,53 @@ No configuration needed - uses instance metadata
 
 ### 2. Google Drive Setup
 
-**Install dependencies:**
+The platform now supports two methods for Google Drive integration:
+
+#### Method A: Frontend OAuth2 Integration (Recommended)
+
+**Features:**
+- User-friendly authentication via Google account
+- Interactive file browser with search
+- No service account needed
+- Direct user authorization
+
+**Setup:**
+
+1. **Google Cloud Console Configuration:**
+   - Go to [Google Cloud Console](https://console.cloud.google.com/)
+   - Create or select a project
+   - Enable Google Drive API
+   - Create OAuth2 credentials (Web application)
+   - Add authorized JavaScript origins: `http://localhost:3000`
+   - Add redirect URIs: `http://localhost:3000/auth/google/callback`
+
+2. **Environment Configuration (.env):**
+```bash
+GOOGLE_CLIENT_ID=your_client_id
+GOOGLE_CLIENT_SECRET=your_client_secret
+GOOGLE_REDIRECT_URI=http://localhost:3000/auth/google/callback
+```
+
+3. **Usage:**
+   - In mailbox creation, select "Google Drive" as file source
+   - Click "Select from Google Drive"
+   - Authenticate with Google account
+   - Browse and select files
+
+#### Method B: Service Account (Backend Processing)
+
+**For automated/batch processing:**
+
 ```bash
 pip install google-auth google-auth-httplib2 google-api-python-client
 ```
 
-**Create service account:**
-
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project or select existing
-3. Enable Google Drive API
-4. Create Service Account:
-   - Go to IAM & Admin → Service Accounts
-   - Click "Create Service Account"
-   - Grant role: "Viewer" or "Drive API - Read Only"
-   - Create and download JSON key file
-
-**Share Drive files with service account:**
-1. Open the file in Google Drive
-2. Click "Share"
-3. Add the service account email (from JSON key file)
-4. Grant "Viewer" permission
-
-**Configure credentials:**
+1. Create Service Account in Google Cloud Console
+2. Download JSON key file
+3. Share files with service account email
+4. Configure:
 ```bash
 export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
-```
-
-Or in `.env`:
-```bash
-GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
 ```
 
 **Get File ID from Google Drive URL:**
@@ -110,23 +130,27 @@ https://drive.google.com/file/d/1abc234def567890/view
 ```
 
 **Usage in mailbox configuration:**
+
+Frontend OAuth2 method:
+```json
+{
+  "name": "Google Drive Archive",
+  "mailbox_type": "mbox",
+  "connection_config": {
+    "file_source": "google_drive",
+    "google_drive_file_id": "1abc234def567890",
+    "google_drive_file_name": "archive.mbox"
+  }
+}
+```
+
+Service account method:
 ```json
 {
   "name": "Google Drive Archive",
   "mailbox_type": "mbox",
   "connection_config": {
     "file_path": "gdrive://1abc234def567890"
-  }
-}
-```
-
-Or use the full URL:
-```json
-{
-  "name": "Google Drive Archive",
-  "mailbox_type": "mbox",
-  "connection_config": {
-    "file_path": "https://drive.google.com/file/d/1abc234def567890/view"
   }
 }
 ```
@@ -232,7 +256,13 @@ Failed to download from S3: An error occurred (AccessDenied)
 ```
 Failed to download from Google Drive: <HttpError 403>
 ```
-**Solutions:**
+**Solutions for OAuth2 method:**
+- Ensure user has access to the file
+- Check OAuth scopes include drive.readonly
+- Verify access token is not expired
+- Re-authenticate if necessary
+
+**Solutions for Service Account method:**
 - Verify service account has access to the file
 - Check if file is in a Shared Drive (requires additional setup)
 - Ensure Google Drive API is enabled in Google Cloud Console

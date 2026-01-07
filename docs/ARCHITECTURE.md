@@ -236,15 +236,16 @@ async def process_emails_real(job_id):
 
 ### 4. Progress Tracking System
 
-**Two-Tier Architecture** (Redis + Database):
+**Two-Tier Architecture** (Redis REQUIRED + Database):
 
-#### Tier 1: Redis (Real-time, In-memory)
+#### Tier 1: Redis (Real-time, In-memory) - MANDATORY
 
 **Location**: `src/database/redis_client.py`
 
 **Classes**:
 - `JobProgressManager` - Progress tracking
 - `JobQueueManager` - Job queue management
+- `RedisClient` - Connection management with REDIS_URL support
 
 **Storage**:
 ```
@@ -589,19 +590,27 @@ Job terminated gracefully
 
 ### Environment Variables
 
-**Backend** (`.env`):
+**Single .env file in root directory**:
 ```bash
+# Supabase Configuration (Required)
 SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your_anon_key
 SUPABASE_SERVICE_KEY=your_service_role_key
-REDIS_URL=redis://localhost:6379  # Optional
+
+# Redis Configuration (Required)
+REDIS_URL=redis://localhost:6379
+REDIS_TTL_DAYS=7  # Job data retention period
+
+# Google Drive API (Optional)
+GOOGLE_CLIENT_ID=your_client_id
+GOOGLE_CLIENT_SECRET=your_client_secret
+GOOGLE_REDIRECT_URI=http://localhost:3000/auth/google/callback
+
+# API Configuration
+API_BASE_URL=http://localhost:8000/api
 ```
 
-**Frontend** (`.env.local`):
-```bash
-REACT_APP_SUPABASE_URL=https://your-project.supabase.co
-REACT_APP_SUPABASE_ANON_KEY=your_anon_key
-REACT_APP_API_BASE_URL=http://localhost:8000/api
-```
+Note: Frontend environment variables are automatically loaded from root .env by the start-poc.sh script.
 
 ### Service Startup
 

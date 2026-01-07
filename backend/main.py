@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 import random
 import logging
 from concurrent.futures import ThreadPoolExecutor
+from google_auth_oauthlib.flow import Flow
 
 # Version: 1.2.0 - Email count estimation + folder/tag separation + Redis
 # Add src to path for imports
@@ -44,9 +45,25 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Load environment variables from parent directory
-dotenv_path = os.path.join(os.path.dirname(__file__), '..', '.env')
-load_dotenv(dotenv_path=dotenv_path)
-logger.info(f"Loading environment variables from: {dotenv_path}")
+# Check for environment-specific files first, then fallback to .env
+parent_dir = os.path.join(os.path.dirname(__file__), '..')
+python_env = os.getenv('PYTHON_ENV', 'development')  # default to development
+
+# Try environment-specific file first
+env_file = os.path.join(parent_dir, f'.env.{python_env}')
+if os.path.exists(env_file):
+    load_dotenv(dotenv_path=env_file)
+    logger.info(f"Loading {python_env} environment variables from: {env_file}")
+else:
+    # Fallback to generic .env file
+    fallback_env = os.path.join(parent_dir, '.env')
+    if os.path.exists(fallback_env):
+        load_dotenv(dotenv_path=fallback_env)
+        logger.info(f"Loading environment variables from: {fallback_env}")
+    else:
+        logger.warning("No .env file found! Please create .env.development or .env file")
+
+logger.info(f"Running in {python_env} mode")
 
 app = FastAPI(title="Email Intelligence API", version="1.0.0")
 
@@ -55,16 +72,22 @@ app = FastAPI(title="Email Intelligence API", version="1.0.0")
 # This ensures multiple mailboxes can be processed simultaneously
 executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="email_processor")
 
-# Initialize Redis managers
+# Initialize Redis managers (REQUIRED for job processing)
 try:
     progress_manager = JobProgressManager()
     queue_manager = JobQueueManager()
     logger.info("Redis managers initialized successfully")
+    
+    # Test Redis connection
+    if not RedisClient.test_connection():
+        raise Exception("Redis connection test failed")
+        
 except Exception as e:
     logger.error(f"Failed to initialize Redis managers: {e}")
-    logger.warning("Falling back to database-only mode (Redis unavailable)")
-    progress_manager = None
-    queue_manager = None
+    logger.error("Redis is REQUIRED for job processing. Please ensure Redis is running.")
+    logger.error("Install Redis: brew install redis (macOS) or sudo apt install redis-server (Ubuntu)")
+    logger.error("Start Redis: redis-server")
+    raise RuntimeError("Redis is required but not available. Cannot start application.")
 
 # Initialize shared progress tracker (used by email processor)
 # Force backend restart
@@ -203,8 +226,160 @@ class ConnectionTest(BaseModel):
     mailbox_type: str
     connection_config: Dict[str, Any]
 
+class OAuth2ExchangeRequest(BaseModel):
+    code: str  # OAuth2 authorization code from frontend
+    user_id: str  # User identifier
+
+class GoogleDriveConnection(BaseModel):
+    user_id: str
+    status: str  # 'connected' or 'disconnected'
+
 # In-memory job storage for POC (use Redis in production)
 active_jobs = {}
+
+# Helper functions for Google Drive token management
+def store_user_google_tokens(user_id: str, access_token: str, refresh_token: str) -> bool:
+    """Store user's Google Drive tokens in database"""
+    try:
+        # Check if integration already exists
+        existing = get_supabase().table('user_integrations').select('id').eq('user_id', user_id).eq('provider', 'google_drive').execute()
+        
+        token_data = {
+            'user_id': user_id,
+            'provider': 'google_drive',
+            'access_token': access_token,
+            'refresh_token': refresh_token,
+            'updated_at': datetime.now(timezone.utc).isoformat()
+        }
+        
+        if existing.data:
+            # Update existing integration
+            result = get_supabase().table('user_integrations').update(token_data).eq('user_id', user_id).eq('provider', 'google_drive').execute()
+        else:
+            # Create new integration
+            token_data['created_at'] = datetime.now(timezone.utc).isoformat()
+            result = get_supabase().table('user_integrations').insert(token_data).execute()
+        
+        logger.info(f"Stored Google Drive tokens for user {user_id}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Failed to store Google Drive tokens for user {user_id}: {e}")
+        return False
+
+def get_user_google_tokens(user_id: str) -> Optional[Dict]:
+    """Get user's Google Drive tokens from database"""
+    try:
+        result = get_supabase().table('user_integrations').select('access_token,refresh_token').eq('user_id', user_id).eq('provider', 'google_drive').execute()
+        
+        if result.data:
+            return result.data[0]
+        return None
+        
+    except Exception as e:
+        logger.error(f"Failed to get Google Drive tokens for user {user_id}: {e}")
+        return None
+
+def update_user_access_token(user_id: str, new_access_token: str) -> bool:
+    """Update user's access token after refresh"""
+    try:
+        get_supabase().table('user_integrations').update({
+            'access_token': new_access_token,
+            'updated_at': datetime.now(timezone.utc).isoformat()
+        }).eq('user_id', user_id).eq('provider', 'google_drive').execute()
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Failed to update access token for user {user_id}: {e}")
+        return False
+
+# =========================================================================
+# Google Drive OAuth2 Integration Endpoints
+# =========================================================================
+
+@app.post("/api/auth/google/exchange")
+async def exchange_oauth_code(request: OAuth2ExchangeRequest):
+    """Exchange OAuth2 authorization code for tokens and store securely"""
+    try:
+        # Create OAuth2 flow
+        flow = Flow.from_client_config(
+            {
+                "web": {
+                    "client_id": os.getenv("GOOGLE_CLIENT_ID"),
+                    "client_secret": os.getenv("GOOGLE_CLIENT_SECRET"),
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "redirect_uris": [os.getenv("GOOGLE_REDIRECT_URI")]
+                }
+            },
+            scopes=[
+                'https://www.googleapis.com/auth/drive.readonly',
+                'https://www.googleapis.com/auth/userinfo.email',
+                'openid',
+                'https://www.googleapis.com/auth/userinfo.profile'
+            ]
+        )
+        
+        flow.redirect_uri = os.getenv("GOOGLE_REDIRECT_URI")
+        
+        # Exchange authorization code for tokens
+        flow.fetch_token(code=request.code)
+        
+        # Store tokens securely in database
+        success = store_user_google_tokens(
+            user_id=request.user_id,
+            access_token=flow.credentials.token,
+            refresh_token=flow.credentials.refresh_token
+        )
+        
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to store Google Drive tokens")
+        
+        return {
+            "status": "success",
+            "message": "Google Drive connected successfully",
+            "user_id": request.user_id
+        }
+        
+    except Exception as e:
+        logger.error(f"OAuth2 token exchange failed: {e}")
+        raise HTTPException(status_code=400, detail=f"Token exchange failed: {str(e)}")
+
+@app.get("/api/auth/google/status/{user_id}")
+async def get_google_drive_status(user_id: str):
+    """Check if user has connected their Google Drive"""
+    try:
+        tokens = get_user_google_tokens(user_id)
+        
+        return {
+            "user_id": user_id,
+            "connected": tokens is not None,
+            "provider": "google_drive"
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to check Google Drive status for user {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to check connection status")
+
+@app.delete("/api/auth/google/disconnect/{user_id}")
+async def disconnect_google_drive(user_id: str):
+    """Disconnect user's Google Drive integration"""
+    try:
+        # Remove tokens from database
+        get_supabase().table('user_integrations').delete().eq('user_id', user_id).eq('provider', 'google_drive').execute()
+        
+        logger.info(f"Disconnected Google Drive for user {user_id}")
+        
+        return {
+            "status": "success",
+            "message": "Google Drive disconnected successfully",
+            "user_id": user_id
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to disconnect Google Drive for user {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to disconnect Google Drive")
 
 @app.get("/")
 async def root():
@@ -215,6 +390,241 @@ async def health_check():
     return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()}
 
 # Mailbox endpoints
+@app.get("/api/mailboxes")
+async def get_mailboxes():
+    """Get all mailboxes with email counts"""
+    try:
+        sb = get_supabase()
+        
+        # Get mailboxes
+        mailboxes_result = sb.table('mailboxes').select('*').order('created_at', desc=True).execute()
+        
+        if not mailboxes_result.data:
+            return []
+        
+        # Get email counts for each mailbox
+        mailboxes_with_counts = []
+        for mailbox in mailboxes_result.data:
+            try:
+                count_result = sb.table('emails').select('*', count='exact', head=True).eq('mailbox_id', mailbox['id']).execute()
+                email_count = count_result.count or 0
+                
+                mailboxes_with_counts.append({
+                    **mailbox,
+                    'total_emails': email_count
+                })
+            except Exception as e:
+                logger.warning(f"Failed to get email count for mailbox {mailbox['id']}: {e}")
+                mailboxes_with_counts.append({
+                    **mailbox,
+                    'total_emails': 0
+                })
+        
+        return mailboxes_with_counts
+        
+    except Exception as e:
+        logger.error(f"Error fetching mailboxes: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch mailboxes: {str(e)}")
+
+@app.get("/api/mailboxes/{mailbox_id}")
+async def get_mailbox(mailbox_id: str):
+    """Get a single mailbox by ID"""
+    try:
+        sb = get_supabase()
+        result = sb.table('mailboxes').select('*').eq('id', mailbox_id).single().execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Mailbox not found")
+        
+        return result.data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching mailbox {mailbox_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch mailbox: {str(e)}")
+
+@app.post("/api/mailboxes")
+async def create_mailbox(mailbox_data: MailboxConfig):
+    """Create a new mailbox"""
+    try:
+        sb = get_supabase()
+        
+        # Prepare data for insertion
+        insert_data = {
+            "name": mailbox_data.name,
+            "mailbox_type": mailbox_data.mailbox_type,
+            "is_active": mailbox_data.is_active,
+            "connection_config": mailbox_data.connection_config,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "total_emails": 0
+        }
+        
+        # Add email_address if provided
+        if mailbox_data.email_address:
+            insert_data["email_address"] = mailbox_data.email_address
+        
+        # Insert the mailbox
+        result = sb.table('mailboxes').insert(insert_data).execute()
+        
+        # Fetch the created mailbox
+        if result.data and len(result.data) > 0:
+            mailbox_id = result.data[0]['id']
+            created_result = sb.table('mailboxes').select('*').eq('id', mailbox_id).single().execute()
+            return created_result.data
+        else:
+            raise HTTPException(status_code=500, detail="Failed to create mailbox")
+        
+    except Exception as e:
+        logger.error(f"Error creating mailbox: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create mailbox: {str(e)}")
+
+@app.put("/api/mailboxes/{mailbox_id}")
+async def update_mailbox(mailbox_id: str, mailbox_data: MailboxConfig):
+    """Update an existing mailbox"""
+    try:
+        sb = get_supabase()
+        
+        # Prepare update data
+        update_data = {
+            "name": mailbox_data.name,
+            "mailbox_type": mailbox_data.mailbox_type,
+            "is_active": mailbox_data.is_active,
+            "connection_config": mailbox_data.connection_config,
+        }
+        
+        # Add email_address if provided
+        if mailbox_data.email_address:
+            update_data["email_address"] = mailbox_data.email_address
+        
+        # Update the mailbox
+        result = sb.table('mailboxes').update(update_data).eq('id', mailbox_id).execute()
+        
+        # Fetch the updated mailbox
+        updated_result = sb.table('mailboxes').select('*').eq('id', mailbox_id).single().execute()
+        
+        if not updated_result.data:
+            raise HTTPException(status_code=404, detail="Mailbox not found")
+        
+        return updated_result.data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating mailbox {mailbox_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to update mailbox: {str(e)}")
+
+@app.delete("/api/mailboxes/{mailbox_id}")
+async def delete_mailbox(mailbox_id: str):
+    """Delete a mailbox"""
+    try:
+        sb = get_supabase()
+        
+        # Check if mailbox exists
+        check_result = sb.table('mailboxes').select('id').eq('id', mailbox_id).execute()
+        if not check_result.data:
+            raise HTTPException(status_code=404, detail="Mailbox not found")
+        
+        # Delete the mailbox
+        sb.table('mailboxes').delete().eq('id', mailbox_id).execute()
+        
+        return {"message": "Mailbox deleted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting mailbox {mailbox_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete mailbox: {str(e)}")
+
+@app.post("/api/mailboxes/{mailbox_id}/sync")
+async def sync_mailbox(mailbox_id: str):
+    """Trigger sync for a mailbox"""
+    try:
+        sb = get_supabase()
+        
+        # Update last_sync_at timestamp
+        update_data = {
+            "last_sync_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        result = sb.table('mailboxes').update(update_data).eq('id', mailbox_id).execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Mailbox not found")
+        
+        return {"message": "Mailbox sync triggered successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error syncing mailbox {mailbox_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to sync mailbox: {str(e)}")
+
+@app.post("/api/mailboxes/test/test-connection")
+async def test_connection_generic(connection_test: ConnectionTest):
+    """Test mailbox connection based on type"""
+    
+    mailbox_type = connection_test.mailbox_type
+    config = connection_test.connection_config
+    
+    try:
+        # Use EmailProcessor to validate configuration
+        processor = EmailProcessor(
+            mailbox_id="test_connection",  # Temporary ID for validation
+            connection_config=config
+        )
+        
+        # For local files, use the validation method
+        if config.get('file_source', 'local') == 'local':
+            validation_result = processor.validate_configuration(mailbox_type)
+            
+            if not validation_result['valid']:
+                raise HTTPException(
+                    status_code=400,
+                    detail=validation_result['error']
+                )
+            
+            return {
+                "success": True,
+                "message": f"{mailbox_type.upper()} connection test successful",
+                "details": validation_result['details'],
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+        else:
+            # For Google Drive files, test extractor initialization with service account
+            try:
+                if not processor.initialize_extractor(mailbox_type):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Failed to initialize {mailbox_type.upper()} extractor for Google Drive file"
+                    )
+                
+                # Test successful - cleanup and return
+                processor.disconnect()
+                
+                google_file_name = config.get('google_drive_file_name', 'Unknown file')
+                return {
+                    "success": True,
+                    "message": f"{mailbox_type.upper()} Google Drive connection test successful",
+                    "details": {
+                        "file_name": google_file_name,
+                        "file_source": "google_drive",
+                        "mailbox_type": mailbox_type
+                    },
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
+                
+            except Exception as e:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Google Drive connection test failed: {str(e)}"
+                )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Connection test failed: {str(e)}")
+
 @app.post("/api/mailboxes/{mailbox_id}/test-connection")
 async def test_connection(mailbox_id: str, connection_test: ConnectionTest):
     """Test mailbox connection based on type"""
@@ -229,20 +639,51 @@ async def test_connection(mailbox_id: str, connection_test: ConnectionTest):
             connection_config=config
         )
 
-        validation_result = processor.validate_configuration(mailbox_type)
+        # For local files, use the validation method
+        if config.get('file_source', 'local') == 'local':
+            validation_result = processor.validate_configuration(mailbox_type)
 
-        if not validation_result['valid']:
-            raise HTTPException(
-                status_code=400,
-                detail=validation_result['error']
-            )
-
-        return {
-            "success": True,
-            "message": f"{mailbox_type.upper()} connection test successful",
-            "details": validation_result['details'],
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        }
+            if not validation_result['valid']:
+                raise HTTPException(
+                    status_code=400,
+                    detail=validation_result['error']
+                )
+                
+            return {
+                "success": True,
+                "message": f"{mailbox_type.upper()} connection test successful",
+                "details": validation_result['details'],
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+        else:
+            # For Google Drive files, test extractor initialization with service account
+            try:
+                if not processor.initialize_extractor(mailbox_type):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Failed to initialize {mailbox_type.upper()} extractor for Google Drive file"
+                    )
+                
+                # Test successful - cleanup and return
+                processor.disconnect()
+                
+                google_file_name = config.get('google_drive_file_name', 'Unknown file')
+                return {
+                    "success": True,
+                    "message": f"{mailbox_type.upper()} Google Drive connection test successful",
+                    "details": {
+                        "file_name": google_file_name,
+                        "file_source": "google_drive",
+                        "mailbox_type": mailbox_type
+                    },
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
+                
+            except Exception as e:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Google Drive connection test failed: {str(e)}"
+                )
 
     except HTTPException:
         raise
@@ -377,12 +818,13 @@ async def process_emails_real(job_id: str, config: ProcessingJobConfig):
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(
             executor,  # Custom thread pool with 20 workers
-            processor.process_emails,
-            job_id,
-            config.total_records,  # max_emails (None for all)
-            config.batch_size or 5000,  # batch_size
-            True,  # skip_duplicates
-            config.enable_categorization  # enable_categorization
+            lambda: processor.process_emails(
+                job_id=job_id,
+                max_emails=config.total_records,  # max_emails (None for all)
+                batch_size=config.batch_size or 5000,  # batch_size
+                skip_duplicates=True,  # skip_duplicates
+                enable_categorization=config.enable_categorization  # enable_categorization
+            )
         )
 
         logger.info(f"Processing completed for job {job_id}: {result}")
@@ -539,8 +981,22 @@ async def get_processing_jobs():
             }
         ]
 
-@app.post("/api/processing-jobs/{job_id}/control")
-async def control_job(job_id: str, action: str):
+@app.post("/api/processing-jobs/{job_id}/pause")
+async def pause_job(job_id: str):
+    """Pause a processing job"""
+    return await control_job_action(job_id, "pause")
+
+@app.post("/api/processing-jobs/{job_id}/resume")
+async def resume_job(job_id: str):
+    """Resume a processing job"""
+    return await control_job_action(job_id, "resume")
+
+@app.post("/api/processing-jobs/{job_id}/stop")
+async def stop_job(job_id: str):
+    """Stop a processing job"""
+    return await control_job_action(job_id, "stop")
+
+async def control_job_action(job_id: str, action: str):
     """Control processing job (pause, resume, stop)"""
     
     valid_actions = ["pause", "resume", "stop"]
@@ -551,7 +1007,7 @@ async def control_job(job_id: str, action: str):
         status_map = {
             "pause": "paused",
             "resume": "running",
-            "stop": "stopped"  # Fixed: was "failed"
+            "stop": "stopped"
         }
 
         new_status = status_map[action]

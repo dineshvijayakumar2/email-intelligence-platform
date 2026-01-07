@@ -1,6 +1,12 @@
 import React, { PropsWithChildren } from "react";
 import { Layout as AntdLayout, Menu, Typography } from "antd";
 import { Link } from "react-router-dom";
+import { 
+  DashboardOutlined, 
+  MailOutlined, 
+  InboxOutlined, 
+  SettingOutlined 
+} from "@ant-design/icons";
 
 const { Header, Sider, Content } = AntdLayout;
 const { Title } = Typography;
@@ -21,16 +27,16 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
           defaultSelectedKeys={["/"]}
           style={{ height: "100%", borderRight: 0 }}
         >
-          <Menu.Item key="/" icon="📊">
+          <Menu.Item key="/" icon={<DashboardOutlined />}>
             <Link to="/">Dashboard</Link>
           </Menu.Item>
-          <Menu.Item key="/mailboxes" icon="📮">
+          <Menu.Item key="/mailboxes" icon={<InboxOutlined />}>
             <Link to="/mailboxes">Mailboxes</Link>
           </Menu.Item>
-          <Menu.Item key="/emails" icon="📧">
+          <Menu.Item key="/emails" icon={<MailOutlined />}>
             <Link to="/emails">Emails</Link>
           </Menu.Item>
-          <Menu.Item key="/processing" icon="⚙️">
+          <Menu.Item key="/processing" icon={<SettingOutlined />}>
             <Link to="/processing">Processing</Link>
           </Menu.Item>
         </Menu>

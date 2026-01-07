@@ -48,18 +48,17 @@ class FileExtractor(BaseExtractor):
         self.extractor = None
         self.storage_manager = StorageManager()
 
-    def connect(self, file_path: str, **kwargs):
+    def connect(self, file_path: str = None, access_token: Optional[str] = None, **kwargs):
         """
         Connect to email file with auto-detection
         Supports local files, S3, and Google Drive
 
         Args:
-            file_path: Path or URI to email archive file
+            file_path: Path or URI to email archive file (for local files)
                       Examples:
                       - /path/to/file.mbox (local)
                       - s3://bucket/path/file.mbox (S3)
-                      - gdrive://file_id (Google Drive)
-                      - https://drive.google.com/file/d/FILE_ID/view (Google Drive)
+            access_token: Google Drive OAuth2 access token (for Google Drive files)
             **kwargs: Additional arguments passed to specific extractor
 
         Raises:
@@ -68,39 +67,66 @@ class FileExtractor(BaseExtractor):
             PermissionError: If file is locked or no read permission
             RuntimeError: If initialization fails
         """
-        self.file_uri = file_path
+        # Handle both local files and Google Drive files
+        if file_path:
+            # Local file path provided
+            self.file_uri = file_path
+            
+            # Use storage manager to get local file path
+            # This handles cloud storage downloads automatically
+            try:
+                logger.info(f"Resolving file URI: {file_path}")
+                self.file_path = self.storage_manager.get_file(file_path)
+                logger.info(f"Local file path: {self.file_path}")
+            except FileNotFoundError as e:
+                raise FileNotFoundError(
+                    f"File not found: {file_path}\n"
+                    f"Please verify:\n"
+                    f"  - Path/URI is correct\n"
+                    f"  - File location is accessible (cloud storage credentials configured)\n"
+                    f"  - You have read permissions\n"
+                    f"Error: {str(e)}"
+                ) from e
+            except Exception as e:
+                raise RuntimeError(
+                    f"Failed to access file: {file_path}\n"
+                    f"Error: {str(e)}"
+                ) from e
 
-        # Use storage manager to get local file path
-        # This handles cloud storage downloads automatically
-        try:
-            logger.info(f"Resolving file URI: {file_path}")
-            self.file_path = self.storage_manager.get_file(file_path)
-            logger.info(f"Local file path: {self.file_path}")
-        except FileNotFoundError as e:
-            raise FileNotFoundError(
-                f"File not found: {file_path}\n"
-                f"Please verify:\n"
-                f"  - Path/URI is correct\n"
-                f"  - File location is accessible (cloud storage credentials configured)\n"
-                f"  - You have read permissions\n"
-                f"Error: {str(e)}"
-            ) from e
-        except Exception as e:
-            raise RuntimeError(
-                f"Failed to access file: {file_path}\n"
-                f"Error: {str(e)}"
-            ) from e
+            # Detect file type from local file
+            try:
+                self.file_type = self._detect_file_type(file_path)
+                logger.info(f"Detected file type: {self.file_type}")
+            except Exception as e:
+                raise RuntimeError(f"Failed to detect file type for {file_path}: {e}") from e
 
-        # Detect file type
-        try:
-            self.file_type = self._detect_file_type(file_path)
-            logger.info(f"Detected file type: {self.file_type}")
-        except Exception as e:
-            raise RuntimeError(f"Failed to detect file type for {file_path}: {e}") from e
-
-        # Prepare connection config
-        connection_config = {'file_path': file_path}
-        connection_config.update(kwargs)
+            # Prepare connection config for local file
+            connection_config = {'file_path': file_path}
+            connection_config.update(kwargs)
+            
+        else:
+            # Google Drive file - use the stored config
+            if not hasattr(self, 'config') or not self.config:
+                raise ValueError("No file_path provided and no Google Drive config found")
+                
+            connection_config = self.config.copy()
+            connection_config.update(kwargs)
+            
+            # Google Drive file type detection from filename
+            google_file_name = connection_config.get('google_drive_file_name', '')
+            if google_file_name.lower().endswith('.olm'):
+                self.file_type = 'olm'
+            elif google_file_name.lower().endswith('.mbox'):
+                self.file_type = 'mbox'
+            elif google_file_name.lower().endswith('.pst'):
+                self.file_type = 'pst'
+            else:
+                # Try to detect from file extension or default to mbox
+                self.file_type = 'mbox'  # Default fallback
+                logger.warning(f"Could not detect file type from Google Drive filename: {google_file_name}, defaulting to MBOX")
+            
+            logger.info(f"Google Drive file type: {self.file_type}")
+            self.file_uri = f"gdrive://{connection_config.get('google_drive_file_id')}"
 
         # Create appropriate extractor with connection config
         try:
@@ -113,14 +139,17 @@ class FileExtractor(BaseExtractor):
             else:
                 raise ValueError(f"Unsupported file type: {self.file_type}")
 
-            # Connect using specific extractor (file_path already in connection_config)
+            # Connect using specific extractor with access_token if provided
             logger.info(f"Initializing {self.file_type.upper()} extractor...")
-            self.extractor.connect(**kwargs)
+            if access_token:
+                self.extractor.connect(access_token=access_token, **kwargs)
+            else:
+                self.extractor.connect(**kwargs)
             logger.info(f"{self.file_type.upper()} extractor initialized successfully")
 
         except PermissionError as e:
             raise PermissionError(
-                f"Permission denied: {file_path}\n"
+                f"Permission denied accessing file\n"
                 f"Possible causes:\n"
                 f"  - File is locked by another process\n"
                 f"  - Insufficient read permissions\n"
@@ -131,7 +160,7 @@ class FileExtractor(BaseExtractor):
             logger.error(f"Failed to initialize {self.file_type} extractor: {e}", exc_info=True)
             raise RuntimeError(
                 f"Failed to initialize {self.file_type} extractor\n"
-                f"File: {file_path}\n"
+                f"File: {self.file_uri}\n"
                 f"Error: {str(e)}"
             ) from e
 

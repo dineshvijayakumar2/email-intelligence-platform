@@ -25,26 +25,41 @@ class RedisClient:
             Redis client instance
         """
         if cls._instance is None:
-            # Get Redis connection details from environment
-            redis_host = os.getenv('REDIS_HOST', 'localhost')
-            redis_port = int(os.getenv('REDIS_PORT', '6379'))
-            redis_db = int(os.getenv('REDIS_DB', '0'))
-            redis_password = os.getenv('REDIS_PASSWORD', None)
+            # Get Redis connection URL from environment
+            redis_url = os.getenv('REDIS_URL', 'redis://localhost:6379')
+            
+            # Parse Redis URL or use individual settings
+            if redis_url.startswith('redis://'):
+                cls._instance = redis.from_url(
+                    redis_url,
+                    decode_responses=True,  # Automatically decode responses to strings
+                    socket_connect_timeout=5,
+                    socket_timeout=5
+                )
+            else:
+                # Fallback to individual settings for backward compatibility
+                redis_host = os.getenv('REDIS_HOST', 'localhost')
+                redis_port = int(os.getenv('REDIS_PORT', '6379'))
+                redis_db = int(os.getenv('REDIS_DB', '0'))
+                redis_password = os.getenv('REDIS_PASSWORD', None)
 
-            cls._instance = redis.Redis(
-                host=redis_host,
-                port=redis_port,
-                db=redis_db,
-                password=redis_password,
-                decode_responses=True,  # Automatically decode responses to strings
-                socket_connect_timeout=5,
-                socket_timeout=5
-            )
+                cls._instance = redis.Redis(
+                    host=redis_host,
+                    port=redis_port,
+                    db=redis_db,
+                    password=redis_password,
+                    decode_responses=True,  # Automatically decode responses to strings
+                    socket_connect_timeout=5,
+                    socket_timeout=5
+                )
 
             # Test connection
             try:
                 cls._instance.ping()
-                logger.info(f"Redis client initialized successfully (host={redis_host}, port={redis_port}, db={redis_db})")
+                if redis_url.startswith('redis://'):
+                    logger.info(f"Redis client initialized successfully using URL: {redis_url}")
+                else:
+                    logger.info(f"Redis client initialized successfully (host={redis_host}, port={redis_port}, db={redis_db})")
             except redis.ConnectionError as e:
                 logger.error(f"Failed to connect to Redis: {e}")
                 cls._instance = None
@@ -72,7 +87,9 @@ class JobProgressManager:
         self.client = RedisClient.get_client()
         self.progress_prefix = "job:progress:"
         self.queue_prefix = "job:queue:"
-        self.default_ttl = timedelta(days=7)  # Auto-cleanup after 7 days
+        # Get TTL from environment or use default of 7 days
+        ttl_days = int(os.getenv('REDIS_TTL_DAYS', '7'))
+        self.default_ttl = timedelta(days=ttl_days)  # Auto-cleanup after configured days
 
     def _progress_key(self, job_id: str) -> str:
         """Generate Redis key for job progress"""

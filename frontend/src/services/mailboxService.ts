@@ -1,4 +1,5 @@
-import { supabaseClient } from '../supabase';
+// @ts-ignore
+import config from '../config.js';
 
 export interface Mailbox {
   id: string;
@@ -22,115 +23,132 @@ export interface CreateMailboxData {
   file_path?: string;
 }
 
+export interface CreateGoogleDriveMailboxData extends Omit<CreateMailboxData, 'file_path'> {
+  // Google Drive specific fields
+  google_drive_file_id: string;
+  google_drive_file_name: string;
+  user_id: string; // Required for OAuth2 token lookup
+}
+
 export const mailboxService = {
   // Get all mailboxes
   async getMailboxes(): Promise<Mailbox[]> {
     try {
-      // Fetch mailboxes first
-      const { data: mailboxData, error: mailboxError } = await supabaseClient
-        .from('mailboxes')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (mailboxError) {
-        console.error('Error fetching mailboxes:', mailboxError);
-        throw mailboxError;
+      const response = await fetch(`${config.apiBaseUrl}/mailboxes`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      if (!mailboxData || mailboxData.length === 0) {
-        return [];
-      }
-
-      // Fetch email counts for all mailboxes in parallel
-      const mailboxesWithCounts = await Promise.all(
-        mailboxData.map(async (mailbox) => {
-          try {
-            const { count, error: countError } = await supabaseClient
-              .from('emails')
-              .select('*', { count: 'exact', head: true })
-              .eq('mailbox_id', mailbox.id);
-
-            if (countError) {
-              console.warn(`Failed to get count for mailbox ${mailbox.id}:`, countError);
-              return { ...mailbox, total_emails: 0 };
-            }
-
-            return { ...mailbox, total_emails: count || 0 };
-          } catch (err) {
-            console.warn(`Error counting emails for mailbox ${mailbox.id}:`, err);
-            return { ...mailbox, total_emails: 0 };
-          }
-        })
-      );
-
-      return mailboxesWithCounts;
+      const mailboxes = await response.json();
+      return mailboxes;
     } catch (error) {
-      console.error('Error in getMailboxes:', error);
+      console.error('Error fetching mailboxes:', error);
       throw error;
     }
   },
 
   // Get a single mailbox by ID
   async getMailbox(id: string): Promise<Mailbox | null> {
-    const { data, error } = await supabaseClient
-      .from('mailboxes')
-      .select('*')
-      .eq('id', id)
-      .single();
-    
-    if (error) {
+    try {
+      const response = await fetch(`${config.apiBaseUrl}/mailboxes/${id}`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const mailbox = await response.json();
+      return mailbox;
+    } catch (error) {
       console.error('Error fetching mailbox:', error);
       throw error;
     }
-    
-    return data;
   },
 
   // Create a new mailbox
   async createMailbox(mailboxData: CreateMailboxData): Promise<Mailbox> {
-    const { data, error } = await supabaseClient
-      .from('mailboxes')
-      .insert([{
-        ...mailboxData,
-        total_emails: 0,
-        created_at: new Date().toISOString()
-      }])
-      .select()
-      .single();
-    
-    if (error) {
+    try {
+      const response = await fetch(`${config.apiBaseUrl}/mailboxes`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(mailboxData),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const mailbox = await response.json();
+      return mailbox;
+    } catch (error) {
       console.error('Error creating mailbox:', error);
       throw error;
     }
-    
-    return data;
+  },
+
+  // Create a Google Drive mailbox with OAuth2 support
+  async createGoogleDriveMailbox(mailboxData: CreateGoogleDriveMailboxData): Promise<Mailbox> {
+    try {
+      // Build connection config for Google Drive mailbox
+      const connectionConfig = {
+        file_source: 'google_drive',
+        google_drive_file_id: mailboxData.google_drive_file_id,
+        google_drive_file_name: mailboxData.google_drive_file_name,
+        user_id: mailboxData.user_id // Include user_id for backend token lookup
+      };
+
+      // Create mailbox data
+      const createData: CreateMailboxData = {
+        name: mailboxData.name,
+        email_address: mailboxData.email_address,
+        mailbox_type: mailboxData.mailbox_type,
+        is_active: mailboxData.is_active,
+        connection_config: connectionConfig
+      };
+
+      return await this.createMailbox(createData);
+    } catch (error) {
+      console.error('Error creating Google Drive mailbox:', error);
+      throw error;
+    }
   },
 
   // Update an existing mailbox
   async updateMailbox(id: string, updates: Partial<CreateMailboxData>): Promise<Mailbox> {
-    const { data, error } = await supabaseClient
-      .from('mailboxes')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
-    
-    if (error) {
+    try {
+      const response = await fetch(`${config.apiBaseUrl}/mailboxes/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updates),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const mailbox = await response.json();
+      return mailbox;
+    } catch (error) {
       console.error('Error updating mailbox:', error);
       throw error;
     }
-    
-    return data;
   },
 
   // Delete a mailbox
   async deleteMailbox(id: string): Promise<void> {
-    const { error } = await supabaseClient
-      .from('mailboxes')
-      .delete()
-      .eq('id', id);
-    
-    if (error) {
+    try {
+      const response = await fetch(`${config.apiBaseUrl}/mailboxes/${id}`, {
+        method: 'DELETE',
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+    } catch (error) {
       console.error('Error deleting mailbox:', error);
       throw error;
     }
@@ -138,15 +156,19 @@ export const mailboxService = {
 
   // Trigger sync for a mailbox
   async syncMailbox(id: string): Promise<void> {
-    // TODO: This would typically trigger a background job
-    // For now, we'll just update the last_sync_at timestamp
-    const { error } = await supabaseClient
-      .from('mailboxes')
-      .update({ last_sync_at: new Date().toISOString() })
-      .eq('id', id);
-    
-    if (error) {
-      console.error('Error updating sync timestamp:', error);
+    try {
+      const response = await fetch(`${config.apiBaseUrl}/mailboxes/${id}/sync`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+    } catch (error) {
+      console.error('Error syncing mailbox:', error);
       throw error;
     }
   }

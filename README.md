@@ -1,612 +1,505 @@
-# 📧 Email Intelligence Platform
+# 📧 Email Intelligence POC
 
-A scalable email processing system with real-time progress tracking, automatic tagging, and multi-format support (MBOX, PST, OLM).
+**Advanced Email Analysis Platform with Cloud Storage Integration**
 
-**Status**: Production-ready with known issues being addressed
+A comprehensive proof-of-concept for email intelligence gathering, processing, and analysis with support for multiple archive formats and cloud storage providers including **Google Drive OAuth2 integration**.
+
+---
+
+## 🔥 **New!** Google Drive OAuth2 Integration
+**Industry-standard authentication for seamless Google Drive access**
+
+- ✅ **One-click connection** - Users connect Google Drive with OAuth2 popup
+- ✅ **Secure token management** - Backend stores and refreshes tokens automatically  
+- ✅ **Access entire Drive** - Browse and select any file without manual sharing
+- ✅ **Real-time status** - Connection indicators and management UI
+- ✅ **Production ready** - Same OAuth2 flow used by Slack, Notion, Zapier
+
+**Quick Setup**: See [Google Drive Setup](#4-google-drive-setup-optional-but-recommended) below.
+
+---
+
+## 🌟 Features
+
+### **Core Email Processing**
+- ✅ **Multi-format Support**: MBOX, PST, OLM archives
+- ✅ **Real-time Processing**: Live progress tracking with Redis
+- ✅ **Email Categorization**: Industry-specific tagging and analysis
+- ✅ **Data Enrichment**: Contact extraction and normalization
+- ✅ **Scalable Architecture**: Concurrent processing with thread pools
+
+### **Cloud Storage Integration** 🆕
+- ✅ **Google Drive OAuth2**: Industry-standard authentication (like Slack, Notion)
+- ✅ **Seamless File Access**: Browse and select files from entire Google Drive
+- ✅ **Secure Token Management**: Backend-managed refresh tokens
+- ✅ **Auto Token Refresh**: No manual intervention required
+- ✅ **AWS S3 Support**: S3 bucket integration for enterprise
+- ✅ **Local File Support**: Traditional file path processing
+
+### **Modern Web Interface**
+- ✅ **React TypeScript Frontend**: Modern, responsive UI
+- ✅ **Real-time Dashboard**: Live processing monitoring
+- ✅ **Google Drive Integration UI**: One-click connection management
+- ✅ **Mailbox Management**: Create, edit, and manage email sources
+- ✅ **Processing Jobs**: Start, monitor, and track email analysis
 
 ---
 
 ## 🚀 Quick Start
 
-### Prerequisites
-```bash
-# Required
-- Python 3.8+
-- Node.js 16+
-- Supabase account
+### **Prerequisites**
+- **Python 3.8+** with pip
+- **Node.js 16+** with npm
+- **Redis Server** (for job processing)
+- **Supabase Account** (for database)
 
-# Optional (recommended for production)
-- Redis (for faster progress tracking)
+### **1. Clone Repository**
+```bash
+git clone <repository-url>
+cd email-intelligence-poc
 ```
 
-### One-Command Setup
+### **2. Environment Setup**
+Create environment configuration files:
+
+**`.env.development`** (for local development):
 ```bash
+# Database Configuration
+SUPABASE_URL=your_supabase_url
+SUPABASE_KEY=your_supabase_key
+
+# Redis Configuration
+REDIS_URL=redis://localhost:6379
+
+# Google Drive OAuth2 Integration
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+GOOGLE_REDIRECT_URI=http://localhost:3000
+
+# API Configuration
+API_BASE_URL=http://localhost:8000/api
+```
+
+### **3. Google Drive Setup (Optional but Recommended)**
+For Google Drive integration, configure OAuth2 credentials:
+
+1. **Go to [Google Cloud Console](https://console.cloud.google.com/)**
+2. **Create or select a project**
+3. **Enable Google Drive API**
+4. **Create OAuth2 credentials:**
+   - Application type: **Web application**
+   - Authorized JavaScript origins: `http://localhost:3000`
+   - Authorized redirect URIs: `http://localhost:3000`
+5. **Copy Client ID and Client Secret to your `.env.development` file**
+
+### **4. Database Setup**
+```bash
+# Run database migrations
+cd backend
+python -c "
+from src.database.supabase_client import get_client
+import subprocess
+subprocess.run(['psql', f'{supabase_url}/sql', '-f', 'scripts/create_tables.sql'])
+"
+```
+
+Or manually run SQL files in Supabase SQL Editor:
+- `scripts/create_tables.sql`
+- `migrations/add_user_integrations.sql`
+
+### **5. Start Services**
+
+#### **Option A: Automated Startup (Recommended)**
+```bash
+# Full startup with environment checks
 ./start-poc.sh
+
+# Or specify environment
+./start-poc.sh development
+./start-poc.sh production
 ```
 
-This automatically starts both backend (port 8000) and frontend (port 3000).
-
-### Manual Setup
-
-**1. Database Setup**
+#### **Option B: Quick Development Commands**
 ```bash
-# Run in Supabase SQL Editor
-cat sql/create_tables.sql  # Copy and execute
+# Quick commands for development
+./quick-start.sh setup          # First-time setup
+./quick-start.sh start          # Start both services  
+./quick-start.sh status         # Check if services are running
+./quick-start.sh stop           # Stop all services
+./quick-start.sh logs           # View logs
 ```
 
-**2. Environment Configuration**
-
-**Backend** (`.env` in root directory):
+**Manual startup:**
 ```bash
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_SERVICE_KEY=your_service_role_key
-REDIS_URL=redis://localhost:6379  # Optional
+# Terminal 1: Start Redis
+redis-server
+
+# Terminal 2: Start Backend
+cd backend
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+python main.py
+
+# Terminal 3: Start Frontend
+cd frontend
+npm install
+npm run dev
 ```
 
-**Frontend** (`frontend/.env.local`):
-```bash
-REACT_APP_SUPABASE_URL=https://your-project.supabase.co
-REACT_APP_SUPABASE_ANON_KEY=your_anon_key
-REACT_APP_API_BASE_URL=http://localhost:8000/api
-```
-
-**3. Start Services**
-```bash
-# Terminal 1 - Backend
-cd backend && ./run.sh
-
-# Terminal 2 - Frontend
-cd frontend && npm install && npm start
-```
-
-**4. Access Application**
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:8000/docs
-- Health Check: http://localhost:8000/health
+### **6. Access Application**
+- **Frontend**: http://localhost:3000
+- **Backend API**: http://localhost:8000
+- **API Documentation**: http://localhost:8000/docs
 
 ---
 
-## ✨ Key Features
+## 📚 Usage Guide
 
-### Email Processing
-- ✅ **Multi-Format Support**: MBOX, PST, OLM with auto-detection
-- ✅ **Concurrent Processing**: Process up to 20 mailboxes simultaneously
-- ✅ **Large File Support**: Streams files without loading into memory
-- ✅ **Automatic Tagging**: 20+ rule-based tags applied to every email
-- ✅ **Pause/Resume/Stop**: Full job control with graceful shutdown
+### **Creating Mailboxes**
 
-### Folder Detection
-- ✅ **Gmail Label Support**: MBOX files preserve Gmail folder structure from `X-Gmail-Labels` headers
-- ✅ **Native PST/OLM Folders**: Full folder hierarchy preserved from Outlook
-- ✅ **Smart Inference**: Automatically detects Inbox/Sent/Spam for MBOX files without labels
+#### **Local File Mailbox**
+1. Navigate to **Mailboxes** → **Add Mailbox**
+2. Enter mailbox name and email (optional)
+3. Select mailbox type: `MBOX`, `PST`, or `OLM`
+4. Choose **Local File** as source
+5. Provide file path: `/path/to/archive.mbox`
+6. Test connection and create
 
-**Example**: A single Gmail MBOX export can yield 5-10+ folders based on your Gmail labels!
+#### **Google Drive Mailbox** 🆕
+1. Navigate to **Mailboxes** → **Add Mailbox**
+2. Enter mailbox name and email (optional)
+3. Select mailbox type: `MBOX`, `PST`, or `OLM`
+4. Choose **Google Drive** as source
+5. **Connect Google Drive** (OAuth2 popup)
+6. **Select file** from your Google Drive
+7. Test connection and create
 
-### Progress Tracking
-- ✅ **Real-Time Updates**: Redis-powered progress cache (updates every email)
-- ✅ **Database Persistence**: Syncs to database every 100 emails
-- ✅ **Graceful Fallback**: Works without Redis (database-only mode)
-- ✅ **Auto-Refresh**: Frontend polls every 2-5 seconds
+### **Processing Emails**
+1. Go to **Mailboxes** and find your mailbox
+2. Click **Process** button
+3. Configure processing options:
+   - **Job Type**: `extraction`, `categorization`, `enrichment`
+   - **Batch Size**: Number of emails per batch
+   - **Total Records**: Limit processing (leave empty for all)
+4. Monitor progress in real-time
+5. View results in **Dashboard** and **Emails**
 
-### Tagging System
-- ✅ **Direction Tags**: `inbound`, `outbound`
-- ✅ **Thread Tags**: `new_thread`, `reply`, `forward`
-- ✅ **Folder Tags**: `inbox`, `sent`, `spam`, `trash`, `archive`, `drafts`
-- ✅ **Classification**: `spam`, `marketing`, `system`, `automated`
-- ✅ **Content Tags**: `urgent`, `financial`, `meeting`, `ecommerce`, `newsletter`
-- ✅ **Priority Scoring**: 0-10 automatic priority calculation
-- ✅ **Fast**: 2,000-10,000 emails/second (rule-based, no API calls)
+### **Google Drive Integration**
 
-See `docs/EMAIL_TAGGING_IMPLEMENTATION.md` for full tag list.
+#### **Connection Management**
+- **Connect**: One-click OAuth2 authentication
+- **Status**: Real-time connection indicator
+- **Disconnect**: Revoke access anytime
+- **Reconnect**: Seamless re-authentication
 
----
-
-## 📊 Dashboard & UI
-
-### Pages
-
-**Dashboard** (`/`)
-- Email volume charts (last 7 days)
-- Tag distribution pie chart
-- Mailbox statistics
-- Active job monitoring
-
-**Mailboxes** (`/mailboxes`)
-- Create/Edit/Delete mailboxes
-- Test connections before processing
-- View mailbox statistics
-
-**Emails** (`/emails`)
-- Browse all processed emails
-- Filter by tags, folders, date range
-- View email details and tags
-
-**Processing Jobs** (`/processing`)
-- Monitor real-time job progress
-- Pause/Resume/Stop running jobs
-- Reprocess emails with updated tagging
-- View job history and errors
+#### **File Selection**
+- **Browse entire Google Drive**: No manual sharing required
+- **Search functionality**: Find files quickly
+- **Format filtering**: Only show compatible files
+- **Real-time preview**: File details and metadata
 
 ---
 
 ## 🏗️ Architecture
 
-### System Overview
-
+### **Backend (Python/FastAPI)**
 ```
-Frontend (React) → API (FastAPI) → ThreadPool (20 workers)
-                                          ↓
-                    Extractor → Normalizer → Tagger → Database
-                       ↓            ↓           ↓
-                    MBOX/PST/OLM  Folders    20+ Tags
-                                          ↓
-                    Redis (Progress Cache) + Supabase (Persistent)
-```
-
-### Components
-
-**Backend**:
-- FastAPI with async I/O for API endpoints
-- ThreadPoolExecutor for concurrent job processing
-- Redis for real-time progress tracking
-- Streaming extractors for memory efficiency
-
-**Frontend**:
-- React with TypeScript
-- Ant Design component library
-- Auto-refreshing job status
-- Tag-based filtering
-
-**Data**:
-- Supabase PostgreSQL for email storage
-- Redis for progress cache (optional)
-- Full-text search indexes
-- Normalized tag storage in `email_categories` table
-
-See `docs/ARCHITECTURE.md` for detailed documentation.
-
----
-
-## 📁 Project Structure
-
-```
-email-intelligence-poc/
-├── backend/
-│   ├── main.py              # FastAPI application
-│   ├── run.sh               # Backend startup script
-│   └── logs/                # Rotating log files
-├── frontend/
-│   └── src/
-│       ├── pages/           # React pages
-│       └── services/        # API integration
+backend/
+├── main.py                 # FastAPI application
 ├── src/
-│   ├── database/
-│   │   ├── operations.py    # Database operations
-│   │   └── redis_client.py  # Redis managers
-│   ├── extractors/
-│   │   ├── mbox_extractor.py
-│   │   ├── pst_extractor.py
-│   │   └── olm_extractor.py
-│   └── processors/
-│       ├── email_processor.py  # Main pipeline
-│       ├── normalizer.py       # Email normalization
-│       └── email_tagger.py     # Automatic tagging
-├── sql/
-│   └── create_tables.sql    # Database schema
-├── docs/
-│   ├── ARCHITECTURE.md      # Detailed architecture
-│   ├── QUICKSTART.md        # Tag system quickstart
-│   ├── FILE_EXTRACTORS.md   # Extractor documentation
-│   └── EMAIL_TAGGING_IMPLEMENTATION.md
-└── README.md                # This file
+│   ├── database/           # Supabase & Redis clients
+│   ├── extractors/         # Email format processors
+│   ├── processors/         # Email analysis & categorization
+│   ├── storage/            # Cloud storage adapters
+│   └── utils/              # Progress tracking & utilities
+└── requirements.txt        # Python dependencies
 ```
 
----
-
-## 🎯 Usage Examples
-
-### 1. Process an MBOX File
-
-```bash
-# From UI:
-1. Go to Mailboxes → Add Mailbox
-2. Name: "My Gmail Archive"
-3. Type: MBOX
-4. File Path: /path/to/gmail-export.mbox
-5. Click "Test Connection"
-6. Click "Save"
-7. Click "Process" → Start Processing
-8. Monitor progress in Processing Jobs page
+### **Frontend (React/TypeScript)**
+```
+frontend/
+├── src/
+│   ├── components/         # Reusable UI components
+│   │   ├── GoogleDriveConnection.tsx    # OAuth2 integration
+│   │   ├── GoogleDrivePicker.tsx        # File browser
+│   │   ├── MailboxCreateForm.tsx        # Mailbox creation
+│   │   └── MailboxEditForm.tsx          # Mailbox editing
+│   ├── pages/              # Application pages
+│   ├── services/           # API clients & integrations
+│   └── config.js           # Configuration
+└── package.json            # Node.js dependencies
 ```
 
-**Result**:
-- Emails extracted and tagged automatically
-- Folders detected from Gmail labels (e.g., Inbox, Sent, Work)
-- Tags applied (inbound/outbound, spam, marketing, urgent, etc.)
-
-### 2. Reprocess Emails with Updated Tags
-
-```bash
-# From UI:
-1. Go to Processing Jobs
-2. Find completed extraction job
-3. Click "Reprocess" button (sync icon)
-4. Wait for reprocessing to complete
-5. Go to Emails page to see updated tags
+### **Cloud Storage Architecture**
 ```
-
-**Use Case**: Tag logic was improved, reprocess to apply new rules to existing emails.
-
-### 3. Query Tagged Emails
-
-```sql
--- Find all urgent emails from humans
-SELECT e.* FROM emails e
-JOIN email_categories ec ON e.id = ec.email_id
-WHERE ec.category = 'urgent'
-AND e.sender_type = 'sender_human'
-AND e.is_spam = false;
-
--- Tag distribution
-SELECT category, COUNT(*) as count
-FROM email_categories
-WHERE category NOT LIKE '_meta_%'
-GROUP BY category
-ORDER BY count DESC;
+┌─────────────────────────────────────────────┐
+│                Frontend                     │
+│  ┌─────────────────┐ ┌──────────────────┐   │
+│  │ Google Drive    │ │ Local File       │   │
+│  │ OAuth2 UI       │ │ Browser          │   │
+│  └─────────────────┘ └──────────────────┘   │
+└─────────────────────────────────────────────┘
+                        │
+                        ▼
+┌─────────────────────────────────────────────┐
+│                Backend                      │
+│  ┌─────────────────┐ ┌──────────────────┐   │
+│  │ OAuth2 Token    │ │ File Stream      │   │
+│  │ Management      │ │ Processing       │   │
+│  └─────────────────┘ └──────────────────┘   │
+└─────────────────────────────────────────────┘
+                        │
+                        ▼
+┌─────────────────────────────────────────────┐
+│            Storage Providers                │
+│  ┌─────────────────┐ ┌──────────────────┐   │
+│  │ Google Drive    │ │ AWS S3 / Local   │   │
+│  │ Files           │ │ Files            │   │
+│  └─────────────────┘ └──────────────────┘   │
+└─────────────────────────────────────────────┘
 ```
 
 ---
 
 ## 🔧 Configuration
 
-### Processing Options
+### **Environment Variables**
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `SUPABASE_URL` | Supabase project URL | `https://xxx.supabase.co` |
+| `SUPABASE_KEY` | Supabase public key | `eyJ...` |
+| `REDIS_URL` | Redis connection URL | `redis://localhost:6379` |
+| `GOOGLE_CLIENT_ID` | Google OAuth2 client ID | `xxx.apps.googleusercontent.com` |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth2 client secret | `GOCSPX-xxx` |
+| `GOOGLE_REDIRECT_URI` | OAuth2 redirect URI | `http://localhost:3000` |
+| `API_BASE_URL` | Backend API base URL | `http://localhost:8000/api` |
 
-When starting a new job, you can configure:
+### **Google Drive OAuth2 Scopes**
+```javascript
+'https://www.googleapis.com/auth/drive.readonly'
+'https://www.googleapis.com/auth/userinfo.email'
+```
 
-- **Batch Size**: 100-10,000 emails per transaction (default: 5,000)
-- **Categorization**: Enable automatic tagging (default: enabled)
-- **Max Records**: Limit number of emails to process (default: all)
+### **Supported File Formats**
+- **MBOX**: Universal email format (Gmail exports, Thunderbird, Apple Mail)
+- **PST**: Windows Outlook archive files with folder structure
+- **OLM**: Mac Outlook archive files with folder hierarchy
 
-### Redis Configuration
+---
 
-**With Redis** (recommended for production):
+## 🧪 Development
+
+### **Running Tests**
 ```bash
-# Install Redis
-sudo apt install redis-server  # Ubuntu/Debian
-brew install redis             # macOS
+# Backend tests
+cd backend
+python -m pytest tests/
 
-# Start Redis
-redis-server
-
-# Configure backend
-REDIS_URL=redis://localhost:6379
+# Frontend tests
+cd frontend
+npm test
 ```
 
-**Without Redis** (development):
-- System automatically falls back to database-only mode
-- Progress updates every 100 emails (vs every email with Redis)
-- ~2x slower progress tracking
-
----
-
-## 📈 Performance
-
-### Processing Speed
-
-| Mailbox Size | Time | Throughput |
-|--------------|------|------------|
-| 1,000 emails | ~30s | 33 emails/sec |
-| 10,000 emails | ~5m | 33 emails/sec |
-| 100,000 emails | ~50m | 33 emails/sec |
-
-**Factors**:
-- MBOX: Fastest (sequential read)
-- PST: Medium (binary database)
-- OLM: Slower (ZIP extraction overhead)
-
-### Scalability
-
-- **Concurrent Jobs**: 20 mailboxes simultaneously
-- **Memory Usage**: ~50-100MB per job (streaming)
-- **Database**: Supports 10M+ emails with indexes
-- **Redis**: Optional but recommended for 10+ concurrent jobs
-
----
-
-## ⚠️ Known Issues (Being Fixed)
-
-### Critical
-1. **Pause Button**: Doesn't work - frontend bypasses backend API endpoint *(fix in progress)*
-2. **Progress Counter**: Shows 0 until job completes - Redis updates not reflected *(fix in progress)*
-3. **Stop Button**: Shows "FAILED" status before "STOPPED" *(fix in progress)*
-
-### Medium Priority
-4. **Dashboard**: References "Categories" instead of "Tags" *(terminology update needed)*
-5. **Reprocessing**: Doesn't use Redis progress updates - frontend may freeze on large datasets *(optimization needed)*
-6. **Initialization**: Backend startup blocks frontend - poor UX *(improvement needed)*
-
-**Status**: These issues are documented and queued for fixing after documentation update.
-
----
-
-## 🗂️ Database Schema
-
-### Core Tables
-
-**`emails`** - Email data
-- Fields: subject, sender, body, folder, tags
-- Indexes: full-text search, mailbox+date, sender, folder
-
-**`email_categories`** - Normalized tag storage
-- Links: email_id → tags
-- Optimized for tag queries and analytics
-
-**`processing_jobs`** - Job tracking
-- Status: pending/running/paused/stopped/completed/failed
-- Progress: processed/failed counts, timestamps
-
-**`mailboxes`** - Email sources
-- Types: mbox, pst, olm
-- Config: file path or connection details
-
-**`folders`** - Folder hierarchy
-- Auto-populated during processing
-- Types: inbox/sent/spam/trash/archive/user
-
-See `sql/create_tables.sql` for complete schema.
-
----
-
-## 🚦 API Endpoints
-
-### Mailbox Management
-```
-POST   /api/mailboxes/{id}/process          # Start processing
-POST   /api/mailboxes/{id}/test-connection  # Test connection
-```
-
-### Job Control
-```
-GET    /api/processing-jobs                 # List all jobs
-POST   /api/processing-jobs/{id}/control    # Pause/Resume/Stop
-POST   /api/processing-jobs/{id}/reprocess  # Re-tag emails
-DELETE /api/processing-jobs/{id}            # Delete job
-```
-
-### Dashboard
-```
-GET    /api/dashboard/stats                 # Statistics
-GET    /health                              # Health check
-GET    /docs                                # OpenAPI documentation
-```
-
-Full API documentation: http://localhost:8000/docs (when backend is running)
-
----
-
-## 🧪 Testing
-
-### Run Test Script
+### **Code Quality**
 ```bash
-cd /home/ubuntu/Projects/email-intelligence-poc
-source venv/bin/activate
-python test_email_tagging.py
+# Python linting
+cd backend
+flake8 src/
+black src/
+
+# TypeScript linting
+cd frontend
+npm run lint
+npm run type-check
 ```
 
-### Test MBOX Extraction
+### **Database Migrations**
 ```bash
-python -m src.extractors.mbox_extractor /path/to/file.mbox
+# Add new migration
+cd backend/migrations/
+# Create new .sql file
+psql $SUPABASE_URL -f new_migration.sql
 ```
 
-### Test Auto-Detection
-```bash
-python -m src.extractors.file_extractor /path/to/any-email-file
+### **API Documentation**
+Visit http://localhost:8000/docs for interactive API documentation with all OAuth2 endpoints.
+
+---
+
+## 🔐 Security
+
+### **OAuth2 Security Features**
+- ✅ **Industry-standard flow**: Authorization code + PKCE
+- ✅ **Secure token storage**: Backend-managed refresh tokens
+- ✅ **User data isolation**: Each user only accesses their own files
+- ✅ **Token encryption**: Secure database storage
+- ✅ **Automatic refresh**: No manual token management
+- ✅ **Easy revocation**: One-click disconnect
+
+### **Best Practices**
+- Never commit credentials to Git
+- Use environment variables for all secrets
+- Rotate Google OAuth2 credentials regularly
+- Monitor API usage quotas
+- Enable logging and auditing
+- Use HTTPS in production
+
+---
+
+## 🚀 Production Deployment
+
+### **Environment Setup**
+1. **Create production environment file** (`.env.production`)
+2. **Configure production database** (Supabase production instance)
+3. **Set up production Redis** (Redis Cloud or AWS ElastiCache)
+4. **Configure production Google OAuth2** credentials
+5. **Update CORS settings** for production domains
+
+### **Docker Deployment** (Optional)
+```dockerfile
+# Example Dockerfile structure
+FROM python:3.9-slim
+
+# Backend setup
+COPY backend/ /app/backend/
+WORKDIR /app/backend
+RUN pip install -r requirements.txt
+
+# Frontend build
+FROM node:16 AS frontend-build
+COPY frontend/ /app/frontend/
+WORKDIR /app/frontend
+RUN npm install && npm run build
+
+# Combine and serve
+COPY --from=frontend-build /app/frontend/dist /app/static
+CMD ["python", "main.py"]
+```
+
+### **Scaling Considerations**
+- **Redis Cluster**: For high-availability job processing
+- **Load Balancing**: Multiple backend instances
+- **Database Connection Pooling**: Optimize Supabase connections
+- **File Processing Queue**: Separate workers for large files
+- **CDN**: Static file delivery optimization
+
+---
+
+## 🛠️ API Reference
+
+### **OAuth2 Endpoints**
+```http
+# Exchange authorization code for tokens
+POST /api/auth/google/exchange
+{
+  "code": "authorization_code",
+  "user_id": "user_identifier"
+}
+
+# Check user connection status
+GET /api/auth/google/status/{user_id}
+
+# Disconnect user Google Drive
+DELETE /api/auth/google/disconnect/{user_id}
+```
+
+### **Mailbox Endpoints**
+```http
+# Create Google Drive mailbox
+POST /api/mailboxes
+{
+  "name": "My Google Drive Archive",
+  "mailbox_type": "mbox",
+  "connection_config": {
+    "file_source": "google_drive",
+    "google_drive_file_id": "1abc...",
+    "google_drive_file_name": "archive.mbox",
+    "user_id": "user_123"
+  }
+}
+
+# Test connection
+POST /api/mailboxes/test/test-connection
 ```
 
 ---
 
-## 📚 Documentation
+## 📖 Documentation
 
-- **`README.md`** (this file) - Overview and quick start
-- **`docs/ARCHITECTURE.md`** - Detailed system architecture
-- **`docs/QUICKSTART.md`** - Tag system quickstart guide
-- **`docs/FILE_EXTRACTORS.md`** - MBOX/PST/OLM extractor details
-- **`docs/EMAIL_TAGGING_IMPLEMENTATION.md`** - Complete tagging documentation
-- **`EMAIL_INTELLIGENCE_POC_DESIGN.md`** - Original design document
+- **[Google Drive Integration Guide](docs/GOOGLE_DRIVE_INTEGRATION.md)** - Complete OAuth2 setup
+- **[Cloud Storage Integration](docs/CLOUD_STORAGE.md)** - AWS S3 and other providers
+- **[Architecture Overview](docs/ARCHITECTURE.md)** - System design and components
+- **[Quick Start Guide](docs/QUICKSTART.md)** - Step-by-step setup instructions
 
 ---
 
 ## 🐛 Troubleshooting
 
-### Backend won't start
-```bash
-# Check logs
-tail -f backend/logs/backend.log
+### **Common Issues**
 
-# Verify environment
-cat .env | grep SUPABASE
-
-# Reinstall dependencies
-cd backend
-rm -rf venv
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+#### **OAuth2 Redirect URI Mismatch**
 ```
-
-### Frontend connection errors
-```bash
-# Verify API URL
-cat frontend/.env.local | grep API_BASE
-
-# Check backend is running
-curl http://localhost:8000/health
-
-# Check CORS
-# Backend allows: http://localhost:3000
+Error: (redirect_uri_mismatch) Bad Request
 ```
+**Solution**: Update Google Cloud Console OAuth2 settings:
+- JavaScript origins: `http://localhost:3000`
+- Redirect URIs: `http://localhost:3000`
 
-### Redis errors
-```bash
-# System will auto-fallback to database-only mode
-# Check logs for confirmation
-grep "Redis" backend/logs/backend.log
-
-# To enable Redis
-brew install redis  # macOS
-sudo apt install redis-server  # Ubuntu
-
-# Start Redis
-redis-server
+#### **Backend Connection Failed**
 ```
-
-### Processing job stuck
-```bash
-# Check job status
-curl http://localhost:8000/api/processing-jobs
-
-# Check backend logs
-tail -f backend/logs/backend.log
-
-# Try stopping job
-curl -X POST "http://localhost:8000/api/processing-jobs/{job_id}/control?action=stop"
+Error: Backend API failed to start
 ```
+**Solutions**:
+1. Check Redis is running: `redis-server`
+2. Verify environment variables in `.env.development`
+3. Check logs: `tail -f backend.log`
+4. Ensure port 8000 is available
 
----
-
-## 🚀 Deployment
-
-### Development
-```bash
-./start-poc.sh
+#### **Google Drive Connection Issues**
 ```
-
-### Production (Docker - Coming Soon)
-```bash
-docker-compose up -d
+Error: Authentication failed
 ```
+**Solutions**:
+1. Verify Google Client ID/Secret in environment
+2. Check Google Drive API is enabled
+3. Ensure correct redirect URI configuration
+4. Clear browser cache and cookies
 
-### Cloud Deployment
-
-**Railway.app** (recommended):
-```bash
-# Backend
-railway up
-
-# Frontend
-npm run build
-railway up
+#### **File Processing Errors**
 ```
-
-**Heroku**:
-```bash
-# Add Procfile
-heroku create
-git push heroku main
+Error: Failed to download from Google Drive
 ```
-
----
-
-## 🔐 Security Notes
-
-### Best Practices
-- ✅ Service keys only in backend (never expose to frontend)
-- ✅ CORS restricted to localhost:3000 (update for production)
-- ✅ File paths validated before processing
-- ✅ No direct file upload (security risk mitigation)
-- ⚠️ RLS policies not enabled (add for multi-tenant)
-
-### For Production
-1. Enable Supabase Row Level Security (RLS)
-2. Add rate limiting to API
-3. Use environment-based CORS configuration
-4. Implement user authentication
-5. Encrypt sensitive data in database
-
----
-
-## 🗺️ Roadmap
-
-### v1.1 (Current - Bug Fixes)
-- [ ] Fix Pause/Resume button API integration
-- [ ] Fix progress counter real-time updates
-- [ ] Fix Stop button status transition
-- [ ] Update Dashboard "Categories" → "Tags"
-- [ ] Add Redis progress to reprocessing pipeline
-- [ ] Improve initialization UX
-
-### v1.2 (Performance)
-- [ ] WebSocket support for real-time updates
-- [ ] Optimize reprocessing for 100K+ emails
-- [ ] Add batch reprocessing API
-- [ ] Thread pool auto-scaling
-
-### v1.3 (Features)
-- [ ] Email attachment extraction
-- [ ] Advanced search with filters
-- [ ] Email thread visualization
-- [ ] Export capabilities (CSV, JSON, EML)
-- [ ] Custom tagging rules (user-defined)
-
-### v2.0 (Advanced)
-- [ ] Gmail API direct integration
-- [ ] Office 365 Graph API support
-- [ ] AI-powered email summarization
-- [ ] Sentiment analysis
-- [ ] Multi-tenant architecture
-- [ ] Advanced analytics dashboard
+**Solutions**:
+1. Check user has access to the file
+2. Verify OAuth tokens are valid
+3. Ensure file hasn't been moved/deleted
+4. Re-authenticate Google Drive connection
 
 ---
 
 ## 🤝 Contributing
 
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature-name`
-3. Make your changes and test thoroughly
-4. Update documentation
-5. Submit a pull request with detailed description
-
-### Development Guidelines
-- No hardcoded file paths (use config or environment variables)
-- Consistent pipeline across all mailbox types
-- Update `sql/create_tables.sql` for schema changes
-- Don't commit fix scripts to main codebase
-- Add `# Force backend restart` comment for main.py changes
-- Git sync after major changes
-
----
-
-## 📞 Support
-
-- **Issues**: Create an issue in the repository
-- **Documentation**: See `docs/` folder
-- **API Docs**: http://localhost:8000/docs (when running)
-- **Logs**: `backend/logs/backend.log`
+1. **Fork the repository**
+2. **Create feature branch**: `git checkout -b feature/amazing-feature`
+3. **Commit changes**: `git commit -m 'Add amazing feature'`
+4. **Push to branch**: `git push origin feature/amazing-feature`
+5. **Open Pull Request**
 
 ---
 
 ## 📄 License
 
-MIT License - Feel free to use, modify, and distribute.
+This project is licensed under the MIT License - see the LICENSE file for details.
 
 ---
 
-## 🎉 Summary
+## 🙋 Support
 
-The Email Intelligence Platform is a **production-ready** system that:
-
-✅ Processes MBOX, PST, and OLM email archives
-✅ Automatically tags emails with 20+ rule-based tags
-✅ Tracks progress in real-time with Redis caching
-✅ Supports concurrent processing of multiple mailboxes
-✅ Provides pause/resume/stop job controls
-✅ Scales to millions of emails with optimized indexes
-✅ Detects folders from Gmail labels (9+ folders from single MBOX!)
-
-**Current State**: Core functionality working, known UI/UX issues being addressed.
-
-**Next Steps**: See `docs/QUICKSTART.md` to start processing your first mailbox!
+- **Documentation**: Check the `/docs` folder for detailed guides
+- **Issues**: Report bugs and feature requests in GitHub Issues
+- **API Documentation**: Visit http://localhost:8000/docs when running locally
 
 ---
 
-**Built with ❤️ using FastAPI, React, Supabase, and Redis**
+**Built with ❤️ using Python, TypeScript, React, and Google Cloud APIs**

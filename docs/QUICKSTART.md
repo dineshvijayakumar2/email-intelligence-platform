@@ -11,29 +11,95 @@
 
 ---
 
-## Setup (5 minutes)
+## Prerequisites
 
-### Step 1: Database Migration
+### Redis (REQUIRED)
+```bash
+# Install Redis
+brew install redis          # macOS
+sudo apt install redis-server  # Ubuntu
 
-Run in Supabase SQL Editor:
-
-```sql
--- Add tag_type column
-ALTER TABLE email_categories ADD COLUMN IF NOT EXISTS tag_type TEXT;
-
--- Create essential indexes (only 2 needed!)
-CREATE INDEX IF NOT EXISTS idx_ec_email_id ON email_categories(email_id);
-CREATE INDEX IF NOT EXISTS idx_ec_category ON email_categories(category) WHERE category NOT LIKE '_meta_%';
+# Start Redis
+redis-server
 ```
 
-**Note**: Only 2 indexes needed. PostgreSQL efficiently combines them for complex queries.
+### Environment Setup
+Create `.env` file in root directory:
+```bash
+# Required
+SUPABASE_URL=your_url
+SUPABASE_ANON_KEY=your_key
+SUPABASE_SERVICE_KEY=your_service_key
+REDIS_URL=redis://localhost:6379
+
+# Google Drive Integration (Industry Standard OAuth2)
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+GOOGLE_REDIRECT_URI=http://localhost:3000/auth/google/callback
+```
+
+## Setup (5 minutes)
+
+### Step 1: Database Setup
+
+Run the complete schema in Supabase SQL Editor:
+```sql
+\i scripts/create_tables.sql
+```
+
+**Note**: The complete schema includes all tables, indexes, and Google Drive OAuth2 support.
+
+### Step 1.5: Google Drive OAuth2 Setup (Optional but Recommended)
+
+For seamless Google Drive integration, set up OAuth2 credentials:
+
+1. **Create Google Cloud Project**:
+   - Go to [Google Cloud Console](https://console.cloud.google.com/)
+   - Create a new project or select existing
+   - Enable Google Drive API
+
+2. **Create OAuth2 Credentials**:
+   - Go to "APIs & Services" → "Credentials"
+   - Click "Create Credentials" → "OAuth 2.0 Client ID"
+   - Application type: "Web application"
+   - Authorized redirect URIs: `http://localhost:3000/auth/google/callback`
+   - Copy the Client ID and Client Secret to your `.env` file
+
+3. **Update Frontend Scopes** (in `frontend/src/services/googleDriveService.ts`):
+   ```javascript
+   const SCOPES = [
+     'https://www.googleapis.com/auth/drive.readonly',
+     'https://www.googleapis.com/auth/userinfo.email'
+   ];
+   ```
+
+**Benefits**: Users connect Google Drive once, then access any file without manual sharing!
+
+**New Backend Endpoints**:
+- `POST /api/auth/google/exchange` - Exchange OAuth2 code for tokens
+- `GET /api/auth/google/status/{user_id}` - Check connection status
+- `DELETE /api/auth/google/disconnect/{user_id}` - Disconnect account
 
 ### Step 2: Process Emails
 
-**Option A: New Processing**
+**Option A: New Processing from Local File**
 1. Go to **Mailboxes** page
-2. Click **Process** button
-3. Start processing (tags are automatically applied)
+2. Click **Add Mailbox**
+3. Select file source: "Local File" or "Google Drive"
+4. Choose file and save mailbox
+5. Click **Process** button
+6. Start processing (tags are automatically applied)
+
+**Option A2: New Processing from Google Drive (OAuth2 - Recommended)**
+1. Go to **Mailboxes** page
+2. Click **Add Mailbox**
+3. Select "Google Drive" as file source
+4. Click "Connect Google Drive" (OAuth2 popup)
+5. Grant permission to your Google Drive
+6. Browse and select your email archive from anywhere in your Drive
+7. Save and process (backend handles authentication automatically)
+
+**Benefits**: No file sharing needed, access to entire Google Drive, seamless UX!
 
 **Option B: Reprocess Existing Emails**
 1. Go to **Processing Jobs** page

@@ -53,14 +53,20 @@ class MBOXExtractor(BaseExtractor):
         self.mbox = None
         self.message_count = 0  # Track count during extraction
 
-    def connect(self, **kwargs) -> bool:
+    def connect(self, access_token: Optional[str] = None, **kwargs) -> bool:
         """
         Open MBOX file
+
+        Args:
+            access_token: Google Drive OAuth2 access token (if needed for Google Drive files)
 
         We don't actually open the file here - we'll stream it directly
         in extract_emails() for better memory efficiency.
         """
         try:
+            # Get the effective file path (local or downloaded from Google Drive)
+            self.file_path = self.get_effective_file_path(access_token)
+            
             # Verify file exists and is readable
             with open(self.file_path, 'r', encoding='utf-8', errors='replace') as f:
                 # Just peek at first line to verify it's an MBOX
@@ -289,8 +295,10 @@ class MBOXExtractor(BaseExtractor):
         }]
 
     def disconnect(self) -> None:
-        """Clean up resources"""
+        """Clean up resources and temporary files"""
         self.mbox = None
+        # Cleanup any temporary Google Drive files
+        self.cleanup_temp_files()
         logger.info("MBOX extractor disconnected")
 
     # =========================================================================

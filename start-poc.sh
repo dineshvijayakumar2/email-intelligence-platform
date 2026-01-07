@@ -2,7 +2,32 @@
 
 echo "🚀 Email Intelligence POC Startup"
 echo "================================="
+
+# Check for environment parameter
+ENVIRONMENT=${1:-development}  # Default to development if no parameter provided
+echo "🌍 Environment: $ENVIRONMENT"
 echo ""
+
+# Check for environment file
+ENV_FILE=".env.$ENVIRONMENT"
+if [ ! -f "$ENV_FILE" ]; then
+    echo "⚠️  Environment file not found: $ENV_FILE"
+    echo "   📋 For Google Drive integration, create $ENV_FILE with:"
+    echo "      GOOGLE_CLIENT_ID=your_google_client_id"
+    echo "      GOOGLE_CLIENT_SECRET=your_google_client_secret"
+    echo "      GOOGLE_REDIRECT_URI=http://localhost:3000"
+    echo "   📖 See README.md for complete setup instructions"
+    echo ""
+else
+    echo "✅ Found environment file: $ENV_FILE"
+    # Check for Google Drive configuration
+    if grep -q "GOOGLE_CLIENT_ID" "$ENV_FILE"; then
+        echo "🌐 Google Drive OAuth2 integration configured"
+    else
+        echo "📋 Google Drive OAuth2 not configured (optional)"
+    fi
+    echo ""
+fi
 
 # Function to check if port is in use
 check_port() {
@@ -85,8 +110,8 @@ start_backend() {
     echo "📖 API docs will be available at http://localhost:8000/docs"
     echo ""
     
-    # Start the backend server in background
-    uvicorn main:app --host 0.0.0.0 --port 8000 --reload > ../backend.log 2>&1 &
+    # Start the backend server in background with environment
+    PYTHON_ENV=$ENVIRONMENT uvicorn main:app --host 0.0.0.0 --port 8000 --reload > ../backend.log 2>&1 &
     BACKEND_PID=$!
     
     # Wait a moment for server to start
@@ -121,11 +146,26 @@ start_frontend() {
         npm install > /dev/null 2>&1
     fi
     
+    # Load environment variables from environment-specific file
+    ENV_FILE="../.env.$ENVIRONMENT"
+    if [ -f "$ENV_FILE" ]; then
+        echo "📋 Loading environment variables from .env.$ENVIRONMENT file..."
+        export $(cat "$ENV_FILE" | grep -v '^#' | xargs)
+    elif [ -f "../.env" ]; then
+        echo "📋 Loading environment variables from .env file (fallback)..."
+        export $(cat ../.env | grep -v '^#' | xargs)
+    fi
+    
     echo "🌐 Frontend starting at http://localhost:3000"
     echo ""
     
-    # Start the frontend server in background
-    npm start > ../frontend.log 2>&1 &
+    # Start the frontend server in background with appropriate mode
+    if [ "$ENVIRONMENT" = "production" ]; then
+        npm run build > ../frontend.log 2>&1
+        npm run preview >> ../frontend.log 2>&1 &
+    else
+        npm run dev > ../frontend.log 2>&1 &
+    fi
     FRONTEND_PID=$!
     
     # Wait a moment for server to start
@@ -154,10 +194,14 @@ echo "   Backend:  backend.log"
 echo ""
 echo "🔧 To test the POC:"
 echo "   1. Open http://localhost:3000 in your browser"
-echo "   2. Navigate to Mailboxes -> Create new mailbox"
-echo "   3. Configure a mailbox (any type) and test connection"
-echo "   4. Use the 'Process' button to start a processing job"
-echo "   5. Monitor progress in real-time"
+echo "   2. Navigate to Mailboxes -> Add Mailbox"
+echo "   3. Choose file source:"
+echo "      📁 Local File: Enter file path directly"
+echo "      🌐 Google Drive: Connect with OAuth2 and browse files"
+echo "   4. For Google Drive: Click 'Connect Google Drive' → Authenticate → Select file"
+echo "   5. Test connection and create mailbox"
+echo "   6. Use the 'Process' button to start email analysis"
+echo "   7. Monitor progress in real-time on Dashboard"
 echo ""
 echo "🛑 To stop all services:"
 echo "   kill $BACKEND_PID $FRONTEND_PID"

@@ -17,6 +17,8 @@ from typing import Iterator, Dict, Optional, List, Any
 from datetime import datetime, timezone
 import logging
 import hashlib
+import os
+import tempfile
 
 logger = logging.getLogger(__name__)
 
@@ -40,11 +42,14 @@ class BaseExtractor(ABC):
         Args:
             connection_config: Dict with connection details
                 - file_path: Path to email file (for file-based formats)
+                - google_drive_file_id: Google Drive file ID (for Google Drive files)
+                - file_source: 'local' or 'google_drive'
                 - url: Cloud URL (for cloud sources)
                 - credentials: Auth details (for remote sources)
                 - format-specific options
         """
         self.config = connection_config
+        self.temp_file_path = None  # For downloaded Google Drive files
         self.stats = {
             'total': 0,
             'success': 0,
@@ -53,6 +58,128 @@ class BaseExtractor(ABC):
             'end_time': None
         }
         self.source_type = None  # Set by subclass: "mbox", "pst", "olm", etc.
+        self.temp_file_path = None  # For downloaded Google Drive files
+
+    def get_effective_file_path(self, access_token: Optional[str] = None) -> str:
+        """
+        Get the file path to process, downloading from Google Drive if necessary
+        
+        Args:
+            access_token: OAuth2 access token for Google Drive (if needed)
+        
+        Returns:
+            str: Path to the file that can be processed locally
+        """
+        file_source = self.config.get('file_source', 'local')
+        
+        if file_source == 'google_drive':
+            # Download from Google Drive
+            if not self.temp_file_path:
+                self.temp_file_path = self._download_google_drive_file(access_token)
+            return self.temp_file_path
+        else:
+            # Use local file path
+            file_path = self.config.get('file_path')
+            if not file_path:
+                raise ValueError("No file_path provided in connection config")
+            return file_path
+    
+    def _download_google_drive_file(self, access_token: Optional[str] = None) -> str:
+        """
+        Download Google Drive file to temporary location using user's stored tokens
+        
+        Args:
+            access_token: Legacy parameter (not used with new user token system)
+        
+        Returns:
+            str: Path to downloaded temporary file
+        """
+        google_file_id = self.config.get('google_drive_file_id')
+        google_file_name = self.config.get('google_drive_file_name', 'downloaded_file')
+        user_id = self.config.get('user_id')  # User ID should be in config for token lookup
+        
+        if not google_file_id:
+            raise ValueError("Google Drive file ID not provided in connection config")
+        
+        logger.info(f"📥 Downloading Google Drive file: {google_file_name} (ID: {google_file_id})")
+        
+        try:
+            # Import here to avoid circular imports
+            from ..storage.google_drive_client import create_google_drive_client
+            
+            # Create client and try authentication methods
+            client = create_google_drive_client()
+            authenticated = False
+            
+            # Try user token authentication first (industry standard)
+            if user_id:
+                logger.info("Trying Google Drive authentication with user's stored tokens...")
+                try:
+                    # Get user tokens from database
+                    from ..database.supabase_client import SupabaseClient
+                    supabase = SupabaseClient.get_client(use_service_key=True)
+                    
+                    result = supabase.table('user_integrations').select('access_token,refresh_token').eq('user_id', user_id).eq('provider', 'google_drive').execute()
+                    
+                    if result.data:
+                        tokens = result.data[0]
+                        authenticated = client.authenticate_with_user_tokens(
+                            access_token=tokens['access_token'],
+                            refresh_token=tokens['refresh_token']
+                        )
+                        
+                        # If token was refreshed, update database
+                        updated_tokens = client.get_current_tokens()
+                        if updated_tokens and updated_tokens['access_token'] != tokens['access_token']:
+                            supabase.table('user_integrations').update({
+                                'access_token': updated_tokens['access_token']
+                            }).eq('user_id', user_id).eq('provider', 'google_drive').execute()
+                            logger.info("Updated refreshed access token in database")
+                    
+                except Exception as e:
+                    logger.warning(f"Failed to use user tokens: {e}")
+            
+            # Fallback to service account authentication
+            if not authenticated:
+                logger.info("Falling back to service account authentication...")
+                authenticated = client.authenticate_with_service_account()
+            
+            if not authenticated:
+                raise RuntimeError(
+                    "Failed to authenticate with Google Drive. Please ensure either:\n"
+                    "1. User has connected their Google Drive account, OR\n"
+                    "2. Service account credentials are configured (GOOGLE_SERVICE_ACCOUNT_JSON environment variable)"
+                )
+            
+            # Download the file
+            temp_file_path = client.download_file_to_temp(google_file_id, google_file_name)
+            if not temp_file_path:
+                raise RuntimeError(f"Failed to download Google Drive file: {google_file_name}")
+            
+            logger.info(f"✅ Google Drive file downloaded successfully: {temp_file_path}")
+            return temp_file_path
+            
+        except Exception as e:
+            logger.error(f"Failed to download Google Drive file {google_file_id}: {e}")
+            raise
+    
+    def cleanup_temp_files(self):
+        """Clean up any temporary files created for Google Drive downloads"""
+        if self.temp_file_path and os.path.exists(self.temp_file_path):
+            try:
+                # Remove the file
+                os.remove(self.temp_file_path)
+                
+                # Remove parent directory if empty
+                parent_dir = os.path.dirname(self.temp_file_path)
+                if os.path.exists(parent_dir) and not os.listdir(parent_dir):
+                    os.rmdir(parent_dir)
+                
+                logger.info(f"🗑️ Cleaned up temporary Google Drive file: {self.temp_file_path}")
+                self.temp_file_path = None
+                
+            except Exception as e:
+                logger.warning(f"Failed to cleanup temp file {self.temp_file_path}: {e}")
 
     @abstractmethod
     def connect(self, **kwargs) -> bool:

@@ -1,54 +1,36 @@
 {
-  "name": "frontend",
+  "name": "email-intelligence-frontend",
   "version": "0.1.0",
   "private": true,
-  "dependencies": {
-    "@ant-design/icons": "^6.1.0",
-    "@refinedev/antd": "^6.0.3",
-    "@refinedev/core": "^5.0.6",
-    "@refinedev/kbar": "^2.0.1",
-    "@refinedev/react-router-v6": "^4.6.2",
-    "@refinedev/supabase": "^6.0.1",
-    "@supabase/supabase-js": "^2.86.2",
-    "@testing-library/dom": "^10.4.1",
-    "@testing-library/jest-dom": "^6.9.1",
-    "@testing-library/react": "^16.3.0",
-    "@testing-library/user-event": "^13.5.0",
-    "@types/jest": "^27.5.2",
-    "@types/node": "^16.18.126",
-    "@types/react": "^19.2.7",
-    "@types/react-dom": "^19.2.3",
-    "ajv": "^8.17.1",
-    "antd": "^6.0.1",
-    "react": "^19.2.1",
-    "react-dom": "^19.2.1",
-    "react-scripts": "5.0.1",
-    "recharts": "^3.5.1",
-    "typescript": "^4.9.5",
-    "web-vitals": "^2.1.4"
-  },
+  "type": "module",
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "dev": "vite --mode development",
+    "build": "tsc && vite build --mode production",
+    "build:dev": "tsc && vite build --mode development", 
+    "preview": "vite preview",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "type-check": "tsc --noEmit"
   },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
+  "dependencies": {
+    "@ant-design/icons": "^5.5.1",
+    "@supabase/supabase-js": "^2.46.1",
+    "antd": "^5.21.7",
+    "axios": "^1.7.9",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0",
+    "recharts": "^2.13.3"
   },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "@vitejs/plugin-react": "^4.3.3",
+    "eslint": "^8.57.1",
+    "eslint-plugin-react-hooks": "^4.6.2",
+    "eslint-plugin-react-refresh": "^0.4.12",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10"
   }
 }

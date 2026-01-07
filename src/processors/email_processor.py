@@ -123,15 +123,46 @@ class EmailProcessor:
             True if successful, False otherwise
         """
         try:
-            # File-based extractors (MBOX, PST, OLM) - use unified FileExtractor
+            # File-based extractors (MBOX, PST, OLM) - use unified FileExtractor for now
             if mailbox_type in ["mbox", "pst", "olm"]:
-                # Expand file path
-                file_path = os.path.expanduser(self.connection_config.get("file_path"))
-                self.extractor = FileExtractor()
-                self.extractor.connect(file_path)
-                logger.info(f"{mailbox_type.upper()} file extractor initialized: {file_path}")
-                logger.info(f"Detected file type: {self.extractor.file_type}")
-                logger.info(f"Folder support: {self.extractor.get_capabilities().get('folder_support', False)}")
+                file_source = self.connection_config.get("file_source", "local")
+                
+                if file_source == "google_drive":
+                    # Google Drive file processing with streaming support
+                    google_file_name = self.connection_config.get("google_drive_file_name", "Unknown file")
+                    google_file_id = self.connection_config.get("google_drive_file_id")
+                    
+                    if not google_file_id:
+                        raise ValueError(
+                            f"Google Drive file ID is required for processing '{google_file_name}'."
+                        )
+                    
+                    logger.info(f"Processing Google Drive file '{google_file_name}' with backend authentication")
+                    
+                    # Initialize FileExtractor with Google Drive config
+                    self.extractor = FileExtractor()
+                    # Store config and connect (will use service account authentication)
+                    self.extractor.config = self.connection_config
+                    self.extractor.connect()
+                    
+                    logger.info(f"Google Drive {mailbox_type.upper()} file extractor initialized: {google_file_name} (ID: {google_file_id})")
+                    logger.info(f"Detected file type: {self.extractor.file_type}")
+                    logger.info(f"Folder support: {self.extractor.get_capabilities().get('folder_support', False)}")
+                    
+                else:
+                    # Local file processing
+                    file_path = self.connection_config.get("file_path")
+                    if not file_path:
+                        raise ValueError("No file_path provided for local file processing")
+                    
+                    # Expand file path
+                    file_path = os.path.expanduser(file_path)
+                    self.extractor = FileExtractor()
+                    self.extractor.connect(file_path)
+                    logger.info(f"{mailbox_type.upper()} file extractor initialized: {file_path}")
+                    logger.info(f"Detected file type: {self.extractor.file_type}")
+                    logger.info(f"Folder support: {self.extractor.get_capabilities().get('folder_support', False)}")
+                
                 return True
 
             else:
