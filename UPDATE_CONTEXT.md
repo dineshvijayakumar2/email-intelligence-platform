@@ -66,11 +66,35 @@ User Creates Mailbox → Backend Downloads Google Drive File → Extract Emails 
 - ❌ ~~Import error in base_extractor.py~~ → ✅ Fixed
 - ❌ ~~Missing google_auth_oauthlib dependency~~ → ✅ Fixed
 
-## Next Steps for New Session
-1. **Test Complete Flow**: Test OAuth2 authentication → file selection → processing
-2. **Frontend Integration**: Ensure frontend properly handles Google Drive mailbox creation
-3. **Error Handling**: Test error scenarios and user feedback
-4. **Production Readiness**: Review security and performance considerations
+## 🚨 CRITICAL ISSUE DISCOVERED
+**Missing Google API Client Dependency**
+- **Error**: `ModuleNotFoundError: No module named 'googleapiclient'`
+- **Location**: `src/storage/google_drive_client.py:23`
+- **Impact**: Google Drive file processing fails during mailbox creation
+- **Root Cause**: Missing `google-api-python-client` package in backend environment
+- **Status**: ⚠️ NEEDS IMMEDIATE FIX in next session
+
+### Error Details:
+```
+File: gdrive://19pzUSFm89rNDkfY0UfHWJlHf7-GolpgE
+Error: No module named 'googleapiclient'
+
+Traceback:
+- olm_extractor.py:69 → get_effective_file_path()
+- base_extractor.py:78 → _download_google_drive_file()
+- base_extractor.py:108 → from ..storage.google_drive_client import create_google_drive_client
+- google_drive_client.py:23 → from googleapiclient.discovery import build
+```
+
+## Priority Tasks for Next Session
+1. **🔴 HIGH PRIORITY**: Install `google-api-python-client` dependency
+   ```bash
+   cd backend && source venv/bin/activate && pip install google-api-python-client
+   ```
+2. **Test Complete Flow**: OAuth2 authentication → file selection → processing
+3. **Verify Dependencies**: Ensure all Google Drive packages are properly installed
+4. **Frontend Integration**: Test end-to-end Google Drive mailbox creation
+5. **Error Handling**: Implement proper error feedback for missing dependencies
 
 ## Environment Status
 - **Backend**: http://localhost:8000 (FastAPI + Uvicorn)
@@ -94,4 +118,6 @@ User Creates Mailbox → Backend Downloads Google Drive File → Extract Emails 
 
 ---
 
-**Status**: System fully operational. Ready for end-to-end testing and production deployment.
+**Status**: ⚠️ OAuth2 integration complete, but Google Drive file processing blocked by missing `googleapiclient` dependency. Ready for dependency fix and end-to-end testing.
+
+**Next Session Priority**: Install `google-api-python-client` to complete Google Drive integration.
