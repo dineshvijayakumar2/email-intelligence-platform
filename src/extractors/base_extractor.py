@@ -62,7 +62,7 @@ class BaseExtractor(ABC):
 
     def get_effective_file_path(self, access_token: Optional[str] = None) -> str:
         """
-        Get the file path to process, downloading from Google Drive if necessary
+        Get the file path to process, checking for mounted drives first, then streaming
         
         Args:
             access_token: OAuth2 access token for Google Drive (if needed)
@@ -73,10 +73,29 @@ class BaseExtractor(ABC):
         file_source = self.config.get('file_source', 'local')
         
         if file_source == 'google_drive':
-            # Download from Google Drive
-            if not self.temp_file_path:
-                self.temp_file_path = self._download_google_drive_file(access_token)
-            return self.temp_file_path
+            # First, check if Google Drive is mounted locally (best performance)
+            google_file_name = self.config.get('google_drive_file_name', '')
+            
+            # Common Google Drive mount points
+            possible_mounts = [
+                f"/mnt/gdrive/{google_file_name}",  # Linux rclone
+                f"/home/{os.getenv('USER', 'user')}/gdrive/{google_file_name}",  # Linux user mount
+                f"/Users/{os.getenv('USER', 'user')}/Google Drive/{google_file_name}",  # macOS Google Drive app
+                f"/Users/{os.getenv('USER', 'user')}/GoogleDrive/{google_file_name}",  # macOS alternative
+                f"~/gdrive/{google_file_name}",  # Generic home mount
+                f"/google-drive/{google_file_name}",  # Docker mount
+            ]
+            
+            # Check each possible mount point
+            for mount_path in possible_mounts:
+                expanded_path = os.path.expanduser(mount_path)
+                if os.path.exists(expanded_path) and os.path.isfile(expanded_path):
+                    logger.info(f"📁 Found Google Drive file at local mount: {expanded_path}")
+                    return expanded_path
+            
+            # No local mount found, use streaming
+            logger.info(f"📡 No local mount found for {google_file_name}, using streaming approach")
+            return 'GOOGLE_DRIVE_STREAM'
         else:
             # Use local file path
             file_path = self.config.get('file_path')

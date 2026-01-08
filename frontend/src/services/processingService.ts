@@ -15,6 +15,9 @@ export interface ProcessingJob {
   created_at: string;
   error_log?: string[] | string | Record<string, any>;
   progress?: number;
+  emails_per_second?: number;
+  estimated_time_remaining?: string;
+  estimated_seconds_remaining?: number;
 }
 
 export interface CreateProcessingJobData {

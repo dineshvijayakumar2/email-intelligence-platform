@@ -114,7 +114,7 @@ export const MailboxProcess: React.FC = () => {
       const jobData = {
         mailbox_id: id,
         job_type: values.job_type || 'extraction',
-        total_records: values.batch_size || 1000
+        total_records: values.email_limit || null  // null means process all emails
       };
 
       const job = await processingService.createProcessingJob(jobData);
@@ -259,6 +259,16 @@ export const MailboxProcess: React.FC = () => {
                       percent={Math.round(((currentJob.processed_records || 0) / currentJob.total_records) * 100)}
                       status={currentJob.status === 'failed' ? 'exception' : 'active'}
                     />
+                    {currentJob.status === 'running' && (
+                      <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#666' }}>
+                        <Text type="secondary">
+                          {currentJob.emails_per_second ? `${currentJob.emails_per_second.toFixed(1)} emails/sec` : ''}
+                        </Text>
+                        <Text type="secondary">
+                          {currentJob.estimated_time_remaining ? `ETA: ${currentJob.estimated_time_remaining}` : ''}
+                        </Text>
+                      </div>
+                    )}
                   </div>
                 )}
                 
@@ -296,6 +306,7 @@ export const MailboxProcess: React.FC = () => {
             onFinish={startProcessing}
             initialValues={{
               job_type: 'extraction',
+              email_limit: 10,
               batch_size: 1000,
               enable_categorization: true,
               enable_enrichment: false
@@ -315,9 +326,17 @@ export const MailboxProcess: React.FC = () => {
             </Form.Item>
 
             <Form.Item
+              name="email_limit"
+              label="Email Limit"
+              tooltip="Maximum number of emails to process (leave empty for all emails)"
+            >
+              <InputNumber min={1} max={100000} placeholder="Enter email limit or leave empty for all" style={{ width: '100%' }} />
+            </Form.Item>
+
+            <Form.Item
               name="batch_size"
               label="Batch Size"
-              tooltip="Number of emails to process in each batch"
+              tooltip="Number of emails to process in each batch (advanced setting)"
             >
               <InputNumber min={100} max={10000} style={{ width: '100%' }} />
             </Form.Item>

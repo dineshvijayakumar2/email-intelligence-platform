@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks  # v9 - industry-standard RemoteZip implementation
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
@@ -143,7 +143,7 @@ def get_job_progress(job_id: str) -> dict:
             return progress
 
     # Fallback to database
-    return {"processed": 0, "failed": 0}
+    return {"processed": 0, "failed": 0, "total_records": 0, "emails_per_second": 0, "estimated_seconds_remaining": 0}
 
 def update_job_progress_redis(job_id: str, processed: int, failed: int = 0, sync_to_db: bool = False):
     """
@@ -946,12 +946,38 @@ async def get_processing_jobs():
             else:
                 progress = 0  # Pending or running without total_records yet
 
+            # Format ETA if available from Redis
+            eta_str = None
+            emails_per_second = redis_progress.get('emails_per_second', 0) or 0
+            estimated_seconds = redis_progress.get('estimated_seconds_remaining', 0) or 0
+            
+            # Ensure values are numbers, not None
+            try:
+                emails_per_second = float(emails_per_second) if emails_per_second else 0
+                estimated_seconds = float(estimated_seconds) if estimated_seconds else 0
+            except (ValueError, TypeError):
+                emails_per_second = 0
+                estimated_seconds = 0
+            
+            if estimated_seconds > 0 and job.get('status') == 'running':
+                if estimated_seconds < 60:
+                    eta_str = f"{estimated_seconds:.0f}s"
+                elif estimated_seconds < 3600:
+                    eta_minutes = estimated_seconds / 60
+                    eta_str = f"{eta_minutes:.1f}m"
+                else:
+                    eta_hours = estimated_seconds / 3600
+                    eta_str = f"{eta_hours:.1f}h"
+
             job_data = {
                 **job,
                 "mailbox_name": job.get('mailboxes', {}).get('name') if job.get('mailboxes') else 'Unknown Mailbox',
                 "progress": progress,
                 "total_records": total,  # Ensure it's not None
-                "processed_records": processed  # Ensure it's not None
+                "processed_records": processed,  # Ensure it's not None
+                "emails_per_second": emails_per_second,
+                "estimated_time_remaining": eta_str,
+                "estimated_seconds_remaining": estimated_seconds
             }
             # Remove the nested mailboxes object
             if 'mailboxes' in job_data:

@@ -216,7 +216,7 @@ export const ProcessingJobs: React.FC = () => {
         const progress = total_records > 0 ? Math.round((processed_records / total_records) * 100) : 0;
         
         return (
-          <Space direction="vertical" size="small" style={{ width: 200 }}>
+          <Space direction="vertical" size="small" style={{ width: 250 }}>
             <Progress 
               percent={progress} 
               size="small" 
@@ -228,6 +228,12 @@ export const ProcessingJobs: React.FC = () => {
                 <span style={{ color: '#ff4d4f' }}> ({failed_records} failed)</span>
               )}
             </Text>
+            {status === 'running' && (record.emails_per_second || record.estimated_time_remaining) && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#999' }}>
+                <span>{record.emails_per_second ? `${record.emails_per_second.toFixed(1)}/s` : ''}</span>
+                <span>{record.estimated_time_remaining ? `ETA: ${record.estimated_time_remaining}` : ''}</span>
+              </div>
+            )}
           </Space>
         );
       },

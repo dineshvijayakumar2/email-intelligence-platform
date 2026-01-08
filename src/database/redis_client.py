@@ -149,7 +149,7 @@ class JobProgressManager:
                 'processed': int(data.get('processed', 0)),
                 'failed': int(data.get('failed', 0)),
                 'status': data.get('status'),
-                'total_records': int(data.get('total_records', 0)) if data.get('total_records') else None,
+                'total_records': int(data.get('total_records', 0)) if data.get('total_records') else 0,
                 **{k: v for k, v in data.items() if k not in ['processed', 'failed', 'status', 'total_records']}
             }
         except Exception as e:

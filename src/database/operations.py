@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 import logging
 from uuid import uuid4
 import json
+import time
 
 from .supabase_client import SupabaseClient
 
@@ -169,7 +170,7 @@ class EmailOperations:
         mailbox_id: str = None,
         batch_size: int = 5000,
         checkpoint_callback=None,
-        skip_duplicates: bool = True,
+        skip_duplicates: bool = True,  # Now handled by database upsert
         job_id: str = None
     ) -> Dict:
         """
@@ -181,7 +182,7 @@ class EmailOperations:
             mailbox_id: Mailbox ID (uses instance default if not provided)
             batch_size: Number of emails per batch (default 5000 for large files)
             checkpoint_callback: Optional callback(processed_count, last_message_id) for progress tracking
-            skip_duplicates: Skip emails that already exist in database
+            skip_duplicates: Skip emails that already exist in database (now handled by database upsert)
             job_id: Optional job ID for cancellation checks
 
         Returns:
@@ -200,7 +201,11 @@ class EmailOperations:
         last_message_id = None
         was_stopped = False
 
-        logger.info(f"Starting streaming insert with batch_size={batch_size}, skip_duplicates={skip_duplicates}")
+        logger.info(f"Starting streaming insert with batch_size={batch_size} (using database upsert for deduplication)")
+        
+        # Performance tracking for time estimation
+        start_time = time.time()
+        emails_per_second = 0
 
         try:
             for email in emails:
@@ -229,15 +234,62 @@ class EmailOperations:
                 total += 1
                 last_message_id = email.get('message_id', f'unknown_{total}')
 
-                # Skip duplicates if enabled
-                if skip_duplicates and email.get('message_id'):
-                    if self.email_exists(email['message_id'], mailbox_id):
-                        skipped += 1
-                        if total % 100 == 0:  # Log more frequently
-                            logger.info(f"📊 Processed {total} emails ({skipped} skipped duplicates)")
-                        continue
-
+                # Add email directly to batch - duplicates handled by database upsert
                 current_batch.append(email)
+                
+                # Calculate and log progress with time estimation more frequently
+                if total % 10 == 0 or total <= 50:  # Every 10 emails, or every email for first 50
+                    elapsed = time.time() - start_time
+                    emails_per_second = total / elapsed if elapsed > 0 else 0
+                    
+                    # Calculate estimated time remaining
+                    from .redis_client import JobProgressManager
+                    progress_manager = JobProgressManager()
+                    
+                    # Get total emails expected (from Redis or estimate) with robust null handling
+                    if job_id:
+                        try:
+                            progress_data = progress_manager.get_progress(job_id)
+                            total_expected = 0  # Default safe value
+                            
+                            if progress_data and isinstance(progress_data, dict):
+                                total_records_raw = progress_data.get('total_records', 0)
+                                if total_records_raw is not None:
+                                    try:
+                                        total_expected = int(total_records_raw)
+                                    except (ValueError, TypeError):
+                                        total_expected = 0
+                            
+                            # Ensure we have valid positive numbers before comparison
+                            if isinstance(total_expected, int) and total_expected > 0 and isinstance(emails_per_second, (int, float)) and emails_per_second > 0:
+                                remaining_emails = max(0, total_expected - total)
+                                estimated_seconds_remaining = remaining_emails / emails_per_second
+                                estimated_minutes = estimated_seconds_remaining / 60
+                                
+                                if estimated_minutes < 1:
+                                    eta_str = f"{estimated_seconds_remaining:.0f}s"
+                                elif estimated_minutes < 60:
+                                    eta_str = f"{estimated_minutes:.1f}m"
+                                else:
+                                    eta_hours = estimated_minutes / 60
+                                    eta_str = f"{eta_hours:.1f}h"
+                                
+                                # Store ETA in Redis for frontend
+                                progress_manager.update_progress(
+                                    job_id, total, failed, 
+                                    emails_per_second=emails_per_second,
+                                    estimated_seconds_remaining=estimated_seconds_remaining
+                                )
+                                
+                                logger.info(f"📊 Processed {total}/{total_expected} emails - {emails_per_second:.1f} emails/sec - ETA: {eta_str}")
+                            else:
+                                logger.info(f"📊 Processed {total} emails - {emails_per_second:.1f} emails/sec")
+                                
+                        except Exception as e:
+                            logger.warning(f"Failed to calculate ETA: {e}")
+                            logger.info(f"📊 Processed {total} emails - {emails_per_second:.1f} emails/sec")
+                    else:
+                        logger.info(f"📊 Processed {total} emails - {emails_per_second:.1f} emails/sec")
 
                 # Log progress for every email during small tests
                 if total <= 20:
@@ -286,7 +338,7 @@ class EmailOperations:
                     # Clear batch to free memory
                     current_batch = []
 
-                    logger.info(f"Progress: {total} emails processed ({success} inserted, {failed} failed, {skipped} skipped)")
+                    logger.info(f"Progress: {total} emails processed ({success} inserted, {failed} failed)")
 
             # Insert remaining emails in final batch
             if current_batch:
@@ -305,15 +357,15 @@ class EmailOperations:
                 logger.warning(f"Failed to update folder counts: {e}")
 
             if was_stopped:
-                logger.info(f"Streaming insert STOPPED by user: {total} total, {success} inserted, {failed} failed, {skipped} skipped")
+                logger.info(f"Streaming insert STOPPED by user: {total} total, {success} inserted, {failed} failed (duplicates handled by database)")
             else:
-                logger.info(f"Streaming insert completed: {total} total, {success} inserted, {failed} failed, {skipped} skipped")
+                logger.info(f"Streaming insert completed: {total} total, {success} inserted, {failed} failed (duplicates handled by database)")
 
             return {
                 'total': total,
                 'success': success,
                 'failed': failed,
-                'skipped': skipped,
+                'skipped': 0,  # Duplicates now handled by database upsert
                 'stopped': was_stopped,
                 'errors': errors[:100]  # Limit errors to first 100 to avoid memory issues
             }
@@ -361,7 +413,9 @@ class EmailOperations:
             inserted_emails = []
             for attempt in range(max_retries):
                 try:
-                    result = self.client.table('emails').insert(prepared_batch).execute()
+                    # Use upsert for automatic duplicate handling
+                    # This will insert new emails and update existing ones based on unique constraint
+                    result = self.client.table('emails').upsert(prepared_batch, on_conflict='message_id,mailbox_id').execute()
 
                     if result.data:
                         success = len(prepared_batch)
@@ -682,7 +736,7 @@ class EmailOperations:
             return None
     
     def email_exists(self, message_id: str, mailbox_id: str = None) -> bool:
-        """Check if email already exists in database"""
+        """Check if email already exists in database (single email check)"""
         try:
             mailbox_id = mailbox_id or self.mailbox_id
             if not mailbox_id:
@@ -696,10 +750,42 @@ class EmailOperations:
                 .execute()
             
             return len(result.data) > 0
+        except Exception as e:
+            logger.warning(f"Failed to check email existence: {e}")
+            return False
+    
+    def batch_check_emails_exist(self, message_ids: List[str], mailbox_id: str = None) -> set:
+        """
+        Check which emails already exist in database (optimized batch check)
+        
+        Args:
+            message_ids: List of message IDs to check
+            mailbox_id: Mailbox ID to check within
+            
+        Returns:
+            Set of message IDs that already exist
+        """
+        try:
+            mailbox_id = mailbox_id or self.mailbox_id
+            if not mailbox_id:
+                raise ValueError("mailbox_id is required")
+            
+            if not message_ids:
+                return set()
+            
+            # Use 'in' operator for batch lookup - much more efficient
+            result = self.client.table('emails')\
+                .select('message_id')\
+                .eq('mailbox_id', mailbox_id)\
+                .in_('message_id', message_ids)\
+                .execute()
+            
+            # Return set of existing message IDs
+            return {row['message_id'] for row in result.data}
             
         except Exception as e:
-            logger.error(f"Failed to check email existence {message_id}: {e}")
-            return False
+            logger.warning(f"Failed batch email existence check: {e}")
+            return set()  # Conservative fallback
     
     def search_emails(
         self,

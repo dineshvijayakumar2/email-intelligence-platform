@@ -46,9 +46,21 @@ class MBOXExtractor(BaseExtractor):
         super().__init__(connection_config)
         self.source_type = "mbox"  # Set format type
         self.file_path = connection_config.get('file_path')
-
-        if not self.file_path:
-            raise ValueError("file_path required in connection_config")
+        
+        # Support Google Drive files
+        self.google_drive_file_id = connection_config.get('google_drive_file_id')
+        self.google_drive_file_name = connection_config.get('google_drive_file_name')
+        
+        # Check if we have either local file path or Google Drive info
+        if not self.file_path and not self.google_drive_file_id:
+            raise ValueError("Either 'file_path' or 'google_drive_file_id' required in connection_config")
+            
+        # Determine if this is a Google Drive file
+        self.is_google_drive = bool(self.google_drive_file_id)
+        if self.is_google_drive:
+            logger.info(f"🌟 MBOX extractor configured for Google Drive file: {self.google_drive_file_name}")
+        else:
+            logger.info(f"📁 MBOX extractor configured for local file: {self.file_path}")
 
         self.mbox = None
         self.message_count = 0  # Track count during extraction
@@ -64,8 +76,24 @@ class MBOXExtractor(BaseExtractor):
         in extract_emails() for better memory efficiency.
         """
         try:
-            # Get the effective file path (local or downloaded from Google Drive)
-            self.file_path = self.get_effective_file_path(access_token)
+            # For Google Drive files, we need to either find mounted drive or download
+            if self.is_google_drive:
+                logger.info(f"🌟 Processing Google Drive MBOX file: {self.google_drive_file_name}")
+                # For MBOX files from Google Drive, we need to download (unlike OLM which can stream)
+                # This is because MBOX is a text format that needs full file access
+                effective_path = self.get_effective_file_path(access_token)
+                
+                if effective_path == 'GOOGLE_DRIVE_STREAM':
+                    # No local mount found, need to download the file
+                    logger.info(f"📥 No local mount found, downloading MBOX file from Google Drive...")
+                    self.file_path = self._download_google_drive_file(access_token)
+                else:
+                    # Found local mount
+                    self.file_path = effective_path
+            # Local file path is already set
+            
+            if not self.file_path:
+                raise ValueError("No file path available for MBOX processing")
             
             # Verify file exists and is readable
             with open(self.file_path, 'r', encoding='utf-8', errors='replace') as f:

@@ -65,31 +65,117 @@ class OLMExtractor(BaseExtractor):
             zipfile.BadZipFile: If file is not a valid ZIP
             ConnectionError: If failed to open OLM file
         """
-        # Get the effective file path (local or downloaded from Google Drive)
+        # Get the effective file path (local or streamed from Google Drive)
         self.file_path = self.get_effective_file_path(access_token)
 
-        if not Path(self.file_path).exists():
-            raise FileNotFoundError(f"OLM file not found: {self.file_path}")
+        # Check if we're streaming from Google Drive
+        if self.file_path == 'GOOGLE_DRIVE_STREAM':
+            # For large ZIP files, download to temp file instead of streaming
+            # This is more reliable for zipfile module compatibility
+            try:
+                logger.info("💾 Using temporary download approach for Google Drive OLM file (large ZIP compatibility)")
+                
+                # Get Google Drive file details
+                google_file_id = self.config.get('google_drive_file_id')
+                google_file_name = self.config.get('google_drive_file_name', 'Unknown OLM')
+                user_id = self.config.get('user_id')
+                
+                if not google_file_id:
+                    raise ValueError("Google Drive file ID not provided")
+                
+                # Import here to avoid circular imports
+                from ..storage.google_drive_client import create_google_drive_client
+                from ..storage.remote_zip_google_drive import create_remote_zip
+                
+                # Create client and authenticate
+                client = create_google_drive_client()
+                authenticated = False
+                
+                # Try user token authentication first
+                if user_id:
+                    logger.info("Authenticating with user's stored Google Drive tokens...")
+                    try:
+                        from ..database.supabase_client import SupabaseClient
+                        supabase = SupabaseClient.get_client(use_service_key=True)
+                        
+                        result = supabase.table('user_integrations').select('access_token,refresh_token').eq('user_id', user_id).eq('provider', 'google_drive').execute()
+                        
+                        if result.data:
+                            user_tokens = result.data[0]
+                            if client.authenticate_with_user_tokens(
+                                user_tokens['access_token'],
+                                user_tokens['refresh_token']
+                            ):
+                                authenticated = True
+                                logger.info("✅ Authenticated with user's Google Drive tokens")
+                                
+                                # Update tokens if refreshed
+                                current_tokens = client.get_current_tokens()
+                                if current_tokens and current_tokens['access_token'] != user_tokens['access_token']:
+                                    supabase.table('user_integrations').update({
+                                        'access_token': current_tokens['access_token']
+                                    }).eq('user_id', user_id).eq('provider', 'google_drive').execute()
+                                    logger.info("Updated refreshed access token in database")
+                    except Exception as e:
+                        logger.warning(f"Failed to authenticate with user tokens: {e}")
+                
+                # Fallback to service account if user auth failed
+                if not authenticated:
+                    logger.info("Trying service account authentication...")
+                    if client.authenticate_with_service_account():
+                        authenticated = True
+                        logger.info("✅ Authenticated with service account")
+                    else:
+                        raise ConnectionError("Failed to authenticate with Google Drive")
+                
+                # Get file metadata
+                file_info = client.get_file_info(google_file_id)
+                if not file_info:
+                    raise ConnectionError(f"Could not get info for Google Drive file {google_file_id}")
+                
+                logger.info(f"📦 Opening OLM via RemoteZip: {file_info['name']} "
+                           f"(Size: {file_info['size']:,} bytes)")
+                
+                # Use industry-standard RemoteZip approach
+                self.zip_file = create_remote_zip(client, google_file_id, file_info)
+                logger.info(f"✅ Connected to OLM via RemoteZip: {file_info['name']}")
+                
+                # Build index of message files and folder structure
+                self._index_messages()
+                
+                logger.info(f"Found {len(self.message_files)} messages in {len(self.folder_structure)} folders")
+                return True
+                
+            except Exception as e:
+                logger.error(f"Failed to connect to Google Drive OLM: {e}")
+                if self.zip_file:
+                    self.zip_file.close()
+                raise ConnectionError(f"Google Drive OLM connection failed: {e}") from e
+        
+        else:
+            # Local file path - use existing logic
+            if not Path(self.file_path).exists():
+                raise FileNotFoundError(f"OLM file not found: {self.file_path}")
 
-        try:
-            # Open ZIP file for streaming (no extraction)
-            self.zip_file = zipfile.ZipFile(self.file_path, 'r')
-            logger.info(f"Connected to OLM ZIP archive: {self.file_path}")
+            try:
+                # Open ZIP file for streaming (no extraction)
+                self.zip_file = zipfile.ZipFile(self.file_path, 'r')
+                logger.info(f"Connected to OLM ZIP archive: {self.file_path}")
 
-            # Build index of message files and folder structure
-            self._index_messages()
+                # Build index of message files and folder structure
+                self._index_messages()
 
-            logger.info(f"Found {len(self.message_files)} messages in {len(self.folder_structure)} folders")
-            return True
+                logger.info(f"Found {len(self.message_files)} messages in {len(self.folder_structure)} folders")
+                return True
 
-        except zipfile.BadZipFile as e:
-            logger.error(f"Invalid OLM file (not a ZIP archive): {e}")
-            raise ConnectionError(f"OLM connection failed: not a valid ZIP file") from e
-        except Exception as e:
-            logger.error(f"Failed to connect to OLM file: {e}")
-            if self.zip_file:
-                self.zip_file.close()
-            raise ConnectionError(f"OLM connection failed: {e}") from e
+            except zipfile.BadZipFile as e:
+                logger.error(f"Invalid OLM file (not a ZIP archive): {e}")
+                raise ConnectionError(f"OLM connection failed: not a valid ZIP file") from e
+            except Exception as e:
+                logger.error(f"Failed to connect to OLM file: {e}")
+                if self.zip_file:
+                    self.zip_file.close()
+                raise ConnectionError(f"OLM connection failed: {e}") from e
 
     def _index_messages(self):
         """
