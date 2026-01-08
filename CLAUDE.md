@@ -2,12 +2,14 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Recent Improvements
+## Recent Improvements (Jan 8, 2025)
 
 1. **Single .env file**: All configuration now in root .env file (no more frontend/.env.local)
 2. **Google Drive Integration**: Frontend can authenticate and select files from Google Drive
 3. **Redis Required**: Redis is now mandatory for job processing (no fallback mode)
 4. **Cleaned Structure**: Test files and temporary scripts moved to dev-scripts/
+5. **RemoteZip Streaming**: Industry-standard implementation for processing 65GB+ OLM files directly from Google Drive
+6. **Progress Tracking with ETA**: Real-time processing speed and estimated time remaining calculations
 
 ## Common Development Commands
 
@@ -102,7 +104,11 @@ Frontend → FastAPI → ThreadPool (20 workers) → Email Processing Pipeline
 #### Google Drive Integration
 - Frontend authenticates with Google OAuth2
 - File picker allows selecting email archives from Drive
-- Download URL passed to backend for processing
+- **RemoteZip Streaming** (Jan 8, 2025): Large OLM files (65GB+) are streamed directly using HTTP range requests
+  - No full download required - uses targeted byte-range requests
+  - Central Directory scanning for efficient ZIP navigation
+  - Virtual file wrapper for transparent streaming operations
+  - Smart retry logic with exponential backoff for network resilience
 - Supports MBOX, PST, OLM files in Drive
 
 #### Redis as Primary Job System
@@ -142,6 +148,11 @@ Note: Frontend environment variables are automatically loaded from root .env by 
 - **frontend/src/config.js**: Central configuration file
 - **frontend/src/services/googleDriveService.ts**: Google Drive API integration
 - **frontend/src/components/GoogleDrivePicker.tsx**: File selection UI
+- **src/storage/** (Jan 8, 2025): New cloud storage streaming modules
+  - **remote_zip_google_drive.py**: RemoteZip implementation for Google Drive
+  - **google_drive_stream.py**: Streaming wrapper for Drive files
+  - **cloud_stream_wrapper.py**: Base streaming interface
+  - **smart_zip_reader.py**: Efficient ZIP Central Directory scanner
 - Removed: test_*.py files from root, POC documentation files
 
 ### Instructions
