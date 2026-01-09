@@ -111,7 +111,7 @@ start_backend() {
     echo ""
     
     # Start the backend server in background with environment
-    PYTHON_ENV=$ENVIRONMENT uvicorn main:app --host 0.0.0.0 --port 8000 --reload > ../backend.log 2>&1 &
+    PYTHON_ENV=$ENVIRONMENT python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload > ../backend.log 2>&1 &
     BACKEND_PID=$!
     
     # Wait a moment for server to start

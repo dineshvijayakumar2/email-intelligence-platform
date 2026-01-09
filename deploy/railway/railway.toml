@@ -1,0 +1,31 @@
+[build]
+builder = "nixpacks"
+
+[deploy]
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
+
+# Backend API Service
+[[services]]
+name = "backend-api"
+source = "backend"
+buildCommand = "pip install -r ../requirements.txt"
+startCommand = "python3 -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+
+# Frontend Service
+[[services]]
+name = "frontend"
+source = "frontend"
+buildCommand = "npm install && npm run build"
+startCommand = "npx serve -s build -l ${PORT:-3000}"
+healthcheckPath = "/"
+
+# Worker Service for Email Processing
+[[services]]
+name = "email-worker"
+source = "."
+buildCommand = "pip install -r requirements.txt"
+startCommand = "python3 -m src.workers.email_processor"
+replicas = 2  # Can scale based on load

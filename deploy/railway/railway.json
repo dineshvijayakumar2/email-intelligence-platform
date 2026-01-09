@@ -1,0 +1,73 @@
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "NIXPACKS",
+    "buildpacks": ["python", "nodejs"]
+  },
+  "deploy": {
+    "numReplicas": {
+      "production": 2,
+      "staging": 1,
+      "development": 1
+    },
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 3,
+    "region": "us-west1",
+    "healthcheckPath": "/health",
+    "healthcheckTimeout": 30
+  },
+  "services": [
+    {
+      "name": "backend-api",
+      "source": ".",
+      "buildPath": "./backend",
+      "buildCommand": "pip install -r requirements.txt",
+      "startCommand": "cd backend && python3 -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}",
+      "envVars": {
+        "PYTHON_VERSION": "3.9",
+        "SERVICE_TYPE": "api"
+      },
+      "domains": {
+        "production": "api.emailintel.app",
+        "staging": "api-staging.emailintel.app"
+      }
+    },
+    {
+      "name": "frontend",
+      "source": ".",
+      "buildPath": "./frontend",
+      "buildCommand": "cd frontend && npm ci && npm run build",
+      "startCommand": "cd frontend && npx serve -s build -l ${PORT:-3000}",
+      "envVars": {
+        "NODE_VERSION": "18",
+        "SERVICE_TYPE": "frontend"
+      },
+      "domains": {
+        "production": "app.emailintel.app",
+        "staging": "staging.emailintel.app"
+      }
+    },
+    {
+      "name": "email-worker",
+      "source": ".",
+      "buildCommand": "pip install -r requirements.txt",
+      "startCommand": "python3 -m src.workers.email_processor",
+      "envVars": {
+        "PYTHON_VERSION": "3.9",
+        "SERVICE_TYPE": "worker",
+        "WORKER_CONCURRENCY": "${WORKER_CONCURRENCY:-4}"
+      },
+      "replicas": {
+        "production": 2,
+        "staging": 1
+      }
+    }
+  ],
+  "databases": [
+    {
+      "name": "redis",
+      "type": "redis",
+      "version": "7"
+    }
+  ]
+}

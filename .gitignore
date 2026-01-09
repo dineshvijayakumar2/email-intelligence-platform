@@ -9,10 +9,12 @@ __pycache__/
 frontend/build/
 backend/dist/
 
-# Environment files
+# Environment files (NEVER commit these!)
 .env
-.env.local
-.env.production
+.env.*
+!.env.example
+config/*/.env
+!config/*/.env.example
 
 # Logs
 *.log
@@ -54,10 +56,16 @@ yarn-error.log*
 *.db
 *.sqlite
 
-# Secrets
+# Secrets and sensitive files
 *.pem
 *.key
 *.cert
+*.p12
+*.pfx
+service-account.json
+**/service-account-*.json
+secrets/
+.secrets/
 
 # Troubleshooting, migrations, and test scripts (temporary/local)
 scripts/troubleshooting/

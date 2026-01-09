@@ -1,0 +1,78 @@
+# Production Dockerfile with multi-stage build
+# Optimized for size and security
+
+# Stage 1: Backend Builder
+FROM python:3.9-slim as backend-builder
+
+WORKDIR /app
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy and install Python dependencies
+COPY requirements.txt .
+RUN pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels -r requirements.txt
+
+# Stage 2: Frontend Builder
+FROM node:18-alpine as frontend-builder
+
+WORKDIR /app
+
+# Copy package files
+COPY frontend/package*.json ./
+
+# Install dependencies
+RUN npm ci --only=production
+
+# Copy source code
+COPY frontend/ .
+
+# Build production bundle
+RUN npm run build
+
+# Stage 3: Final Production Image
+FROM python:3.9-slim
+
+# Create non-root user
+RUN useradd -m -u 1001 appuser && \
+    mkdir -p /app && \
+    chown -R appuser:appuser /app
+
+WORKDIR /app
+
+# Install runtime dependencies only
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy Python wheels from builder
+COPY --from=backend-builder /app/wheels /wheels
+COPY --from=backend-builder /app/requirements.txt .
+
+# Install Python packages
+RUN pip install --no-cache-dir /wheels/*
+
+# Copy application code
+COPY --chown=appuser:appuser backend/ backend/
+COPY --chown=appuser:appuser src/ src/
+
+# Copy frontend build
+COPY --from=frontend-builder --chown=appuser:appuser /app/build frontend/build
+
+# Switch to non-root user
+USER appuser
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:8000/health || exit 1
+
+# Expose port
+EXPOSE 8000
+
+# Start command
+CMD ["python3", "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
