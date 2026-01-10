@@ -1,0 +1,56 @@
+# Email Intelligence Platform - Complete Requirements
+# Python 3.8+ required
+
+# ===== Core API & Backend =====
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+aiofiles==23.2.1
+
+# ===== Database & Storage =====
+supabase==2.0.2
+psycopg2-binary==2.9.9
+redis==5.0.1  # REQUIRED for job processing
+
+# ===== Configuration =====
+python-dotenv==1.0.0
+pydantic==2.5.0
+
+# ===== Email Processing =====
+flanker==0.9.11
+python-dateutil==2.8.2
+email-validator==2.1.0
+
+# ===== Microsoft Graph API (Outlook Live) =====
+msal==1.25.0
+requests==2.31.0
+httpx==0.24.1
+
+# ===== Utilities =====
+tqdm==4.66.1
+pyyaml==6.0.1
+
+# ===== Development Tools =====
+pytest==7.4.3
+black==23.11.0
+
+# ===== Optional: Cloud Storage Support =====
+# Uncomment the following lines based on your needs:
+
+# AWS S3 Support:
+# boto3>=1.28.0
+
+# Google Drive Backend Support (OAuth2 + Service Account):
+google-auth>=2.23.0
+google-auth-httplib2>=0.1.1
+google-api-python-client>=2.100.0
+google-auth-oauthlib>=1.1.0
+
+# ===== Optional: Advanced Features (Stage 2) =====
+# AI/ML Support:
+# anthropic==0.25.0
+
+# Data Analysis Dashboard:
+# streamlit==1.29.0
+# plotly==5.18.0
+# pandas==2.1.3
