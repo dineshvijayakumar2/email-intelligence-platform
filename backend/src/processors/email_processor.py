@@ -212,7 +212,7 @@ class EmailProcessor:
             """
             try:
                 # Use shared progress tracker (initialized by backend)
-                from utils.progress_tracker import update_job_progress
+                from src.utils.progress_tracker import update_job_progress
 
                 should_sync_db = update_job_progress(job_id, processed_count, 0)
 

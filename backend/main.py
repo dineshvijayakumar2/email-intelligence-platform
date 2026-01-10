@@ -97,7 +97,7 @@ try:
     if src_path not in sys.path:
         sys.path.insert(0, src_path)
 
-    from utils.progress_tracker import initialize_progress_managers
+    from src.utils.progress_tracker import initialize_progress_managers
     initialize_progress_managers(progress_manager, queue_manager)
     logger.info("Shared progress tracker initialized")
 except Exception as e:

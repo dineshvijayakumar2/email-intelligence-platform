@@ -38,9 +38,9 @@ source venv/bin/activate
 echo "⬆️  Upgrading pip..."
 pip install --upgrade pip > /dev/null 2>&1
 
-# Install dependencies from root requirements.txt
-echo "📥 Installing dependencies from root requirements.txt..."
-pip install -r "$PROJECT_ROOT/requirements.txt"
+# Install dependencies from backend requirements.txt
+echo "📥 Installing dependencies from backend requirements.txt..."
+pip install -r requirements.txt
 
 # Check if Redis is running (REQUIRED)
 echo "🔍 Checking Redis status..."
