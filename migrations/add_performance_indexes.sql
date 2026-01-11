@@ -29,12 +29,10 @@ CREATE INDEX IF NOT EXISTS idx_emails_coverage_main ON emails(mailbox_id, sent_d
 CREATE INDEX IF NOT EXISTS idx_email_categories_coverage ON email_categories(email_id) 
   INCLUDE (category, confidence, detection_method);
 
--- Text search optimization (if not already exists from schema)
-CREATE INDEX IF NOT EXISTS idx_emails_sender_email_gin ON emails USING gin(sender_email gin_trgm_ops);
-CREATE INDEX IF NOT EXISTS idx_emails_subject_gin ON emails USING gin(subject gin_trgm_ops);
-
--- Add trigram extension for better text search if not exists
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
+-- Note: Trigram indexes require pg_trgm extension - enable manually if needed:
+-- CREATE EXTENSION IF NOT EXISTS pg_trgm;
+-- CREATE INDEX IF NOT EXISTS idx_emails_sender_email_gin ON emails USING gin(sender_email gin_trgm_ops);
+-- CREATE INDEX IF NOT EXISTS idx_emails_subject_gin ON emails USING gin(subject gin_trgm_ops);
 
 -- Update table statistics for better query planning
 ANALYZE emails;
