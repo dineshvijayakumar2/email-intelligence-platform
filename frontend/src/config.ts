@@ -2,10 +2,6 @@
 // Uses the same variables as backend - no duplication needed
 
 const config = {
-  // Supabase - Use VITE_ prefixed for frontend
-  supabaseUrl: import.meta.env.VITE_SUPABASE_URL || import.meta.env.SUPABASE_URL || '',
-  supabaseAnonKey: import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.SUPABASE_ANON_KEY || '',
-  
   // API - Use full URL in production
   apiBaseUrl: import.meta.env.VITE_API_BASE_URL || import.meta.env.API_BASE_URL || 
     (import.meta.env.PROD ? 'https://backend-production-42f4.up.railway.app/api' : '/api'),

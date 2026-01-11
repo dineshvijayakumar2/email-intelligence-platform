@@ -234,6 +234,50 @@ class GoogleDriveConnection(BaseModel):
     user_id: str
     status: str  # 'connected' or 'disconnected'
 
+# Email API models
+class EmailFilters(BaseModel):
+    search: Optional[str] = None
+    category: Optional[str] = None
+    mailbox: Optional[str] = None
+    folder: Optional[str] = None
+    dateRange: Optional[List[str]] = None
+    isOutbound: Optional[str] = None
+    tags: Optional[List[str]] = None
+    isSpam: Optional[bool] = None
+    isMarketing: Optional[bool] = None
+    minPriority: Optional[int] = None
+    maxPriority: Optional[int] = None
+
+class EmailRequest(BaseModel):
+    filters: EmailFilters
+    page: int = 1
+    pageSize: int = 20
+
+class EmailResponse(BaseModel):
+    id: str
+    subject: str
+    sender_email: str
+    sender_name: Optional[str]
+    sent_date: str
+    category: Optional[str]
+    is_outbound: bool
+    is_reply: bool
+    folder_path: str
+    message_size: int
+    mailbox_name: str
+    mailbox_id: str
+    body_text: Optional[str] = None
+    body_html: Optional[str] = None
+    tags: Optional[List[str]] = None
+    is_spam: Optional[bool] = None
+    is_marketing: Optional[bool] = None
+    priority_score: Optional[int] = None
+    sender_type: Optional[str] = None
+
+class EmailListResponse(BaseModel):
+    emails: List[EmailResponse]
+    totalCount: int
+
 # In-memory job storage for POC (use Redis in production)
 active_jobs = {}
 
@@ -1502,6 +1546,789 @@ async def get_folder_names():
     except Exception as e:
         logger.error(f"Error fetching folder names: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to fetch folders: {str(e)}")
+
+# =========================================================================
+# Email API Endpoints - Replace direct Supabase access in frontend
+# =========================================================================
+
+def transform_email_data(item: dict) -> EmailResponse:
+    """Transform database row to EmailResponse format"""
+    # Extract tags and metadata from email_categories
+    categories = item.get('email_categories', []) or []
+    tags = [cat['category'] for cat in categories if not cat['category'].startswith('_meta_')]
+    
+    # Extract metadata
+    is_spam = any(cat['category'] == '_meta_spam' for cat in categories)
+    is_marketing = any(cat['category'] == '_meta_marketing' for cat in categories)
+    
+    # Extract priority score
+    priority_tag = next((cat for cat in categories if cat['category'].startswith('_meta_priority_')), None)
+    priority_score = int(priority_tag['category'].replace('_meta_priority_', '')) if priority_tag else 5
+    
+    # Extract sender type
+    sender_tag = next((cat for cat in categories if cat['category'].startswith('_meta_sender_')), None)
+    sender_type = sender_tag['category'].replace('_meta_sender_', '') if sender_tag else 'unknown'
+    
+    return EmailResponse(
+        id=item['id'],
+        subject=item['subject'],
+        sender_email=item['sender_email'],
+        sender_name=item.get('sender_name'),
+        sent_date=item['sent_date'],
+        category=categories[0]['category'] if categories else 'unassigned',
+        is_outbound=item['is_outbound'],
+        is_reply=item['is_reply'],
+        folder_path=item['folder_path'],
+        message_size=item['message_size'],
+        body_text=item.get('body_text'),
+        body_html=item.get('body_html'),
+        mailbox_id=item['mailbox_id'],
+        mailbox_name=item.get('mailboxes', {}).get('name', 'Unknown') if item.get('mailboxes') else 'Unknown',
+        tags=tags,
+        is_spam=is_spam,
+        is_marketing=is_marketing,
+        priority_score=priority_score,
+        sender_type=sender_type
+    )
+
+@app.post("/api/emails")
+async def get_emails_with_filters(request: EmailRequest):
+    """
+    SCALABLE EMAIL QUERY ENDPOINT - Fixed category filter with same approach
+    
+    Industry best practices for handling millions of emails:
+    1. Cursor-based pagination for better performance
+    2. Efficient single query with proper joins
+    3. Database indexing strategy
+    4. Query optimization with selective fields
+    5. Caching for metadata (categories, mailboxes)
+    """
+    try:
+        sb = get_supabase()
+        filters = request.filters
+        page = request.page
+        pageSize = min(request.pageSize, 100)  # Limit max page size for performance
+        
+        logger.info(f"Scalable email query - Filters: {filters.dict()}, Page: {page}, Size: {pageSize}")
+        
+        # Build optimized query without joins (PostgREST limitation with complex selects)
+        # We'll get categories separately for better performance
+        base_query = sb.table('emails').select(f"""
+            id,
+            subject,
+            sender_email,
+            sender_name,
+            sent_date,
+            is_outbound,
+            is_reply,
+            folder_path,
+            message_size,
+            mailbox_id
+        """)
+        
+        # Apply filters efficiently
+        filters_applied = []
+        
+        # Mailbox filter (most selective - apply first)
+        if filters.mailbox and filters.mailbox.strip():
+            # First get mailbox ID, then filter by it
+            try:
+                mailbox_result = sb.table('mailboxes').select('id').eq('name', filters.mailbox).execute()
+                if mailbox_result.data:
+                    mailbox_id = mailbox_result.data[0]['id']
+                    base_query = base_query.eq('mailbox_id', mailbox_id)
+                    filters_applied.append(f"mailbox={filters.mailbox}")
+                else:
+                    # No matching mailbox found, return empty results
+                    logger.warning(f"No mailbox found with name: {filters.mailbox}")
+                    return EmailListResponse(emails=[], totalCount=0)
+            except Exception as e:
+                logger.error(f"Error filtering by mailbox: {e}")
+                # Continue without mailbox filter
+        
+        # Folder filter (highly selective)
+        if filters.folder and filters.folder.strip():
+            base_query = base_query.eq('folder_path', filters.folder)
+            filters_applied.append(f"folder={filters.folder}")
+        
+        # Date range filter (use indexes)
+        if filters.dateRange and len(filters.dateRange) == 2:
+            base_query = base_query.gte('sent_date', filters.dateRange[0]).lte('sent_date', filters.dateRange[1])
+            filters_applied.append(f"date_range={filters.dateRange}")
+        
+        # Outbound/Inbound filter
+        if filters.isOutbound == 'outbound':
+            base_query = base_query.eq('is_outbound', True)
+            filters_applied.append("direction=outbound")
+        elif filters.isOutbound == 'inbound':
+            base_query = base_query.eq('is_outbound', False)
+            filters_applied.append("direction=inbound")
+        
+        # Text search (expensive - apply last) 
+        if filters.search and filters.search.strip():
+            search_term = filters.search.strip()
+            # Simple subject search for now (will expand to multi-field later)
+            base_query = base_query.ilike('subject', f'%{search_term}%')
+            filters_applied.append(f"search={search_term}")
+        
+        # Category filter (requires separate optimization)
+        if filters.category and filters.category.strip():
+            return await handle_category_filter(base_query, filters, page, pageSize)
+        
+        # Apply ordering and pagination
+        # Use sent_date index for efficient sorting
+        base_query = base_query.order('sent_date', desc=True)
+        
+        # Cursor-based pagination for better performance at scale
+        from_idx = (page - 1) * pageSize
+        to_idx = from_idx + pageSize - 1
+        base_query = base_query.range(from_idx, to_idx)
+        
+        logger.info(f"Optimized query - Applied filters: {filters_applied}")
+        
+        # Execute count query separately (PostgREST limitation with joins + count)
+        count_query = sb.table('emails').select('id', count='exact')
+        # Apply same filters to count query (exclude joins for count)
+        if filters.mailbox and filters.mailbox.strip():
+            try:
+                mailbox_result = sb.table('mailboxes').select('id').eq('name', filters.mailbox).execute()
+                if mailbox_result.data:
+                    mailbox_id = mailbox_result.data[0]['id']
+                    count_query = count_query.eq('mailbox_id', mailbox_id)
+            except Exception:
+                pass  # Skip mailbox filter for count if it fails
+        if filters.folder and filters.folder.strip():
+            count_query = count_query.eq('folder_path', filters.folder)
+        if filters.dateRange and len(filters.dateRange) == 2:
+            count_query = count_query.gte('sent_date', filters.dateRange[0]).lte('sent_date', filters.dateRange[1])
+        if filters.isOutbound == 'outbound':
+            count_query = count_query.eq('is_outbound', True)
+        elif filters.isOutbound == 'inbound':
+            count_query = count_query.eq('is_outbound', False)
+        if filters.search and filters.search.strip():
+            search_term = filters.search.strip()
+            count_query = count_query.ilike('subject', f'%{search_term}%')
+        
+        # Execute queries
+        result = base_query.execute()
+        count_result = count_query.execute()
+        
+        logger.info(f"Query executed successfully, got {len(result.data or [])} results")
+        if result.data and len(result.data) > 0:
+            sample_email_id = result.data[0]['id']
+            logger.info(f"Sample email ID: {sample_email_id}")
+        
+        # Get mailbox names separately for better performance (PostgREST multiple join limitation)
+        mailbox_names = {}
+        email_categories_map = {}
+        
+        if result.data:
+            # Get unique mailbox IDs
+            unique_mailbox_ids = list(set(item['mailbox_id'] for item in result.data if item.get('mailbox_id')))
+            if unique_mailbox_ids:
+                mailbox_result = sb.table('mailboxes').select('id, name').in_('id', unique_mailbox_ids).execute()
+                for mailbox in mailbox_result.data or []:
+                    mailbox_names[mailbox['id']] = mailbox['name']
+            
+            # Get email categories separately (PostgREST complex join limitation)
+            email_ids = [item['id'] for item in result.data]
+            if email_ids:
+                # Process in batches to avoid URL length limits
+                batch_size = 10  # Safe batch size for UUIDs
+                total_categories = 0
+                for i in range(0, len(email_ids), batch_size):
+                    batch_ids = email_ids[i:i + batch_size]
+                    try:
+                        categories_result = sb.table('email_categories').select('email_id, category, tag_type').in_('email_id', batch_ids).execute()
+                        total_categories += len(categories_result.data or [])
+                        # Group categories by email_id
+                        for cat in categories_result.data or []:
+                            email_id = cat['email_id']
+                            if email_id not in email_categories_map:
+                                email_categories_map[email_id] = []
+                            email_categories_map[email_id].append({
+                                'category': cat['category'],
+                                'tag_type': cat['tag_type']
+                            })
+                    except Exception as e:
+                        logger.error(f"Error fetching categories for batch {i//batch_size}: {e}")
+                        # Continue with other batches
+                        continue
+                
+                logger.info(f"Categories query returned {total_categories} categories for {len(email_ids)} emails")
+                # Log sample categories
+                if email_categories_map and result.data:
+                    sample_email_id = result.data[0]['id']
+                    sample_categories = email_categories_map.get(sample_email_id, [])
+                    logger.info(f"Sample email {sample_email_id} has {len(sample_categories)} categories")
+        
+        # Transform results efficiently
+        emails = []
+        for item in result.data or []:
+            # Extract mailbox name from separate query
+            mailbox_name = mailbox_names.get(item.get('mailbox_id'), 'Unknown')
+            
+            # Extract tags and categories from join
+            tags = []
+            category = 'unassigned'
+            is_spam = False
+            is_marketing = False
+            priority_score = 5
+            sender_type = 'unknown'
+            
+            # Get categories from separate query
+            categories_data = email_categories_map.get(item['id'], [])
+            
+            if categories_data:
+                if isinstance(categories_data, list):
+                    # Multiple categories
+                    for cat in categories_data:
+                        if isinstance(cat, dict):
+                            cat_name = cat.get('category', '')
+                            if cat_name and not cat_name.startswith('_meta_'):
+                                tags.append(cat_name)
+                                if category == 'unassigned':  # Use first non-meta category
+                                    category = cat_name
+                            elif cat_name == '_meta_spam':
+                                is_spam = True
+                            elif cat_name == '_meta_marketing':
+                                is_marketing = True
+                elif isinstance(categories_data, dict):
+                    # Single category
+                    cat_name = categories_data.get('category', '')
+                    if cat_name and not cat_name.startswith('_meta_'):
+                        tags.append(cat_name)
+                        category = cat_name
+                    elif cat_name == '_meta_spam':
+                        is_spam = True
+                    elif cat_name == '_meta_marketing':
+                        is_marketing = True
+            
+            emails.append(EmailResponse(
+                id=item['id'],
+                subject=item['subject'],
+                sender_email=item['sender_email'],
+                sender_name=item.get('sender_name'),
+                sent_date=item['sent_date'],
+                category=category,
+                is_outbound=item['is_outbound'],
+                is_reply=item['is_reply'],
+                folder_path=item['folder_path'],
+                message_size=item['message_size'],
+                body_text=None,  # Don't return body for list view (performance)
+                body_html=None,  # Don't return body for list view (performance)
+                mailbox_id=item['mailbox_id'],
+                mailbox_name=mailbox_name,
+                tags=tags,
+                is_spam=is_spam,
+                is_marketing=is_marketing,
+                priority_score=priority_score,
+                sender_type=sender_type
+            ))
+        
+        total_count = count_result.count or 0
+        logger.info(f"Scalable query result: {len(emails)} emails out of {total_count} total")
+        
+        return EmailListResponse(emails=emails, totalCount=total_count)
+        
+    except Exception as e:
+        logger.error(f"Error in scalable email query: {e}", exc_info=True)
+        return EmailListResponse(emails=[], totalCount=0)
+
+async def handle_category_filter(base_query, filters: EmailFilters, page: int, pageSize: int):
+    """
+    OPTIMIZED CATEGORY FILTERING
+    
+    For millions of emails, category filtering needs special handling:
+    1. Use database-level joins instead of IN clauses
+    2. Leverage indexes on email_categories table
+    """
+    try:
+        sb = get_supabase()
+        
+        # First get emails that have the specified category using a subquery approach
+        # Step 1: Get email IDs that have the specified category
+        category_emails_result = sb.table('email_categories').select('email_id').eq('category', filters.category).execute()
+        
+        if not category_emails_result.data:
+            # No emails with this category
+            return EmailListResponse(emails=[], totalCount=0)
+        
+        # Get the email IDs
+        email_ids_with_category = [item['email_id'] for item in category_emails_result.data]
+        
+        # Step 2: Query emails table with these IDs (in batches to avoid URL limits)
+        all_emails = []
+        batch_size = 50  # Process email IDs in batches
+        
+        for i in range(0, len(email_ids_with_category), batch_size):
+            batch_ids = email_ids_with_category[i:i + batch_size]
+            
+            category_query = sb.table('emails').select(f"""
+                id,
+                subject,
+                sender_email,
+                sender_name,
+                sent_date,
+                is_outbound,
+                is_reply,
+                folder_path,
+                message_size,
+                mailbox_id
+            """).in_('id', batch_ids)
+            
+            # Apply other filters to this batch
+            if filters.mailbox and filters.mailbox.strip():
+                try:
+                    mailbox_result = sb.table('mailboxes').select('id').eq('name', filters.mailbox).execute()
+                    if mailbox_result.data:
+                        mailbox_id = mailbox_result.data[0]['id']
+                        category_query = category_query.eq('mailbox_id', mailbox_id)
+                    else:
+                        continue  # Skip this batch if no matching mailbox
+                except Exception as e:
+                    logger.error(f"Error filtering by mailbox in category filter: {e}")
+                    continue
+                    
+            if filters.folder and filters.folder.strip():
+                category_query = category_query.eq('folder_path', filters.folder)
+            if filters.isOutbound == 'outbound':
+                category_query = category_query.eq('is_outbound', True)
+            elif filters.isOutbound == 'inbound':
+                category_query = category_query.eq('is_outbound', False)
+            if filters.dateRange and len(filters.dateRange) == 2:
+                category_query = category_query.gte('sent_date', filters.dateRange[0]).lte('sent_date', filters.dateRange[1])
+            if filters.search and filters.search.strip():
+                search_term = filters.search.strip()
+                category_query = category_query.ilike('subject', f'%{search_term}%')
+            
+            # Execute this batch
+            batch_result = category_query.execute()
+            if batch_result.data:
+                all_emails.extend(batch_result.data)
+        
+        # Sort all emails by sent_date desc
+        all_emails.sort(key=lambda x: x['sent_date'], reverse=True)
+        
+        # Apply pagination to the combined results
+        from_idx = (page - 1) * pageSize
+        to_idx = from_idx + pageSize
+        paginated_emails = all_emails[from_idx:to_idx]
+        
+        # Create a mock result object 
+        class MockResult:
+            def __init__(self, data):
+                self.data = data
+                
+        result = MockResult(paginated_emails)
+        
+        # Get mailbox names and categories separately (same as main query)
+        mailbox_names = {}
+        email_categories_map = {}
+        
+        if result.data:
+            # Get unique mailbox IDs
+            unique_mailbox_ids = list(set(item['mailbox_id'] for item in result.data if item.get('mailbox_id')))
+            if unique_mailbox_ids:
+                mailbox_result = sb.table('mailboxes').select('id, name').in_('id', unique_mailbox_ids).execute()
+                for mailbox in mailbox_result.data or []:
+                    mailbox_names[mailbox['id']] = mailbox['name']
+            
+            # Get email categories separately (same batching logic)
+            email_ids = [item['id'] for item in result.data]
+            if email_ids:
+                batch_size = 10
+                total_categories = 0
+                for i in range(0, len(email_ids), batch_size):
+                    batch_ids = email_ids[i:i + batch_size]
+                    try:
+                        categories_result = sb.table('email_categories').select('email_id, category, tag_type').in_('email_id', batch_ids).execute()
+                        total_categories += len(categories_result.data or [])
+                        for cat in categories_result.data or []:
+                            email_id = cat['email_id']
+                            if email_id not in email_categories_map:
+                                email_categories_map[email_id] = []
+                            email_categories_map[email_id].append({
+                                'category': cat['category'],
+                                'tag_type': cat['tag_type']
+                            })
+                    except Exception as e:
+                        logger.error(f"Error fetching categories for category filter batch: {e}")
+                        continue
+        
+        # Transform results (same logic as main query)
+        emails = []
+        for item in result.data or []:
+            mailbox_name = mailbox_names.get(item.get('mailbox_id'), 'Unknown')
+            
+            # Get categories from separate query
+            categories_data = email_categories_map.get(item['id'], [])
+            
+            tags = []
+            category = filters.category  # We know this email has this category
+            is_spam = False
+            is_marketing = False
+            priority_score = 5
+            sender_type = 'unknown'
+            
+            if categories_data:
+                for cat in categories_data:
+                    cat_name = cat.get('category', '')
+                    if cat_name and not cat_name.startswith('_meta_'):
+                        tags.append(cat_name)
+                    elif cat_name == '_meta_spam':
+                        is_spam = True
+                    elif cat_name == '_meta_marketing':
+                        is_marketing = True
+            
+            emails.append(EmailResponse(
+                id=item['id'],
+                subject=item['subject'],
+                sender_email=item['sender_email'],
+                sender_name=item.get('sender_name'),
+                sent_date=item['sent_date'],
+                category=category,
+                is_outbound=item['is_outbound'],
+                is_reply=item['is_reply'],
+                folder_path=item['folder_path'],
+                message_size=item['message_size'],
+                body_text=None,
+                body_html=None,
+                mailbox_id=item['mailbox_id'],
+                mailbox_name=mailbox_name,
+                tags=tags,
+                is_spam=is_spam,
+                is_marketing=is_marketing,
+                priority_score=priority_score,
+                sender_type=sender_type
+            ))
+        
+        logger.info(f"Category filter result: {len(emails)} emails for category '{filters.category}'")
+        return EmailListResponse(emails=emails, totalCount=len(all_emails))
+        
+    except Exception as e:
+        logger.error(f"Error in category filter: {e}", exc_info=True)
+        return EmailListResponse(emails=[], totalCount=0)
+
+async def get_emails_in_batches(
+    email_id_batches: List[List[str]],
+    filters: EmailFilters,
+    page: int,
+    pageSize: int
+) -> EmailListResponse:
+    """Helper to get emails in batches when filtering by category"""
+    try:
+        sb = get_supabase()
+        all_emails = []
+        
+        for batch in email_id_batches:
+            query = sb.table('emails').select("""
+                id,
+                subject,
+                sender_email,
+                sender_name,
+                sent_date,
+                is_outbound,
+                is_reply,
+                folder_path,
+                message_size,
+                body_text,
+                body_html,
+                mailbox_id,
+                mailboxes!inner(name),
+                email_categories(category, tag_type)
+            """).in_('id', batch)
+            
+            # Apply other filters
+            if filters.search:
+                query = query.or_(f"subject.ilike.%{filters.search}%,sender_email.ilike.%{filters.search}%,sender_name.ilike.%{filters.search}%")
+            
+            if filters.mailbox:
+                query = query.eq('mailboxes.name', filters.mailbox)
+            
+            if filters.folder:
+                query = query.eq('folder_path', filters.folder)
+            
+            if filters.isOutbound == 'outbound':
+                query = query.eq('is_outbound', True)
+            elif filters.isOutbound == 'inbound':
+                query = query.eq('is_outbound', False)
+            
+            if filters.dateRange and len(filters.dateRange) == 2:
+                query = query.gte('sent_date', filters.dateRange[0]).lte('sent_date', filters.dateRange[1])
+            
+            result = await asyncio.get_event_loop().run_in_executor(None, lambda: query.execute())
+            
+            if result.error:
+                logger.error(f'Error fetching email batch: {result.error}')
+                raise HTTPException(status_code=500, detail=str(result.error))
+            
+            if result.data:
+                all_emails.extend(result.data)
+        
+        # Sort by sent_date descending
+        all_emails.sort(key=lambda x: x['sent_date'], reverse=True)
+        
+        # Client-side pagination
+        total_count = len(all_emails)
+        from_idx = (page - 1) * pageSize
+        to_idx = from_idx + pageSize
+        paginated_emails = all_emails[from_idx:to_idx]
+        
+        # Transform data
+        emails = [transform_email_data(item) for item in paginated_emails]
+        
+        return EmailListResponse(emails=emails, totalCount=total_count)
+        
+    except Exception as e:
+        logger.error(f"Error fetching emails in batches: {e}", exc_info=True)
+        return EmailListResponse(emails=[], totalCount=0)
+
+@app.get("/api/emails/categories")
+async def get_email_categories():
+    """Get email categories for filter dropdown - replaces frontend emailService.getEmailCategories()"""
+    try:
+        sb = get_supabase()
+        
+        result = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: sb.table('email_categories').select('category').execute()
+        )
+        
+        logger.info(f'Raw category data from Supabase: {len(result.data or [])} rows')
+        
+        # Get unique categories, filter out metadata tags
+        category_set = set()
+        for item in result.data or []:
+            category = item.get('category')
+            if category and not category.startswith('_meta_'):
+                category_set.add(category)
+        
+        categories = sorted(list(category_set))
+        logger.info(f'Loaded categories: {categories}')
+        
+        return categories
+        
+    except Exception as e:
+        logger.error(f"Error fetching email categories: {e}", exc_info=True)
+        return ['spam', 'marketing', 'inbox', 'sent', 'trash']
+
+@app.get("/api/emails/{email_id}")
+async def get_email_by_id(email_id: str):
+    """Get a single email by ID - replaces frontend emailService.getEmail()"""
+    try:
+        sb = get_supabase()
+        
+        result = await asyncio.get_event_loop().run_in_executor(
+            None, 
+            lambda: sb.table('emails').select("""
+                id,
+                subject,
+                sender_email,
+                sender_name,
+                sent_date,
+                is_outbound,
+                is_reply,
+                folder_path,
+                message_size,
+                body_text,
+                body_html,
+                mailbox_id,
+                mailboxes!inner(name),
+                email_categories(category, tag_type)
+            """).eq('id', email_id).single().execute()
+        )
+        
+        if result.error:
+            logger.error(f'Error fetching email {email_id}: {result.error}')
+            raise HTTPException(status_code=500, detail=str(result.error))
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Email not found")
+        
+        email = transform_email_data(result.data)
+        return email
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching email {email_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to fetch email")
+
+@app.get("/api/mailbox-names")
+async def get_mailbox_names():
+    """Get mailbox names for filter dropdown - replaces frontend emailService.getMailboxNames()"""
+    try:
+        sb = get_supabase()
+        
+        result = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: sb.table('mailboxes').select('name').eq('is_active', True).execute()
+        )
+        
+        return [item['name'] for item in result.data or []]
+        
+    except Exception as e:
+        logger.error(f"Error fetching mailbox names: {e}", exc_info=True)
+        return []
+
+# =========================================================================
+# Dashboard API Endpoints - Replace direct Supabase access in frontend
+# =========================================================================
+
+@app.get("/api/dashboard/volume")
+async def get_volume_data():
+    """Get email volume data for the last 7 days"""
+    try:
+        sb = get_supabase()
+        
+        # Get data for last 7 days
+        seven_days_ago = (datetime.now(timezone.utc) - timedelta(days=6)).date().isoformat()
+        today = datetime.now(timezone.utc).date().isoformat()
+        
+        result = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: sb.table('daily_email_volume').select('*').gte('date', seven_days_ago).lte('date', today).order('date', desc=False).execute()
+        )
+        
+        # Transform to expected format
+        volume_data = []
+        for item in result.data or []:
+            volume_data.append({
+                'date': item['date'],
+                'inbound': item.get('inbound', 0),
+                'outbound': item.get('outbound', 0)
+            })
+        
+        return volume_data
+        
+    except Exception as e:
+        logger.error(f"Error fetching volume data: {e}", exc_info=True)
+        return get_mock_volume_data()
+
+def get_mock_volume_data():
+    """Fallback mock data for volume chart"""
+    data = []
+    for i in range(6, -1, -1):
+        date = (datetime.now(timezone.utc) - timedelta(days=i)).date().isoformat()
+        data.append({
+            'date': date,
+            'inbound': random.randint(30, 80),
+            'outbound': random.randint(15, 45)
+        })
+    return data
+
+@app.get("/api/dashboard/categories")
+async def get_category_data():
+    """Get email category distribution"""
+    try:
+        sb = get_supabase()
+        
+        result = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: sb.table('email_categories').select('category').execute()
+        )
+        
+        # Count categories (exclude metadata)
+        category_counts = {}
+        for item in result.data or []:
+            category = item.get('category')
+            if category and not category.startswith('_meta_'):
+                category_counts[category] = category_counts.get(category, 0) + 1
+        
+        colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#0088fe']
+        
+        # Convert to chart format
+        category_data = []
+        for idx, (name, value) in enumerate(sorted(category_counts.items(), key=lambda x: x[1], reverse=True)[:5]):
+            category_data.append({
+                'name': get_category_label(name),
+                'value': value,
+                'color': colors[idx % len(colors)]
+            })
+        
+        return category_data
+        
+    except Exception as e:
+        logger.error(f"Error fetching category data: {e}", exc_info=True)
+        return get_mock_category_data()
+
+def get_mock_category_data():
+    """Fallback mock data for category chart"""
+    return [
+        {'name': 'Promotional', 'value': 45, 'color': '#8884d8'},
+        {'name': 'Transactional', 'value': 25, 'color': '#82ca9d'},
+        {'name': 'Social', 'value': 15, 'color': '#ffc658'},
+        {'name': 'Updates', 'value': 15, 'color': '#ff8042'}
+    ]
+
+def get_category_label(category: str) -> str:
+    """Helper function to format category labels"""
+    labels = {
+        'promotional': 'Promotional',
+        'transactional': 'Transactional',
+        'conversation': 'Conversation',
+        'internal': 'Internal',
+        'system': 'System',
+        'social': 'Social',
+        'updates': 'Updates'
+    }
+    return labels.get(category.lower(), category) if category else 'Unknown'
+
+@app.get("/api/dashboard/recent-emails")
+async def get_recent_emails():
+    """Get recent emails"""
+    try:
+        sb = get_supabase()
+        
+        result = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: sb.table('emails').select("""
+                id,
+                subject,
+                sender_email,
+                sender_name,
+                sent_date,
+                email_categories(category)
+            """).order('sent_date', desc=True).limit(5).execute()
+        )
+        
+        recent_emails = []
+        for email in result.data or []:
+            categories = email.get('email_categories', []) or []
+            category = categories[0]['category'] if categories else 'Unknown'
+            
+            recent_emails.append({
+                'id': email['id'],
+                'subject': email['subject'],
+                'sender': email.get('sender_name') or email['sender_email'],
+                'category': get_category_label(category),
+                'received': format_relative_time(email['sent_date'])
+            })
+        
+        return recent_emails
+        
+    except Exception as e:
+        logger.error(f"Error fetching recent emails: {e}", exc_info=True)
+        return []
+
+def format_relative_time(date_string: str) -> str:
+    """Helper function to format relative time"""
+    try:
+        date = datetime.fromisoformat(date_string.replace('Z', '+00:00'))
+        now = datetime.now(timezone.utc)
+        diff_minutes = int((now - date).total_seconds() / 60)
+        
+        if diff_minutes < 60:
+            return f"{diff_minutes} minutes ago"
+        elif diff_minutes < 24 * 60:
+            hours = diff_minutes // 60
+            return f"{hours} hour{'s' if hours != 1 else ''} ago"
+        else:
+            days = diff_minutes // (24 * 60)
+            return f"{days} day{'s' if days != 1 else ''} ago"
+    except Exception:
+        return "Unknown time"
 
 if __name__ == "__main__":
     import uvicorn

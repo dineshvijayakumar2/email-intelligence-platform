@@ -1,4 +1,4 @@
-import { supabaseClient } from '../supabase';
+import config from '../config';
 
 export interface DashboardStats {
   totalEmails: number;
@@ -29,38 +29,17 @@ export interface RecentEmail {
 }
 
 export const dashboardService = {
-  // Get dashboard statistics
+  // Get dashboard statistics - now uses backend API
   async getDashboardStats(): Promise<DashboardStats> {
     try {
-      // Get total emails
-      const { count: totalEmails } = await supabaseClient
-        .from('emails')
-        .select('*', { count: 'exact', head: true });
-
-      // Get total mailboxes
-      const { count: totalMailboxes } = await supabaseClient
-        .from('mailboxes')
-        .select('*', { count: 'exact', head: true });
-
-      // Get today's emails
-      const today = new Date().toISOString().split('T')[0];
-      const { count: todayEmails } = await supabaseClient
-        .from('emails')
-        .select('*', { count: 'exact', head: true })
-        .gte('sent_date', today);
-
-      // Get processing jobs count (if table exists)
-      const { count: processingJobs } = await supabaseClient
-        .from('processing_jobs')
-        .select('*', { count: 'exact', head: true })
-        .in('status', ['pending', 'running']);
-
-      return {
-        totalEmails: totalEmails || 0,
-        totalMailboxes: totalMailboxes || 0,
-        todayEmails: todayEmails || 0,
-        processingJobs: processingJobs || 0,
-      };
+      const response = await fetch(`${config.apiBaseUrl}/dashboard/stats`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const stats = await response.json();
+      return stats;
     } catch (error) {
       console.error('Error fetching dashboard stats:', error);
       // Return default values if there's an error
@@ -73,31 +52,17 @@ export const dashboardService = {
     }
   },
 
-  // Get email volume data for the last 7 days
+  // Get email volume data for the last 7 days - now uses backend API
   async getVolumeData(): Promise<VolumeData[]> {
     try {
-      // Use the daily_email_volume view from your schema
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+      const response = await fetch(`${config.apiBaseUrl}/dashboard/volume`);
       
-      const { data, error } = await supabaseClient
-        .from('daily_email_volume')
-        .select('*')
-        .gte('date', sevenDaysAgo.toISOString().split('T')[0])
-        .lte('date', new Date().toISOString().split('T')[0])
-        .order('date', { ascending: true });
-
-      if (error) {
-        console.error('Error fetching volume data:', error);
-        return this.getMockVolumeData();
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-
-      // Transform to match expected format
-      return (data || []).map(item => ({
-        date: item.date,
-        inbound: item.inbound || 0,
-        outbound: item.outbound || 0
-      }));
+      
+      const volumeData = await response.json();
+      return volumeData;
     } catch (error) {
       console.error('Error fetching volume data:', error);
       return this.getMockVolumeData();
@@ -119,36 +84,17 @@ export const dashboardService = {
     return data;
   },
 
-  // Get email category distribution
+  // Get email category distribution - now uses backend API
   async getCategoryData(): Promise<CategoryData[]> {
     try {
-      const { data, error } = await supabaseClient
-        .from('email_categories')
-        .select('category');
-
-      if (error) {
-        console.error('Error fetching category data:', error);
-        return this.getMockCategoryData();
-      }
-
-      // Count categories
-      const categoryCounts: { [key: string]: number } = {};
-      data?.forEach(item => {
-        if (item.category) {
-          categoryCounts[item.category] = (categoryCounts[item.category] || 0) + 1;
-        }
-      });
-
-      const colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#0088fe'];
+      const response = await fetch(`${config.apiBaseUrl}/dashboard/categories`);
       
-      return Object.entries(categoryCounts)
-        .map(([name, value], index) => ({
-          name: this.getCategoryLabel(name),
-          value,
-          color: colors[index % colors.length]
-        }))
-        .sort((a, b) => b.value - a.value)
-        .slice(0, 5); // Top 5 categories
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const categoryData = await response.json();
+      return categoryData;
     } catch (error) {
       console.error('Error fetching category data:', error);
       return this.getMockCategoryData();
@@ -165,34 +111,17 @@ export const dashboardService = {
     ];
   },
 
-  // Get recent emails
+  // Get recent emails - now uses backend API
   async getRecentEmails(): Promise<RecentEmail[]> {
     try {
-      const { data, error } = await supabaseClient
-        .from('emails')
-        .select(`
-          id, 
-          subject, 
-          sender_email, 
-          sender_name, 
-          sent_date,
-          email_categories(category)
-        `)
-        .order('sent_date', { ascending: false })
-        .limit(5);
-
-      if (error) {
-        console.error('Error fetching recent emails:', error);
-        return [];
+      const response = await fetch(`${config.apiBaseUrl}/dashboard/recent-emails`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-
-      return (data || []).map(email => ({
-        id: email.id,
-        subject: email.subject,
-        sender: email.sender_name || email.sender_email,
-        category: this.getCategoryLabel(email.email_categories?.[0]?.category),
-        received: this.formatRelativeTime(email.sent_date),
-      }));
+      
+      const recentEmails = await response.json();
+      return recentEmails;
     } catch (error) {
       console.error('Error fetching recent emails:', error);
       return [];
