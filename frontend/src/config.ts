@@ -6,8 +6,9 @@ const config = {
   supabaseUrl: import.meta.env.VITE_SUPABASE_URL || import.meta.env.SUPABASE_URL || '',
   supabaseAnonKey: import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.SUPABASE_ANON_KEY || '',
   
-  // API
-  apiBaseUrl: import.meta.env.VITE_API_BASE_URL || import.meta.env.API_BASE_URL || '/api',
+  // API - Use full URL in production
+  apiBaseUrl: import.meta.env.VITE_API_BASE_URL || import.meta.env.API_BASE_URL || 
+    (import.meta.env.PROD ? 'https://backend-production-42f4.up.railway.app/api' : '/api'),
   
   // Google Drive
   googleClientId: import.meta.env.VITE_GOOGLE_CLIENT_ID || import.meta.env.GOOGLE_CLIENT_ID || '',

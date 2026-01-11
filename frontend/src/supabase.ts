@@ -1,7 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
+import config from './config';
 
-// Use centralized environment variables (loaded by Vite from root .env files)
-const supabaseUrl = import.meta.env.SUPABASE_URL || "https://pimoidzoxjzdzcccjneg.supabase.co";
-const supabaseAnonKey = import.meta.env.SUPABASE_ANON_KEY || "REMOVED_ANON_KEY";
+// Use config for Supabase URL and key (supports VITE_ prefix)
+const supabaseUrl = config.supabaseUrl;
+const supabaseAnonKey = config.supabaseAnonKey;
 
+// Note: Direct Supabase access should be replaced with backend API calls
+// This is kept temporarily for backward compatibility
 export const supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
