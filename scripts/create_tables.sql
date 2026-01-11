@@ -4,6 +4,9 @@
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- Enable trigram extension for better text search
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
 -- Mailboxes table for multi-mailbox support
 CREATE TABLE mailboxes (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -137,14 +140,42 @@ CREATE INDEX idx_folders_mailbox_id ON folders(mailbox_id);
 CREATE INDEX idx_processing_jobs_mailbox ON processing_jobs(mailbox_id);
 CREATE INDEX idx_user_integrations_user_provider ON user_integrations(user_id, provider);
 
+-- Email categories table indexes (critical for tag queries)
+CREATE INDEX idx_email_categories_email_id ON email_categories(email_id);
+CREATE INDEX idx_email_categories_category ON email_categories(category);
+CREATE INDEX idx_email_categories_email_category ON email_categories(email_id, category);
+
+-- Additional email table indexes for filtering (based on existing schema)
+
+-- Processing jobs performance indexes
+CREATE INDEX idx_processing_jobs_status ON processing_jobs(status);
+CREATE INDEX idx_processing_jobs_type_status ON processing_jobs(job_type, status);
+CREATE INDEX idx_processing_jobs_created_at ON processing_jobs(created_at DESC);
+
+-- User integrations performance indexes
+CREATE INDEX idx_user_integrations_token_expires ON user_integrations(token_expires_at) WHERE token_expires_at IS NOT NULL;
+
 -- Full-text search indexes
 CREATE INDEX idx_emails_subject_fts ON emails USING gin(to_tsvector('english', subject));
 CREATE INDEX idx_emails_body_fts ON emails USING gin(to_tsvector('english', COALESCE(body_text, '')));
+
+-- Trigram indexes for partial text matching
+CREATE INDEX idx_emails_sender_email_gin ON emails USING gin(sender_email gin_trgm_ops);
+CREATE INDEX idx_emails_subject_gin ON emails USING gin(subject gin_trgm_ops);
 
 -- Composite indexes for common queries
 CREATE INDEX idx_emails_folder_date ON emails(folder_path, sent_date DESC);
 CREATE INDEX idx_emails_sender_date ON emails(sender_email, sent_date DESC);
 CREATE INDEX idx_emails_mailbox_folder_date ON emails(mailbox_id, folder_path, sent_date DESC);
+CREATE INDEX idx_emails_mailbox_date_outbound ON emails(mailbox_id, sent_date DESC, is_outbound);
+CREATE INDEX idx_emails_mailbox_sender_date ON emails(mailbox_id, sender_email, sent_date DESC);
+CREATE INDEX idx_emails_mailbox_folder_outbound ON emails(mailbox_id, folder_path, is_outbound);
+
+-- Covering indexes for performance (includes frequently selected columns)
+CREATE INDEX idx_emails_coverage_main ON emails(mailbox_id, sent_date DESC) 
+  INCLUDE (id, subject, sender_email, sender_name, is_outbound, is_reply, folder_path, message_size);
+CREATE INDEX idx_email_categories_coverage ON email_categories(email_id) 
+  INCLUDE (category, confidence, detection_method);
 
 -- Updated timestamp trigger
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -300,3 +331,10 @@ $$ LANGUAGE plpgsql;
 -- Grant permissions (adjust based on your Supabase setup)
 -- GRANT ALL ON ALL TABLES IN SCHEMA public TO authenticated;
 -- GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated;
+
+-- Update table statistics for better query planning
+ANALYZE emails;
+ANALYZE email_categories;
+ANALYZE processing_jobs;
+ANALYZE mailboxes;
+ANALYZE folders;
