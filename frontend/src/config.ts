@@ -2,9 +2,8 @@
 // Uses the same variables as backend - no duplication needed
 
 const config = {
-  // API - Use full URL in production
-  apiBaseUrl: import.meta.env.VITE_API_BASE_URL || import.meta.env.API_BASE_URL || 
-    (import.meta.env.PROD ? 'https://backend-production-42f4.up.railway.app/api' : '/api'),
+  // API - Use environment variable, fallback to relative path
+  apiBaseUrl: import.meta.env.VITE_API_BASE_URL || import.meta.env.API_BASE_URL || '/api',
   
   // Google Drive
   googleClientId: import.meta.env.VITE_GOOGLE_CLIENT_ID || import.meta.env.GOOGLE_CLIENT_ID || '',
