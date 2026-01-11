@@ -78,11 +78,14 @@ frontend/node_modules/
 frontend/build/
 frontend/dist/
 frontend/.env.local
+frontend/.env.development
 frontend/.env.production
 
 # Backend
 backend/__pycache__/
 backend/.env
+backend/.env.development
+backend/.env.production
 
 # Root
 node_modules/

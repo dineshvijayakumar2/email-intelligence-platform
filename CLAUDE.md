@@ -120,7 +120,9 @@ Frontend → FastAPI → ThreadPool (20 workers) → Email Processing Pipeline
 
 #### Environment Configuration
 
-Single .env file in root directory:
+Separate environment files for backend and frontend:
+
+**Backend Environment (`backend/.env.development` or `backend/.env.production`)**:
 ```
 # Supabase Configuration
 SUPABASE_URL=https://your-project.supabase.co
@@ -128,7 +130,8 @@ SUPABASE_ANON_KEY=your_anon_key
 SUPABASE_SERVICE_KEY=your_service_role_key
 
 # Redis Configuration (REQUIRED)
-REDIS_URL=redis://localhost:6379
+REDIS_URL=redis://localhost:6379  # Development
+REDIS_URL=${Redis.REDIS_URL}       # Production (Railway)
 REDIS_TTL_DAYS=7
 
 # Google Drive API Configuration
@@ -137,10 +140,23 @@ GOOGLE_CLIENT_SECRET=your_google_client_secret
 GOOGLE_REDIRECT_URI=http://localhost:3000/auth/google/callback
 
 # API Configuration
-API_BASE_URL=http://localhost:8000/api
+API_HOST=0.0.0.0
+API_PORT=8000
+SECRET_KEY=your_secret_key
 ```
 
-Note: Frontend environment variables are automatically loaded from root .env by start-poc.sh script.
+**Frontend Environment (`frontend/.env.development` or `frontend/.env.production`)**:
+```
+# API Configuration
+VITE_API_BASE_URL=http://localhost:8000/api  # Development
+VITE_API_BASE_URL=https://${{backend.RAILWAY_PRIVATE_DOMAIN}}/api  # Production
+
+# Google Drive Configuration
+VITE_GOOGLE_CLIENT_ID=your_google_client_id
+VITE_GOOGLE_REDIRECT_URI=http://localhost:3000/auth/google/callback
+```
+
+Note: Example files are provided as `.env.example` in each directory. Environment files are ignored by git for security.
 
 ### File Structure Changes
 
@@ -148,12 +164,16 @@ Note: Frontend environment variables are automatically loaded from root .env by 
 - **frontend/src/config.js**: Central configuration file
 - **frontend/src/services/googleDriveService.ts**: Google Drive API integration
 - **frontend/src/components/GoogleDrivePicker.tsx**: File selection UI
+- **Environment files**: Separated by service
+  - **backend/.env.development**, **backend/.env.production**: Backend-specific configuration
+  - **frontend/.env.development**, **frontend/.env.production**: Frontend-specific configuration
+  - **backend/.env.example**, **frontend/.env.example**: Template files for reference
 - **src/storage/** (Jan 8, 2025): New cloud storage streaming modules
   - **remote_zip_google_drive.py**: RemoteZip implementation for Google Drive
   - **google_drive_stream.py**: Streaming wrapper for Drive files
   - **cloud_stream_wrapper.py**: Base streaming interface
   - **smart_zip_reader.py**: Efficient ZIP Central Directory scanner
-- Removed: test_*.py files from root, POC documentation files
+- Removed: test_*.py files from root, POC documentation files, centralized .env files
 
 ### Instructions
 Please follow the below best practices while doing coding.
