@@ -159,9 +159,9 @@ CREATE INDEX idx_user_integrations_token_expires ON user_integrations(token_expi
 CREATE INDEX idx_emails_subject_fts ON emails USING gin(to_tsvector('english', subject));
 CREATE INDEX idx_emails_body_fts ON emails USING gin(to_tsvector('english', COALESCE(body_text, '')));
 
--- Trigram indexes for partial text matching
-CREATE INDEX idx_emails_sender_email_gin ON emails USING gin(sender_email gin_trgm_ops);
-CREATE INDEX idx_emails_subject_gin ON emails USING gin(subject gin_trgm_ops);
+-- Trigram indexes for partial text matching (requires pg_trgm extension)
+-- CREATE INDEX idx_emails_sender_email_gin ON emails USING gin(sender_email gin_trgm_ops);
+-- CREATE INDEX idx_emails_subject_gin ON emails USING gin(subject gin_trgm_ops);
 
 -- Composite indexes for common queries
 CREATE INDEX idx_emails_folder_date ON emails(folder_path, sent_date DESC);
