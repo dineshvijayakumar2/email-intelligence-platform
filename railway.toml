@@ -1,0 +1,33 @@
+# Railway Configuration File
+# This file documents the environment variables needed for deployment
+
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT"
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+restartPolicyType = "on-failure"
+restartPolicyMaxRetries = 3
+
+# Environment Variables to set in Railway Dashboard:
+# 
+# Backend Service:
+# - PYTHON_ENV=production
+# - ALLOWED_ORIGINS=https://${{frontend.RAILWAY_PUBLIC_DOMAIN}}
+# - SUPABASE_URL=<your-supabase-url>
+# - SUPABASE_ANON_KEY=<your-supabase-anon-key>
+# - SUPABASE_SERVICE_KEY=<your-supabase-service-key>
+# - REDIS_URL=${{Redis.REDIS_URL}}
+# - REDIS_TTL_DAYS=30
+# - GOOGLE_CLIENT_ID=<your-google-client-id>
+# - GOOGLE_CLIENT_SECRET=<your-google-client-secret>
+# - GOOGLE_REDIRECT_URI=https://${{frontend.RAILWAY_PUBLIC_DOMAIN}}/auth/google/callback
+# - SECRET_KEY=<your-secret-key>
+#
+# Frontend Service:
+# - NODE_ENV=production
+# - VITE_API_BASE_URL=https://${{backend.RAILWAY_PUBLIC_DOMAIN}}/api
+# - VITE_GOOGLE_CLIENT_ID=<your-google-client-id>
+# - VITE_GOOGLE_REDIRECT_URI=https://${{frontend.RAILWAY_PUBLIC_DOMAIN}}/auth/google/callback
