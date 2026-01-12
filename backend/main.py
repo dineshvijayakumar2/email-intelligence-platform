@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks  # v9 - industry-standard RemoteZip implementation
+from fastapi import FastAPI, HTTPException, BackgroundTasks  # v10 - fix Google Drive OAuth popup redirect URI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
@@ -414,10 +414,16 @@ async def exchange_oauth_code(request: OAuth2ExchangeRequest):
         logger.info(f"✅ Token exchange successful, storing tokens...")
         
         # Store tokens securely in database
+        access_token = flow.credentials.token
+        refresh_token = flow.credentials.refresh_token
+        
+        if not access_token:
+            raise HTTPException(status_code=500, detail="No access token received from Google")
+            
         success = store_user_google_tokens(
             user_id=request.user_id,
-            access_token=flow.credentials.token,
-            refresh_token=flow.credentials.refresh_token
+            access_token=access_token,
+            refresh_token=refresh_token or ""
         )
         
         if not success:
