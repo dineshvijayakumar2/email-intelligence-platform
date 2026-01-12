@@ -1608,6 +1608,17 @@ def transform_email_data(item: dict) -> EmailResponse:
         sender_type=sender_type
     )
 
+@app.options("/api/emails")
+async def emails_preflight():
+    """Handle CORS preflight for POST /api/emails"""
+    from fastapi.responses import Response
+    
+    response = Response()
+    response.headers["Access-Control-Allow-Origin"] = "*"  # Temporary - will be overridden by middleware
+    response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    return response
+
 @app.post("/api/emails")
 async def get_emails_with_filters(request: EmailRequest):
     """
