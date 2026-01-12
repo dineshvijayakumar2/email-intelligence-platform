@@ -67,6 +67,21 @@ logger.info(f"Running in {python_env} mode")
 
 app = FastAPI(title="Email Intelligence API", version="1.0.0")
 
+# Configure CORS for frontend access
+# Parse allowed origins from environment variable (comma-separated)
+allowed_origins_str = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
+allowed_origins = [origin.strip() for origin in allowed_origins_str.split(",")]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+)
+
+logger.info(f"CORS configured with allowed origins: {allowed_origins}")
+
 # Configure thread pool for concurrent job processing
 # Allows up to 20 concurrent background jobs (file processing is I/O bound)
 # This ensures multiple mailboxes can be processed simultaneously
