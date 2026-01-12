@@ -372,15 +372,28 @@ def update_user_access_token(user_id: str, new_access_token: str) -> bool:
 async def exchange_oauth_code(request: OAuth2ExchangeRequest):
     """Exchange OAuth2 authorization code for tokens and store securely"""
     try:
+        logger.info(f"🔐 Starting OAuth2 token exchange for user: {request.user_id}")
+        
+        # Validate required environment variables
+        client_id = os.getenv("GOOGLE_CLIENT_ID")
+        client_secret = os.getenv("GOOGLE_CLIENT_SECRET") 
+        redirect_uri = os.getenv("GOOGLE_REDIRECT_URI")
+        
+        if not client_id or not client_secret:
+            logger.error("❌ Missing Google OAuth credentials")
+            raise HTTPException(status_code=500, detail="Server configuration error: Missing Google credentials")
+            
+        logger.info(f"🔧 Using redirect URI: {redirect_uri}")
+        
         # Create OAuth2 flow
         flow = Flow.from_client_config(
             {
                 "web": {
-                    "client_id": os.getenv("GOOGLE_CLIENT_ID"),
-                    "client_secret": os.getenv("GOOGLE_CLIENT_SECRET"),
+                    "client_id": client_id,
+                    "client_secret": client_secret,
                     "auth_uri": "https://accounts.google.com/o/oauth2/auth",
                     "token_uri": "https://oauth2.googleapis.com/token",
-                    "redirect_uris": [os.getenv("GOOGLE_REDIRECT_URI")]
+                    "redirect_uris": [redirect_uri]
                 }
             },
             scopes=[
@@ -391,10 +404,14 @@ async def exchange_oauth_code(request: OAuth2ExchangeRequest):
             ]
         )
         
-        flow.redirect_uri = os.getenv("GOOGLE_REDIRECT_URI")
+        flow.redirect_uri = redirect_uri
+        
+        logger.info(f"🔄 Exchanging authorization code...")
         
         # Exchange authorization code for tokens
         flow.fetch_token(code=request.code)
+        
+        logger.info(f"✅ Token exchange successful, storing tokens...")
         
         # Store tokens securely in database
         success = store_user_google_tokens(
@@ -404,7 +421,10 @@ async def exchange_oauth_code(request: OAuth2ExchangeRequest):
         )
         
         if not success:
+            logger.error(f"❌ Failed to store tokens for user: {request.user_id}")
             raise HTTPException(status_code=500, detail="Failed to store Google Drive tokens")
+        
+        logger.info(f"✅ Google Drive connection successful for user: {request.user_id}")
         
         return {
             "status": "success",
@@ -413,7 +433,9 @@ async def exchange_oauth_code(request: OAuth2ExchangeRequest):
         }
         
     except Exception as e:
-        logger.error(f"OAuth2 token exchange failed: {e}")
+        logger.error(f"❌ OAuth2 token exchange failed for user {request.user_id}: {e}")
+        logger.error(f"❌ Exception type: {type(e).__name__}")
+        logger.error(f"❌ Exception details: {str(e)}")
         raise HTTPException(status_code=400, detail=f"Token exchange failed: {str(e)}")
 
 @app.get("/api/auth/google/status/{user_id}")
