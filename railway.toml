@@ -8,8 +8,6 @@ builder = "nixpacks"
 startCommand = "cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT"
 healthcheckPath = "/health"
 healthcheckTimeout = 30
-restartPolicyType = "on-failure"
-restartPolicyMaxRetries = 3
 
 # Environment Variables to set in Railway Dashboard:
 # 
