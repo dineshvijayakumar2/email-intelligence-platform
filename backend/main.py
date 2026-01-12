@@ -93,6 +93,14 @@ app.add_middleware(
 
 logger.info(f"CORS middleware configured - Origins: {allowed_origins}, Credentials: {allow_credentials}")
 
+# Global OPTIONS handler to fix CORS preflight issues
+@app.options("/{path:path}")
+async def options_handler(path: str):
+    """Global OPTIONS handler for all CORS preflight requests"""
+    return {"status": "ok"}
+
+logger.info("Global OPTIONS handler configured for all routes")
+
 # Configure thread pool for concurrent job processing
 # Allows up to 20 concurrent background jobs (file processing is I/O bound)
 # This ensures multiple mailboxes can be processed simultaneously
@@ -367,11 +375,6 @@ def update_user_access_token(user_id: str, new_access_token: str) -> bool:
 # =========================================================================
 # Google Drive OAuth2 Integration Endpoints
 # =========================================================================
-
-@app.options("/api/auth/google/exchange")
-async def google_exchange_options():
-    """Handle CORS preflight for Google OAuth token exchange"""
-    return {"status": "ok"}
 
 @app.post("/api/auth/google/exchange")
 async def exchange_oauth_code(request: OAuth2ExchangeRequest):
@@ -1621,11 +1624,6 @@ def transform_email_data(item: dict) -> EmailResponse:
         priority_score=priority_score,
         sender_type=sender_type
     )
-
-@app.options("/api/emails")
-async def emails_options():
-    """Explicit OPTIONS handler to fix CORS preflight"""
-    return {"status": "ok"}
 
 @app.post("/api/emails")
 async def get_emails_with_filters(request: EmailRequest):
