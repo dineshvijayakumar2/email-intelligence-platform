@@ -68,7 +68,7 @@ app = FastAPI(title="Email Intelligence API", version="1.0.0")
 
 # Configure CORS for frontend access
 # Parse allowed origins from environment variable (comma-separated)
-allowed_origins_str = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
+allowed_origins_str = os.getenv("ALLOWED_ORIGINS", "*")
 
 # Log the raw environment variable to debug Railway variable resolution
 logger.info(f"Raw ALLOWED_ORIGINS env var: '{allowed_origins_str}'")
@@ -205,14 +205,6 @@ def update_job_progress_redis(job_id: str, processed: int, failed: int = 0, sync
 
     return should_sync
 
-# Enable CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # Supabase client - lazy initialization to ensure env vars are loaded
 _supabase_client = None
