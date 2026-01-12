@@ -368,6 +368,11 @@ def update_user_access_token(user_id: str, new_access_token: str) -> bool:
 # Google Drive OAuth2 Integration Endpoints
 # =========================================================================
 
+@app.options("/api/auth/google/exchange")
+async def google_exchange_options():
+    """Handle CORS preflight for Google OAuth token exchange"""
+    return {"status": "ok"}
+
 @app.post("/api/auth/google/exchange")
 async def exchange_oauth_code(request: OAuth2ExchangeRequest):
     """Exchange OAuth2 authorization code for tokens and store securely"""
