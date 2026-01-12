@@ -1617,6 +1617,11 @@ def transform_email_data(item: dict) -> EmailResponse:
         sender_type=sender_type
     )
 
+@app.options("/api/emails")
+async def emails_options():
+    """Explicit OPTIONS handler to fix CORS preflight"""
+    return {"status": "ok"}
+
 @app.post("/api/emails")
 async def get_emails_with_filters(request: EmailRequest):
     """
