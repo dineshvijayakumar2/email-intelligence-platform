@@ -44,24 +44,23 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Load environment variables from parent directory
-# Check for environment-specific files first, then fallback to .env
-parent_dir = os.path.join(os.path.dirname(__file__), '..')
+# Load environment variables from backend directory
 python_env = os.getenv('PYTHON_ENV', 'development')  # default to development
+backend_dir = os.path.dirname(__file__)
 
-# Try environment-specific file first
-env_file = os.path.join(parent_dir, f'.env.{python_env}')
+# Try environment-specific file first in backend directory
+env_file = os.path.join(backend_dir, f'.env.{python_env}')
 if os.path.exists(env_file):
     load_dotenv(dotenv_path=env_file)
     logger.info(f"Loading {python_env} environment variables from: {env_file}")
 else:
-    # Fallback to generic .env file
-    fallback_env = os.path.join(parent_dir, '.env')
+    # Fallback to generic .env file in backend directory
+    fallback_env = os.path.join(backend_dir, '.env')
     if os.path.exists(fallback_env):
         load_dotenv(dotenv_path=fallback_env)
         logger.info(f"Loading environment variables from: {fallback_env}")
     else:
-        logger.warning("No .env file found! Please create .env.development or .env file")
+        logger.warning("No .env file found! Please create backend/.env.development or backend/.env file")
 
 logger.info(f"Running in {python_env} mode")
 
@@ -70,7 +69,10 @@ app = FastAPI(title="Email Intelligence API", version="1.0.0")
 # Configure CORS for frontend access
 # Parse allowed origins from environment variable (comma-separated)
 allowed_origins_str = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
-allowed_origins = [origin.strip() for origin in allowed_origins_str.split(",")]
+allowed_origins = [origin.strip() for origin in allowed_origins_str.split(",") if origin.strip()]
+
+# Log the raw environment variable to debug Railway variable resolution
+logger.info(f"Raw ALLOWED_ORIGINS env var: '{allowed_origins_str}'")
 
 app.add_middleware(
     CORSMiddleware,
