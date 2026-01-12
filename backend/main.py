@@ -264,7 +264,7 @@ class EmailFilters(BaseModel):
     maxPriority: Optional[int] = None
 
 class EmailRequest(BaseModel):
-    filters: EmailFilters
+    filters: EmailFilters = EmailFilters()  # Make filters optional with default empty filters
     page: int = 1
     pageSize: int = 20
 
