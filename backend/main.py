@@ -69,20 +69,29 @@ app = FastAPI(title="Email Intelligence API", version="1.0.0")
 # Configure CORS for frontend access
 # Parse allowed origins from environment variable (comma-separated)
 allowed_origins_str = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
-allowed_origins = [origin.strip() for origin in allowed_origins_str.split(",") if origin.strip()]
 
 # Log the raw environment variable to debug Railway variable resolution
 logger.info(f"Raw ALLOWED_ORIGINS env var: '{allowed_origins_str}'")
 
+# Handle wildcard or specific origins
+if allowed_origins_str.strip() == "*":
+    allowed_origins = ["*"]
+    allow_credentials = False  # Must be False for wildcard
+    logger.info("Using wildcard CORS origin (*)")
+else:
+    allowed_origins = [origin.strip() for origin in allowed_origins_str.split(",") if origin.strip()]
+    allow_credentials = True
+    logger.info(f"Using specific CORS origins: {allowed_origins}")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_credentials=True,
+    allow_credentials=allow_credentials,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
-logger.info(f"CORS configured with allowed origins: {allowed_origins}")
+logger.info(f"CORS middleware configured - Origins: {allowed_origins}, Credentials: {allow_credentials}")
 
 # Configure thread pool for concurrent job processing
 # Allows up to 20 concurrent background jobs (file processing is I/O bound)
