@@ -2,8 +2,13 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Recent Improvements (Jan 8, 2025)
+## Recent Improvements
 
+### Jan 14, 2026
+1. **MBOX Streaming**: MBOX files now stream from Google Drive (no download) - consistent with OLM streaming
+2. **Unified Streaming Architecture**: Both MBOX and OLM use streaming approach for cancellable, memory-efficient processing
+
+### Jan 8, 2025
 1. **Single .env file**: All configuration now in root .env file (no more frontend/.env.local)
 2. **Google Drive Integration**: Frontend can authenticate and select files from Google Drive
 3. **Redis Required**: Redis is now mandatory for job processing (no fallback mode)
@@ -104,11 +109,17 @@ Frontend → FastAPI → ThreadPool (20 workers) → Email Processing Pipeline
 #### Google Drive Integration
 - Frontend authenticates with Google OAuth2
 - File picker allows selecting email archives from Drive
-- **RemoteZip Streaming** (Jan 8, 2025): Large OLM files (65GB+) are streamed directly using HTTP range requests
-  - No full download required - uses targeted byte-range requests
-  - Central Directory scanning for efficient ZIP navigation
-  - Virtual file wrapper for transparent streaming operations
-  - Smart retry logic with exponential backoff for network resilience
+- **Unified Streaming Architecture** (Updated Jan 14, 2026):
+  - **OLM Files**: RemoteZip streaming for large archives (65GB+)
+    - No full download required - uses targeted byte-range requests
+    - Central Directory scanning for efficient ZIP navigation
+    - Smart retry logic with exponential backoff for network resilience
+  - **MBOX Files**: Text streaming with line-by-line processing (NEW)
+    - Streams text content in chunks (default 5MB)
+    - No full download required - processes on-the-fly
+    - Cancellable during processing
+    - Consistent UX with OLM streaming
+  - Both formats support graceful cancellation and real-time progress tracking
 - Supports MBOX, PST, OLM files in Drive
 
 #### Redis as Primary Job System
@@ -168,9 +179,10 @@ Note: Example files are provided as `.env.example` in each directory. Environmen
   - **backend/.env.development**, **backend/.env.production**: Backend-specific configuration
   - **frontend/.env.development**, **frontend/.env.production**: Frontend-specific configuration
   - **backend/.env.example**, **frontend/.env.example**: Template files for reference
-- **src/storage/** (Jan 8, 2025): New cloud storage streaming modules
-  - **remote_zip_google_drive.py**: RemoteZip implementation for Google Drive
-  - **google_drive_stream.py**: Streaming wrapper for Drive files
+- **src/storage/**: Cloud storage streaming modules
+  - **remote_zip_google_drive.py**: RemoteZip implementation for Google Drive (Jan 8, 2025)
+  - **google_drive_stream.py**: Streaming wrapper for Drive files (Jan 8, 2025)
+  - **google_drive_text_stream.py**: Text file streaming for MBOX (Jan 14, 2026)
   - **cloud_stream_wrapper.py**: Base streaming interface
   - **smart_zip_reader.py**: Efficient ZIP Central Directory scanner
 - Removed: test_*.py files from root, POC documentation files, centralized .env files

@@ -30,7 +30,6 @@ const GoogleDrivePicker: React.FC<GoogleDrivePickerProps> = ({
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(false);
   const [files, setFiles] = useState<GoogleDriveFile[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
   const [selectedFile, setSelectedFile] = useState<GoogleDriveFile | null>(null);
   const [currentFolder, setCurrentFolder] = useState<string>('all');
   const [folderPath, setFolderPath] = useState<Array<{id: string, name: string}>>([
@@ -45,12 +44,6 @@ const GoogleDrivePicker: React.FC<GoogleDrivePickerProps> = ({
   const handleAuthenticate = async () => {
     setLoading(true);
     try {
-      console.log('🔍 Debug - Config loaded:', {
-        googleClientId: config.googleClientId,
-        hasClientId: !!config.googleClientId,
-        clientIdLength: config.googleClientId?.length
-      });
-      
       await googleDriveService.authenticate();
       setIsAuthenticated(true);
       await loadFiles('all'); // Load all files
@@ -67,31 +60,26 @@ const GoogleDrivePicker: React.FC<GoogleDrivePickerProps> = ({
   const loadFiles = async (folderId: string = 'all', query?: string) => {
     setLoading(true);
     try {
-      console.log('📂 Loading files:', folderId === 'all' ? 'All archive files' : `Folder: ${folderId}`);
-      
       let searchQuery: string;
-      
+
       if (folderId === 'all') {
         // Show ALL archive files from everywhere (owned, shared, any folder)
-        // Make the search more flexible to catch all variations
         const formatQueries = [
           "name contains '.mbox'",
           "name contains '.MBOX'",
           "name contains '.pst'",
-          "name contains '.PST'", 
+          "name contains '.PST'",
           "name contains '.olm'",
           "name contains '.OLM'",
-          "name contains 'mbox'",  // Sometimes files don't have extension
-          "mimeType = 'application/mbox'"  // MIME type for MBOX files
+          "name contains 'mbox'",
+          "mimeType = 'application/mbox'"
         ];
-        
+
         searchQuery = `(${formatQueries.join(' or ')}) and trashed = false`;
-        
+
         if (query) {
           searchQuery += ` and name contains '${query}'`;
         }
-        
-        console.log('🔍 Searching for all archive files with query:', searchQuery);
       } else if (folderId === 'root') {
         // For root, show items in My Drive root and shared with me
         searchQuery = `('root' in parents or sharedWithMe) and trashed = false`;
@@ -105,26 +93,12 @@ const GoogleDrivePicker: React.FC<GoogleDrivePickerProps> = ({
           searchQuery += ` and name contains '${query}'`;
         }
       }
-      
-      console.log('🔍 Final search query:', searchQuery);
-      
+
       // Get items based on the query
       const allItems = await googleDriveService.listFiles(searchQuery);
-      console.log('📁 Items found:', allItems.length, allItems);
-      
-      // Debug: Log details about each file
-      allItems.forEach((item, index) => {
-        console.log(`File ${index + 1}:`, {
-          name: item.name,
-          mimeType: item.mimeType,
-          size: item.size,
-          parents: item.parents
-        });
-      });
-      
+
       if (folderId === 'all') {
         // In "all files" view, resolve folder paths for each file
-        console.log('🔍 Resolving folder paths for files...');
         const filesWithPaths = await Promise.all(
           allItems.map(async (file) => {
             try {
@@ -136,46 +110,42 @@ const GoogleDrivePicker: React.FC<GoogleDrivePickerProps> = ({
             }
           })
         );
-        
+
         setFiles(filesWithPaths);
-        
+
         if (allItems.length === 0) {
           message.info('No email archive files (.mbox, .pst, .olm) found in your Google Drive');
         }
       } else {
         // In folder view, separate folders and files
-        const folders = allItems.filter(item => 
+        const folders = allItems.filter(item =>
           item.mimeType === 'application/vnd.google-apps.folder'
         );
-        
+
         const files = allItems.filter(item => {
           if (item.mimeType === 'application/vnd.google-apps.folder') return false;
-          
-          // More flexible file matching
+
           const fileName = item.name.toLowerCase();
-          return acceptedFormats.some(format => 
-            fileName.includes(format.toLowerCase()) || 
+          return acceptedFormats.some(format =>
+            fileName.includes(format.toLowerCase()) ||
             fileName.endsWith(format.toLowerCase()) ||
             item.mimeType === 'application/mbox'
           );
         });
-        
-        console.log('📁 Folders:', folders.length, '📄 Files:', files.length);
-        
+
         // Combine: folders first, then files
         const combined = [...folders, ...files];
         setFiles(combined);
       }
     } catch (error) {
       message.error('Failed to load files from Google Drive');
-      console.error('❌ Error loading files:', error);
+      console.error('Error loading files:', error);
     } finally {
       setLoading(false);
     }
   };
 
   const handleSearch = (value: string) => {
-    setSearchQuery(value);
     if (isAuthenticated) {
       loadFiles(currentFolder, value);
     }
@@ -294,7 +264,6 @@ const GoogleDrivePicker: React.FC<GoogleDrivePickerProps> = ({
                 placeholder="Search in current folder..."
                 prefix={<SearchOutlined />}
                 onSearch={handleSearch}
-                onChange={(e) => setSearchQuery(e.target.value)}
                 enterButton="Search"
               />
 

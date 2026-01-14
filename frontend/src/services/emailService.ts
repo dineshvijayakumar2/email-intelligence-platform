@@ -101,7 +101,6 @@ export const emailService = {
       }
 
       const categories = await response.json();
-      console.log('Loaded categories from backend:', categories);
       return categories;
     } catch (error) {
       console.error('Error fetching email categories:', error);

@@ -68,7 +68,6 @@ export const MailboxList: React.FC = () => {
       // Retry up to 2 times with exponential backoff for transient errors
       if (retryCount < 2) {
         const delay = Math.pow(2, retryCount) * 500; // 500ms, 1000ms
-        console.log(`Retrying in ${delay}ms... (attempt ${retryCount + 1}/2)`);
         shouldStopLoading = false; // Keep loading spinner while retrying
         setTimeout(() => loadMailboxes(retryCount + 1), delay);
         return;

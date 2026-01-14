@@ -46,15 +46,15 @@ class MBOXExtractor(BaseExtractor):
         super().__init__(connection_config)
         self.source_type = "mbox"  # Set format type
         self.file_path = connection_config.get('file_path')
-        
+
         # Support Google Drive files
         self.google_drive_file_id = connection_config.get('google_drive_file_id')
         self.google_drive_file_name = connection_config.get('google_drive_file_name')
-        
+
         # Check if we have either local file path or Google Drive info
         if not self.file_path and not self.google_drive_file_id:
             raise ValueError("Either 'file_path' or 'google_drive_file_id' required in connection_config")
-            
+
         # Determine if this is a Google Drive file
         self.is_google_drive = bool(self.google_drive_file_id)
         if self.is_google_drive:
@@ -65,36 +65,114 @@ class MBOXExtractor(BaseExtractor):
         self.mbox = None
         self.message_count = 0  # Track count during extraction
 
+        # Google Drive streaming components
+        self.drive_stream = None  # Will hold GoogleDriveTextStream for remote files
+        self.drive_client = None  # Google Drive client for authentication
+
     def connect(self, access_token: Optional[str] = None, **kwargs) -> bool:
         """
-        Open MBOX file
+        Open MBOX file or initialize streaming from Google Drive
 
         Args:
             access_token: Google Drive OAuth2 access token (if needed for Google Drive files)
 
-        We don't actually open the file here - we'll stream it directly
-        in extract_emails() for better memory efficiency.
+        Returns:
+            True if connection successful
         """
         try:
-            # For Google Drive files, we need to either find mounted drive or download
+            # For Google Drive files, set up streaming (like OLM does)
             if self.is_google_drive:
                 logger.info(f"🌟 Processing Google Drive MBOX file: {self.google_drive_file_name}")
-                # For MBOX files from Google Drive, we need to download (unlike OLM which can stream)
-                # This is because MBOX is a text format that needs full file access
+
+                # Check for local mount first
                 effective_path = self.get_effective_file_path(access_token)
-                
+
                 if effective_path == 'GOOGLE_DRIVE_STREAM':
-                    # No local mount found, need to download the file
-                    logger.info(f"📥 No local mount found, downloading MBOX file from Google Drive...")
-                    self.file_path = self._download_google_drive_file(access_token)
+                    # No local mount found - use streaming approach
+                    logger.info(f"🌊 No local mount found, streaming MBOX file from Google Drive...")
+
+                    # Get Google Drive file details
+                    google_file_id = self.config.get('google_drive_file_id')
+                    google_file_name = self.config.get('google_drive_file_name', 'Unknown MBOX')
+                    user_id = self.config.get('user_id')
+
+                    if not google_file_id:
+                        raise ValueError("Google Drive file ID not provided")
+
+                    # Import here to avoid circular imports
+                    from ..storage.google_drive_client import create_google_drive_client
+                    from ..storage.google_drive_text_stream import GoogleDriveTextStream
+
+                    # Create client and authenticate
+                    self.drive_client = create_google_drive_client()
+                    authenticated = False
+
+                    # Try user token authentication first
+                    if user_id:
+                        logger.info("Authenticating with user's stored Google Drive tokens...")
+                        try:
+                            from ..database.supabase_client import SupabaseClient
+                            supabase = SupabaseClient.get_client(use_service_key=True)
+
+                            result = supabase.table('user_integrations').select('access_token,refresh_token').eq('user_id', user_id).eq('provider', 'google_drive').execute()
+
+                            if result.data:
+                                user_tokens = result.data[0]
+                                if self.drive_client.authenticate_with_user_tokens(
+                                    user_tokens['access_token'],
+                                    user_tokens['refresh_token']
+                                ):
+                                    authenticated = True
+                                    logger.info("✅ Authenticated with user's Google Drive tokens")
+
+                                    # Update tokens if refreshed
+                                    current_tokens = self.drive_client.get_current_tokens()
+                                    if current_tokens and current_tokens['access_token'] != user_tokens['access_token']:
+                                        supabase.table('user_integrations').update({
+                                            'access_token': current_tokens['access_token']
+                                        }).eq('user_id', user_id).eq('provider', 'google_drive').execute()
+                                        logger.info("Updated refreshed access token in database")
+                        except Exception as e:
+                            logger.warning(f"Failed to authenticate with user tokens: {e}")
+
+                    # Fallback to service account if user auth failed
+                    if not authenticated:
+                        logger.info("Trying service account authentication...")
+                        if self.drive_client.authenticate_with_service_account():
+                            authenticated = True
+                            logger.info("✅ Authenticated with service account")
+                        else:
+                            raise ConnectionError("Failed to authenticate with Google Drive")
+
+                    # Get file metadata
+                    file_info = self.drive_client.get_file_info(google_file_id)
+                    if not file_info:
+                        raise ConnectionError(f"Could not get info for Google Drive file {google_file_id}")
+
+                    logger.info(f"📦 Opening MBOX via streaming: {file_info['name']} "
+                               f"(Size: {file_info['size']:,} bytes)")
+
+                    # Create streaming text reader
+                    self.drive_stream = GoogleDriveTextStream(
+                        self.drive_client.service,
+                        google_file_id,
+                        file_info
+                    )
+
+                    # Mark as connected via streaming
+                    self.mbox = 'GOOGLE_DRIVE_STREAM'
+                    logger.info(f"✅ Connected to MBOX via streaming: {file_info['name']}")
+                    return True
+
                 else:
                     # Found local mount
                     self.file_path = effective_path
-            # Local file path is already set
-            
+                    logger.info(f"📁 Using local mount: {self.file_path}")
+
+            # Local file path processing
             if not self.file_path:
                 raise ValueError("No file path available for MBOX processing")
-            
+
             # Verify file exists and is readable
             with open(self.file_path, 'r', encoding='utf-8', errors='replace') as f:
                 # Just peek at first line to verify it's an MBOX
@@ -108,6 +186,8 @@ class MBOXExtractor(BaseExtractor):
 
         except Exception as e:
             logger.error(f"Failed to connect to MBOX file: {e}")
+            if self.drive_stream:
+                self.drive_stream.close()
             raise ConnectionError(f"MBOX connection failed: {e}")
 
     def get_email_count(self) -> Optional[int]:
@@ -141,7 +221,7 @@ class MBOXExtractor(BaseExtractor):
 
     def extract_emails(self, max_emails: Optional[int] = None) -> Iterator[Dict]:
         """
-        Extract emails from MBOX file
+        Extract emails from MBOX file (local or streaming from Google Drive)
 
         Streams file line-by-line, yields standardized email dicts.
         NO date filtering - that belongs in the pipeline.
@@ -162,11 +242,21 @@ class MBOXExtractor(BaseExtractor):
             extracted = 0
             self.message_count = 0
 
-            # Stream file line-by-line
-            with open(self.mbox, 'r', encoding='utf-8', errors='replace') as f:
+            # Determine if we're streaming from Google Drive or reading local file
+            if self.mbox == 'GOOGLE_DRIVE_STREAM' and self.drive_stream:
+                # Stream from Google Drive
+                logger.info("🌊 Streaming MBOX content from Google Drive...")
+                line_iterator = iter(self.drive_stream)
+            else:
+                # Read from local file
+                logger.info(f"📁 Reading MBOX from local file: {self.mbox}")
+                file_handle = open(self.mbox, 'r', encoding='utf-8', errors='replace')
+                line_iterator = iter(file_handle)
+
+            try:
                 current_message_lines = []
 
-                for line_num, line in enumerate(f, 1):
+                for line in line_iterator:
                     # MBOX format: messages start with "From " at beginning of line
                     if line.startswith('From ') and current_message_lines:
                         # Process the previous message
@@ -216,6 +306,11 @@ class MBOXExtractor(BaseExtractor):
                             logger.info(f"📧 Email {extracted}: {email_dict.get('subject', 'No subject')[:60]}")
 
                         yield email_dict
+
+            finally:
+                # Close local file handle if we opened one
+                if self.mbox != 'GOOGLE_DRIVE_STREAM':
+                    file_handle.close()
 
         except Exception as e:
             logger.error(f"MBOX extraction failed: {e}")
@@ -324,8 +419,19 @@ class MBOXExtractor(BaseExtractor):
 
     def disconnect(self) -> None:
         """Clean up resources and temporary files"""
+        # Close Google Drive stream if active
+        if self.drive_stream:
+            try:
+                self.drive_stream.close()
+                logger.info("Google Drive stream closed")
+            except Exception as e:
+                logger.warning(f"Error closing Google Drive stream: {e}")
+            finally:
+                self.drive_stream = None
+                self.drive_client = None
+
         self.mbox = None
-        # Cleanup any temporary Google Drive files
+        # Cleanup any temporary Google Drive files (if any were downloaded as fallback)
         self.cleanup_temp_files()
         logger.info("MBOX extractor disconnected")
 
