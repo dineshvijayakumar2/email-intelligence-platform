@@ -1,436 +1,489 @@
-# 📧 Email Intelligence POC
+# 📧 Email Intelligence Platform - POC
 
-**Advanced Email Analysis Platform with Cloud Storage Integration**
+**Advanced Email Analysis Platform with AI Enrichment & Cloud Integration**
 
-A comprehensive proof-of-concept for email intelligence gathering, processing, and analysis with support for multiple archive formats and cloud storage providers including **Google Drive OAuth2 integration**.
-
----
-
-## 🔥 **New!** Google Drive OAuth2 Integration
-**Industry-standard authentication for seamless Google Drive access**
-
-- ✅ **One-click connection** - Users connect Google Drive with OAuth2 popup
-- ✅ **Secure token management** - Backend stores and refreshes tokens automatically  
-- ✅ **Access entire Drive** - Browse and select any file without manual sharing
-- ✅ **Real-time status** - Connection indicators and management UI
-- ✅ **Production ready** - Same OAuth2 flow used by Slack, Notion, Zapier
-
-**Quick Setup**: See [Google Drive Setup](#4-google-drive-setup-optional-but-recommended) below.
+A comprehensive proof-of-concept for email intelligence gathering, processing, and AI-powered analysis with support for multiple archive formats, cloud storage, and automated tagging.
 
 ---
 
-## 🌟 Features
+## 🎯 Project Status
 
-### **Core Email Processing**
-- ✅ **Multi-format Support**: MBOX, PST, OLM archives
-- ✅ **Real-time Processing**: Live progress tracking with Redis
-- ✅ **Email Categorization**: Industry-specific tagging and analysis
-- ✅ **Data Enrichment**: Contact extraction and normalization
-- ✅ **Scalable Architecture**: Concurrent processing with thread pools
+### ✅ Stage 1: Complete - Email Extraction & Rule-Based Tagging
+**Status**: Production-ready deployment complete (January 14, 2026)
 
-### **Cloud Storage Integration** 🆕
-- ✅ **Google Drive OAuth2**: Industry-standard authentication (like Slack, Notion)
-- ✅ **Seamless File Access**: Browse and select files from entire Google Drive
-- ✅ **Secure Token Management**: Backend-managed refresh tokens
-- ✅ **Auto Token Refresh**: No manual intervention required
-- ✅ **AWS S3 Support**: S3 bucket integration for enterprise
-- ✅ **Local File Support**: Traditional file path processing
+**Delivered Capabilities**:
+- ✅ Multi-format email extraction (MBOX, PST, OLM) with Google Drive streaming
+- ✅ Rule-based tagging system (20+ tags: spam, marketing, system, automated, etc.)
+- ✅ Real-time processing with Redis progress tracking
+- ✅ Modern React UI with email preview and filtering
+- ✅ Production deployment on Railway with Supabase database
+- ✅ Google Drive OAuth2 integration for seamless file access
+
+### 🚀 Stage 2: In Planning - AI Enrichment & Export
+**Target Start**: January 2026
+**Estimated Duration**: 3-4 weeks
+
+**Planned Capabilities**:
+- AI-powered intent, tone, and sentiment analysis
+- Quote/pricing extraction from sales emails
+- Batch processing with structured JSON output
+- Export to CSV/Excel with customizable fields
+- Advanced filtering and search with AI-enriched metadata
+
+---
+
+## 🌟 Stage 1 Features (Completed)
+
+### **Email Processing Pipeline**
+- ✅ **Multi-Format Support**: MBOX, PST, OLM archives
+- ✅ **Streaming Architecture**: Process large files (65GB+) without downloading
+- ✅ **Google Drive Integration**: OAuth2 authentication with automatic token refresh
+- ✅ **Real-time Progress**: Redis-backed job tracking with ETA calculations
+- ✅ **Concurrent Processing**: ThreadPool executor with 20 workers
+- ✅ **Cancellable Jobs**: Stop processing at any time
+
+### **Rule-Based Tagging System** 🎯
+**20+ Automated Tags**:
+- **Direction**: `inbound`, `outbound`
+- **Thread Type**: `new_thread`, `reply`, `forward`
+- **Classification**: `spam`, `marketing`, `system`, `automated`
+- **Sender Type**: `sender_human`, `sender_marketing`, `sender_system`
+- **Priority**: `high_priority`, `low_priority`, `urgent`
+- **Content**: `has_attachments`, `financial`, `meeting`, `newsletter`
+- **Social**: `social_notification`, `account_action`, `ecommerce`
+
+**Tagging Criteria**:
+- Spam detection (10+ patterns)
+- Marketing identification (unsubscribe links, sender patterns)
+- System/automated email detection
+- Priority scoring (0-10 scale)
+- Content-based categorization
 
 ### **Modern Web Interface**
-- ✅ **React TypeScript Frontend**: Modern, responsive UI
-- ✅ **Real-time Dashboard**: Live processing monitoring
-- ✅ **Google Drive Integration UI**: One-click connection management
-- ✅ **Mailbox Management**: Create, edit, and manage email sources
-- ✅ **Processing Jobs**: Start, monitor, and track email analysis
+- ✅ **Responsive Dashboard**: Real-time metrics and processing status
+- ✅ **Email Browser**: Filter by tags, folders, mailboxes, dates
+- ✅ **Email Preview Modal**: Two-column layout with metadata and content
+- ✅ **Mailbox Management**: Create, edit, process email sources
+- ✅ **Google Drive Picker**: Browse and select files from Drive
+- ✅ **Job Monitoring**: Live progress with speed and ETA
+
+### **Production Infrastructure**
+- ✅ **Railway Deployment**: Auto-scaling backend
+- ✅ **Supabase Database**: PostgreSQL with RLS and functions
+- ✅ **Redis Caching**: Job progress and queue management
+- ✅ **Environment Management**: Separate dev/prod configurations
+- ✅ **Error Handling**: Retry logic, graceful failures, logging
 
 ---
 
-## 🚀 Quick Start
+## 📋 Stage 2 Plan: AI Enrichment & Export
+
+### **Goal**
+Enrich 1,000-2,000 structured emails with AI-powered analysis to extract intent, tone, sentiment, and business-critical details (quotes, pricing, escalations).
+
+### **Core Requirements**
+
+#### 1. **AI Batch Processing**
+**Architecture Decision**: Claude API with Batch Message API
+- **Model**: Claude 3.5 Sonnet (optimal cost/performance)
+- **Batch Size**: 10-20 emails per API call
+- **Rate Limiting**: Respect API limits with exponential backoff
+- **Cost Optimization**: Cache embeddings, reuse responses
+
+**Batching Strategy**:
+```python
+# Pseudo-code structure
+batches = chunk_emails(emails, size=15)
+for batch in batches:
+    prompt = build_batch_prompt(batch)
+    response = claude_api.messages.create(
+        model="claude-3-5-sonnet-20241022",
+        max_tokens=4096,
+        messages=[{"role": "user", "content": prompt}]
+    )
+    enrichments = parse_batch_response(response)
+    save_to_database(enrichments)
+```
+
+#### 2. **Structured JSON Output**
+**Schema Design** (v1 - Iterative):
+```json
+{
+  "email_id": "uuid",
+  "email_type": "customer_inquiry | sales_quote | support_escalation | newsletter | internal",
+  "tone": "professional | friendly | urgent | frustrated | neutral",
+  "sentiment": "positive | negative | neutral | mixed",
+  "happiness_index": 0.0-1.0,
+  "escalation_needed": true|false,
+  "escalation_reason": "string or null",
+  "short_summary": "1-2 sentence summary",
+  "key_entities": {
+    "people": ["names"],
+    "companies": ["company names"],
+    "products": ["product mentions"]
+  },
+  "quote_details": {
+    "has_quote": true|false,
+    "quoted_amount": number or null,
+    "currency": "USD" or null,
+    "products_quoted": ["product list"]
+  },
+  "action_items": ["extracted action items"],
+  "confidence_score": 0.0-1.0
+}
+```
+
+**Validation**: Pydantic models with strict type checking
+
+#### 3. **Database Design**
+**New Table**: `email_enrichment`
+```sql
+CREATE TABLE email_enrichment (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  email_id UUID REFERENCES emails(id) ON DELETE CASCADE,
+
+  -- Classification
+  email_type TEXT NOT NULL,
+  tone TEXT,
+  sentiment TEXT,
+  happiness_index DECIMAL(3,2),
+  confidence_score DECIMAL(3,2),
+
+  -- Analysis
+  short_summary TEXT,
+  escalation_needed BOOLEAN DEFAULT FALSE,
+  escalation_reason TEXT,
+
+  -- Structured data (JSONB for flexibility)
+  key_entities JSONB,
+  quote_details JSONB,
+  action_items JSONB,
+  raw_ai_response JSONB,
+
+  -- Metadata
+  model_version TEXT,
+  processing_time_ms INTEGER,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+
+  UNIQUE(email_id)
+);
+
+CREATE INDEX idx_email_enrichment_type ON email_enrichment(email_type);
+CREATE INDEX idx_email_enrichment_sentiment ON email_enrichment(sentiment);
+CREATE INDEX idx_email_enrichment_escalation ON email_enrichment(escalation_needed);
+CREATE INDEX idx_email_enrichment_entities ON email_enrichment USING GIN(key_entities);
+```
+
+#### 4. **Error Handling & Retry Logic**
+- **JSON Validation**: Catch malformed responses, request retry
+- **API Errors**: Exponential backoff (1s, 2s, 4s, 8s)
+- **Partial Success**: Save successful enrichments, retry failed ones
+- **Logging**: Detailed logs for debugging
+- **Monitoring**: Track success rate, avg processing time
+
+#### 5. **Export Capabilities**
+**CSV Export**:
+- All email fields + enrichment data
+- Configurable column selection
+- Filtered exports (by date, folder, tags, sentiment)
+- Scheduled exports (optional)
+
+**Excel Export**:
+- Multiple sheets (emails, enrichment, summary stats)
+- Formatted cells (sentiment colors, priority highlights)
+- Charts and pivot tables
+
+**Export API**:
+```python
+POST /api/exports/create
+{
+  "format": "csv" | "excel",
+  "filters": {
+    "date_from": "2025-01-01",
+    "mailbox_ids": ["uuid1", "uuid2"],
+    "sentiment": ["positive", "negative"],
+    "has_quote": true
+  },
+  "columns": ["subject", "sender", "sentiment", "quote_amount"]
+}
+
+Response: {
+  "export_id": "uuid",
+  "status": "processing",
+  "download_url": null
+}
+
+GET /api/exports/{export_id}/download
+```
+
+---
+
+## 🏗️ Stage 2 Architecture
+
+### **AI Enrichment Module**
+```
+src/ai/
+├── enrichment_engine.py      # Main orchestrator
+├── claude_client.py           # Claude API wrapper
+├── prompt_templates.py        # Prompt engineering
+├── batch_processor.py         # Batch management
+├── response_parser.py         # JSON validation
+├── retry_handler.py           # Error handling
+└── models.py                  # Pydantic schemas
+```
+
+### **Export Module**
+```
+src/exports/
+├── export_engine.py           # Export orchestrator
+├── csv_exporter.py            # CSV generation
+├── excel_exporter.py          # Excel generation
+├── formatters.py              # Data formatting
+└── models.py                  # Export schemas
+```
+
+### **Processing Flow**
+```
+┌─────────────────────────────────────────────┐
+│  Frontend: Trigger AI Enrichment           │
+│  (Select emails, configure options)         │
+└────────────────┬────────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────────┐
+│  Backend: Create Enrichment Job            │
+│  - Validate selection                       │
+│  - Create job record                        │
+│  - Queue for processing                     │
+└────────────────┬────────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────────┐
+│  AI Enrichment Engine                       │
+│  ├─ Batch emails (10-20 per call)           │
+│  ├─ Build prompts with email context        │
+│  ├─ Call Claude API (with retry)            │
+│  ├─ Parse & validate JSON responses         │
+│  └─ Save to email_enrichment table          │
+└────────────────┬────────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────────┐
+│  Database: email_enrichment table           │
+│  (Available for queries and exports)        │
+└────────────────┬────────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────────┐
+│  Export Engine (triggered by user)         │
+│  ├─ Query emails + enrichment data          │
+│  ├─ Apply filters                           │
+│  ├─ Format as CSV/Excel                     │
+│  └─ Generate download link                  │
+└─────────────────────────────────────────────┘
+```
+
+---
+
+## 📊 Stage 2 Deliverables
+
+### **Week 1: AI Enrichment Foundation**
+- [ ] Claude API integration with retry logic
+- [ ] Prompt engineering for batch processing
+- [ ] JSON schema definition and validation
+- [ ] Database schema for enrichment table
+- [ ] Basic batch processing (10 emails at a time)
+
+### **Week 2: Enrichment Engine**
+- [ ] Complete batch processor with error handling
+- [ ] Entity extraction (people, companies, products)
+- [ ] Quote/pricing detection and extraction
+- [ ] Escalation detection logic
+- [ ] Confidence scoring system
+
+### **Week 3: Export System**
+- [ ] CSV export with customizable columns
+- [ ] Excel export with multiple sheets
+- [ ] Export API endpoints
+- [ ] Async export processing for large datasets
+- [ ] Download link generation
+
+### **Week 4: UI & Testing**
+- [ ] AI enrichment trigger UI
+- [ ] Export configuration UI
+- [ ] Progress monitoring for enrichment jobs
+- [ ] End-to-end testing with 1,000+ emails
+- [ ] Performance optimization and caching
+
+---
+
+## 🚀 Quick Start (Stage 1)
 
 ### **Prerequisites**
-- **Python 3.8+** with pip
-- **Node.js 16+** with npm
-- **Redis Server** (for job processing)
-- **Supabase Account** (for database)
+- Python 3.8+ with pip
+- Node.js 16+ with npm
+- Redis Server (required)
+- Supabase Account
 
-### **1. Clone Repository**
+### **1. Clone & Setup**
 ```bash
 git clone <repository-url>
-cd email-intelligence-poc
-```
+cd email-intelligence-platform
 
-### **2. Environment Setup**
-Create environment configuration files:
-
-**`.env.development`** (for local development):
-```bash
-# Database Configuration
-SUPABASE_URL=your_supabase_url
-SUPABASE_KEY=your_supabase_key
-
-# Redis Configuration
-REDIS_URL=redis://localhost:6379
-
-# Google Drive OAuth2 Integration
-GOOGLE_CLIENT_ID=your_google_client_id
-GOOGLE_CLIENT_SECRET=your_google_client_secret
-GOOGLE_REDIRECT_URI=http://localhost:3000
-
-# API Configuration
-API_BASE_URL=http://localhost:8000/api
-```
-
-### **3. Google Drive Setup (Optional but Recommended)**
-For Google Drive integration, configure OAuth2 credentials:
-
-1. **Go to [Google Cloud Console](https://console.cloud.google.com/)**
-2. **Create or select a project**
-3. **Enable Google Drive API**
-4. **Create OAuth2 credentials:**
-   - Application type: **Web application**
-   - Authorized JavaScript origins: `http://localhost:3000`
-   - Authorized redirect URIs: `http://localhost:3000`
-5. **Copy Client ID and Client Secret to your `.env.development` file**
-
-### **4. Database Setup**
-```bash
-# Run database migrations
-cd backend
-python -c "
-from src.database.supabase_client import get_client
-import subprocess
-subprocess.run(['psql', f'{supabase_url}/sql', '-f', 'scripts/create_tables.sql'])
-"
-```
-
-Or manually run SQL files in Supabase SQL Editor:
-- `scripts/create_tables.sql`
-- `migrations/add_user_integrations.sql`
-
-### **5. Start Services**
-
-#### **Option A: Automated Startup (Recommended)**
-```bash
-# Full startup with environment checks
-./start-poc.sh
-
-# Or specify environment
-./start-poc.sh development
-./start-poc.sh production
-```
-
-#### **Option B: Quick Development Commands**
-```bash
-# Quick commands for development
-./quick-start.sh setup          # First-time setup
-./quick-start.sh start          # Start both services  
-./quick-start.sh status         # Check if services are running
-./quick-start.sh stop           # Stop all services
-./quick-start.sh logs           # View logs
-```
-
-**Manual startup:**
-```bash
-# Terminal 1: Start Redis
-redis-server
-
-# Terminal 2: Start Backend
+# Backend setup
 cd backend
 python3 -m venv venv
-source venv/bin/activate
+source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
+
+# Frontend setup
+cd ../frontend
+npm install
+```
+
+### **2. Environment Configuration**
+Create `.env.development` in project root:
+```env
+# Database
+SUPABASE_URL=https://xxx.supabase.co
+SUPABASE_ANON_KEY=your_anon_key
+SUPABASE_SERVICE_KEY=your_service_role_key
+
+# Redis (REQUIRED)
+REDIS_URL=redis://localhost:6379
+REDIS_TTL_DAYS=7
+
+# Google Drive OAuth2
+GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=GOCSPX-xxx
+GOOGLE_REDIRECT_URI=http://localhost:3000
+
+# API
+API_BASE_URL=http://localhost:8000/api
+API_HOST=0.0.0.0
+API_PORT=8000
+```
+
+### **3. Database Setup**
+Run in Supabase SQL Editor:
+1. `scripts/create_tables.sql` (main schema)
+2. `migrations/add_user_integrations.sql` (OAuth tables)
+3. `migrations/fix_folder_counts_permissions.sql` (RLS permissions)
+
+### **4. Start Services**
+```bash
+# Terminal 1: Redis
+redis-server
+
+# Terminal 2: Backend
+cd backend
 python main.py
 
-# Terminal 3: Start Frontend
+# Terminal 3: Frontend
 cd frontend
-npm install
 npm run dev
 ```
 
-### **6. Access Application**
-- **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:8000
-- **API Documentation**: http://localhost:8000/docs
-
----
-
-## 📚 Usage Guide
-
-### **Creating Mailboxes**
-
-#### **Local File Mailbox**
-1. Navigate to **Mailboxes** → **Add Mailbox**
-2. Enter mailbox name and email (optional)
-3. Select mailbox type: `MBOX`, `PST`, or `OLM`
-4. Choose **Local File** as source
-5. Provide file path: `/path/to/archive.mbox`
-6. Test connection and create
-
-#### **Google Drive Mailbox** 🆕
-1. Navigate to **Mailboxes** → **Add Mailbox**
-2. Enter mailbox name and email (optional)
-3. Select mailbox type: `MBOX`, `PST`, or `OLM`
-4. Choose **Google Drive** as source
-5. **Connect Google Drive** (OAuth2 popup)
-6. **Select file** from your Google Drive
-7. Test connection and create
-
-### **Processing Emails**
-1. Go to **Mailboxes** and find your mailbox
-2. Click **Process** button
-3. Configure processing options:
-   - **Job Type**: `extraction`, `categorization`, `enrichment`
-   - **Batch Size**: Number of emails per batch
-   - **Total Records**: Limit processing (leave empty for all)
-4. Monitor progress in real-time
-5. View results in **Dashboard** and **Emails**
-
-### **Google Drive Integration**
-
-#### **Connection Management**
-- **Connect**: One-click OAuth2 authentication
-- **Status**: Real-time connection indicator
-- **Disconnect**: Revoke access anytime
-- **Reconnect**: Seamless re-authentication
-
-#### **File Selection**
-- **Browse entire Google Drive**: No manual sharing required
-- **Search functionality**: Find files quickly
-- **Format filtering**: Only show compatible files
-- **Real-time preview**: File details and metadata
-
----
-
-## 🏗️ Architecture
-
-### **Backend (Python/FastAPI)**
-```
-backend/
-├── main.py                 # FastAPI application
-├── src/
-│   ├── database/           # Supabase & Redis clients
-│   ├── extractors/         # Email format processors
-│   ├── processors/         # Email analysis & categorization
-│   ├── storage/            # Cloud storage adapters
-│   └── utils/              # Progress tracking & utilities
-└── requirements.txt        # Python dependencies
-```
-
-### **Frontend (React/TypeScript)**
-```
-frontend/
-├── src/
-│   ├── components/         # Reusable UI components
-│   │   ├── GoogleDriveConnection.tsx    # OAuth2 integration
-│   │   ├── GoogleDrivePicker.tsx        # File browser
-│   │   ├── MailboxCreateForm.tsx        # Mailbox creation
-│   │   └── MailboxEditForm.tsx          # Mailbox editing
-│   ├── pages/              # Application pages
-│   ├── services/           # API clients & integrations
-│   └── config.js           # Configuration
-└── package.json            # Node.js dependencies
-```
-
-### **Cloud Storage Architecture**
-```
-┌─────────────────────────────────────────────┐
-│                Frontend                     │
-│  ┌─────────────────┐ ┌──────────────────┐   │
-│  │ Google Drive    │ │ Local File       │   │
-│  │ OAuth2 UI       │ │ Browser          │   │
-│  └─────────────────┘ └──────────────────┘   │
-└─────────────────────────────────────────────┘
-                        │
-                        ▼
-┌─────────────────────────────────────────────┐
-│                Backend                      │
-│  ┌─────────────────┐ ┌──────────────────┐   │
-│  │ OAuth2 Token    │ │ File Stream      │   │
-│  │ Management      │ │ Processing       │   │
-│  └─────────────────┘ └──────────────────┘   │
-└─────────────────────────────────────────────┘
-                        │
-                        ▼
-┌─────────────────────────────────────────────┐
-│            Storage Providers                │
-│  ┌─────────────────┐ ┌──────────────────┐   │
-│  │ Google Drive    │ │ AWS S3 / Local   │   │
-│  │ Files           │ │ Files            │   │
-│  └─────────────────┘ └──────────────────┘   │
-└─────────────────────────────────────────────┘
-```
-
----
-
-## 🔧 Configuration
-
-### **Environment Variables**
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `SUPABASE_URL` | Supabase project URL | `https://xxx.supabase.co` |
-| `SUPABASE_KEY` | Supabase public key | `eyJ...` |
-| `REDIS_URL` | Redis connection URL | `redis://localhost:6379` |
-| `GOOGLE_CLIENT_ID` | Google OAuth2 client ID | `xxx.apps.googleusercontent.com` |
-| `GOOGLE_CLIENT_SECRET` | Google OAuth2 client secret | `GOCSPX-xxx` |
-| `GOOGLE_REDIRECT_URI` | OAuth2 redirect URI | `http://localhost:3000` |
-| `API_BASE_URL` | Backend API base URL | `http://localhost:8000/api` |
-
-### **Google Drive OAuth2 Scopes**
-```javascript
-'https://www.googleapis.com/auth/drive.readonly'
-'https://www.googleapis.com/auth/userinfo.email'
-```
-
-### **Supported File Formats**
-- **MBOX**: Universal email format (Gmail exports, Thunderbird, Apple Mail)
-- **PST**: Windows Outlook archive files with folder structure
-- **OLM**: Mac Outlook archive files with folder hierarchy
-
----
-
-## 🧪 Development
-
-### **Running Tests**
-```bash
-# Backend tests
-cd backend
-python -m pytest tests/
-
-# Frontend tests
-cd frontend
-npm test
-```
-
-### **Code Quality**
-```bash
-# Python linting
-cd backend
-flake8 src/
-black src/
-
-# TypeScript linting
-cd frontend
-npm run lint
-npm run type-check
-```
-
-### **Database Migrations**
-```bash
-# Add new migration
-cd backend/migrations/
-# Create new .sql file
-psql $SUPABASE_URL -f new_migration.sql
-```
-
-### **API Documentation**
-Visit http://localhost:8000/docs for interactive API documentation with all OAuth2 endpoints.
-
----
-
-## 🔐 Security
-
-### **OAuth2 Security Features**
-- ✅ **Industry-standard flow**: Authorization code + PKCE
-- ✅ **Secure token storage**: Backend-managed refresh tokens
-- ✅ **User data isolation**: Each user only accesses their own files
-- ✅ **Token encryption**: Secure database storage
-- ✅ **Automatic refresh**: No manual token management
-- ✅ **Easy revocation**: One-click disconnect
-
-### **Best Practices**
-- Never commit credentials to Git
-- Use environment variables for all secrets
-- Rotate Google OAuth2 credentials regularly
-- Monitor API usage quotas
-- Enable logging and auditing
-- Use HTTPS in production
-
----
-
-## 🚀 Production Deployment
-
-### **Environment Setup**
-1. **Create production environment file** (`.env.production`)
-2. **Configure production database** (Supabase production instance)
-3. **Set up production Redis** (Redis Cloud or AWS ElastiCache)
-4. **Configure production Google OAuth2** credentials
-5. **Update CORS settings** for production domains
-
-### **Docker Deployment** (Optional)
-```dockerfile
-# Example Dockerfile structure
-FROM python:3.9-slim
-
-# Backend setup
-COPY backend/ /app/backend/
-WORKDIR /app/backend
-RUN pip install -r requirements.txt
-
-# Frontend build
-FROM node:16 AS frontend-build
-COPY frontend/ /app/frontend/
-WORKDIR /app/frontend
-RUN npm install && npm run build
-
-# Combine and serve
-COPY --from=frontend-build /app/frontend/dist /app/static
-CMD ["python", "main.py"]
-```
-
-### **Scaling Considerations**
-- **Redis Cluster**: For high-availability job processing
-- **Load Balancing**: Multiple backend instances
-- **Database Connection Pooling**: Optimize Supabase connections
-- **File Processing Queue**: Separate workers for large files
-- **CDN**: Static file delivery optimization
-
----
-
-## 🛠️ API Reference
-
-### **OAuth2 Endpoints**
-```http
-# Exchange authorization code for tokens
-POST /api/auth/google/exchange
-{
-  "code": "authorization_code",
-  "user_id": "user_identifier"
-}
-
-# Check user connection status
-GET /api/auth/google/status/{user_id}
-
-# Disconnect user Google Drive
-DELETE /api/auth/google/disconnect/{user_id}
-```
-
-### **Mailbox Endpoints**
-```http
-# Create Google Drive mailbox
-POST /api/mailboxes
-{
-  "name": "My Google Drive Archive",
-  "mailbox_type": "mbox",
-  "connection_config": {
-    "file_source": "google_drive",
-    "google_drive_file_id": "1abc...",
-    "google_drive_file_name": "archive.mbox",
-    "user_id": "user_123"
-  }
-}
-
-# Test connection
-POST /api/mailboxes/test/test-connection
-```
+### **5. Access Application**
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:8000
+- API Docs: http://localhost:8000/docs
 
 ---
 
 ## 📖 Documentation
 
-- **[Google Drive Integration Guide](docs/GOOGLE_DRIVE_INTEGRATION.md)** - Complete OAuth2 setup
-- **[Cloud Storage Integration](docs/CLOUD_STORAGE.md)** - AWS S3 and other providers
-- **[Architecture Overview](docs/ARCHITECTURE.md)** - System design and components
-- **[Quick Start Guide](docs/QUICKSTART.md)** - Step-by-step setup instructions
+### **Stage 1 Docs**
+- [Google Drive Integration](docs/GOOGLE_DRIVE_INTEGRATION.md)
+- [Architecture Overview](docs/ARCHITECTURE.md)
+- [Email Tagging System](docs/EMAIL_TAGGING.md)
+- [Deployment Guide](docs/DEPLOYMENT.md)
+
+### **Stage 2 Docs (Coming Soon)**
+- AI Enrichment Guide
+- Export System Documentation
+- Prompt Engineering Best Practices
+- Performance Optimization
+
+---
+
+## 🔧 API Reference
+
+### **Email Endpoints**
+```http
+# Get emails with filters
+POST /api/emails
+{
+  "offset": 0,
+  "limit": 50,
+  "filters": {
+    "mailbox_ids": ["uuid"],
+    "tags": ["spam", "marketing"],
+    "date_from": "2025-01-01"
+  }
+}
+
+# Get single email with enrichment
+GET /api/emails/{email_id}
+```
+
+### **Tagging Endpoints**
+```http
+# Get available tags
+GET /api/emails/categories
+
+# Reprocess emails with updated tagging
+POST /api/processing-jobs/{job_id}/reprocess
+```
+
+### **Stage 2: Enrichment Endpoints (Planned)**
+```http
+# Trigger AI enrichment
+POST /api/enrichment/batch
+{
+  "email_ids": ["uuid1", "uuid2"],
+  "model": "claude-3-5-sonnet",
+  "fields": ["intent", "sentiment", "quotes"]
+}
+
+# Get enrichment status
+GET /api/enrichment/jobs/{job_id}
+
+# Export enriched data
+POST /api/exports/create
+{
+  "format": "csv",
+  "filters": {...},
+  "columns": [...]
+}
+
+GET /api/exports/{export_id}/download
+```
+
+---
+
+## 🛠️ Tech Stack
+
+### **Backend**
+- **Framework**: FastAPI 0.104+
+- **Database**: Supabase (PostgreSQL)
+- **Cache**: Redis 7.0+
+- **AI**: Claude 3.5 Sonnet API (Stage 2)
+- **Cloud Storage**: Google Drive API
+- **Processing**: ThreadPoolExecutor (20 workers)
+
+### **Frontend**
+- **Framework**: React 18 + TypeScript
+- **UI Library**: Ant Design 5.x
+- **State Management**: React Hooks
+- **API Client**: Axios
+- **Build Tool**: Vite
+
+### **Infrastructure**
+- **Hosting**: Railway (backend + Redis)
+- **Database**: Supabase Cloud
+- **Storage**: Google Drive (user files)
+- **Monitoring**: Application logs + Redis metrics
 
 ---
 
@@ -438,68 +491,77 @@ POST /api/mailboxes/test/test-connection
 
 ### **Common Issues**
 
-#### **OAuth2 Redirect URI Mismatch**
+#### **Tagging Not Working**
+Run these migrations in Supabase:
+```sql
+-- migrations/fix_email_categories_permissions.sql
+-- migrations/fix_update_folder_counts_function.sql
 ```
-Error: (redirect_uri_mismatch) Bad Request
-```
-**Solution**: Update Google Cloud Console OAuth2 settings:
-- JavaScript origins: `http://localhost:3000`
-- Redirect URIs: `http://localhost:3000`
 
-#### **Backend Connection Failed**
+#### **Mailbox Shows "Unknown"**
+Restart backend (fixed in v16):
+```bash
+cd backend && python main.py
 ```
-Error: Backend API failed to start
-```
-**Solutions**:
-1. Check Redis is running: `redis-server`
-2. Verify environment variables in `.env.development`
-3. Check logs: `tail -f backend.log`
-4. Ensure port 8000 is available
 
-#### **Google Drive Connection Issues**
+#### **Email Count Shows 0**
+Run folder counts update:
+```sql
+SELECT update_folder_counts();
 ```
-Error: Authentication failed
-```
-**Solutions**:
-1. Verify Google Client ID/Secret in environment
-2. Check Google Drive API is enabled
-3. Ensure correct redirect URI configuration
-4. Clear browser cache and cookies
 
-#### **File Processing Errors**
+#### **Redis Connection Failed**
+```bash
+# Start Redis
+redis-server
+
+# Test connection
+redis-cli ping
+# Should return: PONG
 ```
-Error: Failed to download from Google Drive
-```
-**Solutions**:
-1. Check user has access to the file
-2. Verify OAuth tokens are valid
-3. Ensure file hasn't been moved/deleted
-4. Re-authenticate Google Drive connection
+
+---
+
+## 📈 Stage 2 Success Metrics
+
+### **Performance Targets**
+- **AI Processing**: < 2 seconds per email
+- **Batch Throughput**: 500-1,000 emails/hour
+- **JSON Parse Success**: > 95%
+- **Export Generation**: < 30 seconds for 10,000 emails
+
+### **Quality Metrics**
+- **Intent Classification Accuracy**: > 85%
+- **Sentiment Analysis Accuracy**: > 90%
+- **Quote Extraction Precision**: > 95%
+- **Escalation Detection Recall**: > 90%
 
 ---
 
 ## 🤝 Contributing
 
-1. **Fork the repository**
-2. **Create feature branch**: `git checkout -b feature/amazing-feature`
-3. **Commit changes**: `git commit -m 'Add amazing feature'`
-4. **Push to branch**: `git push origin feature/amazing-feature`
-5. **Open Pull Request**
+1. Fork the repository
+2. Create feature branch: `git checkout -b feature/amazing-feature`
+3. Commit changes: `git commit -m 'Add amazing feature'`
+4. Push to branch: `git push origin feature/amazing-feature`
+5. Open Pull Request
 
 ---
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+MIT License - see LICENSE file for details
 
 ---
 
 ## 🙋 Support
 
-- **Documentation**: Check the `/docs` folder for detailed guides
-- **Issues**: Report bugs and feature requests in GitHub Issues
-- **API Documentation**: Visit http://localhost:8000/docs when running locally
+- **Documentation**: Check `/docs` folder
+- **Issues**: GitHub Issues
+- **API Docs**: http://localhost:8000/docs
 
 ---
 
-**Built with ❤️ using Python, TypeScript, React, and Google Cloud APIs**
+**Stage 1 Complete ✅ | Stage 2 Coming Soon 🚀**
+
+*Built with ❤️ using Python, TypeScript, React, Claude AI, and Google Cloud APIs*
