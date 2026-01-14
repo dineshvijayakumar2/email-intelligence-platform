@@ -1556,7 +1556,7 @@ async def get_folder_names():
         # This is much faster than fetching all rows
         result = await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: sb.rpc('get_distinct_folders').execute()
+            lambda: sb.rpc('get_distinct_folders', {}).execute()
         )
 
         if result.data:
