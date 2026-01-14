@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks  # v15 - remove all tag_type references
+from fastapi import FastAPI, HTTPException, BackgroundTasks  # v16 - fix mailbox name extraction
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
@@ -1584,6 +1584,16 @@ def transform_email_data(item: dict) -> EmailResponse:
     sender_tag = next((cat for cat in categories if cat['category'].startswith('_meta_sender_')), None)
     sender_type = sender_tag['category'].replace('_meta_sender_', '') if sender_tag else 'unknown'
     
+    # Extract mailbox name from nested structure
+    mailbox_name = 'Unknown'
+    mailboxes_data = item.get('mailboxes')
+    if mailboxes_data:
+        # Handle both dict and list formats
+        if isinstance(mailboxes_data, dict):
+            mailbox_name = mailboxes_data.get('name', 'Unknown')
+        elif isinstance(mailboxes_data, list) and len(mailboxes_data) > 0:
+            mailbox_name = mailboxes_data[0].get('name', 'Unknown')
+
     return EmailResponse(
         id=item['id'],
         subject=item['subject'],
@@ -1602,7 +1612,7 @@ def transform_email_data(item: dict) -> EmailResponse:
         body_text=item.get('body_text'),
         body_html=item.get('body_html'),
         mailbox_id=item['mailbox_id'],
-        mailbox_name=item.get('mailboxes', {}).get('name', 'Unknown') if item.get('mailboxes') else 'Unknown',
+        mailbox_name=mailbox_name,
         tags=tags,
         is_spam=is_spam,
         is_marketing=is_marketing,
