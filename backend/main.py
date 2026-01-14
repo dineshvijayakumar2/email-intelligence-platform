@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks  # v13 - fix tag_type schema mismatch
+from fastapi import FastAPI, HTTPException, BackgroundTasks  # v14 - fix select head parameter
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
@@ -510,9 +510,10 @@ async def get_mailboxes():
         mailboxes_with_counts = []
         for mailbox in mailboxes_result.data:
             try:
-                count_result = sb.table('emails').select('*', count='exact', head=True).eq('mailbox_id', mailbox['id']).execute()
+                # Use count='exact' without head parameter for compatibility
+                count_result = sb.table('emails').select('id', count='exact').eq('mailbox_id', mailbox['id']).limit(1).execute()
                 email_count = count_result.count or 0
-                
+
                 mailboxes_with_counts.append({
                     **mailbox,
                     'total_emails': email_count
