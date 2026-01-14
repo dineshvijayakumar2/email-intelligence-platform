@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks  # v12 - force reload for metadata fields
+from fastapi import FastAPI, HTTPException, BackgroundTasks  # v13 - fix tag_type schema mismatch
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List

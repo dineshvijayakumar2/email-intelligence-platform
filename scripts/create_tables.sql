@@ -310,7 +310,8 @@ BEGIN
     FROM emails e
     WHERE e.folder_path = f.folder_path
     AND e.mailbox_id = f.mailbox_id
-  );
+  )
+  WHERE f.id IS NOT NULL;  -- Add WHERE clause for RLS compatibility
 
   -- Update mailbox totals
   UPDATE mailboxes m
@@ -318,7 +319,8 @@ BEGIN
     SELECT COUNT(*)
     FROM emails e
     WHERE e.mailbox_id = m.id
-  );
+  )
+  WHERE m.id IS NOT NULL;  -- Add WHERE clause for RLS compatibility
 END;
 $$ LANGUAGE plpgsql;
 
@@ -326,6 +328,13 @@ $$ LANGUAGE plpgsql;
 GRANT EXECUTE ON FUNCTION update_folder_counts() TO anon, authenticated;
 
 COMMENT ON FUNCTION update_folder_counts() IS 'Updates message counts in folders table and total_emails in mailboxes table';
+
+-- Grant table permissions for email processing
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE emails TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE email_categories TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE folders TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE mailboxes TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE processing_jobs TO anon, authenticated;
 
 -- RLS (Row Level Security) policies for multi-tenant usage (if needed)
 -- ALTER TABLE emails ENABLE ROW LEVEL SECURITY;

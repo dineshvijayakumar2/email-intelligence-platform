@@ -552,7 +552,6 @@ class EmailOperations:
                         'category': tag,
                         'confidence': 1.0,  # Rule-based tags have 100% confidence
                         'detection_method': 'rule_based',
-                        'tag_type': self._classify_tag_type(tag),
                     })
 
                 # Insert special metadata tags
@@ -562,7 +561,6 @@ class EmailOperations:
                         'category': '_meta_spam',
                         'confidence': 1.0,
                         'detection_method': 'rule_based',
-                        'tag_type': 'metadata',
                     })
 
                 if is_marketing:
@@ -571,7 +569,6 @@ class EmailOperations:
                         'category': '_meta_marketing',
                         'confidence': 1.0,
                         'detection_method': 'rule_based',
-                        'tag_type': 'metadata',
                     })
 
                 # Insert priority as metadata
@@ -580,7 +577,6 @@ class EmailOperations:
                     'category': f'_meta_priority_{priority_score}',
                     'confidence': 1.0,
                     'detection_method': 'rule_based',
-                    'tag_type': 'metadata',
                 })
 
                 # Insert sender type
@@ -590,7 +586,6 @@ class EmailOperations:
                         'category': f'_meta_sender_{sender_type}',
                         'confidence': 1.0,
                         'detection_method': 'rule_based',
-                        'tag_type': 'metadata',
                     })
 
             # Batch insert all categories
@@ -609,23 +604,6 @@ class EmailOperations:
         except Exception as e:
             logger.error(f"Failed to insert email tags: {e}")
             # Don't raise - tags are non-critical
-
-    def _classify_tag_type(self, tag: str) -> str:
-        """Classify tag into type categories"""
-        if tag in ['inbound', 'outbound']:
-            return 'direction'
-        elif tag in ['new_thread', 'reply', 'forward']:
-            return 'thread_type'
-        elif tag in ['inbox', 'sent', 'spam', 'trash', 'archive', 'drafts']:
-            return 'folder'
-        elif tag in ['spam', 'marketing', 'system', 'automated']:
-            return 'classification'
-        elif tag.startswith('sender_'):
-            return 'sender_type'
-        elif tag in ['high_priority', 'low_priority', 'urgent']:
-            return 'priority'
-        else:
-            return 'content'
 
     def _ensure_folders_exist(self, emails: List[Dict], mailbox_id: str):
         """
