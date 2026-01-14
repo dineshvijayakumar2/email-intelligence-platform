@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks  # v14 - fix select head parameter
+from fastapi import FastAPI, HTTPException, BackgroundTasks  # v15 - remove all tag_type references
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
@@ -1211,23 +1211,6 @@ async def reprocess_emails(job_id: str, background_tasks: BackgroundTasks):
         logger.error(f"Failed to start reprocessing: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to start reprocessing: {str(e)}")
 
-def _classify_tag_type(tag: str) -> str:
-    """Classify tag into type categories"""
-    if tag in ['inbound', 'outbound']:
-        return 'direction'
-    elif tag in ['new_thread', 'reply', 'forward']:
-        return 'thread_type'
-    elif tag in ['inbox', 'sent', 'spam', 'trash', 'archive', 'drafts']:
-        return 'folder'
-    elif tag in ['spam', 'marketing', 'system', 'automated']:
-        return 'classification'
-    elif tag.startswith('sender_'):
-        return 'sender_type'
-    elif tag in ['high_priority', 'low_priority', 'urgent']:
-        return 'priority'
-    else:
-        return 'content'
-
 async def run_reprocessing(job_id: str, mailbox_id: str):
     """
     Run reprocessing to:
@@ -1352,7 +1335,6 @@ async def run_reprocessing(job_id: str, mailbox_id: str):
                             'category': tag,
                             'confidence': 1.0,
                             'detection_method': 'rule_based',
-                            'tag_type': _classify_tag_type(tag),
                         })
 
                     # Add metadata tags
@@ -1362,7 +1344,6 @@ async def run_reprocessing(job_id: str, mailbox_id: str):
                             'category': '_meta_spam',
                             'confidence': 1.0,
                             'detection_method': 'rule_based',
-                            'tag_type': 'metadata',
                         })
 
                     if tag_result.get('is_marketing'):
@@ -1371,7 +1352,6 @@ async def run_reprocessing(job_id: str, mailbox_id: str):
                             'category': '_meta_marketing',
                             'confidence': 1.0,
                             'detection_method': 'rule_based',
-                            'tag_type': 'metadata',
                         })
 
                     # Add priority
@@ -1381,7 +1361,6 @@ async def run_reprocessing(job_id: str, mailbox_id: str):
                         'category': f'_meta_priority_{priority_score}',
                         'confidence': 1.0,
                         'detection_method': 'rule_based',
-                        'tag_type': 'metadata',
                     })
 
                     # Add sender type
@@ -1391,7 +1370,6 @@ async def run_reprocessing(job_id: str, mailbox_id: str):
                         'category': f'_meta_sender_{sender_type}',
                         'confidence': 1.0,
                         'detection_method': 'rule_based',
-                        'tag_type': 'metadata',
                     })
 
                     processed += 1
@@ -1780,7 +1758,7 @@ async def get_emails_with_filters(request: EmailRequest):
                 for i in range(0, len(email_ids), batch_size):
                     batch_ids = email_ids[i:i + batch_size]
                     try:
-                        categories_result = sb.table('email_categories').select('email_id, category, tag_type').in_('email_id', batch_ids).execute()
+                        categories_result = sb.table('email_categories').select('email_id, category').in_('email_id', batch_ids).execute()
                         total_categories += len(categories_result.data or [])
                         # Group categories by email_id
                         for cat in categories_result.data or []:
@@ -1788,8 +1766,7 @@ async def get_emails_with_filters(request: EmailRequest):
                             if email_id not in email_categories_map:
                                 email_categories_map[email_id] = []
                             email_categories_map[email_id].append({
-                                'category': cat['category'],
-                                'tag_type': cat['tag_type']
+                                'category': cat['category']
                             })
                     except Exception as e:
                         logger.error(f"Error fetching categories for batch {i//batch_size}: {e}")
@@ -1983,15 +1960,14 @@ async def handle_category_filter(base_query, filters: EmailFilters, page: int, p
                 for i in range(0, len(email_ids), batch_size):
                     batch_ids = email_ids[i:i + batch_size]
                     try:
-                        categories_result = sb.table('email_categories').select('email_id, category, tag_type').in_('email_id', batch_ids).execute()
+                        categories_result = sb.table('email_categories').select('email_id, category').in_('email_id', batch_ids).execute()
                         total_categories += len(categories_result.data or [])
                         for cat in categories_result.data or []:
                             email_id = cat['email_id']
                             if email_id not in email_categories_map:
                                 email_categories_map[email_id] = []
                             email_categories_map[email_id].append({
-                                'category': cat['category'],
-                                'tag_type': cat['tag_type']
+                                'category': cat['category']
                             })
                     except Exception as e:
                         logger.error(f"Error fetching categories for category filter batch: {e}")
@@ -2077,7 +2053,7 @@ async def get_emails_in_batches(
                 body_html,
                 mailbox_id,
                 mailboxes!inner(name),
-                email_categories(category, tag_type)
+                email_categories(category)
             """).in_('id', batch)
             
             # Apply other filters
@@ -2184,7 +2160,7 @@ async def get_email_by_id(email_id: str):
                     body_html,
                     mailbox_id,
                     mailboxes!inner(name),
-                    email_categories(category, tag_type)
+                    email_categories(category)
                 """).eq('id', email_id).single().execute()
             )
 
