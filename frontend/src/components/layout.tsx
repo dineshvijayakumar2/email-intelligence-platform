@@ -1,17 +1,18 @@
 import React, { PropsWithChildren } from "react";
 import { Layout as AntdLayout, Menu, Typography } from "antd";
-import { Link } from "react-router-dom";
-import { 
-  DashboardOutlined, 
-  MailOutlined, 
-  InboxOutlined, 
-  SettingOutlined 
+import { Link, useLocation } from "react-router-dom";
+import {
+  DashboardOutlined,
+  MailOutlined,
+  InboxOutlined,
+  SettingOutlined
 } from "@ant-design/icons";
 
 const { Header, Sider, Content } = AntdLayout;
 const { Title } = Typography;
 
 export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
+  const location = useLocation();
 
   return (
     <AntdLayout style={{ minHeight: "100vh" }}>
@@ -24,7 +25,7 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
         <Menu
           theme="dark"
           mode="inline"
-          defaultSelectedKeys={["/"]}
+          selectedKeys={[location.pathname]}
           style={{ height: "100%", borderRight: 0 }}
         >
           <Menu.Item key="/" icon={<DashboardOutlined />}>

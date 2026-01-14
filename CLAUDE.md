@@ -184,6 +184,6 @@ Please follow the below best practices while doing coding.
 4. Make sure you don't keep the fix scripts in the main code base
 5. When you make changes that require backend to restart, mimic change in main.py that will auto-shutdown and restart the backend service
 6. Do git sync to the main branch when performing major changes to the codebase.
-7. Create docs only in docs folder. Create a new one only if it's a major functionality newly implemented. Otherwise, update the existing docs. 
+7. Create docs only in docs folder. Create a new one only if it's a major functionality newly implemented. Otherwise, update the existing docs.
 8. Keep the environment configuration centralized in the root folder and create separate files for dev and prod
-9. 
+9. **Always use designated ports for services**: Backend must run on port 8000, Frontend must run on port 3000. Before starting a service, check if the port is in use and kill the old process. Never start services on different ports (e.g., 3001, 3002, 8001). Always verify the service started on the correct port. 

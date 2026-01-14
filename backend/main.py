@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks  # v10 - fix Google Drive OAuth popup redirect URI
+from fastapi import FastAPI, HTTPException, BackgroundTasks  # v12 - force reload for metadata fields
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
@@ -284,7 +284,11 @@ class EmailResponse(BaseModel):
     subject: str
     sender_email: str
     sender_name: Optional[str]
+    recipients: Optional[List[Dict[str, str]]] = None
+    cc_list: Optional[List[Dict[str, str]]] = None
+    bcc_list: Optional[List[Dict[str, str]]] = None
     sent_date: str
+    received_date: Optional[str] = None
     category: Optional[str]
     is_outbound: bool
     is_reply: bool
@@ -376,15 +380,17 @@ async def exchange_oauth_code(request: OAuth2ExchangeRequest):
         
         # Validate required environment variables
         client_id = os.getenv("GOOGLE_CLIENT_ID")
-        client_secret = os.getenv("GOOGLE_CLIENT_SECRET") 
-        redirect_uri = os.getenv("GOOGLE_REDIRECT_URI")
-        
+        client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
+
         if not client_id or not client_secret:
             logger.error("❌ Missing Google OAuth credentials")
             raise HTTPException(status_code=500, detail="Server configuration error: Missing Google credentials")
-            
+
+        # For popup-based OAuth flow (frontend uses ux_mode: 'popup'), Google uses "postmessage"
+        # This works for both local development and Railway deployment
+        redirect_uri = os.getenv("GOOGLE_REDIRECT_URI_OVERRIDE", "postmessage")
         logger.info(f"🔧 Using redirect URI: {redirect_uri}")
-        
+
         # Create OAuth2 flow
         flow = Flow.from_client_config(
             {
@@ -403,7 +409,7 @@ async def exchange_oauth_code(request: OAuth2ExchangeRequest):
                 'https://www.googleapis.com/auth/userinfo.profile'
             ]
         )
-        
+
         flow.redirect_uri = redirect_uri
         
         logger.info(f"🔄 Exchanging authorization code...")
@@ -1540,61 +1546,37 @@ async def get_dashboard_stats():
 
 @app.get("/api/emails/folders")
 async def get_folder_names():
-    """Get distinct folder names from emails for filter dropdown"""
-
+    """Get distinct folder names from emails for filter dropdown - Optimized with direct SQL"""
     try:
         sb = get_supabase()
 
-        logger.info("Fetching distinct folder names...")
+        logger.info("Fetching distinct folder names (optimized)...")
 
-        # First, get total count to verify data
-        count_result = sb.table('emails').select('id', count='exact').execute()
-        total_emails = count_result.count or 0
-        logger.info(f"Total emails in database: {total_emails}")
+        # Use PostgreSQL DISTINCT query for efficient folder retrieval
+        # This is much faster than fetching all rows
+        result = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: sb.rpc('get_distinct_folders').execute()
+        )
 
-        # Fetch all emails in batches
-        # IMPORTANT: Supabase may have varying limits, so we loop until we get all emails
+        if result.data:
+            folders_list = sorted([f['folder_path'] for f in result.data if f.get('folder_path')])
+            logger.info(f"✓ Found {len(folders_list)} unique folders: {folders_list}")
+            return folders_list
+
+        # Fallback: If RPC function doesn't exist, use regular query with limit
+        # This will only work if there aren't too many unique folders
+        logger.warning("RPC function not found, using fallback method")
+        result = sb.table('emails').select('folder_path').limit(10000).execute()
+
         all_folders = set()
-        page = 0
-        page_size = 1000  # Request size
-        total_fetched = 0
-
-        while total_fetched < total_emails:
-            from_idx = page * page_size
-            to_idx = from_idx + page_size - 1
-
-            logger.info(f"Fetching page {page} (rows {from_idx}-{to_idx})")
-
-            # Supabase range() is INCLUSIVE on both ends
-            result = sb.table('emails').select('folder_path').range(from_idx, to_idx).execute()
-
-            if not result.data or len(result.data) == 0:
-                logger.warning(f"No data returned for page {page}, stopping")
-                break
-
-            batch_size = len(result.data)
-            total_fetched += batch_size
-            logger.info(f"Page {page}: Got {batch_size} rows, total fetched: {total_fetched}/{total_emails}")
-
-            # Add to set
-            for row in result.data:
-                folder = row.get('folder_path')
-                if folder:
-                    all_folders.add(folder)
-
-            logger.info(f"Unique folders so far: {len(all_folders)} - {sorted(all_folders)}")
-
-            # Continue to next page
-            page += 1
-
-            # Safety limit
-            if page > 100:
-                logger.warning(f"Hit safety limit of 100 pages (100k emails)")
-                break
+        for row in result.data:
+            folder = row.get('folder_path')
+            if folder:
+                all_folders.add(folder)
 
         folders_list = sorted(list(all_folders))
-        logger.info(f"✓ Found {len(folders_list)} unique folders from {total_fetched} emails: {folders_list}")
-
+        logger.info(f"✓ Found {len(folders_list)} unique folders (fallback): {folders_list}")
         return folders_list
 
     except Exception as e:
@@ -1628,7 +1610,11 @@ def transform_email_data(item: dict) -> EmailResponse:
         subject=item['subject'],
         sender_email=item['sender_email'],
         sender_name=item.get('sender_name'),
+        recipients=item.get('recipients'),
+        cc_list=item.get('cc_list'),
+        bcc_list=item.get('bcc_list'),
         sent_date=item['sent_date'],
+        received_date=item.get('received_date'),
         category=categories[0]['category'] if categories else 'unassigned',
         is_outbound=item['is_outbound'],
         is_reply=item['is_reply'],
@@ -2170,44 +2156,51 @@ async def get_email_categories():
 @app.get("/api/emails/{email_id}")
 async def get_email_by_id(email_id: str):
     """Get a single email by ID - replaces frontend emailService.getEmail()"""
-    try:
-        sb = get_supabase()
-        
-        result = await asyncio.get_event_loop().run_in_executor(
-            None, 
-            lambda: sb.table('emails').select("""
-                id,
-                subject,
-                sender_email,
-                sender_name,
-                sent_date,
-                is_outbound,
-                is_reply,
-                folder_path,
-                message_size,
-                body_text,
-                body_html,
-                mailbox_id,
-                mailboxes!inner(name),
-                email_categories(category, tag_type)
-            """).eq('id', email_id).single().execute()
-        )
-        
-        if result.error:
-            logger.error(f'Error fetching email {email_id}: {result.error}')
-            raise HTTPException(status_code=500, detail=str(result.error))
-        
-        if not result.data:
-            raise HTTPException(status_code=404, detail="Email not found")
-        
-        email = transform_email_data(result.data)
-        return email
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error fetching email {email_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to fetch email")
+    max_retries = 3
+    retry_delay = 1
+
+    for attempt in range(max_retries):
+        try:
+            sb = get_supabase()
+
+            result = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: sb.table('emails').select("""
+                    id,
+                    subject,
+                    sender_email,
+                    sender_name,
+                    recipients,
+                    cc_list,
+                    bcc_list,
+                    sent_date,
+                    received_date,
+                    is_outbound,
+                    is_reply,
+                    folder_path,
+                    message_size,
+                    body_text,
+                    body_html,
+                    mailbox_id,
+                    mailboxes!inner(name),
+                    email_categories(category, tag_type)
+                """).eq('id', email_id).single().execute()
+            )
+
+            if not result.data:
+                raise HTTPException(status_code=404, detail="Email not found")
+
+            email = transform_email_data(result.data)
+            return email
+        except HTTPException:
+            raise
+        except Exception as e:
+            if attempt < max_retries - 1 and "WinError 10035" in str(e):
+                logger.warning(f"Retry {attempt + 1}/{max_retries} for email {email_id} due to socket error")
+                await asyncio.sleep(retry_delay)
+                continue
+            logger.error(f"Error fetching email {email_id}: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail="Failed to fetch email")
 
 @app.get("/api/mailbox-names")
 async def get_mailbox_names():

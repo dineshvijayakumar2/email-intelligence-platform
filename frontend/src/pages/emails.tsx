@@ -59,6 +59,7 @@ export const EmailList: React.FC = () => {
   const [pageSize, setPageSize] = useState(20);
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
   const [drawerVisible, setDrawerVisible] = useState(false);
+  const [emailBodyView, setEmailBodyView] = useState<'html' | 'text'>('html');
   const [categories, setCategories] = useState<string[]>([]);
   const [mailboxes, setMailboxes] = useState<string[]>([]);
   const [folders, setFolders] = useState<string[]>([]);
@@ -429,16 +430,58 @@ export const EmailList: React.FC = () => {
               <Descriptions.Item label="Subject" span={3}>
                 <Text strong>{selectedEmail.subject}</Text>
               </Descriptions.Item>
-              <Descriptions.Item label="From" span={2}>
+              <Descriptions.Item label="From" span={3}>
                 {selectedEmail.sender_name && (
                   <div>{selectedEmail.sender_name}</div>
                 )}
                 <Text type="secondary">{selectedEmail.sender_email}</Text>
               </Descriptions.Item>
-              <Descriptions.Item label="Direction">
+              {selectedEmail.recipients && selectedEmail.recipients.length > 0 && (
+                <Descriptions.Item label="To" span={3}>
+                  <Space direction="vertical" size={0}>
+                    {selectedEmail.recipients.map((recipient, idx) => (
+                      <div key={idx}>
+                        {recipient.name && <span>{recipient.name} </span>}
+                        <Text type="secondary">&lt;{recipient.email}&gt;</Text>
+                      </div>
+                    ))}
+                  </Space>
+                </Descriptions.Item>
+              )}
+              {selectedEmail.cc_list && selectedEmail.cc_list.length > 0 && (
+                <Descriptions.Item label="CC" span={3}>
+                  <Space direction="vertical" size={0}>
+                    {selectedEmail.cc_list.map((cc, idx) => (
+                      <div key={idx}>
+                        {cc.name && <span>{cc.name} </span>}
+                        <Text type="secondary">&lt;{cc.email}&gt;</Text>
+                      </div>
+                    ))}
+                  </Space>
+                </Descriptions.Item>
+              )}
+              {selectedEmail.bcc_list && selectedEmail.bcc_list.length > 0 && (
+                <Descriptions.Item label="BCC" span={3}>
+                  <Space direction="vertical" size={0}>
+                    {selectedEmail.bcc_list.map((bcc, idx) => (
+                      <div key={idx}>
+                        {bcc.name && <span>{bcc.name} </span>}
+                        <Text type="secondary">&lt;{bcc.email}&gt;</Text>
+                      </div>
+                    ))}
+                  </Space>
+                </Descriptions.Item>
+              )}
+              <Descriptions.Item label="Direction" span={1}>
                 <Tag color={selectedEmail.is_outbound ? 'green' : 'blue'}>
                   {selectedEmail.is_outbound ? 'Outbound' : 'Inbound'}
                 </Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="Reply" span={1}>
+                {selectedEmail.is_reply ? 'Yes' : 'No'}
+              </Descriptions.Item>
+              <Descriptions.Item label="Size" span={1}>
+                {(selectedEmail.message_size / 1024).toFixed(1)} KB
               </Descriptions.Item>
               <Descriptions.Item label="Tags" span={3}>
                 <Space wrap size={[4, 4]}>
@@ -453,41 +496,157 @@ export const EmailList: React.FC = () => {
                   )}
                 </Space>
               </Descriptions.Item>
-              <Descriptions.Item label="Folder" span={2}>
+              <Descriptions.Item label="Folder" span={1}>
                 <Tag color="blue">{selectedEmail.folder_path}</Tag>
               </Descriptions.Item>
-              <Descriptions.Item label="Reply">
-                {selectedEmail.is_reply ? 'Yes' : 'No'}
+              <Descriptions.Item label="Mailbox" span={2}>
+                {selectedEmail.mailbox_name}
               </Descriptions.Item>
-              <Descriptions.Item label="Date" span={2}>
+              <Descriptions.Item label="Sent Date" span={selectedEmail.received_date ? 2 : 3}>
                 <Space>
                   <CalendarOutlined />
                   {new Date(selectedEmail.sent_date).toLocaleString()}
                 </Space>
               </Descriptions.Item>
-              <Descriptions.Item label="Size">
-                {(selectedEmail.message_size / 1024).toFixed(1)} KB
-              </Descriptions.Item>
-              <Descriptions.Item label="Mailbox">
-                {selectedEmail.mailbox_name}
-              </Descriptions.Item>
+              {selectedEmail.received_date && (
+                <Descriptions.Item label="Received Date" span={1}>
+                  <Space>
+                    <CalendarOutlined />
+                    {new Date(selectedEmail.received_date).toLocaleString()}
+                  </Space>
+                </Descriptions.Item>
+              )}
             </Descriptions>
 
-            <Divider>Email Content Preview</Divider>
-            <Card size="small" title="Message Body">
-              <Paragraph>
-                {selectedEmail.body_text ? (
-                  <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>
-                    {selectedEmail.body_text.substring(0, 1000)}
-                    {selectedEmail.body_text.length > 1000 && '...'}
-                  </pre>
-                ) : (
-                  <Text type="secondary">
-                    Email content preview would be displayed here. In a real implementation, 
-                    this would show the actual email body content retrieved from the database.
-                  </Text>
-                )}
-              </Paragraph>
+            <Divider>Email Content</Divider>
+            <Card
+              size="small"
+              title={
+                <Space>
+                  <MailOutlined />
+                  <span>Message Body</span>
+                </Space>
+              }
+              extra={
+                (selectedEmail.body_html && selectedEmail.body_text) && (
+                  <Space>
+                    <Button
+                      size="small"
+                      type={emailBodyView === 'html' ? 'primary' : 'default'}
+                      onClick={() => setEmailBodyView('html')}
+                    >
+                      HTML View
+                    </Button>
+                    <Button
+                      size="small"
+                      type={emailBodyView === 'text' ? 'primary' : 'default'}
+                      onClick={() => setEmailBodyView('text')}
+                    >
+                      Plain Text
+                    </Button>
+                  </Space>
+                )
+              }
+              style={{ marginBottom: 0 }}
+            >
+              {selectedEmail.body_html && emailBodyView === 'html' ? (
+                <div
+                  style={{
+                    border: '1px solid #d9d9d9',
+                    borderRadius: '4px',
+                    backgroundColor: '#ffffff',
+                    height: '500px',
+                    overflow: 'auto',
+                    position: 'relative'
+                  }}
+                >
+                  <iframe
+                    srcDoc={`
+                      <!DOCTYPE html>
+                      <html>
+                      <head>
+                        <meta charset="UTF-8">
+                        <base target="_blank">
+                        <style>
+                          html, body {
+                            margin: 0;
+                            padding: 0;
+                            min-width: fit-content;
+                          }
+                          body {
+                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                            font-size: 14px;
+                            line-height: 1.6;
+                            color: #333;
+                            padding: 20px;
+                          }
+                          img {
+                            max-width: 100%;
+                            height: auto;
+                          }
+                          a {
+                            color: #1890ff;
+                            text-decoration: none;
+                          }
+                          a:hover {
+                            text-decoration: underline;
+                          }
+                          table {
+                            border-collapse: collapse;
+                          }
+                          blockquote {
+                            border-left: 3px solid #d9d9d9;
+                            padding-left: 16px;
+                            margin-left: 0;
+                            color: #666;
+                          }
+                          pre {
+                            background: #f5f5f5;
+                            padding: 12px;
+                            border-radius: 4px;
+                            overflow-x: auto;
+                          }
+                        </style>
+                      </head>
+                      <body>${selectedEmail.body_html}</body>
+                      </html>
+                    `}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      border: 'none',
+                      display: 'block'
+                    }}
+                    sandbox="allow-same-origin allow-scripts allow-popups"
+                    title="Email Content"
+                  />
+                </div>
+              ) : selectedEmail.body_text ? (
+                <div
+                  style={{
+                    border: '1px solid #d9d9d9',
+                    borderRadius: '4px',
+                    backgroundColor: '#ffffff',
+                    minHeight: '400px',
+                    maxHeight: '70vh',
+                    overflow: 'auto',
+                    padding: '20px',
+                    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                    fontSize: '14px',
+                    lineHeight: '1.6',
+                    color: '#333',
+                    whiteSpace: 'pre-wrap',
+                    wordWrap: 'break-word',
+                    overflowWrap: 'break-word'
+                  }}
+                >
+                  {selectedEmail.body_text}
+                </div>
+              ) : (
+                <div style={{ padding: '40px', textAlign: 'center' }}>
+                  <Text type="secondary">No email content available</Text>
+                </div>
+              )}
             </Card>
           </Space>
         )}

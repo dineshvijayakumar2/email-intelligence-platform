@@ -40,6 +40,8 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+tmpclaude-*
+**/tmpclaude-*
 
 # Python specific
 *.egg-info/

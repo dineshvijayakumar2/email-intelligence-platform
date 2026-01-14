@@ -5,7 +5,11 @@ export interface Email {
   subject: string;
   sender_email: string;
   sender_name?: string;
+  recipients?: Array<{ email: string; name?: string }>;
+  cc_list?: Array<{ email: string; name?: string }>;
+  bcc_list?: Array<{ email: string; name?: string }>;
   sent_date: string;
+  received_date?: string;
   category?: string; // This will come from email_categories join
   is_outbound: boolean;
   is_reply: boolean;
