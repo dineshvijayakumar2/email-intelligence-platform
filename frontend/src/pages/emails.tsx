@@ -10,10 +10,12 @@ import {
   DatePicker,
   Button,
   Tooltip,
-  Drawer,
+  Modal,
   Descriptions,
   Divider,
   message,
+  Row,
+  Col,
 } from "antd";
 import {
   SearchOutlined,
@@ -21,6 +23,7 @@ import {
   EyeOutlined,
   MailOutlined,
   CalendarOutlined,
+  CloseOutlined,
 } from "@ant-design/icons";
 import { emailService, Email, EmailFilters } from '../services/emailService';
 
@@ -58,7 +61,7 @@ export const EmailList: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
-  const [drawerVisible, setDrawerVisible] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
   const [emailBodyView, setEmailBodyView] = useState<'html' | 'text'>('html');
   const [categories, setCategories] = useState<string[]>([]);
   const [mailboxes, setMailboxes] = useState<string[]>([]);
@@ -119,7 +122,7 @@ export const EmailList: React.FC = () => {
       // Load full email details including body
       const fullEmail = await emailService.getEmail(email.id);
       setSelectedEmail(fullEmail);
-      setDrawerVisible(true);
+      setModalVisible(true);
     } catch (error) {
       console.error('Error loading email details:', error);
       message.error('Failed to load email details');
@@ -416,107 +419,149 @@ export const EmailList: React.FC = () => {
         />
       </Card>
 
-      {/* Email Details Drawer */}
-      <Drawer
-        title={<Space><MailOutlined />Email Details</Space>}
-        placement="right"
-        onClose={() => setDrawerVisible(false)}
-        open={drawerVisible}
-        width={600}
+      {/* Email Details Modal */}
+      <Modal
+        title={
+          <Space>
+            <MailOutlined />
+            <Text strong>Email Details</Text>
+          </Space>
+        }
+        open={modalVisible}
+        onCancel={() => setModalVisible(false)}
+        footer={null}
+        width="90%"
+        style={{ top: 20 }}
+        styles={{ body: { maxHeight: 'calc(100vh - 120px)', overflowY: 'auto' } }}
       >
         {selectedEmail && (
           <Space direction="vertical" size="large" style={{ width: '100%' }}>
-            <Descriptions title="Email Information" bordered size="small">
-              <Descriptions.Item label="Subject" span={3}>
-                <Text strong>{selectedEmail.subject}</Text>
-              </Descriptions.Item>
-              <Descriptions.Item label="From" span={3}>
-                {selectedEmail.sender_name && (
-                  <div>{selectedEmail.sender_name}</div>
-                )}
-                <Text type="secondary">{selectedEmail.sender_email}</Text>
-              </Descriptions.Item>
-              {selectedEmail.recipients && selectedEmail.recipients.length > 0 && (
-                <Descriptions.Item label="To" span={3}>
-                  <Space direction="vertical" size={0}>
+            {/* Email Header Info */}
+            <Card size="small" title="Email Information">
+              <Row gutter={[16, 16]}>
+                <Col span={24}>
+                  <Text type="secondary">Subject:</Text>
+                  <br />
+                  <Text strong style={{ fontSize: '16px' }}>{selectedEmail.subject}</Text>
+                </Col>
+
+                <Col span={12}>
+                  <Text type="secondary">From:</Text>
+                  <br />
+                  {selectedEmail.sender_name && (
+                    <Text>{selectedEmail.sender_name} </Text>
+                  )}
+                  <Text type="secondary">&lt;{selectedEmail.sender_email}&gt;</Text>
+                </Col>
+
+                <Col span={12}>
+                  <Text type="secondary">Mailbox:</Text>
+                  <br />
+                  <Text>{selectedEmail.mailbox_name || 'Unknown'}</Text>
+                </Col>
+
+                {selectedEmail.recipients && selectedEmail.recipients.length > 0 && (
+                  <Col span={24}>
+                    <Text type="secondary">To:</Text>
+                    <br />
                     {selectedEmail.recipients.map((recipient, idx) => (
-                      <div key={idx}>
-                        {recipient.name && <span>{recipient.name} </span>}
+                      <div key={idx} style={{ display: 'inline-block', marginRight: '12px' }}>
+                        {recipient.name && <Text>{recipient.name} </Text>}
                         <Text type="secondary">&lt;{recipient.email}&gt;</Text>
                       </div>
                     ))}
-                  </Space>
-                </Descriptions.Item>
-              )}
-              {selectedEmail.cc_list && selectedEmail.cc_list.length > 0 && (
-                <Descriptions.Item label="CC" span={3}>
-                  <Space direction="vertical" size={0}>
+                  </Col>
+                )}
+
+                {selectedEmail.cc_list && selectedEmail.cc_list.length > 0 && (
+                  <Col span={24}>
+                    <Text type="secondary">CC:</Text>
+                    <br />
                     {selectedEmail.cc_list.map((cc, idx) => (
-                      <div key={idx}>
-                        {cc.name && <span>{cc.name} </span>}
+                      <div key={idx} style={{ display: 'inline-block', marginRight: '12px' }}>
+                        {cc.name && <Text>{cc.name} </Text>}
                         <Text type="secondary">&lt;{cc.email}&gt;</Text>
                       </div>
                     ))}
-                  </Space>
-                </Descriptions.Item>
-              )}
-              {selectedEmail.bcc_list && selectedEmail.bcc_list.length > 0 && (
-                <Descriptions.Item label="BCC" span={3}>
-                  <Space direction="vertical" size={0}>
+                  </Col>
+                )}
+
+                {selectedEmail.bcc_list && selectedEmail.bcc_list.length > 0 && (
+                  <Col span={24}>
+                    <Text type="secondary">BCC:</Text>
+                    <br />
                     {selectedEmail.bcc_list.map((bcc, idx) => (
-                      <div key={idx}>
-                        {bcc.name && <span>{bcc.name} </span>}
+                      <div key={idx} style={{ display: 'inline-block', marginRight: '12px' }}>
+                        {bcc.name && <Text>{bcc.name} </Text>}
                         <Text type="secondary">&lt;{bcc.email}&gt;</Text>
                       </div>
                     ))}
-                  </Space>
-                </Descriptions.Item>
-              )}
-              <Descriptions.Item label="Direction" span={1}>
-                <Tag color={selectedEmail.is_outbound ? 'green' : 'blue'}>
-                  {selectedEmail.is_outbound ? 'Outbound' : 'Inbound'}
-                </Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label="Reply" span={1}>
-                {selectedEmail.is_reply ? 'Yes' : 'No'}
-              </Descriptions.Item>
-              <Descriptions.Item label="Size" span={1}>
-                {(selectedEmail.message_size / 1024).toFixed(1)} KB
-              </Descriptions.Item>
-              <Descriptions.Item label="Tags" span={3}>
-                <Space wrap size={[4, 4]}>
-                  {selectedEmail.tags && filterContentTags(selectedEmail.tags).length > 0 ? (
-                    filterContentTags(selectedEmail.tags).map(tag => (
-                      <Tag key={tag} color={getCategoryColor(tag)}>
-                        {getCategoryLabel(tag)}
-                      </Tag>
-                    ))
-                  ) : (
-                    <Tag color="default">No content tags</Tag>
-                  )}
-                </Space>
-              </Descriptions.Item>
-              <Descriptions.Item label="Folder" span={1}>
-                <Tag color="blue">{selectedEmail.folder_path}</Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label="Mailbox" span={2}>
-                {selectedEmail.mailbox_name}
-              </Descriptions.Item>
-              <Descriptions.Item label="Sent Date" span={selectedEmail.received_date ? 2 : 3}>
-                <Space>
-                  <CalendarOutlined />
-                  {new Date(selectedEmail.sent_date).toLocaleString()}
-                </Space>
-              </Descriptions.Item>
-              {selectedEmail.received_date && (
-                <Descriptions.Item label="Received Date" span={1}>
+                  </Col>
+                )}
+
+                <Col span={6}>
+                  <Text type="secondary">Direction:</Text>
+                  <br />
+                  <Tag color={selectedEmail.is_outbound ? 'green' : 'blue'}>
+                    {selectedEmail.is_outbound ? 'Outbound' : 'Inbound'}
+                  </Tag>
+                </Col>
+
+                <Col span={6}>
+                  <Text type="secondary">Reply:</Text>
+                  <br />
+                  <Text>{selectedEmail.is_reply ? 'Yes' : 'No'}</Text>
+                </Col>
+
+                <Col span={6}>
+                  <Text type="secondary">Size:</Text>
+                  <br />
+                  <Text>{(selectedEmail.message_size / 1024).toFixed(1)} KB</Text>
+                </Col>
+
+                <Col span={6}>
+                  <Text type="secondary">Folder:</Text>
+                  <br />
+                  <Tag color="blue">{selectedEmail.folder_path}</Tag>
+                </Col>
+
+                <Col span={12}>
+                  <Text type="secondary">Sent Date:</Text>
+                  <br />
                   <Space>
                     <CalendarOutlined />
-                    {new Date(selectedEmail.received_date).toLocaleString()}
+                    <Text>{new Date(selectedEmail.sent_date).toLocaleString()}</Text>
                   </Space>
-                </Descriptions.Item>
-              )}
-            </Descriptions>
+                </Col>
+
+                {selectedEmail.received_date && (
+                  <Col span={12}>
+                    <Text type="secondary">Received Date:</Text>
+                    <br />
+                    <Space>
+                      <CalendarOutlined />
+                      <Text>{new Date(selectedEmail.received_date).toLocaleString()}</Text>
+                    </Space>
+                  </Col>
+                )}
+
+                <Col span={24}>
+                  <Text type="secondary">Tags:</Text>
+                  <br />
+                  <Space wrap size={[4, 4]}>
+                    {selectedEmail.tags && filterContentTags(selectedEmail.tags).length > 0 ? (
+                      filterContentTags(selectedEmail.tags).map(tag => (
+                        <Tag key={tag} color={getCategoryColor(tag)}>
+                          {getCategoryLabel(tag)}
+                        </Tag>
+                      ))
+                    ) : (
+                      <Tag color="default">No content tags</Tag>
+                    )}
+                  </Space>
+                </Col>
+              </Row>
+            </Card>
 
             <Divider>Email Content</Divider>
             <Card
@@ -650,7 +695,7 @@ export const EmailList: React.FC = () => {
             </Card>
           </Space>
         )}
-      </Drawer>
+      </Modal>
     </Space>
   );
 };

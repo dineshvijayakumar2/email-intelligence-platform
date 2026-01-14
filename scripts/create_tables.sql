@@ -311,7 +311,7 @@ BEGIN
     WHERE e.folder_path = f.folder_path
     AND e.mailbox_id = f.mailbox_id
   );
-  
+
   -- Update mailbox totals
   UPDATE mailboxes m
   SET total_emails = (
@@ -321,6 +321,11 @@ BEGIN
   );
 END;
 $$ LANGUAGE plpgsql;
+
+-- Grant execute permission to anon and authenticated roles
+GRANT EXECUTE ON FUNCTION update_folder_counts() TO anon, authenticated;
+
+COMMENT ON FUNCTION update_folder_counts() IS 'Updates message counts in folders table and total_emails in mailboxes table';
 
 -- RLS (Row Level Security) policies for multi-tenant usage (if needed)
 -- ALTER TABLE emails ENABLE ROW LEVEL SECURITY;
