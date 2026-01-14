@@ -76,10 +76,18 @@ A comprehensive proof-of-concept for email intelligence gathering, processing, a
 
 ---
 
-## 📋 Stage 2 Plan: AI Enrichment & Export
+## 📋 Stage 2 Plan: AI Enrichment, Business Analytics & Export
 
 ### **Goal**
-Enrich 1,000-2,000 structured emails with AI-powered analysis to extract intent, tone, sentiment, and business-critical details (quotes, pricing, escalations).
+Transform the platform into a comprehensive business intelligence tool by enriching 1,000-2,000 emails with AI-powered analysis, building a contacts/leads database, creating actionable analytics dashboards, and enabling smart export capabilities.
+
+### **Expanded Scope** (Based on Business Email Analytics Best Practices)
+1. **AI Email Enrichment**: Intent, tone, sentiment, quotes, pricing extraction
+2. **Attachments Intelligence**: Track, categorize, and extract metadata from attachments
+3. **Contacts & Lead Directory**: Build searchable contact database with lead scoring
+4. **Email Signature Parsing**: Extract job titles, companies, phone numbers for lead targeting
+5. **Business Analytics Dashboard**: Visualize trends, response times, engagement metrics
+6. **Smart Export System**: CSV/Excel with customizable fields and filters
 
 ### **Core Requirements**
 
@@ -105,8 +113,109 @@ for batch in batches:
     save_to_database(enrichments)
 ```
 
-#### 2. **Structured JSON Output**
-**Schema Design** (v1 - Iterative):
+#### 2. **Attachments Intelligence**
+**Capabilities**:
+- **Metadata Extraction**: Filename, size, type, count per email
+- **Content Categorization**: Documents (PDF, DOCX), images, spreadsheets, presentations
+- **Business Document Detection**: Invoices, contracts, proposals, RFQs
+- **Attachment Analytics**: Most common file types, size distribution, attachment trends
+
+**Database Schema**:
+```sql
+CREATE TABLE email_attachments (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  email_id UUID REFERENCES emails(id) ON DELETE CASCADE,
+  filename TEXT NOT NULL,
+  file_size INTEGER,
+  mime_type TEXT,
+  file_extension TEXT,
+  attachment_type TEXT, -- 'document', 'image', 'spreadsheet', 'presentation', 'other'
+  is_business_doc BOOLEAN DEFAULT FALSE,
+  business_doc_type TEXT, -- 'invoice', 'contract', 'proposal', 'quote', 'rfq'
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+
+  INDEX idx_attachment_email(email_id),
+  INDEX idx_attachment_type(attachment_type),
+  INDEX idx_business_docs(is_business_doc, business_doc_type)
+);
+```
+
+#### 3. **Contacts & Lead Directory**
+**Lead Intelligence System**:
+- **Automatic Contact Extraction**: Parse From/To/CC fields to build contact database
+- **Email Signature Parsing**: Extract job titles, company names, phone numbers, LinkedIn profiles
+- **Lead Scoring**: Rank contacts by email frequency, engagement, business relevance
+- **Deduplication**: Merge duplicate contacts across multiple email addresses
+- **Company Grouping**: Group contacts by company domain for account-based insights
+
+**Database Schema**:
+```sql
+CREATE TABLE contacts (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  email_address TEXT UNIQUE NOT NULL,
+  full_name TEXT,
+  first_name TEXT,
+  last_name TEXT,
+
+  -- Signature-extracted fields
+  job_title TEXT,
+  company_name TEXT,
+  phone_number TEXT,
+  linkedin_url TEXT,
+  website TEXT,
+
+  -- Analytics
+  total_emails_sent INTEGER DEFAULT 0,
+  total_emails_received INTEGER DEFAULT 0,
+  first_contact_date TIMESTAMPTZ,
+  last_contact_date TIMESTAMPTZ,
+  lead_score INTEGER DEFAULT 0, -- 0-100 scoring
+
+  -- Classification
+  contact_type TEXT, -- 'customer', 'prospect', 'vendor', 'partner', 'internal'
+  industry TEXT,
+
+  -- Metadata
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+
+  INDEX idx_contact_email(email_address),
+  INDEX idx_contact_company(company_name),
+  INDEX idx_lead_score(lead_score DESC),
+  INDEX idx_contact_type(contact_type)
+);
+
+CREATE TABLE contact_email_map (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  contact_id UUID REFERENCES contacts(id) ON DELETE CASCADE,
+  email_id UUID REFERENCES emails(id) ON DELETE CASCADE,
+  interaction_type TEXT, -- 'sent', 'received', 'cc', 'bcc'
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+
+  UNIQUE(contact_id, email_id, interaction_type)
+);
+```
+
+**Signature Parsing Strategy**:
+```python
+# AI-powered signature extraction
+signature_prompt = """
+Extract contact information from this email signature:
+{signature_text}
+
+Return JSON:
+{
+  "job_title": "Senior Sales Manager",
+  "company_name": "Acme Corp",
+  "phone": "+1-555-0123",
+  "linkedin": "linkedin.com/in/johndoe",
+  "website": "acme.com"
+}
+"""
+```
+
+#### 4. **Structured JSON Output**
+**Enhanced Schema Design** (v2 - with attachments & contacts):
 ```json
 {
   "email_id": "uuid",
@@ -129,13 +238,93 @@ for batch in batches:
     "products_quoted": ["product list"]
   },
   "action_items": ["extracted action items"],
+  "signature_data": {
+    "job_title": "string or null",
+    "company": "string or null",
+    "phone": "string or null",
+    "linkedin": "string or null"
+  },
   "confidence_score": 0.0-1.0
 }
 ```
 
 **Validation**: Pydantic models with strict type checking
 
-#### 3. **Database Design**
+#### 5. **Business Analytics Dashboard**
+**Key Metrics & Visualizations**:
+
+**Email Volume Analytics**:
+- Daily/weekly/monthly email trends (line charts)
+- Inbound vs outbound volume comparison
+- Peak email hours/days heatmap
+- Email volume by folder/mailbox
+
+**Response Time Analytics**:
+- Average response time by sender/recipient
+- Response time distribution (histogram)
+- Longest unanswered threads
+- Response rate percentage
+
+**Engagement Metrics**:
+- Top contacts by email frequency
+- Thread length distribution
+- Email read/reply patterns
+- Engagement score by contact
+
+**Business Intelligence**:
+- Sentiment trends over time
+- Quote/pricing analytics (total value, average deal size)
+- Escalation tracking and resolution times
+- Lead source analysis (which contacts generate most valuable conversations)
+
+**Attachment Intelligence**:
+- File type distribution (pie chart)
+- Business documents tracker
+- Attachment size trends
+- Most shared document types
+
+**Contact Analytics**:
+- Top leads by score
+- Company/domain distribution
+- Contact acquisition funnel
+- Industry breakdown
+
+**UI Components** (Ant Design Charts):
+```typescript
+// Example dashboard widgets
+<Row gutter={16}>
+  <Col span={6}>
+    <Card title="Total Emails">
+      <Statistic value={12543} prefix={<MailOutlined />} />
+    </Card>
+  </Col>
+  <Col span={6}>
+    <Card title="Active Contacts">
+      <Statistic value={342} prefix={<UserOutlined />} />
+    </Card>
+  </Col>
+  <Col span={6}>
+    <Card title="Avg Response Time">
+      <Statistic value="2.4 hrs" prefix={<ClockCircleOutlined />} />
+    </Card>
+  </Col>
+  <Col span={6}>
+    <Card title="Lead Score Avg">
+      <Statistic value={68} suffix="/ 100" />
+    </Card>
+  </Col>
+</Row>
+
+<Card title="Email Volume Trends">
+  <Line data={emailVolumeData} />
+</Card>
+
+<Card title="Sentiment Distribution">
+  <Pie data={sentimentData} />
+</Card>
+```
+
+#### 6. **Database Design**
 **New Table**: `email_enrichment`
 ```sql
 CREATE TABLE email_enrichment (
@@ -174,24 +363,28 @@ CREATE INDEX idx_email_enrichment_escalation ON email_enrichment(escalation_need
 CREATE INDEX idx_email_enrichment_entities ON email_enrichment USING GIN(key_entities);
 ```
 
-#### 4. **Error Handling & Retry Logic**
+#### 7. **Error Handling & Retry Logic**
 - **JSON Validation**: Catch malformed responses, request retry
 - **API Errors**: Exponential backoff (1s, 2s, 4s, 8s)
 - **Partial Success**: Save successful enrichments, retry failed ones
 - **Logging**: Detailed logs for debugging
 - **Monitoring**: Track success rate, avg processing time
 
-#### 5. **Export Capabilities**
+#### 8. **Export Capabilities**
 **CSV Export**:
-- All email fields + enrichment data
+- All email fields + enrichment data + contact details
+- Attachments summary (count, types, business docs)
 - Configurable column selection
-- Filtered exports (by date, folder, tags, sentiment)
+- Filtered exports (by date, folder, tags, sentiment, lead score)
+- Contact/lead exports with company grouping
 - Scheduled exports (optional)
 
 **Excel Export**:
-- Multiple sheets (emails, enrichment, summary stats)
-- Formatted cells (sentiment colors, priority highlights)
+- Multiple sheets (emails, enrichment, contacts, attachments, analytics summary)
+- Formatted cells (sentiment colors, priority highlights, lead scores)
 - Charts and pivot tables
+- Contact directory with company grouping
+- Attachment inventory by type
 
 **Export API**:
 ```python
@@ -232,12 +425,41 @@ src/ai/
 └── models.py                  # Pydantic schemas
 ```
 
+### **Attachments Module**
+```
+src/attachments/
+├── attachment_extractor.py    # Extract attachment metadata
+├── file_classifier.py         # Categorize file types
+├── business_doc_detector.py   # Detect invoices, contracts, etc.
+└── models.py                  # Attachment schemas
+```
+
+### **Contacts & Leads Module**
+```
+src/contacts/
+├── contact_extractor.py       # Build contact database
+├── signature_parser.py        # AI-powered signature extraction
+├── lead_scorer.py             # Calculate lead scores
+├── deduplication.py           # Merge duplicate contacts
+└── models.py                  # Contact schemas
+```
+
+### **Analytics Module**
+```
+src/analytics/
+├── email_analytics.py         # Email volume, trends
+├── response_analytics.py      # Response time calculations
+├── engagement_metrics.py      # Contact engagement scoring
+├── dashboard_builder.py       # Aggregate dashboard data
+└── models.py                  # Analytics schemas
+```
+
 ### **Export Module**
 ```
 src/exports/
 ├── export_engine.py           # Export orchestrator
 ├── csv_exporter.py            # CSV generation
-├── excel_exporter.py          # Excel generation
+├── excel_exporter.py          # Excel with multiple sheets
 ├── formatters.py              # Data formatting
 └── models.py                  # Export schemas
 ```
@@ -287,33 +509,53 @@ src/exports/
 
 ## 📊 Stage 2 Deliverables
 
-### **Week 1: AI Enrichment Foundation**
+### **Week 1-2: AI Enrichment & Attachments**
 - [ ] Claude API integration with retry logic
 - [ ] Prompt engineering for batch processing
 - [ ] JSON schema definition and validation
-- [ ] Database schema for enrichment table
+- [ ] Database schema for enrichment, attachments, contacts tables
 - [ ] Basic batch processing (10 emails at a time)
-
-### **Week 2: Enrichment Engine**
+- [ ] Attachment metadata extraction
+- [ ] File type classification and business document detection
 - [ ] Complete batch processor with error handling
 - [ ] Entity extraction (people, companies, products)
 - [ ] Quote/pricing detection and extraction
 - [ ] Escalation detection logic
-- [ ] Confidence scoring system
+- [ ] Email signature parsing with AI
 
-### **Week 3: Export System**
-- [ ] CSV export with customizable columns
+### **Week 3-4: Contacts & Analytics Dashboard**
+- [ ] Contact extraction from From/To/CC fields
+- [ ] Signature parsing integration
+- [ ] Lead scoring algorithm implementation
+- [ ] Contact deduplication and merging
+- [ ] Company/domain grouping logic
+- [ ] Email volume analytics (daily/weekly trends)
+- [ ] Response time calculations
+- [ ] Engagement metrics engine
+- [ ] Dashboard API endpoints
+- [ ] Frontend dashboard with Ant Design charts
+- [ ] Top contacts/leads widgets
+- [ ] Sentiment trend visualizations
+- [ ] Attachment analytics widgets
+
+### **Week 5: Export System**
+- [ ] CSV export with customizable columns (emails, contacts, attachments)
 - [ ] Excel export with multiple sheets
+- [ ] Contact directory export with lead scores
+- [ ] Attachment inventory export
 - [ ] Export API endpoints
 - [ ] Async export processing for large datasets
 - [ ] Download link generation
 
-### **Week 4: UI & Testing**
+### **Week 6: UI & Testing**
 - [ ] AI enrichment trigger UI
-- [ ] Export configuration UI
+- [ ] Contacts/leads directory UI
+- [ ] Export configuration UI with advanced filters
 - [ ] Progress monitoring for enrichment jobs
 - [ ] End-to-end testing with 1,000+ emails
 - [ ] Performance optimization and caching
+- [ ] Dashboard performance tuning
+- [ ] Lead scoring validation
 
 ---
 
@@ -436,25 +678,86 @@ GET /api/emails/categories
 POST /api/processing-jobs/{job_id}/reprocess
 ```
 
-### **Stage 2: Enrichment Endpoints (Planned)**
+### **Stage 2: AI Enrichment Endpoints (Planned)**
 ```http
 # Trigger AI enrichment
 POST /api/enrichment/batch
 {
   "email_ids": ["uuid1", "uuid2"],
   "model": "claude-3-5-sonnet",
-  "fields": ["intent", "sentiment", "quotes"]
+  "fields": ["intent", "sentiment", "quotes", "signature"]
 }
 
 # Get enrichment status
 GET /api/enrichment/jobs/{job_id}
 
+# Get enriched email details
+GET /api/emails/{email_id}/enrichment
+```
+
+### **Stage 2: Contacts & Leads Endpoints (Planned)**
+```http
+# Get all contacts with filters
+GET /api/contacts?company=Acme&min_score=70&sort=lead_score
+
+# Get single contact details
+GET /api/contacts/{contact_id}
+
+# Get contact's email history
+GET /api/contacts/{contact_id}/emails
+
+# Get contacts grouped by company
+GET /api/contacts/companies
+
+# Update contact details
+PATCH /api/contacts/{contact_id}
+{
+  "contact_type": "customer",
+  "industry": "Technology"
+}
+
+# Merge duplicate contacts
+POST /api/contacts/merge
+{
+  "primary_id": "uuid1",
+  "duplicate_ids": ["uuid2", "uuid3"]
+}
+```
+
+### **Stage 2: Analytics Dashboard Endpoints (Planned)**
+```http
+# Get dashboard summary
+GET /api/analytics/dashboard
+
+# Get email volume trends
+GET /api/analytics/email-volume?period=7d&group_by=day
+
+# Get response time analytics
+GET /api/analytics/response-times?contact_id=uuid
+
+# Get top contacts by engagement
+GET /api/analytics/top-contacts?limit=50&metric=email_count
+
+# Get sentiment trends
+GET /api/analytics/sentiment-trends?period=30d
+
+# Get attachment analytics
+GET /api/analytics/attachments?group_by=type
+```
+
+### **Stage 2: Export Endpoints (Planned)**
+```http
 # Export enriched data
 POST /api/exports/create
 {
-  "format": "csv",
-  "filters": {...},
-  "columns": [...]
+  "format": "csv" | "excel",
+  "export_type": "emails" | "contacts" | "attachments" | "all",
+  "filters": {
+    "date_from": "2025-01-01",
+    "sentiment": ["positive"],
+    "lead_score_min": 70
+  },
+  "columns": ["subject", "sender", "sentiment", "lead_score"]
 }
 
 GET /api/exports/{export_id}/download
@@ -529,12 +832,24 @@ redis-cli ping
 - **Batch Throughput**: 500-1,000 emails/hour
 - **JSON Parse Success**: > 95%
 - **Export Generation**: < 30 seconds for 10,000 emails
+- **Dashboard Load Time**: < 3 seconds for analytics queries
+- **Contact Extraction**: Process all emails in < 5 minutes for 10,000 emails
 
 ### **Quality Metrics**
 - **Intent Classification Accuracy**: > 85%
 - **Sentiment Analysis Accuracy**: > 90%
 - **Quote Extraction Precision**: > 95%
 - **Escalation Detection Recall**: > 90%
+- **Signature Parsing Accuracy**: > 80% (job title, company extraction)
+- **Contact Deduplication Precision**: > 95%
+- **Lead Scoring Relevance**: Validated by business use case
+
+### **Business Intelligence Metrics**
+- **Contact Database**: Build directory of 500+ unique contacts from 10,000 emails
+- **Lead Quality**: Identify top 50 leads with scores > 70/100
+- **Business Documents**: Detect and categorize 100+ invoices/contracts/quotes
+- **Attachment Coverage**: Extract metadata for > 95% of attachments
+- **Dashboard Insights**: Provide 10+ actionable analytics widgets
 
 ---
 
