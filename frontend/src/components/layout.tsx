@@ -5,7 +5,9 @@ import {
   DashboardOutlined,
   MailOutlined,
   InboxOutlined,
-  SettingOutlined
+  SettingOutlined,
+  ExclamationCircleOutlined,
+  TeamOutlined
 } from "@ant-design/icons";
 
 const { Header, Sider, Content } = AntdLayout;
@@ -39,6 +41,12 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
           </Menu.Item>
           <Menu.Item key="/processing" icon={<SettingOutlined />}>
             <Link to="/processing">Processing</Link>
+          </Menu.Item>
+          <Menu.Item key="/errors" icon={<ExclamationCircleOutlined />}>
+            <Link to="/errors">Errors</Link>
+          </Menu.Item>
+          <Menu.Item key="/clients" icon={<TeamOutlined />}>
+            <Link to="/clients">Clients</Link>
           </Menu.Item>
         </Menu>
       </Sider>

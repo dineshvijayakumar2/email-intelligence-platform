@@ -159,8 +159,18 @@ class GoogleDriveTextStream:
             logger.error(f"❌ Failed to fetch chunk from Google Drive: {e}")
             raise IOError(f"Failed to read from Google Drive text stream: {e}")
 
-    def _fetch_with_retry(self, range_header: str, expected_size: int, max_retries: int = 3) -> bytes:
-        """Fetch data with retry logic for resilience"""
+    def _fetch_with_retry(self, range_header: str, expected_size: int, max_retries: int = 5) -> bytes:
+        """
+        Fetch data with improved retry logic for network resilience.
+
+        Handles common network errors:
+        - WinError 10053: Connection aborted by host
+        - WinError 10035: Non-blocking socket would block
+        - Connection timeouts
+        - Temporary Google API errors
+        """
+        last_exception = None
+
         for attempt in range(max_retries):
             try:
                 # Create request with range header
@@ -180,12 +190,57 @@ class GoogleDriveTextStream:
                     return b''
 
             except Exception as e:
-                if attempt < max_retries - 1:
-                    wait_time = 2 ** attempt  # Exponential backoff
-                    logger.warning(f"⚠️ Fetch attempt {attempt + 1} failed, retrying in {wait_time}s: {e}")
+                last_exception = e
+                error_str = str(e).lower()
+                error_type = type(e).__name__
+
+                # Determine if error is retryable
+                retryable_errors = [
+                    '10053',  # WinError: Connection aborted
+                    '10035',  # WinError: Non-blocking socket
+                    '10054',  # WinError: Connection reset
+                    'timeout',
+                    'timed out',
+                    'connection reset',
+                    'connection aborted',
+                    'broken pipe',
+                    'connection refused',
+                    'temporary failure',
+                    'service unavailable',
+                    '503',
+                    '500',
+                    '502',
+                    '504',
+                ]
+
+                is_retryable = any(err in error_str for err in retryable_errors)
+
+                if attempt < max_retries - 1 and is_retryable:
+                    # Exponential backoff with jitter: 1s, 2s, 4s, 8s, 16s
+                    base_wait = 2 ** attempt
+                    jitter = base_wait * 0.1 * (time.time() % 1)  # 10% jitter
+                    wait_time = base_wait + jitter
+
+                    logger.warning(
+                        f"⚠️ Network error on attempt {attempt + 1}/{max_retries}, "
+                        f"retrying in {wait_time:.1f}s: [{error_type}] {e}"
+                    )
                     time.sleep(wait_time)
-                else:
+                elif not is_retryable:
+                    # Non-retryable error - fail immediately
+                    logger.error(f"❌ Non-retryable error: [{error_type}] {e}")
                     raise
+                else:
+                    # All retries exhausted
+                    logger.error(
+                        f"❌ All {max_retries} fetch attempts failed. "
+                        f"Last error: [{error_type}] {e}"
+                    )
+                    raise
+
+        # Should not reach here, but just in case
+        if last_exception:
+            raise last_exception
 
     def _log_progress(self):
         """Log streaming progress at reasonable intervals"""

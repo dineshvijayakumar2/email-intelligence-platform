@@ -4,6 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Recent Improvements
 
+### Jan 19, 2026
+1. **Parallel Download Option**: Added "Download Before Processing" in Advanced Settings for large Google Drive files (faster than streaming for 5GB+ files)
+2. **Frontend API Client**: Centralized API client (`frontend/src/services/apiClient.ts`) with timeout, retry, and connection status tracking
+3. **Connection Status Hook**: `frontend/src/hooks/useConnectionStatus.ts` for detecting backend disconnection
+4. **Interrupted Job Status**: Jobs interrupted by server restart are now marked as `interrupted` and can be restarted
+
 ### Jan 14, 2026
 1. **MBOX Streaming**: MBOX files now stream from Google Drive (no download) - consistent with OLM streaming
 2. **Unified Streaming Architecture**: Both MBOX and OLM use streaming approach for cancellable, memory-efficient processing
@@ -198,4 +204,16 @@ Please follow the below best practices while doing coding.
 6. Do git sync to the main branch when performing major changes to the codebase.
 7. Create docs only in docs folder. Create a new one only if it's a major functionality newly implemented. Otherwise, update the existing docs.
 8. Keep the environment configuration centralized in the root folder and create separate files for dev and prod
-9. **Always use designated ports for services**: Backend must run on port 8000, Frontend must run on port 3000. Before starting a service, check if the port is in use and kill the old process. Never start services on different ports (e.g., 3001, 3002, 8001). Always verify the service started on the correct port. 
+9. **Always use designated ports for services**: Backend must run on port 8000, Frontend must run on port 3000. Before starting a service, check if the port is in use and kill the old process. Never start services on different ports (e.g., 3001, 3002, 8001). Always verify the service started on the correct port.
+10. **Thread daemon status**: In Python, you cannot change a thread's daemon status after it has started. When creating custom ThreadPoolExecutors with daemon threads, you must set `daemon=True` during thread creation, not after. The standard ThreadPoolExecutor doesn't support this directly.
+11. **Frontend service pattern**: All frontend API services should use the centralized `apiClient.ts` for consistent error handling, timeouts, and connection status tracking. Use `silentOnNetworkError: true` for polling requests.
+12. **Job status handling**: Always include all active statuses (`pending`, `running`, `downloading`) when checking for active jobs in both frontend and backend.
+
+### Known Issues / TODO
+
+1. **Daemon Thread Error**: The `DaemonThreadPoolExecutor` in `main.py` and `parallel_downloader.py` has a bug - it tries to set `thread.daemon = True` on already-running threads which raises `RuntimeError`. This needs to be fixed by either:
+   - Removing the daemon thread approach and relying on proper cancellation
+   - Implementing a proper daemon thread factory (complex)
+   - Using multiprocessing instead of threading for downloads
+
+   See `docs/UPDATE_CONTEXT.md` for detailed context on this issue. 

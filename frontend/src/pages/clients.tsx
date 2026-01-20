@@ -1,0 +1,475 @@
+/**
+ * Clients Page - Stage 2 Business Hierarchy
+ *
+ * List and manage consulting clients with their customer companies.
+ */
+
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  Card,
+  Table,
+  Tag,
+  Button,
+  Space,
+  Typography,
+  Input,
+  Row,
+  Col,
+  Statistic,
+  Modal,
+  Form,
+  Select,
+  message,
+  Tooltip,
+  Breadcrumb,
+  Popconfirm,
+} from 'antd';
+import {
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  SearchOutlined,
+  TeamOutlined,
+  HomeOutlined,
+  ReloadOutlined,
+  BankOutlined,
+} from '@ant-design/icons';
+import { Link } from 'react-router-dom';
+import {
+  clientService,
+  ClientSummary,
+  ClientCreate,
+  ClientUpdate,
+  ClientStatus,
+} from '../services/clientService';
+import {
+  accountManagerService,
+  AccountManager,
+} from '../services/accountManagerService';
+
+const { Title, Text } = Typography;
+const { Option } = Select;
+
+const ClientsPage: React.FC = () => {
+  // State
+  const [loading, setLoading] = useState(false);
+  const [clients, setClients] = useState<ClientSummary[]>([]);
+  const [total, setTotal] = useState(0);
+  const [accountManagers, setAccountManagers] = useState<AccountManager[]>([]);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [editingClient, setEditingClient] = useState<ClientSummary | null>(null);
+  const [form] = Form.useForm();
+
+  // Filters
+  const [statusFilter, setStatusFilter] = useState<ClientStatus | undefined>();
+  const [accountManagerFilter, setAccountManagerFilter] = useState<string | undefined>();
+
+  // Load clients
+  const loadClients = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await clientService.list(accountManagerFilter, statusFilter);
+      setClients(response.clients);
+      setTotal(response.total);
+    } catch (error) {
+      console.error('Failed to load clients:', error);
+      message.error('Failed to load clients');
+    } finally {
+      setLoading(false);
+    }
+  }, [accountManagerFilter, statusFilter]);
+
+  // Load account managers
+  const loadAccountManagers = useCallback(async () => {
+    try {
+      const response = await accountManagerService.list(true);
+      setAccountManagers(response.account_managers);
+    } catch (error) {
+      console.error('Failed to load account managers:', error);
+    }
+  }, []);
+
+  // Initial load
+  useEffect(() => {
+    loadClients();
+    loadAccountManagers();
+  }, [loadClients, loadAccountManagers]);
+
+  // Handle create/edit
+  const handleSubmit = async (values: any) => {
+    try {
+      if (editingClient) {
+        await clientService.update(editingClient.id, values as ClientUpdate);
+        message.success('Client updated successfully');
+      } else {
+        await clientService.create(values as ClientCreate);
+        message.success('Client created successfully');
+      }
+      setModalVisible(false);
+      form.resetFields();
+      setEditingClient(null);
+      loadClients();
+    } catch (error: any) {
+      message.error(error.message || 'Failed to save client');
+    }
+  };
+
+  // Handle delete
+  const handleDelete = async (id: string) => {
+    try {
+      await clientService.delete(id);
+      message.success('Client deleted successfully');
+      loadClients();
+    } catch (error: any) {
+      message.error(error.message || 'Failed to delete client');
+    }
+  };
+
+  // Open edit modal
+  const openEditModal = (client: ClientSummary) => {
+    setEditingClient(client);
+    form.setFieldsValue({
+      client_name: client.client_name,
+      client_label: client.client_label,
+      status: client.status,
+    });
+    setModalVisible(true);
+  };
+
+  // Table columns
+  const columns = [
+    {
+      title: 'Client Name',
+      dataIndex: 'client_name',
+      key: 'client_name',
+      render: (name: string, record: ClientSummary) => (
+        <Space>
+          <BankOutlined />
+          <Text strong>{name}</Text>
+          {record.client_label && (
+            <Tag color="blue">{record.client_label}</Tag>
+          )}
+        </Space>
+      ),
+    },
+    {
+      title: 'Status',
+      dataIndex: 'status',
+      key: 'status',
+      width: 100,
+      render: (status: ClientStatus) => (
+        <Tag color={clientService.getStatusColor(status)}>
+          {clientService.getStatusLabel(status)}
+        </Tag>
+      ),
+    },
+    {
+      title: 'Account Manager',
+      dataIndex: 'account_manager_name',
+      key: 'account_manager_name',
+      width: 150,
+      render: (name: string) => name || <Text type="secondary">Unassigned</Text>,
+    },
+    {
+      title: 'Companies',
+      dataIndex: 'customer_company_count',
+      key: 'customer_company_count',
+      width: 100,
+      align: 'center' as const,
+      render: (count: number) => (
+        <Tooltip title="Customer Companies">
+          <Tag color="geekblue">{count}</Tag>
+        </Tooltip>
+      ),
+    },
+    {
+      title: 'Contacts',
+      dataIndex: 'contact_count',
+      key: 'contact_count',
+      width: 100,
+      align: 'center' as const,
+      render: (count: number) => (
+        <Tooltip title="Customer Contacts">
+          <Tag color="cyan">{count}</Tag>
+        </Tooltip>
+      ),
+    },
+    {
+      title: 'Mailboxes',
+      dataIndex: 'mailbox_count',
+      key: 'mailbox_count',
+      width: 100,
+      align: 'center' as const,
+      render: (count: number) => (
+        <Tooltip title="Connected Mailboxes">
+          <Tag>{count}</Tag>
+        </Tooltip>
+      ),
+    },
+    {
+      title: 'Emails',
+      dataIndex: 'total_emails',
+      key: 'total_emails',
+      width: 100,
+      align: 'right' as const,
+      render: (count: number) => count.toLocaleString(),
+    },
+    {
+      title: 'Actions',
+      key: 'actions',
+      width: 100,
+      render: (_: any, record: ClientSummary) => (
+        <Space size="small">
+          <Tooltip title="Edit">
+            <Button
+              type="text"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => openEditModal(record)}
+            />
+          </Tooltip>
+          <Popconfirm
+            title="Delete this client?"
+            description="This will also delete all customer companies, contacts, and rules."
+            onConfirm={() => handleDelete(record.id)}
+            okText="Delete"
+            okButtonProps={{ danger: true }}
+          >
+            <Tooltip title="Delete">
+              <Button
+                type="text"
+                size="small"
+                icon={<DeleteOutlined />}
+                danger
+              />
+            </Tooltip>
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
+
+  // Calculate stats
+  const activeClients = clients.filter(c => c.status === 'active').length;
+  const totalCompanies = clients.reduce((sum, c) => sum + c.customer_company_count, 0);
+  const totalContacts = clients.reduce((sum, c) => sum + c.contact_count, 0);
+
+  return (
+    <div style={{ padding: 24 }}>
+      {/* Breadcrumb */}
+      <Breadcrumb style={{ marginBottom: 16 }}>
+        <Breadcrumb.Item>
+          <Link to="/"><HomeOutlined /> Home</Link>
+        </Breadcrumb.Item>
+        <Breadcrumb.Item>
+          <TeamOutlined /> Clients
+        </Breadcrumb.Item>
+      </Breadcrumb>
+
+      {/* Header */}
+      <Row justify="space-between" align="middle" style={{ marginBottom: 24 }}>
+        <Col>
+          <Title level={2} style={{ margin: 0 }}>
+            <TeamOutlined style={{ marginRight: 8 }} />
+            Clients
+          </Title>
+        </Col>
+        <Col>
+          <Space>
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={loadClients}
+              loading={loading}
+            >
+              Refresh
+            </Button>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => {
+                setEditingClient(null);
+                form.resetFields();
+                setModalVisible(true);
+              }}
+            >
+              Add Client
+            </Button>
+          </Space>
+        </Col>
+      </Row>
+
+      {/* Stats */}
+      <Row gutter={16} style={{ marginBottom: 24 }}>
+        <Col span={6}>
+          <Card>
+            <Statistic title="Total Clients" value={total} />
+          </Card>
+        </Col>
+        <Col span={6}>
+          <Card>
+            <Statistic
+              title="Active Clients"
+              value={activeClients}
+              valueStyle={{ color: '#3f8600' }}
+            />
+          </Card>
+        </Col>
+        <Col span={6}>
+          <Card>
+            <Statistic title="Customer Companies" value={totalCompanies} />
+          </Card>
+        </Col>
+        <Col span={6}>
+          <Card>
+            <Statistic title="Customer Contacts" value={totalContacts} />
+          </Card>
+        </Col>
+      </Row>
+
+      {/* Filters */}
+      <Card style={{ marginBottom: 24 }}>
+        <Row gutter={16}>
+          <Col span={8}>
+            <Text strong>Filter by Status:</Text>
+            <Select
+              style={{ width: '100%', marginTop: 8 }}
+              placeholder="All Statuses"
+              allowClear
+              value={statusFilter}
+              onChange={setStatusFilter}
+            >
+              <Option value="active">Active</Option>
+              <Option value="inactive">Inactive</Option>
+              <Option value="prospect">Prospect</Option>
+            </Select>
+          </Col>
+          <Col span={8}>
+            <Text strong>Filter by Account Manager:</Text>
+            <Select
+              style={{ width: '100%', marginTop: 8 }}
+              placeholder="All Account Managers"
+              allowClear
+              value={accountManagerFilter}
+              onChange={setAccountManagerFilter}
+            >
+              {accountManagers.map(am => (
+                <Option key={am.id} value={am.id}>
+                  {am.name}
+                </Option>
+              ))}
+            </Select>
+          </Col>
+        </Row>
+      </Card>
+
+      {/* Clients Table */}
+      <Card>
+        <Table
+          dataSource={clients}
+          columns={columns}
+          rowKey="id"
+          loading={loading}
+          pagination={{
+            total,
+            pageSize: 20,
+            showSizeChanger: true,
+            showTotal: (total) => `Total ${total} clients`,
+          }}
+        />
+      </Card>
+
+      {/* Create/Edit Modal */}
+      <Modal
+        title={editingClient ? 'Edit Client' : 'Add Client'}
+        open={modalVisible}
+        onCancel={() => {
+          setModalVisible(false);
+          form.resetFields();
+          setEditingClient(null);
+        }}
+        footer={null}
+        width={600}
+      >
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={handleSubmit}
+          initialValues={{ status: 'active' }}
+        >
+          <Form.Item
+            name="client_name"
+            label="Client Name"
+            rules={[{ required: true, message: 'Please enter client name' }]}
+          >
+            <Input placeholder="e.g., ABC Corporation" />
+          </Form.Item>
+
+          <Form.Item
+            name="client_label"
+            label="Short Label"
+            extra="A short identifier for quick reference (e.g., ABC)"
+          >
+            <Input placeholder="e.g., ABC" maxLength={20} />
+          </Form.Item>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="status"
+                label="Status"
+                rules={[{ required: true }]}
+              >
+                <Select>
+                  <Option value="active">Active</Option>
+                  <Option value="inactive">Inactive</Option>
+                  <Option value="prospect">Prospect</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="account_manager_id"
+                label="Account Manager"
+              >
+                <Select placeholder="Select account manager" allowClear>
+                  {accountManagers.map(am => (
+                    <Option key={am.id} value={am.id}>
+                      {am.name}
+                    </Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Form.Item
+            name="industry"
+            label="Industry"
+          >
+            <Input placeholder="e.g., Manufacturing, Technology" />
+          </Form.Item>
+
+          <Form.Item
+            name="notes"
+            label="Notes"
+          >
+            <Input.TextArea rows={3} placeholder="Additional notes..." />
+          </Form.Item>
+
+          <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
+            <Space>
+              <Button onClick={() => setModalVisible(false)}>
+                Cancel
+              </Button>
+              <Button type="primary" htmlType="submit">
+                {editingClient ? 'Update' : 'Create'}
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
+    </div>
+  );
+};
+
+export default ClientsPage;

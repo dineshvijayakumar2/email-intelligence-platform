@@ -2,15 +2,19 @@
 Real email processing with streaming support for large files
 
 Supports: MBOX, PST (Outlook Windows), OLM (Outlook Mac) files
+
+Stage 2: Enhanced with error tracking for individual email failures
 """
 import os
 import logging
+import traceback
 from typing import Dict, Optional, Iterator
 from datetime import datetime
 
 from ..extractors.file_extractor import FileExtractor
 from ..extractors.base_extractor import BaseExtractor
 from ..database.operations import EmailOperations
+from ..database.redis_client import JobProgressManager
 from .normalizer import EmailNormalizer
 from .email_tagger import EmailTagger
 
@@ -37,6 +41,13 @@ class EmailProcessor:
         self.normalizer = EmailNormalizer()
         self.tagger = EmailTagger()
         self.extractor: Optional[BaseExtractor] = None
+        self.date_filter: Optional[Dict] = None  # Date-based filtering
+        # Stage 2: Error tracking
+        try:
+            self.progress_manager = JobProgressManager()
+        except Exception as e:
+            logger.warning(f"Failed to initialize Redis progress manager: {e}")
+            self.progress_manager = None
 
     def validate_configuration(self, mailbox_type: str) -> Dict:
         """
@@ -180,7 +191,8 @@ class EmailProcessor:
         max_emails: Optional[int] = None,
         batch_size: int = 5000,
         skip_duplicates: bool = True,
-        enable_categorization: bool = False
+        enable_categorization: bool = False,
+        date_filter: Optional[Dict] = None
     ) -> Dict:
         """
         Process emails from the configured source with streaming
@@ -191,6 +203,7 @@ class EmailProcessor:
             batch_size: Number of emails per database batch
             skip_duplicates: Skip emails already in database
             enable_categorization: Enable email categorization (Stage 2)
+            date_filter: Optional date range filter {'start_date': datetime, 'end_date': datetime}
 
         Returns:
             Dict with processing statistics
@@ -198,8 +211,10 @@ class EmailProcessor:
         if not self.extractor:
             raise RuntimeError("Extractor not initialized. Call initialize_extractor() first.")
 
+        self.date_filter = date_filter  # Store for use in normalization
+
         logger.info(f"Starting email processing for job {job_id}")
-        logger.info(f"Config: max_emails={max_emails}, batch_size={batch_size}, skip_duplicates={skip_duplicates}")
+        logger.info(f"Config: max_emails={max_emails}, batch_size={batch_size}, skip_duplicates={skip_duplicates}, date_filter={date_filter}")
 
         # Note: Job status is already set to 'running' in process_emails_real before initialization
         # This ensures user sees the job is active immediately, not after initialization completes
@@ -253,7 +268,8 @@ class EmailProcessor:
         try:
             # Extract and normalize emails
             raw_emails = self.extractor.extract_emails(max_emails=max_emails)
-            normalized_emails = self._normalize_email_stream(raw_emails)
+            # Stage 2: Pass job_id for error tracking
+            normalized_emails = self._normalize_email_stream(raw_emails, job_id=job_id)
 
             # Stream insert to database (with cancellation support)
             result = self.db_ops.stream_insert_emails(
@@ -306,6 +322,15 @@ class EmailProcessor:
                 if result['failed'] > 0 and result.get('errors'):
                     logger.warning(f"Job {job_id} had {result['failed']} failures. First few errors: {result['errors'][:3]}")
 
+            # Stage 2: Save error summary to database for persistence
+            if result['failed'] > 0 and self.progress_manager:
+                try:
+                    error_summary = self.progress_manager.build_error_summary_json(job_id)
+                    self.db_ops.save_job_error_summary(job_id, error_summary)
+                    logger.info(f"Saved error summary for job {job_id}: {error_summary.get('total_errors', 0)} errors")
+                except Exception as e:
+                    logger.warning(f"Failed to save error summary: {e}")
+
             # TODO: Implement categorization in Stage 2
             if enable_categorization:
                 logger.info("Categorization requested but not yet implemented (Stage 2)")
@@ -331,21 +356,54 @@ class EmailProcessor:
 
             raise
 
-    def _normalize_email_stream(self, raw_emails: Iterator[Dict]) -> Iterator[Dict]:
+    def _normalize_email_stream(self, raw_emails: Iterator[Dict], job_id: str = None) -> Iterator[Dict]:
         """
         Generator that normalizes and tags emails one at a time
 
         Args:
             raw_emails: Iterator of raw email dicts from extractor
+            job_id: Job ID for error tracking (Stage 2)
 
         Yields:
             Normalized and tagged email dicts
         """
+        filtered_count = 0
         for raw_email in raw_emails:
             try:
                 # Normalize email structure
                 normalized = self.normalizer.normalize(raw_email)
                 if normalized:
+                    # Apply date filter if configured
+                    if self.date_filter:
+                        sent_date = normalized.get('sent_date')
+                        if sent_date:
+                            # Parse sent_date if it's a string
+                            if isinstance(sent_date, str):
+                                try:
+                                    from datetime import datetime, timezone
+                                    # Handle various date formats
+                                    if 'T' in sent_date:
+                                        sent_date = datetime.fromisoformat(sent_date.replace('Z', '+00:00'))
+                                    else:
+                                        sent_date = datetime.fromisoformat(sent_date)
+                                    # Ensure timezone aware
+                                    if sent_date.tzinfo is None:
+                                        sent_date = sent_date.replace(tzinfo=timezone.utc)
+                                except (ValueError, TypeError):
+                                    sent_date = None
+
+                            # Check date range
+                            if sent_date:
+                                start_date = self.date_filter.get('start_date')
+                                end_date = self.date_filter.get('end_date')
+
+                                if start_date and sent_date < start_date:
+                                    filtered_count += 1
+                                    continue  # Skip emails before start_date
+                                if end_date and sent_date > end_date:
+                                    filtered_count += 1
+                                    continue  # Skip emails after end_date
+
                     # Tag email with basic attributes
                     tag_result = self.tagger.tag_email(normalized)
 
@@ -355,11 +413,56 @@ class EmailProcessor:
                     normalized['is_marketing'] = tag_result.get('is_marketing', False)
                     normalized['priority_score'] = tag_result.get('priority_score', 5)
                     normalized['sender_type'] = tag_result.get('sender_type', 'unknown')
+                    # Stage 2: Mark as success initially (will be updated if DB insert fails)
+                    normalized['processing_status'] = 'success'
 
                     yield normalized
             except Exception as e:
-                logger.warning(f"Failed to normalize email {raw_email.get('message_id', 'unknown')}: {e}")
+                error_msg = str(e)
+                message_id = raw_email.get('message_id', 'unknown')
+                subject = raw_email.get('subject', 'No subject')
+                sender = raw_email.get('sender_email') or raw_email.get('from', 'Unknown')
+
+                logger.warning(f"Failed to normalize email {message_id}: {e}")
+
+                # Stage 2: Track error in Redis for real-time visibility
+                if job_id and self.progress_manager:
+                    try:
+                        error_type = self._classify_error(e)
+                        self.progress_manager.track_error(
+                            job_id=job_id,
+                            error_type=error_type,
+                            error_message=error_msg[:500],
+                            email_info={
+                                'message_id': message_id,
+                                'subject': subject[:200] if subject else None,
+                                'sender_email': sender
+                            }
+                        )
+                    except Exception as track_error:
+                        logger.warning(f"Failed to track error in Redis: {track_error}")
+
                 # Continue processing other emails
+
+    def _classify_error(self, exception: Exception) -> str:
+        """Classify error type from exception for reporting"""
+        error_str = str(exception).lower()
+        exception_name = type(exception).__name__.lower()
+
+        if 'encoding' in error_str or 'decode' in error_str or 'codec' in error_str:
+            return 'encoding_error'
+        elif 'parse' in error_str or 'parsing' in exception_name:
+            return 'parse_error'
+        elif 'timeout' in error_str or 'timed out' in error_str:
+            return 'timeout_error'
+        elif 'connection' in error_str or 'connect' in error_str:
+            return 'connection_error'
+        elif 'duplicate' in error_str or 'unique' in error_str:
+            return 'duplicate_error'
+        elif 'memory' in error_str or 'oom' in error_str:
+            return 'memory_error'
+        else:
+            return 'other_error'
 
     def disconnect(self):
         """Disconnect from email source"""

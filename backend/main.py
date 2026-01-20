@@ -1,9 +1,11 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks  # v16 - fix mailbox name extraction
+from fastapi import FastAPI, HTTPException, BackgroundTasks  # v26 - Fix shutdown not waiting, daemon threads for graceful exit
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
 import os
 import sys
+import signal
+import atexit
 from dotenv import load_dotenv
 from supabase import create_client, Client
 import asyncio
@@ -20,29 +22,75 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from src.processors.email_processor import EmailProcessor
 from src.database.redis_client import JobProgressManager, JobQueueManager, RedisClient
 
+# Stage 2: Business Hierarchy Routers
+from src.routers.account_managers import router as account_managers_router, init_account_managers_router
+from src.routers.clients import router as clients_router, init_clients_router
+from src.routers.customers import router as customers_router, init_customers_router
+from src.routers.contacts import router as contacts_router, init_contacts_router
+
 # Configure logging to both file and console
 import logging.handlers
+import sys
 
 # Create logs directory if it doesn't exist
 log_dir = os.path.join(os.path.dirname(__file__), 'logs')
 os.makedirs(log_dir, exist_ok=True)
 
+# Custom formatter that handles Unicode on Windows
+class SafeFormatter(logging.Formatter):
+    """Formatter that replaces emojis with text equivalents on Windows"""
+    EMOJI_MAP = {
+        '📦': '[PKG]',
+        '📊': '[STATS]',
+        '📧': '[EMAIL]',
+        '🌊': '[STREAM]',
+        '🏁': '[DONE]',
+        '❌': '[ERROR]',
+        '⚠️': '[WARN]',
+        '✅': '[OK]',
+        '🔄': '[SYNC]',
+        '⏸️': '[PAUSE]',
+        '▶️': '[PLAY]',
+    }
+
+    def format(self, record):
+        msg = super().format(record)
+        # Only replace emojis on Windows console
+        if sys.platform == 'win32':
+            for emoji, replacement in self.EMOJI_MAP.items():
+                msg = msg.replace(emoji, replacement)
+        return msg
+
+# Create formatters
+log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+file_formatter = logging.Formatter(log_format)
+console_formatter = SafeFormatter(log_format)
+
+# Create handlers
+file_handler = logging.handlers.RotatingFileHandler(
+    os.path.join(log_dir, 'backend.log'),
+    maxBytes=10*1024*1024,  # 10MB
+    backupCount=5,
+    encoding='utf-8'  # Ensure UTF-8 for file
+)
+file_handler.setFormatter(file_formatter)
+
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(console_formatter)
+
 # Configure root logger
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        # File handler - rotates when file reaches 10MB, keeps 5 backup files
-        logging.handlers.RotatingFileHandler(
-            os.path.join(log_dir, 'backend.log'),
-            maxBytes=10*1024*1024,  # 10MB
-            backupCount=5
-        ),
-        # Console handler - also output to terminal
-        logging.StreamHandler()
-    ]
+    handlers=[file_handler, console_handler]
 )
 logger = logging.getLogger(__name__)
+
+# Reduce logging verbosity for noisy libraries
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
+logging.getLogger("googleapiclient.discovery_cache").setLevel(logging.ERROR)
+logging.getLogger("googleapiclient.discovery").setLevel(logging.WARNING)
 
 # Load environment variables from backend directory
 python_env = os.getenv('PYTHON_ENV', 'development')  # default to development
@@ -101,10 +149,69 @@ async def options_handler(path: str):
 
 logger.info("Global OPTIONS handler configured for all routes")
 
+# Custom ThreadPoolExecutor with daemon threads for graceful shutdown
+class DaemonThreadPoolExecutor(ThreadPoolExecutor):
+    """ThreadPoolExecutor that uses daemon threads (don't block process exit)"""
+    def _adjust_thread_count(self):
+        super()._adjust_thread_count()
+        for thread in self._threads:
+            if not thread.daemon:
+                thread.daemon = True
+
 # Configure thread pool for concurrent job processing
 # Allows up to 20 concurrent background jobs (file processing is I/O bound)
 # This ensures multiple mailboxes can be processed simultaneously
-executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="email_processor")
+# Uses daemon threads so they don't block server shutdown
+executor = DaemonThreadPoolExecutor(max_workers=20, thread_name_prefix="email_processor")
+
+
+def force_shutdown(signum=None, frame=None):
+    """Force shutdown handler for SIGTERM/SIGINT"""
+    logger.info(f"=== RECEIVED SIGNAL {signum}, forcing shutdown ===")
+
+    # Cancel all parallel downloads
+    try:
+        from src.storage.parallel_downloader import cancel_all_downloads
+        cancel_all_downloads()
+    except Exception as e:
+        logger.warning(f"Error cancelling downloads during signal handler: {e}")
+
+    # Shutdown executor
+    try:
+        executor.shutdown(wait=False, cancel_futures=True)
+    except Exception as e:
+        logger.warning(f"Error shutting down executor: {e}")
+
+    logger.info("Shutdown complete, exiting...")
+    # Use os._exit to force immediate exit without waiting for threads
+    os._exit(0)
+
+
+# Register signal handlers for graceful shutdown
+try:
+    if sys.platform != 'win32':
+        signal.signal(signal.SIGTERM, force_shutdown)
+        signal.signal(signal.SIGINT, force_shutdown)
+        logger.info("Signal handlers registered for graceful shutdown (Unix)")
+    else:
+        # On Windows, register atexit handler as fallback
+        def windows_cleanup():
+            logger.info("=== ATEXIT CLEANUP (Windows) ===")
+            try:
+                from src.storage.parallel_downloader import cancel_all_downloads
+                cancel_all_downloads()
+            except Exception as e:
+                logger.warning(f"Error in atexit cleanup: {e}")
+            try:
+                executor.shutdown(wait=False, cancel_futures=True)
+            except Exception:
+                pass
+
+        atexit.register(windows_cleanup)
+        logger.info("Atexit handler registered for graceful shutdown (Windows)")
+except Exception as e:
+    logger.warning(f"Could not register shutdown handlers: {e}")
+
 
 # Initialize Redis managers (REQUIRED for job processing)
 try:
@@ -163,11 +270,32 @@ def sync_redis_to_database():
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on server shutdown"""
-    logger.info("Syncing all Redis progress to database...")
+    logger.info("=== SERVER SHUTDOWN INITIATED ===")
+
+    # Cancel any active parallel downloads first
+    logger.info("Step 1: Cancelling any active parallel downloads...")
+    try:
+        from src.storage.parallel_downloader import cancel_all_downloads
+        cancel_all_downloads()
+    except Exception as e:
+        logger.warning(f"Error cancelling downloads: {e}")
+
+    logger.info("Step 2: Syncing Redis progress to database...")
     sync_redis_to_database()
-    logger.info("Shutting down thread pool executor...")
-    executor.shutdown(wait=True)
-    logger.info("Thread pool executor shut down successfully")
+
+    logger.info("Step 3: Shutting down thread pool executor...")
+    try:
+        # Don't wait for threads - daemon threads will be killed on exit
+        # cancel_futures requires Python 3.9+
+        import sys
+        if sys.version_info >= (3, 9):
+            executor.shutdown(wait=False, cancel_futures=True)
+        else:
+            executor.shutdown(wait=False)
+    except Exception as e:
+        logger.warning(f"Error during executor shutdown: {e}")
+
+    logger.info("=== SERVER SHUTDOWN COMPLETE ===")
 
 def get_job_progress(job_id: str) -> dict:
     """Get progress from Redis (fast) or database (fallback)"""
@@ -229,6 +357,81 @@ def get_supabase() -> Client:
 # For backwards compatibility
 supabase = None
 
+# =========================================================================
+# Stage 2: Business Hierarchy API Routers
+# =========================================================================
+
+# Initialize routers with Supabase client
+def initialize_business_hierarchy_routers():
+    """Initialize all business hierarchy routers with Supabase client"""
+    sb = get_supabase()
+    init_account_managers_router(sb)
+    init_clients_router(sb)
+    init_customers_router(sb)
+    init_contacts_router(sb)
+    logger.info("Business hierarchy routers initialized")
+
+# Register routers with API prefix
+app.include_router(account_managers_router, prefix="/api")
+app.include_router(clients_router, prefix="/api")
+app.include_router(customers_router, prefix="/api")
+app.include_router(contacts_router, prefix="/api")
+
+# Initialize routers (lazy init when first request comes in)
+@app.on_event("startup")
+async def startup_event():
+    """Initialize services on startup"""
+    try:
+        initialize_business_hierarchy_routers()
+    except Exception as e:
+        logger.warning(f"Failed to initialize business hierarchy routers: {e}")
+        # Don't fail startup - routers will init on first use
+
+    # Clean up orphaned jobs from previous server restart
+    try:
+        await cleanup_orphaned_jobs()
+    except Exception as e:
+        logger.warning(f"Failed to cleanup orphaned jobs: {e}")
+
+
+async def cleanup_orphaned_jobs():
+    """
+    Mark any jobs that were running/pending/downloading when server restarted as 'interrupted'.
+    This prevents the frontend from spinning forever waiting for a dead job.
+    """
+    try:
+        sb = get_supabase()
+
+        # Find jobs that are stuck in running/pending/downloading status
+        result = sb.table('processing_jobs').select('id, status, mailbox_id').in_(
+            'status', ['running', 'pending', 'downloading']
+        ).execute()
+
+        orphaned_jobs = result.data or []
+
+        if orphaned_jobs:
+            logger.info(f"Found {len(orphaned_jobs)} orphaned jobs from previous session, marking as interrupted")
+
+            for job in orphaned_jobs:
+                job_id = job['id']
+                try:
+                    sb.table('processing_jobs').update({
+                        'status': 'interrupted',
+                        'error_log': 'Job was interrupted by server restart. You can restart this job.',
+                        'completed_at': datetime.now(timezone.utc).isoformat()
+                    }).eq('id', job_id).execute()
+
+                    logger.info(f"Marked job {job_id} as interrupted")
+                except Exception as e:
+                    logger.warning(f"Failed to update job {job_id}: {e}")
+
+            logger.info(f"Cleanup complete: {len(orphaned_jobs)} jobs marked as interrupted")
+        else:
+            logger.info("No orphaned jobs found during startup")
+
+    except Exception as e:
+        logger.error(f"Error during orphaned job cleanup: {e}")
+
 # Pydantic models
 class MailboxConfig(BaseModel):
     name: str
@@ -238,11 +441,40 @@ class MailboxConfig(BaseModel):
     connection_config: Optional[Dict[str, Any]] = {}
 
 class ProcessingJobConfig(BaseModel):
+    """
+    Configuration for email processing jobs.
+
+    Processing Limits:
+    - max_emails: Maximum number of emails to process (None = all emails in file)
+    - batch_size: Database batch insert size for performance (default 5000)
+
+    Date Filters (for processing only emails within a date range):
+    - start_date: Process emails sent on or after this date (ISO format: YYYY-MM-DD)
+    - end_date: Process emails sent on or before this date (ISO format: YYYY-MM-DD)
+
+    Download Options (for Google Drive files):
+    - download_first: Download file completely before processing (faster for large files)
+    - download_threads: Number of parallel threads for download (default: 8)
+
+    Example: To process only emails from 2024:
+        start_date: "2024-01-01"
+        end_date: "2024-12-31"
+    """
     job_type: str
-    total_records: Optional[int] = None  # None = process all emails
-    batch_size: Optional[int] = 5000  # Increased for large files
+    # Processing limits
+    max_emails: Optional[int] = None  # Maximum emails to process (None = all)
+    batch_size: Optional[int] = 5000  # Database batch insert size
+    # Date-based filtering
+    start_date: Optional[str] = None  # ISO date: YYYY-MM-DD (process emails from this date)
+    end_date: Optional[str] = None    # ISO date: YYYY-MM-DD (process emails until this date)
+    # Feature flags
     enable_categorization: Optional[bool] = True
     enable_enrichment: Optional[bool] = False
+    # Download options for Google Drive files
+    download_first: Optional[bool] = False  # Download file before processing (faster for large files)
+    download_threads: Optional[int] = 8     # Number of parallel download threads
+    # Deprecated field (use max_emails instead)
+    total_records: Optional[int] = None  # Kept for backwards compatibility
     # These will be populated from mailbox data
     mailbox_id: Optional[str] = None
     mailbox_type: Optional[str] = None
@@ -490,6 +722,7 @@ async def root():
     return {"message": "Email Intelligence API", "status": "running"}
 
 @app.get("/health")
+@app.get("/api/health")
 async def health_check():
     return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()}
 
@@ -868,6 +1101,8 @@ async def process_emails_real(job_id: str, config: ProcessingJobConfig):
     Processes actual emails from MBOX/IMAP/POP3/Outlook sources
     """
 
+    downloaded_file_path = None  # Track downloaded file for cleanup
+
     try:
         logger.info(f"Starting REAL email processing for job {job_id}")
 
@@ -876,10 +1111,103 @@ async def process_emails_real(job_id: str, config: ProcessingJobConfig):
             "started_at": datetime.now(timezone.utc).isoformat()
         })
 
-        # Initialize processor with actual configuration
+        # Check if parallel download is requested for Google Drive files
+        connection_config = config.connection_config.copy() if config.connection_config else {}
+
+        if (config.download_first and
+            connection_config.get('file_source') == 'google_drive' and
+            connection_config.get('google_drive_file_id')):
+
+            logger.info(f"Parallel download requested for job {job_id} with {config.download_threads} threads")
+
+            # Import parallel downloader
+            from src.storage.parallel_downloader import ParallelDownloader
+
+            # Get access token from stored credentials and refresh if needed
+            user_id = connection_config.get('user_id', 'default')
+            tokens_result = get_supabase().table('user_integrations').select(
+                'access_token,refresh_token'
+            ).eq('user_id', user_id).eq('provider', 'google_drive').execute()
+
+            if not tokens_result.data:
+                raise Exception("No Google Drive credentials found. Please re-authenticate.")
+
+            access_token = tokens_result.data[0].get('access_token')
+            refresh_token = tokens_result.data[0].get('refresh_token')
+
+            if not access_token:
+                raise Exception("Invalid Google Drive access token")
+
+            # Refresh the access token to ensure it's valid
+            if refresh_token:
+                try:
+                    from google.oauth2.credentials import Credentials
+                    from google.auth.transport.requests import Request
+
+                    credentials = Credentials(
+                        token=access_token,
+                        refresh_token=refresh_token,
+                        token_uri="https://oauth2.googleapis.com/token",
+                        client_id=os.getenv("GOOGLE_CLIENT_ID"),
+                        client_secret=os.getenv("GOOGLE_CLIENT_SECRET")
+                    )
+
+                    # Force refresh the token
+                    credentials.refresh(Request())
+                    access_token = credentials.token
+
+                    # Store the new access token
+                    update_user_access_token(user_id, access_token)
+                    logger.info(f"Refreshed Google Drive access token for parallel download")
+                except Exception as refresh_error:
+                    logger.warning(f"Token refresh failed, using existing token: {refresh_error}")
+
+            file_id = connection_config.get('google_drive_file_id')
+            file_name = connection_config.get('google_drive_file_name', 'download')
+
+            # Progress callback to update Redis
+            def download_progress_callback(downloaded: int, total: int, speed_mbps: float):
+                if progress_manager and total > 0:
+                    percent = int(downloaded / total * 100)
+                    # Store download progress in Redis (using negative values to indicate download phase)
+                    progress_manager.update_progress(
+                        job_id, 0, 0,
+                        status='downloading',
+                        download_percent=percent,
+                        download_speed_mbps=round(speed_mbps, 1)
+                    )
+
+            # Perform parallel download
+            logger.info(f"Starting parallel download: {file_name} ({file_id})")
+            downloader = ParallelDownloader(
+                access_token=access_token,
+                num_threads=config.download_threads or 8,
+                progress_callback=download_progress_callback
+            )
+
+            # Run download in thread pool
+            loop = asyncio.get_event_loop()
+            downloaded_file_path = await loop.run_in_executor(
+                executor,
+                lambda: downloader.download(file_id, file_name)
+            )
+
+            if not downloaded_file_path:
+                raise Exception("Parallel download failed")
+
+            logger.info(f"Parallel download complete: {downloaded_file_path}")
+
+            # Update connection config to use local file instead of streaming
+            connection_config['file_source'] = 'local'
+            connection_config['file_path'] = downloaded_file_path
+            # Remove Google Drive specific fields
+            connection_config.pop('google_drive_file_id', None)
+            connection_config.pop('google_drive_file_name', None)
+
+        # Initialize processor with actual configuration (may be modified for local file)
         processor = EmailProcessor(
             mailbox_id=config.mailbox_id,
-            connection_config=config.connection_config
+            connection_config=connection_config
         )
 
         # Initialize the extractor
@@ -917,6 +1245,31 @@ async def process_emails_real(job_id: str, config: ProcessingJobConfig):
         except Exception as e:
             logger.warning(f"Failed to get email count (will proceed without estimate): {e}")
 
+        # Determine max_emails: prefer new max_emails field, fallback to deprecated total_records
+        effective_max_emails = config.max_emails or config.total_records  # None means process all
+
+        # Parse date filters
+        date_filter = None
+        if config.start_date or config.end_date:
+            date_filter = {}
+            if config.start_date:
+                try:
+                    date_filter['start_date'] = datetime.fromisoformat(config.start_date).replace(tzinfo=timezone.utc)
+                    logger.info(f"Date filter: start_date = {config.start_date}")
+                except ValueError:
+                    logger.warning(f"Invalid start_date format: {config.start_date}, expected YYYY-MM-DD")
+            if config.end_date:
+                try:
+                    # End date should include the entire day
+                    date_filter['end_date'] = datetime.fromisoformat(config.end_date).replace(
+                        hour=23, minute=59, second=59, tzinfo=timezone.utc
+                    )
+                    logger.info(f"Date filter: end_date = {config.end_date}")
+                except ValueError:
+                    logger.warning(f"Invalid end_date format: {config.end_date}, expected YYYY-MM-DD")
+
+        logger.info(f"Processing config: max_emails={effective_max_emails}, batch_size={config.batch_size or 5000}, date_filter={date_filter}")
+
         # Process emails with streaming
         # Run in dedicated thread pool to avoid blocking event loop
         # Using custom executor allows multiple concurrent jobs
@@ -925,10 +1278,11 @@ async def process_emails_real(job_id: str, config: ProcessingJobConfig):
             executor,  # Custom thread pool with 20 workers
             lambda: processor.process_emails(
                 job_id=job_id,
-                max_emails=config.total_records,  # max_emails (None for all)
-                batch_size=config.batch_size or 5000,  # batch_size
+                max_emails=effective_max_emails,  # max_emails (None for all)
+                batch_size=config.batch_size or 5000,  # batch_size for DB inserts
                 skip_duplicates=True,  # skip_duplicates
-                enable_categorization=config.enable_categorization  # enable_categorization
+                enable_categorization=config.enable_categorization,  # enable_categorization
+                date_filter=date_filter  # NEW: date-based filtering
             )
         )
 
@@ -937,9 +1291,35 @@ async def process_emails_real(job_id: str, config: ProcessingJobConfig):
         # Cleanup
         processor.disconnect()
 
+        # Cleanup downloaded file if parallel download was used
+        if downloaded_file_path:
+            try:
+                import shutil
+                if os.path.exists(downloaded_file_path):
+                    os.remove(downloaded_file_path)
+                    logger.info(f"Cleaned up downloaded file: {downloaded_file_path}")
+                # Also try to remove the temp directory
+                parent_dir = os.path.dirname(downloaded_file_path)
+                if parent_dir and os.path.exists(parent_dir) and not os.listdir(parent_dir):
+                    os.rmdir(parent_dir)
+            except Exception as cleanup_error:
+                logger.warning(f"Failed to cleanup downloaded file: {cleanup_error}")
+
     except Exception as e:
         error_msg = f"Processing error: {str(e)}"
         logger.error(error_msg, exc_info=True)
+
+        # Cleanup downloaded file on error
+        if downloaded_file_path:
+            try:
+                if os.path.exists(downloaded_file_path):
+                    os.remove(downloaded_file_path)
+                    logger.info(f"Cleaned up downloaded file after error: {downloaded_file_path}")
+                parent_dir = os.path.dirname(downloaded_file_path)
+                if parent_dir and os.path.exists(parent_dir) and not os.listdir(parent_dir):
+                    os.rmdir(parent_dir)
+            except Exception as cleanup_error:
+                logger.warning(f"Failed to cleanup downloaded file: {cleanup_error}")
 
         # Check if job was already stopped (don't override stopped status)
         job_result = get_supabase().table('processing_jobs').select('status').eq('id', job_id).execute()
@@ -1074,15 +1454,41 @@ async def get_processing_jobs():
                     eta_hours = estimated_seconds / 3600
                     eta_str = f"{eta_hours:.1f}h"
 
+            # Get download progress if in downloading phase
+            download_percent_raw = redis_progress.get('download_percent', 0)
+            download_speed_raw = redis_progress.get('download_speed_mbps', 0)
+
+            # Convert to numbers (Redis stores as strings)
+            try:
+                download_percent = float(download_percent_raw) if download_percent_raw else 0
+            except (ValueError, TypeError):
+                download_percent = 0
+
+            try:
+                download_speed_mbps = float(download_speed_raw) if download_speed_raw else 0
+            except (ValueError, TypeError):
+                download_speed_mbps = 0
+
+            redis_status = redis_progress.get('status')
+
+            # Override status if downloading
+            effective_status = job.get('status')
+            if redis_status == 'downloading' and effective_status == 'running':
+                effective_status = 'downloading'
+                logger.debug(f"Job {job['id']} status overridden to 'downloading' - percent: {download_percent}, speed: {download_speed_mbps}")
+
             job_data = {
                 **job,
                 "mailbox_name": job.get('mailboxes', {}).get('name') if job.get('mailboxes') else 'Unknown Mailbox',
+                "status": effective_status,
                 "progress": progress,
                 "total_records": total,  # Ensure it's not None
                 "processed_records": processed,  # Ensure it's not None
                 "emails_per_second": emails_per_second,
                 "estimated_time_remaining": eta_str,
-                "estimated_seconds_remaining": estimated_seconds
+                "estimated_seconds_remaining": estimated_seconds,
+                "download_percent": download_percent,
+                "download_speed_mbps": download_speed_mbps
             }
             # Remove the nested mailboxes object
             if 'mailboxes' in job_data:
@@ -1491,6 +1897,219 @@ async def run_reprocessing(job_id: str, mailbox_id: str):
                 "completed_at": datetime.now(timezone.utc).isoformat()
             })
 
+# =============================================================================
+# Stage 2: Error Handling Endpoints
+# =============================================================================
+
+@app.get("/api/processing-jobs/{job_id}/errors")
+async def get_processing_errors(
+    job_id: str,
+    limit: int = 50,
+    offset: int = 0
+):
+    """
+    Get errors for a specific processing job.
+
+    Returns both Redis-cached errors (for active jobs) and
+    database-persisted errors (for completed jobs).
+    """
+    try:
+        # Get mailbox_id from job
+        job_result = get_supabase().table('processing_jobs').select('mailbox_id').eq('id', job_id).single().execute()
+        if not job_result.data:
+            raise HTTPException(status_code=404, detail="Job not found")
+
+        mailbox_id = job_result.data.get('mailbox_id')
+        if not mailbox_id:
+            raise HTTPException(status_code=400, detail="Job has no associated mailbox")
+
+        # Get errors from Redis (for active jobs)
+        redis_errors = []
+        redis_total = 0
+        if progress_manager:
+            redis_errors = progress_manager.get_errors(job_id, limit, offset)
+            error_counts = progress_manager.get_error_counts(job_id)
+            redis_total = error_counts.get('total', 0)
+
+        # Get failed emails from database (for persistence and completed jobs)
+        db_result = get_supabase().table('emails').select(
+            'id, message_id, subject, sender_email, sent_date, '
+            'processing_error, processing_attempts, last_processing_attempt'
+        ).eq(
+            'mailbox_id', mailbox_id
+        ).eq(
+            'processing_status', 'failed'
+        ).order(
+            'last_processing_attempt', desc=True
+        ).range(offset, offset + limit - 1).execute()
+
+        db_errors = db_result.data or []
+
+        # Get total failed count
+        count_result = get_supabase().table('emails').select(
+            'id', count='exact'
+        ).eq('mailbox_id', mailbox_id).eq('processing_status', 'failed').execute()
+        db_total = count_result.count or 0
+
+        # Use the higher count between Redis and DB
+        total_failed = max(redis_total, db_total)
+
+        # Format response - prefer DB records as they have email IDs
+        emails = []
+        seen_message_ids = set()
+
+        for err in db_errors:
+            emails.append({
+                'id': err.get('id', ''),
+                'message_id': err.get('message_id'),
+                'subject': err.get('subject'),
+                'sender_email': err.get('sender_email'),
+                'sent_date': err.get('sent_date'),
+                'processing_error': err.get('processing_error'),
+                'processing_attempts': err.get('processing_attempts', 1),
+                'last_processing_attempt': err.get('last_processing_attempt')
+            })
+            if err.get('message_id'):
+                seen_message_ids.add(err.get('message_id'))
+
+        # Add Redis errors that aren't in DB yet (from active processing)
+        for err in redis_errors:
+            if err.get('message_id') and err.get('message_id') not in seen_message_ids:
+                emails.append({
+                    'id': err.get('email_id', ''),
+                    'message_id': err.get('message_id'),
+                    'subject': err.get('subject'),
+                    'sender_email': err.get('sender_email'),
+                    'sent_date': None,
+                    'processing_error': err.get('error_message'),
+                    'processing_attempts': err.get('attempt_number', 1),
+                    'last_processing_attempt': err.get('timestamp')
+                })
+
+        return {
+            'job_id': job_id,
+            'mailbox_id': mailbox_id,
+            'total_failed': total_failed,
+            'emails': emails[:limit],
+            'has_more': total_failed > offset + limit
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get processing errors: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/processing-jobs/{job_id}/errors/summary")
+async def get_error_summary(job_id: str):
+    """Get aggregated error summary for a processing job."""
+    try:
+        # Get mailbox_id from job
+        job_result = get_supabase().table('processing_jobs').select(
+            'mailbox_id, error_summary, failed_records'
+        ).eq('id', job_id).single().execute()
+
+        if not job_result.data:
+            raise HTTPException(status_code=404, detail="Job not found")
+
+        job = job_result.data
+        mailbox_id = job.get('mailbox_id')
+
+        # Try Redis first for active jobs
+        if progress_manager:
+            summary = progress_manager.get_error_summary(job_id)
+            if summary.get('total_errors', 0) > 0:
+                return summary
+
+        # Check stored error_summary in processing_jobs
+        if job.get('error_summary'):
+            error_summary = job.get('error_summary')
+            return {
+                'total_errors': error_summary.get('total_errors', job.get('failed_records', 0)),
+                'error_types': error_summary.get('error_types', {}),
+                'sample_errors': error_summary.get('sample_errors', []),
+                'has_more_errors': False
+            }
+
+        # Return basic summary from failed_records count
+        return {
+            'total_errors': job.get('failed_records', 0),
+            'error_types': {},
+            'sample_errors': [],
+            'has_more_errors': False
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get error summary: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/processing-jobs/{job_id}/retry-failed")
+async def retry_failed_emails(job_id: str, max_attempts: int = 3):
+    """Reset failed emails to pending status for retry processing."""
+    try:
+        # Get mailbox_id from job
+        job_result = get_supabase().table('processing_jobs').select('mailbox_id').eq('id', job_id).single().execute()
+        if not job_result.data:
+            raise HTTPException(status_code=404, detail="Job not found")
+
+        mailbox_id = job_result.data.get('mailbox_id')
+        if not mailbox_id:
+            raise HTTPException(status_code=400, detail="Job has no associated mailbox")
+
+        # Get emails that can be retried
+        emails_to_reset = get_supabase().table('emails').select('id').eq(
+            'mailbox_id', mailbox_id
+        ).eq(
+            'processing_status', 'failed'
+        ).lt(
+            'processing_attempts', max_attempts
+        ).execute()
+
+        if not emails_to_reset.data:
+            return {
+                'job_id': job_id,
+                'mailbox_id': mailbox_id,
+                'emails_reset': 0,
+                'message': 'No emails to retry (all have exceeded max attempts or none failed)'
+            }
+
+        email_ids = [e['id'] for e in emails_to_reset.data]
+
+        # Reset them to pending
+        get_supabase().table('emails').update({
+            'processing_status': 'pending',
+            'processing_error': None
+        }).in_('id', email_ids).execute()
+
+        # Clear Redis error cache for this job
+        if progress_manager:
+            progress_manager.clear_errors(job_id)
+
+        # Update job status to allow reprocessing
+        get_supabase().table('processing_jobs').update({
+            'status': 'pending'
+        }).eq('id', job_id).eq('status', 'completed').execute()
+
+        logger.info(f"Reset {len(email_ids)} failed emails for retry in job {job_id}")
+
+        return {
+            'job_id': job_id,
+            'mailbox_id': mailbox_id,
+            'emails_reset': len(email_ids),
+            'message': f'Reset {len(email_ids)} failed emails for retry'
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to retry failed emails: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # Email analysis endpoints for dashboard
 @app.get("/api/dashboard/stats")
 async def get_dashboard_stats():
@@ -1638,7 +2257,7 @@ async def get_emails_with_filters(request: EmailRequest):
         page = request.page
         pageSize = min(request.pageSize, 100)  # Limit max page size for performance
         
-        logger.info(f"Scalable email query - Filters: {filters.dict()}, Page: {page}, Size: {pageSize}")
+        logger.debug(f"Scalable email query - Filters: {filters.dict()}, Page: {page}, Size: {pageSize}")
         
         # Build optimized query without joins (PostgREST limitation with complex selects)
         # We'll get categories separately for better performance
@@ -1713,7 +2332,7 @@ async def get_emails_with_filters(request: EmailRequest):
         to_idx = from_idx + pageSize - 1
         base_query = base_query.range(from_idx, to_idx)
         
-        logger.info(f"Optimized query - Applied filters: {filters_applied}")
+        logger.debug(f"Optimized query - Applied filters: {filters_applied}")
         
         # Execute count query separately (PostgREST limitation with joins + count)
         count_query = sb.table('emails').select('id', count='exact')
@@ -1742,10 +2361,7 @@ async def get_emails_with_filters(request: EmailRequest):
         result = base_query.execute()
         count_result = count_query.execute()
         
-        logger.info(f"Query executed successfully, got {len(result.data or [])} results")
-        if result.data and len(result.data) > 0:
-            sample_email_id = result.data[0]['id']
-            logger.info(f"Sample email ID: {sample_email_id}")
+        logger.debug(f"Query executed successfully, got {len(result.data or [])} results")
         
         # Get mailbox names separately for better performance (PostgREST multiple join limitation)
         mailbox_names = {}
@@ -1783,12 +2399,7 @@ async def get_emails_with_filters(request: EmailRequest):
                         # Continue with other batches
                         continue
                 
-                logger.info(f"Categories query returned {total_categories} categories for {len(email_ids)} emails")
-                # Log sample categories
-                if email_categories_map and result.data:
-                    sample_email_id = result.data[0]['id']
-                    sample_categories = email_categories_map.get(sample_email_id, [])
-                    logger.info(f"Sample email {sample_email_id} has {len(sample_categories)} categories")
+                logger.debug(f"Categories query returned {total_categories} categories for {len(email_ids)} emails")
         
         # Transform results efficiently
         emails = []
@@ -1855,7 +2466,7 @@ async def get_emails_with_filters(request: EmailRequest):
             ))
         
         total_count = count_result.count or 0
-        logger.info(f"Scalable query result: {len(emails)} emails out of {total_count} total")
+        logger.debug(f"Scalable query result: {len(emails)} emails out of {total_count} total")
         
         return EmailListResponse(emails=emails, totalCount=total_count)
         
@@ -2122,17 +2733,17 @@ async def get_email_categories():
             lambda: sb.table('email_categories').select('category').execute()
         )
         
-        logger.info(f'Raw category data from Supabase: {len(result.data or [])} rows')
-        
+        logger.debug(f'Raw category data from Supabase: {len(result.data or [])} rows')
+
         # Get unique categories, filter out metadata tags
         category_set = set()
         for item in result.data or []:
             category = item.get('category')
             if category and not category.startswith('_meta_'):
                 category_set.add(category)
-        
+
         categories = sorted(list(category_set))
-        logger.info(f'Loaded categories: {categories}')
+        logger.debug(f'Loaded categories: {categories}')
         
         return categories
         
@@ -2367,3 +2978,7 @@ def format_relative_time(date_string: str) -> str:
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+# Trigger restart
+
+
+

@@ -237,21 +237,22 @@ class EmailOperations:
                 # Add email directly to batch - duplicates handled by database upsert
                 current_batch.append(email)
                 
-                # Calculate and log progress with time estimation more frequently
-                if total % 10 == 0 or total <= 50:  # Every 10 emails, or every email for first 50
+                # Calculate and update ETA in Redis (for frontend) every 10 emails
+                # But only LOG to terminal every 100 emails to reduce noise
+                if total % 10 == 0:
                     elapsed = time.time() - start_time
                     emails_per_second = total / elapsed if elapsed > 0 else 0
-                    
+
                     # Calculate estimated time remaining
                     from .redis_client import JobProgressManager
                     progress_manager = JobProgressManager()
-                    
+
                     # Get total emails expected (from Redis or estimate) with robust null handling
                     if job_id:
                         try:
                             progress_data = progress_manager.get_progress(job_id)
                             total_expected = 0  # Default safe value
-                            
+
                             if progress_data and isinstance(progress_data, dict):
                                 total_records_raw = progress_data.get('total_records', 0)
                                 if total_records_raw is not None:
@@ -259,13 +260,16 @@ class EmailOperations:
                                         total_expected = int(total_records_raw)
                                     except (ValueError, TypeError):
                                         total_expected = 0
-                            
-                            # Ensure we have valid positive numbers before comparison
+
+                            # Calculate ETA if we know total, otherwise just update speed
+                            estimated_seconds_remaining = 0
+                            eta_str = None
+
                             if isinstance(total_expected, int) and total_expected > 0 and isinstance(emails_per_second, (int, float)) and emails_per_second > 0:
                                 remaining_emails = max(0, total_expected - total)
                                 estimated_seconds_remaining = remaining_emails / emails_per_second
                                 estimated_minutes = estimated_seconds_remaining / 60
-                                
+
                                 if estimated_minutes < 1:
                                     eta_str = f"{estimated_seconds_remaining:.0f}s"
                                 elif estimated_minutes < 60:
@@ -273,27 +277,23 @@ class EmailOperations:
                                 else:
                                     eta_hours = estimated_minutes / 60
                                     eta_str = f"{eta_hours:.1f}h"
-                                
-                                # Store ETA in Redis for frontend
-                                progress_manager.update_progress(
-                                    job_id, total, failed, 
-                                    emails_per_second=emails_per_second,
-                                    estimated_seconds_remaining=estimated_seconds_remaining
-                                )
-                                
-                                logger.info(f"📊 Processed {total}/{total_expected} emails - {emails_per_second:.1f} emails/sec - ETA: {eta_str}")
-                            else:
-                                logger.info(f"📊 Processed {total} emails - {emails_per_second:.1f} emails/sec")
-                                
-                        except Exception as e:
-                            logger.warning(f"Failed to calculate ETA: {e}")
-                            logger.info(f"📊 Processed {total} emails - {emails_per_second:.1f} emails/sec")
-                    else:
-                        logger.info(f"📊 Processed {total} emails - {emails_per_second:.1f} emails/sec")
 
-                # Log progress for every email during small tests
-                if total <= 20:
-                    logger.info(f"📧 Email {total}: {email.get('subject', 'No subject')[:60]}")
+                            # ALWAYS store processing speed in Redis for frontend (even without ETA)
+                            progress_manager.update_progress(
+                                job_id, total, failed,
+                                emails_per_second=emails_per_second,
+                                estimated_seconds_remaining=estimated_seconds_remaining
+                            )
+
+                            # Only log to terminal every 100 emails (or first 10)
+                            if total <= 10 or total % 100 == 0:
+                                if eta_str:
+                                    logger.info(f"[STATS] Processed {total}/{total_expected} emails - {emails_per_second:.1f} emails/sec - ETA: {eta_str}")
+                                else:
+                                    logger.info(f"[STATS] Processed {total} emails - {emails_per_second:.1f} emails/sec")
+
+                        except Exception as e:
+                            logger.debug(f"Failed to calculate ETA: {e}")
 
                 # Update progress more frequently for better UX
                 # - First email: immediate update
@@ -597,7 +597,12 @@ class EmailOperations:
                     try:
                         self.client.table('email_categories').insert(chunk).execute()
                     except Exception as e:
-                        logger.warning(f"Failed to insert tag chunk: {e}")
+                        # Duplicate key errors are expected for re-processed emails - ignore silently
+                        error_str = str(e)
+                        if '23505' in error_str or 'duplicate key' in error_str.lower():
+                            logger.debug(f"Tag chunk had duplicates (expected): {len(chunk)} entries")
+                        else:
+                            logger.warning(f"Failed to insert tag chunk: {e}")
 
                 logger.debug(f"Inserted {len(category_inserts)} tag entries for {len(inserted_emails)} emails")
 
@@ -1022,7 +1027,291 @@ class EmailOperations:
             # For now, just return 0 and implement later if needed
             logger.info("Duplicate cleanup not implemented yet")
             return 0
-            
+
         except Exception as e:
             logger.error(f"Failed to cleanup duplicates: {e}")
             return 0
+
+    # =========================================================================
+    # Error Tracking Methods (Stage 2)
+    # =========================================================================
+
+    def update_email_processing_status(
+        self,
+        email_id: str,
+        status: str,
+        error_message: Optional[str] = None,
+        increment_attempts: bool = True
+    ) -> bool:
+        """
+        Update the processing status of an email.
+
+        Args:
+            email_id: UUID of the email
+            status: New status (pending, processing, success, failed, skipped)
+            error_message: Error message if status is 'failed'
+            increment_attempts: Whether to increment the attempt counter
+
+        Returns:
+            True if update succeeded
+        """
+        try:
+            update_data = {
+                'processing_status': status,
+                'last_processing_attempt': datetime.now(timezone.utc).isoformat()
+            }
+
+            if error_message:
+                update_data['processing_error'] = error_message[:1000]  # Limit size
+
+            if status == 'success':
+                update_data['processing_error'] = None  # Clear error on success
+
+            self.client.table('emails').update(update_data).eq('id', email_id).execute()
+
+            # Increment attempts using raw SQL if needed
+            if increment_attempts:
+                # Use a separate update to increment
+                try:
+                    self.client.rpc('increment_processing_attempts', {'p_email_id': email_id}).execute()
+                except Exception:
+                    # If RPC doesn't exist, do manual increment
+                    current = self.client.table('emails').select('processing_attempts').eq('id', email_id).execute()
+                    if current.data:
+                        current_attempts = current.data[0].get('processing_attempts', 0) or 0
+                        self.client.table('emails').update({
+                            'processing_attempts': current_attempts + 1
+                        }).eq('id', email_id).execute()
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to update email processing status: {e}")
+            return False
+
+    def batch_update_email_status(
+        self,
+        email_ids: List[str],
+        status: str,
+        error_message: Optional[str] = None
+    ) -> int:
+        """
+        Update processing status for multiple emails at once.
+
+        Args:
+            email_ids: List of email UUIDs
+            status: New status to set
+            error_message: Optional error message (for failed status)
+
+        Returns:
+            Number of emails updated
+        """
+        if not email_ids:
+            return 0
+
+        try:
+            update_data = {
+                'processing_status': status,
+                'last_processing_attempt': datetime.now(timezone.utc).isoformat()
+            }
+
+            if error_message:
+                update_data['processing_error'] = error_message[:1000]
+
+            if status == 'success':
+                update_data['processing_error'] = None
+
+            result = self.client.table('emails').update(update_data).in_('id', email_ids).execute()
+
+            return len(result.data) if result.data else 0
+
+        except Exception as e:
+            logger.error(f"Failed to batch update email status: {e}")
+            return 0
+
+    def get_failed_emails(
+        self,
+        mailbox_id: str,
+        limit: int = 100,
+        offset: int = 0
+    ) -> List[Dict]:
+        """
+        Get failed emails for a mailbox.
+
+        Args:
+            mailbox_id: UUID of the mailbox
+            limit: Maximum number of results
+            offset: Offset for pagination
+
+        Returns:
+            List of failed email records
+        """
+        try:
+            result = self.client.table('emails').select(
+                'id, message_id, subject, sender_email, sent_date, '
+                'processing_error, processing_attempts, last_processing_attempt'
+            ).eq(
+                'mailbox_id', mailbox_id
+            ).eq(
+                'processing_status', 'failed'
+            ).order(
+                'last_processing_attempt', desc=True
+            ).range(offset, offset + limit - 1).execute()
+
+            return result.data or []
+
+        except Exception as e:
+            logger.error(f"Failed to get failed emails: {e}")
+            return []
+
+    def get_error_counts_by_type(self, mailbox_id: str) -> Dict[str, int]:
+        """
+        Get counts of failed emails grouped by error type.
+
+        Args:
+            mailbox_id: UUID of the mailbox
+
+        Returns:
+            Dictionary with error type as key and count as value
+        """
+        try:
+            # Get all failed emails and classify them
+            result = self.client.table('emails').select(
+                'processing_error'
+            ).eq(
+                'mailbox_id', mailbox_id
+            ).eq(
+                'processing_status', 'failed'
+            ).execute()
+
+            if not result.data:
+                return {}
+
+            # Classify errors
+            error_counts = {}
+            for row in result.data:
+                error_msg = (row.get('processing_error') or '').lower()
+
+                if 'encoding' in error_msg or 'decode' in error_msg or 'codec' in error_msg:
+                    error_type = 'encoding_error'
+                elif 'parse' in error_msg:
+                    error_type = 'parse_error'
+                elif 'timeout' in error_msg:
+                    error_type = 'timeout_error'
+                elif 'connection' in error_msg:
+                    error_type = 'connection_error'
+                elif 'duplicate' in error_msg or 'unique' in error_msg:
+                    error_type = 'duplicate_error'
+                else:
+                    error_type = 'other_error'
+
+                error_counts[error_type] = error_counts.get(error_type, 0) + 1
+
+            return error_counts
+
+        except Exception as e:
+            logger.error(f"Failed to get error counts: {e}")
+            return {}
+
+    def reset_failed_emails_for_retry(
+        self,
+        mailbox_id: str,
+        max_attempts: int = 3
+    ) -> int:
+        """
+        Reset failed emails to pending status for retry.
+
+        Args:
+            mailbox_id: UUID of the mailbox
+            max_attempts: Only reset emails with fewer attempts than this
+
+        Returns:
+            Number of emails reset
+        """
+        try:
+            # Get emails that can be retried
+            emails_to_reset = self.client.table('emails').select('id').eq(
+                'mailbox_id', mailbox_id
+            ).eq(
+                'processing_status', 'failed'
+            ).lt(
+                'processing_attempts', max_attempts
+            ).execute()
+
+            if not emails_to_reset.data:
+                return 0
+
+            email_ids = [e['id'] for e in emails_to_reset.data]
+
+            # Reset them to pending
+            self.client.table('emails').update({
+                'processing_status': 'pending',
+                'processing_error': None
+            }).in_('id', email_ids).execute()
+
+            logger.info(f"Reset {len(email_ids)} failed emails for retry in mailbox {mailbox_id}")
+            return len(email_ids)
+
+        except Exception as e:
+            logger.error(f"Failed to reset failed emails: {e}")
+            return 0
+
+    def save_job_error_summary(self, job_id: str, error_summary: Dict) -> bool:
+        """
+        Save error summary to the processing_jobs table.
+
+        Args:
+            job_id: UUID of the processing job
+            error_summary: Error summary dictionary
+
+        Returns:
+            True if save succeeded
+        """
+        try:
+            self.client.table('processing_jobs').update({
+                'error_summary': error_summary
+            }).eq('id', job_id).execute()
+
+            logger.info(f"Saved error summary for job {job_id}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to save job error summary: {e}")
+            return False
+
+    def get_processing_stats(self, mailbox_id: str) -> Dict:
+        """
+        Get processing statistics for a mailbox.
+
+        Args:
+            mailbox_id: UUID of the mailbox
+
+        Returns:
+            Dictionary with processing stats
+        """
+        try:
+            # Count by status
+            result = self.client.table('emails').select(
+                'processing_status'
+            ).eq('mailbox_id', mailbox_id).execute()
+
+            stats = {
+                'total': 0,
+                'pending': 0,
+                'processing': 0,
+                'success': 0,
+                'failed': 0,
+                'skipped': 0
+            }
+
+            for row in (result.data or []):
+                status = row.get('processing_status', 'pending')
+                stats['total'] += 1
+                if status in stats:
+                    stats[status] += 1
+
+            return stats
+
+        except Exception as e:
+            logger.error(f"Failed to get processing stats: {e}")
+            return {}

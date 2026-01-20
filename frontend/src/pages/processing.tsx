@@ -29,6 +29,7 @@ import {
   SyncOutlined
 } from "@ant-design/icons";
 import { processingService, ProcessingJob } from '../services/processingService';
+import { ErrorDisplay } from '../components/ErrorDisplay';
 
 const { Title, Text } = Typography;
 
@@ -42,6 +43,19 @@ const getStatusIcon = (status: string) => {
     stopped: <StopOutlined />
   };
   return icons[status as keyof typeof icons] || <ClockCircleOutlined />;
+};
+
+// Format processing speed - show per minute if less than 1/sec
+const formatProcessingSpeed = (emailsPerSecond: number | undefined): string => {
+  if (!emailsPerSecond || emailsPerSecond === 0) return '';
+
+  if (emailsPerSecond >= 1) {
+    return `${emailsPerSecond.toFixed(1)}/s`;
+  } else {
+    // Convert to per minute for slow processing
+    const emailsPerMinute = emailsPerSecond * 60;
+    return `${emailsPerMinute.toFixed(1)}/min`;
+  }
 };
 
 export const ProcessingJobs: React.FC = () => {
@@ -230,7 +244,7 @@ export const ProcessingJobs: React.FC = () => {
             </Text>
             {status === 'running' && (record.emails_per_second || record.estimated_time_remaining) && (
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#999' }}>
-                <span>{record.emails_per_second ? `${record.emails_per_second.toFixed(1)}/s` : ''}</span>
+                <span>{formatProcessingSpeed(record.emails_per_second)}</span>
                 <span>{record.estimated_time_remaining ? `ETA: ${record.estimated_time_remaining}` : ''}</span>
               </div>
             )}
@@ -515,6 +529,15 @@ export const ProcessingJobs: React.FC = () => {
                   )}
                 />
               </Card>
+            )}
+
+            {/* Stage 2: Enhanced Error Display with detailed breakdown and retry */}
+            {selectedJob.failed_records > 0 && (
+              <ErrorDisplay
+                jobId={selectedJob.id}
+                failedCount={selectedJob.failed_records}
+                onRetryComplete={() => loadJobs(false)}
+              />
             )}
           </Space>
         )}

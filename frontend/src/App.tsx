@@ -9,6 +9,8 @@ import { MailboxList, MailboxCreate, MailboxEdit } from "./pages/mailboxes";
 import { MailboxProcess } from "./pages/mailbox-process";
 import { EmailList } from "./pages/emails";
 import { ProcessingJobs } from "./pages/processing";
+import ErrorsPage from "./pages/errors";
+import ClientsPage from "./pages/clients";
 
 import "./App.css";
 
@@ -25,6 +27,8 @@ function App() {
             <Route path="/mailboxes/process/:id" element={<MailboxProcess />} />
             <Route path="/emails" element={<EmailList />} />
             <Route path="/processing" element={<ProcessingJobs />} />
+            <Route path="/errors" element={<ErrorsPage />} />
+            <Route path="/clients" element={<ClientsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Layout>

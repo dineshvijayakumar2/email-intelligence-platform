@@ -18,7 +18,12 @@ CREATE TABLE mailboxes (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   last_sync_at TIMESTAMPTZ,
-  total_emails INTEGER DEFAULT 0
+  total_emails INTEGER DEFAULT 0,
+  -- Stage 2: Business hierarchy columns (FK constraints added after tables exist)
+  client_id UUID,
+  account_manager_id UUID,
+  sync_enabled BOOLEAN DEFAULT FALSE,
+  last_synced_at TIMESTAMPTZ
 );
 
 -- Add helpful column comments
@@ -46,6 +51,16 @@ CREATE TABLE emails (
   is_reply BOOLEAN DEFAULT false,
   message_size INTEGER,
   raw_headers JSONB,
+  -- Stage 2: Error tracking columns
+  processing_status TEXT DEFAULT 'pending',  -- pending, processing, success, failed, skipped
+  processing_error TEXT,  -- Error message when failed
+  processing_attempts INTEGER DEFAULT 0,  -- Retry count
+  last_processing_attempt TIMESTAMPTZ,  -- Last attempt timestamp
+  -- Stage 2: Business hierarchy columns (added in migration 002)
+  client_id UUID,  -- References clients(id) - added after clients table exists
+  customer_company_id UUID,  -- References customer_companies(id)
+  customer_contact_id UUID,  -- References customer_contacts(id)
+  direction TEXT,  -- inbound, outbound, internal
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   CONSTRAINT emails_message_id_mailbox_unique UNIQUE (message_id, mailbox_id)
@@ -100,6 +115,8 @@ CREATE TABLE processing_jobs (
   processed_records INTEGER DEFAULT 0,
   failed_records INTEGER DEFAULT 0,
   error_log JSONB,
+  -- Stage 2: Error summary for aggregated error tracking
+  error_summary JSONB,  -- {total_errors, error_types: {type: count}, sample_errors: [...]}
   started_at TIMESTAMPTZ,
   completed_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW()
@@ -151,6 +168,16 @@ CREATE INDEX idx_email_categories_email_category ON email_categories(email_id, c
 CREATE INDEX idx_processing_jobs_status ON processing_jobs(status);
 CREATE INDEX idx_processing_jobs_type_status ON processing_jobs(job_type, status);
 CREATE INDEX idx_processing_jobs_created_at ON processing_jobs(created_at DESC);
+
+-- Stage 2: Error tracking indexes
+CREATE INDEX idx_emails_processing_status ON emails(processing_status);
+CREATE INDEX idx_emails_processing_status_mailbox ON emails(mailbox_id, processing_status);
+CREATE INDEX idx_emails_failed_retry ON emails(processing_status, processing_attempts)
+  WHERE processing_status = 'failed';
+CREATE INDEX idx_emails_direction ON emails(direction);
+CREATE INDEX idx_emails_client ON emails(client_id);
+CREATE INDEX idx_emails_customer_company ON emails(customer_company_id);
+CREATE INDEX idx_emails_customer_contact ON emails(customer_contact_id);
 
 -- User integrations performance indexes
 CREATE INDEX idx_user_integrations_token_expires ON user_integrations(token_expires_at) WHERE token_expires_at IS NOT NULL;
@@ -390,3 +417,157 @@ $$;
 GRANT EXECUTE ON FUNCTION get_distinct_mailboxes() TO anon, authenticated;
 
 COMMENT ON FUNCTION get_distinct_mailboxes() IS 'Returns mailbox names for filter dropdowns';
+
+-- =========================================================================
+-- Stage 2 Phase 2: Business Hierarchy Tables
+-- =========================================================================
+
+-- Account Managers (Platform Users)
+CREATE TABLE IF NOT EXISTS account_managers (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT NOT NULL,
+  email TEXT UNIQUE NOT NULL,
+  role TEXT NOT NULL DEFAULT 'account_manager',
+  password_hash TEXT,
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+COMMENT ON TABLE account_managers IS 'Platform users who manage client relationships';
+
+-- Clients (Consulting Clients)
+CREATE TABLE IF NOT EXISTS clients (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  account_manager_id UUID REFERENCES account_managers(id) ON DELETE SET NULL,
+  client_name TEXT NOT NULL,
+  client_label TEXT,
+  industry TEXT,
+  status TEXT DEFAULT 'active',
+  uses_quickbase BOOLEAN DEFAULT FALSE,
+  quickbase_realm TEXT,
+  quickbase_api_token TEXT,
+  uses_printiq BOOLEAN DEFAULT FALSE,
+  printiq_api_url TEXT,
+  printiq_api_key TEXT,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+COMMENT ON TABLE clients IS 'Consulting clients of the platform';
+
+-- Customer Companies (Each Client's Customers)
+CREATE TABLE IF NOT EXISTS customer_companies (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  company_name TEXT NOT NULL,
+  email_domains JSONB DEFAULT '[]'::jsonb,
+  industry TEXT,
+  website TEXT,
+  first_contact_date TIMESTAMPTZ,
+  last_contact_date TIMESTAMPTZ,
+  total_emails INTEGER DEFAULT 0,
+  total_inbound INTEGER DEFAULT 0,
+  total_outbound INTEGER DEFAULT 0,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT customer_companies_client_name_unique UNIQUE (client_id, company_name)
+);
+
+COMMENT ON TABLE customer_companies IS 'Customer companies belonging to each client';
+
+-- Customer Contacts (Individuals at Customer Companies)
+CREATE TABLE IF NOT EXISTS customer_contacts (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  customer_company_id UUID REFERENCES customer_companies(id) ON DELETE CASCADE,
+  client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+  email_address TEXT NOT NULL,
+  full_name TEXT,
+  first_name TEXT,
+  last_name TEXT,
+  job_title TEXT,
+  company_name TEXT,
+  phone_number TEXT,
+  mobile_number TEXT,
+  linkedin_url TEXT,
+  first_contacted_at TIMESTAMPTZ,
+  last_contacted_at TIMESTAMPTZ,
+  total_emails_sent INTEGER DEFAULT 0,
+  total_emails_received INTEGER DEFAULT 0,
+  signature_data JSONB,
+  signature_last_updated TIMESTAMPTZ,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT customer_contacts_company_email_unique UNIQUE (customer_company_id, email_address)
+);
+
+COMMENT ON TABLE customer_contacts IS 'Individual contacts at customer companies';
+
+-- Customer Recognition Rules
+CREATE TABLE IF NOT EXISTS customer_recognition_rules (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+  customer_company_id UUID REFERENCES customer_companies(id) ON DELETE CASCADE,
+  rule_name TEXT NOT NULL,
+  rule_type TEXT NOT NULL,
+  pattern TEXT NOT NULL,
+  priority INTEGER DEFAULT 0,
+  is_active BOOLEAN DEFAULT TRUE,
+  match_count INTEGER DEFAULT 0,
+  last_matched_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+COMMENT ON TABLE customer_recognition_rules IS 'Rules for automatically matching emails to customer companies';
+
+-- Business hierarchy indexes
+CREATE INDEX IF NOT EXISTS idx_account_managers_email ON account_managers(email);
+CREATE INDEX IF NOT EXISTS idx_account_managers_active ON account_managers(is_active) WHERE is_active = TRUE;
+CREATE INDEX IF NOT EXISTS idx_clients_account_manager ON clients(account_manager_id);
+CREATE INDEX IF NOT EXISTS idx_clients_status ON clients(status);
+CREATE INDEX IF NOT EXISTS idx_clients_label ON clients(client_label);
+CREATE INDEX IF NOT EXISTS idx_customer_companies_client ON customer_companies(client_id);
+CREATE INDEX IF NOT EXISTS idx_customer_companies_name ON customer_companies(company_name);
+CREATE INDEX IF NOT EXISTS idx_customer_companies_last_contact ON customer_companies(last_contact_date DESC);
+CREATE INDEX IF NOT EXISTS idx_customer_contacts_company ON customer_contacts(customer_company_id);
+CREATE INDEX IF NOT EXISTS idx_customer_contacts_client ON customer_contacts(client_id);
+CREATE INDEX IF NOT EXISTS idx_customer_contacts_email ON customer_contacts(email_address);
+CREATE INDEX IF NOT EXISTS idx_customer_contacts_last_contact ON customer_contacts(last_contacted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_rules_client ON customer_recognition_rules(client_id);
+CREATE INDEX IF NOT EXISTS idx_rules_customer ON customer_recognition_rules(customer_company_id);
+CREATE INDEX IF NOT EXISTS idx_rules_type ON customer_recognition_rules(rule_type);
+CREATE INDEX IF NOT EXISTS idx_rules_active ON customer_recognition_rules(is_active) WHERE is_active = TRUE;
+CREATE INDEX IF NOT EXISTS idx_rules_priority ON customer_recognition_rules(priority DESC);
+CREATE INDEX IF NOT EXISTS idx_mailboxes_client ON mailboxes(client_id);
+CREATE INDEX IF NOT EXISTS idx_mailboxes_account_manager ON mailboxes(account_manager_id);
+CREATE INDEX IF NOT EXISTS idx_customer_companies_domains_gin ON customer_companies USING gin(email_domains);
+
+-- Business hierarchy update triggers
+CREATE TRIGGER update_account_managers_updated_at BEFORE UPDATE
+    ON account_managers FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_clients_updated_at BEFORE UPDATE
+    ON clients FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_customer_companies_updated_at BEFORE UPDATE
+    ON customer_companies FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_customer_contacts_updated_at BEFORE UPDATE
+    ON customer_contacts FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_customer_recognition_rules_updated_at BEFORE UPDATE
+    ON customer_recognition_rules FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Business hierarchy permissions
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE account_managers TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE clients TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE customer_companies TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE customer_contacts TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE customer_recognition_rules TO anon, authenticated;
+
+-- Update statistics for business hierarchy tables
+ANALYZE account_managers;
+ANALYZE clients;
+ANALYZE customer_companies;
+ANALYZE customer_contacts;
+ANALYZE customer_recognition_rules;

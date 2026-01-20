@@ -54,6 +54,8 @@ class BaseExtractor(ABC):
             'total': 0,
             'success': 0,
             'failed': 0,
+            'errors': [],  # Stage 2: List of error messages for tracking
+            'emails_extracted': 0,  # Track extracted count
             'start_time': None,
             'end_time': None
         }

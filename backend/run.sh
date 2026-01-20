@@ -73,6 +73,18 @@ else
     echo "   Create .env.$ENVIRONMENT or copy .env.example to .env and configure it"
 fi
 
+# Kill any existing process on port 8000 to ensure clean start
+echo "🔍 Checking for existing process on port 8000..."
+if command -v lsof &> /dev/null; then
+    PID=$(lsof -t -i:8000 2>/dev/null)
+    if [ -n "$PID" ]; then
+        echo "⚠️  Found existing process on port 8000 (PID: $PID), killing..."
+        kill -9 $PID 2>/dev/null || true
+        sleep 1
+        echo "✅ Killed existing process"
+    fi
+fi
+
 # Start the API server
 echo ""
 echo "🎯 Starting FastAPI server..."
