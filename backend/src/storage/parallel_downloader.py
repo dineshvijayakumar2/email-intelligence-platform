@@ -58,21 +58,6 @@ def _unregister_downloader(downloader: 'ParallelDownloader'):
         _active_downloaders.discard(downloader)
 
 
-class DaemonThreadPoolExecutor(ThreadPoolExecutor):
-    """
-    A ThreadPoolExecutor that uses daemon threads.
-    Daemon threads don't block process exit, allowing graceful shutdown.
-    """
-
-    def _adjust_thread_count(self):
-        """Override to make threads daemon"""
-        super()._adjust_thread_count()
-        # Make all threads in this pool daemon threads
-        for thread in self._threads:
-            if not thread.daemon:
-                thread.daemon = True
-
-
 class ParallelDownloader:
     """Download Google Drive files using parallel byte-range requests"""
 
@@ -275,7 +260,7 @@ class ParallelDownloader:
             failed_chunks = []
 
             # Create a managed thread pool for this download
-            self._pool = DaemonThreadPoolExecutor(max_workers=self.num_threads)
+            self._pool = ThreadPoolExecutor(max_workers=self.num_threads)
             try:
                 futures = {
                     self._pool.submit(

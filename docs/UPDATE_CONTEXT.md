@@ -1,4 +1,4 @@
-# Update Context - January 19, 2026
+# Update Context - January 20, 2026
 
 ## Session Summary
 
@@ -6,136 +6,129 @@ This document captures the current state and pending issues to resume work in a 
 
 ---
 
-## Completed Work
+## Stage 2 Scope (Revised)
 
-### 1. Parallel Download Feature (Complete)
-- Added "Download Before Processing" option in Advanced Settings for Google Drive files
-- Created `backend/src/storage/parallel_downloader.py` - multi-threaded downloader using byte-range requests
-- Frontend shows download progress with purple progress bar during download phase
-- Download speed displayed in MB/s
+Based on updated user stories, Stage 2 is now organized into 3 sprints:
 
-### 2. Frontend Reconnection Logic (Complete)
-- Created `frontend/src/services/apiClient.ts` - centralized API client with:
-  - Timeout support (default 10 seconds)
-  - Automatic retry logic (2 retries)
-  - Connection status tracking
-  - `silentOnNetworkError` option for polling
-- Created `frontend/src/hooks/useConnectionStatus.ts` - React hook for tracking backend connection
-- Updated all services to use the new API client:
-  - `processingService.ts`
-  - `mailboxService.ts`
-  - `errorService.ts`
-- Added `/api/health` endpoint to backend
-- Added connection status banner in `mailbox-process.tsx` that shows when backend is disconnected
+### Sprint 1: Foundation (Weeks 1-3)
+**Goal**: Secure multi-tenant infrastructure with OAuth-based email synchronization
 
-### 3. Status Handling Improvements
-- Added `downloading` and `interrupted` statuses throughout the codebase
-- Updated `cleanup_orphaned_jobs()` to mark `downloading` jobs as `interrupted` on restart
-- Fixed active job detection to include `downloading` status in polling
+| Epic | Status |
+|------|--------|
+| Account Manager & Client Hierarchy | Backend Complete |
+| Role-Based Access Control | Pending |
+| Gmail OAuth Integration | Pending |
+| Outlook OAuth Integration | Pending |
+| Date Range Processing | Pending |
+
+### Sprint 2: Intelligence (Weeks 4-6)
+**Goal**: Automatic customer recognition and comprehensive contact database
+
+| Epic | Status |
+|------|--------|
+| Customer Recognition System | Pending |
+| Rules Management Interface | Pending |
+| Contact Database | Pending |
+| Communication History | Pending |
+| Shared Inbox Handling | Pending |
+
+### Sprint 3: AI Layer (Weeks 7-9)
+**Goal**: AI-powered email classification with trust mechanisms
+
+| Epic | Status |
+|------|--------|
+| AI Email Classification | Pending |
+| Business Entity Extraction | Pending |
+| Manual Correction UI | Pending |
+| Cost & Performance Tracking | Pending |
+| Accuracy Testing & Metrics | Pending |
 
 ---
 
-## Pending Issue: Backend Freeze During Restart
+## Completed Work
 
-### Problem
-When the backend is restarted (via uvicorn --reload or manual restart) while a parallel download is in progress:
-1. The old Python process doesn't terminate properly
-2. Download threads continue running
-3. New backend instance can't bind to port 8000
-4. Health endpoints don't respond
+### Stage 1 (Complete)
+- Multi-format email extraction (MBOX, PST, OLM)
+- Google Drive streaming for large files
+- Rule-based tagging system (20+ tags)
+- Real-time processing with Redis
+- Production deployment on Railway
 
-### Current Error
-```
-RuntimeError: cannot set daemon status of active thread
-```
+### Stage 2 Progress (Jan 19-20, 2026)
 
-This error occurs in `main.py` line 159 in `DaemonThreadPoolExecutor._adjust_thread_count()` - we're trying to set `thread.daemon = True` on threads that are already running.
+#### 1. Error Handling System (Complete)
+- Added `processing_status`, `processing_error`, `processing_attempts` columns to emails
+- Created error tracking functions in PostgreSQL
+- Split migrations for Railway (001a, 001b, 001c)
 
-### Attempted Fix (Needs Revision)
-Created `DaemonThreadPoolExecutor` class that overrides `_adjust_thread_count()` to make threads daemon. However, you can't change the daemon status of a thread after it starts.
+#### 2. Business Hierarchy (Backend Complete)
+- Database tables: `account_managers`, `clients`, `customer_companies`, `customer_contacts`, `customer_recognition_rules`
+- Backend routers with CRUD endpoints
+- Foreign key relationships to emails table
 
-### Proper Fix Needed
-Instead of modifying threads after creation, need to:
+#### 3. Parallel Download (Complete)
+- `backend/src/storage/parallel_downloader.py` - multi-threaded byte-range downloads
+- Optional "Download Before Processing" in Advanced Settings
+- Progress tracking with speed display
 
-**Option A**: Use a custom thread factory that creates daemon threads from the start:
-```python
-import threading
-from concurrent.futures import ThreadPoolExecutor
+#### 4. Frontend Resilience (Complete)
+- `frontend/src/services/apiClient.ts` - centralized API client with timeout/retry
+- `frontend/src/hooks/useConnectionStatus.ts` - connection tracking hook
+- Auto-reconnect when backend restarts
+- Connection status banner in UI
 
-def daemon_thread_factory(target, name, args, kwargs):
-    t = threading.Thread(target=target, name=name, args=args, kwargs=kwargs)
-    t.daemon = True
-    return t
-
-# Unfortunately ThreadPoolExecutor doesn't support custom thread factory directly
-```
-
-**Option B**: Create threads manually with daemon=True in a custom executor:
-```python
-class DaemonThreadPoolExecutor(ThreadPoolExecutor):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Patch the internal _threads set to use daemon threads
-        # This requires understanding the internal implementation
-```
-
-**Option C**: Don't use daemon threads, instead ensure proper cancellation:
-- Make download threads check a cancellation flag more frequently
-- Use shorter timeouts in HTTP requests
-- Kill processes by port on startup (already added to start scripts)
-
-### Files Modified for This Issue
-- `backend/main.py` - Added DaemonThreadPoolExecutor (has bug), signal handlers, atexit handlers
-- `backend/src/storage/parallel_downloader.py` - Added DaemonThreadPoolExecutor (has bug), download cancellation registry
-- `backend/run.sh` - Added port 8000 cleanup before start
+#### 5. Bug Fixes (Complete)
+- Removed faulty `DaemonThreadPoolExecutor` (was trying to set daemon on active threads)
+- Split migration scripts for Railway timeout issues
 
 ---
 
 ## Code Locations
 
-### Parallel Download
-- Backend: `backend/src/storage/parallel_downloader.py`
-- Integration: `backend/main.py` lines ~1100-1180 (in `process_emails_real()`)
-- Frontend UI: `frontend/src/pages/mailbox-process.tsx` (download progress section)
+### Business Hierarchy (Stage 2)
+- Backend routers: `backend/src/routers/` (account_managers.py, clients.py, customers.py, contacts.py)
+- Database migration: `scripts/migrations/002_add_business_hierarchy.sql`
 
-### Frontend Reconnection
+### Error Handling
+- Migration: `scripts/migrations/001a_add_error_columns.sql`, `001b_add_error_functions.sql`, `001c_add_error_indexes.sql`
+- Backend: `backend/src/routers/errors.py`
+
+### Frontend Resilience
 - API Client: `frontend/src/services/apiClient.ts`
 - Hook: `frontend/src/hooks/useConnectionStatus.ts`
-- Usage: `frontend/src/pages/mailbox-process.tsx`
 
-### Shutdown Handling
-- Main shutdown: `backend/main.py` - `shutdown_event()` function
-- Signal handlers: `backend/main.py` - `force_shutdown()` function
-- Download cancellation: `backend/src/storage/parallel_downloader.py` - `cancel_all_downloads()`
+### Parallel Download
+- Backend: `backend/src/storage/parallel_downloader.py`
 
 ---
 
-## Todo List Status
+## Next Steps
 
-```
-[completed] Phase 1: Error Handling
-[completed] Phase 2: Business Hierarchy
-[completed] Parallel download option for large files
-[completed] Frontend reconnection when backend restarts
-[in_progress] Fix daemon thread error in DaemonThreadPoolExecutor
-[pending] Phase 3: Rules Engine - Backend implementation
-[pending] Phase 3: Rules Engine - Frontend implementation
-```
+### Immediate (Sprint 1 Continuation)
+1. **Role-Based Access Control**
+   - Implement RLS policies in Supabase
+   - Add role validation to API endpoints
+   - Create role assignment UI
 
----
+2. **Gmail OAuth Integration**
+   - Implement OAuth flow for Gmail
+   - Create filter import functionality
+   - Set up 15-minute sync background job
 
-## Quick Resume Instructions
+3. **Outlook OAuth Integration**
+   - Implement Microsoft Graph OAuth
+   - Import Outlook rules
+   - Handle token refresh
 
-1. **Fix the daemon thread error first**:
-   - Remove or fix the `DaemonThreadPoolExecutor` class in both `main.py` and `parallel_downloader.py`
-   - Either use Option C (rely on cancellation + port cleanup) or implement proper daemon thread handling
+### Sprint 2 (After Sprint 1 Complete)
+1. Customer Recognition System with domain/keyword rules
+2. Visual Rules Management Interface
+3. Contact Database with signature parsing
 
-2. **Test the fix**:
-   - Start a large file download
-   - Restart the backend
-   - Verify the old process terminates and new one starts
-
-3. **Then continue with Phase 3**: Rules Engine implementation
+### Sprint 3 (After Sprint 2 Complete)
+1. AI Email Classification (Claude API)
+2. Business Entity Extraction
+3. Accuracy Testing (85% target)
 
 ---
 
@@ -145,5 +138,6 @@ class DaemonThreadPoolExecutor(ThreadPoolExecutor):
 - Python: 3.13
 - Backend port: 8000
 - Frontend port: 3000
-- Uses Redis for job progress tracking
-- Uses Supabase for database
+- Redis: Required for job tracking
+- Database: Supabase PostgreSQL
+- Production: Railway deployment

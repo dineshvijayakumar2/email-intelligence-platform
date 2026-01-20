@@ -4,6 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Recent Improvements
 
+### Jan 20, 2026
+1. **Daemon Thread Error Fixed**: Removed faulty `DaemonThreadPoolExecutor` from `main.py` and `parallel_downloader.py`. Now uses regular `ThreadPoolExecutor` + proper cancellation mechanisms.
+2. **Railway Migration Optimization**: Split `001_add_error_handling.sql` into `001a/001b/001c` to avoid timeout on large tables.
+3. **Stage 2 Scope Revised**: Updated to 3-sprint structure (Foundation, Intelligence, AI Layer) per new user stories.
+
 ### Jan 19, 2026
 1. **Parallel Download Option**: Added "Download Before Processing" in Advanced Settings for large Google Drive files (faster than streaming for 5GB+ files)
 2. **Frontend API Client**: Centralized API client (`frontend/src/services/apiClient.ts`) with timeout, retry, and connection status tracking
@@ -27,7 +32,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Start the Application
 ```bash
 # One-command startup (starts both backend and frontend)
-./start-poc.sh
+./start-platform.bat    # Windows
+./start-poc.sh          # macOS/Linux
 
 # Manual startup
 cd backend && ./run.sh              # Backend API (port 8000)
@@ -97,9 +103,10 @@ Frontend → FastAPI → ThreadPool (20 workers) → Email Processing Pipeline
 - **Extractors** (src/extractors/): Stream-based file processors for MBOX/PST/OLM
 - **email_tagger.py**: Rule-based tagging engine (20+ tags) in src/processors/
 - **Redis Managers**: JobProgressManager and JobQueueManager for real-time updates
+- **Routers** (src/routers/): Business hierarchy endpoints (account_managers, clients, customers, contacts)
 
 #### Frontend (React/TypeScript)
-- **Pages**: dashboard, mailboxes, emails, processing (in frontend/src/pages/)
+- **Pages**: dashboard, mailboxes, emails, processing, clients, customers, contacts (in frontend/src/pages/)
 - **Google Drive Integration**: GoogleDrivePicker component and googleDriveService
 - **Services**: API integration layer (frontend/src/services/)
 - **Auto-refresh**: Polls job status every 2-5 seconds
@@ -108,7 +115,7 @@ Frontend → FastAPI → ThreadPool (20 workers) → Email Processing Pipeline
 #### Data Layer
 - **Supabase PostgreSQL**: Primary data storage
 - **Redis (REQUIRED)**: Progress cache and job queue management
-- **Tables**: emails, email_categories (tags), processing_jobs, mailboxes, folders
+- **Tables**: emails, email_categories (tags), processing_jobs, mailboxes, folders, account_managers, clients, customer_companies, customer_contacts
 
 ### Important Implementation Details
 
@@ -120,7 +127,7 @@ Frontend → FastAPI → ThreadPool (20 workers) → Email Processing Pipeline
     - No full download required - uses targeted byte-range requests
     - Central Directory scanning for efficient ZIP navigation
     - Smart retry logic with exponential backoff for network resilience
-  - **MBOX Files**: Text streaming with line-by-line processing (NEW)
+  - **MBOX Files**: Text streaming with line-by-line processing
     - Streams text content in chunks (default 5MB)
     - No full download required - processes on-the-fly
     - Cancellable during processing
@@ -186,17 +193,16 @@ Note: Example files are provided as `.env.example` in each directory. Environmen
   - **frontend/.env.development**, **frontend/.env.production**: Frontend-specific configuration
   - **backend/.env.example**, **frontend/.env.example**: Template files for reference
 - **src/storage/**: Cloud storage streaming modules
-  - **remote_zip_google_drive.py**: RemoteZip implementation for Google Drive (Jan 8, 2025)
-  - **google_drive_stream.py**: Streaming wrapper for Drive files (Jan 8, 2025)
-  - **google_drive_text_stream.py**: Text file streaming for MBOX (Jan 14, 2026)
+  - **remote_zip_google_drive.py**: RemoteZip implementation for Google Drive
+  - **google_drive_stream.py**: Streaming wrapper for Drive files
+  - **google_drive_text_stream.py**: Text file streaming for MBOX
   - **cloud_stream_wrapper.py**: Base streaming interface
   - **smart_zip_reader.py**: Efficient ZIP Central Directory scanner
-- Removed: test_*.py files from root, POC documentation files, centralized .env files
+- **src/routers/**: Business hierarchy API routers (Stage 2)
 
 ### Instructions
 Please follow the below best practices while doing coding.
-1. Don't hardcode gdrive that may be different in different machines. Please make sure that the code is not too specific for the folder setup during the
-  current implementation
+1. Don't hardcode gdrive that may be different in different machines. Please make sure that the code is not too specific for the folder setup during the current implementation
 2. Make sure that the overall pipeline of email processing activities remains consistent for all mailbox types
 3. When suggesting any database changes for fixes, please make sure the original database setup script files are also updated so that when doing new deployment, the issues don't reoccur and doesn't need separate migration.
 4. Make sure you don't keep the fix scripts in the main code base
@@ -208,12 +214,26 @@ Please follow the below best practices while doing coding.
 10. **Thread daemon status**: In Python, you cannot change a thread's daemon status after it has started. When creating custom ThreadPoolExecutors with daemon threads, you must set `daemon=True` during thread creation, not after. The standard ThreadPoolExecutor doesn't support this directly.
 11. **Frontend service pattern**: All frontend API services should use the centralized `apiClient.ts` for consistent error handling, timeouts, and connection status tracking. Use `silentOnNetworkError: true` for polling requests.
 12. **Job status handling**: Always include all active statuses (`pending`, `running`, `downloading`) when checking for active jobs in both frontend and backend.
+13. **Railway SQL migrations**: For large tables (10M+ rows), split migrations into smaller files. Cannot use `CREATE INDEX CONCURRENTLY` in Railway SQL runner (runs in transaction block).
 
-### Known Issues / TODO
+## Stage 2 Sprint Structure
 
-1. **Daemon Thread Error**: The `DaemonThreadPoolExecutor` in `main.py` and `parallel_downloader.py` has a bug - it tries to set `thread.daemon = True` on already-running threads which raises `RuntimeError`. This needs to be fixed by either:
-   - Removing the daemon thread approach and relying on proper cancellation
-   - Implementing a proper daemon thread factory (complex)
-   - Using multiprocessing instead of threading for downloads
+### Sprint 1: Foundation (Weeks 1-3)
+- Account Manager & Client Hierarchy
+- Role-Based Access Control
+- Gmail/Outlook OAuth Integration
+- Date Range Processing
 
-   See `docs/UPDATE_CONTEXT.md` for detailed context on this issue. 
+### Sprint 2: Intelligence (Weeks 4-6)
+- Customer Recognition System (domain/keyword rules)
+- Rules Management Interface
+- Contact Database (auto-extract from email headers)
+- Communication History
+
+### Sprint 3: AI Layer (Weeks 7-9)
+- AI Email Classification (type, priority, sentiment)
+- Business Entity Extraction (quote numbers, PO numbers, amounts)
+- Manual Correction UI (trust building)
+- Accuracy Testing & Metrics
+
+See `docs/UPDATE_CONTEXT.md` for current progress and next steps.

@@ -149,20 +149,12 @@ async def options_handler(path: str):
 
 logger.info("Global OPTIONS handler configured for all routes")
 
-# Custom ThreadPoolExecutor with daemon threads for graceful shutdown
-class DaemonThreadPoolExecutor(ThreadPoolExecutor):
-    """ThreadPoolExecutor that uses daemon threads (don't block process exit)"""
-    def _adjust_thread_count(self):
-        super()._adjust_thread_count()
-        for thread in self._threads:
-            if not thread.daemon:
-                thread.daemon = True
-
 # Configure thread pool for concurrent job processing
 # Allows up to 20 concurrent background jobs (file processing is I/O bound)
 # This ensures multiple mailboxes can be processed simultaneously
-# Uses daemon threads so they don't block server shutdown
-executor = DaemonThreadPoolExecutor(max_workers=20, thread_name_prefix="email_processor")
+# Note: We use regular ThreadPoolExecutor + proper cancellation via cancel_all_downloads()
+# and port cleanup in start scripts instead of daemon threads (can't set daemon on active threads)
+executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="email_processor")
 
 
 def force_shutdown(signum=None, frame=None):
