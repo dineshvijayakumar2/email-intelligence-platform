@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Card,
   Table,
@@ -26,7 +26,9 @@ import {
   ClockCircleOutlined,
   CheckCircleOutlined,
   ExclamationCircleOutlined,
-  SyncOutlined
+  SyncOutlined,
+  CalendarOutlined,
+  CloudDownloadOutlined
 } from "@ant-design/icons";
 import { processingService, ProcessingJob } from '../services/processingService';
 import { ErrorDisplay } from '../components/ErrorDisplay';
@@ -36,6 +38,7 @@ const { Title, Text } = Typography;
 const getStatusIcon = (status: string) => {
   const icons = {
     pending: <ClockCircleOutlined />,
+    downloading: <CloudDownloadOutlined spin />,
     running: <PlayCircleOutlined />,
     completed: <CheckCircleOutlined />,
     failed: <ExclamationCircleOutlined />,
@@ -65,29 +68,44 @@ export const ProcessingJobs: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [reprocessingJobs, setReprocessingJobs] = useState<Set<string>>(new Set());
 
+  // Track if component is mounted to avoid state updates after unmount
+  const isMountedRef = useRef(true);
+
   useEffect(() => {
+    isMountedRef.current = true;
     loadJobs(true); // Show loading on initial load
 
     // Auto-refresh every 5 seconds (without loading spinner)
     const interval = setInterval(() => {
-      loadJobs(false);
+      if (isMountedRef.current) {
+        loadJobs(false);
+      }
     }, 5000);
 
-    return () => clearInterval(interval);
+    return () => {
+      isMountedRef.current = false;
+      clearInterval(interval);
+    };
   }, []);
 
   const loadJobs = async (showLoading = false) => {
     try {
-      if (showLoading) {
+      if (showLoading && isMountedRef.current) {
         setLoading(true);
       }
       const jobsData = await processingService.getProcessingJobs();
-      setJobs(jobsData);
+      // Only update state if component is still mounted
+      if (isMountedRef.current) {
+        setJobs(jobsData);
+      }
     } catch (error) {
-      console.error('Error loading jobs:', error);
-      message.error('Failed to load processing jobs');
+      // Only show error if component is still mounted and it's not a cancelled request
+      if (isMountedRef.current) {
+        console.error('Error loading jobs:', error);
+        message.error('Failed to load processing jobs');
+      }
     } finally {
-      if (showLoading) {
+      if (showLoading && isMountedRef.current) {
         setLoading(false);
       }
     }
@@ -226,22 +244,71 @@ export const ProcessingJobs: React.FC = () => {
       title: 'Progress',
       key: 'progress',
       render: (_: any, record: ProcessingJob) => {
-        const { status, processed_records, total_records, failed_records } = record;
+        const { status, processed_records, total_records, failed_records, filtered_records, filter_start_date, filter_end_date } = record;
         const progress = total_records > 0 ? Math.round((processed_records / total_records) * 100) : 0;
-        
+        const hasDateFilter = filter_start_date || filter_end_date;
+
+        // Show download progress for downloading status
+        if (status === 'downloading') {
+          return (
+            <Space direction="vertical" size="small" style={{ width: 250 }}>
+              <Progress
+                percent={record.download_percent || 0}
+                size="small"
+                status="active"
+                strokeColor="#722ed1"
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                <Text type="secondary">
+                  <CloudDownloadOutlined style={{ marginRight: 4, color: '#722ed1' }} />
+                  Downloading...
+                </Text>
+                <Text strong style={{ color: '#722ed1' }}>
+                  {record.download_percent || 0}%
+                </Text>
+              </div>
+              {record.download_speed_mbps && (
+                <Text type="secondary" style={{ fontSize: 11 }}>
+                  Speed: {record.download_speed_mbps.toFixed(1)} MB/s
+                </Text>
+              )}
+            </Space>
+          );
+        }
+
+        // Calculate effective progress
+        const effectiveTotal = total_records > 0 ? total_records : (processed_records + (filtered_records || 0));
+        const effectiveProgress = status === 'completed' ? 100 :
+          (effectiveTotal > 0 ? Math.min(100, Math.round(((processed_records + (filtered_records || 0)) / effectiveTotal) * 100)) : 0);
+        const isStreaming = total_records === 0 && status === 'running';
+
         return (
           <Space direction="vertical" size="small" style={{ width: 250 }}>
-            <Progress 
-              percent={progress} 
-              size="small" 
+            <Progress
+              percent={effectiveProgress}
+              size="small"
               status={status === 'failed' ? 'exception' : status === 'completed' ? 'success' : 'active'}
+              showInfo={!isStreaming}
             />
             <Text type="secondary" style={{ fontSize: 12 }}>
-              {processed_records.toLocaleString()} / {total_records.toLocaleString()}
+              {processed_records.toLocaleString()} processed
+              {total_records > 0 && (
+                <span> / {total_records.toLocaleString()}</span>
+              )}
               {failed_records > 0 && (
                 <span style={{ color: '#ff4d4f' }}> ({failed_records} failed)</span>
               )}
+              {(filtered_records ?? 0) > 0 && (
+                <span style={{ color: '#faad14' }}> ({filtered_records!.toLocaleString()} filtered)</span>
+              )}
             </Text>
+            {hasDateFilter && (
+              <Tooltip title={`Date filter: ${filter_start_date || 'any'} to ${filter_end_date || 'any'}`}>
+                <Tag icon={<CalendarOutlined />} color="blue" style={{ fontSize: 10 }}>
+                  Date Filter
+                </Tag>
+              </Tooltip>
+            )}
             {status === 'running' && (record.emails_per_second || record.estimated_time_remaining) && (
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#999' }}>
                 <span>{formatProcessingSpeed(record.emails_per_second)}</span>
@@ -501,6 +568,20 @@ export const ProcessingJobs: React.FC = () => {
                   {selectedJob.failed_records.toLocaleString()}
                 </Text>
               </Descriptions.Item>
+              {(selectedJob.filtered_records !== undefined && selectedJob.filtered_records > 0) && (
+                <Descriptions.Item label="Filtered Records" span={3}>
+                  <Text type="warning">
+                    {selectedJob.filtered_records.toLocaleString()} (excluded by date filter)
+                  </Text>
+                </Descriptions.Item>
+              )}
+              {(selectedJob.filter_start_date || selectedJob.filter_end_date) && (
+                <Descriptions.Item label="Date Filter" span={3}>
+                  <Tag icon={<CalendarOutlined />} color="blue">
+                    {selectedJob.filter_start_date || 'Any'} → {selectedJob.filter_end_date || 'Any'}
+                  </Tag>
+                </Descriptions.Item>
+              )}
               <Descriptions.Item label="Progress">
                 <Progress 
                   percent={Math.round((selectedJob.processed_records / selectedJob.total_records) * 100)} 

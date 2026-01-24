@@ -28,6 +28,12 @@ from src.routers.clients import router as clients_router, init_clients_router
 from src.routers.customers import router as customers_router, init_customers_router
 from src.routers.contacts import router as contacts_router, init_contacts_router
 
+# Stage 2: Error Router
+from src.routers.errors import router as errors_router, init_error_router
+
+# Stage 2: Job Error Logger
+from src.services.job_error_logger import JobErrorLogger, init_error_logger, get_error_logger
+
 # Configure logging to both file and console
 import logging.handlers
 import sys
@@ -344,6 +350,10 @@ def get_supabase() -> Client:
         _supabase_client = create_client(supabase_url, supabase_key)
         logger.info("Supabase client initialized successfully")
 
+        # Initialize error logger with Supabase client
+        init_error_logger(_supabase_client)
+        logger.info("Job error logger initialized")
+
     return _supabase_client
 
 # For backwards compatibility
@@ -361,6 +371,15 @@ def initialize_business_hierarchy_routers():
     init_clients_router(sb)
     init_customers_router(sb)
     init_contacts_router(sb)
+    # Initialize error router with Supabase client and job error logger
+    error_logger = get_error_logger()
+    init_error_router(
+        error_tracker=None,  # Redis error tracker - deprecated in favor of job_errors table
+        db_error_tracker=None,  # Old DB error tracker - deprecated
+        supabase_client=sb,
+        redis_client=None,
+        job_error_logger=error_logger
+    )
     logger.info("Business hierarchy routers initialized")
 
 # Register routers with API prefix
@@ -368,6 +387,7 @@ app.include_router(account_managers_router, prefix="/api")
 app.include_router(clients_router, prefix="/api")
 app.include_router(customers_router, prefix="/api")
 app.include_router(contacts_router, prefix="/api")
+app.include_router(errors_router, prefix="/api")
 
 # Initialize routers (lazy init when first request comes in)
 @app.on_event("startup")
@@ -463,8 +483,10 @@ class ProcessingJobConfig(BaseModel):
     enable_categorization: Optional[bool] = True
     enable_enrichment: Optional[bool] = False
     # Download options for Google Drive files
-    download_first: Optional[bool] = False  # Download file before processing (faster for large files)
+    download_first: Optional[bool] = True  # Download file before processing (3-5x faster for large files)
     download_threads: Optional[int] = 8     # Number of parallel download threads
+    keep_downloaded_file: Optional[bool] = True  # Keep file after processing for re-use
+    use_cached_file: Optional[bool] = True  # Use cached file if available (skip download)
     # Deprecated field (use max_emails instead)
     total_records: Optional[int] = None  # Kept for backwards compatibility
     # These will be populated from mailbox data
@@ -1020,6 +1042,102 @@ async def test_connection(mailbox_id: str, connection_test: ConnectionTest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Connection test failed: {str(e)}")
 
+@app.get("/api/mailboxes/{mailbox_id}/cached-download")
+async def check_cached_download(mailbox_id: str):
+    """
+    Check if there's a cached download available for this mailbox's Google Drive file.
+    Returns cache info if available, or null if no cache exists.
+    """
+    try:
+        sb = get_supabase()
+
+        # Get mailbox connection config
+        mailbox_result = sb.table('mailboxes').select('connection_config').eq('id', mailbox_id).single().execute()
+        if not mailbox_result.data:
+            raise HTTPException(status_code=404, detail="Mailbox not found")
+
+        connection_config = mailbox_result.data.get('connection_config', {})
+
+        # Only relevant for Google Drive files
+        if connection_config.get('file_source') != 'google_drive':
+            return {"cached": False, "reason": "Not a Google Drive file"}
+
+        google_drive_file_id = connection_config.get('google_drive_file_id')
+        if not google_drive_file_id:
+            return {"cached": False, "reason": "No Google Drive file ID"}
+
+        # Check for cached download
+        cache_result = sb.table('downloaded_files').select('*').eq(
+            'google_drive_file_id', google_drive_file_id
+        ).eq('is_valid', True).execute()
+
+        if not cache_result.data:
+            return {"cached": False, "reason": "No cached download found"}
+
+        cached = cache_result.data[0]
+
+        # Check if file still exists (for local storage)
+        import os
+        if cached.get('storage_type') == 'local':
+            if not os.path.exists(cached.get('storage_path', '')):
+                # Mark as invalid
+                sb.table('downloaded_files').update({'is_valid': False}).eq('id', cached['id']).execute()
+                return {"cached": False, "reason": "Cached file no longer exists on disk"}
+
+        # Calculate age
+        from datetime import datetime, timezone
+        downloaded_at = datetime.fromisoformat(cached['downloaded_at'].replace('Z', '+00:00'))
+        age_hours = (datetime.now(timezone.utc) - downloaded_at).total_seconds() / 3600
+
+        # Format file size
+        file_size = cached.get('file_size', 0)
+        if file_size >= 1024 * 1024 * 1024:
+            size_str = f"{file_size / (1024 * 1024 * 1024):.2f} GB"
+        elif file_size >= 1024 * 1024:
+            size_str = f"{file_size / (1024 * 1024):.1f} MB"
+        else:
+            size_str = f"{file_size / 1024:.1f} KB"
+
+        return {
+            "cached": True,
+            "cache_id": cached['id'],
+            "file_name": cached['file_name'],
+            "file_size": file_size,
+            "file_size_formatted": size_str,
+            "storage_type": cached['storage_type'],
+            "storage_path": cached['storage_path'],
+            "downloaded_at": cached['downloaded_at'],
+            "age_hours": round(age_hours, 1),
+            "age_formatted": f"{int(age_hours)} hours ago" if age_hours < 24 else f"{int(age_hours / 24)} days ago",
+            "last_used_at": cached.get('last_used_at')
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to check cached download: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/cached-downloads/{cache_id}")
+async def invalidate_cached_download(cache_id: str):
+    """Invalidate (mark as invalid) a cached download."""
+    try:
+        sb = get_supabase()
+        result = sb.table('downloaded_files').update({'is_valid': False}).eq('id', cache_id).execute()
+
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Cache entry not found")
+
+        return {"success": True, "message": "Cache invalidated"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to invalidate cache: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/mailboxes/{mailbox_id}/process")
 async def start_processing(mailbox_id: str, config: ProcessingJobConfig, background_tasks: BackgroundTasks):
     """Start email processing for a mailbox"""
@@ -1046,7 +1164,7 @@ async def start_processing(mailbox_id: str, config: ProcessingJobConfig, backgro
                        f"Job ID: {active_job['id']}"
             )
 
-        # Create processing job
+        # Create processing job with filter parameters for audit trail
         job_data = {
             "job_type": config.job_type,
             "mailbox_id": mailbox_id,
@@ -1054,10 +1172,14 @@ async def start_processing(mailbox_id: str, config: ProcessingJobConfig, backgro
             "total_records": config.total_records,
             "processed_records": 0,
             "failed_records": 0,
+            "filtered_records": 0,  # Track emails skipped by date filter
             "created_at": datetime.now(timezone.utc).isoformat(),
             "started_at": None,
             "completed_at": None,
-            "error_log": []
+            "error_log": [],
+            # Stage 2: Store date filter parameters for visibility/audit
+            "filter_start_date": config.start_date if config.start_date else None,
+            "filter_end_date": config.end_date if config.end_date else None
         }
         
         # Insert job into database
@@ -1094,6 +1216,8 @@ async def process_emails_real(job_id: str, config: ProcessingJobConfig):
     """
 
     downloaded_file_path = None  # Track downloaded file for cleanup
+    cache_entry_id = None  # Track cache entry for updating last_used_at
+    google_drive_file_id = None  # Track for cache registration
 
     try:
         logger.info(f"Starting REAL email processing for job {job_id}")
@@ -1110,96 +1234,189 @@ async def process_emails_real(job_id: str, config: ProcessingJobConfig):
             connection_config.get('file_source') == 'google_drive' and
             connection_config.get('google_drive_file_id')):
 
-            logger.info(f"Parallel download requested for job {job_id} with {config.download_threads} threads")
-
-            # Import parallel downloader
-            from src.storage.parallel_downloader import ParallelDownloader
-
-            # Get access token from stored credentials and refresh if needed
-            user_id = connection_config.get('user_id', 'default')
-            tokens_result = get_supabase().table('user_integrations').select(
-                'access_token,refresh_token'
-            ).eq('user_id', user_id).eq('provider', 'google_drive').execute()
-
-            if not tokens_result.data:
-                raise Exception("No Google Drive credentials found. Please re-authenticate.")
-
-            access_token = tokens_result.data[0].get('access_token')
-            refresh_token = tokens_result.data[0].get('refresh_token')
-
-            if not access_token:
-                raise Exception("Invalid Google Drive access token")
-
-            # Refresh the access token to ensure it's valid
-            if refresh_token:
-                try:
-                    from google.oauth2.credentials import Credentials
-                    from google.auth.transport.requests import Request
-
-                    credentials = Credentials(
-                        token=access_token,
-                        refresh_token=refresh_token,
-                        token_uri="https://oauth2.googleapis.com/token",
-                        client_id=os.getenv("GOOGLE_CLIENT_ID"),
-                        client_secret=os.getenv("GOOGLE_CLIENT_SECRET")
-                    )
-
-                    # Force refresh the token
-                    credentials.refresh(Request())
-                    access_token = credentials.token
-
-                    # Store the new access token
-                    update_user_access_token(user_id, access_token)
-                    logger.info(f"Refreshed Google Drive access token for parallel download")
-                except Exception as refresh_error:
-                    logger.warning(f"Token refresh failed, using existing token: {refresh_error}")
-
-            file_id = connection_config.get('google_drive_file_id')
+            google_drive_file_id = connection_config.get('google_drive_file_id')
             file_name = connection_config.get('google_drive_file_name', 'download')
 
-            # Progress callback to update Redis
-            def download_progress_callback(downloaded: int, total: int, speed_mbps: float):
-                if progress_manager and total > 0:
-                    percent = int(downloaded / total * 100)
-                    # Store download progress in Redis (using negative values to indicate download phase)
-                    progress_manager.update_progress(
-                        job_id, 0, 0,
-                        status='downloading',
-                        download_percent=percent,
-                        download_speed_mbps=round(speed_mbps, 1)
-                    )
+            # Check for cached download if use_cached_file is enabled (default: True)
+            use_cached = config.use_cached_file if config.use_cached_file is not None else True
 
-            # Perform parallel download
-            logger.info(f"Starting parallel download: {file_name} ({file_id})")
-            downloader = ParallelDownloader(
-                access_token=access_token,
-                num_threads=config.download_threads or 8,
-                progress_callback=download_progress_callback
-            )
+            if use_cached:
+                logger.info(f"Checking for cached download of {google_drive_file_id}")
+                sb = get_supabase()
+                cache_result = sb.table('downloaded_files').select('*').eq(
+                    'google_drive_file_id', google_drive_file_id
+                ).eq('is_valid', True).execute()
 
-            # Run download in thread pool
-            loop = asyncio.get_event_loop()
-            downloaded_file_path = await loop.run_in_executor(
-                executor,
-                lambda: downloader.download(file_id, file_name)
-            )
+                if cache_result.data:
+                    cached = cache_result.data[0]
+                    cached_path = cached.get('storage_path', '')
 
+                    # For local storage, verify file still exists
+                    if cached.get('storage_type') == 'local' and os.path.exists(cached_path):
+                        logger.info(f"Using cached download: {cached_path}")
+
+                        # Update last_used_at
+                        cache_entry_id = cached['id']
+                        sb.table('downloaded_files').update({
+                            'last_used_at': datetime.now(timezone.utc).isoformat(),
+                            'last_job_id': job_id
+                        }).eq('id', cache_entry_id).execute()
+
+                        # Use cached file instead of downloading
+                        downloaded_file_path = cached_path
+                        connection_config['file_source'] = 'local'
+                        connection_config['file_path'] = cached_path
+                        connection_config.pop('google_drive_file_id', None)
+                        connection_config.pop('google_drive_file_name', None)
+
+                        # Update job status to indicate cache was used
+                        if progress_manager:
+                            progress_manager.update_progress(
+                                job_id, 0, 0,
+                                status='running',
+                                download_percent=100,
+                                using_cache=True
+                            )
+                    else:
+                        # Cached file doesn't exist - mark as invalid
+                        logger.warning(f"Cached file no longer exists: {cached_path}")
+                        sb.table('downloaded_files').update({'is_valid': False}).eq('id', cached['id']).execute()
+
+            # If no cached file was found/used, proceed with download
             if not downloaded_file_path:
-                raise Exception("Parallel download failed")
+                logger.info(f"Parallel download requested for job {job_id} with {config.download_threads} threads")
 
-            logger.info(f"Parallel download complete: {downloaded_file_path}")
+                # Import parallel downloader
+                from src.storage.parallel_downloader import ParallelDownloader
 
-            # Update connection config to use local file instead of streaming
-            connection_config['file_source'] = 'local'
-            connection_config['file_path'] = downloaded_file_path
-            # Remove Google Drive specific fields
-            connection_config.pop('google_drive_file_id', None)
-            connection_config.pop('google_drive_file_name', None)
+                # Get access token from stored credentials and refresh if needed
+                user_id = connection_config.get('user_id', 'default')
+                tokens_result = get_supabase().table('user_integrations').select(
+                    'access_token,refresh_token'
+                ).eq('user_id', user_id).eq('provider', 'google_drive').execute()
+
+                if not tokens_result.data:
+                    raise Exception("No Google Drive credentials found. Please re-authenticate.")
+
+                access_token = tokens_result.data[0].get('access_token')
+                refresh_token = tokens_result.data[0].get('refresh_token')
+
+                if not access_token:
+                    raise Exception("Invalid Google Drive access token")
+
+                # Refresh the access token to ensure it's valid
+                if refresh_token:
+                    try:
+                        from google.oauth2.credentials import Credentials
+                        from google.auth.transport.requests import Request
+
+                        credentials = Credentials(
+                            token=access_token,
+                            refresh_token=refresh_token,
+                            token_uri="https://oauth2.googleapis.com/token",
+                            client_id=os.getenv("GOOGLE_CLIENT_ID"),
+                            client_secret=os.getenv("GOOGLE_CLIENT_SECRET")
+                        )
+
+                        # Force refresh the token
+                        credentials.refresh(Request())
+                        access_token = credentials.token
+
+                        # Store the new access token
+                        update_user_access_token(user_id, access_token)
+                        logger.info(f"Refreshed Google Drive access token for parallel download")
+                    except Exception as refresh_error:
+                        logger.warning(f"Token refresh failed, using existing token: {refresh_error}")
+
+                # Progress callback to update Redis
+                def download_progress_callback(downloaded: int, total: int, speed_mbps: float):
+                    if progress_manager and total > 0:
+                        percent = int(downloaded / total * 100)
+                        # Store download progress in Redis (using negative values to indicate download phase)
+                        progress_manager.update_progress(
+                            job_id, 0, 0,
+                            status='downloading',
+                            download_percent=percent,
+                            download_speed_mbps=round(speed_mbps, 1)
+                        )
+
+                # Perform parallel download with error logging
+                logger.info(f"Starting parallel download: {file_name} ({google_drive_file_id})")
+                error_logger = get_error_logger()
+                downloader = ParallelDownloader(
+                    access_token=access_token,
+                    num_threads=config.download_threads or 8,
+                    progress_callback=download_progress_callback,
+                    job_id=job_id,
+                    mailbox_id=str(config.mailbox_id) if config.mailbox_id else None,
+                    error_logger=error_logger
+                )
+
+                # Run download in thread pool
+                loop = asyncio.get_event_loop()
+                downloaded_file_path = await loop.run_in_executor(
+                    executor,
+                    lambda: downloader.download(google_drive_file_id, file_name)
+                )
+
+                if not downloaded_file_path:
+                    raise Exception("Parallel download failed")
+
+                logger.info(f"Parallel download complete: {downloaded_file_path}")
+
+                # Register downloaded file in cache for future reuse
+                keep_file = config.keep_downloaded_file if config.keep_downloaded_file is not None else True
+                if keep_file:
+                    try:
+                        file_size = os.path.getsize(downloaded_file_path) if os.path.exists(downloaded_file_path) else 0
+                        sb = get_supabase()
+                        cache_insert = sb.table('downloaded_files').upsert({
+                            'google_drive_file_id': google_drive_file_id,
+                            'file_name': file_name,
+                            'file_size': file_size,
+                            'storage_type': 'local',
+                            'storage_path': downloaded_file_path,
+                            'mailbox_id': str(config.mailbox_id) if config.mailbox_id else None,
+                            'last_job_id': job_id,
+                            'downloaded_at': datetime.now(timezone.utc).isoformat(),
+                            'last_used_at': datetime.now(timezone.utc).isoformat(),
+                            'is_valid': True
+                        }, on_conflict='google_drive_file_id').execute()
+
+                        if cache_insert.data:
+                            cache_entry_id = cache_insert.data[0]['id']
+                            logger.info(f"Registered download in cache: {cache_entry_id}")
+                    except Exception as cache_error:
+                        logger.warning(f"Failed to register download in cache: {cache_error}")
+
+                # Update connection config to use local file instead of streaming
+                connection_config['file_source'] = 'local'
+                connection_config['file_path'] = downloaded_file_path
+                # Remove Google Drive specific fields
+                connection_config.pop('google_drive_file_id', None)
+                connection_config.pop('google_drive_file_name', None)
+
+            # Download complete (either from cache or fresh download) - update status to 'running'
+            logger.info(f"Download phase complete for job {job_id}, transitioning to processing phase")
+
+            # Update database status to 'running'
+            await update_job_status(job_id, "running", {})
+
+            # Update Redis to clear download state and show processing phase
+            if progress_manager:
+                progress_manager.update_progress(
+                    job_id, 0, 0,
+                    status='running',
+                    download_percent=100,  # Keep at 100 to show download completed
+                    download_complete=True  # Flag to indicate download phase is done
+                )
 
         # Initialize processor with actual configuration (may be modified for local file)
+        error_logger = get_error_logger()
         processor = EmailProcessor(
             mailbox_id=config.mailbox_id,
-            connection_config=connection_config
+            connection_config=connection_config,
+            error_logger=error_logger
         )
 
         # Initialize the extractor
@@ -1283,26 +1500,43 @@ async def process_emails_real(job_id: str, config: ProcessingJobConfig):
         # Cleanup
         processor.disconnect()
 
-        # Cleanup downloaded file if parallel download was used
-        if downloaded_file_path:
+        # Cleanup downloaded file if parallel download was used AND keep_downloaded_file is False
+        keep_file = config.keep_downloaded_file if config.keep_downloaded_file is not None else True
+        if downloaded_file_path and not keep_file:
             try:
-                import shutil
                 if os.path.exists(downloaded_file_path):
                     os.remove(downloaded_file_path)
                     logger.info(f"Cleaned up downloaded file: {downloaded_file_path}")
+
+                    # Mark cache entry as invalid since file is deleted
+                    if cache_entry_id:
+                        try:
+                            get_supabase().table('downloaded_files').update({
+                                'is_valid': False
+                            }).eq('id', cache_entry_id).execute()
+                        except Exception:
+                            pass
+
                 # Also try to remove the temp directory
                 parent_dir = os.path.dirname(downloaded_file_path)
                 if parent_dir and os.path.exists(parent_dir) and not os.listdir(parent_dir):
                     os.rmdir(parent_dir)
             except Exception as cleanup_error:
                 logger.warning(f"Failed to cleanup downloaded file: {cleanup_error}")
+        elif downloaded_file_path and keep_file:
+            logger.info(f"Keeping downloaded file for future reuse: {downloaded_file_path}")
 
     except Exception as e:
         error_msg = f"Processing error: {str(e)}"
         logger.error(error_msg, exc_info=True)
 
-        # Cleanup downloaded file on error
-        if downloaded_file_path:
+        # Decide whether to keep file on error
+        # If keep_downloaded_file is True (default), keep it for debugging/retry
+        # If file was from cache, always keep it
+        keep_file = config.keep_downloaded_file if config.keep_downloaded_file is not None else True
+
+        if downloaded_file_path and not keep_file and not cache_entry_id:
+            # Only cleanup if explicitly told not to keep AND it's not a cached file
             try:
                 if os.path.exists(downloaded_file_path):
                     os.remove(downloaded_file_path)
@@ -1312,6 +1546,8 @@ async def process_emails_real(job_id: str, config: ProcessingJobConfig):
                     os.rmdir(parent_dir)
             except Exception as cleanup_error:
                 logger.warning(f"Failed to cleanup downloaded file: {cleanup_error}")
+        elif downloaded_file_path:
+            logger.info(f"Keeping downloaded file after error for debugging/retry: {downloaded_file_path}")
 
         # Check if job was already stopped (don't override stopped status)
         job_result = get_supabase().table('processing_jobs').select('status').eq('id', job_id).execute()
@@ -1400,7 +1636,7 @@ async def get_processing_jobs():
     try:
         # Try to get from database with mailbox join
         result = get_supabase().table('processing_jobs').select(
-            'id, job_type, mailbox_id, status, total_records, processed_records, failed_records, started_at, completed_at, created_at, error_log, mailboxes(name)'
+            'id, job_type, mailbox_id, status, total_records, processed_records, failed_records, filtered_records, started_at, completed_at, created_at, error_log, filter_start_date, filter_end_date, mailboxes(name)'
         ).order('created_at', desc=True).execute()
         
         jobs = []
@@ -1415,11 +1651,18 @@ async def get_processing_jobs():
             # Calculate progress safely, handling None and 0
             total = job.get('total_records') or 0
             processed = job.get('processed_records') or 0
+            filtered = job.get('filtered_records') or 0
 
-            if total > 0:
-                progress = round((processed / total) * 100)
-            elif job.get('status') == 'completed':
-                progress = 100  # If completed but no total_records, show 100%
+            # Progress calculation:
+            # - If completed: always 100%
+            # - If has total: (processed + filtered) / total (filtered emails count as processed for progress)
+            # - Otherwise: 0%
+            if job.get('status') == 'completed':
+                progress = 100  # Completed jobs always show 100%
+            elif total > 0:
+                # Include filtered records in progress calculation
+                effective_processed = processed + filtered
+                progress = min(100, round((effective_processed / total) * 100))
             else:
                 progress = 0  # Pending or running without total_records yet
 

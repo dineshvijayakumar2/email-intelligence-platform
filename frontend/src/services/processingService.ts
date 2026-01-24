@@ -9,6 +9,7 @@ export interface ProcessingJob {
   total_records: number;
   processed_records: number;
   failed_records: number;
+  filtered_records?: number;  // Stage 2: Emails filtered by date range
   started_at?: string;
   completed_at?: string;
   created_at: string;
@@ -20,6 +21,9 @@ export interface ProcessingJob {
   // Download progress (for parallel download mode)
   download_percent?: number;
   download_speed_mbps?: number;
+  // Stage 2: Date range filter parameters
+  filter_start_date?: string;
+  filter_end_date?: string;
 }
 
 export interface CreateProcessingJobData {
@@ -32,6 +36,23 @@ export interface CreateProcessingJobData {
   enable_categorization?: boolean;
   download_first?: boolean;
   download_threads?: number;
+  use_cached_file?: boolean;
+  keep_downloaded_file?: boolean;
+}
+
+export interface CachedDownload {
+  cached: boolean;
+  reason?: string;
+  cache_id?: string;
+  file_name?: string;
+  file_size?: number;
+  file_size_formatted?: string;
+  storage_type?: string;
+  storage_path?: string;
+  downloaded_at?: string;
+  age_hours?: number;
+  age_formatted?: string;
+  last_used_at?: string;
 }
 
 export const processingService = {
@@ -43,8 +64,10 @@ export const processingService = {
       start_date: jobData.start_date || null,
       end_date: jobData.end_date || null,
       enable_categorization: jobData.enable_categorization ?? true,
-      download_first: jobData.download_first ?? false,
-      download_threads: jobData.download_threads ?? 8
+      download_first: jobData.download_first ?? true,
+      download_threads: jobData.download_threads ?? 8,
+      use_cached_file: jobData.use_cached_file ?? true,
+      keep_downloaded_file: jobData.keep_downloaded_file ?? true
     });
 
     if (!job) {
@@ -122,6 +145,25 @@ export const processingService = {
       interrupted: 'magenta'  // Server restart interrupted the job
     };
     return colors[status as keyof typeof colors] || 'default';
+  },
+
+  // Check if there's a cached download available for a mailbox
+  async checkCachedDownload(mailboxId: string): Promise<CachedDownload> {
+    const result = await api.get<CachedDownload>(`/mailboxes/${mailboxId}/cached-download`, {
+      silentOnNetworkError: true,
+      timeout: 5000,
+    });
+
+    if (!result) {
+      return { cached: false, reason: 'Network error' };
+    }
+
+    return result;
+  },
+
+  // Invalidate (delete) a cached download
+  async invalidateCachedDownload(cacheId: string): Promise<void> {
+    await api.delete(`/cached-downloads/${cacheId}`);
   },
 
 };

@@ -3,6 +3,10 @@
  *
  * Dedicated page to view all processing errors across all jobs
  * with filtering, search, and retry capabilities.
+ *
+ * Two views:
+ * 1. All Errors - From job_errors table (download, extraction, processing, etc.)
+ * 2. Failed Emails - From emails table (email-specific failures with retry)
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -23,6 +27,8 @@ import {
   Modal,
   Tooltip,
   Breadcrumb,
+  Tabs,
+  Collapse,
 } from 'antd';
 import {
   ExclamationCircleOutlined,
@@ -30,18 +36,29 @@ import {
   InfoCircleOutlined,
   HomeOutlined,
   WarningOutlined,
+  CheckCircleOutlined,
+  CloudDownloadOutlined,
+  FileTextOutlined,
+  DatabaseOutlined,
+  TagsOutlined,
+  SyncOutlined,
+  RobotOutlined,
 } from '@ant-design/icons';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   errorService,
   ErrorSummary,
   FailedEmail,
+  JobError,
+  JobErrorsSummary,
 } from '../services/errorService';
 // @ts-ignore
 import config from '../config.js';
 
 const { Title, Text, Paragraph } = Typography;
 const { Option } = Select;
+const { TabPane } = Tabs;
+const { Panel } = Collapse;
 
 interface ProcessingJob {
   id: string;
@@ -59,9 +76,20 @@ interface MailboxOption {
   name: string;
 }
 
+// Phase icon mapping
+const phaseIcons: Record<string, React.ReactNode> = {
+  download: <CloudDownloadOutlined />,
+  extraction: <FileTextOutlined />,
+  normalization: <SyncOutlined />,
+  tagging: <TagsOutlined />,
+  database: <DatabaseOutlined />,
+  categorization: <RobotOutlined />,
+};
+
 const ErrorsPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const jobIdFromUrl = searchParams.get('jobId');
+  const tabFromUrl = searchParams.get('tab') || 'all';
 
   // State
   const [loading, setLoading] = useState(false);
@@ -69,6 +97,18 @@ const ErrorsPage: React.FC = () => {
   const [mailboxes, setMailboxes] = useState<MailboxOption[]>([]);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(jobIdFromUrl);
   const [selectedMailboxId, setSelectedMailboxId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<string>(tabFromUrl);
+
+  // Job Errors state (from job_errors table)
+  const [jobErrors, setJobErrors] = useState<JobError[]>([]);
+  const [jobErrorsSummary, setJobErrorsSummary] = useState<JobErrorsSummary | null>(null);
+  const [totalJobErrors, setTotalJobErrors] = useState(0);
+  const [hasMoreJobErrors, setHasMoreJobErrors] = useState(false);
+  const [selectedJobError, setSelectedJobError] = useState<JobError | null>(null);
+  const [phaseFilter, setPhaseFilter] = useState<string | null>(null);
+  const [typeFilter, setTypeFilter] = useState<string | null>(null);
+
+  // Failed Emails state (from emails table - legacy)
   const [errors, setErrors] = useState<FailedEmail[]>([]);
   const [errorSummary, setErrorSummary] = useState<ErrorSummary | null>(null);
   const [totalErrors, setTotalErrors] = useState(0);
@@ -114,7 +154,37 @@ const ErrorsPage: React.FC = () => {
     }
   }, []);
 
-  // Load errors for selected job
+  // Load job errors from job_errors table (ALL error types)
+  const loadJobErrors = useCallback(async (jobId: string, phase?: string | null, errorType?: string | null) => {
+    setLoading(true);
+    try {
+      const [errorsData, summaryData] = await Promise.all([
+        errorService.getJobErrors(jobId, {
+          phase: phase || undefined,
+          error_type: errorType || undefined,
+          limit: 100,
+          offset: 0,
+        }),
+        errorService.getJobErrorsSummary(jobId),
+      ]);
+
+      setJobErrors(errorsData.errors || []);
+      setTotalJobErrors(errorsData.total_errors || 0);
+      setHasMoreJobErrors(errorsData.has_more || false);
+      setJobErrorsSummary(summaryData);
+    } catch (error: any) {
+      console.error('Failed to load job errors:', error);
+      // Reset state on error
+      setJobErrors([]);
+      setTotalJobErrors(0);
+      setHasMoreJobErrors(false);
+      setJobErrorsSummary(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Load failed emails from emails table (legacy)
   const loadErrors = useCallback(async (jobId: string) => {
     setLoading(true);
     try {
@@ -161,16 +231,22 @@ const ErrorsPage: React.FC = () => {
   // Load errors when job selected
   useEffect(() => {
     if (selectedJobId) {
+      // Load both job errors and failed emails
+      loadJobErrors(selectedJobId, phaseFilter, typeFilter);
       loadErrors(selectedJobId);
       // Update URL
-      setSearchParams({ jobId: selectedJobId });
+      setSearchParams({ jobId: selectedJobId, tab: activeTab });
     } else {
+      // Reset both states
+      setJobErrors([]);
+      setJobErrorsSummary(null);
+      setTotalJobErrors(0);
       setErrors([]);
       setErrorSummary(null);
       setTotalErrors(0);
       setSearchParams({});
     }
-  }, [selectedJobId, loadErrors, setSearchParams]);
+  }, [selectedJobId, loadJobErrors, loadErrors, setSearchParams, phaseFilter, typeFilter, activeTab]);
 
   // Handle job selection
   const handleJobSelect = (jobId: string) => {
@@ -187,6 +263,43 @@ const ErrorsPage: React.FC = () => {
       if (job) {
         setSelectedJobId(job.id);
       }
+    }
+  };
+
+  // Handle tab change
+  const handleTabChange = (key: string) => {
+    setActiveTab(key);
+    if (selectedJobId) {
+      setSearchParams({ jobId: selectedJobId, tab: key });
+    }
+  };
+
+  // Handle phase filter change
+  const handlePhaseFilterChange = (phase: string | null) => {
+    setPhaseFilter(phase);
+    if (selectedJobId) {
+      loadJobErrors(selectedJobId, phase, typeFilter);
+    }
+  };
+
+  // Handle type filter change
+  const handleTypeFilterChange = (errorType: string | null) => {
+    setTypeFilter(errorType);
+    if (selectedJobId) {
+      loadJobErrors(selectedJobId, phaseFilter, errorType);
+    }
+  };
+
+  // Handle resolve job error
+  const handleResolveJobError = async (errorId: string) => {
+    if (!selectedJobId) return;
+    try {
+      await errorService.resolveJobError(selectedJobId, errorId, 'manual_fix');
+      message.success('Error marked as resolved');
+      loadJobErrors(selectedJobId, phaseFilter, typeFilter);
+    } catch (error) {
+      console.error('Failed to resolve error:', error);
+      message.error('Failed to resolve error');
     }
   };
 
@@ -212,7 +325,28 @@ const ErrorsPage: React.FC = () => {
     }
   };
 
-  // Load more errors
+  // Load more job errors
+  const loadMoreJobErrors = async () => {
+    if (!selectedJobId) return;
+
+    setLoading(true);
+    try {
+      const moreErrors = await errorService.getJobErrors(selectedJobId, {
+        phase: phaseFilter || undefined,
+        error_type: typeFilter || undefined,
+        limit: 100,
+        offset: jobErrors.length,
+      });
+      setJobErrors([...jobErrors, ...moreErrors.errors]);
+      setHasMoreJobErrors(moreErrors.has_more);
+    } catch (error) {
+      console.error('Failed to load more job errors:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load more failed emails
   const loadMore = async () => {
     if (!selectedJobId) return;
 
@@ -232,7 +366,106 @@ const ErrorsPage: React.FC = () => {
     }
   };
 
-  // Table columns
+  // Job Errors table columns (from job_errors table)
+  const jobErrorsColumns = [
+    {
+      title: 'Phase',
+      dataIndex: 'error_phase',
+      key: 'error_phase',
+      width: '10%',
+      render: (phase: string) => (
+        <Tag color={errorService.getErrorPhaseColor(phase)} icon={phaseIcons[phase]}>
+          {errorService.getErrorPhaseLabel(phase)}
+        </Tag>
+      ),
+    },
+    {
+      title: 'Severity',
+      dataIndex: 'error_severity',
+      key: 'error_severity',
+      width: '8%',
+      render: (severity: string) => (
+        <Tag color={errorService.getErrorSeverityColor(severity)}>
+          {errorService.getErrorSeverityLabel(severity)}
+        </Tag>
+      ),
+    },
+    {
+      title: 'Type',
+      dataIndex: 'error_type',
+      key: 'error_type',
+      width: '12%',
+      render: (errorType: string) => (
+        <Tag color={errorService.getErrorTypeColor(errorType)}>
+          {errorService.getErrorTypeLabel(errorType)}
+        </Tag>
+      ),
+    },
+    {
+      title: 'Message',
+      dataIndex: 'error_message',
+      key: 'error_message',
+      width: '30%',
+      render: (msg: string) => (
+        <Tooltip title={msg}>
+          <Text type="danger" ellipsis style={{ maxWidth: 300 }}>
+            {errorService.formatErrorMessage(msg, 60)}
+          </Text>
+        </Tooltip>
+      ),
+    },
+    {
+      title: 'Context',
+      dataIndex: 'context_type',
+      key: 'context',
+      width: '15%',
+      render: (_: any, record: JobError) => (
+        <Text type="secondary" ellipsis>
+          {record.context_type ? `${record.context_type}: ${record.context_id || 'N/A'}` : '-'}
+        </Text>
+      ),
+    },
+    {
+      title: 'Time',
+      dataIndex: 'created_at',
+      key: 'created_at',
+      width: '12%',
+      render: (date: string) =>
+        date ? new Date(date).toLocaleString() : 'Unknown',
+    },
+    {
+      title: '',
+      key: 'action',
+      width: '13%',
+      render: (_: any, record: JobError) => (
+        <Space size="small">
+          <Tooltip title="View Details">
+            <Button
+              type="text"
+              size="small"
+              icon={<InfoCircleOutlined />}
+              onClick={() => setSelectedJobError(record)}
+            />
+          </Tooltip>
+          {!record.resolved_at && (
+            <Tooltip title="Mark as Resolved">
+              <Button
+                type="text"
+                size="small"
+                icon={<CheckCircleOutlined />}
+                onClick={() => handleResolveJobError(record.id)}
+              />
+            </Tooltip>
+          )}
+          {record.resolved_at && (
+            <Tag color="green" style={{ marginLeft: 4 }}>Resolved</Tag>
+          )}
+        </Space>
+      ),
+    },
+  ];
+
+  // Failed Emails table columns (from emails table - legacy)
   const columns = [
     {
       title: 'Subject',
@@ -356,7 +589,10 @@ const ErrorsPage: React.FC = () => {
             icon={<ReloadOutlined />}
             onClick={() => {
               loadJobsWithErrors();
-              if (selectedJobId) loadErrors(selectedJobId);
+              if (selectedJobId) {
+                loadJobErrors(selectedJobId, phaseFilter, typeFilter);
+                loadErrors(selectedJobId);
+              }
             }}
             loading={loading}
           >
@@ -370,9 +606,9 @@ const ErrorsPage: React.FC = () => {
         <Col span={6}>
           <Card>
             <Statistic
-              title="Jobs with Errors"
+              title="Total Jobs"
               value={jobsWithErrorsCount}
-              valueStyle={{ color: jobsWithErrorsCount > 0 ? '#cf1322' : '#3f8600' }}
+              valueStyle={{ color: jobsWithErrorsCount > 0 ? '#1890ff' : '#3f8600' }}
               prefix={<WarningOutlined />}
             />
           </Card>
@@ -380,28 +616,30 @@ const ErrorsPage: React.FC = () => {
         <Col span={6}>
           <Card>
             <Statistic
-              title="Total Failed Emails"
+              title="Failed Emails"
               value={totalFailedAcrossJobs}
               valueStyle={{ color: totalFailedAcrossJobs > 0 ? '#cf1322' : '#3f8600' }}
             />
           </Card>
         </Col>
-        {selectedJobId && errorSummary && (
+        {selectedJobId && jobErrorsSummary && (
           <>
             <Col span={6}>
               <Card>
                 <Statistic
-                  title="Selected Job Errors"
-                  value={errorSummary.total_errors}
-                  valueStyle={{ color: '#cf1322' }}
+                  title="All Job Errors"
+                  value={jobErrorsSummary.total_errors}
+                  suffix={jobErrorsSummary.unresolved_errors > 0 ? <Text type="secondary" style={{ fontSize: 14 }}> ({jobErrorsSummary.unresolved_errors} unresolved)</Text> : null}
+                  valueStyle={{ color: jobErrorsSummary.total_errors > 0 ? '#cf1322' : '#3f8600' }}
                 />
               </Card>
             </Col>
             <Col span={6}>
               <Card>
                 <Statistic
-                  title="Error Types"
-                  value={Object.keys(errorSummary.error_types || {}).length}
+                  title="By Phase"
+                  value={Object.keys(jobErrorsSummary.by_phase || {}).length}
+                  suffix={<Text type="secondary" style={{ fontSize: 14 }}> phases</Text>}
                 />
               </Card>
             </Col>
@@ -445,96 +683,210 @@ const ErrorsPage: React.FC = () => {
               ))}
             </Select>
           </Col>
-          <Col span={8}>
-            {selectedJobId && (
-              <div style={{ marginTop: 28 }}>
-                <Space>
-                  <Tooltip title="Reset failed emails to pending for retry (max 3 attempts per email)">
-                    <Button
-                      type="primary"
-                      danger
-                      icon={<ReloadOutlined />}
-                      onClick={handleRetry}
-                      loading={retrying}
-                      disabled={!selectedJobId || totalErrors === 0}
-                    >
-                      Retry Failed ({totalErrors})
-                    </Button>
-                  </Tooltip>
-                </Space>
-              </div>
-            )}
-          </Col>
         </Row>
       </Card>
 
-      {/* Error Type Breakdown */}
-      {selectedJobId && errorSummary && errorSummary.error_types && (
-        <Card title="Error Type Breakdown" style={{ marginBottom: 24 }}>
+      {/* Error Breakdown by Phase (Job Errors) */}
+      {selectedJobId && jobErrorsSummary && Object.keys(jobErrorsSummary.by_phase || {}).length > 0 && (
+        <Card title="Errors by Phase" size="small" style={{ marginBottom: 24 }}>
           <Row gutter={[16, 16]}>
-            {Object.entries(errorSummary.error_types).map(([type, data]) => {
-              const count = typeof data === 'number' ? data : data.count;
-              const description =
-                typeof data === 'object' && data.description
-                  ? data.description
-                  : errorService.getErrorTypeLabel(type);
-
-              return (
-                <Col key={type} xs={12} sm={8} md={6} lg={4}>
-                  <Card size="small">
-                    <Statistic
-                      title={
-                        <Tooltip title={description}>
-                          <Tag color={errorService.getErrorTypeColor(type)}>
-                            {errorService.getErrorTypeLabel(type)}
-                          </Tag>
-                        </Tooltip>
-                      }
-                      value={count}
-                      valueStyle={{ fontSize: 20 }}
-                    />
-                  </Card>
-                </Col>
-              );
-            })}
+            {Object.entries(jobErrorsSummary.by_phase).map(([phase, count]) => (
+              <Col key={phase} xs={12} sm={8} md={6} lg={4}>
+                <Card size="small" hoverable onClick={() => handlePhaseFilterChange(phaseFilter === phase ? null : phase)}>
+                  <Statistic
+                    title={
+                      <Space>
+                        {phaseIcons[phase]}
+                        <Tag color={errorService.getErrorPhaseColor(phase)}>
+                          {errorService.getErrorPhaseLabel(phase)}
+                        </Tag>
+                      </Space>
+                    }
+                    value={count}
+                    valueStyle={{ fontSize: 20, color: phaseFilter === phase ? '#1890ff' : undefined }}
+                  />
+                </Card>
+              </Col>
+            ))}
           </Row>
         </Card>
       )}
 
-      {/* Errors Table */}
-      <Card title={selectedJobId ? `Failed Emails (${totalErrors})` : 'Select a job to view errors'}>
-        {loading && errors.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: 48 }}>
-            <Spin size="large" />
-          </div>
-        ) : !selectedJobId ? (
-          <Empty
-            description="Select a processing job above to view its errors"
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-          />
-        ) : errors.length === 0 ? (
-          <Empty description="No errors found for this job" />
-        ) : (
-          <>
-            <Table
-              dataSource={errors}
-              columns={columns}
-              rowKey="id"
-              size="small"
-              pagination={false}
-              scroll={{ y: 400 }}
-              loading={loading}
-            />
+      {/* Errors Tabs */}
+      <Card>
+        <Tabs activeKey={activeTab} onChange={handleTabChange}>
+          {/* All Job Errors Tab */}
+          <TabPane
+            tab={
+              <span>
+                <ExclamationCircleOutlined />
+                All Errors ({totalJobErrors})
+              </span>
+            }
+            key="all"
+          >
+            {/* Filters for job errors */}
+            {selectedJobId && (
+              <Row gutter={16} style={{ marginBottom: 16 }}>
+                <Col span={6}>
+                  <Text type="secondary">Filter by Phase:</Text>
+                  <Select
+                    style={{ width: '100%', marginTop: 4 }}
+                    placeholder="All Phases"
+                    allowClear
+                    value={phaseFilter}
+                    onChange={handlePhaseFilterChange}
+                  >
+                    <Option value="download">Download</Option>
+                    <Option value="extraction">Extraction</Option>
+                    <Option value="normalization">Normalization</Option>
+                    <Option value="tagging">Tagging</Option>
+                    <Option value="database">Database</Option>
+                    <Option value="categorization">Categorization</Option>
+                  </Select>
+                </Col>
+                <Col span={6}>
+                  <Text type="secondary">Filter by Type:</Text>
+                  <Select
+                    style={{ width: '100%', marginTop: 4 }}
+                    placeholder="All Types"
+                    allowClear
+                    value={typeFilter}
+                    onChange={handleTypeFilterChange}
+                  >
+                    <Option value="network_error">Network Error</Option>
+                    <Option value="timeout_error">Timeout</Option>
+                    <Option value="encoding_error">Encoding Error</Option>
+                    <Option value="parse_error">Parse Error</Option>
+                    <Option value="connection_error">Connection Error</Option>
+                    <Option value="auth_error">Auth Error</Option>
+                    <Option value="file_error">File Error</Option>
+                    <Option value="chunk_error">Chunk Error</Option>
+                    <Option value="other_error">Other</Option>
+                  </Select>
+                </Col>
+              </Row>
+            )}
 
-            {hasMore && (
-              <div style={{ textAlign: 'center', marginTop: 16 }}>
-                <Button onClick={loadMore} loading={loading}>
-                  Load More ({totalErrors - errors.length} remaining)
-                </Button>
+            {loading && jobErrors.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: 48 }}>
+                <Spin size="large" />
+              </div>
+            ) : !selectedJobId ? (
+              <Empty
+                description="Select a processing job above to view its errors"
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+              />
+            ) : jobErrors.length === 0 ? (
+              <Empty description="No errors found for this job" />
+            ) : (
+              <>
+                <Table
+                  dataSource={jobErrors}
+                  columns={jobErrorsColumns}
+                  rowKey="id"
+                  size="small"
+                  pagination={false}
+                  scroll={{ y: 400 }}
+                  loading={loading}
+                />
+
+                {hasMoreJobErrors && (
+                  <div style={{ textAlign: 'center', marginTop: 16 }}>
+                    <Button onClick={loadMoreJobErrors} loading={loading}>
+                      Load More ({totalJobErrors - jobErrors.length} remaining)
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
+          </TabPane>
+
+          {/* Failed Emails Tab */}
+          <TabPane
+            tab={
+              <span>
+                <WarningOutlined />
+                Failed Emails ({totalErrors})
+              </span>
+            }
+            key="emails"
+          >
+            {/* Error Type Breakdown */}
+            {selectedJobId && errorSummary && errorSummary.error_types && Object.keys(errorSummary.error_types).length > 0 && (
+              <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+                {Object.entries(errorSummary.error_types).map(([type, data]) => {
+                  const count = typeof data === 'number' ? data : data.count;
+                  return (
+                    <Col key={type} xs={12} sm={8} md={6} lg={4}>
+                      <Card size="small">
+                        <Statistic
+                          title={
+                            <Tag color={errorService.getErrorTypeColor(type)}>
+                              {errorService.getErrorTypeLabel(type)}
+                            </Tag>
+                          }
+                          value={count}
+                          valueStyle={{ fontSize: 16 }}
+                        />
+                      </Card>
+                    </Col>
+                  );
+                })}
+              </Row>
+            )}
+
+            {/* Retry button */}
+            {selectedJobId && totalErrors > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <Tooltip title="Reset failed emails to pending for retry (max 3 attempts per email)">
+                  <Button
+                    type="primary"
+                    danger
+                    icon={<ReloadOutlined />}
+                    onClick={handleRetry}
+                    loading={retrying}
+                  >
+                    Retry Failed Emails ({totalErrors})
+                  </Button>
+                </Tooltip>
               </div>
             )}
-          </>
-        )}
+
+            {loading && errors.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: 48 }}>
+                <Spin size="large" />
+              </div>
+            ) : !selectedJobId ? (
+              <Empty
+                description="Select a processing job above to view its errors"
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+              />
+            ) : errors.length === 0 ? (
+              <Empty description="No failed emails found for this job" />
+            ) : (
+              <>
+                <Table
+                  dataSource={errors}
+                  columns={columns}
+                  rowKey="id"
+                  size="small"
+                  pagination={false}
+                  scroll={{ y: 400 }}
+                  loading={loading}
+                />
+
+                {hasMore && (
+                  <div style={{ textAlign: 'center', marginTop: 16 }}>
+                    <Button onClick={loadMore} loading={loading}>
+                      Load More ({totalErrors - errors.length} remaining)
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
+          </TabPane>
+        </Tabs>
       </Card>
 
       {/* Error Detail Modal */}
@@ -626,6 +978,151 @@ const ErrorsPage: React.FC = () => {
                 </Text>
               </Paragraph>
             </div>
+          </Space>
+        )}
+      </Modal>
+
+      {/* Job Error Detail Modal */}
+      <Modal
+        title="Job Error Details"
+        open={!!selectedJobError}
+        onCancel={() => setSelectedJobError(null)}
+        footer={[
+          selectedJobError && !selectedJobError.resolved_at && (
+            <Button
+              key="resolve"
+              type="primary"
+              icon={<CheckCircleOutlined />}
+              onClick={() => {
+                handleResolveJobError(selectedJobError.id);
+                setSelectedJobError(null);
+              }}
+            >
+              Mark as Resolved
+            </Button>
+          ),
+          <Button key="close" onClick={() => setSelectedJobError(null)}>
+            Close
+          </Button>,
+        ]}
+        width={800}
+      >
+        {selectedJobError && (
+          <Space direction="vertical" style={{ width: '100%' }} size="middle">
+            <Row gutter={16}>
+              <Col span={8}>
+                <Text strong>Phase:</Text>
+                <br />
+                <Tag color={errorService.getErrorPhaseColor(selectedJobError.error_phase)} icon={phaseIcons[selectedJobError.error_phase]}>
+                  {errorService.getErrorPhaseLabel(selectedJobError.error_phase)}
+                </Tag>
+              </Col>
+              <Col span={8}>
+                <Text strong>Type:</Text>
+                <br />
+                <Tag color={errorService.getErrorTypeColor(selectedJobError.error_type)}>
+                  {errorService.getErrorTypeLabel(selectedJobError.error_type)}
+                </Tag>
+              </Col>
+              <Col span={8}>
+                <Text strong>Severity:</Text>
+                <br />
+                <Tag color={errorService.getErrorSeverityColor(selectedJobError.error_severity)}>
+                  {errorService.getErrorSeverityLabel(selectedJobError.error_severity)}
+                </Tag>
+              </Col>
+            </Row>
+
+            <Row gutter={16}>
+              <Col span={8}>
+                <Text strong>Context Type:</Text>
+                <br />
+                <Text>{selectedJobError.context_type || 'N/A'}</Text>
+              </Col>
+              <Col span={8}>
+                <Text strong>Context ID:</Text>
+                <br />
+                <Text code style={{ fontSize: 11 }}>
+                  {selectedJobError.context_id || 'N/A'}
+                </Text>
+              </Col>
+              <Col span={8}>
+                <Text strong>Created:</Text>
+                <br />
+                <Text>
+                  {selectedJobError.created_at
+                    ? new Date(selectedJobError.created_at).toLocaleString()
+                    : 'Unknown'}
+                </Text>
+              </Col>
+            </Row>
+
+            <Row gutter={16}>
+              <Col span={8}>
+                <Text strong>Retryable:</Text>
+                <br />
+                <Tag color={selectedJobError.is_retryable ? 'green' : 'red'}>
+                  {selectedJobError.is_retryable ? 'Yes' : 'No'}
+                </Tag>
+              </Col>
+              <Col span={8}>
+                <Text strong>Retry Count:</Text>
+                <br />
+                <Text>{selectedJobError.retry_count}</Text>
+              </Col>
+              <Col span={8}>
+                <Text strong>Status:</Text>
+                <br />
+                {selectedJobError.resolved_at ? (
+                  <Tag color="green">Resolved at {new Date(selectedJobError.resolved_at).toLocaleString()}</Tag>
+                ) : (
+                  <Tag color="red">Unresolved</Tag>
+                )}
+              </Col>
+            </Row>
+
+            {selectedJobError.context_details && Object.keys(selectedJobError.context_details).length > 0 && (
+              <div>
+                <Text strong>Context Details:</Text>
+                <Collapse style={{ marginTop: 8 }}>
+                  <Panel header="View Details" key="1">
+                    <pre style={{ background: '#f5f5f5', padding: 12, borderRadius: 4, overflow: 'auto', maxHeight: 200 }}>
+                      {JSON.stringify(selectedJobError.context_details, null, 2)}
+                    </pre>
+                  </Panel>
+                </Collapse>
+              </div>
+            )}
+
+            <div>
+              <Text strong>Error Message:</Text>
+              <Paragraph
+                style={{
+                  background: '#fff2f0',
+                  padding: 12,
+                  borderRadius: 4,
+                  marginTop: 8,
+                  border: '1px solid #ffccc7',
+                }}
+              >
+                <Text type="danger" style={{ whiteSpace: 'pre-wrap' }}>
+                  {selectedJobError.error_message || 'No error message'}
+                </Text>
+              </Paragraph>
+            </div>
+
+            {selectedJobError.error_stack && (
+              <div>
+                <Text strong>Stack Trace:</Text>
+                <Collapse style={{ marginTop: 8 }}>
+                  <Panel header="View Stack Trace" key="1">
+                    <pre style={{ background: '#f5f5f5', padding: 12, borderRadius: 4, overflow: 'auto', maxHeight: 300, fontSize: 11 }}>
+                      {selectedJobError.error_stack}
+                    </pre>
+                  </Panel>
+                </Collapse>
+              </div>
+            )}
           </Space>
         )}
       </Modal>

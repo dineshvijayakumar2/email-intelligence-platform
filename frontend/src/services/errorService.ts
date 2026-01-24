@@ -1,10 +1,65 @@
 /**
  * Error Service - Stage 2 Error Handling
  *
- * Provides API methods for fetching and managing processing errors
+ * Provides API methods for fetching and managing processing errors.
+ *
+ * Two types of errors:
+ * 1. Job Errors (job_errors table) - ALL errors: download, extraction, processing, etc.
+ * 2. Failed Emails (emails table) - Email-specific failures with retry capability
  */
 
 import api from './apiClient';
+
+// =========================================================================
+// Job Errors (from job_errors table) - Comprehensive error logging
+// =========================================================================
+
+export interface JobError {
+  id: string;
+  error_phase: string;  // download, extraction, normalization, tagging, database, categorization
+  error_type: string;   // encoding_error, parse_error, network_error, etc.
+  error_severity: string;  // warning, error, critical
+  error_message: string;
+  error_stack?: string;
+  context_type?: string;  // file, chunk, email, batch
+  context_id?: string;
+  context_details?: Record<string, any>;
+  is_retryable: boolean;
+  retry_count: number;
+  resolved_at?: string;
+  created_at: string;
+}
+
+export interface JobErrorsResponse {
+  job_id: string;
+  total_errors: number;
+  unresolved_errors: number;
+  errors: JobError[];
+  has_more: boolean;
+}
+
+export interface JobErrorsSummary {
+  total_errors: number;
+  unresolved_errors: number;
+  retryable_errors: number;
+  by_phase: Record<string, number>;
+  by_type: Record<string, number>;
+  by_severity: Record<string, number>;
+  recent_errors: Array<{
+    id: string;
+    phase: string;
+    type: string;
+    severity: string;
+    message: string;
+    context_type?: string;
+    context_id?: string;
+    created_at: string;
+  }>;
+}
+
+// =========================================================================
+// Failed Emails (from emails table) - Legacy email-specific errors
+// =========================================================================
 
 export interface FailedEmail {
   id: string;
@@ -52,6 +107,73 @@ export interface RetryResponse {
 }
 
 export const errorService = {
+  // =========================================================================
+  // Job Errors API (from job_errors table) - ALL error types
+  // =========================================================================
+
+  /**
+   * Get all job errors (download, extraction, processing, etc.)
+   */
+  async getJobErrors(
+    jobId: string,
+    options: {
+      phase?: string;
+      error_type?: string;
+      unresolved_only?: boolean;
+      limit?: number;
+      offset?: number;
+    } = {}
+  ): Promise<JobErrorsResponse> {
+    const params = new URLSearchParams();
+    if (options.phase) params.append('phase', options.phase);
+    if (options.error_type) params.append('error_type', options.error_type);
+    if (options.unresolved_only) params.append('unresolved_only', 'true');
+    params.append('limit', String(options.limit || 50));
+    params.append('offset', String(options.offset || 0));
+
+    const result = await api.get<JobErrorsResponse>(
+      `/processing-jobs/${jobId}/job-errors?${params.toString()}`
+    );
+    if (!result) {
+      throw new Error('Failed to fetch job errors');
+    }
+    return result;
+  },
+
+  /**
+   * Get comprehensive job errors summary
+   */
+  async getJobErrorsSummary(jobId: string): Promise<JobErrorsSummary> {
+    const result = await api.get<JobErrorsSummary>(
+      `/processing-jobs/${jobId}/job-errors/summary`
+    );
+    if (!result) {
+      throw new Error('Failed to fetch job errors summary');
+    }
+    return result;
+  },
+
+  /**
+   * Mark a job error as resolved
+   */
+  async resolveJobError(
+    jobId: string,
+    errorId: string,
+    resolutionType: string = 'manual_fix'
+  ): Promise<{ success: boolean; error_id: string; resolution_type: string }> {
+    const result = await api.post<{ success: boolean; error_id: string; resolution_type: string }>(
+      `/processing-jobs/${jobId}/job-errors/${errorId}/resolve?resolution_type=${resolutionType}`
+    );
+    if (!result) {
+      throw new Error('Failed to resolve job error');
+    }
+    return result;
+  },
+
+  // =========================================================================
+  // Failed Emails API (from emails table) - Legacy email-specific errors
+  // =========================================================================
+
   /**
    * Get failed emails for a processing job
    */
@@ -70,7 +192,7 @@ export const errorService = {
   },
 
   /**
-   * Get error summary for a processing job
+   * Get error summary for a processing job (legacy)
    */
   async getErrorSummary(jobId: string): Promise<ErrorSummary> {
     const result = await api.get<ErrorSummary>(
@@ -98,6 +220,10 @@ export const errorService = {
     return result;
   },
 
+  // =========================================================================
+  // Display Helpers
+  // =========================================================================
+
   /**
    * Get error type label for display
    */
@@ -107,9 +233,14 @@ export const errorService = {
       parse_error: 'Parse Error',
       timeout_error: 'Timeout',
       connection_error: 'Connection Error',
+      network_error: 'Network Error',
+      auth_error: 'Auth Error',
       duplicate_error: 'Duplicate',
       memory_error: 'Memory Error',
       permission_error: 'Permission Error',
+      file_error: 'File Error',
+      chunk_error: 'Chunk Error',
+      validation_error: 'Validation Error',
       other_error: 'Other Error',
     };
     return labels[errorType] || errorType;
@@ -124,12 +255,71 @@ export const errorService = {
       parse_error: 'red',
       timeout_error: 'gold',
       connection_error: 'magenta',
+      network_error: 'blue',
+      auth_error: 'volcano',
       duplicate_error: 'cyan',
       memory_error: 'volcano',
       permission_error: 'purple',
+      file_error: 'geekblue',
+      chunk_error: 'lime',
+      validation_error: 'warning',
       other_error: 'default',
     };
     return colors[errorType] || 'default';
+  },
+
+  /**
+   * Get error phase label for display
+   */
+  getErrorPhaseLabel(phase: string): string {
+    const labels: Record<string, string> = {
+      download: 'Download',
+      extraction: 'Extraction',
+      normalization: 'Normalization',
+      tagging: 'Tagging',
+      database: 'Database',
+      categorization: 'Categorization',
+    };
+    return labels[phase] || phase;
+  },
+
+  /**
+   * Get error phase color for display
+   */
+  getErrorPhaseColor(phase: string): string {
+    const colors: Record<string, string> = {
+      download: 'blue',
+      extraction: 'cyan',
+      normalization: 'green',
+      tagging: 'purple',
+      database: 'orange',
+      categorization: 'magenta',
+    };
+    return colors[phase] || 'default';
+  },
+
+  /**
+   * Get error severity label for display
+   */
+  getErrorSeverityLabel(severity: string): string {
+    const labels: Record<string, string> = {
+      warning: 'Warning',
+      error: 'Error',
+      critical: 'Critical',
+    };
+    return labels[severity] || severity;
+  },
+
+  /**
+   * Get error severity color for display
+   */
+  getErrorSeverityColor(severity: string): string {
+    const colors: Record<string, string> = {
+      warning: 'gold',
+      error: 'red',
+      critical: 'volcano',
+    };
+    return colors[severity] || 'default';
   },
 
   /**

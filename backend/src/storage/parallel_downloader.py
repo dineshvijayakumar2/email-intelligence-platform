@@ -7,7 +7,8 @@ Ideal for files > 1GB where streaming may be slower than parallel download.
 Key Features:
 - Multi-threaded download using byte-range requests
 - Progress tracking per chunk and overall
-- Automatic retry logic for failed chunks
+- Two-tier retry logic: per-chunk retries + batch retry for failed chunks
+- Network resilience: waits for network stability before retrying failed batches
 - Cleanup on failure or cancellation
 - Graceful shutdown support for server restarts
 """
@@ -21,9 +22,12 @@ import time
 import atexit
 import signal
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Optional, Callable, Dict, Any, Set
+from typing import Optional, Callable, Dict, Any, Set, TYPE_CHECKING
 from pathlib import Path
 from weakref import WeakSet
+
+if TYPE_CHECKING:
+    from ..services.job_error_logger import JobErrorLogger
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +71,12 @@ class ParallelDownloader:
         num_threads: int = 8,
         chunk_size_mb: int = 50,
         max_retries: int = 3,
-        progress_callback: Optional[Callable[[int, int, float], None]] = None
+        max_batch_retries: int = 5,
+        batch_retry_delay: int = 10,
+        progress_callback: Optional[Callable[[int, int, float], None]] = None,
+        job_id: Optional[str] = None,
+        mailbox_id: Optional[str] = None,
+        error_logger: Optional['JobErrorLogger'] = None
     ):
         """
         Initialize the parallel downloader.
@@ -76,14 +85,28 @@ class ParallelDownloader:
             access_token: Google OAuth2 access token
             num_threads: Number of parallel download threads (default: 8)
             chunk_size_mb: Size of each chunk in MB (default: 50MB)
-            max_retries: Max retries per chunk on failure (default: 3)
+            max_retries: Max retries per chunk on immediate failure (default: 3)
+            max_batch_retries: Max batch retry rounds for failed chunks after network stabilizes (default: 5)
+            batch_retry_delay: Seconds to wait before retrying failed chunk batch (default: 10)
             progress_callback: Optional callback(downloaded_bytes, total_bytes, speed_mbps)
+            job_id: Optional job ID for error logging
+            mailbox_id: Optional mailbox ID for error logging
+            error_logger: Optional JobErrorLogger instance for persistent error tracking
         """
         self.access_token = access_token
         self.num_threads = num_threads
         self.chunk_size = chunk_size_mb * 1024 * 1024  # Convert to bytes
         self.max_retries = max_retries
+        self.max_batch_retries = max_batch_retries
+        self.batch_retry_delay = batch_retry_delay
         self.progress_callback = progress_callback
+
+        # Error logging
+        self.job_id = job_id
+        self.mailbox_id = mailbox_id
+        self.error_logger = error_logger
+        self.file_id: Optional[str] = None  # Set during download
+        self.file_name: Optional[str] = None  # Set during download
 
         # Progress tracking
         self.downloaded_bytes = 0
@@ -111,6 +134,54 @@ class ParallelDownloader:
         response.raise_for_status()
 
         return response.json()
+
+    def _check_network_connectivity(self) -> bool:
+        """
+        Check if network is available by making a lightweight API call.
+        Returns True if network is working, False otherwise.
+        """
+        try:
+            # Use Google's API endpoint for a lightweight connectivity check
+            response = requests.head(
+                "https://www.googleapis.com/drive/v3/about",
+                headers={"Authorization": f"Bearer {self.access_token}"},
+                timeout=10
+            )
+            return response.status_code in [200, 401, 403]  # 401/403 means network works, just auth issue
+        except (requests.ConnectionError, requests.Timeout):
+            return False
+        except Exception:
+            return False
+
+    def _wait_for_network(self, max_wait_seconds: int = 120) -> bool:
+        """
+        Wait for network to become available.
+
+        Args:
+            max_wait_seconds: Maximum time to wait for network (default: 120s)
+
+        Returns:
+            True if network became available, False if timeout or cancelled
+        """
+        wait_start = time.time()
+        check_interval = 5  # Check every 5 seconds
+
+        logger.info(f"Waiting for network connectivity (max {max_wait_seconds}s)...")
+
+        while time.time() - wait_start < max_wait_seconds:
+            if self.cancelled:
+                logger.info("Network wait cancelled")
+                return False
+
+            if self._check_network_connectivity():
+                wait_time = time.time() - wait_start
+                logger.info(f"Network connectivity restored after {wait_time:.1f}s")
+                return True
+
+            time.sleep(check_interval)
+
+        logger.warning(f"Network wait timeout after {max_wait_seconds}s")
+        return False
 
     def _download_chunk(
         self,
@@ -187,10 +258,50 @@ class ParallelDownloader:
                 logger.warning(
                     f"Chunk {chunk_index} attempt {attempt + 1}/{self.max_retries} failed: {e}"
                 )
+
+                # Log error on final attempt failure
+                if attempt == self.max_retries - 1 and self.error_logger and self.job_id:
+                    try:
+                        self.error_logger.log_download_error(
+                            job_id=self.job_id,
+                            error_message=f"Chunk {chunk_index} download failed after {self.max_retries} attempts: {str(e)}",
+                            mailbox_id=self.mailbox_id,
+                            file_id=file_id,
+                            file_name=self.file_name,
+                            chunk_index=chunk_index,
+                            chunk_start=start,
+                            chunk_end=end,
+                            error_type=self._classify_download_error(e),
+                            is_retryable=True,
+                            exception=e
+                        )
+                    except Exception as log_error:
+                        logger.debug(f"Failed to log chunk error: {log_error}")
+
                 if attempt < self.max_retries - 1:
                     time.sleep(2 ** attempt)  # Exponential backoff
 
         return (chunk_index, None, False)
+
+    def _classify_download_error(self, exception: Exception) -> str:
+        """Classify a download exception into an error type."""
+        error_str = str(exception).lower()
+        exception_name = type(exception).__name__.lower()
+
+        if 'timeout' in error_str or 'timeout' in exception_name:
+            return 'timeout_error'
+        if 'connection' in error_str or 'connection' in exception_name:
+            return 'connection_error'
+        if 'network' in error_str or 'unreachable' in error_str:
+            return 'network_error'
+        if 'auth' in error_str or '401' in error_str or '403' in error_str:
+            return 'auth_error'
+        if 'range' in error_str or '416' in error_str:
+            return 'chunk_error'
+        if 'ssl' in error_str or 'certificate' in error_str:
+            return 'network_error'
+
+        return 'network_error'  # Default to network error for download issues
 
     def download(
         self,
@@ -213,10 +324,14 @@ class ParallelDownloader:
         _register_downloader(self)
 
         try:
+            # Store file info for error logging
+            self.file_id = file_id
+
             # Get file info
             file_info = self.get_file_info(file_id)
             self.total_bytes = int(file_info.get('size', 0))
             actual_name = file_name or file_info.get('name', f'download_{file_id}')
+            self.file_name = actual_name
 
             logger.info(
                 f"Starting parallel download: {actual_name} "
@@ -255,47 +370,121 @@ class ParallelDownloader:
 
             logger.info(f"[DOWNLOAD] Starting download of {len(chunks)} chunks...")
 
-            # Download chunks in parallel
+            # Download chunks in parallel with batch retry for network failures
             chunk_data_map = {}
-            failed_chunks = []
+            chunks_to_download = chunks.copy()  # List of (idx, start, end) tuples
+            batch_attempt = 0
 
-            # Create a managed thread pool for this download
-            self._pool = ThreadPoolExecutor(max_workers=self.num_threads)
-            try:
-                futures = {
-                    self._pool.submit(
-                        self._download_chunk,
-                        file_id,
-                        start,
-                        end,
-                        idx
-                    ): idx
-                    for idx, start, end in chunks
-                }
+            while chunks_to_download and batch_attempt < self.max_batch_retries:
+                if self.cancelled:
+                    logger.info("Download cancelled, stopping...")
+                    self._cleanup()
+                    return None
 
-                for future in as_completed(futures):
-                    if self.cancelled:
-                        logger.info("Download cancelled, stopping...")
-                        self._pool.shutdown(wait=False, cancel_futures=True)
-                        self._cleanup()
-                        return None
+                batch_attempt += 1
+                failed_chunks = []
 
-                    chunk_index, chunk_data, success = future.result()
+                if batch_attempt > 1:
+                    logger.info(
+                        f"Batch retry {batch_attempt}/{self.max_batch_retries}: "
+                        f"Retrying {len(chunks_to_download)} failed chunks..."
+                    )
+                    # Wait for network to stabilize before retrying
+                    time.sleep(self.batch_retry_delay)
 
-                    if success and chunk_data:
-                        chunk_data_map[chunk_index] = chunk_data
+                    # Check network connectivity before retrying
+                    if not self._check_network_connectivity():
+                        logger.warning("Network still unavailable, waiting for connectivity...")
+                        if not self._wait_for_network(max_wait_seconds=120):
+                            logger.error("Network did not recover, aborting download")
+                            self._cleanup()
+                            return None
+
+                # Create a managed thread pool for this batch
+                self._pool = ThreadPoolExecutor(max_workers=self.num_threads)
+                try:
+                    futures = {
+                        self._pool.submit(
+                            self._download_chunk,
+                            file_id,
+                            start,
+                            end,
+                            idx
+                        ): (idx, start, end)
+                        for idx, start, end in chunks_to_download
+                    }
+
+                    for future in as_completed(futures):
+                        if self.cancelled:
+                            logger.info("Download cancelled, stopping...")
+                            self._pool.shutdown(wait=False, cancel_futures=True)
+                            self._cleanup()
+                            return None
+
+                        chunk_info = futures[future]
+                        idx, start, end = chunk_info
+                        chunk_index, chunk_data, success = future.result()
+
+                        if success and chunk_data:
+                            chunk_data_map[chunk_index] = chunk_data
+                        else:
+                            failed_chunks.append((idx, start, end))
+                finally:
+                    # Ensure pool is shut down
+                    if self._pool:
+                        self._pool.shutdown(wait=False)
+                        self._pool = None
+
+                # Update chunks_to_download with only the failed ones
+                chunks_to_download = failed_chunks
+
+                if failed_chunks:
+                    failed_indices = [c[0] for c in failed_chunks]
+                    if batch_attempt < self.max_batch_retries:
+                        logger.warning(
+                            f"Batch {batch_attempt}: {len(failed_chunks)} chunks failed "
+                            f"(indices: {failed_indices[:10]}{'...' if len(failed_indices) > 10 else ''}). "
+                            f"Will retry after {self.batch_retry_delay}s delay."
+                        )
                     else:
-                        failed_chunks.append(chunk_index)
-            finally:
-                # Ensure pool is shut down
-                if self._pool:
-                    self._pool.shutdown(wait=False)
-                    self._pool = None
+                        logger.error(
+                            f"Final batch attempt failed. {len(failed_chunks)} chunks could not be downloaded: "
+                            f"{failed_indices}"
+                        )
 
-            if failed_chunks:
-                logger.error(f"Failed to download chunks: {failed_chunks}")
+            # Check if all chunks were successfully downloaded
+            if chunks_to_download:
+                failed_indices = [c[0] for c in chunks_to_download]
+                error_msg = (
+                    f"Failed to download {len(chunks_to_download)} chunks after "
+                    f"{self.max_batch_retries} batch retries: {failed_indices}"
+                )
+                logger.error(error_msg)
+
+                # Log critical error for complete download failure
+                if self.error_logger and self.job_id:
+                    try:
+                        self.error_logger.log_critical_error(
+                            job_id=self.job_id,
+                            phase="download",
+                            error_message=error_msg,
+                            mailbox_id=self.mailbox_id,
+                            context_details={
+                                "file_id": file_id,
+                                "file_name": self.file_name,
+                                "total_chunks": len(chunks),
+                                "failed_chunks": len(chunks_to_download),
+                                "failed_indices": failed_indices[:20],  # Limit to first 20
+                                "batch_retries": self.max_batch_retries
+                            }
+                        )
+                    except Exception as log_error:
+                        logger.debug(f"Failed to log critical error: {log_error}")
+
                 self._cleanup()
                 return None
+
+            logger.info(f"All {len(chunks)} chunks downloaded successfully")
 
             # Write chunks to file in order
             logger.info(f"Writing {len(chunk_data_map)} chunks to {self.output_path}...")
@@ -325,6 +514,26 @@ class ParallelDownloader:
 
         except Exception as e:
             logger.error(f"Download failed: {e}")
+
+            # Log critical error
+            if self.error_logger and self.job_id:
+                try:
+                    self.error_logger.log_critical_error(
+                        job_id=self.job_id,
+                        phase="download",
+                        error_message=f"Download failed: {str(e)}",
+                        mailbox_id=self.mailbox_id,
+                        exception=e,
+                        context_details={
+                            "file_id": file_id,
+                            "file_name": self.file_name,
+                            "total_bytes": self.total_bytes,
+                            "downloaded_bytes": self.downloaded_bytes
+                        }
+                    )
+                except Exception as log_error:
+                    logger.debug(f"Failed to log critical error: {log_error}")
+
             self._cleanup()
             return None
         finally:
@@ -375,7 +584,12 @@ def download_with_progress(
     file_id: str,
     file_name: str,
     num_threads: int = 8,
-    progress_callback: Optional[Callable[[Dict], None]] = None
+    max_batch_retries: int = 5,
+    batch_retry_delay: int = 10,
+    progress_callback: Optional[Callable[[Dict], None]] = None,
+    job_id: Optional[str] = None,
+    mailbox_id: Optional[str] = None,
+    error_logger: Optional['JobErrorLogger'] = None
 ) -> Optional[str]:
     """
     Convenience function to download a Google Drive file with progress tracking.
@@ -385,6 +599,8 @@ def download_with_progress(
         file_id: Google Drive file ID
         file_name: Output filename
         num_threads: Number of parallel download threads
+        max_batch_retries: Max batch retry rounds for failed chunks (default: 5)
+        batch_retry_delay: Seconds to wait before retrying failed batches (default: 10)
         progress_callback: Optional callback receiving progress dict:
             {
                 'downloaded_bytes': int,
@@ -393,6 +609,9 @@ def download_with_progress(
                 'percent': float,
                 'eta_seconds': float
             }
+        job_id: Optional job ID for error logging
+        mailbox_id: Optional mailbox ID for error logging
+        error_logger: Optional JobErrorLogger instance
 
     Returns:
         Path to downloaded file, or None if failed
@@ -415,7 +634,12 @@ def download_with_progress(
     downloader = ParallelDownloader(
         access_token=access_token,
         num_threads=num_threads,
-        progress_callback=internal_callback
+        max_batch_retries=max_batch_retries,
+        batch_retry_delay=batch_retry_delay,
+        progress_callback=internal_callback,
+        job_id=job_id,
+        mailbox_id=mailbox_id,
+        error_logger=error_logger
     )
 
     return downloader.download(file_id, file_name)

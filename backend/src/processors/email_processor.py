@@ -4,11 +4,13 @@ Real email processing with streaming support for large files
 Supports: MBOX, PST (Outlook Windows), OLM (Outlook Mac) files
 
 Stage 2: Enhanced with error tracking for individual email failures
+        - Redis tracking for real-time visibility
+        - JobErrorLogger for persistent error storage in job_errors table
 """
 import os
 import logging
 import traceback
-from typing import Dict, Optional, Iterator
+from typing import Dict, Optional, Iterator, TYPE_CHECKING
 from datetime import datetime
 
 from ..extractors.file_extractor import FileExtractor
@@ -17,6 +19,9 @@ from ..database.operations import EmailOperations
 from ..database.redis_client import JobProgressManager
 from .normalizer import EmailNormalizer
 from .email_tagger import EmailTagger
+
+if TYPE_CHECKING:
+    from ..services.job_error_logger import JobErrorLogger
 
 logger = logging.getLogger(__name__)
 
@@ -27,13 +32,14 @@ class EmailProcessor:
     Handles extraction, normalization, and database insertion
     """
 
-    def __init__(self, mailbox_id: str, connection_config: Dict):
+    def __init__(self, mailbox_id: str, connection_config: Dict, error_logger: Optional['JobErrorLogger'] = None):
         """
         Initialize email processor
 
         Args:
             mailbox_id: Database mailbox ID
             connection_config: Configuration dict with mailbox-specific settings
+            error_logger: Optional JobErrorLogger for persistent error tracking
         """
         self.mailbox_id = mailbox_id
         self.connection_config = connection_config
@@ -42,7 +48,10 @@ class EmailProcessor:
         self.tagger = EmailTagger()
         self.extractor: Optional[BaseExtractor] = None
         self.date_filter: Optional[Dict] = None  # Date-based filtering
-        # Stage 2: Error tracking
+        self.filtered_count: int = 0  # Stage 2: Track emails filtered by date range
+        # Stage 2: Error tracking - JobErrorLogger for persistent storage
+        self.error_logger = error_logger
+        # Stage 2: Redis for real-time visibility
         try:
             self.progress_manager = JobProgressManager()
         except Exception as e:
@@ -212,6 +221,7 @@ class EmailProcessor:
             raise RuntimeError("Extractor not initialized. Call initialize_extractor() first.")
 
         self.date_filter = date_filter  # Store for use in normalization
+        self.filtered_count = 0  # Reset filtered count for this job
 
         logger.info(f"Starting email processing for job {job_id}")
         logger.info(f"Config: max_emails={max_emails}, batch_size={batch_size}, skip_duplicates={skip_duplicates}, date_filter={date_filter}")
@@ -267,11 +277,13 @@ class EmailProcessor:
 
         try:
             # Extract and normalize emails
+            logger.info(f"[DB-INSERT] Starting email extraction for job {job_id}, mailbox_id={self.mailbox_id}")
             raw_emails = self.extractor.extract_emails(max_emails=max_emails)
             # Stage 2: Pass job_id for error tracking
             normalized_emails = self._normalize_email_stream(raw_emails, job_id=job_id)
 
             # Stream insert to database (with cancellation support)
+            logger.info(f"[DB-INSERT] Starting database insert for job {job_id}, mailbox_id={self.mailbox_id}")
             result = self.db_ops.stream_insert_emails(
                 emails=normalized_emails,
                 mailbox_id=self.mailbox_id,
@@ -298,6 +310,7 @@ class EmailProcessor:
                     job_id=job_id,
                     processed_records=result['total'],  # Total emails examined (includes new, skipped, failed)
                     failed_records=result['failed'],
+                    filtered_records=self.filtered_count,  # Stage 2: Emails filtered by date range
                     status=current_status  # Keep current status
                 )
             elif result.get('stopped', False):
@@ -306,19 +319,34 @@ class EmailProcessor:
                     job_id=job_id,
                     processed_records=result['total'],  # Total emails examined (includes new, skipped, failed)
                     failed_records=result['failed'],
+                    filtered_records=self.filtered_count,  # Stage 2: Emails filtered by date range
                     status='stopped'
                 )
                 logger.warning(f"Processing stopped by user for job {job_id}: {result}")
             else:
                 # Job completed normally
+                # Calculate effective total (examined + filtered)
+                effective_total = result['total'] + self.filtered_count
+
                 self.db_ops.update_job_progress(
                     job_id=job_id,
                     processed_records=result['total'],  # Total emails examined (includes new, skipped, failed)
                     failed_records=result['failed'],
+                    filtered_records=self.filtered_count,  # Stage 2: Emails filtered by date range
                     status='completed',
                     error_log=result.get('errors', []) if result['failed'] > 0 else None
                 )
-                logger.info(f"Processing completed for job {job_id}: {result['total']} examined ({result['success']} inserted, {result['skipped']} skipped duplicates, {result['failed']} failed)")
+
+                # Also update total_records to match effective total for accurate progress display
+                # This ensures progress shows 100% when completed
+                try:
+                    self.db_ops.client.table('processing_jobs').update({
+                        'total_records': effective_total
+                    }).eq('id', job_id).execute()
+                except Exception as e:
+                    logger.warning(f"Failed to update total_records: {e}")
+
+                logger.info(f"Processing completed for job {job_id}: {result['total']} examined ({result['success']} inserted, {result['skipped']} skipped duplicates, {result['failed']} failed, {self.filtered_count} filtered by date range)")
                 if result['failed'] > 0 and result.get('errors'):
                     logger.warning(f"Job {job_id} had {result['failed']} failures. First few errors: {result['errors'][:3]}")
 
@@ -367,7 +395,6 @@ class EmailProcessor:
         Yields:
             Normalized and tagged email dicts
         """
-        filtered_count = 0
         for raw_email in raw_emails:
             try:
                 # Normalize email structure
@@ -398,10 +425,10 @@ class EmailProcessor:
                                 end_date = self.date_filter.get('end_date')
 
                                 if start_date and sent_date < start_date:
-                                    filtered_count += 1
+                                    self.filtered_count += 1
                                     continue  # Skip emails before start_date
                                 if end_date and sent_date > end_date:
-                                    filtered_count += 1
+                                    self.filtered_count += 1
                                     continue  # Skip emails after end_date
 
                     # Tag email with basic attributes
@@ -441,6 +468,22 @@ class EmailProcessor:
                         )
                     except Exception as track_error:
                         logger.warning(f"Failed to track error in Redis: {track_error}")
+
+                # Stage 2: Log error to job_errors table for persistence
+                if job_id and self.error_logger:
+                    try:
+                        self.error_logger.log_email_error(
+                            job_id=job_id,
+                            error_message=error_msg,
+                            mailbox_id=self.mailbox_id,
+                            message_id=message_id if message_id != 'unknown' else None,
+                            subject=subject[:200] if subject else None,
+                            sender=sender,
+                            phase="normalization",
+                            exception=e
+                        )
+                    except Exception as log_error:
+                        logger.debug(f"Failed to log error to job_errors: {log_error}")
 
                 # Continue processing other emails
 

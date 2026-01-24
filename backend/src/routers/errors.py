@@ -4,6 +4,10 @@ Error Handling API Router
 Provides endpoints for viewing and managing processing errors.
 
 Stage 2 Phase 1 - Error Handling Implementation
+
+This router provides two types of error views:
+1. Job Errors (job_errors table) - All errors: download, extraction, processing, etc.
+2. Failed Emails (emails table) - Email-specific failures with retry capability
 """
 
 from fastapi import APIRouter, HTTPException, Query
@@ -17,7 +21,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/processing-jobs", tags=["errors"])
 
 
-# Pydantic models for request/response
+# =========================================================================
+# Pydantic Models
+# =========================================================================
+
 class ErrorSummary(BaseModel):
     """Error summary response model"""
     total_errors: int
@@ -55,20 +62,60 @@ class RetryResponse(BaseModel):
     message: str
 
 
+# New models for job_errors table
+class JobError(BaseModel):
+    """Single job error record from job_errors table"""
+    id: str
+    error_phase: str
+    error_type: str
+    error_severity: str
+    error_message: str
+    error_stack: Optional[str] = None
+    context_type: Optional[str] = None
+    context_id: Optional[str] = None
+    context_details: Optional[Dict[str, Any]] = None
+    is_retryable: bool = True
+    retry_count: int = 0
+    resolved_at: Optional[datetime] = None
+    created_at: datetime
+
+
+class JobErrorsResponse(BaseModel):
+    """Response for job errors list"""
+    job_id: str
+    total_errors: int
+    unresolved_errors: int
+    errors: List[JobError]
+    has_more: bool
+
+
+class JobErrorsSummary(BaseModel):
+    """Comprehensive error summary from job_errors table"""
+    total_errors: int
+    unresolved_errors: int
+    retryable_errors: int
+    by_phase: Dict[str, int]
+    by_type: Dict[str, int]
+    by_severity: Dict[str, int]
+    recent_errors: List[Dict[str, Any]]
+
+
 # These will be injected from main.py
 _error_tracker = None
 _db_error_tracker = None
 _supabase = None
 _redis = None
+_job_error_logger = None
 
 
-def init_error_router(error_tracker, db_error_tracker, supabase_client, redis_client):
+def init_error_router(error_tracker, db_error_tracker, supabase_client, redis_client, job_error_logger=None):
     """Initialize the router with dependencies"""
-    global _error_tracker, _db_error_tracker, _supabase, _redis
+    global _error_tracker, _db_error_tracker, _supabase, _redis, _job_error_logger
     _error_tracker = error_tracker
     _db_error_tracker = db_error_tracker
     _supabase = supabase_client
     _redis = redis_client
+    _job_error_logger = job_error_logger
 
 
 def get_mailbox_id_for_job(job_id: str) -> Optional[str]:
@@ -335,4 +382,228 @@ async def get_all_failed_emails(
 
     except Exception as e:
         logger.error(f"Failed to get all failed emails: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =========================================================================
+# New Job Errors Endpoints (from job_errors table)
+# These capture ALL errors: download, extraction, processing, etc.
+# =========================================================================
+
+@router.get("/{job_id}/job-errors", response_model=JobErrorsResponse)
+async def get_job_errors(
+    job_id: str,
+    phase: Optional[str] = Query(default=None, description="Filter by phase: download, extraction, normalization, tagging, database, categorization"),
+    error_type: Optional[str] = Query(default=None, description="Filter by type: encoding_error, parse_error, network_error, etc."),
+    unresolved_only: bool = Query(default=False, description="Only show unresolved errors"),
+    limit: int = Query(default=50, ge=1, le=500),
+    offset: int = Query(default=0, ge=0)
+):
+    """
+    Get all job errors from the job_errors table.
+
+    This includes ALL error types: download errors, extraction errors,
+    email processing errors, database errors, etc.
+
+    Args:
+        job_id: UUID of the processing job
+        phase: Optional filter by error phase
+        error_type: Optional filter by error type
+        unresolved_only: Only return unresolved errors
+        limit: Maximum number of errors to return
+        offset: Pagination offset
+
+    Returns:
+        JobErrorsResponse with comprehensive error details
+    """
+    try:
+        # Build query for job_errors table
+        query = _supabase.table('job_errors').select('*').eq('job_id', job_id)
+
+        if phase:
+            query = query.eq('error_phase', phase)
+        if error_type:
+            query = query.eq('error_type', error_type)
+        if unresolved_only:
+            query = query.is_('resolved_at', 'null')
+
+        # Get total count for pagination
+        count_query = _supabase.table('job_errors').select('id', count='exact').eq('job_id', job_id)
+        if phase:
+            count_query = count_query.eq('error_phase', phase)
+        if error_type:
+            count_query = count_query.eq('error_type', error_type)
+        if unresolved_only:
+            count_query = count_query.is_('resolved_at', 'null')
+
+        count_result = count_query.execute()
+        total_errors = count_result.count if count_result.count else 0
+
+        # Get unresolved count
+        unresolved_query = _supabase.table('job_errors').select('id', count='exact').eq('job_id', job_id).is_('resolved_at', 'null')
+        unresolved_result = unresolved_query.execute()
+        unresolved_errors = unresolved_result.count if unresolved_result.count else 0
+
+        # Get paginated errors
+        result = query.order('created_at', desc=True).range(offset, offset + limit - 1).execute()
+
+        errors = []
+        for err in result.data or []:
+            errors.append(JobError(
+                id=err.get('id', ''),
+                error_phase=err.get('error_phase', 'unknown'),
+                error_type=err.get('error_type', 'other_error'),
+                error_severity=err.get('error_severity', 'error'),
+                error_message=err.get('error_message', ''),
+                error_stack=err.get('error_stack'),
+                context_type=err.get('context_type'),
+                context_id=err.get('context_id'),
+                context_details=err.get('context_details'),
+                is_retryable=err.get('is_retryable', True),
+                retry_count=err.get('retry_count', 0),
+                resolved_at=err.get('resolved_at'),
+                created_at=err.get('created_at')
+            ))
+
+        return JobErrorsResponse(
+            job_id=job_id,
+            total_errors=total_errors,
+            unresolved_errors=unresolved_errors,
+            errors=errors,
+            has_more=total_errors > offset + limit
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to get job errors: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{job_id}/job-errors/summary", response_model=JobErrorsSummary)
+async def get_job_errors_summary(job_id: str):
+    """
+    Get comprehensive error summary from job_errors table.
+
+    Returns error counts grouped by phase, type, and severity,
+    plus the most recent errors.
+
+    Args:
+        job_id: UUID of the processing job
+
+    Returns:
+        JobErrorsSummary with aggregated error statistics
+    """
+    try:
+        # Try using the database function first
+        try:
+            result = _supabase.rpc('get_job_errors_summary', {'p_job_id': job_id}).execute()
+            if result.data:
+                data = result.data
+                return JobErrorsSummary(
+                    total_errors=data.get('total_errors', 0),
+                    unresolved_errors=data.get('unresolved_errors', 0),
+                    retryable_errors=data.get('retryable_errors', 0),
+                    by_phase=data.get('by_phase', {}),
+                    by_type=data.get('by_type', {}),
+                    by_severity=data.get('by_severity', {}),
+                    recent_errors=data.get('recent_errors', [])
+                )
+        except Exception as rpc_error:
+            logger.warning(f"RPC call failed, using fallback query: {rpc_error}")
+
+        # Fallback: manually aggregate
+        errors_result = _supabase.table('job_errors').select('*').eq('job_id', job_id).execute()
+        errors = errors_result.data or []
+
+        total_errors = len(errors)
+        unresolved_errors = sum(1 for e in errors if e.get('resolved_at') is None)
+        retryable_errors = sum(1 for e in errors if e.get('is_retryable') and e.get('resolved_at') is None)
+
+        # Group by phase
+        by_phase = {}
+        for e in errors:
+            phase = e.get('error_phase', 'unknown')
+            by_phase[phase] = by_phase.get(phase, 0) + 1
+
+        # Group by type
+        by_type = {}
+        for e in errors:
+            etype = e.get('error_type', 'other_error')
+            by_type[etype] = by_type.get(etype, 0) + 1
+
+        # Group by severity
+        by_severity = {}
+        for e in errors:
+            sev = e.get('error_severity', 'error')
+            by_severity[sev] = by_severity.get(sev, 0) + 1
+
+        # Get recent errors (sorted by created_at desc)
+        sorted_errors = sorted(errors, key=lambda x: x.get('created_at', ''), reverse=True)[:10]
+        recent_errors = [
+            {
+                'id': e.get('id'),
+                'phase': e.get('error_phase'),
+                'type': e.get('error_type'),
+                'severity': e.get('error_severity'),
+                'message': (e.get('error_message', '') or '')[:200],
+                'context_type': e.get('context_type'),
+                'context_id': e.get('context_id'),
+                'created_at': e.get('created_at')
+            }
+            for e in sorted_errors
+        ]
+
+        return JobErrorsSummary(
+            total_errors=total_errors,
+            unresolved_errors=unresolved_errors,
+            retryable_errors=retryable_errors,
+            by_phase=by_phase,
+            by_type=by_type,
+            by_severity=by_severity,
+            recent_errors=recent_errors
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to get job errors summary: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{job_id}/job-errors/{error_id}/resolve")
+async def resolve_job_error(
+    job_id: str,
+    error_id: str,
+    resolution_type: str = Query(default="manual_fix", description="Resolution type: auto_retry, manual_skip, manual_fix")
+):
+    """
+    Mark a job error as resolved.
+
+    Args:
+        job_id: UUID of the processing job
+        error_id: UUID of the error record
+        resolution_type: How the error was resolved
+
+    Returns:
+        Updated error record
+    """
+    try:
+        # Verify error belongs to job
+        check_result = _supabase.table('job_errors').select('id').eq('id', error_id).eq('job_id', job_id).execute()
+        if not check_result.data:
+            raise HTTPException(status_code=404, detail="Error not found for this job")
+
+        # Update the error
+        from datetime import datetime, timezone
+        result = _supabase.table('job_errors').update({
+            'resolved_at': datetime.now(timezone.utc).isoformat(),
+            'resolution_type': resolution_type
+        }).eq('id', error_id).execute()
+
+        if result.data:
+            return {"success": True, "error_id": error_id, "resolution_type": resolution_type}
+
+        raise HTTPException(status_code=500, detail="Failed to update error")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to resolve job error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

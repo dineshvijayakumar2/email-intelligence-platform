@@ -170,9 +170,15 @@ export async function apiRequest<T>(
     } catch (error: any) {
       lastError = error;
 
-      // Check if it's a network/connection error
+      // AbortError means request was intentionally cancelled (timeout or component unmount)
+      // Don't retry these - just return null silently
+      if (error.name === 'AbortError') {
+        console.debug(`[API] Request aborted: ${method} ${endpoint}`);
+        return null;
+      }
+
+      // Check if it's a network/connection error (NOT AbortError)
       const isNetworkError =
-        error.name === 'AbortError' ||
         error.name === 'TypeError' ||
         error.message?.includes('Failed to fetch') ||
         error.message?.includes('NetworkError') ||

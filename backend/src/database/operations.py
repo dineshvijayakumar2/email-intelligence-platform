@@ -341,14 +341,19 @@ class EmailOperations:
                     logger.info(f"Progress: {total} emails processed ({success} inserted, {failed} failed)")
 
             # Insert remaining emails in final batch
+            logger.info(f"[DB-INSERT] Final batch check: {len(current_batch)} emails in batch, {total} total processed")
             if current_batch:
+                logger.info(f"[DB-INSERT] Inserting final batch of {len(current_batch)} emails to mailbox {mailbox_id}")
                 result = self._insert_batch(current_batch, mailbox_id, (total // batch_size) + 1)
+                logger.info(f"[DB-INSERT] Final batch result: success={result['success']}, failed={result['failed']}")
                 success += result['success']
                 failed += result['failed']
                 errors.extend(result['errors'])
 
                 if checkpoint_callback:
                     checkpoint_callback(total, last_message_id)
+            else:
+                logger.warning(f"[DB-INSERT] No emails in final batch! Total processed: {total}")
 
             # Update folder counts after all inserts
             try:
@@ -411,11 +416,13 @@ class EmailOperations:
             # Insert batch with retry logic
             max_retries = 3
             inserted_emails = []
+            logger.info(f"[DB-INSERT] Batch {batch_num}: Upserting {len(prepared_batch)} prepared emails to mailbox {mailbox_id}")
             for attempt in range(max_retries):
                 try:
                     # Use upsert for automatic duplicate handling
                     # This will insert new emails and update existing ones based on unique constraint
                     result = self.client.table('emails').upsert(prepared_batch, on_conflict='message_id,mailbox_id').execute()
+                    logger.debug(f"[DB-INSERT] Batch {batch_num}: Upsert returned {len(result.data) if result.data else 0} records")
 
                     if result.data:
                         success = len(prepared_batch)
@@ -908,6 +915,7 @@ class EmailOperations:
         job_id: str,
         processed_records: int,
         failed_records: int = 0,
+        filtered_records: int = 0,
         status: str = 'running',
         error_log: List[str] = None,
         update_status: bool = True
@@ -918,6 +926,7 @@ class EmailOperations:
             job_id: Job ID to update
             processed_records: Number of records processed
             failed_records: Number of failed records
+            filtered_records: Number of records filtered by date range (Stage 2)
             status: Job status (only used if update_status=True)
             error_log: List of error messages
             update_status: If False, only update counts, preserve current status
@@ -925,7 +934,8 @@ class EmailOperations:
         try:
             update_data = {
                 'processed_records': processed_records,
-                'failed_records': failed_records
+                'failed_records': failed_records,
+                'filtered_records': filtered_records
             }
 
             # Only update status if requested
@@ -963,9 +973,9 @@ class EmailOperations:
                 .execute()
 
             if update_status:
-                logger.debug(f"Updated job {job_id}: status={status}, processed={processed_records}, failed={failed_records}")
+                logger.debug(f"Updated job {job_id}: status={status}, processed={processed_records}, failed={failed_records}, filtered={filtered_records}")
             else:
-                logger.info(f"Progress: Job {job_id} - {processed_records} processed, {failed_records} failed")
+                logger.info(f"Progress: Job {job_id} - {processed_records} processed, {failed_records} failed, {filtered_records} filtered")
 
         except Exception as e:
             logger.error(f"Failed to update job progress: {e}")

@@ -39,7 +39,7 @@ import {
 } from "@ant-design/icons";
 import { useNavigate, useParams } from "react-router-dom";
 import { mailboxService, Mailbox } from '../services/mailboxService';
-import { processingService, ProcessingJob } from '../services/processingService';
+import { processingService, ProcessingJob, CachedDownload } from '../services/processingService';
 import { useConnectionStatus } from '../hooks/useConnectionStatus';
 
 const { Title, Text } = Typography;
@@ -55,6 +55,8 @@ export const MailboxProcess: React.FC = () => {
   const [processing, setProcessing] = useState(false);
   const [currentJob, setCurrentJob] = useState<ProcessingJob | null>(null);
   const [jobHistory, setJobHistory] = useState<ProcessingJob[]>([]);
+  const [cachedDownload, setCachedDownload] = useState<CachedDownload | null>(null);
+  const [checkingCache, setCheckingCache] = useState(false);
 
   // Track connection status
   const { isConnected, isChecking, checkNow } = useConnectionStatus({
@@ -118,12 +120,42 @@ export const MailboxProcess: React.FC = () => {
       if (!id) return;
       const data = await mailboxService.getMailbox(id);
       setMailbox(data);
+
+      // Check for cached download if it's a Google Drive file
+      if (data?.connection_config?.file_source === 'google_drive') {
+        checkCachedDownload();
+      }
     } catch (error) {
       console.error('Error loading mailbox:', error);
       message.error('Failed to load mailbox data');
       navigate('/mailboxes');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const checkCachedDownload = async () => {
+    if (!id) return;
+    try {
+      setCheckingCache(true);
+      const cache = await processingService.checkCachedDownload(id);
+      setCachedDownload(cache);
+    } catch (error) {
+      console.error('Error checking cached download:', error);
+    } finally {
+      setCheckingCache(false);
+    }
+  };
+
+  const handleInvalidateCache = async () => {
+    if (!cachedDownload?.cache_id) return;
+    try {
+      await processingService.invalidateCachedDownload(cachedDownload.cache_id);
+      message.success('Cache invalidated. File will be re-downloaded on next processing.');
+      setCachedDownload({ cached: false, reason: 'Invalidated by user' });
+    } catch (error) {
+      console.error('Error invalidating cache:', error);
+      message.error('Failed to invalidate cache');
     }
   };
 
@@ -177,6 +209,8 @@ export const MailboxProcess: React.FC = () => {
       if (mailbox?.connection_config?.file_source === 'google_drive') {
         jobData.download_first = values.download_first ?? false;
         jobData.download_threads = values.download_threads ?? 8;
+        jobData.use_cached_file = true;  // Always try to use cached file
+        jobData.keep_downloaded_file = true;  // Always keep for future reuse
       }
 
       const job = await processingService.createProcessingJob(jobData);
@@ -417,46 +451,73 @@ export const MailboxProcess: React.FC = () => {
                   </div>
                 )}
 
-                {/* Progress section - show when we have total_records OR job is running */}
-                {currentJob.status !== 'downloading' && (currentJob.total_records && currentJob.total_records > 0) ? (
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                      <Text>Progress</Text>
-                      <Text>{currentJob.processed_records || 0} / {currentJob.total_records}</Text>
-                    </div>
-                    <Progress
-                      percent={Math.round(((currentJob.processed_records || 0) / currentJob.total_records) * 100)}
-                      status={currentJob.status === 'failed' ? 'exception' : 'active'}
-                    />
-                    {currentJob.status === 'running' && (
-                      <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#666' }}>
-                        <Text type="secondary">
-                          {formatProcessingSpeed(currentJob.emails_per_second)}
-                        </Text>
-                        <Text type="secondary">
-                          {currentJob.estimated_time_remaining ? `ETA: ${currentJob.estimated_time_remaining}` : ''}
+                {/* Progress section - show when not downloading */}
+                {currentJob.status !== 'downloading' && (() => {
+                  const processed = currentJob.processed_records || 0;
+                  const filtered = currentJob.filtered_records || 0;
+                  const total = currentJob.total_records || 0;
+                  const isCompleted = currentJob.status === 'completed';
+                  const isFailed = currentJob.status === 'failed';
+
+                  // Calculate progress:
+                  // - Completed: always 100%
+                  // - Has known total: (processed + filtered) / total
+                  // - Unknown total (streaming): show indeterminate during running, 100% when done
+                  let progressPercent = 0;
+                  let showIndeterminate = false;
+
+                  if (isCompleted || isFailed) {
+                    progressPercent = 100;
+                  } else if (total > 0) {
+                    progressPercent = Math.min(100, Math.round(((processed + filtered) / total) * 100));
+                  } else if (currentJob.status === 'running') {
+                    // Streaming mode - no known total
+                    showIndeterminate = true;
+                  }
+
+                  return (
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <Text>Progress</Text>
+                        <Text>
+                          <strong>{processed.toLocaleString()}</strong> processed
+                          {filtered > 0 && (
+                            <span style={{ color: '#faad14', marginLeft: 8 }}>
+                              <strong>{filtered.toLocaleString()}</strong> filtered by date
+                            </span>
+                          )}
+                          {total > 0 && (
+                            <span style={{ color: '#999', marginLeft: 8 }}>
+                              / {total.toLocaleString()} total
+                            </span>
+                          )}
                         </Text>
                       </div>
-                    )}
-                  </div>
-                ) : currentJob.status === 'running' && (
-                  /* Show streaming progress when total_records is unknown */
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                      <Text>Processing (streaming mode)</Text>
-                      <Text strong>{currentJob.processed_records || 0} emails processed</Text>
+                      <Progress
+                        percent={showIndeterminate ? 0 : progressPercent}
+                        status={isFailed ? 'exception' : isCompleted ? 'success' : 'active'}
+                        showInfo={!showIndeterminate}
+                      />
+                      {currentJob.status === 'running' && (
+                        <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#666' }}>
+                          <Text type="secondary">
+                            {formatProcessingSpeed(currentJob.emails_per_second)}
+                          </Text>
+                          <Text type="secondary">
+                            {currentJob.estimated_time_remaining ? `ETA: ${currentJob.estimated_time_remaining}` : ''}
+                          </Text>
+                        </div>
+                      )}
+                      {isCompleted && processed > 0 && (
+                        <div style={{ marginTop: 8, fontSize: '12px' }}>
+                          <Text type="success">
+                            {processed.toLocaleString()} emails inserted to database
+                          </Text>
+                        </div>
+                      )}
                     </div>
-                    <Progress percent={0} status="active" showInfo={false} />
-                    <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#666' }}>
-                      <Text type="secondary">
-                        {formatProcessingSpeed(currentJob.emails_per_second)}
-                      </Text>
-                      <Text type="secondary" style={{ fontStyle: 'italic' }}>
-                        Total unknown (streaming archive)
-                      </Text>
-                    </div>
-                  </div>
-                )}
+                  );
+                })()}
                 
                 {currentJob.status === 'failed' && currentJob.error_log && (
                   <Alert
@@ -508,7 +569,7 @@ export const MailboxProcess: React.FC = () => {
               job_type: 'extraction',
               max_emails: undefined,
               enable_categorization: true,
-              download_first: false,
+              download_first: true,  // Default to download mode (3-5x faster for large files)
               download_threads: 8
             }}
           >
@@ -555,6 +616,129 @@ export const MailboxProcess: React.FC = () => {
               />
             </Form.Item>
 
+            {/* Google Drive Download Options - shown prominently for Google Drive files */}
+            {mailbox?.connection_config?.file_source === 'google_drive' && (
+              <>
+                <Divider orientation="left">
+                  <Space>
+                    <CloudDownloadOutlined style={{ color: '#722ed1' }} />
+                    <Text strong>Google Drive Processing Mode</Text>
+                  </Space>
+                </Divider>
+
+                <Form.Item
+                  name="download_first"
+                  label={
+                    <Space>
+                      Download Before Processing
+                      <Tag color="green">Recommended</Tag>
+                      <Tooltip title="Download the entire file first using parallel threads, then process locally. Typically 3-5x faster than streaming for large files.">
+                        <QuestionCircleOutlined style={{ color: '#999' }} />
+                      </Tooltip>
+                    </Space>
+                  }
+                  valuePropName="checked"
+                >
+                  <Switch />
+                </Form.Item>
+
+                {/* Show cache info and download options only when download_first is enabled */}
+                <Form.Item
+                  noStyle
+                  shouldUpdate={(prevValues, currentValues) =>
+                    prevValues.download_first !== currentValues.download_first
+                  }
+                >
+                  {({ getFieldValue }) =>
+                    getFieldValue('download_first') ? (
+                      <>
+                        {/* Show cached download info if available */}
+                        {checkingCache ? (
+                          <Alert
+                            message="Checking for cached download..."
+                            type="info"
+                            showIcon
+                            icon={<SyncOutlined spin />}
+                            style={{ marginBottom: 16 }}
+                          />
+                        ) : cachedDownload?.cached ? (
+                          <Alert
+                            message="Using Cached File (No Download Needed)"
+                            description={
+                              <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                                <Text>
+                                  <strong>{cachedDownload.file_name}</strong> ({cachedDownload.file_size_formatted})
+                                </Text>
+                                <Text type="secondary">
+                                  Downloaded {cachedDownload.age_formatted} •
+                                  Last used: {cachedDownload.last_used_at ? new Date(cachedDownload.last_used_at).toLocaleString() : 'Never'}
+                                </Text>
+                                <Text type="secondary" style={{ fontSize: 12 }}>
+                                  Path: {cachedDownload.storage_path}
+                                </Text>
+                                <Space style={{ marginTop: 8 }}>
+                                  <Button
+                                    size="small"
+                                    danger
+                                    onClick={handleInvalidateCache}
+                                  >
+                                    Clear Cache (Force Re-download)
+                                  </Button>
+                                  <Button
+                                    size="small"
+                                    onClick={checkCachedDownload}
+                                  >
+                                    Refresh
+                                  </Button>
+                                </Space>
+                              </Space>
+                            }
+                            type="success"
+                            showIcon
+                            icon={<CheckCircleOutlined />}
+                            style={{ marginBottom: 16 }}
+                          />
+                        ) : (
+                          /* Show download threads only when NO cache available (actual download will happen) */
+                          <Form.Item
+                            name="download_threads"
+                            label={
+                              <Space>
+                                Download Threads
+                                <Tooltip title="Number of parallel download threads. More threads = faster download, but requires more bandwidth. 8-16 is optimal for most connections.">
+                                  <QuestionCircleOutlined style={{ color: '#999' }} />
+                                </Tooltip>
+                              </Space>
+                            }
+                          >
+                            <Slider
+                              min={2}
+                              max={32}
+                              marks={{
+                                2: '2',
+                                8: '8',
+                                16: '16',
+                                32: '32'
+                              }}
+                              tooltip={{ formatter: (value) => `${value} threads` }}
+                            />
+                          </Form.Item>
+                        )}
+                      </>
+                    ) : (
+                      <Alert
+                        message="Streaming Mode"
+                        description="Emails will be processed directly from Google Drive without downloading the file first. This is slower but uses less disk space."
+                        type="info"
+                        showIcon
+                        style={{ marginBottom: 16 }}
+                      />
+                    )
+                  }
+                </Form.Item>
+              </>
+            )}
+
             <Collapse
               ghost
               items={[{
@@ -566,81 +750,20 @@ export const MailboxProcess: React.FC = () => {
                   </Space>
                 ),
                 children: (
-                  <Space direction="vertical" style={{ width: '100%' }}>
-                    <Form.Item
-                      name="enable_categorization"
-                      label={
-                        <Space>
-                          Enable Auto-Tagging
-                          <Tooltip title="Automatically categorize emails with tags like Newsletter, Receipt, Meeting, etc.">
-                            <QuestionCircleOutlined style={{ color: '#999' }} />
-                          </Tooltip>
-                        </Space>
-                      }
-                      valuePropName="checked"
-                    >
-                      <Switch />
-                    </Form.Item>
-
-                    {/* Show parallel download options only for Google Drive files */}
-                    {mailbox?.connection_config?.file_source === 'google_drive' && (
-                      <>
-                        <Divider orientation="left" plain>
-                          <Text type="secondary">Google Drive Download Options</Text>
-                        </Divider>
-
-                        <Form.Item
-                          name="download_first"
-                          label={
-                            <Space>
-                              Download Before Processing
-                              <Tooltip title="Download the entire file first using parallel threads, then process locally. Recommended for files over 5GB - typically 3-5x faster than streaming.">
-                                <QuestionCircleOutlined style={{ color: '#999' }} />
-                              </Tooltip>
-                            </Space>
-                          }
-                          valuePropName="checked"
-                        >
-                          <Switch />
-                        </Form.Item>
-
-                        <Form.Item
-                          noStyle
-                          shouldUpdate={(prevValues, currentValues) =>
-                            prevValues.download_first !== currentValues.download_first
-                          }
-                        >
-                          {({ getFieldValue }) =>
-                            getFieldValue('download_first') ? (
-                              <Form.Item
-                                name="download_threads"
-                                label={
-                                  <Space>
-                                    Download Threads
-                                    <Tooltip title="Number of parallel download threads. More threads = faster download, but requires more bandwidth. 8-16 is optimal for most connections.">
-                                      <QuestionCircleOutlined style={{ color: '#999' }} />
-                                    </Tooltip>
-                                  </Space>
-                                }
-                              >
-                                <Slider
-                                  min={2}
-                                  max={32}
-                                  marks={{
-                                    2: '2',
-                                    8: '8',
-                                    16: '16',
-                                    32: '32'
-                                  }}
-                                  tooltip={{ formatter: (value) => `${value} threads` }}
-                                />
-                              </Form.Item>
-                            ) : null
-                          }
-                        </Form.Item>
-                      </>
-                    )}
-                  </Space>
+                  <Form.Item
+                    name="enable_categorization"
+                    label={
+                      <Space>
+                        Enable Auto-Tagging
+                        <Tooltip title="Automatically categorize emails with tags like Newsletter, Receipt, Meeting, etc.">
+                          <QuestionCircleOutlined style={{ color: '#999' }} />
+                        </Tooltip>
+                      </Space>
+                    }
+                    valuePropName="checked"
+                  >
+                    <Switch />
+                  </Form.Item>
                 )
               }]}
             />
