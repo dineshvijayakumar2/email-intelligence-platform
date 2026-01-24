@@ -6,7 +6,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Card,
   Table,
   Tag,
   Button,
@@ -28,7 +27,6 @@ import {
   PlusOutlined,
   EditOutlined,
   DeleteOutlined,
-  SearchOutlined,
   TeamOutlined,
   HomeOutlined,
   ReloadOutlined,
@@ -47,7 +45,7 @@ import {
   AccountManager,
 } from '../services/accountManagerService';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 const { Option } = Select;
 
 const ClientsPage: React.FC = () => {
@@ -255,9 +253,9 @@ const ClientsPage: React.FC = () => {
   const totalContacts = clients.reduce((sum, c) => sum + c.contact_count, 0);
 
   return (
-    <div style={{ padding: 24 }}>
+    <div className="glass-page-bg" style={{ padding: 24 }}>
       {/* Breadcrumb */}
-      <Breadcrumb style={{ marginBottom: 16 }}>
+      <Breadcrumb className="fade-in-up" style={{ marginBottom: 16 }}>
         <Breadcrumb.Item>
           <Link to="/"><HomeOutlined /> Home</Link>
         </Breadcrumb.Item>
@@ -267,12 +265,11 @@ const ClientsPage: React.FC = () => {
       </Breadcrumb>
 
       {/* Header */}
-      <Row justify="space-between" align="middle" style={{ marginBottom: 24 }}>
+      <Row justify="space-between" align="middle" style={{ marginBottom: 24 }} className="fade-in-up">
         <Col>
-          <Title level={2} style={{ margin: 0 }}>
-            <TeamOutlined style={{ marginRight: 8 }} />
-            Clients
-          </Title>
+          <Text type="secondary">
+            Manage consulting clients and customer companies
+          </Text>
         </Col>
         <Col>
           <Space>
@@ -291,6 +288,7 @@ const ClientsPage: React.FC = () => {
                 form.resetFields();
                 setModalVisible(true);
               }}
+              className="glass-button-primary"
             >
               Add Client
             </Button>
@@ -299,35 +297,35 @@ const ClientsPage: React.FC = () => {
       </Row>
 
       {/* Stats */}
-      <Row gutter={16} style={{ marginBottom: 24 }}>
+      <Row gutter={16} style={{ marginBottom: 24 }} className="fade-in-up stagger-1">
         <Col span={6}>
-          <Card>
-            <Statistic title="Total Clients" value={total} />
-          </Card>
+          <div className="glass-card" style={{ padding: 24 }}>
+            <Statistic title="Total Clients" value={total} valueStyle={{ color: '#667eea' }} />
+          </div>
         </Col>
         <Col span={6}>
-          <Card>
+          <div className="glass-card" style={{ padding: 24 }}>
             <Statistic
               title="Active Clients"
               value={activeClients}
               valueStyle={{ color: '#3f8600' }}
             />
-          </Card>
+          </div>
         </Col>
         <Col span={6}>
-          <Card>
-            <Statistic title="Customer Companies" value={totalCompanies} />
-          </Card>
+          <div className="glass-card" style={{ padding: 24 }}>
+            <Statistic title="Customer Companies" value={totalCompanies} valueStyle={{ color: '#764ba2' }} />
+          </div>
         </Col>
         <Col span={6}>
-          <Card>
-            <Statistic title="Customer Contacts" value={totalContacts} />
-          </Card>
+          <div className="glass-card" style={{ padding: 24 }}>
+            <Statistic title="Customer Contacts" value={totalContacts} valueStyle={{ color: '#fa8c16' }} />
+          </div>
         </Col>
       </Row>
 
       {/* Filters */}
-      <Card style={{ marginBottom: 24 }}>
+      <div className="glass-filters fade-in-up stagger-2" style={{ marginBottom: 24 }}>
         <Row gutter={16}>
           <Col span={8}>
             <Text strong>Filter by Status:</Text>
@@ -360,10 +358,10 @@ const ClientsPage: React.FC = () => {
             </Select>
           </Col>
         </Row>
-      </Card>
+      </div>
 
       {/* Clients Table */}
-      <Card>
+      <div className="glass-table-container fade-in-up stagger-3">
         <Table
           dataSource={clients}
           columns={columns}
@@ -376,7 +374,7 @@ const ClientsPage: React.FC = () => {
             showTotal: (total) => `Total ${total} clients`,
           }}
         />
-      </Card>
+      </div>
 
       {/* Create/Edit Modal */}
       <Modal

@@ -97,24 +97,32 @@ export const emailService = {
     // Check cache first
     const cached = filterCache.get<string[]>(FILTER_KEYS.CATEGORIES);
     if (cached) {
+      console.log('[emailService] Categories loaded from cache:', cached);
       return cached;
     }
 
+    const url = `${config.apiBaseUrl}/emails/categories`;
+    console.log('[emailService] Fetching categories from:', url);
+
     try {
-      const response = await fetch(`${config.apiBaseUrl}/emails/categories`);
+      const response = await fetch(url);
+      console.log('[emailService] Categories response status:', response.status, response.statusText);
 
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[emailService] Categories error response body:', errorText);
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const categories = await response.json();
+      console.log('[emailService] Categories received:', categories);
 
       // Cache the result
       filterCache.set(FILTER_KEYS.CATEGORIES, categories);
 
       return categories;
     } catch (error) {
-      console.error('Error fetching email categories:', error);
+      console.error('[emailService] Error fetching email categories:', error);
       return [];
     }
   },

@@ -1,50 +1,27 @@
 import React, { useState, useEffect } from "react";
-import { 
-  Card, 
-  Table, 
-  Space, 
-  Button, 
-  Typography, 
-  Tag, 
-  Form, 
-  Input, 
-  Select, 
-  Switch,
+import {
+  Table,
+  Space,
+  Button,
+  Typography,
+  Tag,
   Popconfirm,
-  message,
-  Divider,
-  InputNumber,
-  Collapse,
-  Alert,
-  Progress,
-  Badge,
-  Radio
+  message
 } from "antd";
-import { 
-  PlusOutlined, 
-  EditOutlined, 
-  DeleteOutlined, 
-  SyncOutlined, 
+import {
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  SyncOutlined,
   MailOutlined,
-  FolderOpenOutlined,
-  PlayCircleOutlined,
-  CheckCircleOutlined,
-  ExclamationCircleOutlined,
-  LoadingOutlined,
-  SettingOutlined,
-  GoogleOutlined,
-  CloudOutlined
+  PlayCircleOutlined
 } from "@ant-design/icons";
 import { useNavigate, useParams } from "react-router-dom";
-import { mailboxService, Mailbox, CreateMailboxData } from '../services/mailboxService';
-import { processingService } from '../services/processingService';
-import GoogleDrivePicker from '../components/GoogleDrivePicker';
-import GoogleDriveConnection from '../components/GoogleDriveConnection';
+import { mailboxService, Mailbox } from '../services/mailboxService';
 import { MailboxCreateForm } from '../components/MailboxCreateForm';
 import { MailboxEditForm } from '../components/MailboxEditForm';
 
-const { Title, Text } = Typography;
-const { Option } = Select;
+const { Text } = Typography;
 
 export const MailboxList: React.FC = () => {
   const navigate = useNavigate();
@@ -213,12 +190,10 @@ export const MailboxList: React.FC = () => {
   ];
 
   return (
-    <Space direction="vertical" size="large" style={{ width: "100%" }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <div className="glass-page-bg" style={{ padding: 24 }}>
+      {/* Header */}
+      <div className="fade-in-up" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <div>
-          <Title level={2} style={{ margin: 0 }}>
-            📮 Mailboxes
-          </Title>
           <Text type="secondary">
             Manage your email sources for intelligence gathering
           </Text>
@@ -227,12 +202,14 @@ export const MailboxList: React.FC = () => {
           type="primary"
           icon={<PlusOutlined />}
           onClick={() => navigate('/mailboxes/create')}
+          className="glass-button-primary"
         >
           Add Mailbox
         </Button>
       </div>
 
-      <Card>
+      {/* Table */}
+      <div className="glass-table-container fade-in-up stagger-1">
         <Table
           dataSource={mailboxes}
           columns={columns}
@@ -246,8 +223,8 @@ export const MailboxList: React.FC = () => {
               `${range[0]}-${range[1]} of ${total} mailboxes`,
           }}
         />
-      </Card>
-    </Space>
+      </div>
+    </div>
   );
 };
 

@@ -2960,15 +2960,18 @@ async def get_emails_in_batches(
 @app.get("/api/emails/categories")
 async def get_email_categories():
     """Get email categories for filter dropdown - replaces frontend emailService.getEmailCategories()"""
+    logger.info('[Categories API] Request received')
     try:
         sb = get_supabase()
-        
+        logger.info('[Categories API] Supabase client obtained, querying email_categories table...')
+
         result = await asyncio.get_event_loop().run_in_executor(
             None,
             lambda: sb.table('email_categories').select('category').execute()
         )
-        
-        logger.debug(f'Raw category data from Supabase: {len(result.data or [])} rows')
+
+        row_count = len(result.data or [])
+        logger.info(f'[Categories API] Raw data from Supabase: {row_count} rows')
 
         # Get unique categories, filter out metadata tags
         category_set = set()
@@ -2978,12 +2981,12 @@ async def get_email_categories():
                 category_set.add(category)
 
         categories = sorted(list(category_set))
-        logger.debug(f'Loaded categories: {categories}')
-        
+        logger.info(f'[Categories API] Returning {len(categories)} categories: {categories}')
+
         return categories
-        
+
     except Exception as e:
-        logger.error(f"Error fetching email categories: {e}", exc_info=True)
+        logger.error(f"[Categories API] Error fetching email categories: {e}", exc_info=True)
         return ['spam', 'marketing', 'inbox', 'sent', 'trash']
 
 @app.get("/api/emails/{email_id}")

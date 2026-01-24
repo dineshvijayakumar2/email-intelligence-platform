@@ -55,7 +55,7 @@ import {
 // @ts-ignore
 import config from '../config.js';
 
-const { Title, Text, Paragraph } = Typography;
+const { Text, Paragraph } = Typography;
 const { Option } = Select;
 const { TabPane } = Tabs;
 const { Panel } = Collapse;
@@ -562,9 +562,9 @@ const ErrorsPage: React.FC = () => {
     : jobs;
 
   return (
-    <div style={{ padding: 24 }}>
+    <div className="glass-page-bg" style={{ padding: 24 }}>
       {/* Breadcrumb */}
-      <Breadcrumb style={{ marginBottom: 16 }}>
+      <Breadcrumb className="fade-in-up" style={{ marginBottom: 16 }}>
         <Breadcrumb.Item>
           <Link to="/"><HomeOutlined /> Home</Link>
         </Breadcrumb.Item>
@@ -577,12 +577,11 @@ const ErrorsPage: React.FC = () => {
       </Breadcrumb>
 
       {/* Header */}
-      <Row justify="space-between" align="middle" style={{ marginBottom: 24 }}>
+      <Row justify="space-between" align="middle" style={{ marginBottom: 24 }} className="fade-in-up">
         <Col>
-          <Title level={2} style={{ margin: 0 }}>
-            <ExclamationCircleOutlined style={{ color: '#ff4d4f', marginRight: 8 }} />
-            Processing Errors
-          </Title>
+          <Text type="secondary">
+            View and manage processing errors across all jobs
+          </Text>
         </Col>
         <Col>
           <Button
@@ -595,6 +594,7 @@ const ErrorsPage: React.FC = () => {
               }
             }}
             loading={loading}
+            className="glass-button-primary"
           >
             Refresh
           </Button>
@@ -602,53 +602,53 @@ const ErrorsPage: React.FC = () => {
       </Row>
 
       {/* Summary Stats */}
-      <Row gutter={16} style={{ marginBottom: 24 }}>
+      <Row gutter={16} style={{ marginBottom: 24 }} className="fade-in-up stagger-1">
         <Col span={6}>
-          <Card>
+          <div className="glass-card" style={{ padding: 24 }}>
             <Statistic
               title="Total Jobs"
               value={jobsWithErrorsCount}
-              valueStyle={{ color: jobsWithErrorsCount > 0 ? '#1890ff' : '#3f8600' }}
+              valueStyle={{ color: jobsWithErrorsCount > 0 ? '#667eea' : '#3f8600' }}
               prefix={<WarningOutlined />}
             />
-          </Card>
+          </div>
         </Col>
         <Col span={6}>
-          <Card>
+          <div className="glass-card" style={{ padding: 24 }}>
             <Statistic
               title="Failed Emails"
               value={totalFailedAcrossJobs}
               valueStyle={{ color: totalFailedAcrossJobs > 0 ? '#cf1322' : '#3f8600' }}
             />
-          </Card>
+          </div>
         </Col>
         {selectedJobId && jobErrorsSummary && (
           <>
             <Col span={6}>
-              <Card>
+              <div className="glass-card" style={{ padding: 24 }}>
                 <Statistic
                   title="All Job Errors"
                   value={jobErrorsSummary.total_errors}
                   suffix={jobErrorsSummary.unresolved_errors > 0 ? <Text type="secondary" style={{ fontSize: 14 }}> ({jobErrorsSummary.unresolved_errors} unresolved)</Text> : null}
                   valueStyle={{ color: jobErrorsSummary.total_errors > 0 ? '#cf1322' : '#3f8600' }}
                 />
-              </Card>
+              </div>
             </Col>
             <Col span={6}>
-              <Card>
+              <div className="glass-card" style={{ padding: 24 }}>
                 <Statistic
                   title="By Phase"
                   value={Object.keys(jobErrorsSummary.by_phase || {}).length}
                   suffix={<Text type="secondary" style={{ fontSize: 14 }}> phases</Text>}
                 />
-              </Card>
+              </div>
             </Col>
           </>
         )}
       </Row>
 
       {/* Filters */}
-      <Card style={{ marginBottom: 24 }}>
+      <div className="glass-filters fade-in-up stagger-2" style={{ marginBottom: 24 }}>
         <Row gutter={16}>
           <Col span={8}>
             <Text strong>Filter by Mailbox:</Text>
@@ -684,11 +684,12 @@ const ErrorsPage: React.FC = () => {
             </Select>
           </Col>
         </Row>
-      </Card>
+      </div>
 
       {/* Error Breakdown by Phase (Job Errors) */}
       {selectedJobId && jobErrorsSummary && Object.keys(jobErrorsSummary.by_phase || {}).length > 0 && (
-        <Card title="Errors by Phase" size="small" style={{ marginBottom: 24 }}>
+        <div className="glass-card-static fade-in-up stagger-3" style={{ marginBottom: 24, padding: 24 }}>
+          <Text strong style={{ display: 'block', marginBottom: 16 }}>Errors by Phase</Text>
           <Row gutter={[16, 16]}>
             {Object.entries(jobErrorsSummary.by_phase).map(([phase, count]) => (
               <Col key={phase} xs={12} sm={8} md={6} lg={4}>
@@ -709,11 +710,11 @@ const ErrorsPage: React.FC = () => {
               </Col>
             ))}
           </Row>
-        </Card>
+        </div>
       )}
 
       {/* Errors Tabs */}
-      <Card>
+      <div className="glass-table-container fade-in-up stagger-4">
         <Tabs activeKey={activeTab} onChange={handleTabChange}>
           {/* All Job Errors Tab */}
           <TabPane
@@ -887,7 +888,7 @@ const ErrorsPage: React.FC = () => {
             )}
           </TabPane>
         </Tabs>
-      </Card>
+      </div>
 
       {/* Error Detail Modal */}
       <Modal

@@ -33,7 +33,7 @@ import {
 import { processingService, ProcessingJob } from '../services/processingService';
 import { ErrorDisplay } from '../components/ErrorDisplay';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 const getStatusIcon = (status: string) => {
   const icons = {
@@ -465,12 +465,10 @@ export const ProcessingJobs: React.FC = () => {
   const runningJobs = jobs.filter(job => job.status === 'running');
 
   return (
-    <Space direction="vertical" size="large" style={{ width: "100%" }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <div className="glass-page-bg" style={{ padding: 24 }}>
+      {/* Header */}
+      <div className="fade-in-up" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <div>
-          <Title level={2} style={{ margin: 0 }}>
-            ⚙️ Processing Jobs
-          </Title>
           <Text type="secondary">
             Monitor extraction and processing job status
           </Text>
@@ -480,6 +478,7 @@ export const ProcessingJobs: React.FC = () => {
           icon={<ReloadOutlined />}
           onClick={refreshJobs}
           loading={loading}
+          className="glass-button-primary"
         >
           Refresh
         </Button>
@@ -487,18 +486,22 @@ export const ProcessingJobs: React.FC = () => {
 
       {/* Active Jobs Alert */}
       {runningJobs.length > 0 && (
-        <Alert
-          message="Active Jobs Running"
-          description={
-            `${runningJobs.length} job(s) currently processing. 
-            Avoid starting new extractions for the same mailboxes.`
-          }
-          type="info"
-          showIcon
-        />
+        <div className="fade-in-up stagger-1" style={{ marginBottom: 24 }}>
+          <Alert
+            message="Active Jobs Running"
+            description={
+              `${runningJobs.length} job(s) currently processing.
+              Avoid starting new extractions for the same mailboxes.`
+            }
+            type="info"
+            showIcon
+            style={{ borderRadius: 12 }}
+          />
+        </div>
       )}
 
-      <Card>
+      {/* Table */}
+      <div className="glass-table-container fade-in-up stagger-2">
         <Table
           dataSource={jobs}
           columns={columns}
@@ -517,7 +520,7 @@ export const ProcessingJobs: React.FC = () => {
             return '';
           }}
         />
-      </Card>
+      </div>
 
       {/* Job Details Modal */}
       <Modal
@@ -632,6 +635,6 @@ export const ProcessingJobs: React.FC = () => {
           background-color: #f0f9ff;
         }
       `}</style>
-    </Space>
+    </div>
   );
 };

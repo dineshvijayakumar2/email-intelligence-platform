@@ -330,6 +330,195 @@
 }
 
 /* --------------------------------------------------------------------------
+   Glass Sidebar
+   -------------------------------------------------------------------------- */
+.glass-sidebar {
+  background: linear-gradient(180deg, rgba(102, 126, 234, 0.95) 0%, rgba(118, 75, 162, 0.95) 100%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 4px 0 24px rgba(102, 126, 234, 0.15);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Sidebar decorative gradient overlay */
+.glass-sidebar::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0%, transparent 50%);
+  pointer-events: none;
+}
+
+/* Sidebar logo area */
+.sidebar-logo {
+  padding: 24px 20px;
+  text-align: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  position: relative;
+  z-index: 1;
+}
+
+.sidebar-logo-icon {
+  width: 48px;
+  height: 48px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 12px;
+  font-size: 24px;
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.sidebar-title {
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: -0.3px;
+}
+
+.sidebar-subtitle {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+/* Glass menu styling */
+.glass-menu {
+  background: transparent !important;
+  border: none !important;
+  padding: 12px 8px;
+}
+
+.glass-menu .ant-menu-item {
+  margin: 4px 8px !important;
+  padding: 0 16px !important;
+  height: 44px !important;
+  line-height: 44px !important;
+  border-radius: 10px !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+  font-weight: 500;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.glass-menu .ant-menu-item:hover {
+  background: rgba(255, 255, 255, 0.15) !important;
+  color: white !important;
+  transform: translateX(4px);
+}
+
+.glass-menu .ant-menu-item-selected {
+  background: rgba(255, 255, 255, 0.2) !important;
+  color: white !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.glass-menu .ant-menu-item-selected::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 24px;
+  background: white;
+  border-radius: 0 4px 4px 0;
+}
+
+.glass-menu .ant-menu-item a {
+  color: inherit !important;
+}
+
+.glass-menu .ant-menu-item .anticon {
+  font-size: 18px;
+}
+
+/* --------------------------------------------------------------------------
+   Glass Header
+   -------------------------------------------------------------------------- */
+.glass-header {
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--glass-border);
+  box-shadow: 0 4px 20px rgba(102, 126, 234, 0.08);
+  position: relative;
+  z-index: 100;
+}
+
+/* Gradient accent line at top */
+.glass-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--gradient-primary);
+}
+
+.header-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  background: var(--gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.header-breadcrumb {
+  color: var(--color-primary);
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+/* --------------------------------------------------------------------------
+   Glass Content Area
+   -------------------------------------------------------------------------- */
+.glass-content {
+  background: var(--gradient-page);
+  min-height: calc(100vh - 64px);
+  position: relative;
+}
+
+/* Decorative background elements */
+.glass-content::before {
+  content: '';
+  position: fixed;
+  top: 10%;
+  right: -5%;
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, rgba(102, 126, 234, 0.08) 0%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.glass-content::after {
+  content: '';
+  position: fixed;
+  bottom: 10%;
+  left: -5%;
+  width: 350px;
+  height: 350px;
+  background: radial-gradient(circle, rgba(118, 75, 162, 0.06) 0%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* --------------------------------------------------------------------------
    Fallback for browsers without backdrop-filter support
    -------------------------------------------------------------------------- */
 @supports not (backdrop-filter: blur(16px)) {
@@ -341,6 +530,14 @@
   }
 
   .glass-modal .ant-modal-content {
+    background: #ffffff;
+  }
+
+  .glass-sidebar {
+    background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
+  }
+
+  .glass-header {
     background: #ffffff;
   }
 }

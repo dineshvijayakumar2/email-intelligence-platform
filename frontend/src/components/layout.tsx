@@ -11,58 +11,148 @@ import {
 } from "@ant-design/icons";
 
 const { Header, Sider, Content } = AntdLayout;
-const { Title } = Typography;
+const { Title, Text } = Typography;
+
+// Page titles mapped to routes
+const pageTitles: Record<string, string> = {
+  '/': 'Dashboard',
+  '/mailboxes': 'Mailboxes',
+  '/emails': 'Emails',
+  '/processing': 'Processing Jobs',
+  '/errors': 'Error Logs',
+  '/clients': 'Clients',
+};
 
 export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
   const location = useLocation();
 
+  // Get current page title based on route
+  const getCurrentPageTitle = () => {
+    // Handle dynamic routes like /mailboxes/edit/:id
+    for (const [path, title] of Object.entries(pageTitles)) {
+      if (location.pathname === path || location.pathname.startsWith(path + '/')) {
+        return title;
+      }
+    }
+    return 'Dashboard';
+  };
+
+  const menuItems = [
+    {
+      key: '/',
+      icon: <DashboardOutlined />,
+      label: <Link to="/">Dashboard</Link>,
+    },
+    {
+      key: '/mailboxes',
+      icon: <InboxOutlined />,
+      label: <Link to="/mailboxes">Mailboxes</Link>,
+    },
+    {
+      key: '/emails',
+      icon: <MailOutlined />,
+      label: <Link to="/emails">Emails</Link>,
+    },
+    {
+      key: '/processing',
+      icon: <SettingOutlined />,
+      label: <Link to="/processing">Processing</Link>,
+    },
+    {
+      key: '/errors',
+      icon: <ExclamationCircleOutlined />,
+      label: <Link to="/errors">Errors</Link>,
+    },
+    {
+      key: '/clients',
+      icon: <TeamOutlined />,
+      label: <Link to="/clients">Clients</Link>,
+    },
+  ];
+
+  // Get selected key from current path
+  const getSelectedKey = () => {
+    // Check for exact match first
+    if (pageTitles[location.pathname]) {
+      return location.pathname;
+    }
+    // Check for partial match (for nested routes)
+    for (const path of Object.keys(pageTitles)) {
+      if (path !== '/' && location.pathname.startsWith(path)) {
+        return path;
+      }
+    }
+    return '/';
+  };
+
   return (
     <AntdLayout style={{ minHeight: "100vh" }}>
-      <Sider width={200} style={{ backgroundColor: "#001529" }}>
-        <div style={{ padding: "16px", textAlign: "center" }}>
-          <Title level={4} style={{ color: "white", margin: 0 }}>
-            📧 Email Intelligence
+      {/* Glass Sidebar */}
+      <Sider
+        width={240}
+        className="glass-sidebar"
+        style={{
+          position: 'fixed',
+          left: 0,
+          top: 0,
+          bottom: 0,
+          zIndex: 1000,
+        }}
+      >
+        {/* Logo Section */}
+        <div className="sidebar-logo">
+          <div className="sidebar-logo-icon">
+            📧
+          </div>
+          <Title level={5} className="sidebar-title">
+            Email Intelligence
           </Title>
+          <Text className="sidebar-subtitle">
+            Analytics Platform
+          </Text>
         </div>
+
+        {/* Navigation Menu */}
         <Menu
-          theme="dark"
           mode="inline"
-          selectedKeys={[location.pathname]}
-          style={{ height: "100%", borderRight: 0 }}
-        >
-          <Menu.Item key="/" icon={<DashboardOutlined />}>
-            <Link to="/">Dashboard</Link>
-          </Menu.Item>
-          <Menu.Item key="/mailboxes" icon={<InboxOutlined />}>
-            <Link to="/mailboxes">Mailboxes</Link>
-          </Menu.Item>
-          <Menu.Item key="/emails" icon={<MailOutlined />}>
-            <Link to="/emails">Emails</Link>
-          </Menu.Item>
-          <Menu.Item key="/processing" icon={<SettingOutlined />}>
-            <Link to="/processing">Processing</Link>
-          </Menu.Item>
-          <Menu.Item key="/errors" icon={<ExclamationCircleOutlined />}>
-            <Link to="/errors">Errors</Link>
-          </Menu.Item>
-          <Menu.Item key="/clients" icon={<TeamOutlined />}>
-            <Link to="/clients">Clients</Link>
-          </Menu.Item>
-        </Menu>
+          selectedKeys={[getSelectedKey()]}
+          className="glass-menu"
+          items={menuItems}
+        />
       </Sider>
-      <AntdLayout>
-        <Header style={{ 
-          backgroundColor: "#fff", 
-          padding: "0 24px",
-          display: "flex",
-          alignItems: "center",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)"
-        }}>
-          <Title level={3} style={{ margin: 0 }}>
-            Email Intelligence Platform
-          </Title>
+
+      {/* Main Content Area */}
+      <AntdLayout style={{ marginLeft: 240 }}>
+        {/* Glass Header */}
+        <Header
+          className="glass-header"
+          style={{
+            padding: "0 32px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            height: 64,
+          }}
+        >
+          <div>
+            <Title level={4} className="header-title">
+              {getCurrentPageTitle()}
+            </Title>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <Text type="secondary" style={{ fontSize: 13 }}>
+              {new Date().toLocaleDateString('en-US', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+              })}
+            </Text>
+          </div>
         </Header>
-        <Content style={{ padding: "24px", backgroundColor: "#f0f2f5" }}>
+
+        {/* Glass Content */}
+        <Content className="glass-content" style={{ padding: 0, overflow: 'auto' }}>
           {children}
         </Content>
       </AntdLayout>
