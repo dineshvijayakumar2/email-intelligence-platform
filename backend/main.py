@@ -118,6 +118,15 @@ else:
 
 logger.info(f"Running in {python_env} mode")
 
+# Persistent download directory - uses Railway volume in production, temp dir in development
+# In Railway, this maps to a persistent volume that survives redeployments
+DOWNLOAD_DIR = os.getenv('DOWNLOAD_DIR', '/data/downloads' if python_env == 'production' else None)
+if DOWNLOAD_DIR:
+    os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+    logger.info(f"Using persistent download directory: {DOWNLOAD_DIR}")
+else:
+    logger.info("Using temporary directory for downloads (files will be lost on restart)")
+
 app = FastAPI(title="Email Intelligence API", version="1.0.0")
 
 # Configure CORS for frontend access
@@ -1352,11 +1361,11 @@ async def process_emails_real(job_id: str, config: ProcessingJobConfig):
                     error_logger=error_logger
                 )
 
-                # Run download in thread pool
+                # Run download in thread pool - use persistent directory if configured
                 loop = asyncio.get_event_loop()
                 downloaded_file_path = await loop.run_in_executor(
                     executor,
-                    lambda: downloader.download(google_drive_file_id, file_name)
+                    lambda: downloader.download(google_drive_file_id, file_name, output_dir=DOWNLOAD_DIR)
                 )
 
                 if not downloaded_file_path:

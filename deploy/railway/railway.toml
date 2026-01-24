@@ -14,6 +14,12 @@ startCommand = "python3 -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"
 healthcheckPath = "/health"
 healthcheckTimeout = 30
 
+# Persistent volume for downloads - survives redeployments
+[[services.volumes]]
+name = "downloads"
+mountPath = "/data/downloads"
+sizeGB = 10
+
 # Frontend Service
 [[services]]
 name = "frontend"
