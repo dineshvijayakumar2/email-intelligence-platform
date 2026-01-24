@@ -17,11 +17,9 @@ import {
 } from "antd";
 import {
   SearchOutlined,
-  FilterOutlined,
   EyeOutlined,
   MailOutlined,
   CalendarOutlined,
-  CloseOutlined,
 } from "@ant-design/icons";
 import { emailService, Email, EmailFilters } from '../services/emailService';
 
@@ -52,9 +50,18 @@ const getCategoryLabel = (category: string) => {
   return labels[category as keyof typeof labels] || category;
 };
 
+// Skeleton component for filter loading
+const FilterSkeleton: React.FC<{ width?: number }> = ({ width = 150 }) => (
+  <div
+    className="skeleton-shimmer skeleton-filter"
+    style={{ width, height: 40 }}
+  />
+);
+
 export const EmailList: React.FC = () => {
   const [emails, setEmails] = useState<Email[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filtersLoading, setFiltersLoading] = useState(true);
   const [totalCount, setTotalCount] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
@@ -102,6 +109,7 @@ export const EmailList: React.FC = () => {
 
   const loadFilterOptions = async () => {
     try {
+      setFiltersLoading(true);
       const [categoriesData, mailboxesData, foldersData] = await Promise.all([
         emailService.getEmailCategories(),
         emailService.getMailboxNames(),
@@ -112,6 +120,8 @@ export const EmailList: React.FC = () => {
       setFolders(foldersData);
     } catch (error) {
       console.error('Error loading filter options:', error);
+    } finally {
+      setFiltersLoading(false);
     }
   };
 
@@ -285,13 +295,14 @@ export const EmailList: React.FC = () => {
   ];
 
   return (
-    <Space direction="vertical" size="large" style={{ width: "100%" }}>
-      <div>
-        <Title level={2} style={{ margin: 0 }}>
-          📧 Emails
+    <div className="glass-page-bg" style={{ padding: 24, minHeight: 'calc(100vh - 64px)' }}>
+      {/* Header */}
+      <div className="fade-in-up" style={{ marginBottom: 24 }}>
+        <Title level={2} style={{ margin: 0, marginBottom: 4 }} className="gradient-text">
+          Emails
         </Title>
-        <Text type="secondary">
-          Showing {totalCount} email{totalCount !== 1 ? 's' : ''}
+        <Text type="secondary" style={{ fontSize: 14 }}>
+          {totalCount.toLocaleString()} email{totalCount !== 1 ? 's' : ''}
           {filters.category && ` in ${getCategoryLabel(filters.category)}`}
           {filters.mailbox && ` from ${filters.mailbox}`}
           {filters.folder && ` in folder "${filters.folder}"`}
@@ -300,97 +311,116 @@ export const EmailList: React.FC = () => {
         </Text>
       </div>
 
-      {/* Filters */}
-      <Card title={<Space><FilterOutlined />Filters</Space>} size="small">
-        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-          <Search
-            placeholder="Search emails..."
-            allowClear
-            style={{ width: 250 }}
-            value={filters.search}
-            onChange={(e) => handleFilterChange('search', e.target.value)}
-            prefix={<SearchOutlined />}
-          />
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <Text type="secondary" style={{ fontSize: '12px' }}>Category:</Text>
-            <Select
-              placeholder="All"
-              allowClear
-              style={{ width: 150 }}
-              value={filters.category}
-              onChange={(value) => handleFilterChange('category', value)}
-            >
-              {categories.map(category => (
-                <Option key={category} value={category}>
-                  {getCategoryLabel(category)}
-                </Option>
-              ))}
-            </Select>
+      {/* Glass Filters Panel */}
+      <div className="glass-filters fade-in-up stagger-1" style={{ marginBottom: 24 }}>
+        {filtersLoading ? (
+          <div style={{ display: 'flex', gap: 16, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <FilterSkeleton width={250} />
+            <FilterSkeleton width={150} />
+            <FilterSkeleton width={150} />
+            <FilterSkeleton width={150} />
+            <FilterSkeleton width={120} />
+            <FilterSkeleton width={250} />
           </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <Text type="secondary" style={{ fontSize: '12px' }}>Mailbox:</Text>
-            <Select
-              placeholder="All"
+        ) : (
+          <div style={{ display: 'flex', gap: 16, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <Search
+              placeholder="Search emails..."
               allowClear
-              style={{ width: 150 }}
-              value={filters.mailbox}
-              onChange={(value) => handleFilterChange('mailbox', value)}
+              style={{ width: 250 }}
+              value={filters.search}
+              onChange={(e) => handleFilterChange('search', e.target.value)}
+              prefix={<SearchOutlined style={{ color: '#667eea' }} />}
+            />
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <Text type="secondary" style={{ fontSize: 12, fontWeight: 500 }}>Category</Text>
+              <Select
+                placeholder="All categories"
+                allowClear
+                style={{ width: 150 }}
+                value={filters.category}
+                onChange={(value) => handleFilterChange('category', value)}
+              >
+                {categories.map(category => (
+                  <Option key={category} value={category}>
+                    {getCategoryLabel(category)}
+                  </Option>
+                ))}
+              </Select>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <Text type="secondary" style={{ fontSize: 12, fontWeight: 500 }}>Mailbox</Text>
+              <Select
+                placeholder="All mailboxes"
+                allowClear
+                style={{ width: 150 }}
+                value={filters.mailbox}
+                onChange={(value) => handleFilterChange('mailbox', value)}
+              >
+                {mailboxes.map(mailbox => (
+                  <Option key={mailbox} value={mailbox}>
+                    {mailbox}
+                  </Option>
+                ))}
+              </Select>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <Text type="secondary" style={{ fontSize: 12, fontWeight: 500 }}>Folder</Text>
+              <Select
+                placeholder="All folders"
+                allowClear
+                style={{ width: 150 }}
+                value={filters.folder}
+                onChange={(value) => handleFilterChange('folder', value)}
+              >
+                {folders.map(folder => (
+                  <Option key={folder} value={folder}>
+                    {folder}
+                  </Option>
+                ))}
+              </Select>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <Text type="secondary" style={{ fontSize: 12, fontWeight: 500 }}>Direction</Text>
+              <Select
+                placeholder="All"
+                allowClear
+                style={{ width: 120 }}
+                value={filters.isOutbound}
+                onChange={(value) => handleFilterChange('isOutbound', value)}
+              >
+                <Option value="inbound">Inbound</Option>
+                <Option value="outbound">Outbound</Option>
+              </Select>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <Text type="secondary" style={{ fontSize: 12, fontWeight: 500 }}>Date Range</Text>
+              <RangePicker
+                placeholder={['Start', 'End']}
+                style={{ width: 250 }}
+                onChange={(dates, dateStrings) =>
+                  handleFilterChange('dateRange', dates ? dateStrings as [string, string] : null)
+                }
+              />
+            </div>
+
+            <Button
+              onClick={clearFilters}
+              style={{ marginTop: 'auto' }}
             >
-              {mailboxes.map(mailbox => (
-                <Option key={mailbox} value={mailbox}>
-                  {mailbox}
-                </Option>
-              ))}
-            </Select>
+              Clear
+            </Button>
           </div>
+        )}
+      </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <Text type="secondary" style={{ fontSize: '12px' }}>Folder:</Text>
-            <Select
-              placeholder="All"
-              allowClear
-              style={{ width: 150 }}
-              value={filters.folder}
-              onChange={(value) => handleFilterChange('folder', value)}
-            >
-              {folders.map(folder => (
-                <Option key={folder} value={folder}>
-                  {folder}
-                </Option>
-              ))}
-            </Select>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <Text type="secondary" style={{ fontSize: '12px' }}>Direction:</Text>
-            <Select
-              placeholder="All"
-              allowClear
-              style={{ width: 120 }}
-              value={filters.isOutbound}
-              onChange={(value) => handleFilterChange('isOutbound', value)}
-            >
-              <Option value="inbound">Inbound</Option>
-              <Option value="outbound">Outbound</Option>
-            </Select>
-          </div>
-
-          <RangePicker
-            placeholder={['Start Date', 'End Date']}
-            style={{ width: 250 }}
-            onChange={(dates, dateStrings) =>
-              handleFilterChange('dateRange', dates ? dateStrings as [string, string] : null)
-            }
-          />
-
-          <Button onClick={clearFilters}>Clear Filters</Button>
-        </div>
-      </Card>
-
-      {/* Email Table */}
-      <Card>
+      {/* Glass Table Container */}
+      <div className="glass-table-container fade-in-up stagger-2">
         <Table
           dataSource={emails}
           columns={columns}
@@ -415,14 +445,14 @@ export const EmailList: React.FC = () => {
           }}
           scroll={{ x: 1200 }}
         />
-      </Card>
+      </div>
 
-      {/* Email Details Modal */}
+      {/* Email Details Modal with Glass Styling */}
       <Modal
         title={
           <Space>
-            <MailOutlined />
-            <Text strong>Email Details</Text>
+            <MailOutlined style={{ color: '#667eea' }} />
+            <Text strong style={{ fontSize: 16 }}>Email Details</Text>
           </Space>
         }
         open={modalVisible}
@@ -430,7 +460,11 @@ export const EmailList: React.FC = () => {
         footer={null}
         width="95%"
         style={{ top: 20, maxWidth: '1800px' }}
-        styles={{ body: { maxHeight: 'calc(100vh - 120px)', overflowY: 'auto', padding: '24px' } }}
+        styles={{
+          body: { maxHeight: 'calc(100vh - 120px)', overflowY: 'auto', padding: '24px' },
+          header: { borderBottom: '1px solid rgba(102, 126, 234, 0.1)' },
+        }}
+        className="glass-modal"
       >
         {selectedEmail && (
           <Row gutter={24} style={{ width: '100%' }}>
@@ -681,6 +715,6 @@ export const EmailList: React.FC = () => {
           </Row>
         )}
       </Modal>
-    </Space>
+    </div>
   );
 };

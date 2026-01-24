@@ -119,6 +119,11 @@ class JobProgressManager:
                 **kwargs
             }
 
+            # Redis doesn't accept boolean values - convert to strings
+            for k, v in data.items():
+                if isinstance(v, bool):
+                    data[k] = 'true' if v else 'false'
+
             # Store as hash for efficient partial updates
             self.client.hset(key, mapping=data)
 

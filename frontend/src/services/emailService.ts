@@ -1,4 +1,5 @@
 import config from '../config';
+import { filterCache, FILTER_KEYS } from './filterCacheService';
 
 export interface Email {
   id: string;
@@ -91,8 +92,14 @@ export const emailService = {
     }
   },
 
-  // Get email categories for filter dropdown - now uses backend API
+  // Get email categories for filter dropdown - with caching
   async getEmailCategories(): Promise<string[]> {
+    // Check cache first
+    const cached = filterCache.get<string[]>(FILTER_KEYS.CATEGORIES);
+    if (cached) {
+      return cached;
+    }
+
     try {
       const response = await fetch(`${config.apiBaseUrl}/emails/categories`);
 
@@ -101,15 +108,25 @@ export const emailService = {
       }
 
       const categories = await response.json();
+
+      // Cache the result
+      filterCache.set(FILTER_KEYS.CATEGORIES, categories);
+
       return categories;
     } catch (error) {
       console.error('Error fetching email categories:', error);
-      return ['spam', 'marketing', 'inbox', 'sent', 'trash'];
+      return [];
     }
   },
 
-  // Get mailbox names for filter dropdown - now uses backend API
+  // Get mailbox names for filter dropdown - with caching
   async getMailboxNames(): Promise<string[]> {
+    // Check cache first
+    const cached = filterCache.get<string[]>(FILTER_KEYS.MAILBOXES);
+    if (cached) {
+      return cached;
+    }
+
     try {
       const response = await fetch(`${config.apiBaseUrl}/mailbox-names`);
 
@@ -118,6 +135,10 @@ export const emailService = {
       }
 
       const names = await response.json();
+
+      // Cache the result
+      filterCache.set(FILTER_KEYS.MAILBOXES, names);
+
       return names;
     } catch (error) {
       console.error('Error fetching mailbox names:', error);
@@ -125,8 +146,14 @@ export const emailService = {
     }
   },
 
-  // Get folder names for filter dropdown - now uses backend API
+  // Get folder names for filter dropdown - with caching
   async getFolderNames(): Promise<string[]> {
+    // Check cache first
+    const cached = filterCache.get<string[]>(FILTER_KEYS.FOLDERS);
+    if (cached) {
+      return cached;
+    }
+
     try {
       const response = await fetch(`${config.apiBaseUrl}/emails/folders`);
 
@@ -136,11 +163,19 @@ export const emailService = {
       }
 
       const folders = await response.json();
-      console.log('Loaded folders from backend:', folders);
+
+      // Cache the result
+      filterCache.set(FILTER_KEYS.FOLDERS, folders);
+
       return folders;
     } catch (error) {
       console.error('Error fetching folder names:', error);
       return [];
     }
-  }
+  },
+
+  // Invalidate filter caches (call after processing new emails)
+  invalidateFilterCache(): void {
+    filterCache.invalidate();
+  },
 };

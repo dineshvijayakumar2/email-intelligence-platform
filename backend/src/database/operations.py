@@ -392,12 +392,14 @@ class EmailOperations:
         validation_errors = []
 
         try:
-            # Prepare batch data
+            # Prepare batch data - track which original emails were successfully prepared
             prepared_batch = []
+            original_emails_prepared = []  # Keep track of original emails that passed preparation
             for idx, email in enumerate(batch):
                 prepared_email = self._prepare_email_for_insert(email, mailbox_id)
                 if prepared_email:
                     prepared_batch.append(prepared_email)
+                    original_emails_prepared.append(email)  # Keep original email with tags
                 else:
                     failed += 1
                     # Track which email failed and why
@@ -462,9 +464,10 @@ class EmailOperations:
 
             # Insert tags into email_categories for successfully inserted emails
             if inserted_emails:
-                self._insert_email_tags(batch, inserted_emails)
+                # Use original_emails_prepared (not batch) to ensure correct tag-to-email mapping
+                self._insert_email_tags(original_emails_prepared, inserted_emails)
                 # Ensure folder entries exist in folders table
-                self._ensure_folders_exist(batch, mailbox_id)
+                self._ensure_folders_exist(original_emails_prepared, mailbox_id)
 
         except Exception as e:
             failed = len(batch)
@@ -539,8 +542,23 @@ class EmailOperations:
         try:
             category_inserts = []
 
-            # Match original emails with inserted emails by message_id
-            for orig_email, inserted_email in zip(original_emails, inserted_emails):
+            # Build lookup map from message_id to inserted email (with database ID)
+            inserted_by_message_id = {
+                email.get('message_id'): email
+                for email in inserted_emails
+                if email.get('message_id')
+            }
+
+            # Match original emails with inserted emails by message_id (not position)
+            for orig_email in original_emails:
+                message_id = orig_email.get('message_id')
+                if not message_id:
+                    continue
+
+                inserted_email = inserted_by_message_id.get(message_id)
+                if not inserted_email:
+                    continue
+
                 email_id = inserted_email.get('id')
                 if not email_id:
                     continue
@@ -596,6 +614,10 @@ class EmailOperations:
                     })
 
             # Batch insert all categories
+            if not category_inserts:
+                logger.warning(f"No tags to insert for {len(original_emails)} emails - check if emails have tags")
+                return
+
             if category_inserts:
                 # Insert in chunks of 1000
                 chunk_size = 1000
@@ -611,7 +633,7 @@ class EmailOperations:
                         else:
                             logger.warning(f"Failed to insert tag chunk: {e}")
 
-                logger.debug(f"Inserted {len(category_inserts)} tag entries for {len(inserted_emails)} emails")
+                logger.info(f"Inserted {len(category_inserts)} tag entries for {len(inserted_emails)} emails into email_categories")
 
         except Exception as e:
             logger.error(f"Failed to insert email tags: {e}")

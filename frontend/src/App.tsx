@@ -12,12 +12,15 @@ import { ProcessingJobs } from "./pages/processing";
 import ErrorsPage from "./pages/errors";
 import ClientsPage from "./pages/clients";
 
+// Theme and styles
+import { antTheme } from "./theme/glassTheme";
+import "./styles/glass.css";
 import "./App.css";
 
 function App() {
   return (
     <BrowserRouter>
-      <ConfigProvider>
+      <ConfigProvider theme={antTheme}>
         <Layout>
           <Routes>
             <Route path="/" element={<Dashboard />} />
