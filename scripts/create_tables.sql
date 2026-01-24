@@ -83,11 +83,14 @@ CREATE TABLE email_categories (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   email_id UUID REFERENCES emails(id) ON DELETE CASCADE,
   category TEXT NOT NULL,  -- system, spam, marketing, transactional, conversation
+  tag_type TEXT,  -- Tag classification: direction, thread_type, folder, classification, sender_type, priority, content, metadata
   confidence DECIMAL(3,2) DEFAULT 1.0,
   detection_method TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(email_id, category)
 );
+
+COMMENT ON COLUMN email_categories.tag_type IS 'Tag classification: direction, thread_type, folder, classification, sender_type, priority, content, metadata';
 
 -- AI enrichment (Stage 2)
 CREATE TABLE email_enrichment (
