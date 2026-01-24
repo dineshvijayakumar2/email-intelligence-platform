@@ -2963,21 +2963,26 @@ async def get_email_categories():
     logger.info('[Categories API] Request received')
     try:
         sb = get_supabase()
-        logger.info('[Categories API] Supabase client obtained, querying email_categories table...')
 
+        # Use filter to exclude _meta_ prefixed categories at database level
+        # and fetch more rows to ensure we get actual categories
         result = await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: sb.table('email_categories').select('category').execute()
+            lambda: sb.table('email_categories')
+                .select('category')
+                .not_.like('category', '_meta_%')
+                .limit(10000)
+                .execute()
         )
 
         row_count = len(result.data or [])
-        logger.info(f'[Categories API] Raw data from Supabase: {row_count} rows')
+        logger.info(f'[Categories API] Fetched {row_count} non-meta category rows')
 
-        # Get unique categories, filter out metadata tags
+        # Get unique categories
         category_set = set()
         for item in result.data or []:
             category = item.get('category')
-            if category and not category.startswith('_meta_'):
+            if category:
                 category_set.add(category)
 
         categories = sorted(list(category_set))
@@ -2987,7 +2992,7 @@ async def get_email_categories():
 
     except Exception as e:
         logger.error(f"[Categories API] Error fetching email categories: {e}", exc_info=True)
-        return ['spam', 'marketing', 'inbox', 'sent', 'trash']
+        return []
 
 @app.get("/api/emails/{email_id}")
 async def get_email_by_id(email_id: str):
