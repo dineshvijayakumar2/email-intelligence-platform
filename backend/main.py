@@ -1975,8 +1975,12 @@ async def restart_interrupted_job(job_id: str, background_tasks: BackgroundTasks
         if original_job.get('filter_end_date'):
             config.end_date = original_job['filter_end_date'][:10]
 
-        # Start processing in background
-        background_tasks.add_task(run_extraction_job, new_job_id, mailbox, config)
+        # Add mailbox connection config to processing config (required by process_emails_real)
+        config.connection_config = mailbox.get('connection_config', {})
+        config.mailbox_type = mailbox.get('mailbox_type')
+
+        # Start processing in background using the same function as start_processing
+        background_tasks.add_task(process_emails_real, new_job_id, config)
 
         return {
             "message": "Job restarted successfully",
