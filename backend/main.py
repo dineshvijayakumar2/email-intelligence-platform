@@ -408,23 +408,16 @@ def get_supabase() -> Client:
             logger.error(f"Missing env - URL: {bool(supabase_url)}, KEY: {bool(supabase_key)}")
             raise ValueError("SUPABASE_URL and SUPABASE_SERVICE_KEY must be set in environment")
 
-        # Create client with extended timeout for large batch operations
-        # Default timeout is too short for batch upserts of 500+ emails
-        import httpx
-        from supabase import ClientOptions
-
-        timeout = httpx.Timeout(60.0, connect=10.0)  # 60s total, 10s connect
-        options = ClientOptions(
-            schema="public",
-            headers={},
-            postgrest_client_timeout=60  # Set timeout for PostgREST operations
-        )
+        # Create Supabase client
+        # Note: Timeout configuration for batch operations is handled through:
+        # 1. Reduced batch size (500 instead of 5000) in database/operations.py
+        # 2. Exponential backoff retry logic with 2s, 4s, 8s delays
+        # Supabase v2.0.2 doesn't expose timeout configuration in client options
         _supabase_client = create_client(
             supabase_url,
-            supabase_key,
-            options=options
+            supabase_key
         )
-        logger.info("Supabase client initialized successfully with 60s timeout")
+        logger.info("Supabase client initialized successfully")
 
         # Initialize error logger with Supabase client
         init_error_logger(_supabase_client)
