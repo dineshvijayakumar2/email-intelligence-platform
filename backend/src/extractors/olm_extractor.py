@@ -253,9 +253,19 @@ class OLMExtractor(BaseExtractor):
 
         try:
             extracted = 0
+            processed = 0
+            total_messages = len(self.message_files)
+
+            logger.info(f"Starting OLM extraction: {total_messages:,} messages in archive")
 
             for message_path in self.message_files:
                 try:
+                    processed += 1
+
+                    # Log progress every 100 messages
+                    if processed % 100 == 0:
+                        logger.info(f"OLM extraction progress: {processed:,}/{total_messages:,} messages processed ({extracted:,} extracted)")
+
                     # Parse message XML directly from ZIP (no disk extraction)
                     email_dict = self._parse_message_xml(message_path)
 
@@ -273,7 +283,7 @@ class OLMExtractor(BaseExtractor):
                     self.stats['errors'].append(f"Parse error in {message_path}: {e}")
                     continue
 
-            logger.info(f"OLM extraction completed. Extracted {extracted} emails")
+            logger.info(f"OLM extraction completed. Processed {processed:,} messages, extracted {extracted:,} emails")
 
         finally:
             self._mark_end()

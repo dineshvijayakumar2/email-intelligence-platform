@@ -527,7 +527,7 @@ class ProcessingJobConfig(BaseModel):
 
     Processing Limits:
     - max_emails: Maximum number of emails to process (None = all emails in file)
-    - batch_size: Database batch insert size for performance (default 5000)
+    - batch_size: Database batch insert size for performance (default 100, optimized for Railway->Supabase network)
 
     Date Filters (for processing only emails within a date range):
     - start_date: Process emails sent on or after this date (ISO format: YYYY-MM-DD)
@@ -544,7 +544,7 @@ class ProcessingJobConfig(BaseModel):
     job_type: str
     # Processing limits
     max_emails: Optional[int] = None  # Maximum emails to process (None = all)
-    batch_size: Optional[int] = 500  # Database batch insert size (reduced for network reliability with Supabase)
+    batch_size: Optional[int] = 100  # Database batch insert size (reduced to 100 for Railway->Supabase network reliability)
     # Date-based filtering
     start_date: Optional[str] = None  # ISO date: YYYY-MM-DD (process emails from this date)
     end_date: Optional[str] = None    # ISO date: YYYY-MM-DD (process emails until this date)
@@ -1571,7 +1571,7 @@ async def process_emails_real(job_id: str, config: ProcessingJobConfig):
                 except ValueError:
                     logger.warning(f"Invalid end_date format: {config.end_date}, expected YYYY-MM-DD")
 
-        logger.info(f"Processing config: max_emails={effective_max_emails}, batch_size={config.batch_size or 5000}, date_filter={date_filter}")
+        logger.info(f"Processing config: max_emails={effective_max_emails}, batch_size={config.batch_size or 100}, date_filter={date_filter}")
 
         # Process emails with streaming
         # Run in dedicated thread pool to avoid blocking event loop
@@ -1582,7 +1582,7 @@ async def process_emails_real(job_id: str, config: ProcessingJobConfig):
             lambda: processor.process_emails(
                 job_id=job_id,
                 max_emails=effective_max_emails,  # max_emails (None for all)
-                batch_size=config.batch_size or 5000,  # batch_size for DB inserts
+                batch_size=config.batch_size or 100,  # batch_size for DB inserts (100 for network reliability)
                 skip_duplicates=True,  # skip_duplicates
                 enable_categorization=config.enable_categorization,  # enable_categorization
                 date_filter=date_filter  # NEW: date-based filtering
