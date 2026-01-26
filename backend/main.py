@@ -411,15 +411,18 @@ def get_supabase() -> Client:
         # Create client with extended timeout for large batch operations
         # Default timeout is too short for batch upserts of 500+ emails
         import httpx
+        from supabase import ClientOptions
+
         timeout = httpx.Timeout(60.0, connect=10.0)  # 60s total, 10s connect
+        options = ClientOptions(
+            schema="public",
+            headers={},
+            postgrest_client_timeout=60  # Set timeout for PostgREST operations
+        )
         _supabase_client = create_client(
             supabase_url,
             supabase_key,
-            options={
-                "schema": "public",
-                "headers": {},
-                "timeout": timeout
-            }
+            options=options
         )
         logger.info("Supabase client initialized successfully with 60s timeout")
 
