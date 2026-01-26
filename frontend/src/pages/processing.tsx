@@ -500,6 +500,7 @@ export const ProcessingJobs: React.FC = () => {
   ];
 
   const runningJobs = jobs.filter(job => job.status === 'running');
+  const interruptedJobs = jobs.filter(job => job.status === 'interrupted');
 
   return (
     <div className="glass-page-bg" style={{ padding: 24 }}>
@@ -520,6 +521,21 @@ export const ProcessingJobs: React.FC = () => {
           Refresh
         </Button>
       </div>
+
+      {/* Interrupted Jobs Alert */}
+      {interruptedJobs.length > 0 && (
+        <div className="fade-in-up stagger-1" style={{ marginBottom: 24 }}>
+          <Alert
+            message="Jobs Interrupted by Server Restart"
+            description={
+              `${interruptedJobs.length} job(s) were interrupted during a deployment. Click the green play button to restart them. Cached downloads will be reused if available.`
+            }
+            type="warning"
+            showIcon
+            style={{ borderRadius: 12 }}
+          />
+        </div>
+      )}
 
       {/* Active Jobs Alert */}
       {runningJobs.length > 0 && (
