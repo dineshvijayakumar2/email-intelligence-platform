@@ -121,11 +121,63 @@ logger.info(f"Running in {python_env} mode")
 # Persistent download directory - uses Railway volume in production, temp dir in development
 # In Railway, this maps to a persistent volume that survives redeployments
 DOWNLOAD_DIR = os.getenv('DOWNLOAD_DIR', '/data/downloads' if python_env == 'production' else None)
-if DOWNLOAD_DIR:
+VOLUME_MOUNTED = False  # Track if volume is properly mounted
+
+def check_volume_status():
+    """Check if the download directory is a properly mounted volume."""
+    global VOLUME_MOUNTED
+
+    if not DOWNLOAD_DIR:
+        logger.info("Using temporary directory for downloads (files will be lost on restart)")
+        return False
+
     os.makedirs(DOWNLOAD_DIR, exist_ok=True)
-    logger.info(f"Using persistent download directory: {DOWNLOAD_DIR}")
-else:
-    logger.info("Using temporary directory for downloads (files will be lost on restart)")
+
+    # Check if it's a mount point (Linux/Unix) or has enough space
+    try:
+        # On Linux, check if it's a mount point
+        if hasattr(os.path, 'ismount') and os.path.ismount(DOWNLOAD_DIR):
+            VOLUME_MOUNTED = True
+            logger.info(f"✅ VOLUME MOUNTED: {DOWNLOAD_DIR} is a mounted volume")
+        else:
+            # Check disk space - if /data exists and has space, assume volume is mounted
+            import shutil
+            total, used, free = shutil.disk_usage(DOWNLOAD_DIR)
+            free_gb = free / (1024**3)
+            total_gb = total / (1024**3)
+
+            # Railway volumes typically show as separate mount with their own space
+            # If /data/downloads exists and has reasonable space, consider it mounted
+            if DOWNLOAD_DIR.startswith('/data') and total_gb > 1:
+                VOLUME_MOUNTED = True
+                logger.info(f"✅ VOLUME DETECTED: {DOWNLOAD_DIR} ({free_gb:.1f}GB free of {total_gb:.1f}GB)")
+            else:
+                logger.warning(f"⚠️ VOLUME NOT MOUNTED: {DOWNLOAD_DIR} appears to be on root filesystem")
+                logger.warning(f"   Disk space: {free_gb:.1f}GB free of {total_gb:.1f}GB")
+                logger.warning("   Downloads may be lost on redeployment!")
+                logger.warning("   Please ensure Railway volume is attached at /data/downloads")
+
+        # Write a marker file to track volume persistence
+        marker_file = os.path.join(DOWNLOAD_DIR, '.volume_marker')
+        marker_exists = os.path.exists(marker_file)
+
+        if marker_exists:
+            with open(marker_file, 'r') as f:
+                previous_boot = f.read().strip()
+            logger.info(f"   Volume marker found from previous boot: {previous_boot}")
+
+        # Update marker with current boot time
+        with open(marker_file, 'w') as f:
+            f.write(datetime.now(timezone.utc).isoformat())
+
+        return VOLUME_MOUNTED
+
+    except Exception as e:
+        logger.error(f"Error checking volume status: {e}")
+        return False
+
+# Check volume on startup
+check_volume_status()
 
 app = FastAPI(title="Email Intelligence API", version="1.0.0")
 
@@ -747,7 +799,32 @@ async def root():
 @app.get("/health")
 @app.get("/api/health")
 async def health_check():
-    return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()}
+    """Health check with volume status for Railway."""
+    import shutil
+
+    volume_info = {
+        "mounted": VOLUME_MOUNTED,
+        "path": DOWNLOAD_DIR
+    }
+
+    if DOWNLOAD_DIR and os.path.exists(DOWNLOAD_DIR):
+        try:
+            total, used, free = shutil.disk_usage(DOWNLOAD_DIR)
+            volume_info["total_gb"] = round(total / (1024**3), 2)
+            volume_info["used_gb"] = round(used / (1024**3), 2)
+            volume_info["free_gb"] = round(free / (1024**3), 2)
+
+            # Count cached files
+            cached_files = [f for f in os.listdir(DOWNLOAD_DIR) if not f.startswith('.')]
+            volume_info["cached_files"] = len(cached_files)
+        except Exception:
+            pass
+
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "volume": volume_info
+    }
 
 # Mailbox endpoints
 @app.get("/api/mailboxes")
@@ -1803,6 +1880,117 @@ async def control_job_action(job_id: str, action: str):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to {action} job: {str(e)}")
+
+@app.post("/api/processing-jobs/{job_id}/restart")
+async def restart_interrupted_job(job_id: str, background_tasks: BackgroundTasks):
+    """
+    Restart an interrupted job.
+
+    This will:
+    1. Check if there's a cached download available (reuse it)
+    2. Create a new job with same configuration
+    3. Start processing (with fresh download if needed)
+    """
+    try:
+        sb = get_supabase()
+
+        # Get the original job details
+        job_result = sb.table('processing_jobs').select('*').eq('id', job_id).execute()
+        if not job_result.data:
+            raise HTTPException(status_code=404, detail="Job not found")
+
+        original_job = job_result.data[0]
+
+        # Only allow restarting interrupted/failed/stopped jobs
+        if original_job['status'] not in ['interrupted', 'failed', 'stopped']:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Can only restart interrupted, failed, or stopped jobs. Current status: {original_job['status']}"
+            )
+
+        mailbox_id = original_job['mailbox_id']
+
+        # Get mailbox details
+        mailbox_result = sb.table('mailboxes').select('*').eq('id', mailbox_id).execute()
+        if not mailbox_result.data:
+            raise HTTPException(status_code=404, detail="Associated mailbox not found")
+
+        mailbox = mailbox_result.data[0]
+        connection_config = mailbox.get('connection_config', {})
+        google_drive_file_id = connection_config.get('google_drive_file_id')
+
+        # Check for cached download
+        cached_file = None
+        if google_drive_file_id:
+            cache_result = sb.table('downloaded_files').select('*').eq(
+                'google_drive_file_id', google_drive_file_id
+            ).eq('is_valid', True).execute()
+
+            if cache_result.data:
+                cached = cache_result.data[0]
+                cached_path = cached.get('storage_path', '')
+
+                if os.path.exists(cached_path):
+                    cached_file = cached_path
+                    logger.info(f"Found cached download for restart: {cached_path}")
+                else:
+                    # Invalidate the cache entry since file doesn't exist
+                    sb.table('downloaded_files').update({'is_valid': False}).eq('id', cached['id']).execute()
+                    logger.info(f"Cached file not found, will re-download: {cached_path}")
+
+        # Create new job
+        new_job_data = {
+            "job_type": original_job['job_type'],
+            "mailbox_id": mailbox_id,
+            "status": "pending",
+            "total_records": 0,
+            "processed_records": 0,
+            "failed_records": 0,
+            "filtered_records": 0,
+            "filter_start_date": original_job.get('filter_start_date'),
+            "filter_end_date": original_job.get('filter_end_date'),
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+
+        result = sb.table('processing_jobs').insert(new_job_data).execute()
+        new_job_id = result.data[0]['id']
+
+        # Mark old job as superseded
+        sb.table('processing_jobs').update({
+            'error_log': f'Job restarted. New job ID: {new_job_id}'
+        }).eq('id', job_id).execute()
+
+        # Build config for the new job
+        config = ProcessingJobConfig(
+            mailbox_id=mailbox_id,
+            job_type=original_job['job_type'],
+            download_first=True,
+            download_threads=8,
+            keep_downloaded_file=True,
+            use_cached_file=True  # Will use the cached file if available
+        )
+
+        if original_job.get('filter_start_date'):
+            config.start_date = original_job['filter_start_date'][:10]  # Extract date part
+        if original_job.get('filter_end_date'):
+            config.end_date = original_job['filter_end_date'][:10]
+
+        # Start processing in background
+        background_tasks.add_task(run_extraction_job, new_job_id, mailbox, config)
+
+        return {
+            "message": "Job restarted successfully",
+            "new_job_id": new_job_id,
+            "original_job_id": job_id,
+            "cached_file_available": cached_file is not None,
+            "cached_file_path": cached_file
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to restart job {job_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to restart job: {str(e)}")
 
 @app.delete("/api/processing-jobs/{job_id}")
 async def delete_job(job_id: str):

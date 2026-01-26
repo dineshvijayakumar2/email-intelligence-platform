@@ -43,7 +43,8 @@ const getStatusIcon = (status: string) => {
     completed: <CheckCircleOutlined />,
     failed: <ExclamationCircleOutlined />,
     paused: <PauseCircleOutlined />,
-    stopped: <StopOutlined />
+    stopped: <StopOutlined />,
+    interrupted: <ExclamationCircleOutlined />
   };
   return icons[status as keyof typeof icons] || <ClockCircleOutlined />;
 };
@@ -67,6 +68,7 @@ export const ProcessingJobs: React.FC = () => {
   const [selectedJob, setSelectedJob] = useState<ProcessingJob | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [reprocessingJobs, setReprocessingJobs] = useState<Set<string>>(new Set());
+  const [restartingJobs, setRestartingJobs] = useState<Set<string>>(new Set());
 
   // Track if component is mounted to avoid state updates after unmount
   const isMountedRef = useRef(true);
@@ -161,6 +163,27 @@ export const ProcessingJobs: React.FC = () => {
       console.error('Failed to start reprocessing:', error);
       message.error(`Failed to start reprocessing: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setReprocessingJobs(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(jobId);
+        return newSet;
+      });
+    }
+  };
+
+  const handleRestartJob = async (jobId: string) => {
+    try {
+      setRestartingJobs(prev => new Set(prev).add(jobId));
+      const result = await processingService.restartJob(jobId);
+      message.success(`Job restarted! New job ID: ${result.new_job_id.substring(0, 8)}...`);
+      if (result.cached_file_available) {
+        message.info('Using cached download - processing will start faster!');
+      }
+      await loadJobs();
+    } catch (error) {
+      console.error('Failed to restart job:', error);
+      message.error(`Failed to restart job: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setRestartingJobs(prev => {
         const newSet = new Set(prev);
         newSet.delete(jobId);
         return newSet;
@@ -429,6 +452,20 @@ export const ProcessingJobs: React.FC = () => {
             </Tooltip>
           )}
           
+          {/* Restart button for interrupted/failed/stopped jobs */}
+          {(['interrupted', 'failed', 'stopped'].includes(record.status)) && (
+            <Tooltip title={restartingJobs.has(record.id) ? "Restarting..." : "Restart Job (will reuse cached download if available)"}>
+              <Button
+                type="text"
+                style={{ color: '#52c41a' }}
+                icon={<PlayCircleOutlined spin={restartingJobs.has(record.id)} />}
+                onClick={() => handleRestartJob(record.id)}
+                disabled={restartingJobs.has(record.id)}
+                loading={restartingJobs.has(record.id)}
+              />
+            </Tooltip>
+          )}
+
           {record.status === 'completed' && record.job_type.toLowerCase().includes('extraction') && (
             <Tooltip title={reprocessingJobs.has(record.id) ? "Starting reprocessing..." : "Reprocess with Categorization"}>
               <Button
@@ -441,7 +478,7 @@ export const ProcessingJobs: React.FC = () => {
             </Tooltip>
           )}
 
-          {(record.status === 'completed' || record.status === 'failed') && (
+          {(record.status === 'completed' || record.status === 'failed' || record.status === 'interrupted' || record.status === 'stopped') && (
             <Popconfirm
               title="Are you sure you want to delete this job?"
               onConfirm={() => handleDeleteJob(record.id)}

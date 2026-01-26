@@ -119,6 +119,27 @@ export const processingService = {
     return result;
   },
 
+  // Restart an interrupted/failed/stopped job
+  async restartJob(jobId: string): Promise<{
+    message: string;
+    new_job_id: string;
+    original_job_id: string;
+    cached_file_available: boolean;
+    cached_file_path?: string;
+  }> {
+    const result = await api.post<{
+      message: string;
+      new_job_id: string;
+      original_job_id: string;
+      cached_file_available: boolean;
+      cached_file_path?: string;
+    }>(`/processing-jobs/${jobId}/restart`);
+    if (!result) {
+      throw new Error('Failed to restart job');
+    }
+    return result;
+  },
+
   // Get job status labels
   getJobTypeLabel(jobType: string): string {
     const labels = {
