@@ -408,8 +408,20 @@ def get_supabase() -> Client:
             logger.error(f"Missing env - URL: {bool(supabase_url)}, KEY: {bool(supabase_key)}")
             raise ValueError("SUPABASE_URL and SUPABASE_SERVICE_KEY must be set in environment")
 
-        _supabase_client = create_client(supabase_url, supabase_key)
-        logger.info("Supabase client initialized successfully")
+        # Create client with extended timeout for large batch operations
+        # Default timeout is too short for batch upserts of 500+ emails
+        import httpx
+        timeout = httpx.Timeout(60.0, connect=10.0)  # 60s total, 10s connect
+        _supabase_client = create_client(
+            supabase_url,
+            supabase_key,
+            options={
+                "schema": "public",
+                "headers": {},
+                "timeout": timeout
+            }
+        )
+        logger.info("Supabase client initialized successfully with 60s timeout")
 
         # Initialize error logger with Supabase client
         init_error_logger(_supabase_client)
@@ -536,7 +548,7 @@ class ProcessingJobConfig(BaseModel):
     job_type: str
     # Processing limits
     max_emails: Optional[int] = None  # Maximum emails to process (None = all)
-    batch_size: Optional[int] = 5000  # Database batch insert size
+    batch_size: Optional[int] = 500  # Database batch insert size (reduced for network reliability with Supabase)
     # Date-based filtering
     start_date: Optional[str] = None  # ISO date: YYYY-MM-DD (process emails from this date)
     end_date: Optional[str] = None    # ISO date: YYYY-MM-DD (process emails until this date)

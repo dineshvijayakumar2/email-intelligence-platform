@@ -460,7 +460,10 @@ class EmailOperations:
                     else:
                         logger.warning(f"Batch {batch_num} attempt {attempt + 1} failed, retrying: {e}")
                         import time
-                        time.sleep(1)  # Brief pause before retry
+                        # Exponential backoff: 2s, 4s, 8s...
+                        wait_time = 2 ** (attempt + 1)
+                        logger.info(f"Waiting {wait_time}s before retry {attempt + 2}/{max_retries}")
+                        time.sleep(wait_time)
 
             # Insert tags into email_categories for successfully inserted emails
             if inserted_emails:
