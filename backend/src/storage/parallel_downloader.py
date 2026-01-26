@@ -114,6 +114,7 @@ class ParallelDownloader:
         self.start_time = None
         self.cancelled = False
         self._lock = threading.Lock()
+        self._file_lock = threading.Lock()  # Lock for file writes
         self._last_logged_percent = 0  # Track last logged percentage
         self._last_log_time = 0  # Track last log time for time-based logging
 
@@ -183,21 +184,23 @@ class ParallelDownloader:
         logger.warning(f"Network wait timeout after {max_wait_seconds}s")
         return False
 
-    def _download_chunk(
+    def _download_chunk_to_disk(
         self,
         file_id: str,
         start: int,
         end: int,
-        chunk_index: int
+        chunk_index: int,
+        output_file: str
     ) -> tuple:
         """
-        Download a single chunk of the file.
+        Download a single chunk and write directly to disk at the correct offset.
+        This is memory-efficient as it doesn't store chunk data in memory.
 
         Returns:
-            (chunk_index, chunk_data, success)
+            (chunk_index, success)
         """
         if self.cancelled:
-            return (chunk_index, None, False)
+            return (chunk_index, False)
 
         url = f"https://www.googleapis.com/drive/v3/files/{file_id}?alt=media"
         headers = {
@@ -207,7 +210,7 @@ class ParallelDownloader:
 
         for attempt in range(self.max_retries):
             if self.cancelled:
-                return (chunk_index, None, False)
+                return (chunk_index, False)
 
             try:
                 response = requests.get(
@@ -218,8 +221,15 @@ class ParallelDownloader:
                 )
                 response.raise_for_status()
 
-                chunk_data = response.content
-                chunk_size = len(chunk_data)
+                # Write directly to file at the correct offset (memory efficient)
+                chunk_size = 0
+                with self._file_lock:
+                    with open(output_file, 'r+b') as f:
+                        f.seek(start)
+                        for data in response.iter_content(chunk_size=8192):
+                            if data:
+                                f.write(data)
+                                chunk_size += len(data)
 
                 # Update progress
                 with self._lock:
@@ -252,7 +262,7 @@ class ParallelDownloader:
                             f"@ {speed_mbps:.1f} MB/s"
                         )
 
-                return (chunk_index, chunk_data, True)
+                return (chunk_index, True)
 
             except Exception as e:
                 logger.warning(
@@ -281,7 +291,7 @@ class ParallelDownloader:
                 if attempt < self.max_retries - 1:
                     time.sleep(2 ** attempt)  # Exponential backoff
 
-        return (chunk_index, None, False)
+        return (chunk_index, False)
 
     def _classify_download_error(self, exception: Exception) -> str:
         """Classify a download exception into an error type."""
@@ -368,10 +378,18 @@ class ParallelDownloader:
             self._last_logged_percent = 0
             self._last_log_time = time.time()
 
-            logger.info(f"[DOWNLOAD] Starting download of {len(chunks)} chunks...")
+            # Pre-allocate the output file (memory-efficient approach)
+            # This allows parallel writes at specific offsets
+            logger.info(f"[DOWNLOAD] Pre-allocating {self._format_size(self.total_bytes)} file...")
+            with open(self.output_path, 'wb') as f:
+                # Seek to end and write a byte to allocate space
+                f.seek(self.total_bytes - 1)
+                f.write(b'\0')
 
-            # Download chunks in parallel with batch retry for network failures
-            chunk_data_map = {}
+            logger.info(f"[DOWNLOAD] Starting download of {len(chunks)} chunks (writing directly to disk)...")
+
+            # Download chunks in parallel, writing directly to disk (no memory buffering)
+            completed_chunks = set()
             chunks_to_download = chunks.copy()  # List of (idx, start, end) tuples
             batch_attempt = 0
 
@@ -401,15 +419,18 @@ class ParallelDownloader:
                             return None
 
                 # Create a managed thread pool for this batch
-                self._pool = ThreadPoolExecutor(max_workers=self.num_threads)
+                # Use fewer threads to reduce memory pressure
+                effective_threads = min(self.num_threads, 4)  # Cap at 4 for large files
+                self._pool = ThreadPoolExecutor(max_workers=effective_threads)
                 try:
                     futures = {
                         self._pool.submit(
-                            self._download_chunk,
+                            self._download_chunk_to_disk,
                             file_id,
                             start,
                             end,
-                            idx
+                            idx,
+                            self.output_path
                         ): (idx, start, end)
                         for idx, start, end in chunks_to_download
                     }
@@ -423,10 +444,10 @@ class ParallelDownloader:
 
                         chunk_info = futures[future]
                         idx, start, end = chunk_info
-                        chunk_index, chunk_data, success = future.result()
+                        chunk_index, success = future.result()
 
-                        if success and chunk_data:
-                            chunk_data_map[chunk_index] = chunk_data
+                        if success:
+                            completed_chunks.add(chunk_index)
                         else:
                             failed_chunks.append((idx, start, end))
                 finally:
@@ -484,13 +505,7 @@ class ParallelDownloader:
                 self._cleanup()
                 return None
 
-            logger.info(f"All {len(chunks)} chunks downloaded successfully")
-
-            # Write chunks to file in order
-            logger.info(f"Writing {len(chunk_data_map)} chunks to {self.output_path}...")
-            with open(self.output_path, 'wb') as f:
-                for i in range(len(chunks)):
-                    f.write(chunk_data_map[i])
+            logger.info(f"All {len(chunks)} chunks downloaded successfully (written directly to disk)")
 
             # Verify file size
             actual_size = os.path.getsize(self.output_path)
