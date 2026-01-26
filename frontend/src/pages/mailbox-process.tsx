@@ -570,7 +570,7 @@ export const MailboxProcess: React.FC = () => {
               max_emails: undefined,
               enable_categorization: true,
               download_first: true,  // Default to download mode (3-5x faster for large files)
-              download_threads: 8
+              download_threads: 4  // Capped at 4 for memory efficiency with large files
             }}
           >
             <Form.Item
@@ -705,20 +705,20 @@ export const MailboxProcess: React.FC = () => {
                             label={
                               <Space>
                                 Download Threads
-                                <Tooltip title="Number of parallel download threads. More threads = faster download, but requires more bandwidth. 8-16 is optimal for most connections.">
+                                <Tooltip title="Number of parallel download threads. Limited to 4 for memory efficiency when downloading large files (50GB+). Each thread streams directly to disk.">
                                   <QuestionCircleOutlined style={{ color: '#999' }} />
                                 </Tooltip>
                               </Space>
                             }
                           >
                             <Slider
-                              min={2}
-                              max={32}
+                              min={1}
+                              max={4}
                               marks={{
+                                1: '1',
                                 2: '2',
-                                8: '8',
-                                16: '16',
-                                32: '32'
+                                3: '3',
+                                4: '4'
                               }}
                               tooltip={{ formatter: (value) => `${value} threads` }}
                             />

@@ -312,7 +312,13 @@
 /* --------------------------------------------------------------------------
    Responsive Adjustments
    -------------------------------------------------------------------------- */
+
+/* Tablet and below (768px) */
 @media (max-width: 768px) {
+  .glass-page-bg {
+    padding: 16px !important;
+  }
+
   .glass-filters {
     padding: 16px;
     border-radius: 16px;
@@ -327,6 +333,326 @@
   .glass-page-bg::after {
     display: none;
   }
+
+  /* Make tables horizontally scrollable */
+  .glass-table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .glass-table-container .ant-table {
+    min-width: 600px;
+  }
+
+  /* Adjust pagination for mobile */
+  .glass-table-container .ant-pagination {
+    padding: 12px 16px;
+  }
+
+  .glass-table-container .ant-pagination-item,
+  .glass-table-container .ant-pagination-prev,
+  .glass-table-container .ant-pagination-next {
+    min-width: 32px;
+    height: 32px;
+    line-height: 32px;
+    margin: 0 4px;
+  }
+
+  /* Stack filter controls vertically on small screens */
+  .glass-filters > div {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  .glass-filters > div > div {
+    width: 100% !important;
+    margin-bottom: 12px;
+  }
+
+  /* Make modals full-screen on mobile */
+  .glass-modal .ant-modal {
+    max-width: calc(100vw - 32px) !important;
+    margin: 16px auto !important;
+  }
+
+  .glass-modal .ant-modal-content {
+    border-radius: 16px;
+  }
+
+  /* Reduce header padding */
+  .glass-header {
+    padding: 12px 16px !important;
+  }
+
+  .header-title {
+    font-size: 18px;
+  }
+
+  /* Adjust card spacing */
+  .glass-card {
+    margin-bottom: 12px;
+  }
+
+  /* Make buttons full-width on mobile */
+  .ant-btn-block {
+    width: 100%;
+  }
+}
+
+/* Mobile devices (576px and below) */
+@media (max-width: 576px) {
+  :root {
+    --blur-md: 12px;
+    --blur-lg: 16px;
+  }
+
+  .glass-page-bg {
+    padding: 12px !important;
+    min-height: calc(100vh - 56px);
+  }
+
+  .glass-filters {
+    padding: 12px;
+    border-radius: 12px;
+    margin-bottom: 16px !important;
+  }
+
+  .glass-card,
+  .glass-table-container {
+    border-radius: 10px;
+  }
+
+  /* Typography adjustments */
+  h1.ant-typography {
+    font-size: 24px !important;
+  }
+
+  h2.ant-typography {
+    font-size: 20px !important;
+  }
+
+  h3.ant-typography {
+    font-size: 18px !important;
+  }
+
+  .ant-typography {
+    font-size: 14px;
+  }
+
+  /* Table adjustments */
+  .glass-table-container .ant-table-thead > tr > th {
+    padding: 8px;
+    font-size: 12px;
+  }
+
+  .glass-table-container .ant-table-tbody > tr > td {
+    padding: 8px;
+    font-size: 13px;
+  }
+
+  /* Modal adjustments */
+  .glass-modal .ant-modal {
+    max-width: 100vw !important;
+    margin: 0 !important;
+    top: 0;
+    padding: 0;
+  }
+
+  .glass-modal .ant-modal-content {
+    border-radius: 0;
+    min-height: 100vh;
+  }
+
+  .glass-modal .ant-modal-header {
+    padding: 16px;
+  }
+
+  .glass-modal .ant-modal-body {
+    padding: 16px;
+  }
+
+  /* Pagination adjustments */
+  .glass-table-container .ant-pagination {
+    padding: 12px;
+    text-align: center;
+  }
+
+  .glass-table-container .ant-pagination-options {
+    display: none;
+  }
+
+  /* Form elements - ensure minimum 44px touch target */
+  .ant-btn,
+  .ant-input,
+  .ant-select-selector,
+  .ant-picker {
+    min-height: 44px;
+    font-size: 16px; /* Prevents iOS zoom on input focus */
+  }
+
+  .ant-select-selection-item {
+    line-height: 42px !important;
+  }
+
+  /* Sidebar becomes overlay on mobile */
+  .glass-sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 1000;
+    transform: translateX(-100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .glass-sidebar.mobile-open {
+    transform: translateX(0);
+  }
+
+  /* Tags adjustments */
+  .glass-tag,
+  .ant-tag {
+    font-size: 11px;
+    padding: 1px 6px;
+    margin: 2px;
+  }
+
+  /* Space component adjustments */
+  .ant-space-item {
+    margin-bottom: 8px !important;
+  }
+
+  /* Card grid adjustments */
+  .ant-row {
+    margin-left: -8px !important;
+    margin-right: -8px !important;
+  }
+
+  .ant-col {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+
+  /* Reduce animation complexity on mobile for performance */
+  .fade-in-up {
+    animation: none;
+    opacity: 1;
+  }
+
+  .glass-card:hover {
+    transform: none;
+  }
+}
+
+/* Large phones in landscape / Small tablets (landscape) */
+@media (min-width: 577px) and (max-width: 768px) {
+  .glass-filters > div {
+    flex-wrap: wrap !important;
+  }
+
+  .glass-filters > div > div {
+    flex: 1 1 45%;
+    min-width: 200px;
+    margin: 4px;
+  }
+
+  /* 2-column layout for cards */
+  .ant-col-xs-24 {
+    flex: 0 0 50%;
+    max-width: 50%;
+  }
+}
+
+/* Desktop adjustments for better spacing */
+@media (min-width: 1200px) {
+  .glass-page-bg {
+    padding: 32px !important;
+  }
+
+  .glass-filters {
+    padding: 24px 32px;
+  }
+
+  .glass-table-container .ant-pagination {
+    padding: 20px 32px;
+  }
+}
+
+/* High-resolution displays */
+@media (min-resolution: 2dppx) {
+  .glass-card,
+  .glass-filters,
+  .glass-table-container {
+    border-width: 0.5px;
+  }
+}
+
+/* Landscape orientation on mobile */
+@media (max-width: 896px) and (orientation: landscape) {
+  .glass-page-bg {
+    padding: 12px 16px !important;
+  }
+
+  .glass-modal .ant-modal-content {
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  /* Reduce header size in landscape */
+  .glass-header {
+    padding: 8px 16px !important;
+  }
+
+  .header-title {
+    font-size: 16px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Mobile Drawer Styling
+   -------------------------------------------------------------------------- */
+.ant-drawer-content-wrapper {
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15);
+}
+
+.ant-drawer-body .glass-sidebar {
+  border-right: none;
+  box-shadow: none;
+}
+
+/* Prevent body scroll when drawer is open on mobile */
+@media (max-width: 768px) {
+  body.ant-drawer-open {
+    overflow: hidden;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Touch-friendly Adjustments
+   -------------------------------------------------------------------------- */
+@media (max-width: 768px) and (hover: none) and (pointer: coarse) {
+  /* Increase touch targets */
+  .ant-btn,
+  .ant-menu-item,
+  .ant-table-row {
+    min-height: 44px;
+  }
+
+  /* Better spacing for touch */
+  .glass-menu .ant-menu-item {
+    height: 48px !important;
+    line-height: 48px !important;
+    margin: 6px 8px !important;
+  }
+
+  /* Disable hover effects on touch devices */
+  .glass-card:hover {
+    transform: none;
+  }
+
+  .glass-menu .ant-menu-item:hover {
+    transform: none;
+  }
 }
 
 /* --------------------------------------------------------------------------
@@ -339,7 +665,8 @@
   border-right: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: 4px 0 24px rgba(102, 126, 234, 0.15);
   position: relative;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 /* Sidebar decorative gradient overlay */
