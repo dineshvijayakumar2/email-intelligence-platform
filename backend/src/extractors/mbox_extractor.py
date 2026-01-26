@@ -255,13 +255,23 @@ class MBOXExtractor(BaseExtractor):
 
             try:
                 current_message_lines = []
+                current_message_size = 0  # Track message size to limit memory
+                MAX_MESSAGE_SIZE = 10 * 1024 * 1024  # 10MB limit per email (skip larger ones with attachments)
+                skipped_large = 0
 
                 for line in line_iterator:
                     # MBOX format: messages start with "From " at beginning of line
                     if line.startswith('From ') and current_message_lines:
-                        # Process the previous message
-                        message_text = ''.join(current_message_lines)
-                        email_dict = self._process_message(message_text, self.message_count)
+                        # Process the previous message only if it's under size limit
+                        if current_message_size <= MAX_MESSAGE_SIZE:
+                            message_text = ''.join(current_message_lines)
+                            email_dict = self._process_message(message_text, self.message_count)
+                        else:
+                            # Skip oversized email (likely has large attachments)
+                            skipped_large += 1
+                            if skipped_large % 100 == 1:
+                                logger.info(f"Skipped {skipped_large} emails over 10MB (likely large attachments)")
+                            email_dict = None
 
                         if email_dict:
                             self._update_stats(True)
@@ -280,6 +290,7 @@ class MBOXExtractor(BaseExtractor):
 
                         # Start new message
                         current_message_lines = [line]
+                        current_message_size = len(line)
                         self.message_count += 1
 
                         # Progress logging
@@ -287,7 +298,10 @@ class MBOXExtractor(BaseExtractor):
                             logger.info(f"Scanned {self.message_count:,} messages, extracted {extracted:,} emails")
 
                     else:
-                        current_message_lines.append(line)
+                        # Only accumulate if under size limit
+                        if current_message_size <= MAX_MESSAGE_SIZE:
+                            current_message_lines.append(line)
+                            current_message_size += len(line)
 
                     # Early exit if limit reached
                     if max_emails and extracted >= max_emails:
@@ -295,8 +309,13 @@ class MBOXExtractor(BaseExtractor):
 
                 # Process final message
                 if current_message_lines and (not max_emails or extracted < max_emails):
-                    message_text = ''.join(current_message_lines)
-                    email_dict = self._process_message(message_text, self.message_count)
+                    if current_message_size <= MAX_MESSAGE_SIZE:
+                        message_text = ''.join(current_message_lines)
+                        email_dict = self._process_message(message_text, self.message_count)
+                    else:
+                        skipped_large += 1
+                        logger.info(f"Skipped final email over 10MB")
+                        email_dict = None
 
                     if email_dict:
                         self._update_stats(True)
@@ -311,6 +330,10 @@ class MBOXExtractor(BaseExtractor):
                 # Close local file handle if we opened one
                 if self.mbox != 'GOOGLE_DRIVE_STREAM':
                     file_handle.close()
+
+                # Log summary of skipped large emails
+                if skipped_large > 0:
+                    logger.warning(f"⚠️ Skipped {skipped_large} emails over 10MB to reduce memory usage (likely large attachments)")
 
         except Exception as e:
             logger.error(f"MBOX extraction failed: {e}")

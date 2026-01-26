@@ -338,6 +338,13 @@ class EmailOperations:
                     # Clear batch to free memory
                     current_batch = []
 
+                    # Force garbage collection every 10 batches to reduce memory footprint
+                    # Critical for processing 100k+ emails with limited RAM
+                    if (total // batch_size) % 10 == 0:
+                        import gc
+                        gc.collect()
+                        logger.debug(f"Garbage collected after {total} emails")
+
                     logger.info(f"Progress: {total} emails processed ({success} inserted, {failed} failed)")
 
             # Insert remaining emails in final batch
