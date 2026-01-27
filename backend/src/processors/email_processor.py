@@ -328,13 +328,32 @@ class EmailProcessor:
                 # Calculate effective total (examined + filtered)
                 effective_total = result['total'] + self.filtered_count
 
+                # Build comprehensive error_log with both errors and failed_message_ids
+                error_log_data = None
+                if result['failed'] > 0:
+                    error_log_data = {
+                        'errors': result.get('errors', [])[:100],  # Limit to 100 error messages
+                        'failed_message_ids': result.get('failed_message_ids', [])[:500],  # Limit to 500 IDs
+                        'total_failed': result['failed'],
+                        'error_summary': {}
+                    }
+                    # Add error type analysis
+                    for err in result.get('errors', [])[:100]:
+                        if isinstance(err, str):
+                            if 'timeout' in err.lower():
+                                error_log_data['error_summary']['timeout'] = error_log_data['error_summary'].get('timeout', 0) + 1
+                            elif '21000' in err or 'ON CONFLICT' in err:
+                                error_log_data['error_summary']['duplicate_in_batch'] = error_log_data['error_summary'].get('duplicate_in_batch', 0) + 1
+                            else:
+                                error_log_data['error_summary']['other'] = error_log_data['error_summary'].get('other', 0) + 1
+
                 self.db_ops.update_job_progress(
                     job_id=job_id,
                     processed_records=result['total'],  # Total emails examined (includes new, skipped, failed)
                     failed_records=result['failed'],
                     filtered_records=self.filtered_count,  # Stage 2: Emails filtered by date range
                     status='completed',
-                    error_log=result.get('errors', []) if result['failed'] > 0 else None
+                    error_log=error_log_data
                 )
 
                 # Also update total_records to match effective total for accurate progress display

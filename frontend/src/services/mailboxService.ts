@@ -4,23 +4,52 @@ export interface Mailbox {
   id: string;
   name: string;
   email_address?: string;
-  mailbox_type: 'mbox' | 'pst' | 'olm';
+  mailbox_type: 'mbox' | 'pst' | 'olm' | 'gmail' | 'outlook_live';
   is_active: boolean;
   total_emails: number;
   last_sync_at: string | null;
   created_at: string;
-  connection_config?: Record<string, any>;
+  connection_config?: {
+    file_path?: string;
+    file_source?: 'local' | 'google_drive';
+    google_drive_file_id?: string;
+    google_drive_file_name?: string;
+    user_id?: string;
+    // Gmail LIVE sync fields
+    gmail_user_id?: string;
+    gmail_sync_enabled?: boolean;
+    gmail_email?: string;
+    gmail_extended_at?: string;
+    original_type?: string;
+    initial_history_id?: string;
+  };
+  sync_enabled?: boolean;
 }
 
 export interface CreateMailboxData {
   name: string;
   email_address?: string;
-  mailbox_type: 'mbox' | 'pst' | 'olm';
+  mailbox_type: 'mbox' | 'pst' | 'olm' | 'gmail' | 'outlook_live';
   is_active: boolean;
   connection_config?: Record<string, any>;
   // File path for file-based mailboxes (MBOX/PST/OLM)
   file_path?: string;
 }
+
+// Helper to check if mailbox has Gmail LIVE sync enabled
+export const hasGmailLiveSync = (mailbox: Mailbox): boolean => {
+  return !!(mailbox.connection_config?.gmail_sync_enabled);
+};
+
+// Helper to get mailbox source type label
+export const getMailboxSourceLabel = (mailbox: Mailbox): { type: string; live: boolean } => {
+  const isLive = hasGmailLiveSync(mailbox);
+  const originalType = mailbox.connection_config?.original_type || mailbox.mailbox_type;
+  return {
+    type: originalType.toUpperCase(),
+    live: isLive
+  };
+};
 
 export interface CreateGoogleDriveMailboxData extends Omit<CreateMailboxData, 'file_path'> {
   // Google Drive specific fields

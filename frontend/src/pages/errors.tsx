@@ -51,6 +51,7 @@ import {
   FailedEmail,
   JobError,
   JobErrorsSummary,
+  JobErrorLog,
 } from '../services/errorService';
 // @ts-ignore
 import config from '../config.js';
@@ -116,38 +117,33 @@ const ErrorsPage: React.FC = () => {
   const [retrying, setRetrying] = useState(false);
   const [selectedError, setSelectedError] = useState<FailedEmail | null>(null);
 
+  // Batch Error Log state (from processing_jobs.error_log)
+  const [errorLog, setErrorLog] = useState<JobErrorLog | null>(null);
+
   // Load all jobs (any job may have errors logged, even if not marked as failed)
   const loadJobsWithErrors = useCallback(async () => {
-    console.log('[ErrorsPage] Loading all jobs...');
     setLoading(true);
     try {
       const url = `${config.apiBaseUrl}/processing-jobs`;
-      console.log('[ErrorsPage] Fetching from:', url);
       const response = await fetch(url);
       const allJobs: ProcessingJob[] = await response.json();
-      console.log('[ErrorsPage] Got jobs:', allJobs.length);
 
       // Show all jobs with valid mailbox_id (any job may have errors logged)
       const validJobs = allJobs.filter(j => j.mailbox_id);
-      console.log('[ErrorsPage] Valid jobs:', validJobs.length);
-      console.log('[ErrorsPage] Valid jobs details:', validJobs.map(j => ({ id: j.id, mailbox_id: j.mailbox_id, mailbox_name: j.mailbox_name, failed: j.failed_records })));
       setJobs(validJobs);
 
       // Get unique mailboxes from these jobs
       const mailboxIds = [...new Set(validJobs.map(j => j.mailbox_id))];
       const mailboxList: MailboxOption[] = [];
       for (const mbId of mailboxIds) {
-        if (!mbId) continue;  // Skip null/undefined mailbox_id
+        if (!mbId) continue;
         const job = validJobs.find(j => j.mailbox_id === mbId);
-        // Include all mailboxes with names (even 'Unknown Mailbox' for now to debug)
         if (job?.mailbox_name) {
           mailboxList.push({ id: mbId, name: job.mailbox_name });
         }
       }
-      console.log('[ErrorsPage] Mailboxes:', mailboxList);
       setMailboxes(mailboxList);
-    } catch (error) {
-      console.error('[ErrorsPage] Failed to load jobs:', error);
+    } catch {
       message.error('Failed to load processing jobs');
     } finally {
       setLoading(false);
@@ -172,9 +168,8 @@ const ErrorsPage: React.FC = () => {
       setTotalJobErrors(errorsData.total_errors || 0);
       setHasMoreJobErrors(errorsData.has_more || false);
       setJobErrorsSummary(summaryData);
-    } catch (error: any) {
-      console.error('Failed to load job errors:', error);
-      // Reset state on error
+    } catch {
+      // Silently handle errors - the batch error log will still show
       setJobErrors([]);
       setTotalJobErrors(0);
       setHasMoreJobErrors(false);
@@ -197,33 +192,35 @@ const ErrorsPage: React.FC = () => {
       setTotalErrors(errorsData.total_failed || 0);
       setHasMore(errorsData.has_more || false);
       setErrorSummary(summaryData);
-    } catch (error: any) {
-      console.error('Failed to load errors:', error);
-      // Handle specific error cases
-      if (error?.message?.includes('no associated mailbox') || error?.message?.includes('400')) {
-        message.warning('This job has no associated mailbox - cannot load errors');
-        setErrors([]);
-        setTotalErrors(0);
-        setHasMore(false);
-        setErrorSummary(null);
-      } else {
-        message.error('Failed to load error details');
-      }
+    } catch {
+      // Silently handle errors - the batch error log will still show
+      setErrors([]);
+      setTotalErrors(0);
+      setHasMore(false);
+      setErrorSummary(null);
     } finally {
       setLoading(false);
     }
   }, []);
 
+  // Load batch error log from processing_jobs.error_log
+  const loadErrorLog = useCallback(async (jobId: string) => {
+    try {
+      const logData = await errorService.getJobErrorLog(jobId);
+      setErrorLog(logData);
+    } catch {
+      setErrorLog(null);
+    }
+  }, []);
+
   // Initial load - run once on mount
   useEffect(() => {
-    console.log('[ErrorsPage] Component mounted, loading jobs...');
     loadJobsWithErrors();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-select job from URL when jobs are loaded
   useEffect(() => {
     if (jobIdFromUrl && jobs.length > 0 && jobs.some(j => j.id === jobIdFromUrl)) {
-      console.log('[ErrorsPage] Auto-selecting job from URL:', jobIdFromUrl);
       setSelectedJobId(jobIdFromUrl);
     }
   }, [jobIdFromUrl, jobs]);
@@ -231,22 +228,24 @@ const ErrorsPage: React.FC = () => {
   // Load errors when job selected
   useEffect(() => {
     if (selectedJobId) {
-      // Load both job errors and failed emails
+      // Load job errors, failed emails, and batch error log
       loadJobErrors(selectedJobId, phaseFilter, typeFilter);
       loadErrors(selectedJobId);
+      loadErrorLog(selectedJobId);
       // Update URL
       setSearchParams({ jobId: selectedJobId, tab: activeTab });
     } else {
-      // Reset both states
+      // Reset all states
       setJobErrors([]);
       setJobErrorsSummary(null);
       setTotalJobErrors(0);
       setErrors([]);
       setErrorSummary(null);
       setTotalErrors(0);
+      setErrorLog(null);
       setSearchParams({});
     }
-  }, [selectedJobId, loadJobErrors, loadErrors, setSearchParams, phaseFilter, typeFilter, activeTab]);
+  }, [selectedJobId, loadJobErrors, loadErrors, loadErrorLog, setSearchParams, phaseFilter, typeFilter, activeTab]);
 
   // Handle job selection
   const handleJobSelect = (jobId: string) => {
@@ -297,8 +296,7 @@ const ErrorsPage: React.FC = () => {
       await errorService.resolveJobError(selectedJobId, errorId, 'manual_fix');
       message.success('Error marked as resolved');
       loadJobErrors(selectedJobId, phaseFilter, typeFilter);
-    } catch (error) {
-      console.error('Failed to resolve error:', error);
+    } catch {
       message.error('Failed to resolve error');
     }
   };
@@ -317,8 +315,7 @@ const ErrorsPage: React.FC = () => {
         await loadErrors(selectedJobId);
         await loadJobsWithErrors();
       }
-    } catch (error) {
-      console.error('Failed to retry emails:', error);
+    } catch {
       message.error('Failed to retry failed emails');
     } finally {
       setRetrying(false);
@@ -339,8 +336,8 @@ const ErrorsPage: React.FC = () => {
       });
       setJobErrors([...jobErrors, ...moreErrors.errors]);
       setHasMoreJobErrors(moreErrors.has_more);
-    } catch (error) {
-      console.error('Failed to load more job errors:', error);
+    } catch {
+      // Silently handle
     } finally {
       setLoading(false);
     }
@@ -359,8 +356,8 @@ const ErrorsPage: React.FC = () => {
       );
       setErrors([...errors, ...moreErrors.emails]);
       setHasMore(moreErrors.has_more);
-    } catch (error) {
-      console.error('Failed to load more errors:', error);
+    } catch {
+      // Silently handle
     } finally {
       setLoading(false);
     }
@@ -591,6 +588,7 @@ const ErrorsPage: React.FC = () => {
               if (selectedJobId) {
                 loadJobErrors(selectedJobId, phaseFilter, typeFilter);
                 loadErrors(selectedJobId);
+                loadErrorLog(selectedJobId);
               }
             }}
             loading={loading}
@@ -710,6 +708,91 @@ const ErrorsPage: React.FC = () => {
               </Col>
             ))}
           </Row>
+        </div>
+      )}
+
+      {/* Batch Error Log (from processing_jobs.error_log) */}
+      {selectedJobId && errorLog && errorLog.error_count > 0 && (
+        <div className="glass-card-static fade-in-up stagger-3" style={{ marginBottom: 24, padding: 24 }}>
+          <Text strong style={{ display: 'block', marginBottom: 16 }}>
+            <WarningOutlined style={{ color: '#cf1322', marginRight: 8 }} />
+            Batch Processing Error Log ({errorLog.failed_records} failed emails)
+          </Text>
+
+          {/* Error Analysis Breakdown */}
+          {errorLog.error_analysis && Object.keys(errorLog.error_analysis).length > 0 && (
+            <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+              {Object.entries(errorLog.error_analysis).map(([errorType, count]) => (
+                <Col key={errorType} xs={12} sm={8} md={6} lg={4}>
+                  <Card size="small">
+                    <Statistic
+                      title={
+                        <Tag color={
+                          errorType === 'timeout' ? 'gold' :
+                          errorType === 'duplicate_in_batch' ? 'orange' :
+                          errorType === 'constraint_violation' ? 'red' : 'default'
+                        }>
+                          {errorType === 'duplicate_in_batch' ? 'Duplicate in Batch' :
+                           errorType === 'constraint_violation' ? 'Constraint Violation' :
+                           errorType.charAt(0).toUpperCase() + errorType.slice(1)}
+                        </Tag>
+                      }
+                      value={count}
+                      valueStyle={{ fontSize: 18 }}
+                    />
+                  </Card>
+                </Col>
+              ))}
+            </Row>
+          )}
+
+          {/* Error Messages */}
+          {errorLog.errors && errorLog.errors.length > 0 && (
+            <Collapse style={{ marginBottom: 16 }}>
+              <Panel header={`View Error Messages (${errorLog.errors.length} shown)`} key="errors">
+                <div style={{ maxHeight: 200, overflow: 'auto' }}>
+                  {errorLog.errors.map((err, idx) => (
+                    <Paragraph
+                      key={idx}
+                      style={{
+                        background: '#fff2f0',
+                        padding: 8,
+                        borderRadius: 4,
+                        marginBottom: 8,
+                        border: '1px solid #ffccc7',
+                        fontSize: 12,
+                      }}
+                    >
+                      <Text type="danger">{err}</Text>
+                    </Paragraph>
+                  ))}
+                </div>
+              </Panel>
+            </Collapse>
+          )}
+
+          {/* Failed Message IDs */}
+          {errorLog.failed_message_ids_count > 0 && (
+            <Collapse>
+              <Panel
+                header={`Failed Message IDs (${errorLog.failed_message_ids_count} total, showing ${errorLog.failed_message_ids_sample?.length || 0})`}
+                key="message_ids"
+              >
+                <div style={{ maxHeight: 200, overflow: 'auto' }}>
+                  {errorLog.failed_message_ids_sample?.map((msgId, idx) => (
+                    <Tag key={idx} style={{ margin: 4, fontFamily: 'monospace', fontSize: 10 }}>
+                      {msgId.length > 60 ? msgId.substring(0, 60) + '...' : msgId}
+                    </Tag>
+                  ))}
+                </div>
+                {errorLog.failed_message_ids_count > (errorLog.failed_message_ids_sample?.length || 0) && (
+                  <Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
+                    ... and {errorLog.failed_message_ids_count - (errorLog.failed_message_ids_sample?.length || 0)} more
+                  </Text>
+                )}
+              </Panel>
+            </Collapse>
+          )}
         </div>
       )}
 

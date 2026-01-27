@@ -153,7 +153,14 @@ async def get_processing_errors(
     # Get mailbox_id from job
     mailbox_id = get_mailbox_id_for_job(job_id)
     if not mailbox_id:
-        raise HTTPException(status_code=404, detail="Job not found")
+        # Return empty response if job has no mailbox (e.g., file-based processing)
+        return FailedEmailsResponse(
+            job_id=job_id,
+            mailbox_id='',
+            total_failed=0,
+            emails=[],
+            has_more=False
+        )
 
     try:
         # Try Redis first (for active jobs)
@@ -232,8 +239,8 @@ async def get_error_summary(job_id: str):
         ErrorSummary with aggregated error information
     """
     mailbox_id = get_mailbox_id_for_job(job_id)
-    if not mailbox_id:
-        raise HTTPException(status_code=404, detail="Job not found")
+    # If no mailbox_id, we can still check processing_jobs.error_summary
+    # Don't return 404 immediately
 
     try:
         # Try Redis first for active jobs
@@ -242,8 +249,8 @@ async def get_error_summary(job_id: str):
             if summary.get('total_errors', 0) > 0:
                 return ErrorSummary(**summary)
 
-        # Fall back to database for completed jobs
-        if _db_error_tracker:
+        # Fall back to database for completed jobs (only if mailbox_id exists)
+        if _db_error_tracker and mailbox_id:
             db_summary = _db_error_tracker.get_error_summary_from_db(mailbox_id)
             if db_summary:
                 return ErrorSummary(
@@ -259,7 +266,8 @@ async def get_error_summary(job_id: str):
         ).eq('id', job_id).single().execute()
 
         if result.data:
-            error_summary = result.data.get('error_summary', {})
+            # Handle case where error_summary is None (not just missing)
+            error_summary = result.data.get('error_summary') or {}
             return ErrorSummary(
                 total_errors=error_summary.get('total_errors', result.data.get('failed_records', 0)),
                 error_types=error_summary.get('error_types', {}),
@@ -427,24 +435,7 @@ async def get_job_errors(
         if unresolved_only:
             query = query.is_('resolved_at', 'null')
 
-        # Get total count for pagination
-        count_query = _supabase.table('job_errors').select('id', count='exact').eq('job_id', job_id)
-        if phase:
-            count_query = count_query.eq('error_phase', phase)
-        if error_type:
-            count_query = count_query.eq('error_type', error_type)
-        if unresolved_only:
-            count_query = count_query.is_('resolved_at', 'null')
-
-        count_result = count_query.execute()
-        total_errors = count_result.count if count_result.count else 0
-
-        # Get unresolved count
-        unresolved_query = _supabase.table('job_errors').select('id', count='exact').eq('job_id', job_id).is_('resolved_at', 'null')
-        unresolved_result = unresolved_query.execute()
-        unresolved_errors = unresolved_result.count if unresolved_result.count else 0
-
-        # Get paginated errors
+        # Get paginated errors first (simpler query)
         result = query.order('created_at', desc=True).range(offset, offset + limit - 1).execute()
 
         errors = []
@@ -464,6 +455,30 @@ async def get_job_errors(
                 resolved_at=err.get('resolved_at'),
                 created_at=err.get('created_at')
             ))
+
+        # Get total count - use len if no filters, otherwise try count query
+        total_errors = 0
+        unresolved_errors = 0
+
+        try:
+            count_query = _supabase.table('job_errors').select('id', count='exact').eq('job_id', job_id)
+            if phase:
+                count_query = count_query.eq('error_phase', phase)
+            if error_type:
+                count_query = count_query.eq('error_type', error_type)
+            if unresolved_only:
+                count_query = count_query.is_('resolved_at', 'null')
+
+            count_result = count_query.execute()
+            total_errors = count_result.count if count_result.count is not None else len(result.data or [])
+
+            # Get unresolved count
+            unresolved_query = _supabase.table('job_errors').select('id', count='exact').eq('job_id', job_id).is_('resolved_at', 'null')
+            unresolved_result = unresolved_query.execute()
+            unresolved_errors = unresolved_result.count if unresolved_result.count is not None else 0
+        except Exception as count_err:
+            logger.warning(f"Count query failed, using result length: {count_err}")
+            total_errors = len(errors)
 
         return JobErrorsResponse(
             job_id=job_id,
@@ -564,6 +579,90 @@ async def get_job_errors_summary(job_id: str):
 
     except Exception as e:
         logger.error(f"Failed to get job errors summary: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{job_id}/error-log")
+async def get_job_error_log(job_id: str):
+    """
+    Get the raw error_log from a processing job.
+
+    This returns the errors array and failed_message_ids stored in the
+    processing_jobs table after job completion. Useful for debugging
+    batch insert failures.
+
+    Args:
+        job_id: UUID of the processing job
+
+    Returns:
+        Error log details including batch errors and failed message IDs
+    """
+    try:
+        result = _supabase.table('processing_jobs').select(
+            'id, status, job_type, mailbox_id, total_records, processed_records, '
+            'failed_records, error_log, started_at, completed_at'
+        ).eq('id', job_id).single().execute()
+
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Job not found")
+
+        job = result.data
+        # Handle case where error_log is None (not just missing)
+        error_log = job.get('error_log') or {}
+
+        # Parse error_log - it could be a dict or list
+        errors = []
+        failed_message_ids = []
+
+        if isinstance(error_log, dict):
+            errors = error_log.get('errors', [])
+            failed_message_ids = error_log.get('failed_message_ids', [])
+            # If just a single error dict
+            if 'error' in error_log and not errors:
+                errors = [error_log.get('error')]
+        elif isinstance(error_log, list):
+            errors = error_log
+
+        # Analyze error types
+        error_analysis = {}
+        for err in errors:
+            if isinstance(err, str):
+                if 'timeout' in err.lower():
+                    error_type = 'timeout'
+                elif '21000' in err or 'ON CONFLICT' in err:
+                    error_type = 'duplicate_in_batch'
+                elif 'duplicate key' in err.lower():
+                    error_type = 'duplicate_key'
+                elif 'connection' in err.lower():
+                    error_type = 'connection'
+                else:
+                    error_type = 'other'
+
+                error_analysis[error_type] = error_analysis.get(error_type, 0) + 1
+
+        return {
+            "job_id": job.get('id'),
+            "status": job.get('status'),
+            "job_type": job.get('job_type'),
+            "mailbox_id": job.get('mailbox_id'),
+            "total_records": job.get('total_records'),
+            "processed_records": job.get('processed_records'),
+            "failed_records": job.get('failed_records'),
+            "started_at": job.get('started_at'),
+            "completed_at": job.get('completed_at'),
+            "error_count": len(errors),
+            "error_analysis": error_analysis,
+            "errors": errors[:100],  # First 100 errors
+            "failed_message_ids_count": len(failed_message_ids),
+            "failed_message_ids_sample": failed_message_ids[:50],  # First 50 message IDs
+            "has_more_errors": len(errors) > 100,
+            "has_more_message_ids": len(failed_message_ids) > 50
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get job error log: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

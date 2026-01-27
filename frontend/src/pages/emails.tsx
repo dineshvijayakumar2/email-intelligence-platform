@@ -1,76 +1,400 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
-  Card,
-  Table,
-  Space,
   Typography,
   Tag,
   Input,
   Select,
-  DatePicker,
   Button,
   Tooltip,
-  Modal,
   message,
-  Row,
-  Col,
+  Spin,
+  Empty,
+  Badge,
+  Avatar,
+  Dropdown,
+  Skeleton,
 } from "antd";
 import {
   SearchOutlined,
-  EyeOutlined,
   MailOutlined,
-  CalendarOutlined,
+  SendOutlined,
+  DeleteOutlined,
+  StarOutlined,
+  InboxOutlined,
+  FolderOutlined,
+  FilterOutlined,
+  ReloadOutlined,
+  LeftOutlined,
+  PaperClipOutlined,
+  ExpandOutlined,
+  CompressOutlined,
+  AppstoreOutlined,
+  CloseOutlined,
+  SyncOutlined,
 } from "@ant-design/icons";
 import { emailService, Email, EmailFilters } from '../services/emailService';
+import config from '../config';
 
-const { Title, Text, Paragraph } = Typography;
-const { RangePicker } = DatePicker;
+const { Text, Title } = Typography;
 const { Option } = Select;
 const { Search } = Input;
 
+// Helper functions
 const getCategoryColor = (category: string) => {
-  const colors = {
+  const colors: Record<string, string> = {
     promotional: '#f50',
     transactional: '#2db7f5',
     conversation: '#87d068',
     internal: '#722ed1',
     system: '#fa8c16',
   };
-  return colors[category as keyof typeof colors] || '#d9d9d9';
+  return colors[category] || '#d9d9d9';
 };
 
 const getCategoryLabel = (category: string) => {
-  const labels = {
+  const labels: Record<string, string> = {
     promotional: 'Promotional',
     transactional: 'Transactional',
     conversation: 'Conversation',
     internal: 'Internal',
     system: 'System',
   };
-  return labels[category as keyof typeof labels] || category;
+  return labels[category] || category;
 };
 
-// Skeleton component for filter loading
-const FilterSkeleton: React.FC<{ width?: number }> = ({ width = 150 }) => (
-  <div
-    className="skeleton-shimmer skeleton-filter"
-    style={{ width, height: 40 }}
-  />
-);
+const getInitials = (name: string, email: string) => {
+  if (name) {
+    const parts = name.split(' ');
+    return parts.length > 1
+      ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+      : parts[0].substring(0, 2).toUpperCase();
+  }
+  return email?.substring(0, 2).toUpperCase() || '??';
+};
 
+const getAvatarColor = (email: string) => {
+  const colors = ['#667eea', '#764ba2', '#f093fb', '#f5576c', '#4facfe', '#00f2fe', '#43e97b', '#fa709a'];
+  const index = email?.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % colors.length || 0;
+  return colors[index];
+};
+
+const formatRelativeDate = (dateString: string) => {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m`;
+  if (diffHours < 24) return `${diffHours}h`;
+  if (diffDays < 7) return `${diffDays}d`;
+
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+};
+
+const filterContentTags = (tags: string[]) => {
+  if (!tags) return [];
+  const folderTags = ['inbox', 'sent', 'spam', 'trash', 'archive', 'drafts', 'other'];
+  return tags.filter(tag => !folderTags.includes(tag.toLowerCase()));
+};
+
+// Email List Item Component
+const EmailListItem: React.FC<{
+  email: Email;
+  isSelected: boolean;
+  onClick: () => void;
+}> = React.memo(({ email, isSelected, onClick }) => {
+  const contentTags = filterContentTags(email.tags || []);
+  const hasAttachments = email.message_size > 50000;
+
+  return (
+    <div
+      className={`email-list-item ${isSelected ? 'selected' : ''}`}
+      onClick={onClick}
+    >
+      <Avatar
+        size={40}
+        style={{
+          backgroundColor: getAvatarColor(email.sender_email),
+          flexShrink: 0,
+          fontSize: 14,
+          fontWeight: 500,
+        }}
+      >
+        {getInitials(email.sender_name || '', email.sender_email)}
+      </Avatar>
+
+      <div className="email-list-item-content">
+        <div className="email-list-item-header">
+          <Text strong className="email-sender" ellipsis>
+            {email.sender_name || email.sender_email}
+          </Text>
+          <Text type="secondary" className="email-date">
+            {formatRelativeDate(email.sent_date)}
+          </Text>
+        </div>
+
+        <Text className="email-subject" ellipsis>
+          {email.subject || '(No subject)'}
+        </Text>
+
+        <div className="email-list-item-footer">
+          <div className="email-tags">
+            {email.is_outbound && (
+              <Tag color="green" style={{ margin: 0, fontSize: 10, padding: '0 4px', lineHeight: '16px' }}>
+                Sent
+              </Tag>
+            )}
+            {contentTags.slice(0, 2).map(tag => (
+              <Tag
+                key={tag}
+                color={getCategoryColor(tag)}
+                style={{ margin: 0, fontSize: 10, padding: '0 4px', lineHeight: '16px' }}
+              >
+                {getCategoryLabel(tag)}
+              </Tag>
+            ))}
+          </div>
+          <div className="email-indicators">
+            {hasAttachments && <PaperClipOutlined style={{ fontSize: 12, color: '#8c8c8c' }} />}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+// Email Detail Panel Component
+const EmailDetailPanel: React.FC<{
+  email: Email | null;
+  loading: boolean;
+  onClose: () => void;
+  expanded: boolean;
+  onToggleExpand: () => void;
+}> = ({ email, loading, onClose, expanded, onToggleExpand }) => {
+  const [bodyView, setBodyView] = useState<'html' | 'text'>('html');
+
+  if (loading) {
+    return (
+      <div className="email-detail-panel">
+        <div className="email-detail-loading">
+          <Spin size="large" />
+          <Text type="secondary" style={{ marginTop: 16 }}>Loading email...</Text>
+        </div>
+      </div>
+    );
+  }
+
+  if (!email) {
+    return (
+      <div className="email-detail-panel">
+        <div className="email-detail-empty">
+          <MailOutlined style={{ fontSize: 64, color: '#d9d9d9' }} />
+          <Text type="secondary" style={{ marginTop: 16, fontSize: 16 }}>
+            Select an email to view
+          </Text>
+        </div>
+      </div>
+    );
+  }
+
+  const contentTags = filterContentTags(email.tags || []);
+
+  return (
+    <div className={`email-detail-panel ${expanded ? 'expanded' : ''}`}>
+      {/* Header */}
+      <div className="email-detail-header">
+        <div className="email-detail-header-top">
+          <Button
+            type="text"
+            icon={<LeftOutlined />}
+            onClick={onClose}
+            className="mobile-back-btn"
+          />
+          <div className="email-detail-actions">
+            <Tooltip title={expanded ? 'Collapse' : 'Expand'}>
+              <Button
+                type="text"
+                icon={expanded ? <CompressOutlined /> : <ExpandOutlined />}
+                onClick={onToggleExpand}
+              />
+            </Tooltip>
+            <Tooltip title="Close">
+              <Button
+                type="text"
+                icon={<CloseOutlined />}
+                onClick={onClose}
+                className="desktop-close-btn"
+              />
+            </Tooltip>
+          </div>
+        </div>
+
+        <Title level={4} style={{ margin: '16px 0 12px', lineHeight: 1.3 }}>
+          {email.subject || '(No subject)'}
+        </Title>
+
+        <div className="email-detail-meta">
+          <Avatar
+            size={48}
+            style={{
+              backgroundColor: getAvatarColor(email.sender_email),
+              flexShrink: 0,
+            }}
+          >
+            {getInitials(email.sender_name || '', email.sender_email)}
+          </Avatar>
+
+          <div className="email-detail-meta-info">
+            <div className="email-detail-from">
+              <Text strong>{email.sender_name || email.sender_email}</Text>
+              {email.sender_name && (
+                <Text type="secondary" style={{ fontSize: 13 }}>
+                  &lt;{email.sender_email}&gt;
+                </Text>
+              )}
+            </div>
+            <div className="email-detail-to">
+              <Text type="secondary" style={{ fontSize: 13 }}>
+                To: {email.recipients?.map(r => r.name || r.email).join(', ') || 'Unknown'}
+              </Text>
+            </div>
+          </div>
+
+          <div className="email-detail-date">
+            <Text type="secondary" style={{ fontSize: 13 }}>
+              {new Date(email.sent_date).toLocaleString()}
+            </Text>
+          </div>
+        </div>
+
+        {/* Tags */}
+        {contentTags.length > 0 && (
+          <div className="email-detail-tags">
+            {contentTags.map(tag => (
+              <Tag key={tag} color={getCategoryColor(tag)}>
+                {getCategoryLabel(tag)}
+              </Tag>
+            ))}
+          </div>
+        )}
+
+        {/* Info badges */}
+        <div className="email-detail-badges">
+          <Tag icon={<FolderOutlined />} color="default">
+            {email.folder_path || 'Inbox'}
+          </Tag>
+          <Tag icon={<MailOutlined />} color="default">
+            {email.mailbox_name}
+          </Tag>
+          {email.is_outbound && (
+            <Tag color="green">Sent</Tag>
+          )}
+          {email.is_reply && (
+            <Tag color="blue">Reply</Tag>
+          )}
+        </div>
+      </div>
+
+      {/* View Toggle */}
+      {email.body_html && email.body_text && (
+        <div className="email-detail-view-toggle">
+          <Button
+            size="small"
+            type={bodyView === 'html' ? 'primary' : 'default'}
+            onClick={() => setBodyView('html')}
+          >
+            HTML
+          </Button>
+          <Button
+            size="small"
+            type={bodyView === 'text' ? 'primary' : 'default'}
+            onClick={() => setBodyView('text')}
+          >
+            Plain Text
+          </Button>
+        </div>
+      )}
+
+      {/* Body */}
+      <div className="email-detail-body">
+        {email.body_html && bodyView === 'html' ? (
+          <iframe
+            srcDoc={`
+              <!DOCTYPE html>
+              <html>
+              <head>
+                <meta charset="UTF-8">
+                <base target="_blank">
+                <style>
+                  html, body { margin: 0; padding: 0; }
+                  body {
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    font-size: 14px;
+                    line-height: 1.6;
+                    color: #333;
+                    padding: 24px;
+                  }
+                  img { max-width: 100%; height: auto; }
+                  a { color: #667eea; }
+                  blockquote {
+                    border-left: 3px solid #d9d9d9;
+                    padding-left: 16px;
+                    margin-left: 0;
+                    color: #666;
+                  }
+                  pre {
+                    background: #f5f5f5;
+                    padding: 12px;
+                    border-radius: 4px;
+                    overflow-x: auto;
+                  }
+                </style>
+              </head>
+              <body>${email.body_html}</body>
+              </html>
+            `}
+            className="email-body-iframe"
+            sandbox="allow-same-origin allow-scripts allow-popups"
+            title="Email Content"
+          />
+        ) : email.body_text ? (
+          <div className="email-body-text">
+            {email.body_text}
+          </div>
+        ) : (
+          <div className="email-body-empty">
+            <Text type="secondary">No email content available</Text>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Main Email List Component
 export const EmailList: React.FC = () => {
+  // State
   const [emails, setEmails] = useState<Email[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtersLoading, setFiltersLoading] = useState(true);
   const [totalCount, setTotalCount] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize] = useState(50);
+  const isLoadingMoreRef = useRef(false); // Track if we're loading more vs fresh load
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [emailBodyView, setEmailBodyView] = useState<'html' | 'text'>('html');
+  const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailExpanded, setDetailExpanded] = useState(false);
   const [categories, setCategories] = useState<string[]>([]);
   const [mailboxes, setMailboxes] = useState<string[]>([]);
+  const [mailboxIdMap, setMailboxIdMap] = useState<Record<string, string>>({}); // name -> id mapping
   const [folders, setFolders] = useState<string[]>([]);
+  const [foldersLoading, setFoldersLoading] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [filters, setFilters] = useState<EmailFilters>({
     search: '',
     category: '',
@@ -80,16 +404,28 @@ export const EmailList: React.FC = () => {
     isOutbound: '',
   });
 
-  useEffect(() => {
-    loadEmails();
-    loadFilterOptions();
-  }, []);
+  // System folders that always show
+  const systemFolders = useMemo(() => [
+    { key: '', label: 'All Mail', icon: <AppstoreOutlined /> },
+    { key: 'inbox', label: 'Inbox', icon: <InboxOutlined /> },
+    { key: 'sent', label: 'Sent', icon: <SendOutlined /> },
+    { key: 'starred', label: 'Starred', icon: <StarOutlined /> },
+    { key: 'trash', label: 'Trash', icon: <DeleteOutlined /> },
+  ], []);
 
-  useEffect(() => {
-    loadEmails();
-  }, [filters, currentPage, pageSize]);
+  // Get current folder key for highlighting
+  const currentFolderKey = useMemo(() => {
+    if (!filters.folder) return '';
+    const lower = filters.folder.toLowerCase();
+    if (lower.includes('inbox')) return 'inbox';
+    if (lower.includes('sent')) return 'sent';
+    if (lower.includes('starred') || lower.includes('flagged')) return 'starred';
+    if (lower.includes('trash') || lower.includes('deleted')) return 'trash';
+    return filters.folder;
+  }, [filters.folder]);
 
-  const loadEmails = async () => {
+  // Load emails
+  const loadEmails = useCallback(async (append: boolean = false) => {
     try {
       setLoading(true);
       const { emails: emailData, totalCount: total } = await emailService.getEmails(
@@ -97,7 +433,12 @@ export const EmailList: React.FC = () => {
         currentPage,
         pageSize
       );
-      setEmails(emailData);
+      // If appending (load more), add to existing emails; otherwise replace
+      if (append && currentPage > 1) {
+        setEmails(prev => [...prev, ...emailData]);
+      } else {
+        setEmails(emailData);
+      }
       setTotalCount(total);
     } catch (error) {
       console.error('Error loading emails:', error);
@@ -105,616 +446,393 @@ export const EmailList: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters, currentPage, pageSize]);
 
-  const loadFilterOptions = async () => {
+  // Load filter options (categories and mailboxes - static)
+  const loadFilterOptions = useCallback(async () => {
     try {
       setFiltersLoading(true);
-      const [categoriesData, mailboxesData, foldersData] = await Promise.all([
+      const [categoriesData, mailboxListResponse, foldersData] = await Promise.all([
         emailService.getEmailCategories(),
-        emailService.getMailboxNames(),
-        emailService.getFolderNames(),
+        fetch(`${config.apiBaseUrl}/mailboxes`).then(r => r.ok ? r.json() : []),
+        emailService.getFolderNames(), // Load all folders initially
       ]);
       setCategories(categoriesData);
-      setMailboxes(mailboxesData);
+
+      // Extract names for display and create ID map for quick lookup
+      const names = mailboxListResponse.map((m: any) => m.name);
+      const idMap: Record<string, string> = {};
+      mailboxListResponse.forEach((m: any) => {
+        idMap[m.name] = m.id;
+      });
+      setMailboxes(names);
+      setMailboxIdMap(idMap);
       setFolders(foldersData);
     } catch (error) {
       console.error('Error loading filter options:', error);
     } finally {
       setFiltersLoading(false);
     }
-  };
+  }, []);
 
-  const showEmailDetails = async (email: Email) => {
+  // Load folders for a specific mailbox (dynamic) - uses cached mailboxIdMap
+  const loadFoldersForMailbox = useCallback(async (mailboxName: string) => {
+    const mailboxId = mailboxIdMap[mailboxName];
+    if (!mailboxId) {
+      console.error('Mailbox ID not found for:', mailboxName);
+      return;
+    }
+
     try {
-      // Load full email details including body
-      const fullEmail = await emailService.getEmail(email.id);
+      setFoldersLoading(true);
+      const foldersData = await emailService.getFolderNames(mailboxId);
+      setFolders(foldersData);
+    } catch (error) {
+      console.error('Error loading folders for mailbox:', error);
+    } finally {
+      setFoldersLoading(false);
+    }
+  }, [mailboxIdMap]);
+
+  // Load email details
+  const loadEmailDetails = useCallback(async (emailId: string) => {
+    try {
+      setDetailLoading(true);
+      setSelectedEmailId(emailId);
+      const fullEmail = await emailService.getEmail(emailId);
       setSelectedEmail(fullEmail);
-      setModalVisible(true);
     } catch (error) {
       console.error('Error loading email details:', error);
-      message.error('Failed to load email details');
+      message.error('Failed to load email');
+    } finally {
+      setDetailLoading(false);
     }
-  };
+  }, []);
 
+  useEffect(() => {
+    loadEmails();
+    loadFilterOptions();
+  }, []);
+
+  useEffect(() => {
+    loadEmails(isLoadingMoreRef.current);
+    isLoadingMoreRef.current = false; // Reset after loading
+  }, [filters, currentPage]);
+
+  // Reload folders when mailbox selection changes
+  useEffect(() => {
+    if (filters.mailbox) {
+      // Only load if we have the mailbox ID map populated
+      if (mailboxIdMap[filters.mailbox]) {
+        loadFoldersForMailbox(filters.mailbox);
+      }
+      // Reset folder filter when mailbox changes
+      setFilters(prev => ({ ...prev, folder: '' }));
+    } else {
+      // When "All Mailboxes" is selected, load all folders
+      emailService.getFolderNames().then(foldersData => {
+        setFolders(foldersData);
+      });
+    }
+  }, [filters.mailbox, mailboxIdMap, loadFoldersForMailbox]);
+
+  // Handlers
   const handleFilterChange = (key: keyof EmailFilters, value: any) => {
-    setFilters(prev => ({
-      ...prev,
-      [key]: value
-    }));
-    setCurrentPage(1); // Reset to first page when filters change
-  };
-
-  const clearFilters = () => {
-    setFilters({
-      search: '',
-      category: '',
-      mailbox: '',
-      folder: '',
-      dateRange: null,
-      isOutbound: '',
-    });
+    setFilters(prev => ({ ...prev, [key]: value }));
     setCurrentPage(1);
   };
 
-  // Filter out folder-based tags (folders should be in folder_path column)
-  const filterContentTags = (tags: string[]) => {
-    if (!tags) return [];
-    const folderTags = ['inbox', 'sent', 'spam', 'trash', 'archive', 'drafts', 'other'];
-    return tags.filter(tag => !folderTags.includes(tag.toLowerCase()));
+  const handleFolderSelect = (folderKey: string) => {
+    if (folderKey === '') {
+      handleFilterChange('folder', '');
+    } else {
+      // Find matching folder from the folders list, or use the key directly
+      const matchedFolder = folders.find(f => f.toLowerCase().includes(folderKey.toLowerCase()));
+      // Use matched folder if found, otherwise use the key itself for filtering
+      handleFilterChange('folder', matchedFolder || folderKey);
+    }
   };
 
-  const columns = [
-    {
-      title: 'Subject',
-      dataIndex: 'subject',
-      key: 'subject',
-      width: '30%',
-      ellipsis: true,
-      render: (text: string, record: Email) => (
-        <Space direction="vertical" size="small">
-          <Text strong>{text}</Text>
-          <Space size="small">
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              From: {record.sender_name || record.sender_email}
-            </Text>
-            {record.is_reply && (
-              <Tag color="blue">Reply</Tag>
-            )}
-            {record.is_outbound && (
-              <Tag color="green">Sent</Tag>
-            )}
-          </Space>
-        </Space>
-      ),
-    },
-    {
-      title: 'Tags',
-      dataIndex: 'tags',
-      key: 'tags',
-      width: '18%',
-      render: (tags: string[]) => {
-        const contentTags = filterContentTags(tags);
-        return (
-          <Space wrap size={[4, 4]}>
-            {contentTags && contentTags.length > 0 ? (
-              contentTags.slice(0, 3).map(tag => (
-                <Tag key={tag} color={getCategoryColor(tag)} style={{ margin: 0 }}>
-                  {getCategoryLabel(tag)}
-                </Tag>
-              ))
-            ) : (
-              <Tag color="default">No tags</Tag>
-            )}
-            {contentTags && contentTags.length > 3 && (
-              <Tooltip title={contentTags.slice(3).map(t => getCategoryLabel(t)).join(', ')}>
-                <Tag color="default" style={{ margin: 0 }}>+{contentTags.length - 3}</Tag>
-              </Tooltip>
-            )}
-          </Space>
-        );
-      },
-    },
-    {
-      title: 'Folder',
-      dataIndex: 'folder_path',
-      key: 'folder_path',
-      width: '12%',
-      render: (folder: string) => {
-        // Determine folder icon/color based on common folder names
-        const folderLower = (folder || '').toLowerCase();
-        let color = 'default';
-        if (folderLower.includes('inbox')) color = 'blue';
-        else if (folderLower.includes('sent')) color = 'green';
-        else if (folderLower.includes('spam') || folderLower.includes('junk')) color = 'red';
-        else if (folderLower.includes('trash') || folderLower.includes('deleted')) color = 'volcano';
-        else if (folderLower.includes('archive')) color = 'geekblue';
-        else if (folderLower.includes('draft')) color = 'orange';
+  const handleMailboxSelect = (mailbox: string) => {
+    handleFilterChange('mailbox', mailbox);
+  };
 
-        return (
-          <Tag color={color} style={{ maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {folder || 'INBOX'}
-          </Tag>
-        );
-      },
-    },
-    {
-      title: 'Mailbox',
-      dataIndex: 'mailbox_name',
-      key: 'mailbox_name',
-      width: '12%',
-      ellipsis: true,
-      render: (name: string) => (
-        <Tooltip title={name}>
-          <Space>
-            <MailOutlined />
-            <Text ellipsis>{name}</Text>
-          </Space>
-        </Tooltip>
-      ),
-    },
-    {
-      title: 'Date',
-      dataIndex: 'sent_date',
-      key: 'sent_date',
-      width: '13%',
-      render: (date: string) => (
-        <Space direction="vertical" size="small">
-          <Text>{new Date(date).toLocaleDateString()}</Text>
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            {new Date(date).toLocaleTimeString()}
-          </Text>
-        </Space>
-      ),
-      sorter: true,
-    },
-    {
-      title: 'Size',
-      dataIndex: 'message_size',
-      key: 'message_size',
-      width: '8%',
-      render: (size: number) => {
-        const kb = (size / 1024).toFixed(1);
-        return <Text type="secondary">{kb} KB</Text>;
-      },
-    },
-    {
-      title: 'Actions',
-      key: 'actions',
-      width: '10%',
-      render: (_: any, record: Email) => (
-        <Tooltip title="View Details">
-          <Button
-            type="text"
-            icon={<EyeOutlined />}
-            onClick={() => showEmailDetails(record)}
-          />
-        </Tooltip>
-      ),
-    },
-  ];
+  const handleEmailSelect = (email: Email) => {
+    loadEmailDetails(email.id);
+  };
+
+  const handleCloseDetail = () => {
+    setSelectedEmail(null);
+    setSelectedEmailId(null);
+  };
+
+  const handleRefresh = () => {
+    setCurrentPage(1); // Reset to first page on refresh
+    loadEmails(false); // Fresh load, don't append
+    setSelectedEmail(null);
+    setSelectedEmailId(null);
+  };
+
+  const handleLoadMore = () => {
+    if (!loading && emails.length < totalCount) {
+      isLoadingMoreRef.current = true; // Mark as load more operation
+      setCurrentPage(prev => prev + 1);
+    }
+  };
+
+  const hasActiveFilters = !!(filters.category || filters.isOutbound || filters.folder);
+
+  // Get additional folders (not system folders)
+  const additionalFolders = useMemo(() => {
+    return folders.filter(f => {
+      const lower = f.toLowerCase();
+      return !['inbox', 'sent', 'starred', 'flagged', 'trash', 'deleted'].some(sys => lower.includes(sys));
+    });
+  }, [folders]);
 
   return (
-    <div className="glass-page-bg" style={{ padding: 24, minHeight: 'calc(100vh - 64px)' }}>
-      {/* Header */}
-      <div className="fade-in-up" style={{ marginBottom: 24 }}>
-        <Title level={2} style={{ margin: 0, marginBottom: 4 }} className="gradient-text">
-          Emails
-        </Title>
-        <Text type="secondary" style={{ fontSize: 14 }}>
-          {totalCount.toLocaleString()} email{totalCount !== 1 ? 's' : ''}
-          {filters.category && ` in ${getCategoryLabel(filters.category)}`}
-          {filters.mailbox && ` from ${filters.mailbox}`}
-          {filters.folder && ` in folder "${filters.folder}"`}
-          {filters.isOutbound && ` (${filters.isOutbound})`}
-          {filters.search && ` matching "${filters.search}"`}
-        </Text>
+    <div className="mail-client">
+      {/* Left Sidebar */}
+      <div className={`mail-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
+        {/* Sidebar Header */}
+        <div className="mail-sidebar-header">
+          <Text strong style={{ fontSize: 16, color: 'white' }}>Mail</Text>
+          <Tooltip title={sidebarCollapsed ? 'Expand' : 'Collapse'}>
+            <Button
+              type="text"
+              size="small"
+              icon={sidebarCollapsed ? <ExpandOutlined /> : <CompressOutlined />}
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              style={{ color: 'rgba(255,255,255,0.8)' }}
+            />
+          </Tooltip>
+        </div>
+
+        {/* Mailboxes Section */}
+        <div className="mail-sidebar-section">
+          <div className="mail-sidebar-section-title">
+            <MailOutlined /> {!sidebarCollapsed && 'Mailboxes'}
+          </div>
+          <div className="mail-sidebar-items">
+            <div
+              className={`mail-sidebar-item ${!filters.mailbox ? 'active' : ''}`}
+              onClick={() => handleMailboxSelect('')}
+            >
+              <AppstoreOutlined />
+              {!sidebarCollapsed && <span>All Mailboxes</span>}
+            </div>
+            {mailboxes.map(mailbox => (
+              <div
+                key={mailbox}
+                className={`mail-sidebar-item ${filters.mailbox === mailbox ? 'active' : ''}`}
+                onClick={() => handleMailboxSelect(mailbox)}
+              >
+                <InboxOutlined />
+                {!sidebarCollapsed && <span>{mailbox}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Folders Section */}
+        <div className="mail-sidebar-section">
+          <div className="mail-sidebar-section-title">
+            {foldersLoading ? <SyncOutlined spin /> : <FolderOutlined />} {!sidebarCollapsed && 'Folders'}
+          </div>
+          <div className="mail-sidebar-items">
+            {systemFolders.map(folder => (
+              <div
+                key={folder.key}
+                className={`mail-sidebar-item ${currentFolderKey === folder.key ? 'active' : ''}`}
+                onClick={() => handleFolderSelect(folder.key)}
+              >
+                {folder.icon}
+                {!sidebarCollapsed && <span>{folder.label}</span>}
+              </div>
+            ))}
+            {additionalFolders.length > 0 && (
+              <>
+                <div className="mail-sidebar-divider" />
+                {additionalFolders.map(folder => (
+                  <div
+                    key={folder}
+                    className={`mail-sidebar-item ${filters.folder === folder ? 'active' : ''}`}
+                    onClick={() => handleFilterChange('folder', folder)}
+                  >
+                    <FolderOutlined />
+                    {!sidebarCollapsed && <span>{folder}</span>}
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
+        </div>
       </div>
 
-      {/* Glass Filters Panel */}
-      <div className="glass-filters fade-in-up stagger-1" style={{ marginBottom: 24 }}>
-        {filtersLoading ? (
-          <div style={{ display: 'flex', gap: 16, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-            <FilterSkeleton width={250} />
-            <FilterSkeleton width={150} />
-            <FilterSkeleton width={150} />
-            <FilterSkeleton width={150} />
-            <FilterSkeleton width={120} />
-            <FilterSkeleton width={250} />
-          </div>
-        ) : (
-          <div style={{ display: 'flex', gap: 16, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+      {/* Main Content Area */}
+      <div className="mail-main">
+        {/* Top Bar - Search & Filters */}
+        <div className="mail-topbar">
+          <div className="mail-topbar-left">
             <Search
               placeholder="Search emails..."
               allowClear
-              style={{ width: 250 }}
               value={filters.search}
               onChange={(e) => handleFilterChange('search', e.target.value)}
               prefix={<SearchOutlined style={{ color: '#667eea' }} />}
+              className="mail-search"
             />
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <Text type="secondary" style={{ fontSize: 12, fontWeight: 500 }}>Category</Text>
-              <Select
-                placeholder="All categories"
-                allowClear
-                style={{ width: 150 }}
-                value={filters.category}
-                onChange={(value) => handleFilterChange('category', value)}
-              >
-                {categories.map(category => (
-                  <Option key={category} value={category}>
-                    {getCategoryLabel(category)}
-                  </Option>
-                ))}
-              </Select>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <Text type="secondary" style={{ fontSize: 12, fontWeight: 500 }}>Mailbox</Text>
-              <Select
-                placeholder="All mailboxes"
-                allowClear
-                style={{ width: 150 }}
-                value={filters.mailbox}
-                onChange={(value) => handleFilterChange('mailbox', value)}
-              >
-                {mailboxes.map(mailbox => (
-                  <Option key={mailbox} value={mailbox}>
-                    {mailbox}
-                  </Option>
-                ))}
-              </Select>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <Text type="secondary" style={{ fontSize: 12, fontWeight: 500 }}>Folder</Text>
-              <Select
-                placeholder="All folders"
-                allowClear
-                style={{ width: 150 }}
-                value={filters.folder}
-                onChange={(value) => handleFilterChange('folder', value)}
-              >
-                {folders.map(folder => (
-                  <Option key={folder} value={folder}>
-                    {folder}
-                  </Option>
-                ))}
-              </Select>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <Text type="secondary" style={{ fontSize: 12, fontWeight: 500 }}>Direction</Text>
-              <Select
-                placeholder="All"
-                allowClear
-                style={{ width: 120 }}
-                value={filters.isOutbound}
-                onChange={(value) => handleFilterChange('isOutbound', value)}
-              >
-                <Option value="inbound">Inbound</Option>
-                <Option value="outbound">Outbound</Option>
-              </Select>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <Text type="secondary" style={{ fontSize: 12, fontWeight: 500 }}>Date Range</Text>
-              <RangePicker
-                placeholder={['Start', 'End']}
-                style={{ width: 250 }}
-                onChange={(dates, dateStrings) =>
-                  handleFilterChange('dateRange', dates ? dateStrings as [string, string] : null)
-                }
-              />
-            </div>
-
-            <Button
-              onClick={clearFilters}
-              style={{ marginTop: 'auto' }}
-            >
-              Clear
-            </Button>
           </div>
-        )}
-      </div>
 
-      {/* Glass Table Container */}
-      <div className="glass-table-container fade-in-up stagger-2">
-        <Table
-          dataSource={emails}
-          columns={columns}
-          loading={loading}
-          rowKey="id"
-          size="small"
-          pagination={{
-            current: currentPage,
-            pageSize: pageSize,
-            total: totalCount,
-            showSizeChanger: true,
-            showQuickJumper: true,
-            showTotal: (total, range) =>
-              `${range[0]}-${range[1]} of ${total} emails`,
-            onChange: (page, size) => {
-              setCurrentPage(page);
-              if (size !== pageSize) {
-                setPageSize(size);
-                setCurrentPage(1);
-              }
-            },
-          }}
-          scroll={{ x: 1200 }}
-        />
-      </div>
-
-      {/* Email Details Modal with Glass Styling */}
-      <Modal
-        title={
-          <Space>
-            <MailOutlined style={{ color: '#667eea' }} />
-            <Text strong style={{ fontSize: 16 }}>Email Details</Text>
-          </Space>
-        }
-        open={modalVisible}
-        onCancel={() => setModalVisible(false)}
-        footer={null}
-        width="95%"
-        style={{ top: 20, maxWidth: '1800px' }}
-        styles={{
-          body: { maxHeight: 'calc(100vh - 120px)', overflowY: 'auto', padding: '24px' },
-          header: { borderBottom: '1px solid rgba(102, 126, 234, 0.1)' },
-        }}
-        className="glass-modal"
-      >
-        {selectedEmail && (
-          <Row gutter={24} style={{ width: '100%' }}>
-            {/* Left Column - Email Metadata */}
-            <Col span={8}>
-              <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-                {/* Subject Card */}
-                <Card size="small" title={<Text strong>Subject</Text>} style={{ marginBottom: 0 }}>
-                  <Text style={{ fontSize: '15px' }}>{selectedEmail.subject}</Text>
-                </Card>
-
-                {/* From/To Card */}
-                <Card size="small" title={<Text strong>Participants</Text>} style={{ marginBottom: 0 }}>
-                  <Space direction="vertical" size="small" style={{ width: '100%' }}>
-                    <div>
-                      <Text type="secondary" strong>From:</Text><br />
-                      {selectedEmail.sender_name && <Text>{selectedEmail.sender_name}<br /></Text>}
-                      <Text type="secondary" style={{ fontSize: '13px' }}>{selectedEmail.sender_email}</Text>
-                    </div>
-
-                    {selectedEmail.recipients && selectedEmail.recipients.length > 0 && (
-                      <div>
-                        <Text type="secondary" strong>To:</Text><br />
-                        {selectedEmail.recipients.map((recipient, idx) => (
-                          <div key={idx} style={{ marginBottom: '4px' }}>
-                            {recipient.name && <Text>{recipient.name}<br /></Text>}
-                            <Text type="secondary" style={{ fontSize: '13px' }}>{recipient.email}</Text>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {selectedEmail.cc_list && selectedEmail.cc_list.length > 0 && (
-                      <div>
-                        <Text type="secondary" strong>CC:</Text><br />
-                        {selectedEmail.cc_list.map((cc, idx) => (
-                          <div key={idx} style={{ marginBottom: '4px' }}>
-                            {cc.name && <Text>{cc.name}<br /></Text>}
-                            <Text type="secondary" style={{ fontSize: '13px' }}>{cc.email}</Text>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {selectedEmail.bcc_list && selectedEmail.bcc_list.length > 0 && (
-                      <div>
-                        <Text type="secondary" strong>BCC:</Text><br />
-                        {selectedEmail.bcc_list.map((bcc, idx) => (
-                          <div key={idx} style={{ marginBottom: '4px' }}>
-                            {bcc.name && <Text>{bcc.name}<br /></Text>}
-                            <Text type="secondary" style={{ fontSize: '13px' }}>{bcc.email}</Text>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </Space>
-                </Card>
-
-                {/* Metadata Card */}
-                <Card size="small" title={<Text strong>Details</Text>} style={{ marginBottom: 0 }}>
-                  <Space direction="vertical" size="small" style={{ width: '100%' }}>
-                    <div>
-                      <Text type="secondary">Mailbox:</Text><br />
-                      <Text>{selectedEmail.mailbox_name || 'Unknown'}</Text>
-                    </div>
-                    <div>
-                      <Text type="secondary">Folder:</Text><br />
-                      <Tag color="blue">{selectedEmail.folder_path}</Tag>
-                    </div>
-                    <div>
-                      <Text type="secondary">Direction:</Text><br />
-                      <Tag color={selectedEmail.is_outbound ? 'green' : 'blue'}>
-                        {selectedEmail.is_outbound ? 'Outbound' : 'Inbound'}
-                      </Tag>
-                    </div>
-                    <div>
-                      <Text type="secondary">Reply:</Text><br />
-                      <Text>{selectedEmail.is_reply ? 'Yes' : 'No'}</Text>
-                    </div>
-                    <div>
-                      <Text type="secondary">Size:</Text><br />
-                      <Text>{(selectedEmail.message_size / 1024).toFixed(1)} KB</Text>
-                    </div>
-                    <div>
-                      <Text type="secondary">Sent Date:</Text><br />
-                      <Space size="small">
-                        <CalendarOutlined />
-                        <Text style={{ fontSize: '13px' }}>{new Date(selectedEmail.sent_date).toLocaleString()}</Text>
-                      </Space>
-                    </div>
-                    {selectedEmail.received_date && (
-                      <div>
-                        <Text type="secondary">Received Date:</Text><br />
-                        <Space size="small">
-                          <CalendarOutlined />
-                          <Text style={{ fontSize: '13px' }}>{new Date(selectedEmail.received_date).toLocaleString()}</Text>
-                        </Space>
-                      </div>
-                    )}
-                  </Space>
-                </Card>
-
-                {/* Tags Card */}
-                <Card size="small" title={<Text strong>Tags</Text>} style={{ marginBottom: 0 }}>
-                  <Space wrap size={[4, 8]}>
-                    {selectedEmail.tags && filterContentTags(selectedEmail.tags).length > 0 ? (
-                      filterContentTags(selectedEmail.tags).map(tag => (
-                        <Tag key={tag} color={getCategoryColor(tag)}>
-                          {getCategoryLabel(tag)}
-                        </Tag>
-                      ))
-                    ) : (
-                      <Tag color="default">No content tags</Tag>
-                    )}
-                  </Space>
-                </Card>
-              </Space>
-            </Col>
-
-            {/* Right Column - Email Body */}
-            <Col span={16}>
-              <Card
-                size="small"
-                title={
-                  <Space>
-                    <MailOutlined />
-                    <span>Email Content</span>
-                  </Space>
-                }
-                extra={
-                  (selectedEmail.body_html && selectedEmail.body_text) && (
-                    <Space>
+          <div className="mail-topbar-right">
+            {/* Filter Button */}
+            <Dropdown
+              trigger={['click']}
+              open={showFilters}
+              onOpenChange={setShowFilters}
+              dropdownRender={() => (
+                <div className="mail-filters-dropdown">
+                  <div className="filter-header">
+                    <Text strong>Filters</Text>
+                    {hasActiveFilters && (
                       <Button
+                        type="link"
                         size="small"
-                        type={emailBodyView === 'html' ? 'primary' : 'default'}
-                        onClick={() => setEmailBodyView('html')}
+                        onClick={() => {
+                          setFilters({
+                            search: filters.search,
+                            category: '',
+                            mailbox: filters.mailbox,
+                            folder: '',
+                            dateRange: null,
+                            isOutbound: '',
+                          });
+                        }}
                       >
-                        HTML View
+                        Clear
                       </Button>
-                      <Button
-                        size="small"
-                        type={emailBodyView === 'text' ? 'primary' : 'default'}
-                        onClick={() => setEmailBodyView('text')}
-                      >
-                        Plain Text
-                      </Button>
-                    </Space>
-                  )
-                }
-                styles={{ body: { padding: 0 } }}
-                style={{ height: 'calc(100vh - 200px)' }}
-              >
-                {selectedEmail.body_html && emailBodyView === 'html' ? (
-                  <div
-                    style={{
-                      height: '100%',
-                      overflow: 'auto',
-                      backgroundColor: '#ffffff'
-                    }}
-                  >
-                    <iframe
-                      srcDoc={`
-                        <!DOCTYPE html>
-                        <html>
-                        <head>
-                          <meta charset="UTF-8">
-                          <base target="_blank">
-                          <style>
-                            html, body {
-                              margin: 0;
-                              padding: 0;
-                              min-width: fit-content;
-                            }
-                            body {
-                              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-                              font-size: 14px;
-                              line-height: 1.6;
-                              color: #333;
-                              padding: 24px;
-                            }
-                            img {
-                              max-width: 100%;
-                              height: auto;
-                            }
-                            a {
-                              color: #1890ff;
-                              text-decoration: none;
-                            }
-                            a:hover {
-                              text-decoration: underline;
-                            }
-                            table {
-                              border-collapse: collapse;
-                            }
-                            blockquote {
-                              border-left: 3px solid #d9d9d9;
-                              padding-left: 16px;
-                              margin-left: 0;
-                              color: #666;
-                            }
-                            pre {
-                              background: #f5f5f5;
-                              padding: 12px;
-                              border-radius: 4px;
-                              overflow-x: auto;
-                            }
-                          </style>
-                        </head>
-                        <body>${selectedEmail.body_html}</body>
-                        </html>
-                      `}
-                      style={{
-                        width: '100%',
-                        height: '100%',
-                        border: 'none',
-                        display: 'block',
-                        minHeight: 'calc(100vh - 240px)'
-                      }}
-                      sandbox="allow-same-origin allow-scripts allow-popups"
-                      title="Email Content"
+                    )}
+                  </div>
+
+                  <div className="filter-group">
+                    <Text type="secondary" style={{ fontSize: 12, fontWeight: 500 }}>Category</Text>
+                    <Select
+                      placeholder="All categories"
+                      allowClear
+                      style={{ width: '100%' }}
+                      value={filters.category || undefined}
+                      onChange={(v) => handleFilterChange('category', v)}
+                    >
+                      {categories.map(cat => (
+                        <Option key={cat} value={cat}>{getCategoryLabel(cat)}</Option>
+                      ))}
+                    </Select>
+                  </div>
+
+                  <div className="filter-group">
+                    <Text type="secondary" style={{ fontSize: 12, fontWeight: 500 }}>Direction</Text>
+                    <Select
+                      placeholder="All"
+                      allowClear
+                      style={{ width: '100%' }}
+                      value={filters.isOutbound || undefined}
+                      onChange={(v) => handleFilterChange('isOutbound', v)}
+                    >
+                      <Option value="inbound">Received</Option>
+                      <Option value="outbound">Sent</Option>
+                    </Select>
+                  </div>
+                </div>
+              )}
+            >
+              <Badge dot={hasActiveFilters} offset={[-2, 2]}>
+                <Button type={hasActiveFilters ? 'primary' : 'text'} icon={<FilterOutlined />}>
+                  Filters
+                </Button>
+              </Badge>
+            </Dropdown>
+
+            {/* Refresh */}
+            <Tooltip title="Refresh">
+              <Button
+                type="text"
+                icon={<ReloadOutlined spin={loading} />}
+                onClick={handleRefresh}
+              />
+            </Tooltip>
+          </div>
+        </div>
+
+        {/* Content Area */}
+        <div className="mail-content">
+          {/* Email List */}
+          <div className={`mail-list-panel ${selectedEmail ? 'has-detail' : ''}`}>
+            {/* Stats bar */}
+            <div className="mail-list-stats">
+              <Text type="secondary" style={{ fontSize: 13 }}>
+                {totalCount.toLocaleString()} email{totalCount !== 1 ? 's' : ''}
+                {filters.mailbox && ` in ${filters.mailbox}`}
+                {filters.folder && ` • ${filters.folder}`}
+              </Text>
+            </div>
+
+            {/* Email List */}
+            <div className="mail-list-content">
+              {loading && emails.length === 0 ? (
+                <div className="mail-list-loading">
+                  {[1, 2, 3, 4, 5].map(i => (
+                    <div key={i} className="email-skeleton">
+                      <Skeleton.Avatar active size={40} />
+                      <div style={{ flex: 1 }}>
+                        <Skeleton.Input active size="small" style={{ width: '60%', marginBottom: 8 }} />
+                        <Skeleton.Input active size="small" style={{ width: '90%' }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : emails.length === 0 ? (
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description="No emails found"
+                  style={{ marginTop: 60 }}
+                />
+              ) : (
+                <>
+                  {emails.map(email => (
+                    <EmailListItem
+                      key={email.id}
+                      email={email}
+                      isSelected={selectedEmailId === email.id}
+                      onClick={() => handleEmailSelect(email)}
                     />
-                  </div>
-                ) : selectedEmail.body_text ? (
-                  <div
-                    style={{
-                      backgroundColor: '#ffffff',
-                      height: '100%',
-                      overflow: 'auto',
-                      padding: '24px',
-                      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-                      fontSize: '14px',
-                      lineHeight: '1.6',
-                      color: '#333',
-                      whiteSpace: 'pre-wrap',
-                      wordWrap: 'break-word',
-                      overflowWrap: 'break-word'
-                    }}
-                  >
-                    {selectedEmail.body_text}
-                  </div>
-                ) : (
-                  <div style={{ padding: '60px', textAlign: 'center', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Text type="secondary">No email content available</Text>
-                  </div>
-                )}
-              </Card>
-            </Col>
-          </Row>
-        )}
-      </Modal>
+                  ))}
+
+                  {emails.length < totalCount && (
+                    <div className="mail-list-load-more">
+                      <Button
+                        type="link"
+                        onClick={handleLoadMore}
+                        loading={loading}
+                      >
+                        Load more ({totalCount - emails.length} remaining)
+                      </Button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Email Detail */}
+          <EmailDetailPanel
+            email={selectedEmail}
+            loading={detailLoading}
+            onClose={handleCloseDetail}
+            expanded={detailExpanded}
+            onToggleExpand={() => setDetailExpanded(!detailExpanded)}
+          />
+        </div>
+      </div>
     </div>
   );
 };

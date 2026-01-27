@@ -13,14 +13,20 @@ import {
   Alert,
   Radio
 } from "antd";
-import { 
+import {
   FolderOpenOutlined,
-  GoogleOutlined
+  GoogleOutlined,
+  ThunderboltOutlined,
+  LinkOutlined,
+  DisconnectOutlined,
+  CheckCircleOutlined,
+  SyncOutlined
 } from "@ant-design/icons";
 import { useNavigate, useParams } from "react-router-dom";
-import { mailboxService, Mailbox } from '../services/mailboxService';
+import { mailboxService, Mailbox, hasGmailLiveSync } from '../services/mailboxService';
 import GoogleDrivePicker from './GoogleDrivePicker';
 import GoogleDriveConnection from './GoogleDriveConnection';
+import gmailService from '../services/gmailService';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -39,6 +45,8 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
   const [fileSource, setFileSource] = React.useState<'local' | 'google_drive'>('local');
   const [googleDriveFile, setGoogleDriveFile] = React.useState<any>(null);
   const [googleDriveConnected, setGoogleDriveConnected] = React.useState(false);
+  const [gmailConnected, setGmailConnected] = React.useState(false);
+  const [gmailLinking, setGmailLinking] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   // Generate a consistent user ID based on browser fingerprint or use a stored value
@@ -64,7 +72,41 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
     if (mailboxId) {
       loadMailboxData();
     }
+    checkGmailConnection();
   }, [mailboxId]);
+
+  const checkGmailConnection = async () => {
+    try {
+      const connected = await gmailService.isConnected(userId);
+      setGmailConnected(connected);
+    } catch (error) {
+      console.error('Error checking Gmail connection:', error);
+    }
+  };
+
+  const handleLinkGmail = async () => {
+    if (!gmailConnected) {
+      message.warning('Please connect your Gmail account from the Dashboard first');
+      navigate('/');
+      return;
+    }
+
+    try {
+      setGmailLinking(true);
+      const result = await gmailService.extendMailboxWithGmail(mailboxId, userId);
+
+      if (result.success) {
+        message.success(result.message);
+        loadMailboxData(); // Reload to show updated status
+      } else {
+        message.error(result.message);
+      }
+    } catch (error) {
+      message.error('Failed to link Gmail');
+    } finally {
+      setGmailLinking(false);
+    }
+  };
 
   const loadMailboxData = async () => {
     try {
@@ -328,6 +370,84 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
                 style={{ display: 'none' }}
                 onChange={handleFileSelect}
               />
+            </>
+          )}
+
+          {/* Gmail LIVE Sync Section - only for archive mailboxes */}
+          {['mbox', 'pst', 'olm'].includes(selectedType) && (
+            <>
+              <Divider>Gmail LIVE Sync</Divider>
+              {hasGmailLiveSync(mailboxData) ? (
+                // Already linked - show status
+                <Alert
+                  message={
+                    <Space>
+                      <CheckCircleOutlined style={{ color: '#52c41a' }} />
+                      <span>Gmail LIVE Sync Enabled</span>
+                    </Space>
+                  }
+                  description={
+                    <Space direction="vertical" size={4}>
+                      <Text type="secondary">
+                        <GoogleOutlined style={{ marginRight: 4 }} />
+                        {mailboxData.connection_config?.gmail_email || 'Connected'}
+                      </Text>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        Linked on {new Date(mailboxData.connection_config?.gmail_extended_at || '').toLocaleDateString()}
+                      </Text>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        <SyncOutlined style={{ marginRight: 4 }} />
+                        New emails are automatically synced every 15 minutes
+                      </Text>
+                    </Space>
+                  }
+                  type="success"
+                  style={{ marginBottom: 16 }}
+                />
+              ) : (
+                // Not linked - show option to link
+                <div
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(66, 133, 244, 0.08) 0%, rgba(52, 168, 83, 0.08) 100%)',
+                    border: '1px dashed rgba(66, 133, 244, 0.3)',
+                    borderRadius: 12,
+                    padding: 20,
+                    marginBottom: 16
+                  }}
+                >
+                  <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <ThunderboltOutlined style={{ color: '#4285f4', fontSize: 18 }} />
+                      <Text strong>Enable Gmail LIVE Sync</Text>
+                    </div>
+                    <Text type="secondary">
+                      Link your Gmail account to keep this mailbox synced with new emails.
+                      Only new emails will be synced - your archived emails remain intact.
+                    </Text>
+                    <Button
+                      icon={<LinkOutlined />}
+                      onClick={handleLinkGmail}
+                      loading={gmailLinking}
+                      disabled={!gmailConnected}
+                      style={{
+                        color: gmailConnected ? '#4285f4' : undefined,
+                        borderColor: gmailConnected ? '#4285f4' : undefined
+                      }}
+                    >
+                      <GoogleOutlined /> Link Gmail for LIVE Sync
+                    </Button>
+                    {!gmailConnected && (
+                      <Alert
+                        message="Gmail Not Connected"
+                        description="Connect your Gmail account from the Dashboard first to enable LIVE sync."
+                        type="warning"
+                        showIcon
+                        style={{ marginTop: 8 }}
+                      />
+                    )}
+                  </Space>
+                </div>
+              )}
             </>
           )}
 

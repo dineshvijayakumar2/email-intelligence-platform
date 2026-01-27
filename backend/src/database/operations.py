@@ -161,7 +161,8 @@ class EmailOperations:
             'total': total,
             'success': success,
             'failed': failed,
-            'errors': errors
+            'errors': errors,
+            'failed_message_ids': []  # batch_insert_emails doesn't track individual failed IDs
         }
 
     def stream_insert_emails(
@@ -197,6 +198,7 @@ class EmailOperations:
         failed = 0
         skipped = 0
         errors = []
+        failed_message_ids = []  # Track which specific emails failed
         current_batch = []
         last_message_id = None
         was_stopped = False
@@ -330,6 +332,7 @@ class EmailOperations:
                     success += result['success']
                     failed += result['failed']
                     errors.extend(result['errors'])
+                    failed_message_ids.extend(result.get('failed_message_ids', []))
 
                     # Checkpoint callback for resumability
                     if checkpoint_callback:
@@ -356,6 +359,7 @@ class EmailOperations:
                 success += result['success']
                 failed += result['failed']
                 errors.extend(result['errors'])
+                failed_message_ids.extend(result.get('failed_message_ids', []))
 
                 if checkpoint_callback:
                     checkpoint_callback(total, last_message_id)
@@ -373,13 +377,18 @@ class EmailOperations:
             else:
                 logger.info(f"Streaming insert completed: {total} total, {success} inserted, {failed} failed (duplicates handled by database)")
 
+            # Log failed message_ids summary if any failures occurred
+            if failed_message_ids:
+                logger.warning(f"Failed to insert {len(failed_message_ids)} emails. Sample message_ids: {failed_message_ids[:10]}")
+
             return {
                 'total': total,
                 'success': success,
                 'failed': failed,
                 'skipped': 0,  # Duplicates now handled by database upsert
                 'stopped': was_stopped,
-                'errors': errors[:100]  # Limit errors to first 100 to avoid memory issues
+                'errors': errors[:100],  # Limit errors to first 100 to avoid memory issues
+                'failed_message_ids': failed_message_ids[:500]  # Limit to 500 for memory
             }
 
         except Exception as e:
@@ -395,6 +404,7 @@ class EmailOperations:
         2. On timeout, automatically split batch and retry smaller chunks
         3. Progressive backoff with jitter to avoid thundering herd
         4. Fail gracefully - never lose the entire batch on transient errors
+        5. Deduplicate within batch to avoid PostgreSQL 21000 error
 
         Returns:
             Dict with success, failed counts and errors
@@ -418,6 +428,33 @@ class EmailOperations:
         if not prepared_batch:
             return {'success': 0, 'failed': len(batch), 'errors': ['All emails failed validation']}
 
+        # CRITICAL: Deduplicate within batch to prevent PostgreSQL error 21000
+        # "ON CONFLICT DO UPDATE command cannot affect row a second time"
+        # Keep only the last occurrence of each message_id (most complete version)
+        seen_message_ids = {}
+        deduplicated_batch = []
+        deduplicated_originals = []
+        duplicates_in_batch = 0
+
+        for i, prepared_email in enumerate(prepared_batch):
+            message_id = prepared_email.get('message_id')
+            if message_id in seen_message_ids:
+                # Duplicate found - replace with newer version
+                old_idx = seen_message_ids[message_id]
+                deduplicated_batch[old_idx] = prepared_email
+                deduplicated_originals[old_idx] = original_emails_prepared[i]
+                duplicates_in_batch += 1
+            else:
+                seen_message_ids[message_id] = len(deduplicated_batch)
+                deduplicated_batch.append(prepared_email)
+                deduplicated_originals.append(original_emails_prepared[i])
+
+        if duplicates_in_batch > 0:
+            logger.info(f"Batch {batch_num}: Removed {duplicates_in_batch} duplicates within batch ({len(prepared_batch)} -> {len(deduplicated_batch)})")
+
+        prepared_batch = deduplicated_batch
+        original_emails_prepared = deduplicated_originals
+
         # Use adaptive upsert for resilient insertion
         result = self._adaptive_upsert(
             prepared_batch,
@@ -429,7 +466,8 @@ class EmailOperations:
         return {
             'success': result['success'],
             'failed': failed + result['failed'],
-            'errors': result['errors']
+            'errors': result['errors'],
+            'failed_message_ids': result.get('failed_message_ids', [])
         }
 
     def _adaptive_upsert(
@@ -485,7 +523,7 @@ class EmailOperations:
                     if depth == 0:
                         logger.info(f"Batch {batch_num}: Inserted {success_count} emails")
 
-                    return {'success': success_count, 'failed': 0, 'errors': []}
+                    return {'success': success_count, 'failed': 0, 'errors': [], 'failed_message_ids': []}
 
             except Exception as e:
                 error_str = str(e).lower()
@@ -507,12 +545,15 @@ class EmailOperations:
                     if batch_size > min_batch_size:
                         break  # Try splitting
                     else:
-                        # At minimum size, mark as failed
+                        # At minimum size, mark as failed and log message_ids for debugging
+                        failed_message_ids = [email.get('message_id', 'unknown')[:50] for email in prepared_batch[:5]]
                         logger.error(f"{indent}Batch {batch_num} failed at min size ({batch_size}): {str(e)[:100]}")
+                        logger.error(f"{indent}Failed message_ids (sample): {failed_message_ids}")
                         return {
                             'success': 0,
                             'failed': batch_size,
-                            'errors': [f"Batch {batch_num}: {str(e)[:200]}"]
+                            'errors': [f"Batch {batch_num}: {str(e)[:200]}"],
+                            'failed_message_ids': [email.get('message_id') for email in prepared_batch]
                         }
 
         # Split and retry each half
@@ -541,14 +582,17 @@ class EmailOperations:
                 depth + 1
             )
 
+            # Merge failed_message_ids from both halves
+            failed_ids = result1.get('failed_message_ids', []) + result2.get('failed_message_ids', [])
             return {
                 'success': result1['success'] + result2['success'],
                 'failed': result1['failed'] + result2['failed'],
-                'errors': result1['errors'] + result2['errors']
+                'errors': result1['errors'] + result2['errors'],
+                'failed_message_ids': failed_ids if failed_ids else []
             }
 
         # Shouldn't reach here, but handle gracefully
-        return {'success': 0, 'failed': batch_size, 'errors': [f"Batch {batch_num} failed"]}
+        return {'success': 0, 'failed': batch_size, 'errors': [f"Batch {batch_num} failed"], 'failed_message_ids': []}
 
     def _prepare_email_for_insert(self, email: Dict, mailbox_id: str) -> Optional[Dict]:
         """

@@ -106,6 +106,28 @@ export interface RetryResponse {
   message: string;
 }
 
+// =========================================================================
+// Job Error Log (from processing_jobs.error_log) - Batch-level errors
+// =========================================================================
+
+export interface JobErrorLog {
+  job_id: string;
+  status: string;
+  total_records: number;
+  processed_records: number;
+  failed_records: number;
+  error_count: number;
+  error_analysis: {
+    timeout?: number;
+    duplicate_in_batch?: number;
+    constraint_violation?: number;
+    other?: number;
+  };
+  errors: string[];
+  failed_message_ids_count: number;
+  failed_message_ids_sample: string[];
+}
+
 export const errorService = {
   // =========================================================================
   // Job Errors API (from job_errors table) - ALL error types
@@ -218,6 +240,29 @@ export const errorService = {
       throw new Error('Failed to retry failed emails');
     }
     return result;
+  },
+
+  // =========================================================================
+  // Job Error Log API (from processing_jobs.error_log) - Batch-level errors
+  // =========================================================================
+
+  /**
+   * Get the raw error log from a completed processing job
+   * This includes batch-level errors and failed message IDs
+   */
+  async getJobErrorLog(jobId: string): Promise<JobErrorLog | null> {
+    try {
+      const result = await api.get<JobErrorLog>(
+        `/processing-jobs/${jobId}/error-log`
+      );
+      return result;
+    } catch (error: any) {
+      // Return null if no error log exists (404)
+      if (error?.message?.includes('404') || error?.message?.includes('No error log')) {
+        return null;
+      }
+      throw error;
+    }
   },
 
   // =========================================================================

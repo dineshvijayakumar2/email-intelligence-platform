@@ -12,7 +12,7 @@ import {
   CloseOutlined
 } from "@ant-design/icons";
 
-const { Header, Sider, Content } = AntdLayout;
+const { Header, Content } = AntdLayout;
 const { Title, Text } = Typography;
 
 // Page titles mapped to routes
@@ -46,17 +46,6 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
   useEffect(() => {
     setDrawerVisible(false);
   }, [location.pathname]);
-
-  // Get current page title based on route
-  const getCurrentPageTitle = () => {
-    // Handle dynamic routes like /mailboxes/edit/:id
-    for (const [path, title] of Object.entries(pageTitles)) {
-      if (location.pathname === path || location.pathname.startsWith(path + '/')) {
-        return title;
-      }
-    }
-    return 'Dashboard';
-  };
 
   const menuItems = [
     {
@@ -106,132 +95,99 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
     return '/';
   };
 
-  // Sidebar content component (reused in both Sider and Drawer)
-  const SidebarContent = () => (
-    <>
-      {/* Logo Section */}
-      <div className="sidebar-logo">
-        <div className="sidebar-logo-icon">
-          📧
-        </div>
-        <Title level={5} className="sidebar-title">
-          Email Intelligence
-        </Title>
-        <Text className="sidebar-subtitle">
-          Analytics Platform
-        </Text>
-      </div>
-
-      {/* Navigation Menu */}
-      <Menu
-        mode="inline"
-        selectedKeys={[getSelectedKey()]}
-        className="glass-menu"
-        items={menuItems}
-      />
-    </>
-  );
-
   return (
     <AntdLayout style={{ minHeight: "100vh" }}>
-      {/* Desktop Sidebar - Hidden on mobile */}
-      {!isMobile && (
-        <Sider
-          width={240}
-          className="glass-sidebar"
-          style={{
-            position: 'fixed',
-            left: 0,
-            top: 0,
-            bottom: 0,
-            zIndex: 1000,
-          }}
-        >
-          <SidebarContent />
-        </Sider>
-      )}
-
-      {/* Mobile Drawer */}
-      {isMobile && (
-        <Drawer
-          placement="left"
-          onClose={() => setDrawerVisible(false)}
-          open={drawerVisible}
-          closable={false}
-          width={240}
-          styles={{
-            body: { padding: 0 },
-          }}
-          style={{
-            zIndex: 1001,
-          }}
-        >
-          <div className="glass-sidebar" style={{ height: '100%' }}>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: '16px',
-              borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
-            }}>
-              <Title level={5} style={{ margin: 0, color: 'white' }}>Menu</Title>
-              <Button
-                type="text"
-                icon={<CloseOutlined style={{ color: 'white' }} />}
-                onClick={() => setDrawerVisible(false)}
-              />
+      {/* Mobile Drawer for navigation */}
+      <Drawer
+        placement="left"
+        onClose={() => setDrawerVisible(false)}
+        open={drawerVisible}
+        closable={false}
+        width={280}
+        styles={{
+          body: { padding: 0 },
+        }}
+        className="mobile-nav-drawer"
+      >
+        <div className="mobile-nav-content">
+          <div className="mobile-nav-header">
+            <div className="mobile-nav-logo">
+              <span className="logo-icon">📧</span>
+              <div className="logo-text">
+                <Title level={5} style={{ margin: 0 }}>Email Intelligence</Title>
+                <Text type="secondary" style={{ fontSize: 12 }}>Analytics Platform</Text>
+              </div>
             </div>
-            <SidebarContent />
+            <Button
+              type="text"
+              icon={<CloseOutlined />}
+              onClick={() => setDrawerVisible(false)}
+            />
           </div>
-        </Drawer>
-      )}
+          <Menu
+            mode="inline"
+            selectedKeys={[getSelectedKey()]}
+            items={menuItems}
+            className="mobile-nav-menu"
+          />
+        </div>
+      </Drawer>
 
-      {/* Main Content Area */}
-      <AntdLayout style={{ marginLeft: isMobile ? 0 : 240 }}>
-        {/* Glass Header */}
-        <Header
-          className="glass-header"
-          style={{
-            padding: isMobile ? "0 16px" : "0 32px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            height: 64,
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            {/* Mobile Menu Button */}
-            {isMobile && (
+      {/* Top Navigation Header */}
+      <Header className="app-header">
+        <div className="header-container">
+          {/* Left: Logo & Brand */}
+          <div className="header-left">
+            {isMobile ? (
               <Button
                 type="text"
-                icon={<MenuOutlined style={{ fontSize: 20, color: '#667eea' }} />}
+                icon={<MenuOutlined />}
                 onClick={() => setDrawerVisible(true)}
-                style={{ marginRight: 8 }}
+                className="mobile-menu-btn"
               />
+            ) : (
+              <Link to="/" className="header-brand">
+                <span className="brand-icon">📧</span>
+                <span className="brand-text">Email Intelligence</span>
+              </Link>
             )}
-            <Title level={4} className="header-title" style={{ margin: 0 }}>
-              {getCurrentPageTitle()}
-            </Title>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            {!isMobile && (
-              <Text type="secondary" style={{ fontSize: 13 }}>
+
+          {/* Center: Navigation (Desktop only) */}
+          {!isMobile && (
+            <nav className="header-nav">
+              <Menu
+                mode="horizontal"
+                selectedKeys={[getSelectedKey()]}
+                items={menuItems}
+                className="header-menu"
+              />
+            </nav>
+          )}
+
+          {/* Right: Date/Status */}
+          <div className="header-right">
+            {isMobile ? (
+              <Link to="/" className="mobile-brand">
+                <span className="brand-icon">📧</span>
+              </Link>
+            ) : (
+              <Text type="secondary" className="header-date">
                 {new Date().toLocaleDateString('en-US', {
-                  weekday: 'long',
-                  year: 'numeric',
-                  month: 'long',
+                  weekday: 'short',
+                  month: 'short',
                   day: 'numeric'
                 })}
               </Text>
             )}
           </div>
-        </Header>
+        </div>
+      </Header>
 
-        {/* Glass Content */}
-        <Content className="glass-content" style={{ padding: 0, overflow: 'auto' }}>
-          {children}
-        </Content>
-      </AntdLayout>
+      {/* Main Content */}
+      <Content className="glass-content" style={{ marginTop: 64 }}>
+        {children}
+      </Content>
     </AntdLayout>
   );
 };

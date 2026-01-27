@@ -1,0 +1,614 @@
+"""
+Gmail Sync Service - Handles periodic Gmail synchronization
+
+Features:
+- 15-minute automatic polling interval
+- Incremental sync using Gmail historyId
+- Support for extending archive-based mailboxes with LIVE sync
+- Token refresh handling
+- Error recovery with exponential backoff
+- Sync status tracking in database
+
+This service supports two modes:
+1. Pure Gmail mailbox - Created fresh via OAuth connection
+2. Extended mailbox - Archive file (MBOX/PST/OLM) + LIVE Gmail sync
+   (e.g., user imports historical archive, then connects Gmail for ongoing sync)
+"""
+
+import asyncio
+import logging
+from datetime import datetime, timezone, timedelta
+from typing import Optional, Dict, List, Any
+from concurrent.futures import ThreadPoolExecutor
+import traceback
+
+logger = logging.getLogger(__name__)
+
+
+class GmailSyncService:
+    """
+    Service for periodic Gmail synchronization
+
+    Responsibilities:
+    - Schedule 15-minute sync jobs for all connected Gmail accounts
+    - Track sync state per user in user_integrations table
+    - Handle rate limits and errors with exponential backoff
+    - Update sync status in database
+    - Support extending existing mailboxes with LIVE sync
+    """
+
+    SYNC_INTERVAL_MINUTES = 15
+    MAX_EMAILS_PER_SYNC = 500  # Limit per sync to avoid rate limits
+    RATE_LIMIT_BACKOFF_MINUTES = 60
+    MAX_CONSECUTIVE_ERRORS = 3  # After this, skip until manual intervention
+
+    def __init__(self, supabase_client=None):
+        """
+        Initialize the sync service
+
+        Args:
+            supabase_client: Supabase client instance (optional, will create if not provided)
+        """
+        self._supabase = supabase_client
+        self.executor = ThreadPoolExecutor(max_workers=5, thread_name_prefix="gmail_sync")
+        self._running = False
+        self._sync_task = None
+        self._active_syncs = {}  # user_id -> sync task
+
+    @property
+    def supabase(self):
+        """Lazy-load Supabase client"""
+        if self._supabase is None:
+            from ..database.supabase_client import SupabaseClient
+            self._supabase = SupabaseClient.get_client(use_service_key=True)
+        return self._supabase
+
+    async def start(self):
+        """Start the sync service"""
+        if self._running:
+            logger.warning("Gmail sync service already running")
+            return
+
+        self._running = True
+        logger.info("Gmail sync service started")
+
+        # Start background sync loop
+        self._sync_task = asyncio.create_task(self._sync_loop())
+
+    async def stop(self):
+        """Stop the sync service"""
+        self._running = False
+
+        if self._sync_task:
+            self._sync_task.cancel()
+            try:
+                await self._sync_task
+            except asyncio.CancelledError:
+                pass
+
+        self.executor.shutdown(wait=False)
+        logger.info("Gmail sync service stopped")
+
+    async def _sync_loop(self):
+        """Main sync loop - runs every 15 minutes"""
+        while self._running:
+            try:
+                await self._sync_all_users()
+            except Exception as e:
+                logger.error(f"Error in Gmail sync loop: {e}")
+                logger.error(traceback.format_exc())
+
+            # Wait for next interval
+            await asyncio.sleep(self.SYNC_INTERVAL_MINUTES * 60)
+
+    async def _sync_all_users(self):
+        """Sync all users with active Gmail connections"""
+        try:
+            # Get all users with Gmail integration that are not in error state
+            # or have been in error state long enough for retry
+            result = self.supabase.table('user_integrations').select(
+                'user_id, access_token, refresh_token, last_history_id, sync_status, sync_error, last_sync_at, email_count'
+            ).eq('provider', 'gmail').execute()
+
+            users = result.data or []
+            logger.info(f"Found {len(users)} Gmail integrations to check")
+
+            for user in users:
+                user_id = user['user_id']
+
+                # Skip if currently syncing
+                if user_id in self._active_syncs:
+                    logger.debug(f"Skipping {user_id} - sync already in progress")
+                    continue
+
+                # Skip if in error state and not enough time has passed
+                if user.get('sync_status') == 'error':
+                    last_sync = user.get('last_sync_at')
+                    if last_sync:
+                        last_sync_dt = datetime.fromisoformat(last_sync.replace('Z', '+00:00'))
+                        backoff_time = datetime.now(timezone.utc) - timedelta(minutes=self.RATE_LIMIT_BACKOFF_MINUTES)
+                        if last_sync_dt > backoff_time:
+                            logger.debug(f"Skipping {user_id} - in error backoff period")
+                            continue
+
+                # Run sync in background
+                task = asyncio.create_task(self._sync_user(user))
+                self._active_syncs[user_id] = task
+
+                # Clean up completed task
+                task.add_done_callback(lambda t, uid=user_id: self._active_syncs.pop(uid, None))
+
+        except Exception as e:
+            logger.error(f"Failed to fetch users for sync: {e}")
+
+    async def _sync_user(self, user_data: Dict):
+        """
+        Sync a single user's Gmail
+
+        Args:
+            user_data: User integration data from database
+        """
+        user_id = user_data['user_id']
+        logger.info(f"Starting Gmail sync for user: {user_id}")
+
+        try:
+            # Update status to syncing
+            await self._update_sync_status(user_id, 'syncing')
+
+            # Get mailbox for this user
+            mailbox = await self._get_gmail_mailbox(user_id)
+            if not mailbox:
+                logger.warning(f"No Gmail mailbox found for user {user_id}, creating one...")
+                mailbox = await self._create_gmail_mailbox(user_id)
+
+            if not mailbox:
+                raise ValueError(f"Could not create mailbox for user {user_id}")
+
+            # Import here to avoid circular imports
+            from ..extractors.gmail_extractor import GmailExtractor
+            from ..database.operations import EmailOperations
+
+            # Create extractor
+            extractor = GmailExtractor({
+                'user_id': user_id,
+                'access_token': user_data['access_token'],
+                'refresh_token': user_data['refresh_token'],
+                'history_id': user_data.get('last_history_id'),
+                'labels': ['INBOX', 'SENT'],
+                'mailbox_id': mailbox['id']
+            })
+
+            if not extractor.connect():
+                raise ConnectionError("Failed to connect to Gmail API")
+
+            # Create processing job
+            job_id = await self._create_sync_job(mailbox['id'])
+
+            # Process emails using EmailOperations
+            email_ops = EmailOperations()
+            success_count = 0
+            failed_count = 0
+
+            # Extract and insert emails
+            emails_batch = []
+            batch_size = 100
+
+            for email in extractor.extract_emails(max_emails=self.MAX_EMAILS_PER_SYNC):
+                emails_batch.append(email)
+
+                if len(emails_batch) >= batch_size:
+                    result = email_ops.batch_insert_emails(emails_batch, mailbox['id'])
+                    success_count += result.get('success', 0)
+                    failed_count += result.get('failed', 0)
+                    emails_batch = []
+
+            # Insert remaining emails
+            if emails_batch:
+                result = email_ops.batch_insert_emails(emails_batch, mailbox['id'])
+                success_count += result.get('success', 0)
+                failed_count += result.get('failed', 0)
+
+            # Update history ID for next incremental sync
+            new_history_id = extractor.get_current_history_id()
+
+            # Check if tokens were refreshed
+            refreshed_tokens = extractor.get_refreshed_tokens()
+            if refreshed_tokens:
+                await self._update_tokens(user_id, refreshed_tokens)
+
+            # Complete the job
+            await self._complete_sync_job(job_id, success_count, failed_count)
+
+            # Update sync status
+            await self._update_sync_status(
+                user_id,
+                'idle',
+                history_id=new_history_id,
+                email_count=success_count
+            )
+
+            extractor.disconnect()
+
+            logger.info(f"Gmail sync completed for user {user_id}: {success_count} emails synced")
+
+        except Exception as e:
+            logger.error(f"Gmail sync failed for user {user_id}: {e}")
+            logger.error(traceback.format_exc())
+            await self._update_sync_status(user_id, 'error', error=str(e))
+
+    async def _get_gmail_mailbox(self, user_id: str) -> Optional[Dict]:
+        """
+        Get Gmail mailbox for user
+
+        Looks for:
+        1. Mailbox with type 'gmail'
+        2. Mailbox with gmail_user_id in connection_config (extended archive mailbox)
+        """
+        # First, look for pure Gmail mailbox
+        result = self.supabase.table('mailboxes').select('*').eq(
+            'mailbox_type', 'gmail'
+        ).execute()
+
+        for mailbox in (result.data or []):
+            config = mailbox.get('connection_config') or {}
+            if config.get('user_id') == user_id:
+                return mailbox
+
+        # Look for extended mailbox (archive + LIVE sync)
+        result = self.supabase.table('mailboxes').select('*').execute()
+        for mailbox in (result.data or []):
+            config = mailbox.get('connection_config') or {}
+            if config.get('gmail_user_id') == user_id and config.get('gmail_sync_enabled'):
+                return mailbox
+
+        return None
+
+    async def _create_gmail_mailbox(self, user_id: str) -> Optional[Dict]:
+        """Create a new Gmail mailbox for user"""
+        try:
+            # Get user's Gmail email address
+            from ..extractors.gmail_extractor import GmailExtractor
+
+            # Get tokens
+            result = self.supabase.table('user_integrations').select(
+                'access_token, refresh_token'
+            ).eq('user_id', user_id).eq('provider', 'gmail').execute()
+
+            if not result.data:
+                return None
+
+            tokens = result.data[0]
+
+            # Create temporary extractor to get email
+            extractor = GmailExtractor({
+                'user_id': user_id,
+                'access_token': tokens['access_token'],
+                'refresh_token': tokens['refresh_token']
+            })
+
+            if not extractor.connect():
+                return None
+
+            gmail_email = extractor.user_email
+            extractor.disconnect()
+
+            # Create mailbox
+            mailbox_data = {
+                'name': f'Gmail - {gmail_email}',
+                'email_address': gmail_email,
+                'mailbox_type': 'gmail',
+                'is_active': True,
+                'sync_enabled': True,
+                'connection_config': {
+                    'user_id': user_id,
+                    'provider': 'gmail',
+                    'gmail_email': gmail_email
+                }
+            }
+
+            result = self.supabase.table('mailboxes').insert(mailbox_data).execute()
+            return result.data[0] if result.data else None
+
+        except Exception as e:
+            logger.error(f"Failed to create Gmail mailbox: {e}")
+            return None
+
+    async def _create_sync_job(self, mailbox_id: str) -> str:
+        """Create a processing job for the sync"""
+        job_data = {
+            'job_type': 'gmail_sync',
+            'mailbox_id': mailbox_id,
+            'status': 'running',
+            'processed_records': 0,
+            'failed_records': 0,
+            'started_at': datetime.now(timezone.utc).isoformat()
+        }
+
+        result = self.supabase.table('processing_jobs').insert(job_data).execute()
+        return result.data[0]['id'] if result.data else None
+
+    async def _complete_sync_job(self, job_id: str, success: int, failed: int):
+        """Mark sync job as completed"""
+        if not job_id:
+            return
+
+        self.supabase.table('processing_jobs').update({
+            'status': 'completed',
+            'processed_records': success,
+            'failed_records': failed,
+            'completed_at': datetime.now(timezone.utc).isoformat()
+        }).eq('id', job_id).execute()
+
+    async def _update_sync_status(
+        self,
+        user_id: str,
+        status: str,
+        history_id: str = None,
+        email_count: int = None,
+        error: str = None
+    ):
+        """Update sync status in user_integrations table"""
+        update_data = {
+            'sync_status': status,
+            'updated_at': datetime.now(timezone.utc).isoformat()
+        }
+
+        if status == 'idle':
+            update_data['last_sync_at'] = datetime.now(timezone.utc).isoformat()
+            update_data['sync_error'] = None
+
+        if history_id:
+            update_data['last_history_id'] = history_id
+
+        if email_count is not None and email_count > 0:
+            # Increment email count
+            current = self.supabase.table('user_integrations').select('email_count').eq(
+                'user_id', user_id
+            ).eq('provider', 'gmail').execute()
+
+            if current.data:
+                current_count = current.data[0].get('email_count') or 0
+                update_data['email_count'] = current_count + email_count
+
+        if error:
+            update_data['sync_error'] = error[:500]  # Truncate long errors
+
+        self.supabase.table('user_integrations').update(update_data).eq(
+            'user_id', user_id
+        ).eq('provider', 'gmail').execute()
+
+    async def _update_tokens(self, user_id: str, tokens: Dict):
+        """Update refreshed tokens in database"""
+        self.supabase.table('user_integrations').update({
+            'access_token': tokens['access_token'],
+            'updated_at': datetime.now(timezone.utc).isoformat()
+        }).eq('user_id', user_id).eq('provider', 'gmail').execute()
+
+    # =========================================================================
+    # Public API Methods
+    # =========================================================================
+
+    async def trigger_sync(self, user_id: str):
+        """
+        Manually trigger sync for a user
+
+        Args:
+            user_id: User ID to sync
+        """
+        result = self.supabase.table('user_integrations').select(
+            'user_id, access_token, refresh_token, last_history_id, email_count'
+        ).eq('user_id', user_id).eq('provider', 'gmail').execute()
+
+        if result.data:
+            await self._sync_user(result.data[0])
+        else:
+            raise ValueError(f"No Gmail integration found for user {user_id}")
+
+    async def import_filters(self, user_id: str) -> List[Dict]:
+        """
+        Import Gmail filters for a user (S1-08)
+
+        Args:
+            user_id: User ID
+
+        Returns:
+            List of imported filter records
+        """
+        # Get user tokens
+        result = self.supabase.table('user_integrations').select(
+            'access_token, refresh_token'
+        ).eq('user_id', user_id).eq('provider', 'gmail').execute()
+
+        if not result.data:
+            raise ValueError(f"No Gmail integration found for user {user_id}")
+
+        tokens = result.data[0]
+
+        # Import here to avoid circular imports
+        from ..extractors.gmail_extractor import GmailExtractor
+
+        # Create extractor for API access
+        extractor = GmailExtractor({
+            'user_id': user_id,
+            'access_token': tokens['access_token'],
+            'refresh_token': tokens['refresh_token']
+        })
+
+        if not extractor.connect():
+            raise ConnectionError("Failed to connect to Gmail API")
+
+        try:
+            # Fetch filters from Gmail
+            filters_result = extractor.service.users().settings().filters().list(
+                userId='me'
+            ).execute()
+
+            gmail_filters = filters_result.get('filter', [])
+            imported = []
+
+            for filter_data in gmail_filters:
+                filter_record = {
+                    'user_id': user_id,
+                    'filter_id': filter_data['id'],
+                    'criteria': filter_data.get('criteria', {}),
+                    'action': filter_data.get('action', {}),
+                    'is_active': True,
+                    'updated_at': datetime.now(timezone.utc).isoformat()
+                }
+
+                # Upsert filter
+                self.supabase.table('gmail_filters').upsert(
+                    filter_record,
+                    on_conflict='user_id,filter_id'
+                ).execute()
+
+                imported.append(filter_record)
+
+            logger.info(f"Imported {len(imported)} Gmail filters for user {user_id}")
+            return imported
+
+        finally:
+            extractor.disconnect()
+
+    async def extend_mailbox_with_gmail(
+        self,
+        mailbox_id: str,
+        user_id: str
+    ) -> Dict:
+        """
+        Extend an existing archive-based mailbox with LIVE Gmail sync
+
+        This allows users who imported historical emails from MBOX/PST/OLM
+        to now keep the mailbox synced with new emails from Gmail.
+
+        Key feature: Only syncs NEW emails that aren't already in the archive.
+        Uses Gmail's historyId for incremental sync after extension.
+
+        Args:
+            mailbox_id: Existing mailbox ID (from archive import)
+            user_id: User ID with Gmail integration
+
+        Returns:
+            Updated mailbox record
+        """
+        # Verify Gmail integration exists
+        integration = self.supabase.table('user_integrations').select('*').eq(
+            'user_id', user_id
+        ).eq('provider', 'gmail').execute()
+
+        if not integration.data:
+            raise ValueError(f"No Gmail integration found for user {user_id}")
+
+        # Get mailbox
+        mailbox = self.supabase.table('mailboxes').select('*').eq(
+            'id', mailbox_id
+        ).execute()
+
+        if not mailbox.data:
+            raise ValueError(f"Mailbox {mailbox_id} not found")
+
+        current_config = mailbox.data[0].get('connection_config') or {}
+
+        # Get current Gmail history ID to start incremental sync from NOW
+        # This ensures we only sync NEW emails, not re-import archive ones
+        from ..extractors.gmail_extractor import GmailExtractor
+
+        tokens = integration.data[0]
+        extractor = GmailExtractor({
+            'user_id': user_id,
+            'access_token': tokens['access_token'],
+            'refresh_token': tokens['refresh_token']
+        })
+
+        initial_history_id = None
+        gmail_email = None
+        if extractor.connect():
+            initial_history_id = extractor.get_current_history_id()
+            gmail_email = extractor.user_email
+            extractor.disconnect()
+
+        # Update mailbox to enable Gmail sync
+        updated_config = {
+            **current_config,
+            'gmail_user_id': user_id,
+            'gmail_sync_enabled': True,
+            'gmail_email': gmail_email,
+            'gmail_extended_at': datetime.now(timezone.utc).isoformat(),
+            'original_type': mailbox.data[0].get('mailbox_type'),
+            'initial_history_id': initial_history_id  # Start point for LIVE sync
+        }
+
+        result = self.supabase.table('mailboxes').update({
+            'connection_config': updated_config,
+            'sync_enabled': True,
+            'updated_at': datetime.now(timezone.utc).isoformat()
+        }).eq('id', mailbox_id).execute()
+
+        # Also update the user_integrations with initial history ID
+        # This ensures first sync only gets NEW emails
+        if initial_history_id:
+            self.supabase.table('user_integrations').update({
+                'last_history_id': initial_history_id
+            }).eq('user_id', user_id).eq('provider', 'gmail').execute()
+
+        logger.info(f"Extended mailbox {mailbox_id} with Gmail LIVE sync for user {user_id}")
+        logger.info(f"Starting incremental sync from history ID: {initial_history_id}")
+
+        return result.data[0] if result.data else None
+
+    async def get_sync_status(self, user_id: str) -> Dict:
+        """
+        Get sync status for a user
+
+        Args:
+            user_id: User ID
+
+        Returns:
+            Sync status dict
+        """
+        result = self.supabase.table('user_integrations').select(
+            'sync_status, last_sync_at, email_count, sync_error'
+        ).eq('user_id', user_id).eq('provider', 'gmail').execute()
+
+        if not result.data:
+            return {'connected': False}
+
+        data = result.data[0]
+        return {
+            'connected': True,
+            'sync_status': data.get('sync_status', 'idle'),
+            'last_sync_at': data.get('last_sync_at'),
+            'email_count': data.get('email_count', 0),
+            'error': data.get('sync_error')
+        }
+
+
+# =========================================================================
+# Singleton instance management
+# =========================================================================
+
+_gmail_sync_service: Optional[GmailSyncService] = None
+
+
+def get_gmail_sync_service(supabase_client=None) -> GmailSyncService:
+    """
+    Get or create the Gmail sync service singleton
+
+    Args:
+        supabase_client: Optional Supabase client to use
+
+    Returns:
+        GmailSyncService instance
+    """
+    global _gmail_sync_service
+
+    if _gmail_sync_service is None:
+        _gmail_sync_service = GmailSyncService(supabase_client)
+
+    return _gmail_sync_service
+
+
+def reset_gmail_sync_service():
+    """Reset the singleton (for testing)"""
+    global _gmail_sync_service
+    _gmail_sync_service = None

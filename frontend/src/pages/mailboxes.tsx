@@ -6,7 +6,11 @@ import {
   Typography,
   Tag,
   Popconfirm,
-  message
+  message,
+  Modal,
+  DatePicker,
+  InputNumber,
+  Form
 } from "antd";
 import {
   PlusOutlined,
@@ -14,23 +18,66 @@ import {
   DeleteOutlined,
   SyncOutlined,
   MailOutlined,
-  PlayCircleOutlined
+  PlayCircleOutlined,
+  GoogleOutlined,
+  LinkOutlined,
+  ThunderboltOutlined,
+  HistoryOutlined,
+  CalendarOutlined
 } from "@ant-design/icons";
+import dayjs from 'dayjs';
 import { useNavigate, useParams } from "react-router-dom";
-import { mailboxService, Mailbox } from '../services/mailboxService';
+import { mailboxService, Mailbox, hasGmailLiveSync } from '../services/mailboxService';
 import { MailboxCreateForm } from '../components/MailboxCreateForm';
 import { MailboxEditForm } from '../components/MailboxEditForm';
+import gmailService from '../services/gmailService';
 
 const { Text } = Typography;
+const { RangePicker } = DatePicker;
 
 export const MailboxList: React.FC = () => {
   const navigate = useNavigate();
   const [mailboxes, setMailboxes] = useState<Mailbox[]>([]);
   const [loading, setLoading] = useState(true);
+  const [gmailConnected, setGmailConnected] = useState(false);
+  const [linkingMailboxId, setLinkingMailboxId] = useState<string | null>(null);
+
+  // Date range fetch modal state
+  const [dateRangeModalVisible, setDateRangeModalVisible] = useState(false);
+  const [selectedMailboxForFetch, setSelectedMailboxForFetch] = useState<Mailbox | null>(null);
+  const [fetchingEmails, setFetchingEmails] = useState(false);
+  const [dateRangeForm] = Form.useForm();
+
+  // Get user ID from localStorage (same pattern as other components)
+  const getUserId = () => {
+    let userId = localStorage.getItem('user_id');
+    if (!userId) {
+      const fingerprint = [
+        navigator.userAgent,
+        navigator.language,
+        screen.width + 'x' + screen.height,
+        new Date().getTimezoneOffset()
+      ].join('|');
+      userId = 'user_' + btoa(fingerprint).replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
+      localStorage.setItem('user_id', userId);
+    }
+    return userId;
+  };
+  const userId = getUserId();
 
   useEffect(() => {
     loadMailboxes();
+    checkGmailConnection();
   }, []);
+
+  const checkGmailConnection = async () => {
+    try {
+      const connected = await gmailService.isConnected(userId);
+      setGmailConnected(connected);
+    } catch (error) {
+      console.error('Error checking Gmail connection:', error);
+    }
+  };
 
   const loadMailboxes = async (retryCount = 0) => {
     let shouldStopLoading = true;
@@ -83,6 +130,75 @@ export const MailboxList: React.FC = () => {
     }
   };
 
+  const handleLinkGmail = async (mailboxId: string, mailboxName: string) => {
+    if (!gmailConnected) {
+      message.warning('Please connect your Gmail account from the Dashboard first');
+      navigate('/');
+      return;
+    }
+
+    try {
+      setLinkingMailboxId(mailboxId);
+      message.loading({ content: `Linking Gmail to ${mailboxName}...`, key: 'link-gmail' });
+
+      const result = await gmailService.extendMailboxWithGmail(mailboxId, userId);
+
+      if (result.success) {
+        message.success({ content: result.message, key: 'link-gmail' });
+        loadMailboxes(); // Reload to show updated status
+      } else {
+        message.error({ content: result.message, key: 'link-gmail' });
+      }
+    } catch (error) {
+      message.error({ content: 'Failed to link Gmail', key: 'link-gmail' });
+    } finally {
+      setLinkingMailboxId(null);
+    }
+  };
+
+  const handleOpenDateRangeFetch = (mailbox: Mailbox) => {
+    setSelectedMailboxForFetch(mailbox);
+    setDateRangeModalVisible(true);
+    dateRangeForm.resetFields();
+  };
+
+  const handleDateRangeFetch = async (values: any) => {
+    if (!selectedMailboxForFetch) return;
+
+    const { dateRange, maxEmails } = values;
+    if (!dateRange || dateRange.length !== 2) {
+      message.error('Please select a date range');
+      return;
+    }
+
+    const startDate = dateRange[0].format('YYYY-MM-DD');
+    const endDate = dateRange[1].format('YYYY-MM-DD');
+
+    try {
+      setFetchingEmails(true);
+      const result = await gmailService.fetchEmailsByDateRange(
+        selectedMailboxForFetch.id,
+        userId,
+        startDate,
+        endDate,
+        maxEmails
+      );
+
+      if (result.success) {
+        message.success(`${result.message}. Job ID: ${result.job_id}`);
+        setDateRangeModalVisible(false);
+        // Navigate to processing page to see the job
+        navigate('/processing');
+      } else {
+        message.error(result.message);
+      }
+    } catch (error) {
+      message.error('Failed to start email fetch');
+    } finally {
+      setFetchingEmails(false);
+    }
+  };
+
   const columns = [
     {
       title: 'Name',
@@ -104,18 +220,36 @@ export const MailboxList: React.FC = () => {
       title: 'Type',
       dataIndex: 'mailbox_type',
       key: 'mailbox_type',
-      render: (type: string) => {
-        const colors = {
+      render: (type: string, record: Mailbox) => {
+        const colors: Record<string, string> = {
           mbox: 'green',
           pst: 'blue',
-          olm: 'purple'
+          olm: 'purple',
+          gmail: 'cyan',
+          outlook_live: 'geekblue'
         };
-        const labels = {
-          mbox: 'MBOX (Universal)',
-          pst: 'PST (Outlook Windows)',
-          olm: 'OLM (Outlook Mac)'
+        const labels: Record<string, string> = {
+          mbox: 'MBOX',
+          pst: 'PST',
+          olm: 'OLM',
+          gmail: 'Gmail LIVE',
+          outlook_live: 'Outlook LIVE'
         };
-        return <Tag color={colors[type as keyof typeof colors]}>{labels[type as keyof typeof labels] || type.toUpperCase()}</Tag>;
+        const isLiveEnabled = hasGmailLiveSync(record);
+        const displayType = record.connection_config?.original_type || type;
+
+        return (
+          <Space size={4}>
+            <Tag color={colors[displayType] || 'default'}>
+              {labels[displayType] || displayType.toUpperCase()}
+            </Tag>
+            {isLiveEnabled && (
+              <Tag color="cyan" icon={<ThunderboltOutlined />}>
+                LIVE
+              </Tag>
+            )}
+          </Space>
+        );
       },
     },
     {
@@ -146,46 +280,84 @@ export const MailboxList: React.FC = () => {
     {
       title: 'Actions',
       key: 'actions',
-      render: (_: any, record: Mailbox) => (
-        <Space>
-          <Button
-            type="primary"
-            size="small"
-            icon={<PlayCircleOutlined />}
-            onClick={() => navigate(`/mailboxes/process/${record.id}`)}
-            disabled={!record.is_active}
-          >
-            Process
-          </Button>
-          <Button
-            type="primary"
-            ghost
-            size="small"
-            icon={<SyncOutlined />}
-            onClick={() => handleSync(record.id, record.name)}
-            disabled={!record.is_active}
-          >
-            Sync
-          </Button>
-          <Button
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => navigate(`/mailboxes/edit/${record.id}`)}
-          >
-            Edit
-          </Button>
-          <Popconfirm
-            title="Are you sure you want to delete this mailbox?"
-            onConfirm={() => handleDelete(record.id)}
-            okText="Yes"
-            cancelText="No"
-          >
-            <Button size="small" danger icon={<DeleteOutlined />}>
-              Delete
+      render: (_: any, record: Mailbox) => {
+        const isLiveEnabled = hasGmailLiveSync(record);
+        const isArchiveType = ['mbox', 'pst', 'olm'].includes(record.mailbox_type);
+        const canLinkGmail = isArchiveType && !isLiveEnabled && gmailConnected;
+
+        return (
+          <Space wrap>
+            <Button
+              type="primary"
+              size="small"
+              icon={<PlayCircleOutlined />}
+              onClick={() => navigate(`/mailboxes/process/${record.id}`)}
+              disabled={!record.is_active}
+            >
+              Process
             </Button>
-          </Popconfirm>
-        </Space>
-      ),
+            <Button
+              type="primary"
+              ghost
+              size="small"
+              icon={<SyncOutlined />}
+              onClick={() => handleSync(record.id, record.name)}
+              disabled={!record.is_active}
+            >
+              Sync
+            </Button>
+            {/* Link Gmail button - only for archive mailboxes without LIVE sync */}
+            {isArchiveType && !isLiveEnabled && (
+              <Button
+                size="small"
+                icon={<LinkOutlined />}
+                onClick={() => handleLinkGmail(record.id, record.name)}
+                disabled={!canLinkGmail}
+                loading={linkingMailboxId === record.id}
+                title={!gmailConnected ? 'Connect Gmail from Dashboard first' : 'Link Gmail for LIVE sync'}
+                style={{
+                  color: gmailConnected ? '#4285f4' : undefined,
+                  borderColor: gmailConnected ? '#4285f4' : undefined
+                }}
+              >
+                <GoogleOutlined /> Link Gmail
+              </Button>
+            )}
+            {/* Fetch Historical button - only for mailboxes with LIVE sync enabled */}
+            {isLiveEnabled && (
+              <Button
+                size="small"
+                icon={<HistoryOutlined />}
+                onClick={() => handleOpenDateRangeFetch(record)}
+                title="Fetch historical emails from Gmail for a specific date range"
+                style={{
+                  color: '#52c41a',
+                  borderColor: '#52c41a'
+                }}
+              >
+                Fetch Historical
+              </Button>
+            )}
+            <Button
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => navigate(`/mailboxes/edit/${record.id}`)}
+            >
+              Edit
+            </Button>
+            <Popconfirm
+              title="Are you sure you want to delete this mailbox?"
+              onConfirm={() => handleDelete(record.id)}
+              okText="Yes"
+              cancelText="No"
+            >
+              <Button size="small" danger icon={<DeleteOutlined />}>
+                Delete
+              </Button>
+            </Popconfirm>
+          </Space>
+        );
+      },
     },
   ];
 
@@ -224,6 +396,81 @@ export const MailboxList: React.FC = () => {
           }}
         />
       </div>
+
+      {/* Date Range Fetch Modal */}
+      <Modal
+        title={
+          <Space>
+            <CalendarOutlined style={{ color: '#52c41a' }} />
+            <span>Fetch Historical Emails</span>
+          </Space>
+        }
+        open={dateRangeModalVisible}
+        onCancel={() => setDateRangeModalVisible(false)}
+        footer={null}
+        destroyOnClose
+      >
+        <div style={{ marginBottom: 16 }}>
+          <Text type="secondary">
+            Pull historical emails from Gmail for <strong>{selectedMailboxForFetch?.name}</strong> within a specific date range.
+            This uses the LIVE sync connection to fetch older emails on-demand.
+          </Text>
+        </div>
+
+        <Form
+          form={dateRangeForm}
+          layout="vertical"
+          onFinish={handleDateRangeFetch}
+        >
+          <Form.Item
+            name="dateRange"
+            label="Date Range"
+            rules={[{ required: true, message: 'Please select a date range' }]}
+          >
+            <RangePicker
+              style={{ width: '100%' }}
+              disabledDate={(current) => current && current > dayjs().endOf('day')}
+              presets={[
+                { label: 'Last 7 Days', value: [dayjs().subtract(7, 'day'), dayjs()] },
+                { label: 'Last 30 Days', value: [dayjs().subtract(30, 'day'), dayjs()] },
+                { label: 'Last 3 Months', value: [dayjs().subtract(3, 'month'), dayjs()] },
+                { label: 'Last 6 Months', value: [dayjs().subtract(6, 'month'), dayjs()] },
+                { label: 'Last Year', value: [dayjs().subtract(1, 'year'), dayjs()] },
+              ]}
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="maxEmails"
+            label="Maximum Emails (optional)"
+            tooltip="Leave empty to fetch all emails in the date range"
+          >
+            <InputNumber
+              style={{ width: '100%' }}
+              min={1}
+              max={10000}
+              placeholder="No limit"
+            />
+          </Form.Item>
+
+          <Form.Item style={{ marginBottom: 0, marginTop: 24 }}>
+            <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
+              <Button onClick={() => setDateRangeModalVisible(false)}>
+                Cancel
+              </Button>
+              <Button
+                type="primary"
+                htmlType="submit"
+                loading={fetchingEmails}
+                icon={<HistoryOutlined />}
+                style={{ background: '#52c41a', borderColor: '#52c41a' }}
+              >
+                Start Fetch
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 };

@@ -35,6 +35,10 @@ export interface RecentJob {
   jobType: string;
 }
 
+// Cache for processing jobs to avoid duplicate API calls
+let processingJobsCache: { data: any[] | null; timestamp: number } = { data: null, timestamp: 0 };
+const CACHE_TTL = 5000; // 5 seconds cache
+
 export const dashboardService = {
   // Get dashboard statistics
   async getDashboardStats(): Promise<DashboardStats> {
@@ -58,8 +62,15 @@ export const dashboardService = {
     }
   },
 
-  // Get processing overview for dashboard
-  async getProcessingOverview(): Promise<ProcessingOverview> {
+  // Internal: Fetch processing jobs with caching to avoid duplicate calls
+  async _fetchProcessingJobs(): Promise<any[]> {
+    const now = Date.now();
+
+    // Return cached data if still valid
+    if (processingJobsCache.data && (now - processingJobsCache.timestamp) < CACHE_TTL) {
+      return processingJobsCache.data;
+    }
+
     try {
       const response = await fetch(`${config.apiBaseUrl}/processing-jobs`);
 
@@ -68,6 +79,18 @@ export const dashboardService = {
       }
 
       const jobs = await response.json();
+      processingJobsCache = { data: jobs, timestamp: now };
+      return jobs;
+    } catch (error) {
+      console.error('Error fetching processing jobs:', error);
+      return processingJobsCache.data || [];
+    }
+  },
+
+  // Get processing overview for dashboard
+  async getProcessingOverview(): Promise<ProcessingOverview> {
+    try {
+      const jobs = await this._fetchProcessingJobs();
       const today = new Date().toISOString().split('T')[0];
 
       const activeJobs = jobs.filter((j: any) =>
@@ -134,19 +157,13 @@ export const dashboardService = {
     }
   },
 
-  // Get recent processing jobs
+  // Get recent processing jobs (uses cached data)
   async getRecentJobs(limit: number = 5): Promise<RecentJob[]> {
     try {
-      const response = await fetch(`${config.apiBaseUrl}/processing-jobs`);
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const jobs = await response.json();
+      const jobs = await this._fetchProcessingJobs();
 
       // Sort by created_at descending and take limit
-      const sorted = jobs.sort((a: any, b: any) =>
+      const sorted = [...jobs].sort((a: any, b: any) =>
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       ).slice(0, limit);
 
@@ -164,6 +181,33 @@ export const dashboardService = {
       console.error('Error fetching recent jobs:', error);
       return [];
     }
+  },
+
+  // Combined method for dashboard - fetches all data efficiently
+  async getAllDashboardData(): Promise<{
+    stats: DashboardStats;
+    processingOverview: ProcessingOverview;
+    mailboxes: MailboxSummary[];
+    recentJobs: RecentJob[];
+  }> {
+    // Fetch all data in parallel
+    const [stats, mailboxes] = await Promise.all([
+      this.getDashboardStats(),
+      this.getMailboxSummaries(),
+    ]);
+
+    // These two share the same API call via cache
+    const [processingOverview, recentJobs] = await Promise.all([
+      this.getProcessingOverview(),
+      this.getRecentJobs(5),
+    ]);
+
+    return { stats, processingOverview, mailboxes, recentJobs };
+  },
+
+  // Clear cache (call when data is mutated)
+  clearCache() {
+    processingJobsCache = { data: null, timestamp: 0 };
   },
 
   // Format relative time

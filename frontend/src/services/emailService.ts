@@ -155,15 +155,22 @@ export const emailService = {
   },
 
   // Get folder names for filter dropdown - with caching
-  async getFolderNames(): Promise<string[]> {
-    // Check cache first
-    const cached = filterCache.get<string[]>(FILTER_KEYS.FOLDERS);
-    if (cached) {
-      return cached;
+  // When mailboxId is provided, returns folders for that specific mailbox (no caching)
+  async getFolderNames(mailboxId?: string): Promise<string[]> {
+    // When fetching for all mailboxes, use cache
+    if (!mailboxId) {
+      const cached = filterCache.get<string[]>(FILTER_KEYS.FOLDERS);
+      if (cached) {
+        return cached;
+      }
     }
 
     try {
-      const response = await fetch(`${config.apiBaseUrl}/emails/folders`);
+      const url = mailboxId
+        ? `${config.apiBaseUrl}/emails/folders?mailbox_id=${encodeURIComponent(mailboxId)}`
+        : `${config.apiBaseUrl}/emails/folders`;
+
+      const response = await fetch(url);
 
       if (!response.ok) {
         console.error('Error fetching folder names:', response.statusText);
@@ -172,8 +179,10 @@ export const emailService = {
 
       const folders = await response.json();
 
-      // Cache the result
-      filterCache.set(FILTER_KEYS.FOLDERS, folders);
+      // Only cache when fetching all folders (no mailbox filter)
+      if (!mailboxId) {
+        filterCache.set(FILTER_KEYS.FOLDERS, folders);
+      }
 
       return folders;
     } catch (error) {

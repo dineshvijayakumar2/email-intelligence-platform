@@ -1,6 +1,14 @@
 -- Email Intelligence Platform Database Schema
 -- PostgreSQL / Supabase
 
+-- =========================================================================
+-- Performance Configuration (Run on database setup)
+-- =========================================================================
+
+-- Set statement timeout to 60 seconds for batch operations
+-- This prevents long-running queries from blocking the database
+ALTER DATABASE postgres SET statement_timeout = '60s';
+
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
@@ -12,7 +20,7 @@ CREATE TABLE mailboxes (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name TEXT NOT NULL,
   email_address TEXT UNIQUE,  -- Optional: not required for file-based mailboxes (MBOX/PST/OLM)
-  mailbox_type TEXT NOT NULL CHECK (mailbox_type IN ('mbox', 'pst', 'olm')),  -- File-based formats only
+  mailbox_type TEXT NOT NULL CHECK (mailbox_type IN ('mbox', 'pst', 'olm', 'gmail', 'outlook_live')),  -- File-based + LIVE integrations
   connection_config JSONB,
   is_active BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -133,13 +141,19 @@ CREATE TABLE processing_jobs (
 CREATE TABLE user_integrations (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id TEXT NOT NULL,  -- User identifier (string format for flexibility)
-  provider TEXT NOT NULL CHECK (provider IN ('google_drive', 'microsoft', 'dropbox')),
+  provider TEXT NOT NULL CHECK (provider IN ('google_drive', 'gmail', 'microsoft', 'dropbox')),
   access_token TEXT NOT NULL,     -- Current access token
   refresh_token TEXT NOT NULL,    -- Long-lived refresh token
   token_expires_at TIMESTAMPTZ,   -- When access token expires
+  -- Gmail/Outlook LIVE sync tracking columns
+  last_sync_at TIMESTAMPTZ,          -- When last successful sync completed
+  last_history_id TEXT,              -- Gmail historyId / Outlook deltaLink for incremental sync
+  sync_status TEXT DEFAULT 'idle' CHECK (sync_status IN ('idle', 'syncing', 'error')),
+  sync_error TEXT,                   -- Last sync error message (null if no error)
+  email_count INTEGER DEFAULT 0,     -- Total emails synced via this integration
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
-  
+
   -- Ensure one integration per user per provider
   UNIQUE(user_id, provider)
 );
@@ -380,12 +394,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE processing_jobs TO anon, authentic
 -- GRANT ALL ON ALL TABLES IN SCHEMA public TO authenticated;
 -- GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated;
 
--- Update table statistics for better query planning
-ANALYZE emails;
-ANALYZE email_categories;
-ANALYZE processing_jobs;
-ANALYZE mailboxes;
-ANALYZE folders;
+-- Note: ANALYZE statements moved to end of file to run after all tables are created
 
 -- =========================================================================
 -- Helper Functions for Filter Dropdowns (Performance Optimization)
@@ -572,12 +581,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE customer_companies TO anon, authen
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE customer_contacts TO anon, authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE customer_recognition_rules TO anon, authenticated;
 
--- Update statistics for business hierarchy tables
-ANALYZE account_managers;
-ANALYZE clients;
-ANALYZE customer_companies;
-ANALYZE customer_contacts;
-ANALYZE customer_recognition_rules;
+-- Note: ANALYZE statements moved to end of file
 
 -- =========================================================================
 -- Stage 2: Error Handling Functions
@@ -877,9 +881,6 @@ $$;
 GRANT EXECUTE ON FUNCTION get_job_errors_paginated(UUID, TEXT, TEXT, BOOLEAN, INTEGER, INTEGER) TO anon, authenticated;
 COMMENT ON FUNCTION get_job_errors_paginated(UUID, TEXT, TEXT, BOOLEAN, INTEGER, INTEGER) IS 'Returns paginated errors for a job with optional filters';
 
--- Update statistics
-ANALYZE job_errors;
-
 -- =========================================================================
 -- Stage 2: Downloaded Files Table (Cache Tracking)
 -- =========================================================================
@@ -1002,5 +1003,111 @@ $$;
 
 GRANT EXECUTE ON FUNCTION invalidate_download(UUID) TO anon, authenticated;
 
--- Update statistics
-ANALYZE downloaded_files;
+-- =========================================================================
+-- Stage 2: Gmail LIVE Integration
+-- =========================================================================
+
+-- Gmail filters table - stores imported Gmail filters for visibility
+-- Used by S1-08 (Import existing Gmail filters)
+CREATE TABLE IF NOT EXISTS gmail_filters (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id TEXT NOT NULL,           -- User who owns this filter
+    filter_id TEXT NOT NULL,         -- Gmail's filter ID
+    criteria JSONB NOT NULL,         -- Filter criteria: {from, to, subject, hasAttachment, query, etc.}
+    action JSONB NOT NULL,           -- Filter action: {addLabelIds, removeLabelIds, forward, etc.}
+    is_active BOOLEAN DEFAULT TRUE,  -- Whether filter is currently active
+    imported_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(user_id, filter_id)
+);
+
+-- Index for fast lookup by user
+CREATE INDEX IF NOT EXISTS idx_gmail_filters_user ON gmail_filters(user_id);
+
+-- Trigger to update updated_at
+CREATE TRIGGER update_gmail_filters_updated_at BEFORE UPDATE
+    ON gmail_filters FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Permissions
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE gmail_filters TO anon, authenticated;
+
+COMMENT ON TABLE gmail_filters IS 'Gmail filters imported via API to understand email organization rules (Stage 2 S1-08)';
+COMMENT ON COLUMN gmail_filters.criteria IS 'Gmail filter criteria: {from, to, subject, hasAttachment, query, negatedQuery, size, sizeComparison}';
+COMMENT ON COLUMN gmail_filters.action IS 'Gmail filter action: {addLabelIds, removeLabelIds, forward, markAsRead, markImportant}';
+
+-- =========================================================================
+-- Performance Optimization (Final Section)
+-- =========================================================================
+
+-- Critical index for batch upsert operations (message_id + mailbox_id lookups)
+-- This dramatically improves upsert performance for large mailboxes
+CREATE INDEX IF NOT EXISTS idx_emails_message_mailbox_upsert
+ON emails(message_id, mailbox_id);
+
+-- Index for faster sent_date range queries (common filter)
+CREATE INDEX IF NOT EXISTS idx_emails_sent_date_desc
+ON emails(sent_date DESC NULLS LAST);
+
+-- Partial index for active/recent jobs (reduces index size)
+CREATE INDEX IF NOT EXISTS idx_processing_jobs_active
+ON processing_jobs(status, created_at DESC)
+WHERE status IN ('pending', 'running', 'paused');
+
+-- =========================================================================
+-- Table Statistics (Run after data is loaded for optimal query planning)
+-- =========================================================================
+-- Note: These ANALYZE commands update PostgreSQL's query planner statistics.
+-- For best performance, run ANALYZE after bulk data imports.
+-- They are safe to skip during initial setup (empty tables).
+
+-- Wrap in DO block to prevent failures on empty tables
+-- NOTE: ANALYZE on large tables (emails with 100k+ rows) can timeout in Supabase SQL Editor.
+-- PostgreSQL auto-vacuum handles statistics updates automatically for large tables.
+-- We only run ANALYZE on smaller tables here.
+DO $$
+BEGIN
+    -- Skip large tables - auto-vacuum handles these
+    -- ANALYZE emails;  -- Skip - can have 100k+ rows
+    -- ANALYZE email_categories;  -- Skip - can have 100k+ rows
+
+    -- Smaller tables - safe to analyze
+    ANALYZE processing_jobs;
+    ANALYZE mailboxes;
+    ANALYZE folders;
+
+    -- Business hierarchy tables
+    ANALYZE account_managers;
+    ANALYZE clients;
+    ANALYZE customer_companies;
+    ANALYZE customer_contacts;
+    ANALYZE customer_recognition_rules;
+
+    -- Support tables
+    ANALYZE job_errors;
+    ANALYZE downloaded_files;
+    ANALYZE user_integrations;
+    ANALYZE gmail_filters;
+EXCEPTION WHEN OTHERS THEN
+    -- Ignore errors from empty tables or missing tables
+    RAISE NOTICE 'ANALYZE completed with some skipped tables (this is normal for fresh installs)';
+END;
+$$;
+
+-- =========================================================================
+-- Performance Recommendations
+-- =========================================================================
+--
+-- For optimal performance with large mailboxes (100k+ emails):
+--
+-- 1. Supabase Connection Pooling (Dashboard → Settings → Database):
+--    - Enable PgBouncer: Yes
+--    - Pool Mode: Transaction
+--    - Pool Size: 15-20
+--
+-- 2. Use the Pooler connection string for your application
+--
+-- 3. After bulk imports, run: ANALYZE emails; ANALYZE email_categories;
+--
+-- 4. For very large tables, consider partitioning by mailbox_id or date
+--
+-- =========================================================================

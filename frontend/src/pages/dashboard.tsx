@@ -7,7 +7,6 @@ import {
   CheckCircleOutlined,
   ExclamationCircleOutlined,
   ClockCircleOutlined,
-  GoogleOutlined,
   WindowsOutlined,
   ArrowRightOutlined,
   SyncOutlined,
@@ -21,11 +20,30 @@ import {
   MailboxSummary,
   RecentJob,
 } from '../services/dashboardService';
+import GmailConnection from '../components/GmailConnection';
 
 const { Text, Title } = Typography;
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
+
+  // Get consistent user ID (same pattern as other components)
+  const getUserId = () => {
+    let visitorId = localStorage.getItem('user_id');
+    if (!visitorId) {
+      const fingerprint = [
+        navigator.userAgent,
+        navigator.language,
+        screen.width + 'x' + screen.height,
+        new Date().getTimezoneOffset()
+      ].join('|');
+      visitorId = 'user_' + btoa(fingerprint).replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
+      localStorage.setItem('user_id', visitorId);
+    }
+    return visitorId;
+  };
+  const userId = getUserId();
+
   const [stats, setStats] = useState<DashboardStats>({
     totalEmails: 0,
     totalMailboxes: 0,
@@ -42,32 +60,34 @@ export const Dashboard: React.FC = () => {
   const [mailboxes, setMailboxes] = useState<MailboxSummary[]>([]);
   const [recentJobs, setRecentJobs] = useState<RecentJob[]>([]);
   const [loading, setLoading] = useState(true);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
 
   useEffect(() => {
-    loadDashboardData();
-    // Refresh every 30 seconds
-    const interval = setInterval(loadDashboardData, 30000);
+    loadDashboardData(true); // Initial load with loading indicator
+    // Refresh every 30 seconds silently (no loading flash)
+    const interval = setInterval(() => loadDashboardData(false), 30000);
     return () => clearInterval(interval);
   }, []);
 
-  const loadDashboardData = async () => {
+  const loadDashboardData = async (showLoading = false) => {
     try {
-      setLoading(true);
-      const [statsData, processingData, mailboxData, jobsData] = await Promise.all([
-        dashboardService.getDashboardStats(),
-        dashboardService.getProcessingOverview(),
-        dashboardService.getMailboxSummaries(),
-        dashboardService.getRecentJobs(5),
-      ]);
+      // Only show loading spinner on initial load, not on background refreshes
+      if (showLoading && !initialLoadDone) {
+        setLoading(true);
+      }
 
-      setStats(statsData);
-      setProcessingOverview(processingData);
-      setMailboxes(mailboxData);
-      setRecentJobs(jobsData);
+      // Use optimized method that fetches all data efficiently (avoids duplicate API calls)
+      const data = await dashboardService.getAllDashboardData();
+
+      setStats(data.stats);
+      setProcessingOverview(data.processingOverview);
+      setMailboxes(data.mailboxes);
+      setRecentJobs(data.recentJobs);
     } catch (error) {
       console.error('Error loading dashboard data:', error);
     } finally {
       setLoading(false);
+      setInitialLoadDone(true);
     }
   };
 
@@ -372,60 +392,50 @@ export const Dashboard: React.FC = () => {
           </div>
         </Col>
 
-        {/* Coming Soon - Future Integrations */}
+        {/* LIVE Email Integrations */}
         <Col xs={24} lg={10}>
           <div className="glass-card-static" style={{ padding: 24, height: '100%' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
               <ThunderboltOutlined style={{ color: '#667eea', fontSize: 18 }} />
-              <Text strong style={{ fontSize: 16 }}>Coming Soon</Text>
+              <Text strong style={{ fontSize: 16 }}>LIVE Email Sync</Text>
             </div>
 
             <Text type="secondary" style={{ display: 'block', marginBottom: 20 }}>
-              Real-time email integration - connect your live mailboxes directly
+              Connect your email accounts for real-time synchronization
             </Text>
 
-            {/* Google OAuth Integration */}
-            <div
-              style={{
-                background: 'linear-gradient(135deg, rgba(66, 133, 244, 0.08) 0%, rgba(52, 168, 83, 0.08) 100%)',
-                border: '1px dashed rgba(66, 133, 244, 0.3)',
-                borderRadius: 12,
-                padding: 20,
-                marginBottom: 16,
-                opacity: 0.9,
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-                <GoogleOutlined style={{ fontSize: 24, color: '#4285f4' }} />
-                <div>
-                  <Title level={5} style={{ margin: 0, color: '#4285f4' }}>Google Workspace</Title>
-                  <Text type="secondary" style={{ fontSize: 12 }}>Gmail & Google Workspace accounts</Text>
-                </div>
-              </div>
-              <Text type="secondary" style={{ fontSize: 13 }}>
-                Connect via OAuth 2.0 to read emails directly from Gmail. Real-time sync, no export needed.
-              </Text>
+            {/* Gmail LIVE Integration */}
+            <div style={{ marginBottom: 16 }}>
+              <GmailConnection
+                userId={userId}
+                compact={true}
+                onConnectionChange={(connected) => {
+                  if (connected) {
+                    loadDashboardData();
+                  }
+                }}
+              />
             </div>
 
-            {/* Outlook Integration */}
+            {/* Outlook Integration - Coming Soon */}
             <div
               style={{
                 background: 'linear-gradient(135deg, rgba(0, 120, 212, 0.08) 0%, rgba(106, 57, 172, 0.08) 100%)',
                 border: '1px dashed rgba(0, 120, 212, 0.3)',
                 borderRadius: 12,
                 padding: 20,
-                opacity: 0.9,
+                opacity: 0.7,
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
                 <WindowsOutlined style={{ fontSize: 24, color: '#0078d4' }} />
                 <div>
                   <Title level={5} style={{ margin: 0, color: '#0078d4' }}>Microsoft 365</Title>
-                  <Text type="secondary" style={{ fontSize: 12 }}>Outlook & Exchange accounts</Text>
+                  <Text type="secondary" style={{ fontSize: 12 }}>Coming Soon</Text>
                 </div>
               </div>
               <Text type="secondary" style={{ fontSize: 13 }}>
-                Connect via Microsoft Graph API. Access Outlook emails in real-time with OAuth authentication.
+                Outlook & Exchange integration via Microsoft Graph API.
               </Text>
             </div>
           </div>

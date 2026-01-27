@@ -35,8 +35,13 @@ CREATE INDEX IF NOT EXISTS idx_email_categories_coverage ON email_categories(ema
 -- CREATE INDEX IF NOT EXISTS idx_emails_subject_gin ON emails USING gin(subject gin_trgm_ops);
 
 -- Update table statistics for better query planning
-ANALYZE emails;
-ANALYZE email_categories;
+-- NOTE: ANALYZE on large tables (100k+ rows) can timeout in Supabase SQL Editor.
+-- PostgreSQL auto-vacuum handles statistics updates automatically.
+-- If you need to run ANALYZE manually for large tables:
+--   1. Use Supabase CLI with longer timeout: supabase db execute --statement "ANALYZE emails;"
+--   2. Or run via psql directly with no timeout
+-- ANALYZE emails;  -- Skip - auto-vacuum handles this
+-- ANALYZE email_categories;  -- Skip - auto-vacuum handles this
 ANALYZE processing_jobs;
 ANALYZE mailboxes;
 ANALYZE folders;

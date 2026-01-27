@@ -34,6 +34,10 @@ from src.routers.errors import router as errors_router, init_error_router
 # Stage 2: Job Error Logger
 from src.services.job_error_logger import JobErrorLogger, init_error_logger, get_error_logger
 
+# Stage 2: Gmail LIVE Integration
+from src.routers.gmail import router as gmail_router, init_gmail_router
+from src.services.gmail_sync_service import get_gmail_sync_service, GmailSyncService
+
 # Configure logging to both file and console
 import logging.handlers
 import sys
@@ -331,6 +335,14 @@ async def shutdown_event():
     """Cleanup on server shutdown"""
     logger.info("=== SERVER SHUTDOWN INITIATED ===")
 
+    # Stop Gmail sync service
+    logger.info("Step 0: Stopping Gmail sync service...")
+    try:
+        if _gmail_sync_service:
+            await _gmail_sync_service.stop()
+    except Exception as e:
+        logger.warning(f"Error stopping Gmail sync service: {e}")
+
     # Cancel any active parallel downloads first
     logger.info("Step 1: Cancelling any active parallel downloads...")
     try:
@@ -457,16 +469,34 @@ app.include_router(clients_router, prefix="/api")
 app.include_router(customers_router, prefix="/api")
 app.include_router(contacts_router, prefix="/api")
 app.include_router(errors_router, prefix="/api")
+app.include_router(gmail_router, prefix="/api")
+
+# Gmail sync service instance (initialized in startup event)
+_gmail_sync_service: GmailSyncService = None
 
 # Initialize routers (lazy init when first request comes in)
 @app.on_event("startup")
 async def startup_event():
     """Initialize services on startup"""
+    global _gmail_sync_service
+
     try:
         initialize_business_hierarchy_routers()
     except Exception as e:
         logger.warning(f"Failed to initialize business hierarchy routers: {e}")
         # Don't fail startup - routers will init on first use
+
+    # Initialize Gmail sync service (Stage 2)
+    try:
+        _gmail_sync_service = get_gmail_sync_service(get_supabase())
+        init_gmail_router(get_supabase(), _gmail_sync_service)
+
+        # Start the 15-minute sync loop
+        await _gmail_sync_service.start()
+        logger.info("Gmail sync service started successfully")
+    except Exception as e:
+        logger.warning(f"Failed to initialize Gmail sync service: {e}")
+        # Don't fail startup - Gmail sync is optional
 
     # Clean up orphaned jobs from previous server restart
     try:
@@ -837,37 +867,44 @@ async def health_check():
 # Mailbox endpoints
 @app.get("/api/mailboxes")
 async def get_mailboxes():
-    """Get all mailboxes with email counts"""
+    """Get all mailboxes with email counts - Optimized with RPC or simple fallback"""
     try:
         sb = get_supabase()
-        
-        # Get mailboxes
+
+        # Get mailboxes first
         mailboxes_result = sb.table('mailboxes').select('*').order('created_at', desc=True).execute()
-        
+
         if not mailboxes_result.data:
             return []
-        
-        # Get email counts for each mailbox
+
+        # Try to get email counts via RPC (most efficient)
+        count_map = {}
+        try:
+            counts_result = sb.rpc('get_email_counts_by_mailbox', {}).execute()
+            if counts_result.data:
+                for row in counts_result.data:
+                    count_map[row['mailbox_id']] = row['email_count']
+        except Exception as rpc_error:
+            logger.debug(f"RPC not available, using fallback: {rpc_error}")
+            # Fallback: get counts individually (simple sync approach)
+            for mailbox in mailboxes_result.data:
+                try:
+                    count_result = sb.table('emails').select('id', count='exact').eq('mailbox_id', mailbox['id']).limit(1).execute()
+                    count_map[mailbox['id']] = count_result.count or 0
+                except Exception as count_error:
+                    logger.debug(f"Count failed for {mailbox['id']}: {count_error}")
+                    count_map[mailbox['id']] = 0
+
+        # Merge mailboxes with counts
         mailboxes_with_counts = []
         for mailbox in mailboxes_result.data:
-            try:
-                # Use count='exact' without head parameter for compatibility
-                count_result = sb.table('emails').select('id', count='exact').eq('mailbox_id', mailbox['id']).limit(1).execute()
-                email_count = count_result.count or 0
+            mailboxes_with_counts.append({
+                **mailbox,
+                'total_emails': count_map.get(mailbox['id'], 0)
+            })
 
-                mailboxes_with_counts.append({
-                    **mailbox,
-                    'total_emails': email_count
-                })
-            except Exception as e:
-                logger.warning(f"Failed to get email count for mailbox {mailbox['id']}: {e}")
-                mailboxes_with_counts.append({
-                    **mailbox,
-                    'total_emails': 0
-                })
-        
         return mailboxes_with_counts
-        
+
     except Exception as e:
         logger.error(f"Error fetching mailboxes: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch mailboxes: {str(e)}")
@@ -2557,19 +2594,34 @@ async def retry_failed_emails(job_id: str, max_attempts: int = 3):
 # Email analysis endpoints for dashboard
 @app.get("/api/dashboard/stats")
 async def get_dashboard_stats():
-    """Get dashboard statistics"""
-    
+    """Get dashboard statistics - Optimized with RPC or simple sequential fallback"""
+
     try:
-        # Get stats from database
         sb = get_supabase()
+
+        # Try optimized RPC function first (single query instead of 4)
+        try:
+            result = sb.rpc('get_dashboard_stats', {}).execute()
+            if result.data and len(result.data) > 0:
+                stats = result.data[0]
+                return {
+                    "totalEmails": stats.get('total_emails', 0),
+                    "totalMailboxes": stats.get('total_mailboxes', 0),
+                    "todayEmails": stats.get('today_emails', 0),
+                    "processingJobs": stats.get('processing_jobs', 0)
+                }
+        except Exception as rpc_error:
+            logger.debug(f"RPC get_dashboard_stats not available, using fallback: {rpc_error}")
+
+        # Fallback: Simple sequential queries (more reliable on Windows)
         emails_count = sb.table('emails').select('id', count='exact').execute()
         mailboxes_count = sb.table('mailboxes').select('id', count='exact').execute()
 
         today = datetime.now(timezone.utc).date().isoformat()
         today_emails = sb.table('emails').select('id', count='exact').gte('sent_date', today).execute()
 
-        processing_jobs_count = sb.table('processing_jobs').select('id', count='exact').in_('status', ['pending', 'running']).execute()
-        
+        processing_jobs_count = sb.table('processing_jobs').select('id', count='exact').in_('status', ['pending', 'running', 'downloading']).execute()
+
         return {
             "totalEmails": emails_count.count or 0,
             "totalMailboxes": mailboxes_count.count or 0,
@@ -2578,19 +2630,42 @@ async def get_dashboard_stats():
         }
 
     except Exception as e:
-        # Return mock data if database unavailable
+        logger.error(f"Error fetching dashboard stats: {e}")
+        # Return zeros instead of mock data
         return {
-            "totalEmails": 1250,
-            "totalMailboxes": 3,
-            "todayEmails": 45,
-            "processingJobs": 1
+            "totalEmails": 0,
+            "totalMailboxes": 0,
+            "todayEmails": 0,
+            "processingJobs": 0
         }
 
 @app.get("/api/emails/folders")
-async def get_folder_names():
+async def get_folder_names(mailbox_id: Optional[str] = None):
     """Get distinct folder names from emails for filter dropdown - Optimized with direct SQL"""
     try:
         sb = get_supabase()
+
+        if mailbox_id:
+            logger.info(f"Fetching distinct folder names for mailbox {mailbox_id}...")
+            # Filter folders by mailbox_id
+            result = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: sb.table('emails')
+                    .select('folder_path')
+                    .eq('mailbox_id', mailbox_id)
+                    .limit(10000)
+                    .execute()
+            )
+
+            all_folders = set()
+            for row in result.data:
+                folder = row.get('folder_path')
+                if folder:
+                    all_folders.add(folder)
+
+            folders_list = sorted(list(all_folders))
+            logger.info(f"✓ Found {len(folders_list)} unique folders for mailbox {mailbox_id}: {folders_list}")
+            return folders_list
 
         logger.info("Fetching distinct folder names (optimized)...")
 
