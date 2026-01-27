@@ -116,47 +116,80 @@ async def exchange_gmail_oauth_code(request: GmailOAuthRequest):
                 detail="Missing Google OAuth credentials in environment"
             )
 
-        # Import Google OAuth flow
-        from google_auth_oauthlib.flow import Flow
+        # Required scopes we need for Gmail operations
+        required_scopes = {
+            'https://www.googleapis.com/auth/gmail.readonly',
+            'https://www.googleapis.com/auth/gmail.settings.basic',
+        }
 
-        # Create OAuth flow with Gmail scopes
-        flow = Flow.from_client_config(
-            {
-                "web": {
-                    "client_id": client_id,
-                    "client_secret": client_secret,
-                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                    "token_uri": "https://oauth2.googleapis.com/token",
-                    "redirect_uris": ["postmessage"]
-                }
-            },
-            scopes=[
-                'https://www.googleapis.com/auth/gmail.readonly',
-                'https://www.googleapis.com/auth/gmail.settings.basic',
-                'https://www.googleapis.com/auth/userinfo.email',
-                'openid'
-            ]
+        # Exchange authorization code for tokens using direct HTTP request
+        # This avoids the google-auth-oauthlib library's strict scope validation
+        # which fails when Google returns additional previously-authorized scopes
+        import requests as http_requests
+
+        token_response = http_requests.post(
+            'https://oauth2.googleapis.com/token',
+            data={
+                'code': request.code,
+                'client_id': client_id,
+                'client_secret': client_secret,
+                'redirect_uri': 'postmessage',
+                'grant_type': 'authorization_code'
+            }
         )
-        flow.redirect_uri = "postmessage"
 
-        # Exchange code for tokens
-        flow.fetch_token(code=request.code)
+        if token_response.status_code != 200:
+            error_data = token_response.json()
+            logger.error(f"Token exchange failed: {error_data}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Token exchange failed: {error_data.get('error_description', error_data.get('error', 'Unknown error'))}"
+            )
 
-        access_token = flow.credentials.token
-        refresh_token = flow.credentials.refresh_token
-        expiry = flow.credentials.expiry
+        token_data = token_response.json()
+        access_token = token_data.get('access_token')
+        refresh_token = token_data.get('refresh_token', '')
+        expires_in = token_data.get('expires_in', 3600)
+        granted_scope = token_data.get('scope', '')
 
         if not access_token:
             raise HTTPException(status_code=400, detail="No access token received from Google")
 
-        # Get user email from Gmail
+        # Verify we have required scopes (allow additional scopes)
+        granted_scopes = set(granted_scope.split()) if granted_scope else set()
+        missing_scopes = required_scopes - granted_scopes
+
+        if missing_scopes:
+            logger.warning(f"Missing required scopes: {missing_scopes}. Granted: {granted_scopes}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Missing required Gmail permissions. Please re-authorize with full permissions."
+            )
+
+        logger.info(f"Token exchange successful. Granted scopes: {granted_scopes}")
+
+        # Calculate expiry time
+        from datetime import timedelta
+        expiry = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
+
+        # Get user email from Gmail using the access token
         from googleapiclient.discovery import build
-        service = build('gmail', 'v1', credentials=flow.credentials)
+        from google.oauth2.credentials import Credentials
+
+        credentials = Credentials(
+            token=access_token,
+            refresh_token=refresh_token,
+            token_uri='https://oauth2.googleapis.com/token',
+            client_id=client_id,
+            client_secret=client_secret
+        )
+
+        service = build('gmail', 'v1', credentials=credentials)
         profile = service.users().getProfile(userId='me').execute()
         gmail_email = profile.get('emailAddress', '')
 
         # Store tokens in user_integrations
-        token_data = {
+        integration_data = {
             'user_id': request.user_id,
             'provider': 'gmail',
             'access_token': access_token,
@@ -173,13 +206,13 @@ async def exchange_gmail_oauth_code(request: GmailOAuthRequest):
         ).eq('provider', 'gmail').execute()
 
         if existing.data:
-            _supabase.table('user_integrations').update(token_data).eq(
+            _supabase.table('user_integrations').update(integration_data).eq(
                 'user_id', request.user_id
             ).eq('provider', 'gmail').execute()
             logger.info(f"Updated Gmail tokens for user: {request.user_id}")
         else:
-            token_data['created_at'] = datetime.now(timezone.utc).isoformat()
-            _supabase.table('user_integrations').insert(token_data).execute()
+            integration_data['created_at'] = datetime.now(timezone.utc).isoformat()
+            _supabase.table('user_integrations').insert(integration_data).execute()
             logger.info(f"Stored Gmail tokens for new user: {request.user_id}")
 
         return {
