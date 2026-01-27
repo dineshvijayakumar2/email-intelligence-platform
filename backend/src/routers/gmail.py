@@ -757,3 +757,21 @@ async def gmail_health_check():
         "service": "gmail_sync",
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
+
+
+@router.get("/config")
+async def get_gmail_config():
+    """
+    Get Gmail sync configuration
+
+    Returns current sync settings including interval
+    """
+    sync_interval = int(os.getenv('GMAIL_SYNC_INTERVAL_MINUTES', '15'))
+
+    return {
+        "sync_interval_minutes": sync_interval,
+        "max_emails_per_sync": 500,
+        "rate_limit_backoff_minutes": 60,
+        "sync_service_running": _sync_service is not None and _sync_service._running if _sync_service else False,
+        "note": "Set GMAIL_SYNC_INTERVAL_MINUTES environment variable to change sync interval (1-1440 minutes)"
+    }

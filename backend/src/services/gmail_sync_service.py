@@ -17,6 +17,7 @@ This service supports two modes:
 
 import asyncio
 import logging
+import os
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, List, Any
 from concurrent.futures import ThreadPoolExecutor
@@ -25,19 +26,36 @@ import traceback
 logger = logging.getLogger(__name__)
 
 
+def _get_sync_interval() -> int:
+    """
+    Get sync interval from environment variable
+
+    Environment variable: GMAIL_SYNC_INTERVAL_MINUTES
+    Default: 15 minutes
+    Minimum: 1 minute (for testing)
+    Maximum: 1440 minutes (24 hours)
+    """
+    try:
+        interval = int(os.getenv('GMAIL_SYNC_INTERVAL_MINUTES', '15'))
+        # Clamp to reasonable range
+        return max(1, min(1440, interval))
+    except (ValueError, TypeError):
+        return 15
+
+
 class GmailSyncService:
     """
     Service for periodic Gmail synchronization
 
     Responsibilities:
-    - Schedule 15-minute sync jobs for all connected Gmail accounts
+    - Schedule periodic sync jobs for all connected Gmail accounts
+    - Sync interval configurable via GMAIL_SYNC_INTERVAL_MINUTES env var (default: 15)
     - Track sync state per user in user_integrations table
     - Handle rate limits and errors with exponential backoff
     - Update sync status in database
     - Support extending existing mailboxes with LIVE sync
     """
 
-    SYNC_INTERVAL_MINUTES = 15
     MAX_EMAILS_PER_SYNC = 500  # Limit per sync to avoid rate limits
     RATE_LIMIT_BACKOFF_MINUTES = 60
     MAX_CONSECUTIVE_ERRORS = 3  # After this, skip until manual intervention
@@ -54,6 +72,8 @@ class GmailSyncService:
         self._running = False
         self._sync_task = None
         self._active_syncs = {}  # user_id -> sync task
+        self.sync_interval_minutes = _get_sync_interval()
+        logger.info(f"Gmail sync interval set to {self.sync_interval_minutes} minutes")
 
     @property
     def supabase(self):
@@ -90,7 +110,7 @@ class GmailSyncService:
         logger.info("Gmail sync service stopped")
 
     async def _sync_loop(self):
-        """Main sync loop - runs every 15 minutes"""
+        """Main sync loop - runs at configured interval"""
         while self._running:
             try:
                 await self._sync_all_users()
@@ -99,7 +119,8 @@ class GmailSyncService:
                 logger.error(traceback.format_exc())
 
             # Wait for next interval
-            await asyncio.sleep(self.SYNC_INTERVAL_MINUTES * 60)
+            logger.debug(f"Next Gmail sync in {self.sync_interval_minutes} minutes")
+            await asyncio.sleep(self.sync_interval_minutes * 60)
 
     async def _sync_all_users(self):
         """Sync all users with active Gmail connections"""
@@ -158,11 +179,15 @@ class GmailSyncService:
             # Get mailbox for this user
             mailbox = await self._get_gmail_mailbox(user_id)
             if not mailbox:
-                logger.warning(f"No Gmail mailbox found for user {user_id}, creating one...")
-                mailbox = await self._create_gmail_mailbox(user_id)
-
-            if not mailbox:
-                raise ValueError(f"Could not create mailbox for user {user_id}")
+                # User has Gmail connected but no mailbox linked
+                # They need to either:
+                # 1. Use "Link Gmail" on an existing mailbox (Mailboxes page)
+                # 2. Use "Extend mailbox" to add LIVE sync to an archive mailbox
+                logger.info(f"Skipping user {user_id} - Gmail connected but no mailbox linked. "
+                           "User needs to link Gmail to a mailbox via the Mailboxes page.")
+                await self._update_sync_status(user_id, 'idle',
+                    error="No mailbox linked. Use 'Link Gmail' on a mailbox to enable sync.")
+                return
 
             # Import here to avoid circular imports
             from ..extractors.gmail_extractor import GmailExtractor
