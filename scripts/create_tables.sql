@@ -1036,6 +1036,38 @@ COMMENT ON COLUMN gmail_filters.criteria IS 'Gmail filter criteria: {from, to, s
 COMMENT ON COLUMN gmail_filters.action IS 'Gmail filter action: {addLabelIds, removeLabelIds, forward, markAsRead, markImportant}';
 
 -- =========================================================================
+-- Application Configuration Table
+-- =========================================================================
+
+-- Stores runtime-configurable application settings
+-- Used for settings that can be changed without redeploying
+CREATE TABLE IF NOT EXISTS app_config (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    config_key TEXT UNIQUE NOT NULL,
+    config_value TEXT,
+    description TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Trigger to update updated_at
+CREATE TRIGGER update_app_config_updated_at BEFORE UPDATE
+    ON app_config FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Permissions
+GRANT SELECT, INSERT, UPDATE ON TABLE app_config TO anon, authenticated;
+
+-- Comments
+COMMENT ON TABLE app_config IS 'Application configuration settings that can be updated at runtime';
+COMMENT ON COLUMN app_config.config_key IS 'Unique key for the configuration setting (e.g., gmail_sync_interval)';
+COMMENT ON COLUMN app_config.config_value IS 'Value of the configuration setting (stored as text)';
+
+-- Insert default values
+INSERT INTO app_config (config_key, config_value, description)
+VALUES ('gmail_sync_interval', '15', 'Gmail LIVE sync interval in minutes (1-1440)')
+ON CONFLICT (config_key) DO NOTHING;
+
+-- =========================================================================
 -- Performance Optimization (Final Section)
 -- =========================================================================
 

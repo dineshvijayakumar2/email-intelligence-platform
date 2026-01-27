@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Button, Card, Space, Tag, Typography, message, Spin, Statistic, Tooltip, Progress } from 'antd';
+import { Button, Card, Space, Tag, Typography, message, Spin, Statistic, Tooltip, Progress, InputNumber, Divider } from 'antd';
 import {
   GoogleOutlined,
   DisconnectOutlined,
@@ -15,6 +15,8 @@ import {
   SyncOutlined,
   MailOutlined,
   ClockCircleOutlined,
+  SettingOutlined,
+  SaveOutlined,
 } from '@ant-design/icons';
 import gmailService, { GmailConnectionStatus } from '../services/gmailService';
 
@@ -36,6 +38,11 @@ const GmailConnection: React.FC<GmailConnectionProps> = ({
   const [connecting, setConnecting] = useState(false);
   const [syncing, setSyncing] = useState(false);
 
+  // Configuration state
+  const [showSettings, setShowSettings] = useState(false);
+  const [syncInterval, setSyncInterval] = useState<number>(15);
+  const [savingConfig, setSavingConfig] = useState(false);
+
   const checkStatus = useCallback(async () => {
     if (!userId) {
       setLoading(false);
@@ -53,8 +60,19 @@ const GmailConnection: React.FC<GmailConnectionProps> = ({
     }
   }, [userId, onConnectionChange]);
 
+  // Load config on mount
+  const loadConfig = useCallback(async () => {
+    try {
+      const config = await gmailService.getConfig();
+      setSyncInterval(config.sync_interval_minutes);
+    } catch (error) {
+      console.error('[GmailConnection] Failed to load config:', error);
+    }
+  }, []);
+
   useEffect(() => {
     checkStatus();
+    loadConfig();
 
     // Poll status every 30 seconds when syncing
     const interval = setInterval(() => {
@@ -64,7 +82,7 @@ const GmailConnection: React.FC<GmailConnectionProps> = ({
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [checkStatus, status?.sync_status]);
+  }, [checkStatus, loadConfig, status?.sync_status]);
 
   const handleConnect = async () => {
     if (!userId) {
@@ -132,6 +150,27 @@ const GmailConnection: React.FC<GmailConnectionProps> = ({
       message.error(errorMessage);
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleSaveConfig = async () => {
+    try {
+      setSavingConfig(true);
+      const result = await gmailService.updateConfig({
+        sync_interval_minutes: syncInterval
+      });
+
+      if (result.success) {
+        message.success(`Sync interval updated to ${syncInterval} minutes`);
+        setShowSettings(false);
+      } else {
+        message.error(result.message);
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save config';
+      message.error(errorMessage);
+    } finally {
+      setSavingConfig(false);
     }
   };
 
@@ -256,7 +295,7 @@ const GmailConnection: React.FC<GmailConnectionProps> = ({
           </Space>
         ) : (
           <Text type="secondary" style={{ fontSize: 13 }}>
-            Connect Gmail for real-time email sync. Auto-sync every 15 minutes.
+            Connect Gmail for real-time email sync. Auto-sync every {syncInterval} minutes.
           </Text>
         )}
       </div>
@@ -356,10 +395,68 @@ const GmailConnection: React.FC<GmailConnectionProps> = ({
             </div>
           )}
 
+          {/* Settings Section */}
+          <Divider style={{ margin: '16px 0' }} />
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: showSettings ? 16 : 0 }}>
+              <Space>
+                <SettingOutlined />
+                <Text strong>Sync Settings</Text>
+              </Space>
+              <Button
+                type="text"
+                size="small"
+                onClick={() => setShowSettings(!showSettings)}
+              >
+                {showSettings ? 'Hide' : 'Configure'}
+              </Button>
+            </div>
+
+            {showSettings && (
+              <div style={{
+                background: 'rgba(102, 126, 234, 0.05)',
+                border: '1px solid rgba(102, 126, 234, 0.2)',
+                borderRadius: 8,
+                padding: 16
+              }}>
+                <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                  <div>
+                    <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+                      Sync Interval (minutes)
+                    </Text>
+                    <Space>
+                      <InputNumber
+                        min={1}
+                        max={1440}
+                        value={syncInterval}
+                        onChange={(value) => setSyncInterval(value || 15)}
+                        style={{ width: 100 }}
+                      />
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        (1 min - 24 hours)
+                      </Text>
+                    </Space>
+                  </div>
+                  <Button
+                    type="primary"
+                    icon={<SaveOutlined />}
+                    onClick={handleSaveConfig}
+                    loading={savingConfig}
+                    size="small"
+                  >
+                    Save Settings
+                  </Button>
+                </Space>
+              </div>
+            )}
+          </div>
+
           {/* Info */}
-          <Text type="secondary" style={{ fontSize: 13 }}>
-            Gmail syncs automatically every 15 minutes. Only new emails are fetched using incremental sync.
-          </Text>
+          {!showSettings && (
+            <Text type="secondary" style={{ fontSize: 13 }}>
+              Gmail syncs automatically every {syncInterval} minutes. Only new emails are fetched using incremental sync.
+            </Text>
+          )}
         </Space>
       ) : (
         <Space direction="vertical" size="middle" style={{ width: '100%' }}>
@@ -367,7 +464,7 @@ const GmailConnection: React.FC<GmailConnectionProps> = ({
             Connect your Gmail account to enable real-time email synchronization.
           </Text>
           <ul style={{ margin: 0, paddingLeft: 20, color: 'rgba(0,0,0,0.65)' }}>
-            <li>Automatic sync every 15 minutes</li>
+            <li>Automatic sync every {syncInterval} minutes (configurable)</li>
             <li>Incremental sync - only fetches new emails</li>
             <li>Read-only access - we never modify your emails</li>
             <li>Secure OAuth 2.0 authentication</li>

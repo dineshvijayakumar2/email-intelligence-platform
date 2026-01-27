@@ -398,6 +398,72 @@ class GmailService {
   }
 
   /**
+   * Get Gmail sync configuration
+   */
+  async getConfig(): Promise<{
+    sync_interval_minutes: number;
+    service_interval_minutes: number;
+    max_emails_per_sync: number;
+    sync_service_running: boolean;
+    interval_synced: boolean;
+  }> {
+    try {
+      const response = await fetch(`${config.apiBaseUrl}/gmail/config`);
+
+      if (!response.ok) {
+        throw new Error(`Failed to get config: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('[GmailService] Failed to get config:', error);
+      // Return defaults on error
+      return {
+        sync_interval_minutes: 15,
+        service_interval_minutes: 15,
+        max_emails_per_sync: 500,
+        sync_service_running: false,
+        interval_synced: true
+      };
+    }
+  }
+
+  /**
+   * Update Gmail sync configuration
+   */
+  async updateConfig(updates: {
+    sync_interval_minutes?: number;
+  }): Promise<{ success: boolean; message: string; current_config?: any }> {
+    try {
+      const response = await fetch(`${config.apiBaseUrl}/gmail/config`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updates)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Failed to update config: ${response.status}`);
+      }
+
+      const result = await response.json();
+      return {
+        success: true,
+        message: result.message || 'Configuration updated',
+        current_config: result.current_config
+      };
+    } catch (error) {
+      console.error('[GmailService] Failed to update config:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to update configuration'
+      };
+    }
+  }
+
+  /**
    * Format relative time for display
    */
   formatRelativeTime(dateString: string | null): string {

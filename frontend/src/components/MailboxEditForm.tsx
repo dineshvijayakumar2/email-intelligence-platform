@@ -1,17 +1,18 @@
 import React, { useState, useEffect } from "react";
-import { 
-  Card, 
-  Space, 
-  Button, 
-  Typography, 
-  Form, 
-  Input, 
-  Select, 
+import {
+  Card,
+  Space,
+  Button,
+  Typography,
+  Form,
+  Input,
+  Select,
   Switch,
   message,
   Divider,
   Alert,
-  Radio
+  Radio,
+  InputNumber
 } from "antd";
 import {
   FolderOpenOutlined,
@@ -20,7 +21,9 @@ import {
   LinkOutlined,
   DisconnectOutlined,
   CheckCircleOutlined,
-  SyncOutlined
+  SyncOutlined,
+  SettingOutlined,
+  SaveOutlined
 } from "@ant-design/icons";
 import { useNavigate, useParams } from "react-router-dom";
 import { mailboxService, Mailbox, hasGmailLiveSync } from '../services/mailboxService';
@@ -49,6 +52,11 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
   const [gmailLinking, setGmailLinking] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
+  // Sync interval configuration
+  const [syncInterval, setSyncInterval] = React.useState<number>(15);
+  const [showSyncSettings, setShowSyncSettings] = React.useState(false);
+  const [savingConfig, setSavingConfig] = React.useState(false);
+
   // Generate a consistent user ID based on browser fingerprint or use a stored value
   // In a real app, this would come from authentication context (JWT, session, etc.)
   const getUserId = () => {
@@ -73,7 +81,37 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
       loadMailboxData();
     }
     checkGmailConnection();
+    loadSyncConfig();
   }, [mailboxId]);
+
+  const loadSyncConfig = async () => {
+    try {
+      const config = await gmailService.getConfig();
+      setSyncInterval(config.sync_interval_minutes);
+    } catch (error) {
+      console.error('Error loading sync config:', error);
+    }
+  };
+
+  const handleSaveConfig = async () => {
+    try {
+      setSavingConfig(true);
+      const result = await gmailService.updateConfig({
+        sync_interval_minutes: syncInterval
+      });
+
+      if (result.success) {
+        message.success(`Sync interval updated to ${syncInterval} minutes`);
+        setShowSyncSettings(false);
+      } else {
+        message.error(result.message);
+      }
+    } catch (error) {
+      message.error('Failed to save sync configuration');
+    } finally {
+      setSavingConfig(false);
+    }
+  };
 
   const checkGmailConnection = async () => {
     try {
@@ -378,32 +416,91 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
             <>
               <Divider>Gmail LIVE Sync</Divider>
               {hasGmailLiveSync(mailboxData) ? (
-                // Already linked - show status
-                <Alert
-                  message={
-                    <Space>
-                      <CheckCircleOutlined style={{ color: '#52c41a' }} />
-                      <span>Gmail LIVE Sync Enabled</span>
-                    </Space>
-                  }
-                  description={
-                    <Space direction="vertical" size={4}>
-                      <Text type="secondary">
-                        <GoogleOutlined style={{ marginRight: 4 }} />
-                        {mailboxData.connection_config?.gmail_email || 'Connected'}
-                      </Text>
-                      <Text type="secondary" style={{ fontSize: 12 }}>
-                        Linked on {new Date(mailboxData.connection_config?.gmail_extended_at || '').toLocaleDateString()}
-                      </Text>
-                      <Text type="secondary" style={{ fontSize: 12 }}>
-                        <SyncOutlined style={{ marginRight: 4 }} />
-                        New emails are automatically synced every 15 minutes
-                      </Text>
-                    </Space>
-                  }
-                  type="success"
-                  style={{ marginBottom: 16 }}
-                />
+                // Already linked - show status with config option
+                <div style={{ marginBottom: 16 }}>
+                  <Alert
+                    message={
+                      <Space>
+                        <CheckCircleOutlined style={{ color: '#52c41a' }} />
+                        <span>Gmail LIVE Sync Enabled</span>
+                      </Space>
+                    }
+                    description={
+                      <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                        <Text type="secondary">
+                          <GoogleOutlined style={{ marginRight: 4 }} />
+                          {mailboxData.connection_config?.gmail_email || 'Connected'}
+                        </Text>
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          Linked on {new Date(mailboxData.connection_config?.gmail_extended_at || '').toLocaleDateString()}
+                        </Text>
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          <SyncOutlined style={{ marginRight: 4 }} />
+                          New emails are automatically synced every {syncInterval} minutes
+                        </Text>
+                      </Space>
+                    }
+                    type="success"
+                    style={{ marginBottom: 12 }}
+                  />
+
+                  {/* Sync Settings */}
+                  <div
+                    style={{
+                      background: 'rgba(82, 196, 26, 0.05)',
+                      border: '1px solid rgba(82, 196, 26, 0.2)',
+                      borderRadius: 8,
+                      padding: 12
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: showSyncSettings ? 12 : 0 }}>
+                      <Space>
+                        <SettingOutlined />
+                        <Text strong style={{ fontSize: 13 }}>Sync Settings</Text>
+                      </Space>
+                      <Button
+                        type="text"
+                        size="small"
+                        onClick={() => setShowSyncSettings(!showSyncSettings)}
+                      >
+                        {showSyncSettings ? 'Hide' : 'Configure'}
+                      </Button>
+                    </div>
+
+                    {showSyncSettings && (
+                      <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                        <div>
+                          <Text type="secondary" style={{ display: 'block', marginBottom: 4, fontSize: 12 }}>
+                            Sync Interval (minutes)
+                          </Text>
+                          <Space>
+                            <InputNumber
+                              min={1}
+                              max={1440}
+                              value={syncInterval}
+                              onChange={(value) => setSyncInterval(value || 15)}
+                              style={{ width: 80 }}
+                              size="small"
+                            />
+                            <Text type="secondary" style={{ fontSize: 11 }}>
+                              (1 min - 24 hours)
+                            </Text>
+                          </Space>
+                        </div>
+                        <Button
+                          type="primary"
+                          icon={<SaveOutlined />}
+                          onClick={handleSaveConfig}
+                          loading={savingConfig}
+                          size="small"
+                          style={{ background: '#52c41a', borderColor: '#52c41a' }}
+                        >
+                          Save Settings
+                        </Button>
+                      </Space>
+                    )}
+                  </div>
+                </div>
               ) : (
                 // Not linked - show option to link
                 <div
