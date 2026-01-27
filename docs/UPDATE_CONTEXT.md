@@ -1,4 +1,4 @@
-# Update Context - January 20, 2026
+# Update Context - January 27, 2026
 
 ## Session Summary
 
@@ -17,7 +17,7 @@ Based on updated user stories, Stage 2 is now organized into 3 sprints:
 |------|--------|
 | Account Manager & Client Hierarchy | Backend Complete |
 | Role-Based Access Control | Pending |
-| Gmail OAuth Integration | Pending |
+| Gmail OAuth Integration | **Complete** |
 | Outlook OAuth Integration | Pending |
 | Date Range Processing | Complete |
 
@@ -54,12 +54,13 @@ Based on updated user stories, Stage 2 is now organized into 3 sprints:
 - Real-time processing with Redis
 - Production deployment on Railway
 
-### Stage 2 Progress (Jan 19-20, 2026)
+### Stage 2 Progress (Jan 19-27, 2026)
 
 #### 1. Error Handling System (Complete)
 - Added `processing_status`, `processing_error`, `processing_attempts` columns to emails
 - Created error tracking functions in PostgreSQL
 - Split migrations for Railway (001a, 001b, 001c)
+- Job error log endpoint with batch error analysis
 
 #### 2. Business Hierarchy (Backend Complete)
 - Database tables: `account_managers`, `clients`, `customer_companies`, `customer_contacts`, `customer_recognition_rules`
@@ -77,13 +78,65 @@ Based on updated user stories, Stage 2 is now organized into 3 sprints:
 - Auto-reconnect when backend restarts
 - Connection status banner in UI
 
-#### 5. Bug Fixes (Complete)
+#### 5. Gmail LIVE Integration (Complete - Jan 27, 2026)
+- **OAuth Authentication**: Google OAuth2 flow with consent screen
+- **Gmail Extractor**: `backend/src/extractors/gmail_extractor.py` following BaseExtractor pattern
+- **Sync Service**: `backend/src/services/gmail_sync_service.py` with background polling
+- **API Endpoints**: `backend/src/routers/gmail.py` with auth, sync, and config routes
+- **Frontend Components**:
+  - `GmailConnection.tsx` - Connection status and sync controls
+  - `gmailService.ts` - Frontend API service
+  - Sync settings in `MailboxEditForm.tsx`
+- **Features**:
+  - Connect Gmail via OAuth popup
+  - Link Gmail to existing archive mailboxes for continuous sync
+  - Automatic 15-minute sync (configurable 1-1440 minutes)
+  - Incremental sync using Gmail historyId
+  - Manual "Sync Now" button
+  - Frontend UI for configuring sync interval
+  - Persistent config in `app_config` database table
+
+#### 6. Error Tracking Page (Complete - Jan 27, 2026)
+- New dedicated errors page: `frontend/src/pages/errors.tsx`
+- View errors by processing job with filtering by phase and type
+- Job errors summary with error type breakdown (categories, counts)
+- Batch error log display from `processing_jobs.error_log`
+- Error analysis: timeout, duplicate_in_batch, constraint_violation
+- Failed message IDs tracking with sample display
+- Retry failed emails functionality
+
+#### 7. Dashboard Redesign (Complete)
+- Gmail LIVE sync status card with connection controls
+- Processing job status with real-time progress
+- Email statistics with count by mailbox
+- Optimized database queries using PostgreSQL functions:
+  - `get_dashboard_stats()` - aggregated dashboard metrics
+  - `get_email_counts_by_mailbox()` - per-mailbox counts
+- Performance indexes for faster queries
+
+#### 8. Date-Based Filtering (Complete)
+- Date range picker in emails page for filtering
+- Gmail date-range fetch endpoint for historical imports
+- Start/end date parameters in email extraction
+
+#### 9. Bug Fixes (Complete)
 - Removed faulty `DaemonThreadPoolExecutor` (was trying to set daemon on active threads)
 - Split migration scripts for Railway timeout issues
+- Fixed Gmail OAuth scope validation error
+- Fixed Supabase client initialization errors
 
 ---
 
 ## Code Locations
+
+### Gmail LIVE Integration
+- **Extractor**: `backend/src/extractors/gmail_extractor.py`
+- **Sync Service**: `backend/src/services/gmail_sync_service.py`
+- **API Router**: `backend/src/routers/gmail.py`
+- **Frontend Component**: `frontend/src/components/GmailConnection.tsx`
+- **Frontend Service**: `frontend/src/services/gmailService.ts`
+- **Database Tables**: `user_integrations`, `gmail_filters`, `app_config`
+- **Migration**: `scripts/add_app_config_table.sql` (for existing deployments)
 
 ### Business Hierarchy (Stage 2)
 - Backend routers: `backend/src/routers/` (account_managers.py, clients.py, customers.py, contacts.py)
@@ -110,15 +163,14 @@ Based on updated user stories, Stage 2 is now organized into 3 sprints:
    - Add role validation to API endpoints
    - Create role assignment UI
 
-2. **Gmail OAuth Integration**
-   - Implement OAuth flow for Gmail
-   - Create filter import functionality
-   - Set up 15-minute sync background job
-
-3. **Outlook OAuth Integration**
+2. **Outlook OAuth Integration**
    - Implement Microsoft Graph OAuth
    - Import Outlook rules
    - Handle token refresh
+
+3. **Gmail Filter Import** (Optional Enhancement)
+   - Import Gmail filters to platform rules
+   - Display imported filters in UI
 
 ### Sprint 2 (After Sprint 1 Complete)
 1. Customer Recognition System with domain/keyword rules

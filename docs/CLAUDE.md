@@ -4,6 +4,37 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Recent Improvements
 
+### Jan 27, 2026
+1. **Gmail LIVE Sync Complete**: Full implementation of Gmail OAuth integration with automatic 15-minute sync
+   - OAuth2 authentication with Google consent screen
+   - Incremental sync using historyId (only fetches new emails)
+   - Background sync service with configurable interval (1-1440 minutes)
+   - Link existing mailboxes to Gmail for continuous sync
+   - Frontend UI for connection status, sync controls, and settings
+2. **Configurable Sync Interval**: Added frontend UI to configure Gmail sync frequency
+   - `PUT /api/gmail/config` endpoint for updating sync interval
+   - `app_config` database table for persistent configuration
+   - Changes apply immediately to running sync service
+   - Settings panel in MailboxEditForm and GmailConnection components
+3. **Error Tracking Page**: New dedicated errors page (`frontend/src/pages/errors.tsx`)
+   - View errors by processing job with filtering
+   - Job errors summary with error type breakdown
+   - Batch error log display from `processing_jobs.error_log`
+   - Failed message IDs tracking and sample display
+   - Retry failed emails functionality
+4. **Date-Based Email Filtering**: Filter emails by date range
+   - Date range picker in emails page
+   - Gmail date-range fetch for historical imports
+5. **Download Before Processing**: Performance optimization for large files
+   - Parallel multi-threaded download option in Advanced Settings
+   - Faster than streaming for Google Drive files 5GB+
+   - Progress tracking with download speed display
+6. **Dashboard Redesign**: Updated dashboard with improved metrics
+   - Gmail LIVE sync status card
+   - Processing job status with progress
+   - Email statistics with trend indicators
+   - Optimized database queries with PostgreSQL functions
+
 ### Jan 20, 2026
 1. **Daemon Thread Error Fixed**: Removed faulty `DaemonThreadPoolExecutor` from `main.py` and `parallel_downloader.py`. Now uses regular `ThreadPoolExecutor` + proper cancellation mechanisms.
 2. **Railway Migration Optimization**: Split `001_add_error_handling.sql` into `001a/001b/001c` to avoid timeout on large tables.
@@ -115,7 +146,7 @@ Frontend → FastAPI → ThreadPool (20 workers) → Email Processing Pipeline
 #### Data Layer
 - **Supabase PostgreSQL**: Primary data storage
 - **Redis (REQUIRED)**: Progress cache and job queue management
-- **Tables**: emails, email_categories (tags), processing_jobs, mailboxes, folders, account_managers, clients, customer_companies, customer_contacts
+- **Tables**: emails, email_categories (tags), processing_jobs, mailboxes, folders, account_managers, clients, customer_companies, customer_contacts, user_integrations, gmail_filters, app_config
 
 ### Important Implementation Details
 
