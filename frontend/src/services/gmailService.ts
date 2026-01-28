@@ -41,6 +41,17 @@ export interface GmailFilter {
   is_active: boolean;
 }
 
+// Mailbox-specific Gmail status (per-mailbox integration)
+export interface MailboxGmailStatus {
+  connected: boolean;
+  gmail_email?: string;
+  last_sync_at?: string;
+  sync_status: 'idle' | 'syncing' | 'error' | 'disconnected';
+  email_count: number;
+  error?: string;
+  connected_at?: string;
+}
+
 class GmailService {
   /**
    * Initialize Google Identity Services for Gmail OAuth
@@ -459,6 +470,171 @@ class GmailService {
       return {
         success: false,
         message: error instanceof Error ? error.message : 'Failed to update configuration'
+      };
+    }
+  }
+
+  // ============================================
+  // MAILBOX-SPECIFIC GMAIL INTEGRATION METHODS
+  // ============================================
+
+  /**
+   * Connect Gmail directly to a specific mailbox
+   * Stores tokens in mailbox.connection_config, not user_integrations
+   */
+  async connectToMailbox(mailboxId: string): Promise<{
+    success: boolean;
+    gmail_email?: string;
+    message: string;
+  }> {
+    try {
+      console.log('[GmailService] Starting Gmail OAuth2 for mailbox:', mailboxId);
+
+      // Initialize if not already done
+      await this.initializeGoogleApi();
+
+      return new Promise((resolve, reject) => {
+        const client = window.google.accounts.oauth2.initCodeClient({
+          client_id: config.googleClientId,
+          scope: [
+            'https://www.googleapis.com/auth/gmail.readonly',
+            'https://www.googleapis.com/auth/gmail.settings.basic',
+            'https://www.googleapis.com/auth/userinfo.email',
+            'openid'
+          ].join(' '),
+          ux_mode: 'popup',
+          callback: async (response: { code?: string; error?: string; scope?: string }) => {
+            if (response.error) {
+              console.error('[GmailService] OAuth error:', response);
+              reject(new Error(`Authentication failed: ${response.error}`));
+              return;
+            }
+
+            if (!response.code) {
+              reject(new Error('No authorization code received'));
+              return;
+            }
+
+            console.log('[GmailService] Authorization code received for mailbox');
+
+            try {
+              // Send authorization code to backend for THIS mailbox
+              const backendResponse = await fetch(`${config.apiBaseUrl}/gmail/mailbox/${mailboxId}/connect`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  code: response.code
+                })
+              });
+
+              if (!backendResponse.ok) {
+                const errorData = await backendResponse.json().catch(() => ({}));
+                throw new Error(errorData.detail || `Backend token exchange failed: ${backendResponse.status}`);
+              }
+
+              const result = await backendResponse.json();
+              console.log('[GmailService] Mailbox Gmail connection successful:', result);
+
+              resolve({
+                success: true,
+                message: result.message || 'Gmail connected to mailbox successfully!',
+                gmail_email: result.gmail_email
+              });
+
+            } catch (error) {
+              console.error('[GmailService] Mailbox Gmail connection failed:', error);
+              reject(new Error(`Failed to connect Gmail: ${error instanceof Error ? error.message : 'Unknown error'}`));
+            }
+          }
+        });
+
+        // Request authorization code
+        client.requestCode();
+      });
+
+    } catch (error) {
+      console.error('[GmailService] Mailbox Gmail authentication failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Disconnect Gmail from a specific mailbox
+   */
+  async disconnectFromMailbox(mailboxId: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await fetch(`${config.apiBaseUrl}/gmail/mailbox/${mailboxId}/disconnect`, {
+        method: 'DELETE'
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Failed to disconnect: ${response.status}`);
+      }
+
+      const result = await response.json();
+      return {
+        success: true,
+        message: result.message || 'Gmail disconnected from mailbox'
+      };
+    } catch (error) {
+      console.error('[GmailService] Failed to disconnect Gmail from mailbox:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to disconnect'
+      };
+    }
+  }
+
+  /**
+   * Get Gmail sync status for a specific mailbox
+   */
+  async getMailboxGmailStatus(mailboxId: string): Promise<MailboxGmailStatus> {
+    try {
+      const response = await fetch(`${config.apiBaseUrl}/gmail/mailbox/${mailboxId}/status`);
+
+      if (!response.ok) {
+        throw new Error(`Failed to get mailbox Gmail status: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('[GmailService] Failed to get mailbox Gmail status:', error);
+      return {
+        connected: false,
+        sync_status: 'disconnected',
+        email_count: 0,
+        error: error instanceof Error ? error.message : 'Failed to check connection'
+      };
+    }
+  }
+
+  /**
+   * Trigger manual sync for a specific mailbox
+   */
+  async triggerMailboxSync(mailboxId: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await fetch(`${config.apiBaseUrl}/gmail/mailbox/${mailboxId}/sync`, {
+        method: 'POST'
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Failed to trigger sync: ${response.status}`);
+      }
+
+      const result = await response.json();
+      return {
+        success: true,
+        message: result.message || 'Sync started for mailbox'
+      };
+    } catch (error) {
+      console.error('[GmailService] Failed to trigger mailbox sync:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to trigger sync'
       };
     }
   }

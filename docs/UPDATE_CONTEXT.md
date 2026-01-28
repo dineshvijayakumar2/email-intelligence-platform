@@ -1,4 +1,4 @@
-# Update Context - January 27, 2026
+# Update Context - January 28, 2026
 
 ## Session Summary
 
@@ -84,7 +84,7 @@ Based on updated user stories, Stage 2 is now organized into 3 sprints:
 - **Sync Service**: `backend/src/services/gmail_sync_service.py` with background polling
 - **API Endpoints**: `backend/src/routers/gmail.py` with auth, sync, and config routes
 - **Frontend Components**:
-  - `GmailConnection.tsx` - Connection status and sync controls
+  - `GmailConnection.tsx` - Connection status and sync controls (legacy)
   - `gmailService.ts` - Frontend API service
   - Sync settings in `MailboxEditForm.tsx`
 - **Features**:
@@ -95,6 +95,28 @@ Based on updated user stories, Stage 2 is now organized into 3 sprints:
   - Manual "Sync Now" button
   - Frontend UI for configuring sync interval
   - Persistent config in `app_config` database table
+
+#### 5b. Per-Mailbox Gmail Integration (Complete - Jan 28, 2026)
+- **Architecture Change**: Each mailbox now stores its own Gmail tokens directly in `connection_config`
+- **Benefits**:
+  - Multiple Gmail accounts can be connected (one per mailbox)
+  - No global account management needed
+  - Each mailbox independent - simpler mental model
+- **New Endpoints** (`backend/src/routers/gmail.py`):
+  - `POST /api/gmail/mailbox/{mailbox_id}/connect` - Connect Gmail directly to mailbox
+  - `DELETE /api/gmail/mailbox/{mailbox_id}/disconnect` - Disconnect Gmail from mailbox
+  - `GET /api/gmail/mailbox/{mailbox_id}/status` - Get mailbox Gmail sync status
+  - `POST /api/gmail/mailbox/{mailbox_id}/sync` - Trigger manual sync for mailbox
+- **Sync Service Updates** (`backend/src/services/gmail_sync_service.py`):
+  - Added `_sync_all_mailboxes()` - loops through mailboxes with Gmail tokens
+  - Added `_sync_mailbox()` - syncs individual mailbox using its tokens
+  - Added `_update_mailbox_sync_status()` - updates status in connection_config
+  - Backward compatible: still syncs legacy `user_integrations` based connections
+- **Frontend Updates**:
+  - `gmailService.ts` - Added `connectToMailbox()`, `disconnectFromMailbox()`, `getMailboxGmailStatus()`, `triggerMailboxSync()`
+  - `MailboxEditForm.tsx` - Direct Gmail connect/disconnect per mailbox
+  - `dashboard.tsx` - Removed global Gmail connection, shows per-mailbox summary
+- **Migration**: `scripts/migrations/007_migrate_gmail_to_mailbox.sql` for existing connections
 
 #### 6. Error Tracking Page (Complete - Jan 27, 2026)
 - New dedicated errors page: `frontend/src/pages/errors.tsx`
@@ -129,14 +151,16 @@ Based on updated user stories, Stage 2 is now organized into 3 sprints:
 
 ## Code Locations
 
-### Gmail LIVE Integration
+### Gmail LIVE Integration (Per-Mailbox Architecture)
 - **Extractor**: `backend/src/extractors/gmail_extractor.py`
-- **Sync Service**: `backend/src/services/gmail_sync_service.py`
-- **API Router**: `backend/src/routers/gmail.py`
-- **Frontend Component**: `frontend/src/components/GmailConnection.tsx`
-- **Frontend Service**: `frontend/src/services/gmailService.ts`
-- **Database Tables**: `user_integrations`, `gmail_filters`, `app_config`
-- **Migration**: `scripts/add_app_config_table.sql` (for existing deployments)
+- **Sync Service**: `backend/src/services/gmail_sync_service.py` (updated for per-mailbox)
+- **API Router**: `backend/src/routers/gmail.py` (includes mailbox-specific endpoints)
+- **Frontend Service**: `frontend/src/services/gmailService.ts` (mailbox methods added)
+- **Frontend Form**: `frontend/src/components/MailboxEditForm.tsx` (direct Gmail connect)
+- **Legacy Component**: `frontend/src/components/GmailConnection.tsx` (for backward compatibility)
+- **Database Storage**: Gmail tokens stored in `mailboxes.connection_config` JSONB
+- **Legacy Tables**: `user_integrations`, `gmail_filters`, `app_config`
+- **Migration**: `scripts/migrations/007_migrate_gmail_to_mailbox.sql`
 
 ### Business Hierarchy (Stage 2)
 - Backend routers: `backend/src/routers/` (account_managers.py, clients.py, customers.py, contacts.py)

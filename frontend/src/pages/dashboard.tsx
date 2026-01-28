@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Row, Col, Statistic, Typography, Table, Tag, Button, Empty, Space } from "antd";
+import { Row, Col, Statistic, Typography, Table, Tag, Button, Empty, Space, Alert } from "antd";
 import {
   MailOutlined,
   InboxOutlined,
@@ -11,6 +11,8 @@ import {
   ArrowRightOutlined,
   SyncOutlined,
   ThunderboltOutlined,
+  GoogleOutlined,
+  EditOutlined,
 } from "@ant-design/icons";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -20,29 +22,11 @@ import {
   MailboxSummary,
   RecentJob,
 } from '../services/dashboardService';
-import GmailConnection from '../components/GmailConnection';
 
-const { Text, Title } = Typography;
+const { Text } = Typography;
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
-
-  // Get consistent user ID (same pattern as other components)
-  const getUserId = () => {
-    let visitorId = localStorage.getItem('user_id');
-    if (!visitorId) {
-      const fingerprint = [
-        navigator.userAgent,
-        navigator.language,
-        screen.width + 'x' + screen.height,
-        new Date().getTimezoneOffset()
-      ].join('|');
-      visitorId = 'user_' + btoa(fingerprint).replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
-      localStorage.setItem('user_id', visitorId);
-    }
-    return visitorId;
-  };
-  const userId = getUserId();
 
   const [stats, setStats] = useState<DashboardStats>({
     totalEmails: 0,
@@ -401,20 +385,70 @@ export const Dashboard: React.FC = () => {
             </div>
 
             <Text type="secondary" style={{ display: 'block', marginBottom: 20 }}>
-              Connect your email accounts for real-time synchronization
+              Connect email accounts to mailboxes for real-time synchronization
             </Text>
 
-            {/* Gmail LIVE Integration */}
+            {/* Gmail LIVE Integration - Per-Mailbox */}
             <div style={{ marginBottom: 16 }}>
-              <GmailConnection
-                userId={userId}
-                compact={true}
-                onConnectionChange={(connected) => {
-                  if (connected) {
-                    loadDashboardData();
-                  }
+              <div
+                style={{
+                  background: 'linear-gradient(135deg, rgba(66, 133, 244, 0.08) 0%, rgba(52, 168, 83, 0.08) 100%)',
+                  border: '1px solid rgba(66, 133, 244, 0.2)',
+                  borderRadius: 12,
+                  padding: 16,
                 }}
-              />
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                  <GoogleOutlined style={{ fontSize: 24, color: '#4285f4' }} />
+                  <div style={{ flex: 1 }}>
+                    <Text strong style={{ color: '#4285f4' }}>Gmail LIVE Sync</Text>
+                    <Text type="secondary" style={{ display: 'block', fontSize: 12 }}>
+                      Per-mailbox Gmail connections
+                    </Text>
+                  </div>
+                </div>
+
+                {/* Show mailboxes with Gmail sync */}
+                {mailboxes.filter(m => m.type && ['mbox', 'pst', 'olm'].includes(m.type)).length > 0 ? (
+                  <div style={{ fontSize: 13 }}>
+                    <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+                      Connect Gmail to individual mailboxes from their edit page:
+                    </Text>
+                    <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                      {mailboxes.filter(m => m.type && ['mbox', 'pst', 'olm'].includes(m.type)).slice(0, 3).map(mailbox => (
+                        <div key={mailbox.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <Space size={4}>
+                            <InboxOutlined style={{ color: '#667eea' }} />
+                            <Text>{mailbox.name}</Text>
+                          </Space>
+                          <Button
+                            type="link"
+                            size="small"
+                            icon={<EditOutlined />}
+                            onClick={() => navigate(`/mailboxes/edit/${mailbox.id}`)}
+                            style={{ padding: 0 }}
+                          >
+                            Configure
+                          </Button>
+                        </div>
+                      ))}
+                      {mailboxes.filter(m => m.type && ['mbox', 'pst', 'olm'].includes(m.type)).length > 3 && (
+                        <Link to="/mailboxes" style={{ fontSize: 12, color: '#667eea' }}>
+                          + {mailboxes.filter(m => m.type && ['mbox', 'pst', 'olm'].includes(m.type)).length - 3} more mailboxes
+                        </Link>
+                      )}
+                    </Space>
+                  </div>
+                ) : (
+                  <Alert
+                    message="No archive mailboxes"
+                    description="Create a mailbox (MBOX, PST, or OLM) to enable Gmail LIVE sync."
+                    type="info"
+                    showIcon={false}
+                    style={{ background: 'transparent', border: 'none', padding: 0 }}
+                  />
+                )}
+              </div>
             </div>
 
             {/* Outlook Integration - Coming Soon */}
@@ -430,8 +464,8 @@ export const Dashboard: React.FC = () => {
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
                 <WindowsOutlined style={{ fontSize: 24, color: '#0078d4' }} />
                 <div>
-                  <Title level={5} style={{ margin: 0, color: '#0078d4' }}>Microsoft 365</Title>
-                  <Text type="secondary" style={{ fontSize: 12 }}>Coming Soon</Text>
+                  <Text strong style={{ color: '#0078d4' }}>Microsoft 365</Text>
+                  <Text type="secondary" style={{ display: 'block', fontSize: 12 }}>Coming Soon</Text>
                 </div>
               </div>
               <Text type="secondary" style={{ fontSize: 13 }}>

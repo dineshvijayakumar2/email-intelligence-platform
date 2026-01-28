@@ -4,6 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Recent Improvements
 
+### Jan 28, 2026
+1. **Per-Mailbox Gmail Integration**: Each mailbox can now have its own Gmail connection
+   - Gmail tokens stored directly in `mailboxes.connection_config` JSONB
+   - Multiple Gmail accounts supported (one per mailbox)
+   - Direct OAuth flow from mailbox edit page
+   - No global account management needed
+   - New endpoints: `/api/gmail/mailbox/{id}/connect`, `/disconnect`, `/status`, `/sync`
+   - Sync service updated to loop by mailboxes with Gmail tokens
+   - Dashboard shows per-mailbox Gmail summary instead of global connection
+   - Migration script for existing connections: `007_migrate_gmail_to_mailbox.sql`
+
 ### Jan 27, 2026
 1. **Gmail LIVE Sync Complete**: Full implementation of Gmail OAuth integration with automatic 15-minute sync
    - OAuth2 authentication with Google consent screen

@@ -91,6 +91,19 @@ class GmailConfigUpdate(BaseModel):
     sync_interval_minutes: Optional[int] = None
 
 
+class MailboxGmailConnectRequest(BaseModel):
+    code: str  # OAuth authorization code
+
+
+class MailboxGmailStatusResponse(BaseModel):
+    connected: bool
+    gmail_email: Optional[str] = None
+    last_sync_at: Optional[str] = None
+    sync_status: str = "disconnected"
+    email_count: int = 0
+    error: Optional[str] = None
+
+
 # =========================================================================
 # Helper Functions
 # =========================================================================
@@ -889,3 +902,270 @@ async def update_gmail_config(config: GmailConfigUpdate):
     except Exception as e:
         logger.error(f"Failed to update config: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# =========================================================================
+# Per-Mailbox Gmail Endpoints (Multi-Gmail Support)
+# =========================================================================
+
+@router.post("/mailbox/{mailbox_id}/connect")
+async def connect_gmail_to_mailbox(mailbox_id: str, request: MailboxGmailConnectRequest):
+    """
+    Connect Gmail account directly to a specific mailbox.
+
+    Stores tokens in mailbox.connection_config instead of user_integrations.
+    This enables each mailbox to have its own Gmail connection.
+
+    Args:
+        mailbox_id: UUID of the mailbox
+        request: Contains OAuth authorization code
+
+    Returns:
+        Success status with Gmail email
+    """
+    try:
+        logger.info(f"Connecting Gmail to mailbox: {mailbox_id}")
+
+        client_id = os.getenv("GOOGLE_CLIENT_ID")
+        client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
+
+        if not client_id or not client_secret:
+            raise HTTPException(
+                status_code=500,
+                detail="Missing Google OAuth credentials in environment"
+            )
+
+        # Verify mailbox exists
+        mailbox_result = _supabase.table('mailboxes').select('id, name, connection_config').eq(
+            'id', mailbox_id
+        ).execute()
+
+        if not mailbox_result.data:
+            raise HTTPException(status_code=404, detail="Mailbox not found")
+
+        existing_config = mailbox_result.data[0].get('connection_config') or {}
+
+        # Exchange authorization code for tokens
+        import requests as http_requests
+
+        token_response = http_requests.post(
+            'https://oauth2.googleapis.com/token',
+            data={
+                'code': request.code,
+                'client_id': client_id,
+                'client_secret': client_secret,
+                'redirect_uri': 'postmessage',
+                'grant_type': 'authorization_code'
+            }
+        )
+
+        if token_response.status_code != 200:
+            error_data = token_response.json()
+            logger.error(f"Token exchange failed: {error_data}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Token exchange failed: {error_data.get('error_description', error_data.get('error', 'Unknown error'))}"
+            )
+
+        token_data = token_response.json()
+        access_token = token_data.get('access_token')
+        refresh_token = token_data.get('refresh_token', '')
+        expires_in = token_data.get('expires_in', 3600)
+
+        if not access_token:
+            raise HTTPException(status_code=400, detail="No access token received from Google")
+
+        # Calculate expiry time
+        from datetime import timedelta
+        expiry = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
+
+        # Get Gmail profile
+        from googleapiclient.discovery import build
+        from google.oauth2.credentials import Credentials
+
+        credentials = Credentials(
+            token=access_token,
+            refresh_token=refresh_token,
+            token_uri='https://oauth2.googleapis.com/token',
+            client_id=client_id,
+            client_secret=client_secret
+        )
+
+        service = build('gmail', 'v1', credentials=credentials)
+        profile = service.users().getProfile(userId='me').execute()
+        gmail_email = profile.get('emailAddress', '')
+        history_id = profile.get('historyId', '')
+
+        # Build Gmail config for mailbox
+        gmail_config = {
+            'gmail_sync_enabled': True,
+            'gmail_email': gmail_email,
+            'gmail_access_token': access_token,
+            'gmail_refresh_token': refresh_token,
+            'gmail_token_expires_at': expiry.isoformat(),
+            'gmail_last_history_id': history_id,
+            'gmail_sync_status': 'idle',
+            'gmail_sync_error': None,
+            'gmail_email_count': existing_config.get('gmail_email_count', 0),
+            'gmail_connected_at': datetime.now(timezone.utc).isoformat()
+        }
+
+        # Merge with existing connection_config
+        updated_config = {**existing_config, **gmail_config}
+
+        # Update mailbox
+        _supabase.table('mailboxes').update({
+            'connection_config': updated_config
+        }).eq('id', mailbox_id).execute()
+
+        logger.info(f"Gmail {gmail_email} connected to mailbox {mailbox_id}")
+
+        return {
+            "success": True,
+            "gmail_email": gmail_email,
+            "message": f"Gmail {gmail_email} connected to mailbox"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to connect Gmail to mailbox: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/mailbox/{mailbox_id}/disconnect")
+async def disconnect_gmail_from_mailbox(mailbox_id: str):
+    """
+    Remove Gmail connection from a specific mailbox.
+
+    Clears Gmail-related fields from mailbox.connection_config.
+
+    Args:
+        mailbox_id: UUID of the mailbox
+
+    Returns:
+        Success status
+    """
+    try:
+        # Get current config
+        result = _supabase.table('mailboxes').select('connection_config').eq(
+            'id', mailbox_id
+        ).execute()
+
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Mailbox not found")
+
+        config = result.data[0].get('connection_config') or {}
+
+        # Remove all gmail_ prefixed keys
+        cleaned_config = {k: v for k, v in config.items() if not k.startswith('gmail_')}
+
+        # Update mailbox
+        _supabase.table('mailboxes').update({
+            'connection_config': cleaned_config
+        }).eq('id', mailbox_id).execute()
+
+        logger.info(f"Gmail disconnected from mailbox {mailbox_id}")
+
+        return {
+            "success": True,
+            "message": "Gmail disconnected from mailbox"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to disconnect Gmail from mailbox: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/mailbox/{mailbox_id}/status")
+async def get_mailbox_gmail_status(mailbox_id: str) -> MailboxGmailStatusResponse:
+    """
+    Get Gmail sync status for a specific mailbox.
+
+    Args:
+        mailbox_id: UUID of the mailbox
+
+    Returns:
+        Gmail connection and sync status
+    """
+    try:
+        result = _supabase.table('mailboxes').select('connection_config').eq(
+            'id', mailbox_id
+        ).execute()
+
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Mailbox not found")
+
+        config = result.data[0].get('connection_config') or {}
+
+        if not config.get('gmail_sync_enabled') or not config.get('gmail_access_token'):
+            return MailboxGmailStatusResponse(connected=False)
+
+        return MailboxGmailStatusResponse(
+            connected=True,
+            gmail_email=config.get('gmail_email'),
+            last_sync_at=config.get('gmail_last_sync_at'),
+            sync_status=config.get('gmail_sync_status', 'idle'),
+            email_count=config.get('gmail_email_count', 0),
+            error=config.get('gmail_sync_error')
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get mailbox Gmail status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/mailbox/{mailbox_id}/sync")
+async def trigger_mailbox_gmail_sync(mailbox_id: str, background_tasks: BackgroundTasks):
+    """
+    Manually trigger Gmail sync for a specific mailbox.
+
+    Args:
+        mailbox_id: UUID of the mailbox
+        background_tasks: FastAPI background tasks
+
+    Returns:
+        Sync started status
+    """
+    try:
+        if not _sync_service:
+            raise HTTPException(status_code=503, detail="Sync service not available")
+
+        # Verify mailbox has Gmail connected
+        result = _supabase.table('mailboxes').select('connection_config').eq(
+            'id', mailbox_id
+        ).execute()
+
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Mailbox not found")
+
+        config = result.data[0].get('connection_config') or {}
+
+        if not config.get('gmail_sync_enabled') or not config.get('gmail_access_token'):
+            raise HTTPException(status_code=400, detail="Mailbox does not have Gmail connected")
+
+        # Run sync in background
+        background_tasks.add_task(_run_mailbox_sync, mailbox_id)
+
+        return {
+            "status": "started",
+            "message": "Gmail sync started for mailbox"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to trigger mailbox sync: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+async def _run_mailbox_sync(mailbox_id: str):
+    """Background task wrapper for mailbox sync"""
+    try:
+        await _sync_service.trigger_mailbox_sync(mailbox_id)
+    except Exception as e:
+        logger.error(f"Background mailbox sync failed for {mailbox_id}: {e}")

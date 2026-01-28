@@ -113,6 +113,9 @@ class GmailSyncService:
         """Main sync loop - runs at configured interval"""
         while self._running:
             try:
+                # Sync mailboxes with per-mailbox Gmail tokens (new approach)
+                await self._sync_all_mailboxes()
+                # Also sync legacy user_integrations-based connections
                 await self._sync_all_users()
             except Exception as e:
                 logger.error(f"Error in Gmail sync loop: {e}")
@@ -122,8 +125,212 @@ class GmailSyncService:
             logger.debug(f"Next Gmail sync in {self.sync_interval_minutes} minutes")
             await asyncio.sleep(self.sync_interval_minutes * 60)
 
+    async def _sync_all_mailboxes(self):
+        """
+        Sync all mailboxes that have Gmail tokens stored directly in connection_config.
+        This is the new per-mailbox approach where each mailbox has its own Gmail connection.
+        """
+        try:
+            # Get all mailboxes
+            result = self.supabase.table('mailboxes').select('*').execute()
+
+            gmail_mailboxes = []
+            for mailbox in (result.data or []):
+                config = mailbox.get('connection_config') or {}
+                # Check for per-mailbox Gmail tokens (new approach)
+                if config.get('gmail_sync_enabled') and config.get('gmail_access_token'):
+                    gmail_mailboxes.append(mailbox)
+
+            if gmail_mailboxes:
+                logger.info(f"Found {len(gmail_mailboxes)} mailboxes with per-mailbox Gmail sync")
+
+            for mailbox in gmail_mailboxes:
+                mailbox_id = mailbox['id']
+
+                # Skip if currently syncing
+                sync_key = f"mailbox:{mailbox_id}"
+                if sync_key in self._active_syncs:
+                    logger.debug(f"Skipping mailbox {mailbox_id} - sync already in progress")
+                    continue
+
+                config = mailbox.get('connection_config') or {}
+
+                # Skip if in error state and not enough time has passed
+                if config.get('gmail_sync_status') == 'error':
+                    last_sync = config.get('gmail_last_sync_at')
+                    if last_sync:
+                        last_sync_dt = datetime.fromisoformat(last_sync.replace('Z', '+00:00'))
+                        backoff_time = datetime.now(timezone.utc) - timedelta(minutes=self.RATE_LIMIT_BACKOFF_MINUTES)
+                        if last_sync_dt > backoff_time:
+                            logger.debug(f"Skipping mailbox {mailbox_id} - in error backoff period")
+                            continue
+
+                # Run sync in background
+                task = asyncio.create_task(self._sync_mailbox(mailbox))
+                self._active_syncs[sync_key] = task
+
+                # Clean up completed task
+                task.add_done_callback(lambda t, key=sync_key: self._active_syncs.pop(key, None))
+
+        except Exception as e:
+            logger.error(f"Failed to fetch mailboxes for sync: {e}")
+
+    async def _sync_mailbox(self, mailbox: Dict):
+        """
+        Sync a single mailbox using its own Gmail tokens stored in connection_config.
+
+        Args:
+            mailbox: Mailbox record with Gmail config in connection_config
+        """
+        mailbox_id = mailbox['id']
+        mailbox_name = mailbox.get('name', 'Unknown')
+        config = mailbox.get('connection_config') or {}
+
+        logger.info(f"Starting Gmail sync for mailbox: {mailbox_name} ({mailbox_id})")
+
+        try:
+            # Update status to syncing
+            await self._update_mailbox_sync_status(mailbox_id, 'syncing')
+
+            # Import here to avoid circular imports
+            from ..extractors.gmail_extractor import GmailExtractor
+            from ..database.operations import EmailOperations
+
+            # Create extractor using mailbox's own tokens
+            extractor = GmailExtractor({
+                'access_token': config['gmail_access_token'],
+                'refresh_token': config.get('gmail_refresh_token'),
+                'history_id': config.get('gmail_last_history_id'),
+                'labels': ['INBOX', 'SENT'],
+                'mailbox_id': mailbox_id
+            })
+
+            if not extractor.connect():
+                raise ConnectionError("Failed to connect to Gmail API")
+
+            # Create processing job
+            job_id = await self._create_sync_job(mailbox_id)
+
+            # Process emails using EmailOperations
+            email_ops = EmailOperations()
+            success_count = 0
+            failed_count = 0
+
+            # Extract and insert emails
+            emails_batch = []
+            batch_size = 100
+
+            for email in extractor.extract_emails(max_emails=self.MAX_EMAILS_PER_SYNC):
+                emails_batch.append(email)
+
+                if len(emails_batch) >= batch_size:
+                    result = email_ops.batch_insert_emails(emails_batch, mailbox_id)
+                    success_count += result.get('success', 0)
+                    failed_count += result.get('failed', 0)
+                    emails_batch = []
+
+            # Insert remaining emails
+            if emails_batch:
+                result = email_ops.batch_insert_emails(emails_batch, mailbox_id)
+                success_count += result.get('success', 0)
+                failed_count += result.get('failed', 0)
+
+            # Update history ID for next incremental sync
+            new_history_id = extractor.get_current_history_id()
+
+            # Check if tokens were refreshed and update mailbox config
+            refreshed_tokens = extractor.get_refreshed_tokens()
+            if refreshed_tokens:
+                await self._update_mailbox_tokens(mailbox_id, refreshed_tokens)
+
+            # Complete the job
+            await self._complete_sync_job(job_id, success_count, failed_count)
+
+            # Update sync status in mailbox config
+            await self._update_mailbox_sync_status(
+                mailbox_id,
+                'idle',
+                history_id=new_history_id,
+                email_count=success_count
+            )
+
+            extractor.disconnect()
+
+            logger.info(f"Gmail sync completed for mailbox {mailbox_name}: {success_count} emails synced")
+
+        except Exception as e:
+            logger.error(f"Gmail sync failed for mailbox {mailbox_id}: {e}")
+            logger.error(traceback.format_exc())
+            await self._update_mailbox_sync_status(mailbox_id, 'error', error=str(e))
+
+    async def _update_mailbox_sync_status(
+        self,
+        mailbox_id: str,
+        status: str,
+        history_id: str = None,
+        email_count: int = None,
+        error: str = None
+    ):
+        """Update sync status in mailbox.connection_config"""
+        try:
+            # Get current config
+            result = self.supabase.table('mailboxes').select('connection_config').eq(
+                'id', mailbox_id
+            ).execute()
+
+            if not result.data:
+                return
+
+            config = result.data[0].get('connection_config') or {}
+
+            # Update status fields
+            config['gmail_sync_status'] = status
+            config['gmail_last_sync_at'] = datetime.now(timezone.utc).isoformat()
+
+            if history_id:
+                config['gmail_last_history_id'] = history_id
+
+            if email_count is not None and email_count > 0:
+                current_count = config.get('gmail_email_count') or 0
+                config['gmail_email_count'] = current_count + email_count
+
+            if error:
+                config['gmail_sync_error'] = error[:500]  # Truncate long errors
+            elif status == 'idle':
+                config['gmail_sync_error'] = None
+
+            # Update mailbox
+            self.supabase.table('mailboxes').update({
+                'connection_config': config
+            }).eq('id', mailbox_id).execute()
+
+        except Exception as e:
+            logger.error(f"Failed to update mailbox sync status: {e}")
+
+    async def _update_mailbox_tokens(self, mailbox_id: str, tokens: Dict):
+        """Update refreshed tokens in mailbox.connection_config"""
+        try:
+            result = self.supabase.table('mailboxes').select('connection_config').eq(
+                'id', mailbox_id
+            ).execute()
+
+            if not result.data:
+                return
+
+            config = result.data[0].get('connection_config') or {}
+            config['gmail_access_token'] = tokens['access_token']
+            if tokens.get('refresh_token'):
+                config['gmail_refresh_token'] = tokens['refresh_token']
+
+            self.supabase.table('mailboxes').update({
+                'connection_config': config
+            }).eq('id', mailbox_id).execute()
+
+        except Exception as e:
+            logger.error(f"Failed to update mailbox tokens: {e}")
+
     async def _sync_all_users(self):
-        """Sync all users with active Gmail connections"""
+        """Sync all users with active Gmail connections (legacy approach via user_integrations)"""
         try:
             # Get all users with Gmail integration that are not in error state
             # or have been in error state long enough for retry
@@ -415,7 +622,7 @@ class GmailSyncService:
 
     async def trigger_sync(self, user_id: str):
         """
-        Manually trigger sync for a user
+        Manually trigger sync for a user (legacy approach)
 
         Args:
             user_id: User ID to sync
@@ -428,6 +635,28 @@ class GmailSyncService:
             await self._sync_user(result.data[0])
         else:
             raise ValueError(f"No Gmail integration found for user {user_id}")
+
+    async def trigger_mailbox_sync(self, mailbox_id: str):
+        """
+        Manually trigger sync for a specific mailbox using its own Gmail tokens.
+
+        Args:
+            mailbox_id: UUID of the mailbox to sync
+        """
+        result = self.supabase.table('mailboxes').select('*').eq(
+            'id', mailbox_id
+        ).execute()
+
+        if not result.data:
+            raise ValueError(f"Mailbox {mailbox_id} not found")
+
+        mailbox = result.data[0]
+        config = mailbox.get('connection_config') or {}
+
+        if not config.get('gmail_sync_enabled') or not config.get('gmail_access_token'):
+            raise ValueError(f"Mailbox {mailbox_id} does not have Gmail connected")
+
+        await self._sync_mailbox(mailbox)
 
     async def import_filters(self, user_id: str) -> List[Dict]:
         """

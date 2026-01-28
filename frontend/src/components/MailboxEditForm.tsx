@@ -17,8 +17,6 @@ import {
 import {
   FolderOpenOutlined,
   GoogleOutlined,
-  ThunderboltOutlined,
-  LinkOutlined,
   DisconnectOutlined,
   CheckCircleOutlined,
   SyncOutlined,
@@ -26,10 +24,10 @@ import {
   SaveOutlined
 } from "@ant-design/icons";
 import { useNavigate, useParams } from "react-router-dom";
-import { mailboxService, Mailbox, hasGmailLiveSync } from '../services/mailboxService';
+import { mailboxService, Mailbox } from '../services/mailboxService';
 import GoogleDrivePicker from './GoogleDrivePicker';
 import GoogleDriveConnection from './GoogleDriveConnection';
-import gmailService from '../services/gmailService';
+import gmailService, { MailboxGmailStatus } from '../services/gmailService';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -48,9 +46,13 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
   const [fileSource, setFileSource] = React.useState<'local' | 'google_drive'>('local');
   const [googleDriveFile, setGoogleDriveFile] = React.useState<any>(null);
   const [googleDriveConnected, setGoogleDriveConnected] = React.useState(false);
-  const [gmailConnected, setGmailConnected] = React.useState(false);
-  const [gmailLinking, setGmailLinking] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Per-mailbox Gmail connection state
+  const [mailboxGmailStatus, setMailboxGmailStatus] = React.useState<MailboxGmailStatus | null>(null);
+  const [connectingGmail, setConnectingGmail] = React.useState(false);
+  const [disconnectingGmail, setDisconnectingGmail] = React.useState(false);
+  const [syncingGmail, setSyncingGmail] = React.useState(false);
 
   // Sync interval configuration
   const [syncInterval, setSyncInterval] = React.useState<number>(15);
@@ -79,8 +81,8 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
   useEffect(() => {
     if (mailboxId) {
       loadMailboxData();
+      loadMailboxGmailStatus();
     }
-    checkGmailConnection();
     loadSyncConfig();
   }, [mailboxId]);
 
@@ -113,36 +115,71 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
     }
   };
 
-  const checkGmailConnection = async () => {
+  // Load Gmail status for this specific mailbox
+  const loadMailboxGmailStatus = async () => {
     try {
-      const connected = await gmailService.isConnected(userId);
-      setGmailConnected(connected);
+      const status = await gmailService.getMailboxGmailStatus(mailboxId);
+      setMailboxGmailStatus(status);
     } catch (error) {
-      console.error('Error checking Gmail connection:', error);
+      console.error('Error loading mailbox Gmail status:', error);
     }
   };
 
-  const handleLinkGmail = async () => {
-    if (!gmailConnected) {
-      message.warning('Please connect your Gmail account from the Dashboard first');
-      navigate('/');
-      return;
-    }
-
+  // Connect Gmail directly to this mailbox via OAuth
+  const handleConnectGmail = async () => {
     try {
-      setGmailLinking(true);
-      const result = await gmailService.extendMailboxWithGmail(mailboxId, userId);
+      setConnectingGmail(true);
+      const result = await gmailService.connectToMailbox(mailboxId);
 
       if (result.success) {
-        message.success(result.message);
-        loadMailboxData(); // Reload to show updated status
+        message.success(`Gmail ${result.gmail_email} connected to mailbox`);
+        loadMailboxGmailStatus(); // Reload status
       } else {
         message.error(result.message);
       }
     } catch (error) {
-      message.error('Failed to link Gmail');
+      message.error(error instanceof Error ? error.message : 'Failed to connect Gmail');
     } finally {
-      setGmailLinking(false);
+      setConnectingGmail(false);
+    }
+  };
+
+  // Disconnect Gmail from this mailbox
+  const handleDisconnectGmail = async () => {
+    try {
+      setDisconnectingGmail(true);
+      const result = await gmailService.disconnectFromMailbox(mailboxId);
+
+      if (result.success) {
+        message.success('Gmail disconnected from mailbox');
+        setMailboxGmailStatus({ connected: false, sync_status: 'disconnected', email_count: 0 });
+      } else {
+        message.error(result.message);
+      }
+    } catch (error) {
+      message.error('Failed to disconnect Gmail');
+    } finally {
+      setDisconnectingGmail(false);
+    }
+  };
+
+  // Trigger manual sync for this mailbox
+  const handleSyncNow = async () => {
+    try {
+      setSyncingGmail(true);
+      const result = await gmailService.triggerMailboxSync(mailboxId);
+
+      if (result.success) {
+        message.success('Sync started');
+        // Poll for status update
+        setTimeout(loadMailboxGmailStatus, 2000);
+      } else {
+        message.error(result.message);
+      }
+    } catch (error) {
+      message.error('Failed to trigger sync');
+    } finally {
+      setSyncingGmail(false);
     }
   };
 
@@ -415,8 +452,8 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
           {['mbox', 'pst', 'olm'].includes(selectedType) && (
             <>
               <Divider>Gmail LIVE Sync</Divider>
-              {hasGmailLiveSync(mailboxData) ? (
-                // Already linked - show status with config option
+              {mailboxGmailStatus?.connected ? (
+                // Connected - show status with sync controls
                 <div style={{ marginBottom: 16 }}>
                   <Alert
                     message={
@@ -429,19 +466,48 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
                       <Space direction="vertical" size={4} style={{ width: '100%' }}>
                         <Text type="secondary">
                           <GoogleOutlined style={{ marginRight: 4 }} />
-                          {mailboxData.connection_config?.gmail_email || 'Connected'}
-                        </Text>
-                        <Text type="secondary" style={{ fontSize: 12 }}>
-                          Linked on {new Date(mailboxData.connection_config?.gmail_extended_at || '').toLocaleDateString()}
+                          {mailboxGmailStatus.gmail_email || 'Connected'}
                         </Text>
                         <Text type="secondary" style={{ fontSize: 12 }}>
                           <SyncOutlined style={{ marginRight: 4 }} />
-                          New emails are automatically synced every {syncInterval} minutes
+                          {mailboxGmailStatus.sync_status === 'syncing'
+                            ? 'Syncing now...'
+                            : `Last sync: ${gmailService.formatRelativeTime(mailboxGmailStatus.last_sync_at || null)}`
+                          }
                         </Text>
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          {mailboxGmailStatus.email_count} emails synced
+                        </Text>
+                        {mailboxGmailStatus.error && (
+                          <Text type="danger" style={{ fontSize: 12 }}>
+                            Error: {mailboxGmailStatus.error}
+                          </Text>
+                        )}
                       </Space>
                     }
                     type="success"
                     style={{ marginBottom: 12 }}
+                    action={
+                      <Space direction="vertical" size={4}>
+                        <Button
+                          size="small"
+                          icon={<SyncOutlined spin={syncingGmail} />}
+                          onClick={handleSyncNow}
+                          loading={syncingGmail}
+                        >
+                          Sync Now
+                        </Button>
+                        <Button
+                          size="small"
+                          danger
+                          icon={<DisconnectOutlined />}
+                          onClick={handleDisconnectGmail}
+                          loading={disconnectingGmail}
+                        >
+                          Disconnect
+                        </Button>
+                      </Space>
+                    }
                   />
 
                   {/* Sync Settings */}
@@ -502,46 +568,39 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
                   </div>
                 </div>
               ) : (
-                // Not linked - show option to link
+                // Not connected - show connect button
                 <div
                   style={{
                     background: 'linear-gradient(135deg, rgba(66, 133, 244, 0.08) 0%, rgba(52, 168, 83, 0.08) 100%)',
                     border: '1px dashed rgba(66, 133, 244, 0.3)',
                     borderRadius: 12,
                     padding: 20,
-                    marginBottom: 16
+                    marginBottom: 16,
+                    textAlign: 'center'
                   }}
                 >
                   <Space direction="vertical" size={12} style={{ width: '100%' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <ThunderboltOutlined style={{ color: '#4285f4', fontSize: 18 }} />
-                      <Text strong>Enable Gmail LIVE Sync</Text>
+                    <GoogleOutlined style={{ fontSize: 48, color: '#4285f4' }} />
+                    <div>
+                      <Text strong style={{ fontSize: 16 }}>Connect Gmail for LIVE Sync</Text>
                     </div>
                     <Text type="secondary">
-                      Link your Gmail account to keep this mailbox synced with new emails.
-                      Only new emails will be synced - your archived emails remain intact.
+                      Link a Gmail account to automatically sync new emails to this mailbox.
+                      Each mailbox can have its own Gmail connection.
                     </Text>
                     <Button
-                      icon={<LinkOutlined />}
-                      onClick={handleLinkGmail}
-                      loading={gmailLinking}
-                      disabled={!gmailConnected}
+                      type="primary"
+                      icon={<GoogleOutlined />}
+                      onClick={handleConnectGmail}
+                      loading={connectingGmail}
                       style={{
-                        color: gmailConnected ? '#4285f4' : undefined,
-                        borderColor: gmailConnected ? '#4285f4' : undefined
+                        marginTop: 8,
+                        background: '#4285f4',
+                        borderColor: '#4285f4'
                       }}
                     >
-                      <GoogleOutlined /> Link Gmail for LIVE Sync
+                      Connect Gmail Account
                     </Button>
-                    {!gmailConnected && (
-                      <Alert
-                        message="Gmail Not Connected"
-                        description="Connect your Gmail account from the Dashboard first to enable LIVE sync."
-                        type="warning"
-                        showIcon
-                        style={{ marginTop: 8 }}
-                      />
-                    )}
                   </Space>
                 </div>
               )}
