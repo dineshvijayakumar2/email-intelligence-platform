@@ -10,6 +10,7 @@ Stage 2 - Role-Based Access Control Implementation
 from fastapi import Header, HTTPException, Depends
 from typing import Optional, Dict, Callable
 import jwt
+from jwt import PyJWKClient
 import os
 import logging
 
@@ -18,8 +19,12 @@ logger = logging.getLogger(__name__)
 # Supabase client will be injected from main.py
 _supabase = None
 
-# Supabase JWT secret (found in Supabase Dashboard → Settings → API → JWT Secret)
+# Supabase configuration
+SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_JWT_SECRET = os.getenv('SUPABASE_JWT_SECRET')
+
+# JWKS client for ES256 tokens (lazy loaded)
+_jwks_client = None
 
 
 def init_auth_dependencies(supabase_client):
@@ -57,24 +62,49 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> Dict:
 
     token = authorization.replace('Bearer ', '')
 
-    # Check if JWT secret is configured
-    if not SUPABASE_JWT_SECRET:
-        logger.error("SUPABASE_JWT_SECRET not configured")
-        raise HTTPException(
-            status_code=500,
-            detail="Authentication not configured"
-        )
-
     try:
         # Verify Supabase JWT
-        # Supabase uses HS256 for older projects and ES256 for newer ones
-        payload = jwt.decode(
-            token,
-            SUPABASE_JWT_SECRET,
-            algorithms=['HS256', 'ES256', 'RS256'],
-            audience='authenticated',
-            options={"verify_signature": True}
-        )
+        # Try ES256/RS256 first (using JWKS), then fall back to HS256 (using secret)
+        payload = None
+
+        # Decode header to check algorithm
+        unverified_header = jwt.get_unverified_header(token)
+        alg = unverified_header.get('alg', 'HS256')
+
+        if alg in ['ES256', 'RS256']:
+            # Use JWKS for ES256/RS256
+            global _jwks_client
+            if _jwks_client is None and SUPABASE_URL:
+                jwks_url = f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json"
+                _jwks_client = PyJWKClient(jwks_url)
+
+            if _jwks_client:
+                try:
+                    signing_key = _jwks_client.get_signing_key_from_jwt(token)
+                    payload = jwt.decode(
+                        token,
+                        signing_key.key,
+                        algorithms=['ES256', 'RS256'],
+                        audience='authenticated',
+                        options={"verify_signature": True}
+                    )
+                except Exception as e:
+                    logger.warning(f"JWKS verification failed: {e}, trying HS256")
+
+        # Fall back to HS256 if ES256/RS256 failed or not applicable
+        if payload is None:
+            if not SUPABASE_JWT_SECRET:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Authentication not configured"
+                )
+            payload = jwt.decode(
+                token,
+                SUPABASE_JWT_SECRET,
+                algorithms=['HS256'],
+                audience='authenticated',
+                options={"verify_signature": True}
+            )
 
         user_id = payload.get('sub')  # Supabase uses 'sub' for user ID
 
