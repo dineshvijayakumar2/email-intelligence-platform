@@ -33,7 +33,8 @@ import {
   SyncOutlined,
 } from "@ant-design/icons";
 import { emailService, Email, EmailFilters } from '../services/emailService';
-import config from '../config';
+import { mailboxService, Mailbox } from '../services/mailboxService';
+import { useAuth } from '../contexts/AuthContext';
 
 const { Text, Title } = Typography;
 const { Option } = Select;
@@ -376,6 +377,9 @@ const EmailDetailPanel: React.FC<{
 
 // Main Email List Component
 export const EmailList: React.FC = () => {
+  // Auth context for user's accessible mailboxes
+  const { profile } = useAuth();
+
   // State
   const [emails, setEmails] = useState<Email[]>([]);
   const [loading, setLoading] = useState(true);
@@ -389,7 +393,7 @@ export const EmailList: React.FC = () => {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailExpanded, setDetailExpanded] = useState(false);
   const [categories, setCategories] = useState<string[]>([]);
-  const [mailboxes, setMailboxes] = useState<string[]>([]);
+  const [accessibleMailboxes, setAccessibleMailboxes] = useState<Mailbox[]>([]);
   const [mailboxIdMap, setMailboxIdMap] = useState<Record<string, string>>({}); // name -> id mapping
   const [folders, setFolders] = useState<string[]>([]);
   const [foldersLoading, setFoldersLoading] = useState(false);
@@ -454,26 +458,32 @@ export const EmailList: React.FC = () => {
       setFiltersLoading(true);
       const [categoriesData, mailboxListResponse, foldersData] = await Promise.all([
         emailService.getEmailCategories(),
-        fetch(`${config.apiBaseUrl}/mailboxes`).then(r => r.ok ? r.json() : []),
+        mailboxService.getMailboxes(),
         emailService.getFolderNames(), // Load all folders initially
       ]);
       setCategories(categoriesData);
 
-      // Extract names for display and create ID map for quick lookup
-      const names = mailboxListResponse.map((m: any) => m.name);
+      // Filter to active mailboxes and create ID map
+      const activeMailboxes = mailboxListResponse.filter((m: Mailbox) => m.is_active);
+      setAccessibleMailboxes(activeMailboxes);
+
       const idMap: Record<string, string> = {};
-      mailboxListResponse.forEach((m: any) => {
+      activeMailboxes.forEach((m: Mailbox) => {
         idMap[m.name] = m.id;
       });
-      setMailboxes(names);
       setMailboxIdMap(idMap);
       setFolders(foldersData);
+
+      // Auto-select first mailbox if none selected (no "all mailboxes" view)
+      if (activeMailboxes.length > 0 && !filters.mailbox) {
+        setFilters(prev => ({ ...prev, mailbox: activeMailboxes[0].name }));
+      }
     } catch (error) {
       console.error('Error loading filter options:', error);
     } finally {
       setFiltersLoading(false);
     }
-  }, []);
+  }, [filters.mailbox]);
 
   // Load folders for a specific mailbox (dynamic) - uses cached mailboxIdMap
   const loadFoldersForMailbox = useCallback(async (mailboxName: string) => {
@@ -521,18 +531,10 @@ export const EmailList: React.FC = () => {
 
   // Reload folders when mailbox selection changes
   useEffect(() => {
-    if (filters.mailbox) {
-      // Only load if we have the mailbox ID map populated
-      if (mailboxIdMap[filters.mailbox]) {
-        loadFoldersForMailbox(filters.mailbox);
-      }
+    if (filters.mailbox && mailboxIdMap[filters.mailbox]) {
+      loadFoldersForMailbox(filters.mailbox);
       // Reset folder filter when mailbox changes
       setFilters(prev => ({ ...prev, folder: '' }));
-    } else {
-      // When "All Mailboxes" is selected, load all folders
-      emailService.getFolderNames().then(foldersData => {
-        setFolders(foldersData);
-      });
     }
   }, [filters.mailbox, mailboxIdMap, loadFoldersForMailbox]);
 
@@ -614,21 +616,14 @@ export const EmailList: React.FC = () => {
             <MailOutlined /> {!sidebarCollapsed && 'Mailboxes'}
           </div>
           <div className="mail-sidebar-items">
-            <div
-              className={`mail-sidebar-item ${!filters.mailbox ? 'active' : ''}`}
-              onClick={() => handleMailboxSelect('')}
-            >
-              <AppstoreOutlined />
-              {!sidebarCollapsed && <span>All Mailboxes</span>}
-            </div>
-            {mailboxes.map(mailbox => (
+            {accessibleMailboxes.map(mailbox => (
               <div
-                key={mailbox}
-                className={`mail-sidebar-item ${filters.mailbox === mailbox ? 'active' : ''}`}
-                onClick={() => handleMailboxSelect(mailbox)}
+                key={mailbox.id}
+                className={`mail-sidebar-item ${filters.mailbox === mailbox.name ? 'active' : ''}`}
+                onClick={() => handleMailboxSelect(mailbox.name)}
               >
                 <InboxOutlined />
-                {!sidebarCollapsed && <span>{mailbox}</span>}
+                {!sidebarCollapsed && <span>{mailbox.name}</span>}
               </div>
             ))}
           </div>

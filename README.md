@@ -20,11 +20,11 @@ A comprehensive email intelligence platform for processing, analyzing, and extra
 - Google Drive OAuth2 integration for seamless file access
 
 ### Stage 2: In Progress - Business Intelligence Layer
-**Status**: Sprint 1 In Progress (January 27, 2026)
+**Status**: Sprint 1 In Progress (January 30, 2026)
 
 **Sprint 1 - Foundation (Weeks 1-3)**:
 - Account Manager & Client Hierarchy (Backend Complete)
-- Role-Based Access Control (Pending)
+- Role-Based Access Control (**Complete** - Migration Required)
 - Gmail LIVE Sync Integration (**Complete**)
 - Outlook OAuth Integration (Pending)
 - Date Range Processing (Complete)
@@ -82,6 +82,17 @@ A comprehensive email intelligence platform for processing, analyzing, and extra
 - **Frontend Controls**: Connect/disconnect, sync now, configure interval
 - **Persistent Config**: Sync settings stored in database, changes apply immediately
 
+### Role-Based Access Control (Stage 2)
+- **Supabase Authentication**: Google OAuth, Microsoft OAuth, email/password login
+- **3 User Roles**:
+  - **Admin**: Full access to all mailboxes and user management
+  - **Client Manager**: Access to assigned client mailboxes only
+  - **Account Manager**: Access to own mailboxes only
+- **Row Level Security**: Database-level access control with RLS policies
+- **User Management**: Admin interface for role assignment and client assignments
+- **Protected Routes**: Frontend route guards based on user role
+- **JWT Verification**: Secure token-based authentication
+
 ### Error Tracking & Monitoring (Stage 2)
 - **Dedicated Errors Page**: View and manage processing errors by job
 - **Error Analysis**: Categorization (timeout, duplicate, constraint violation)
@@ -112,7 +123,7 @@ A comprehensive email intelligence platform for processing, analyzing, and extra
 | Epic | Description | Status |
 |------|-------------|--------|
 | Account Manager & Client Hierarchy | Admin creates AMs, assigns clients, tenant isolation | Backend Complete |
-| Role-Based Access Control | Admin, Account Manager, Viewer roles with RLS | Pending |
+| Role-Based Access Control | Admin, Client Manager, Account Manager roles with RLS and Supabase Auth | **Complete** |
 | Gmail LIVE Sync | Connect Gmail via OAuth, automatic sync every 15 min (configurable), link to mailboxes | **Complete** |
 | Outlook OAuth Integration | Connect Outlook, import rules, token refresh | Pending |
 | Date Range Processing | Select date range for initial sync, re-process historical | Complete |
@@ -182,6 +193,7 @@ Create `.env.development` in backend and frontend directories:
 SUPABASE_URL=https://xxx.supabase.co
 SUPABASE_ANON_KEY=your_anon_key
 SUPABASE_SERVICE_KEY=your_service_role_key
+SUPABASE_JWT_SECRET=your_jwt_secret  # For RBAC token verification
 REDIS_URL=redis://localhost:6379
 REDIS_TTL_DAYS=7
 GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.com
@@ -193,6 +205,8 @@ API_PORT=8000
 **Frontend (`frontend/.env.development`)**:
 ```env
 VITE_API_BASE_URL=http://localhost:8000/api
+VITE_SUPABASE_URL=https://xxx.supabase.co  # For RBAC authentication
+VITE_SUPABASE_ANON_KEY=your_anon_key  # For RBAC authentication
 VITE_GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.com
 ```
 
@@ -203,6 +217,21 @@ Run in Supabase SQL Editor:
 3. `scripts/migrations/001b_add_error_functions.sql`
 4. `scripts/migrations/001c_add_error_indexes.sql`
 5. `scripts/migrations/002_add_business_hierarchy.sql`
+6. `scripts/migrations/010_create_user_profiles.sql` (RBAC with Supabase Auth)
+
+After running migrations, create initial admin user:
+```sql
+-- Create user profile for your Supabase auth user
+INSERT INTO user_profiles (id, email, name, role, is_active)
+SELECT
+  id, email,
+  COALESCE(raw_user_meta_data->>'full_name', split_part(email, '@', 1)),
+  'admin',  -- Set as admin
+  true
+FROM auth.users
+WHERE email = 'your-email@example.com'
+ON CONFLICT (id) DO NOTHING;
+```
 
 ### 4. Start Services
 ```bash
@@ -241,6 +270,7 @@ npm run dev
 ### Backend
 - **Framework**: FastAPI 0.104+
 - **Database**: Supabase (PostgreSQL)
+- **Authentication**: Supabase Auth + PyJWT
 - **Cache**: Redis 7.0+
 - **AI**: Claude 3.5 Sonnet API (Stage 2 Sprint 3)
 - **Cloud Storage**: Google Drive API
@@ -249,7 +279,8 @@ npm run dev
 ### Frontend
 - **Framework**: React 18 + TypeScript
 - **UI Library**: Ant Design 5.x
-- **State Management**: React Hooks
+- **Authentication**: @supabase/supabase-js
+- **State Management**: React Context + Hooks
 - **API Client**: Centralized apiClient with retry/timeout
 - **Build Tool**: Vite
 
@@ -313,8 +344,8 @@ MIT License - see LICENSE file for details
 
 ---
 
-**Stage 1 Complete | Stage 2 Sprint 1 In Progress (Gmail LIVE Complete)**
+**Stage 1 Complete | Stage 2 Sprint 1 In Progress (Gmail LIVE + RBAC Complete)**
 
-*Last Updated: January 27, 2026*
+*Last Updated: January 30, 2026*
 
-*Built with Python, TypeScript, React, Claude AI, and Google Cloud APIs*
+*Built with Python, TypeScript, React, Supabase Auth, Claude AI, and Google Cloud APIs*

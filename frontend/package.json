@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --mode development",
     "build": "tsc && vite build --mode production",
-    "build:dev": "tsc && vite build --mode development", 
+    "build:dev": "tsc && vite build --mode development",
     "preview": "vite preview",
     "start": "vite preview --host 0.0.0.0 --port ${PORT:-3000}",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@ant-design/icons": "^5.5.1",
-    "@supabase/supabase-js": "^2.46.1",
+    "@supabase/supabase-js": "^2.93.2",
     "antd": "^5.21.7",
     "axios": "^1.7.9",
     "react": "^18.3.1",

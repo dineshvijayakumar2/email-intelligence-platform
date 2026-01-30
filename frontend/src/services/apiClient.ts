@@ -2,9 +2,11 @@
  * API Client with timeout, retry, and connection status tracking
  *
  * Provides resilient API calls that handle backend restarts gracefully.
+ * Automatically includes Supabase auth token in requests.
  */
 
 import config from '../config';
+import { getAccessToken } from '../lib/supabase';
 
 // Connection status tracking
 let isConnected = true;
@@ -127,10 +129,14 @@ export async function apiRequest<T>(
 
   const url = `${config.apiBaseUrl}${endpoint}`;
 
+  // Get auth token from Supabase
+  const authToken = await getAccessToken();
+
   const fetchOptions: RequestInit = {
     method,
     headers: {
       'Content-Type': 'application/json',
+      ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {}),
       ...headers,
     },
   };

@@ -5,6 +5,10 @@ const config = {
   // API - Use environment variable, fallback to relative path
   apiBaseUrl: import.meta.env.VITE_API_BASE_URL || '/api',
 
+  // Supabase (for auth)
+  supabaseUrl: import.meta.env.VITE_SUPABASE_URL || '',
+  supabaseAnonKey: import.meta.env.VITE_SUPABASE_ANON_KEY || '',
+
   // Google Drive
   googleClientId: import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
   googleRedirectUri: import.meta.env.VITE_GOOGLE_REDIRECT_URI || 'http://localhost:3000/auth/google/callback',

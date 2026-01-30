@@ -1,6 +1,17 @@
-import React, { PropsWithChildren, useState, useEffect } from "react";
-import { Layout as AntdLayout, Menu, Typography, Drawer, Button } from "antd";
-import { Link, useLocation } from "react-router-dom";
+import React, { PropsWithChildren, useState, useEffect } from 'react';
+import {
+  Layout as AntdLayout,
+  Menu,
+  Typography,
+  Drawer,
+  Button,
+  Avatar,
+  Dropdown,
+  Space,
+  Tag,
+  Divider,
+} from 'antd';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   DashboardOutlined,
   MailOutlined,
@@ -9,8 +20,13 @@ import {
   ExclamationCircleOutlined,
   TeamOutlined,
   MenuOutlined,
-  CloseOutlined
-} from "@ant-design/icons";
+  CloseOutlined,
+  UserOutlined,
+  LogoutOutlined,
+  DownOutlined,
+  CrownOutlined,
+} from '@ant-design/icons';
+import { useAuth } from '../contexts/AuthContext';
 
 const { Header, Content } = AntdLayout;
 const { Title, Text } = Typography;
@@ -23,10 +39,20 @@ const pageTitles: Record<string, string> = {
   '/processing': 'Processing Jobs',
   '/errors': 'Error Logs',
   '/clients': 'Clients',
+  '/users': 'User Management',
+};
+
+// Role labels and colors
+const roleConfig: Record<string, { label: string; color: string }> = {
+  admin: { label: 'Admin', color: 'gold' },
+  client_manager: { label: 'Client Manager', color: 'blue' },
+  account_manager: { label: 'Account Manager', color: 'green' },
 };
 
 export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { profile, signOut, isAdmin } = useAuth();
   const [isMobile, setIsMobile] = useState(false);
   const [drawerVisible, setDrawerVisible] = useState(false);
 
@@ -46,6 +72,11 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
   useEffect(() => {
     setDrawerVisible(false);
   }, [location.pathname]);
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/login', { replace: true });
+  };
 
   const menuItems = [
     {
@@ -78,6 +109,16 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
       icon: <TeamOutlined />,
       label: <Link to="/clients">Clients</Link>,
     },
+    // Admin-only menu item
+    ...(isAdmin
+      ? [
+          {
+            key: '/users',
+            icon: <CrownOutlined />,
+            label: <Link to="/users">Users</Link>,
+          },
+        ]
+      : []),
   ];
 
   // Get selected key from current path
@@ -95,8 +136,50 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
     return '/';
   };
 
+  // User dropdown menu items
+  const userMenuItems = [
+    {
+      key: 'profile',
+      label: (
+        <div style={{ padding: '4px 0' }}>
+          <div style={{ fontWeight: 500 }}>{profile?.name || 'User'}</div>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {profile?.email}
+          </Text>
+          {profile?.role && (
+            <div style={{ marginTop: 4 }}>
+              <Tag color={roleConfig[profile.role]?.color || 'default'}>
+                {roleConfig[profile.role]?.label || profile.role}
+              </Tag>
+            </div>
+          )}
+        </div>
+      ),
+      disabled: true,
+    },
+    { type: 'divider' as const },
+    {
+      key: 'logout',
+      icon: <LogoutOutlined />,
+      label: 'Sign Out',
+      onClick: handleSignOut,
+    },
+  ];
+
+  // Get user initials for avatar
+  const getUserInitials = () => {
+    if (profile?.name) {
+      const names = profile.name.split(' ');
+      if (names.length >= 2) {
+        return `${names[0][0]}${names[1][0]}`.toUpperCase();
+      }
+      return profile.name.substring(0, 2).toUpperCase();
+    }
+    return 'U';
+  };
+
   return (
-    <AntdLayout style={{ minHeight: "100vh" }}>
+    <AntdLayout style={{ minHeight: '100vh' }}>
       {/* Mobile Drawer for navigation */}
       <Drawer
         placement="left"
@@ -114,22 +197,59 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
             <div className="mobile-nav-logo">
               <span className="logo-icon">📧</span>
               <div className="logo-text">
-                <Title level={5} style={{ margin: 0 }}>Email Intelligence</Title>
-                <Text type="secondary" style={{ fontSize: 12 }}>Analytics Platform</Text>
+                <Title level={5} style={{ margin: 0 }}>
+                  Email Intelligence
+                </Title>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  Analytics Platform
+                </Text>
               </div>
             </div>
-            <Button
-              type="text"
-              icon={<CloseOutlined />}
-              onClick={() => setDrawerVisible(false)}
-            />
+            <Button type="text" icon={<CloseOutlined />} onClick={() => setDrawerVisible(false)} />
           </div>
+
+          {/* User info in mobile drawer */}
+          {profile && (
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(102, 126, 234, 0.1)' }}>
+              <Space>
+                <Avatar
+                  size={40}
+                  src={profile.avatarUrl}
+                  style={{ backgroundColor: '#667eea' }}
+                >
+                  {!profile.avatarUrl && getUserInitials()}
+                </Avatar>
+                <div>
+                  <div style={{ fontWeight: 500 }}>{profile.name}</div>
+                  <Tag
+                    color={roleConfig[profile.role]?.color || 'default'}
+                    style={{ margin: 0, marginTop: 4 }}
+                  >
+                    {roleConfig[profile.role]?.label || profile.role}
+                  </Tag>
+                </div>
+              </Space>
+            </div>
+          )}
+
           <Menu
             mode="inline"
             selectedKeys={[getSelectedKey()]}
             items={menuItems}
             className="mobile-nav-menu"
           />
+
+          {/* Logout button at bottom of mobile drawer */}
+          <div style={{ padding: '16px 20px', borderTop: '1px solid rgba(102, 126, 234, 0.1)' }}>
+            <Button
+              block
+              icon={<LogoutOutlined />}
+              onClick={handleSignOut}
+              style={{ borderColor: '#ff4d4f', color: '#ff4d4f' }}
+            >
+              Sign Out
+            </Button>
+          </div>
         </div>
       </Drawer>
 
@@ -165,20 +285,34 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
             </nav>
           )}
 
-          {/* Right: Date/Status */}
+          {/* Right: User Menu */}
           <div className="header-right">
             {isMobile ? (
               <Link to="/" className="mobile-brand">
                 <span className="brand-icon">📧</span>
               </Link>
             ) : (
-              <Text type="secondary" className="header-date">
-                {new Date().toLocaleDateString('en-US', {
-                  weekday: 'short',
-                  month: 'short',
-                  day: 'numeric'
-                })}
-              </Text>
+              <Dropdown menu={{ items: userMenuItems }} trigger={['click']} placement="bottomRight">
+                <Button type="text" style={{ height: 'auto', padding: '4px 8px' }}>
+                  <Space size={8}>
+                    <Avatar
+                      size={32}
+                      src={profile?.avatarUrl}
+                      style={{ backgroundColor: '#667eea' }}
+                    >
+                      {!profile?.avatarUrl && getUserInitials()}
+                    </Avatar>
+                    {!isMobile && (
+                      <>
+                        <span style={{ fontWeight: 500, color: '#374151' }}>
+                          {profile?.name || 'User'}
+                        </span>
+                        <DownOutlined style={{ fontSize: 10, color: '#9ca3af' }} />
+                      </>
+                    )}
+                  </Space>
+                </Button>
+              </Dropdown>
             )}
           </div>
         </div>

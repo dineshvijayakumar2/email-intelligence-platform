@@ -16,7 +16,7 @@ Based on updated user stories, Stage 2 is now organized into 3 sprints:
 | Epic | Status |
 |------|--------|
 | Account Manager & Client Hierarchy | Backend Complete |
-| Role-Based Access Control | Pending |
+| Role-Based Access Control | **Complete** (Migration Required) |
 | Gmail OAuth Integration | **Complete** |
 | Outlook OAuth Integration | Pending |
 | Date Range Processing | Complete |
@@ -118,7 +118,52 @@ Based on updated user stories, Stage 2 is now organized into 3 sprints:
   - `dashboard.tsx` - Removed global Gmail connection, shows per-mailbox summary
 - **Migration**: `scripts/migrations/007_migrate_gmail_to_mailbox.sql` for existing connections
 
-#### 6. Error Tracking Page (Complete - Jan 27, 2026)
+#### 6. Role-Based Access Control (Complete - Jan 30, 2026)
+- **Architecture**: Supabase Auth for authentication with custom user profiles
+- **3 User Roles**:
+  - **Admin**: Access to all mailboxes and user management
+  - **Client Manager**: Access to mailboxes of assigned clients only
+  - **Account Manager**: Access to own mailboxes only (default for new users)
+- **Authentication Flow**:
+  - Supabase Auth supports Google OAuth, Microsoft OAuth, email/password
+  - Frontend uses `@supabase/supabase-js` for OAuth flows and token management
+  - Backend verifies JWT tokens using PyJWT with `SUPABASE_JWT_SECRET`
+- **Database Schema** (`scripts/migrations/010_create_user_profiles.sql`):
+  - `user_profiles` table extending Supabase `auth.users`
+  - `user_client_assignments` table for client manager role assignments
+  - `get_user_accessible_mailboxes()` function for role-based mailbox filtering
+  - Row Level Security (RLS) policies for data isolation
+  - Auto-create user profile trigger on signup
+- **Backend Implementation**:
+  - `backend/src/dependencies/auth.py` - JWT verification and user profile fetching
+  - `backend/src/routers/auth.py` - Auth endpoints:
+    - `GET /api/auth/me` - Get current user profile with accessible mailboxes
+    - `GET /api/auth/users` - List all users (admin only)
+    - `PATCH /api/auth/users/{user_id}/role` - Update user role (admin only)
+    - `PATCH /api/auth/users/{user_id}/status` - Activate/deactivate user (admin only)
+    - `PUT /api/auth/users/{user_id}/client-assignments` - Assign clients to user (admin only)
+  - Added `PyJWT` and `cryptography` to requirements.txt
+- **Frontend Implementation**:
+  - `frontend/src/lib/supabase.ts` - Supabase client configuration
+  - `frontend/src/contexts/AuthContext.tsx` - Global auth state with user profile
+  - `frontend/src/pages/login.tsx` - Login page with Google/Microsoft OAuth + email/password
+  - `frontend/src/components/ProtectedRoute.tsx` - Route guards (authenticated, admin-only, client-manager+)
+  - `frontend/src/components/layout.tsx` - User profile display with logout in header
+  - `frontend/src/pages/users.tsx` - Admin user management page
+  - `frontend/src/pages/emails.tsx` - Updated to use accessible mailboxes only, auto-select first mailbox
+  - `frontend/src/components/MailboxSelector.tsx` - Dropdown for mailbox selection (replaces "All Mailboxes")
+  - Added `@supabase/supabase-js` to package.json
+- **Environment Configuration**:
+  - Frontend: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
+  - Backend: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY`, `SUPABASE_JWT_SECRET`
+  - Updated `.env.example` files with Supabase configuration
+- **UI Updates**:
+  - Removed "All Mailboxes" view - users see only their accessible mailboxes
+  - Role-based badges in user management (Admin, Client Manager, Account Manager)
+  - User status toggle (Active/Inactive)
+  - Client assignment interface for Client Managers
+
+#### 7. Error Tracking Page (Complete - Jan 27, 2026)
 - New dedicated errors page: `frontend/src/pages/errors.tsx`
 - View errors by processing job with filtering by phase and type
 - Job errors summary with error type breakdown (categories, counts)
@@ -127,7 +172,7 @@ Based on updated user stories, Stage 2 is now organized into 3 sprints:
 - Failed message IDs tracking with sample display
 - Retry failed emails functionality
 
-#### 7. Dashboard Redesign (Complete)
+#### 8. Dashboard Redesign (Complete)
 - Gmail LIVE sync status card with connection controls
 - Processing job status with real-time progress
 - Email statistics with count by mailbox
@@ -136,12 +181,12 @@ Based on updated user stories, Stage 2 is now organized into 3 sprints:
   - `get_email_counts_by_mailbox()` - per-mailbox counts
 - Performance indexes for faster queries
 
-#### 8. Date-Based Filtering (Complete)
+#### 9. Date-Based Filtering (Complete)
 - Date range picker in emails page for filtering
 - Gmail date-range fetch endpoint for historical imports
 - Start/end date parameters in email extraction
 
-#### 9. Bug Fixes (Complete)
+#### 10. Bug Fixes (Complete)
 - Removed faulty `DaemonThreadPoolExecutor` (was trying to set daemon on active threads)
 - Split migration scripts for Railway timeout issues
 - Fixed Gmail OAuth scope validation error
@@ -161,6 +206,26 @@ Based on updated user stories, Stage 2 is now organized into 3 sprints:
 - **Database Storage**: Gmail tokens stored in `mailboxes.connection_config` JSONB
 - **Legacy Tables**: `user_integrations`, `gmail_filters`, `app_config`
 - **Migration**: `scripts/migrations/007_migrate_gmail_to_mailbox.sql`
+
+### Role-Based Access Control (RBAC)
+- **Backend**:
+  - Auth dependency: `backend/src/dependencies/auth.py`
+  - Auth router: `backend/src/routers/auth.py`
+  - Requirements: PyJWT, cryptography
+- **Frontend**:
+  - Supabase client: `frontend/src/lib/supabase.ts`
+  - Auth context: `frontend/src/contexts/AuthContext.tsx`
+  - Login page: `frontend/src/pages/login.tsx`
+  - Protected routes: `frontend/src/components/ProtectedRoute.tsx`
+  - User management: `frontend/src/pages/users.tsx`
+  - Mailbox selector: `frontend/src/components/MailboxSelector.tsx`
+- **Database**:
+  - Migration: `scripts/migrations/010_create_user_profiles.sql`
+  - Tables: `user_profiles`, `user_client_assignments`
+  - Function: `get_user_accessible_mailboxes(user_id)`
+- **Configuration**:
+  - Frontend: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
+  - Backend: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY`, `SUPABASE_JWT_SECRET`
 
 ### Business Hierarchy (Stage 2)
 - Backend routers: `backend/src/routers/` (account_managers.py, clients.py, customers.py, contacts.py)
@@ -182,10 +247,11 @@ Based on updated user stories, Stage 2 is now organized into 3 sprints:
 ## Next Steps
 
 ### Immediate (Sprint 1 Continuation)
-1. **Role-Based Access Control**
-   - Implement RLS policies in Supabase
-   - Add role validation to API endpoints
-   - Create role assignment UI
+1. **Complete RBAC Setup** (Prerequisites for production use)
+   - Run migration `scripts/migrations/010_create_user_profiles.sql` in Supabase
+   - Create initial user profiles for existing Supabase auth users
+   - Set first user as admin role
+   - Test login flow and mailbox access controls
 
 2. **Outlook OAuth Integration**
    - Implement Microsoft Graph OAuth

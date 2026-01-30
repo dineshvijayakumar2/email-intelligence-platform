@@ -1,0 +1,230 @@
+/* ==========================================================================
+   Login Page Styles
+   ========================================================================== */
+
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Decorative background elements */
+.login-page::before {
+  content: '';
+  position: fixed;
+  top: -20%;
+  right: -10%;
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, rgba(102, 126, 234, 0.15) 0%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.login-page::after {
+  content: '';
+  position: fixed;
+  bottom: -20%;
+  left: -10%;
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(118, 75, 162, 0.12) 0%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.login-container {
+  width: 100%;
+  max-width: 420px;
+  position: relative;
+  z-index: 1;
+}
+
+.login-card {
+  padding: 40px !important;
+  border-radius: 20px !important;
+}
+
+.login-card .ant-card-body {
+  padding: 0 !important;
+}
+
+.login-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.login-logo {
+  width: 64px;
+  height: 64px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 20px;
+  font-size: 28px;
+  color: white;
+  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
+}
+
+.login-header h3 {
+  margin-bottom: 8px !important;
+}
+
+/* OAuth Buttons */
+.oauth-btn {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 10px !important;
+  height: 48px !important;
+  border-radius: 10px !important;
+  font-weight: 500 !important;
+  transition: all 0.2s ease !important;
+}
+
+.google-btn {
+  background: #fff !important;
+  border: 1px solid #e0e0e0 !important;
+  color: #444 !important;
+}
+
+.google-btn:hover {
+  background: #f5f5f5 !important;
+  border-color: #d0d0d0 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.google-btn .anticon {
+  color: #4285f4;
+  font-size: 18px;
+}
+
+.microsoft-btn {
+  background: #fff !important;
+  border: 1px solid #e0e0e0 !important;
+  color: #444 !important;
+}
+
+.microsoft-btn:hover {
+  background: #f5f5f5 !important;
+  border-color: #d0d0d0 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.microsoft-btn .anticon {
+  color: #00a4ef;
+  font-size: 18px;
+}
+
+/* Form Styling */
+.login-card .ant-form-item {
+  margin-bottom: 16px;
+}
+
+.login-card .ant-input-affix-wrapper {
+  border-radius: 10px;
+  padding: 12px 14px;
+  border-color: rgba(102, 126, 234, 0.2);
+}
+
+.login-card .ant-input-affix-wrapper:hover,
+.login-card .ant-input-affix-wrapper:focus,
+.login-card .ant-input-affix-wrapper-focused {
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+.login-card .ant-input-affix-wrapper .ant-input-prefix {
+  color: #9ca3af;
+  margin-right: 10px;
+}
+
+/* Divider */
+.login-card .ant-divider {
+  margin: 24px 0;
+  border-color: rgba(102, 126, 234, 0.1);
+}
+
+.login-card .ant-divider-inner-text {
+  font-size: 13px;
+}
+
+/* Tabs */
+.login-card .ant-tabs-nav {
+  margin-bottom: 24px;
+}
+
+.login-card .ant-tabs-tab {
+  padding: 8px 16px;
+  font-weight: 500;
+}
+
+.login-card .ant-tabs-tab-active {
+  font-weight: 600;
+}
+
+.login-card .ant-tabs-ink-bar {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  height: 3px;
+  border-radius: 2px;
+}
+
+/* Footer */
+.login-footer {
+  text-align: center;
+  margin-top: 24px;
+}
+
+/* Responsive */
+@media (max-width: 576px) {
+  .login-page {
+    padding: 16px;
+    align-items: flex-start;
+    padding-top: 40px;
+  }
+
+  .login-card {
+    padding: 24px !important;
+    border-radius: 16px !important;
+  }
+
+  .login-logo {
+    width: 56px;
+    height: 56px;
+    font-size: 24px;
+    margin-bottom: 16px;
+  }
+
+  .login-header {
+    margin-bottom: 24px;
+  }
+
+  .login-header h3 {
+    font-size: 20px !important;
+  }
+
+  .oauth-btn {
+    height: 44px !important;
+    font-size: 14px !important;
+  }
+
+  .login-card .ant-input-affix-wrapper {
+    padding: 10px 12px;
+  }
+
+  .login-page::before,
+  .login-page::after {
+    display: none;
+  }
+}

@@ -6,6 +6,7 @@ from .account_managers import router as account_managers_router, init_account_ma
 from .clients import router as clients_router, init_clients_router
 from .customers import router as customers_router, init_customers_router
 from .contacts import router as contacts_router, init_contacts_router
+from .auth import router as auth_router, init_auth_router
 
 __all__ = [
     # Routers
@@ -14,10 +15,12 @@ __all__ = [
     'clients_router',
     'customers_router',
     'contacts_router',
+    'auth_router',
     # Init functions
     'init_error_router',
     'init_account_managers_router',
     'init_clients_router',
     'init_customers_router',
     'init_contacts_router',
+    'init_auth_router',
 ]

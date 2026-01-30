@@ -16,6 +16,17 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from google_auth_oauthlib.flow import Flow
 
+# IMPORTANT: Load environment variables BEFORE importing any modules that use them
+python_env = os.getenv('PYTHON_ENV', 'development')
+backend_dir = os.path.dirname(__file__)
+env_file = os.path.join(backend_dir, f'.env.{python_env}')
+if os.path.exists(env_file):
+    load_dotenv(dotenv_path=env_file)
+else:
+    fallback_env = os.path.join(backend_dir, '.env')
+    if os.path.exists(fallback_env):
+        load_dotenv(dotenv_path=fallback_env)
+
 # Version: 1.2.0 - Email count estimation + folder/tag separation + Redis
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -37,6 +48,10 @@ from src.services.job_error_logger import JobErrorLogger, init_error_logger, get
 # Stage 2: Gmail LIVE Integration
 from src.routers.gmail import router as gmail_router, init_gmail_router
 from src.services.gmail_sync_service import get_gmail_sync_service, GmailSyncService
+
+# Stage 2: Authentication & RBAC
+from src.routers.auth import router as auth_router, init_auth_router
+from src.dependencies.auth import init_auth_dependencies
 
 # Configure logging to both file and console
 import logging.handlers
@@ -102,24 +117,8 @@ logging.getLogger("urllib3").setLevel(logging.WARNING)
 logging.getLogger("googleapiclient.discovery_cache").setLevel(logging.ERROR)
 logging.getLogger("googleapiclient.discovery").setLevel(logging.WARNING)
 
-# Load environment variables from backend directory
-python_env = os.getenv('PYTHON_ENV', 'development')  # default to development
-backend_dir = os.path.dirname(__file__)
-
-# Try environment-specific file first in backend directory
-env_file = os.path.join(backend_dir, f'.env.{python_env}')
-if os.path.exists(env_file):
-    load_dotenv(dotenv_path=env_file)
-    logger.info(f"Loading {python_env} environment variables from: {env_file}")
-else:
-    # Fallback to generic .env file in backend directory
-    fallback_env = os.path.join(backend_dir, '.env')
-    if os.path.exists(fallback_env):
-        load_dotenv(dotenv_path=fallback_env)
-        logger.info(f"Loading environment variables from: {fallback_env}")
-    else:
-        logger.warning("No .env file found! Please create backend/.env.development or backend/.env file")
-
+# Log which environment we're running in
+logger.info(f"Loading {python_env} environment variables from: {env_file if os.path.exists(env_file) else 'backend/.env'}")
 logger.info(f"Running in {python_env} mode")
 
 # Persistent download directory - uses Railway volume in production, temp dir in development
@@ -461,9 +460,13 @@ def initialize_business_hierarchy_routers():
         redis_client=None,
         job_error_logger=error_logger
     )
-    logger.info("Business hierarchy routers initialized")
+    # Initialize auth router and dependencies (Stage 2 RBAC)
+    init_auth_dependencies(sb)
+    init_auth_router(sb)
+    logger.info("Business hierarchy routers initialized (including auth)")
 
 # Register routers with API prefix
+app.include_router(auth_router, prefix="/api")  # Auth router first for login/me endpoints
 app.include_router(account_managers_router, prefix="/api")
 app.include_router(clients_router, prefix="/api")
 app.include_router(customers_router, prefix="/api")
