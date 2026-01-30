@@ -40,7 +40,7 @@ import {
 } from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../services/apiClient';
-import { clientService, Client } from '../services/clientService';
+import { clientService, ClientSummary } from '../services/clientService';
 
 const { Title, Text } = Typography;
 
@@ -53,7 +53,7 @@ interface User {
   avatar_url?: string;
   created_at: string;
   updated_at: string;
-  assigned_clients?: Client[];
+  assigned_clients?: ClientSummary[];
 }
 
 // Role configuration
@@ -81,7 +81,7 @@ const roleConfig = {
 const UsersPage: React.FC = () => {
   const { isAdmin } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
-  const [clients, setClients] = useState<Client[]>([]);
+  const [clients, setClients] = useState<ClientSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [assignModalVisible, setAssignModalVisible] = useState(false);
@@ -110,8 +110,8 @@ const UsersPage: React.FC = () => {
 
   const loadClients = async () => {
     try {
-      const data = await clientService.getClients();
-      setClients(data);
+      const response = await clientService.list();
+      setClients(response.clients);
     } catch (error) {
       console.error('Failed to load clients:', error);
     }
@@ -239,7 +239,7 @@ const UsersPage: React.FC = () => {
         return (
           <Space wrap>
             {record.assigned_clients?.slice(0, 3).map((client) => (
-              <Tag key={client.id}>{client.name}</Tag>
+              <Tag key={client.id}>{client.client_name}</Tag>
             ))}
             {clientCount > 3 && <Tag>+{clientCount - 3} more</Tag>}
           </Space>
@@ -431,13 +431,13 @@ const UsersPage: React.FC = () => {
               showSearch
             >
               {clients.map((client) => (
-                <Select.Option key={client.id} value={client.id} label={client.name}>
+                <Select.Option key={client.id} value={client.id} label={client.client_name}>
                   <Space>
                     <TeamOutlined />
-                    <span>{client.name}</span>
-                    {client.email && (
+                    <span>{client.client_name}</span>
+                    {client.client_label && (
                       <Text type="secondary" style={{ fontSize: 12 }}>
-                        ({client.email})
+                        ({client.client_label})
                       </Text>
                     )}
                   </Space>
