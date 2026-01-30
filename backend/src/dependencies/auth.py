@@ -67,11 +67,13 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> Dict:
 
     try:
         # Verify Supabase JWT
+        # Supabase uses HS256 for older projects and ES256 for newer ones
         payload = jwt.decode(
             token,
             SUPABASE_JWT_SECRET,
-            algorithms=['HS256'],
-            audience='authenticated'
+            algorithms=['HS256', 'ES256', 'RS256'],
+            audience='authenticated',
+            options={"verify_signature": True}
         )
 
         user_id = payload.get('sub')  # Supabase uses 'sub' for user ID
