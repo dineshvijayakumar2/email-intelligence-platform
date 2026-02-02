@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks  # v26 - Fix shutdown not waiting, daemon threads for graceful exit
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends  # v26 - Fix shutdown not waiting, daemon threads for graceful exit
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
@@ -49,9 +49,13 @@ from src.services.job_error_logger import JobErrorLogger, init_error_logger, get
 from src.routers.gmail import router as gmail_router, init_gmail_router
 from src.services.gmail_sync_service import get_gmail_sync_service, GmailSyncService
 
+# Stage 2: Outlook LIVE Integration
+from src.routers.outlook import router as outlook_router, init_outlook_router
+from src.services.outlook_sync_service import get_outlook_sync_service, OutlookSyncService
+
 # Stage 2: Authentication & RBAC
 from src.routers.auth import router as auth_router, init_auth_router
-from src.dependencies.auth import init_auth_dependencies
+from src.dependencies.auth import init_auth_dependencies, require_role
 
 # Configure logging to both file and console
 import logging.handlers
@@ -342,6 +346,14 @@ async def shutdown_event():
     except Exception as e:
         logger.warning(f"Error stopping Gmail sync service: {e}")
 
+    # Stop Outlook sync service
+    logger.info("Step 0.1: Stopping Outlook sync service...")
+    try:
+        if _outlook_sync_service:
+            await _outlook_sync_service.stop()
+    except Exception as e:
+        logger.warning(f"Error stopping Outlook sync service: {e}")
+
     # Cancel any active parallel downloads first
     logger.info("Step 1: Cancelling any active parallel downloads...")
     try:
@@ -473,15 +485,17 @@ app.include_router(customers_router, prefix="/api")
 app.include_router(contacts_router, prefix="/api")
 app.include_router(errors_router, prefix="/api")
 app.include_router(gmail_router, prefix="/api")
+app.include_router(outlook_router, prefix="/api")
 
-# Gmail sync service instance (initialized in startup event)
+# Sync service instances (initialized in startup event)
 _gmail_sync_service: GmailSyncService = None
+_outlook_sync_service: OutlookSyncService = None
 
 # Initialize routers (lazy init when first request comes in)
 @app.on_event("startup")
 async def startup_event():
     """Initialize services on startup"""
-    global _gmail_sync_service
+    global _gmail_sync_service, _outlook_sync_service
 
     try:
         initialize_business_hierarchy_routers()
@@ -500,6 +514,18 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"Failed to initialize Gmail sync service: {e}")
         # Don't fail startup - Gmail sync is optional
+
+    # Initialize Outlook sync service (Stage 2)
+    try:
+        _outlook_sync_service = get_outlook_sync_service(get_supabase())
+        init_outlook_router(get_supabase(), _outlook_sync_service)
+
+        # Start the 15-minute sync loop
+        await _outlook_sync_service.start()
+        logger.info("Outlook sync service started successfully")
+    except Exception as e:
+        logger.warning(f"Failed to initialize Outlook sync service: {e}")
+        # Don't fail startup - Outlook sync is optional
 
     # Clean up orphaned jobs from previous server restart
     try:
@@ -1015,12 +1041,74 @@ async def delete_mailbox(mailbox_id: str):
         sb.table('mailboxes').delete().eq('id', mailbox_id).execute()
         
         return {"message": "Mailbox deleted successfully"}
-        
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error deleting mailbox {mailbox_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to delete mailbox: {str(e)}")
+
+@app.patch("/api/mailboxes/{mailbox_id}/assign-client")
+async def assign_mailbox_to_client(
+    mailbox_id: str,
+    assignment: dict,
+    current_user: dict = Depends(require_role('admin'))
+):
+    """Assign a mailbox to a client (admin only)"""
+    try:
+        sb = get_supabase()
+
+        client_id = assignment.get('client_id')
+
+        # Update mailbox with client_id
+        result = sb.table('mailboxes').update({
+            'client_id': client_id
+        }).eq('id', mailbox_id).execute()
+
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Mailbox not found")
+
+        return {
+            "success": True,
+            "message": f"Mailbox assigned to client successfully"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error assigning mailbox to client: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to assign mailbox: {str(e)}")
+
+@app.patch("/api/mailboxes/{mailbox_id}/assign-user")
+async def assign_mailbox_to_user(
+    mailbox_id: str,
+    assignment: dict,
+    current_user: dict = Depends(require_role('admin'))
+):
+    """Assign a mailbox to an account manager (admin only)"""
+    try:
+        sb = get_supabase()
+
+        user_id = assignment.get('user_id')
+
+        # Update mailbox with user_id
+        result = sb.table('mailboxes').update({
+            'user_id': user_id
+        }).eq('id', mailbox_id).execute()
+
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Mailbox not found")
+
+        return {
+            "success": True,
+            "message": f"Mailbox assigned to account manager successfully"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error assigning mailbox to user: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to assign mailbox: {str(e)}")
 
 @app.post("/api/mailboxes/{mailbox_id}/sync")
 async def sync_mailbox(mailbox_id: str):

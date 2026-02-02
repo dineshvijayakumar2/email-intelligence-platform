@@ -40,10 +40,6 @@ import {
   ClientUpdate,
   ClientStatus,
 } from '../services/clientService';
-import {
-  accountManagerService,
-  AccountManager,
-} from '../services/accountManagerService';
 
 const { Text } = Typography;
 const { Option } = Select;
@@ -53,20 +49,18 @@ const ClientsPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [clients, setClients] = useState<ClientSummary[]>([]);
   const [total, setTotal] = useState(0);
-  const [accountManagers, setAccountManagers] = useState<AccountManager[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingClient, setEditingClient] = useState<ClientSummary | null>(null);
   const [form] = Form.useForm();
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<ClientStatus | undefined>();
-  const [accountManagerFilter, setAccountManagerFilter] = useState<string | undefined>();
 
   // Load clients
   const loadClients = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await clientService.list(accountManagerFilter, statusFilter);
+      const response = await clientService.list(undefined, statusFilter);
       setClients(response.clients);
       setTotal(response.total);
     } catch (error) {
@@ -75,23 +69,12 @@ const ClientsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [accountManagerFilter, statusFilter]);
-
-  // Load account managers
-  const loadAccountManagers = useCallback(async () => {
-    try {
-      const response = await accountManagerService.list(true);
-      setAccountManagers(response.account_managers);
-    } catch (error) {
-      console.error('Failed to load account managers:', error);
-    }
-  }, []);
+  }, [statusFilter]);
 
   // Initial load
   useEffect(() => {
     loadClients();
-    loadAccountManagers();
-  }, [loadClients, loadAccountManagers]);
+  }, [loadClients]);
 
   // Handle create/edit
   const handleSubmit = async (values: any) => {
@@ -162,11 +145,29 @@ const ClientsPage: React.FC = () => {
       ),
     },
     {
-      title: 'Account Manager',
-      dataIndex: 'account_manager_name',
-      key: 'account_manager_name',
-      width: 150,
-      render: (name: string) => name || <Text type="secondary">Unassigned</Text>,
+      title: 'Account Managers',
+      key: 'account_managers',
+      width: 220,
+      render: (_: any, record: ClientSummary) => {
+        if (!record.account_managers || record.account_managers.length === 0) {
+          return (
+            <Tooltip title="Assign mailboxes to account managers from the Mailboxes page">
+              <Text type="secondary" style={{ fontSize: 12 }}>None assigned</Text>
+            </Tooltip>
+          );
+        }
+        return (
+          <Space size={[0, 4]} wrap>
+            {record.account_managers.map((am) => (
+              <Tooltip key={am.id} title={am.email}>
+                <Tag icon={<TeamOutlined />} color="blue">
+                  {am.name}
+                </Tag>
+              </Tooltip>
+            ))}
+          </Space>
+        );
+      },
     },
     {
       title: 'Companies',
@@ -341,22 +342,6 @@ const ClientsPage: React.FC = () => {
               <Option value="prospect">Prospect</Option>
             </Select>
           </Col>
-          <Col span={8}>
-            <Text strong>Filter by Account Manager:</Text>
-            <Select
-              style={{ width: '100%', marginTop: 8 }}
-              placeholder="All Account Managers"
-              allowClear
-              value={accountManagerFilter}
-              onChange={setAccountManagerFilter}
-            >
-              {accountManagers.map(am => (
-                <Option key={am.id} value={am.id}>
-                  {am.name}
-                </Option>
-              ))}
-            </Select>
-          </Col>
         </Row>
       </div>
 
@@ -425,17 +410,10 @@ const ClientsPage: React.FC = () => {
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item
-                name="account_manager_id"
-                label="Account Manager"
-              >
-                <Select placeholder="Select account manager" allowClear>
-                  {accountManagers.map(am => (
-                    <Option key={am.id} value={am.id}>
-                      {am.name}
-                    </Option>
-                  ))}
-                </Select>
+              <Form.Item label="Account Managers">
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  Managed at mailbox level. Assign mailboxes to account managers from the Mailboxes page.
+                </Text>
               </Form.Item>
             </Col>
           </Row>

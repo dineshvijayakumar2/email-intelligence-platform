@@ -17,6 +17,7 @@ import {
 import {
   FolderOpenOutlined,
   GoogleOutlined,
+  WindowsOutlined,
   DisconnectOutlined,
   CheckCircleOutlined,
   SyncOutlined,
@@ -28,6 +29,7 @@ import { mailboxService, Mailbox } from '../services/mailboxService';
 import GoogleDrivePicker from './GoogleDrivePicker';
 import GoogleDriveConnection from './GoogleDriveConnection';
 import gmailService, { MailboxGmailStatus } from '../services/gmailService';
+import outlookService, { MailboxOutlookStatus } from '../services/outlookService';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -53,6 +55,12 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
   const [connectingGmail, setConnectingGmail] = React.useState(false);
   const [disconnectingGmail, setDisconnectingGmail] = React.useState(false);
   const [syncingGmail, setSyncingGmail] = React.useState(false);
+
+  // Per-mailbox Outlook connection state
+  const [mailboxOutlookStatus, setMailboxOutlookStatus] = React.useState<MailboxOutlookStatus | null>(null);
+  const [connectingOutlook, setConnectingOutlook] = React.useState(false);
+  const [disconnectingOutlook, setDisconnectingOutlook] = React.useState(false);
+  const [syncingOutlook, setSyncingOutlook] = React.useState(false);
 
   // Sync interval configuration
   const [syncInterval, setSyncInterval] = React.useState<number>(15);
@@ -82,6 +90,7 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
     if (mailboxId) {
       loadMailboxData();
       loadMailboxGmailStatus();
+      loadMailboxOutlookStatus();
     }
     loadSyncConfig();
   }, [mailboxId]);
@@ -180,6 +189,74 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
       message.error('Failed to trigger sync');
     } finally {
       setSyncingGmail(false);
+    }
+  };
+
+  // Load Outlook status for this specific mailbox
+  const loadMailboxOutlookStatus = async () => {
+    try {
+      const status = await outlookService.getMailboxOutlookStatus(mailboxId);
+      setMailboxOutlookStatus(status);
+    } catch (error) {
+      console.error('Error loading mailbox Outlook status:', error);
+    }
+  };
+
+  // Connect Outlook directly to this mailbox via OAuth
+  const handleConnectOutlook = async () => {
+    try {
+      setConnectingOutlook(true);
+      const result = await outlookService.connectToMailbox(mailboxId);
+
+      if (result.success) {
+        message.success(`Outlook ${result.outlook_email} connected to mailbox`);
+        loadMailboxOutlookStatus(); // Reload status
+      } else {
+        message.error(result.message);
+      }
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : 'Failed to connect Outlook');
+    } finally {
+      setConnectingOutlook(false);
+    }
+  };
+
+  // Disconnect Outlook from this mailbox
+  const handleDisconnectOutlook = async () => {
+    try {
+      setDisconnectingOutlook(true);
+      const result = await outlookService.disconnectFromMailbox(mailboxId);
+
+      if (result.success) {
+        message.success('Outlook disconnected from mailbox');
+        setMailboxOutlookStatus({ connected: false, sync_status: 'disconnected', email_count: 0 });
+      } else {
+        message.error(result.message);
+      }
+    } catch (error) {
+      message.error('Failed to disconnect Outlook');
+    } finally {
+      setDisconnectingOutlook(false);
+    }
+  };
+
+  // Trigger manual Outlook sync for this mailbox
+  const handleOutlookSyncNow = async () => {
+    try {
+      setSyncingOutlook(true);
+      const result = await outlookService.triggerMailboxSync(mailboxId);
+
+      if (result.success) {
+        message.success('Outlook sync started');
+        // Poll for status update
+        setTimeout(loadMailboxOutlookStatus, 2000);
+      } else {
+        message.error(result.message);
+      }
+    } catch (error) {
+      message.error('Failed to trigger Outlook sync');
+    } finally {
+      setSyncingOutlook(false);
     }
   };
 
@@ -600,6 +677,108 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
                       }}
                     >
                       Connect Gmail Account
+                    </Button>
+                  </Space>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Outlook LIVE Sync Section - only for archive mailboxes */}
+          {['mbox', 'pst', 'olm'].includes(selectedType) && (
+            <>
+              <Divider>Outlook LIVE Sync</Divider>
+              {mailboxOutlookStatus?.connected ? (
+                // Connected - show status with sync controls
+                <div style={{ marginBottom: 16 }}>
+                  <Alert
+                    message={
+                      <Space>
+                        <CheckCircleOutlined style={{ color: '#0078d4' }} />
+                        <span>Outlook LIVE Sync Enabled</span>
+                      </Space>
+                    }
+                    description={
+                      <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                        <Text type="secondary">
+                          <WindowsOutlined style={{ marginRight: 4, color: '#0078d4' }} />
+                          {mailboxOutlookStatus.outlook_email || 'Connected'}
+                        </Text>
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          <SyncOutlined style={{ marginRight: 4 }} />
+                          {mailboxOutlookStatus.sync_status === 'syncing'
+                            ? 'Syncing now...'
+                            : `Last sync: ${outlookService.formatRelativeTime(mailboxOutlookStatus.last_sync_at || null)}`
+                          }
+                        </Text>
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          {mailboxOutlookStatus.email_count} emails synced
+                        </Text>
+                        {mailboxOutlookStatus.error && (
+                          <Text type="danger" style={{ fontSize: 12 }}>
+                            Error: {mailboxOutlookStatus.error}
+                          </Text>
+                        )}
+                      </Space>
+                    }
+                    type="info"
+                    style={{ marginBottom: 12, borderColor: '#0078d4' }}
+                    action={
+                      <Space direction="vertical" size={4}>
+                        <Button
+                          size="small"
+                          icon={<SyncOutlined spin={syncingOutlook} />}
+                          onClick={handleOutlookSyncNow}
+                          loading={syncingOutlook}
+                        >
+                          Sync Now
+                        </Button>
+                        <Button
+                          size="small"
+                          danger
+                          icon={<DisconnectOutlined />}
+                          onClick={handleDisconnectOutlook}
+                          loading={disconnectingOutlook}
+                        >
+                          Disconnect
+                        </Button>
+                      </Space>
+                    }
+                  />
+                </div>
+              ) : (
+                // Not connected - show connect button
+                <div
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(0, 120, 212, 0.08) 0%, rgba(0, 99, 177, 0.08) 100%)',
+                    border: '1px dashed rgba(0, 120, 212, 0.3)',
+                    borderRadius: 12,
+                    padding: 20,
+                    marginBottom: 16,
+                    textAlign: 'center'
+                  }}
+                >
+                  <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                    <WindowsOutlined style={{ fontSize: 48, color: '#0078d4' }} />
+                    <div>
+                      <Text strong style={{ fontSize: 16 }}>Connect Outlook for LIVE Sync</Text>
+                    </div>
+                    <Text type="secondary">
+                      Link an Outlook account (O365 or personal) to automatically sync new emails to this mailbox.
+                      Each mailbox can have its own Outlook connection.
+                    </Text>
+                    <Button
+                      type="primary"
+                      icon={<WindowsOutlined />}
+                      onClick={handleConnectOutlook}
+                      loading={connectingOutlook}
+                      style={{
+                        marginTop: 8,
+                        background: '#0078d4',
+                        borderColor: '#0078d4'
+                      }}
+                    >
+                      Connect Outlook Account
                     </Button>
                   </Space>
                 </div>

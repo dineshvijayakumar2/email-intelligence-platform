@@ -257,14 +257,15 @@ async def list_users(
             assigned_clients = []
             if u['role'] == 'client_manager':
                 clients_result = _supabase.table('user_client_assignments').select(
-                    'client_id, clients(id, client_name, email)'
+                    'client_id, clients(id, client_name, client_label, status)'
                 ).eq('user_id', u['id']).execute()
 
                 assigned_clients = [
                     {
                         'id': str(c['client_id']),
-                        'name': c['clients']['client_name'] if c.get('clients') else 'Unknown',
-                        'email': c['clients'].get('email') if c.get('clients') else None
+                        'client_name': c['clients']['client_name'] if c.get('clients') else 'Unknown',
+                        'client_label': c['clients'].get('client_label') if c.get('clients') else None,
+                        'status': c['clients'].get('status') if c.get('clients') else 'active'
                     }
                     for c in (clients_result.data or [])
                 ]

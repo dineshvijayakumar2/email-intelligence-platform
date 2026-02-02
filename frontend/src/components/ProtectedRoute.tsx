@@ -26,13 +26,16 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requir
       <div
         style={{
           display: 'flex',
+          flexDirection: 'column',
           justifyContent: 'center',
           alignItems: 'center',
           height: '100vh',
           background: 'linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%)',
+          gap: '16px',
         }}
       >
-        <Spin size="large" tip="Loading..." />
+        <Spin size="large" />
+        <div style={{ color: '#667eea', fontSize: '16px' }}>Loading...</div>
       </div>
     );
   }

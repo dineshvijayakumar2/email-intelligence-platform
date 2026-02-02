@@ -28,7 +28,6 @@ class ClientBase(BaseModel):
 
 class ClientCreate(ClientBase):
     """Create client request"""
-    account_manager_id: Optional[str] = None
     uses_quickbase: bool = False
     quickbase_realm: Optional[str] = None
     quickbase_api_token: Optional[str] = None
@@ -43,7 +42,6 @@ class ClientUpdate(BaseModel):
     client_label: Optional[str] = Field(None, max_length=50)
     industry: Optional[str] = Field(None, max_length=100)
     status: Optional[ClientStatus] = None
-    account_manager_id: Optional[str] = None
     notes: Optional[str] = None
     uses_quickbase: Optional[bool] = None
     quickbase_realm: Optional[str] = None
@@ -56,7 +54,6 @@ class ClientUpdate(BaseModel):
 class ClientResponse(ClientBase):
     """Client response model"""
     id: str
-    account_manager_id: Optional[str] = None
     uses_quickbase: bool = False
     uses_printiq: bool = False
     created_at: datetime
@@ -66,9 +63,16 @@ class ClientResponse(ClientBase):
         from_attributes = True
 
 
+class AccountManagerSummary(BaseModel):
+    """Account manager summary for derived fields"""
+    id: str
+    name: str
+    email: str
+
+
 class ClientWithStats(ClientResponse):
     """Client with statistics"""
-    account_manager_name: Optional[str] = None
+    account_managers: List[AccountManagerSummary] = []  # Derived from mailbox assignments
     total_customer_companies: int = 0
     total_customer_contacts: int = 0
     total_mailboxes: int = 0
@@ -82,7 +86,7 @@ class ClientSummary(BaseModel):
     client_name: str
     client_label: Optional[str] = None
     status: ClientStatus
-    account_manager_name: Optional[str] = None
+    account_managers: List[AccountManagerSummary] = []  # Derived from mailbox assignments
     customer_company_count: int = 0
     contact_count: int = 0
     mailbox_count: int = 0

@@ -10,7 +10,8 @@ import {
   Modal,
   DatePicker,
   InputNumber,
-  Form
+  Form,
+  Select
 } from "antd";
 import {
   PlusOutlined,
@@ -20,10 +21,13 @@ import {
   MailOutlined,
   PlayCircleOutlined,
   GoogleOutlined,
+  WindowsOutlined,
   LinkOutlined,
   ThunderboltOutlined,
   HistoryOutlined,
-  CalendarOutlined
+  CalendarOutlined,
+  TeamOutlined,
+  UserOutlined
 } from "@ant-design/icons";
 import dayjs from 'dayjs';
 import { useNavigate, useParams } from "react-router-dom";
@@ -31,15 +35,24 @@ import { mailboxService, Mailbox, hasGmailLiveSync } from '../services/mailboxSe
 import { MailboxCreateForm } from '../components/MailboxCreateForm';
 import { MailboxEditForm } from '../components/MailboxEditForm';
 import gmailService from '../services/gmailService';
+import outlookService from '../services/outlookService';
+import { useAuth } from '../contexts/AuthContext';
+import mailboxAssignmentService from '../services/mailboxAssignmentService';
+import clientService from '../services/clientService';
+import { userService } from '../services/userService';
 
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
 
 export const MailboxList: React.FC = () => {
   const navigate = useNavigate();
+  const { profile } = useAuth();
+  const isAdmin = profile?.role === 'admin';
+
   const [mailboxes, setMailboxes] = useState<Mailbox[]>([]);
   const [loading, setLoading] = useState(true);
   const [gmailConnected, setGmailConnected] = useState(false);
+  const [outlookConnected, setOutlookConnected] = useState(false);
   const [linkingMailboxId, setLinkingMailboxId] = useState<string | null>(null);
 
   // Date range fetch modal state
@@ -47,6 +60,14 @@ export const MailboxList: React.FC = () => {
   const [selectedMailboxForFetch, setSelectedMailboxForFetch] = useState<Mailbox | null>(null);
   const [fetchingEmails, setFetchingEmails] = useState(false);
   const [dateRangeForm] = Form.useForm();
+
+  // Assignment modal state
+  const [assignmentModalVisible, setAssignmentModalVisible] = useState(false);
+  const [assignmentType, setAssignmentType] = useState<'client' | 'user'>('client');
+  const [selectedMailboxForAssignment, setSelectedMailboxForAssignment] = useState<Mailbox | null>(null);
+  const [clients, setClients] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
+  const [assignmentLoading, setAssignmentLoading] = useState(false);
 
   // Get user ID from localStorage (same pattern as other components)
   const getUserId = () => {
@@ -68,7 +89,11 @@ export const MailboxList: React.FC = () => {
   useEffect(() => {
     loadMailboxes();
     checkGmailConnection();
-  }, []);
+    checkOutlookConnection();
+    if (isAdmin) {
+      loadClientsAndUsers();
+    }
+  }, [isAdmin]);
 
   const checkGmailConnection = async () => {
     try {
@@ -76,6 +101,28 @@ export const MailboxList: React.FC = () => {
       setGmailConnected(connected);
     } catch (error) {
       console.error('Error checking Gmail connection:', error);
+    }
+  };
+
+  const checkOutlookConnection = async () => {
+    try {
+      const connected = await outlookService.isConnected(userId);
+      setOutlookConnected(connected);
+    } catch (error) {
+      console.error('Error checking Outlook connection:', error);
+    }
+  };
+
+  const loadClientsAndUsers = async () => {
+    try {
+      const [clientsData, usersData] = await Promise.all([
+        clientService.list(),
+        userService.getAccountManagers()
+      ]);
+      setClients(clientsData.clients || []);
+      setUsers(usersData || []);
+    } catch (error) {
+      console.error('Error loading clients and users:', error);
     }
   };
 
@@ -130,6 +177,35 @@ export const MailboxList: React.FC = () => {
     }
   };
 
+  const handleOpenAssignment = (mailbox: Mailbox, type: 'client' | 'user') => {
+    setSelectedMailboxForAssignment(mailbox);
+    setAssignmentType(type);
+    setAssignmentModalVisible(true);
+  };
+
+  const handleAssignmentSubmit = async (value: string | null) => {
+    if (!selectedMailboxForAssignment) return;
+
+    try {
+      setAssignmentLoading(true);
+
+      if (assignmentType === 'client') {
+        await mailboxAssignmentService.assignToClient(selectedMailboxForAssignment.id, value);
+        message.success('Mailbox assigned to client successfully');
+      } else {
+        await mailboxAssignmentService.assignToUser(selectedMailboxForAssignment.id, value);
+        message.success('Mailbox assigned to account manager successfully');
+      }
+
+      setAssignmentModalVisible(false);
+      loadMailboxes(); // Reload to show updated assignments
+    } catch (error: any) {
+      message.error(error.message || 'Failed to assign mailbox');
+    } finally {
+      setAssignmentLoading(false);
+    }
+  };
+
   const handleLinkGmail = async (mailboxId: string, mailboxName: string) => {
     if (!gmailConnected) {
       message.warning('Please connect your Gmail account from the Dashboard first');
@@ -151,6 +227,32 @@ export const MailboxList: React.FC = () => {
       }
     } catch (error) {
       message.error({ content: 'Failed to link Gmail', key: 'link-gmail' });
+    } finally {
+      setLinkingMailboxId(null);
+    }
+  };
+
+  const handleLinkOutlook = async (mailboxId: string, mailboxName: string) => {
+    if (!outlookConnected) {
+      message.warning('Please connect your Outlook account from the Dashboard first');
+      navigate('/');
+      return;
+    }
+
+    try {
+      setLinkingMailboxId(mailboxId);
+      message.loading({ content: `Linking Outlook to ${mailboxName}...`, key: 'link-outlook' });
+
+      const result = await outlookService.extendMailboxWithOutlook(mailboxId, userId);
+
+      if (result.success) {
+        message.success({ content: result.message, key: 'link-outlook' });
+        loadMailboxes(); // Reload to show updated status
+      } else {
+        message.error({ content: result.message, key: 'link-outlook' });
+      }
+    } catch (error) {
+      message.error({ content: 'Failed to link Outlook', key: 'link-outlook' });
     } finally {
       setLinkingMailboxId(null);
     }
@@ -262,6 +364,52 @@ export const MailboxList: React.FC = () => {
         </Tag>
       ),
     },
+    ...(isAdmin ? [{
+      title: 'Client',
+      dataIndex: 'client_id',
+      key: 'client_id',
+      render: (clientId: string, record: any) => {
+        const client = clients.find(c => c.id === clientId);
+        return client ? (
+          <Space>
+            <TeamOutlined />
+            <Text>{client.client_name}</Text>
+          </Space>
+        ) : (
+          <Button
+            size="small"
+            type="link"
+            icon={<TeamOutlined />}
+            onClick={() => handleOpenAssignment(record, 'client')}
+          >
+            Assign Client
+          </Button>
+        );
+      },
+    },
+    {
+      title: 'Account Manager',
+      dataIndex: 'user_id',
+      key: 'user_id',
+      render: (userId: string, record: any) => {
+        const user = users.find(u => u.id === userId);
+        return user ? (
+          <Space>
+            <UserOutlined />
+            <Text>{user.name}</Text>
+          </Space>
+        ) : (
+          <Button
+            size="small"
+            type="link"
+            icon={<UserOutlined />}
+            onClick={() => handleOpenAssignment(record, 'user')}
+          >
+            Assign User
+          </Button>
+        );
+      },
+    }] : []),
     {
       title: 'Total Emails',
       dataIndex: 'total_emails',
@@ -321,6 +469,23 @@ export const MailboxList: React.FC = () => {
                 }}
               >
                 <GoogleOutlined /> Link Gmail
+              </Button>
+            )}
+            {/* Link Outlook button - only for archive mailboxes without LIVE sync */}
+            {isArchiveType && !isLiveEnabled && (
+              <Button
+                size="small"
+                icon={<LinkOutlined />}
+                onClick={() => handleLinkOutlook(record.id, record.name)}
+                disabled={!outlookConnected}
+                loading={linkingMailboxId === record.id}
+                title={!outlookConnected ? 'Connect Outlook from Dashboard first' : 'Link Outlook for LIVE sync'}
+                style={{
+                  color: outlookConnected ? '#0078d4' : undefined,
+                  borderColor: outlookConnected ? '#0078d4' : undefined
+                }}
+              >
+                <WindowsOutlined /> Link Outlook
               </Button>
             )}
             {/* Fetch Historical button - only for mailboxes with LIVE sync enabled */}
@@ -471,6 +636,48 @@ export const MailboxList: React.FC = () => {
           </Form.Item>
         </Form>
       </Modal>
+
+      {/* Assignment Modal */}
+      {isAdmin && (
+        <Modal
+          title={
+            <Space>
+              {assignmentType === 'client' ? <TeamOutlined /> : <UserOutlined />}
+              <span>
+                Assign {assignmentType === 'client' ? 'Client' : 'Account Manager'} to {selectedMailboxForAssignment?.name}
+              </span>
+            </Space>
+          }
+          open={assignmentModalVisible}
+          onCancel={() => setAssignmentModalVisible(false)}
+          footer={null}
+          destroyOnClose
+        >
+          <div style={{ marginTop: 24 }}>
+            <Select
+              style={{ width: '100%' }}
+              placeholder={`Select ${assignmentType === 'client' ? 'client' : 'account manager'}`}
+              onChange={(value) => handleAssignmentSubmit(value)}
+              loading={assignmentLoading}
+              showSearch
+              optionFilterProp="label"
+              allowClear
+              options={
+                assignmentType === 'client'
+                  ? clients.map(c => ({ label: c.client_name, value: c.id }))
+                  : users.map(u => ({ label: `${u.name} (${u.email})`, value: u.id }))
+              }
+            />
+            <div style={{ marginTop: 16 }}>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {assignmentType === 'client'
+                  ? 'Assign this mailbox to a client. Client Managers assigned to this client will be able to access it.'
+                  : 'Assign this mailbox to an account manager. Only this user will be able to access and manage this mailbox.'}
+              </Text>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };

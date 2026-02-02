@@ -29,7 +29,7 @@ CREATE TABLE mailboxes (
   total_emails INTEGER DEFAULT 0,
   -- Stage 2: Business hierarchy columns (FK constraints added after tables exist)
   client_id UUID,
-  account_manager_id UUID,
+  user_id UUID,  -- References user_profiles(id) - account manager assigned to this mailbox
   sync_enabled BOOLEAN DEFAULT FALSE,
   last_synced_at TIMESTAMPTZ
 );
@@ -455,7 +455,6 @@ COMMENT ON TABLE account_managers IS 'Platform users who manage client relations
 -- Clients (Consulting Clients)
 CREATE TABLE IF NOT EXISTS clients (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  account_manager_id UUID REFERENCES account_managers(id) ON DELETE SET NULL,
   client_name TEXT NOT NULL,
   client_label TEXT,
   industry TEXT,
@@ -471,7 +470,7 @@ CREATE TABLE IF NOT EXISTS clients (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-COMMENT ON TABLE clients IS 'Consulting clients of the platform';
+COMMENT ON TABLE clients IS 'Consulting clients of the platform. Account managers are derived from mailbox.user_id assignments. Many-to-many relationship managed at mailbox level.';
 
 -- Customer Companies (Each Client's Customers)
 CREATE TABLE IF NOT EXISTS customer_companies (
@@ -543,7 +542,6 @@ COMMENT ON TABLE customer_recognition_rules IS 'Rules for automatically matching
 -- Business hierarchy indexes
 CREATE INDEX IF NOT EXISTS idx_account_managers_email ON account_managers(email);
 CREATE INDEX IF NOT EXISTS idx_account_managers_active ON account_managers(is_active) WHERE is_active = TRUE;
-CREATE INDEX IF NOT EXISTS idx_clients_account_manager ON clients(account_manager_id);
 CREATE INDEX IF NOT EXISTS idx_clients_status ON clients(status);
 CREATE INDEX IF NOT EXISTS idx_clients_label ON clients(client_label);
 CREATE INDEX IF NOT EXISTS idx_customer_companies_client ON customer_companies(client_id);
@@ -559,7 +557,7 @@ CREATE INDEX IF NOT EXISTS idx_rules_type ON customer_recognition_rules(rule_typ
 CREATE INDEX IF NOT EXISTS idx_rules_active ON customer_recognition_rules(is_active) WHERE is_active = TRUE;
 CREATE INDEX IF NOT EXISTS idx_rules_priority ON customer_recognition_rules(priority DESC);
 CREATE INDEX IF NOT EXISTS idx_mailboxes_client ON mailboxes(client_id);
-CREATE INDEX IF NOT EXISTS idx_mailboxes_account_manager ON mailboxes(account_manager_id);
+CREATE INDEX IF NOT EXISTS idx_mailboxes_user ON mailboxes(user_id);  -- Account manager assignments
 CREATE INDEX IF NOT EXISTS idx_customer_companies_domains_gin ON customer_companies USING gin(email_domains);
 
 -- Business hierarchy update triggers

@@ -45,24 +45,12 @@ async def create_client(data: ClientCreate):
         Created client record
     """
     try:
-        # Validate account_manager_id if provided
-        if data.account_manager_id:
-            am_check = _supabase.table('account_managers').select('id').eq(
-                'id', data.account_manager_id
-            ).execute()
-            if not am_check.data:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Account manager not found"
-                )
-
         # Create client
         insert_data = {
             'client_name': data.client_name,
             'client_label': data.client_label,
             'industry': data.industry,
             'status': data.status.value,
-            'account_manager_id': data.account_manager_id,
             'notes': data.notes,
             'uses_quickbase': data.uses_quickbase,
             'quickbase_realm': data.quickbase_realm,
@@ -88,7 +76,6 @@ async def create_client(data: ClientCreate):
 
 @router.get("/", response_model=ClientListResponse)
 async def list_clients(
-    account_manager_id: Optional[str] = Query(default=None),
     status: Optional[str] = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0)
@@ -97,26 +84,19 @@ async def list_clients(
     List all clients with optional filters.
 
     Args:
-        account_manager_id: Filter by account manager
         status: Filter by status (active, inactive, prospect)
         limit: Maximum number of results
         offset: Offset for pagination
 
     Returns:
-        List of client summaries
+        List of client summaries with derived account managers from mailboxes
     """
     try:
-        # Build query for client data with account manager name
+        # Build query for client data
         query = _supabase.table('clients').select(
-            '''
-            id, client_name, client_label, status, industry,
-            account_manager_id, created_at, updated_at,
-            account_managers(name)
-            '''
+            'id, client_name, client_label, status, industry, created_at, updated_at'
         )
 
-        if account_manager_id:
-            query = query.eq('account_manager_id', account_manager_id)
         if status:
             query = query.eq('status', status)
 
@@ -137,11 +117,31 @@ async def list_clients(
             ).eq('client_id', c['id']).execute()
             ct_count = ct_result.count if ct_result.count else len(ct_result.data)
 
-            # Get mailbox count
+            # Get mailbox count and derive account managers
             mb_result = _supabase.table('mailboxes').select(
-                'id', count='exact'
+                'id, user_id'
             ).eq('client_id', c['id']).execute()
-            mb_count = mb_result.count if mb_result.count else len(mb_result.data)
+            mb_count = len(mb_result.data) if mb_result.data else 0
+
+            # Get unique user_ids from mailboxes
+            user_ids = list(set([m['user_id'] for m in mb_result.data if m.get('user_id')]))
+
+            # Fetch account managers (user_profiles) for these user_ids
+            account_managers = []
+            if user_ids:
+                am_result = _supabase.table('user_profiles').select(
+                    'id, name, email'
+                ).in_('id', user_ids).eq('role', 'account_manager').execute()
+
+                if am_result.data:
+                    from ..models.client import AccountManagerSummary
+                    account_managers = [
+                        AccountManagerSummary(
+                            id=am['id'],
+                            name=am['name'],
+                            email=am['email']
+                        ) for am in am_result.data
+                    ]
 
             # Get email count
             email_result = _supabase.table('emails').select(
@@ -149,16 +149,12 @@ async def list_clients(
             ).eq('client_id', c['id']).execute()
             email_count = email_result.count if email_result.count else 0
 
-            am_name = None
-            if c.get('account_managers'):
-                am_name = c['account_managers'].get('name')
-
             clients.append(ClientSummary(
                 id=c['id'],
                 client_name=c['client_name'],
                 client_label=c.get('client_label'),
                 status=c['status'],
-                account_manager_name=am_name,
+                account_managers=account_managers,
                 customer_company_count=cc_count,
                 contact_count=ct_count,
                 mailbox_count=mb_count,
@@ -167,8 +163,6 @@ async def list_clients(
 
         # Get total count
         count_query = _supabase.table('clients').select('id', count='exact')
-        if account_manager_id:
-            count_query = count_query.eq('account_manager_id', account_manager_id)
         if status:
             count_query = count_query.eq('status', status)
         count_result = count_query.execute()
@@ -193,14 +187,9 @@ async def get_client(client_id: str):
         Client with detailed statistics
     """
     try:
-        # Get client with account manager
+        # Get client
         result = _supabase.table('clients').select(
-            '''
-            id, client_name, client_label, status, industry, notes,
-            account_manager_id, uses_quickbase, uses_printiq,
-            created_at, updated_at,
-            account_managers(name)
-            '''
+            'id, client_name, client_label, status, industry, notes, uses_quickbase, uses_printiq, created_at, updated_at'
         ).eq('id', client_id).single().execute()
 
         if not result.data:
@@ -219,10 +208,31 @@ async def get_client(client_id: str):
         ).eq('client_id', client_id).execute()
         ct_count = ct_result.count if ct_result.count else len(ct_result.data)
 
+        # Get mailboxes and derive account managers
         mb_result = _supabase.table('mailboxes').select(
-            'id', count='exact'
+            'id, user_id'
         ).eq('client_id', client_id).execute()
-        mb_count = mb_result.count if mb_result.count else len(mb_result.data)
+        mb_count = len(mb_result.data) if mb_result.data else 0
+
+        # Get unique user_ids from mailboxes
+        user_ids = list(set([m['user_id'] for m in mb_result.data if m.get('user_id')]))
+
+        # Fetch account managers (user_profiles) for these user_ids
+        account_managers = []
+        if user_ids:
+            am_result = _supabase.table('user_profiles').select(
+                'id, name, email'
+            ).in_('id', user_ids).eq('role', 'account_manager').execute()
+
+            if am_result.data:
+                from ..models.client import AccountManagerSummary
+                account_managers = [
+                    AccountManagerSummary(
+                        id=am['id'],
+                        name=am['name'],
+                        email=am['email']
+                    ) for am in am_result.data
+                ]
 
         email_result = _supabase.table('emails').select(
             'id', count='exact'
@@ -234,10 +244,6 @@ async def get_client(client_id: str):
         ).eq('client_id', client_id).execute()
         rules_count = rules_result.count if rules_result.count else len(rules_result.data)
 
-        am_name = None
-        if c.get('account_managers'):
-            am_name = c['account_managers'].get('name')
-
         return ClientWithStats(
             id=c['id'],
             client_name=c['client_name'],
@@ -245,12 +251,11 @@ async def get_client(client_id: str):
             status=c['status'],
             industry=c.get('industry'),
             notes=c.get('notes'),
-            account_manager_id=c.get('account_manager_id'),
             uses_quickbase=c.get('uses_quickbase', False),
             uses_printiq=c.get('uses_printiq', False),
             created_at=c['created_at'],
             updated_at=c['updated_at'],
-            account_manager_name=am_name,
+            account_managers=account_managers,
             total_customer_companies=cc_count,
             total_customer_contacts=ct_count,
             total_mailboxes=mb_count,
@@ -286,14 +291,6 @@ async def update_client(client_id: str, data: ClientUpdate):
         if not existing.data:
             raise HTTPException(status_code=404, detail="Client not found")
 
-        # Validate account_manager_id if provided
-        if data.account_manager_id:
-            am_check = _supabase.table('account_managers').select('id').eq(
-                'id', data.account_manager_id
-            ).execute()
-            if not am_check.data:
-                raise HTTPException(status_code=400, detail="Account manager not found")
-
         # Build update data
         update_data = {}
         if data.client_name is not None:
@@ -304,8 +301,6 @@ async def update_client(client_id: str, data: ClientUpdate):
             update_data['industry'] = data.industry
         if data.status is not None:
             update_data['status'] = data.status.value
-        if data.account_manager_id is not None:
-            update_data['account_manager_id'] = data.account_manager_id
         if data.notes is not None:
             update_data['notes'] = data.notes
         if data.uses_quickbase is not None:
