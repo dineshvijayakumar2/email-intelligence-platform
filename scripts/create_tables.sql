@@ -36,7 +36,35 @@ CREATE TABLE mailboxes (
 
 -- Add helpful column comments
 COMMENT ON COLUMN mailboxes.email_address IS 'Optional email address - not required for file-based mailboxes (MBOX/PST/OLM)';
-COMMENT ON COLUMN mailboxes.mailbox_type IS 'Mailbox type: mbox (universal), pst (Windows Outlook), or olm (Mac Outlook)';
+COMMENT ON COLUMN mailboxes.mailbox_type IS 'Mailbox type: mbox (universal), pst (Windows Outlook), olm (Mac Outlook), gmail (Gmail LIVE), outlook_live (Outlook LIVE)';
+COMMENT ON COLUMN mailboxes.connection_config IS
+'JSON config for mailbox connection.
+
+For Gmail LIVE sync:
+{
+  gmail_sync_enabled: boolean,
+  gmail_email: string,
+  gmail_access_token: string,
+  gmail_refresh_token: string,
+  gmail_token_expires_at: string (ISO),
+  gmail_last_history_id: string,
+  gmail_sync_status: "idle" | "syncing" | "error",
+  gmail_sync_error: string | null,
+  gmail_email_count: number
+}
+
+For Outlook LIVE sync:
+{
+  outlook_sync_enabled: boolean,
+  outlook_email: string,
+  outlook_access_token: string,
+  outlook_refresh_token: string,
+  outlook_token_expires_at: string (ISO),
+  outlook_delta_link: string,
+  outlook_sync_status: "idle" | "syncing" | "error",
+  outlook_sync_error: string | null,
+  outlook_email_count: number
+}';
 
 -- Main emails table
 CREATE TABLE emails (
@@ -141,13 +169,14 @@ CREATE TABLE processing_jobs (
 CREATE TABLE user_integrations (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id TEXT NOT NULL,  -- User identifier (string format for flexibility)
-  provider TEXT NOT NULL CHECK (provider IN ('google_drive', 'gmail', 'microsoft', 'dropbox')),
+  provider TEXT NOT NULL CHECK (provider IN ('google_drive', 'gmail', 'outlook', 'microsoft', 'dropbox')),
   access_token TEXT NOT NULL,     -- Current access token
   refresh_token TEXT NOT NULL,    -- Long-lived refresh token
   token_expires_at TIMESTAMPTZ,   -- When access token expires
   -- Gmail/Outlook LIVE sync tracking columns
   last_sync_at TIMESTAMPTZ,          -- When last successful sync completed
-  last_history_id TEXT,              -- Gmail historyId / Outlook deltaLink for incremental sync
+  last_history_id TEXT,              -- Gmail historyId for incremental sync
+  delta_link TEXT,                   -- Microsoft Graph deltaLink for Outlook incremental sync
   sync_status TEXT DEFAULT 'idle' CHECK (sync_status IN ('idle', 'syncing', 'error')),
   sync_error TEXT,                   -- Last sync error message (null if no error)
   email_count INTEGER DEFAULT 0,     -- Total emails synced via this integration
@@ -159,11 +188,16 @@ CREATE TABLE user_integrations (
 );
 
 -- Add helpful comments
-COMMENT ON TABLE user_integrations IS 'Stores OAuth2 tokens and integration status for external services like Google Drive';
+COMMENT ON TABLE user_integrations IS 'Stores OAuth2 tokens and integration status for external services like Google Drive, Gmail, and Outlook';
 COMMENT ON COLUMN user_integrations.user_id IS 'User identifier (string format for flexibility)';
-COMMENT ON COLUMN user_integrations.provider IS 'Service provider (google_drive, microsoft, etc.)';
+COMMENT ON COLUMN user_integrations.provider IS 'Service provider (google_drive, gmail, outlook, microsoft, dropbox)';
 COMMENT ON COLUMN user_integrations.access_token IS 'Short-lived access token for API calls';
 COMMENT ON COLUMN user_integrations.refresh_token IS 'Long-lived token for refreshing access tokens';
+COMMENT ON COLUMN user_integrations.last_history_id IS 'Gmail historyId for incremental sync';
+COMMENT ON COLUMN user_integrations.delta_link IS 'Microsoft Graph deltaLink for Outlook incremental sync';
+COMMENT ON COLUMN user_integrations.sync_status IS 'Current sync status: idle, syncing, error';
+COMMENT ON COLUMN user_integrations.sync_error IS 'Last sync error message if any';
+COMMENT ON COLUMN user_integrations.email_count IS 'Total emails synced for this integration';
 
 -- Performance indexes
 CREATE INDEX idx_emails_sent_date ON emails(sent_date);
@@ -1034,6 +1068,42 @@ COMMENT ON COLUMN gmail_filters.criteria IS 'Gmail filter criteria: {from, to, s
 COMMENT ON COLUMN gmail_filters.action IS 'Gmail filter action: {addLabelIds, removeLabelIds, forward, markAsRead, markImportant}';
 
 -- =========================================================================
+-- Outlook Rules Table
+-- =========================================================================
+
+-- Outlook rules table - stores imported Outlook mail rules
+-- Used for understanding user's email organization preferences (similar to Gmail filters)
+CREATE TABLE IF NOT EXISTS outlook_rules (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id TEXT NOT NULL,
+    rule_id TEXT NOT NULL,           -- Microsoft Graph rule ID
+    display_name TEXT,               -- Rule display name
+    sequence INTEGER,                -- Rule priority/order
+    is_enabled BOOLEAN DEFAULT TRUE,
+    conditions JSONB NOT NULL DEFAULT '{}',
+    actions JSONB NOT NULL DEFAULT '{}',
+    exceptions JSONB DEFAULT '{}',   -- Outlook supports rule exceptions
+    imported_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+
+    UNIQUE(user_id, rule_id)
+);
+
+-- Index for fast lookups
+CREATE INDEX IF NOT EXISTS idx_outlook_rules_user ON outlook_rules(user_id);
+
+-- Update trigger for updated_at
+CREATE TRIGGER update_outlook_rules_updated_at
+    BEFORE UPDATE ON outlook_rules
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Grant permissions
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE outlook_rules TO anon, authenticated;
+GRANT ALL ON outlook_rules TO service_role;
+
+COMMENT ON TABLE outlook_rules IS 'Stores imported Outlook mail rules for user reference';
+
+-- =========================================================================
 -- Application Configuration Table
 -- =========================================================================
 
@@ -1062,7 +1132,9 @@ COMMENT ON COLUMN app_config.config_value IS 'Value of the configuration setting
 
 -- Insert default values
 INSERT INTO app_config (config_key, config_value, description)
-VALUES ('gmail_sync_interval', '15', 'Gmail LIVE sync interval in minutes (1-1440)')
+VALUES
+  ('gmail_sync_interval', '15', 'Gmail LIVE sync interval in minutes (1-1440)'),
+  ('outlook_sync_interval', '15', 'Outlook LIVE sync interval in minutes (1-1440)')
 ON CONFLICT (config_key) DO NOTHING;
 
 -- =========================================================================

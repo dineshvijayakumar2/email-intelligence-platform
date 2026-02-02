@@ -14,7 +14,7 @@ export interface UserProfile {
   id: string;
   email: string;
   name: string;
-  role: 'admin' | 'client_manager' | 'account_manager';
+  roles: Array<'admin' | 'client_manager' | 'account_manager'>;
   isActive: boolean;
   avatarUrl?: string;
   accessibleMailboxIds: string[];
@@ -60,7 +60,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           id: data.id,
           email: data.email,
           name: data.name,
-          role: data.role,
+          roles: data.roles || ['account_manager'],
           isActive: data.is_active,
           avatarUrl: data.avatar_url,
           accessibleMailboxIds: data.accessible_mailbox_ids || [],
@@ -172,9 +172,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     signOut,
     refreshProfile,
     isAuthenticated: !!user,
-    isAdmin: profile?.role === 'admin',
-    isClientManager: profile?.role === 'client_manager',
-    isAccountManager: profile?.role === 'account_manager',
+    isAdmin: profile?.roles?.includes('admin') ?? false,
+    isClientManager: profile?.roles?.includes('client_manager') ?? false,
+    isAccountManager: profile?.roles?.includes('account_manager') ?? false,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

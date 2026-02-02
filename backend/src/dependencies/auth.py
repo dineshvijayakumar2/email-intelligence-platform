@@ -35,19 +35,19 @@ def init_auth_dependencies(supabase_client):
 
 async def get_current_user(authorization: Optional[str] = Header(None)) -> Dict:
     """
-    Verify Supabase JWT and return user info with role.
+    Verify Supabase JWT and return user info with roles.
 
     This is the main authentication dependency. It:
     1. Extracts the JWT from Authorization header
     2. Verifies the token using Supabase JWT secret
     3. Fetches user profile from user_profiles table
-    4. Returns user info dict with id, email, name, role
+    4. Returns user info dict with id, email, name, roles
 
     Args:
         authorization: Bearer token from Authorization header
 
     Returns:
-        Dict with user_id, email, name, role
+        Dict with user_id, email, name, roles (array of role strings)
 
     Raises:
         HTTPException 401: If not authenticated or token invalid
@@ -111,9 +111,9 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> Dict:
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token payload")
 
-        # Get user profile with role
+        # Get user profile with roles
         result = _supabase.table('user_profiles').select(
-            'id, email, name, role, is_active'
+            'id, email, name, roles, is_active'
         ).eq('id', user_id).single().execute()
 
         if not result.data:
@@ -128,7 +128,7 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> Dict:
                     'id': user_id,
                     'email': email,
                     'name': name,
-                    'role': 'account_manager',
+                    'roles': ['account_manager'],
                     'is_active': True
                 }).execute()
 
@@ -149,7 +149,7 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> Dict:
             'user_id': user_id,
             'email': result_data['email'],
             'name': result_data['name'],
-            'role': result_data['role']
+            'roles': result_data.get('roles', ['account_manager'])  # Default to array if missing
         }
 
     except jwt.ExpiredSignatureError:
@@ -198,10 +198,12 @@ def require_role(*roles: str) -> Callable:
         Dependency function that validates role
 
     Raises:
-        HTTPException 403: If user's role not in allowed roles
+        HTTPException 403: If user doesn't have any of the required roles
     """
     async def role_checker(current_user: Dict = Depends(get_current_user)) -> Dict:
-        if current_user['role'] not in roles:
+        user_roles = current_user.get('roles', [])
+        # Check if user has any of the required roles
+        if not any(role in user_roles for role in roles):
             raise HTTPException(
                 status_code=403,
                 detail=f"Insufficient permissions. Required role: {', '.join(roles)}"

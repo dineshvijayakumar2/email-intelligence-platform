@@ -37,7 +37,7 @@ class UserProfile(BaseModel):
     id: str
     email: str
     name: str
-    role: str
+    roles: List[str]
     is_active: bool
     avatar_url: Optional[str] = None
     accessible_mailbox_ids: List[str] = []
@@ -49,9 +49,9 @@ class UserProfileUpdate(BaseModel):
     avatar_url: Optional[str] = None
 
 
-class UpdateRoleRequest(BaseModel):
-    """Role update request (admin only)"""
-    role: str
+class UpdateRolesRequest(BaseModel):
+    """Roles update request (admin only)"""
+    roles: List[str]
 
 
 class UserListResponse(BaseModel):
@@ -81,7 +81,7 @@ class UserWithClients(BaseModel):
     id: str
     email: str
     name: str
-    role: str
+    roles: List[str]
     is_active: bool
     avatar_url: Optional[str] = None
     created_at: Optional[str] = None
@@ -115,7 +115,7 @@ async def get_current_user_profile(current_user: dict = Depends(get_current_user
 
         # Get full profile
         profile_result = _supabase.table('user_profiles').select(
-            'id, email, name, role, is_active, avatar_url'
+            'id, email, name, roles, is_active, avatar_url'
         ).eq('id', current_user['user_id']).single().execute()
 
         if not profile_result.data:
@@ -125,7 +125,7 @@ async def get_current_user_profile(current_user: dict = Depends(get_current_user
             id=str(profile_result.data['id']),
             email=profile_result.data['email'],
             name=profile_result.data['name'],
-            role=profile_result.data['role'],
+            roles=profile_result.data.get('roles', ['account_manager']),
             is_active=profile_result.data['is_active'],
             avatar_url=profile_result.data.get('avatar_url'),
             accessible_mailbox_ids=mailbox_ids
@@ -194,7 +194,7 @@ async def get_assigned_clients(current_user: dict = Depends(get_current_user)):
         List of assigned clients
     """
     try:
-        if current_user['role'] != 'client_manager':
+        if 'client_manager' not in current_user.get('roles', []):
             return []
 
         result = _supabase.table('user_client_assignments').select(
@@ -240,11 +240,12 @@ async def list_users(
     """
     try:
         query = _supabase.table('user_profiles').select(
-            'id, email, name, role, is_active, avatar_url, created_at, updated_at'
+            'id, email, name, roles, is_active, avatar_url, created_at, updated_at'
         )
 
         if role:
-            query = query.eq('role', role)
+            # Filter users that have the specified role in their roles array
+            query = query.contains('roles', [role])
         if active_only:
             query = query.eq('is_active', True)
 
@@ -255,7 +256,8 @@ async def list_users(
         for u in (result.data or []):
             # Get assigned clients for client_manager users
             assigned_clients = []
-            if u['role'] == 'client_manager':
+            user_roles = u.get('roles', [])
+            if 'client_manager' in user_roles:
                 clients_result = _supabase.table('user_client_assignments').select(
                     'client_id, clients(id, client_name, client_label, status)'
                 ).eq('user_id', u['id']).execute()
@@ -274,7 +276,7 @@ async def list_users(
                 id=str(u['id']),
                 email=u['email'],
                 name=u['name'],
-                role=u['role'],
+                roles=user_roles,
                 is_active=u['is_active'],
                 avatar_url=u.get('avatar_url'),
                 created_at=u.get('created_at'),
@@ -307,7 +309,7 @@ async def get_user(
     """
     try:
         result = _supabase.table('user_profiles').select(
-            'id, email, name, role, is_active, avatar_url'
+            'id, email, name, roles, is_active, avatar_url'
         ).eq('id', user_id).single().execute()
 
         if not result.data:
@@ -325,7 +327,7 @@ async def get_user(
             id=str(result.data['id']),
             email=result.data['email'],
             name=result.data['name'],
-            role=result.data['role'],
+            roles=result.data.get('roles', ['account_manager']),
             is_active=result.data['is_active'],
             avatar_url=result.data.get('avatar_url'),
             accessible_mailbox_ids=mailbox_ids
@@ -338,56 +340,69 @@ async def get_user(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.patch("/users/{user_id}/role")
-async def update_user_role(
+@router.patch("/users/{user_id}/roles")
+async def update_user_roles(
     user_id: str,
-    request: UpdateRoleRequest,
+    request: UpdateRolesRequest,
     current_user: dict = Depends(require_role('admin'))
 ):
     """
-    Update a user's role (admin only).
+    Update a user's roles (admin only).
+
+    Users can have multiple roles. For example, an admin can also be an account_manager
+    to monitor mailboxes linked to clients.
 
     Args:
         user_id: UUID of the user
-        request: New role
+        request: Array of new roles
 
     Returns:
         Success message
     """
     try:
         valid_roles = ['admin', 'client_manager', 'account_manager']
-        if request.role not in valid_roles:
+
+        # Validate all roles
+        if not request.roles or len(request.roles) == 0:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid role. Must be one of: {', '.join(valid_roles)}"
+                detail="At least one role is required"
             )
 
-        # Prevent admin from demoting themselves
-        if user_id == current_user['user_id'] and request.role != 'admin':
+        for role in request.roles:
+            if role not in valid_roles:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid role '{role}'. Must be one of: {', '.join(valid_roles)}"
+                )
+
+        # Prevent admin from removing their own admin role
+        if user_id == current_user['user_id'] and 'admin' not in request.roles:
             raise HTTPException(
                 status_code=400,
-                detail="Cannot change your own role"
+                detail="Cannot remove your own admin role"
             )
 
         result = _supabase.table('user_profiles').update({
-            'role': request.role
+            'roles': request.roles
         }).eq('id', user_id).execute()
 
         if not result.data:
             raise HTTPException(status_code=404, detail="User not found")
 
-        logger.info(f"User {user_id} role updated to {request.role} by {current_user['user_id']}")
+        logger.info(f"User {user_id} roles updated to {request.roles} by {current_user['user_id']}")
 
         return {
             "success": True,
-            "message": f"Role updated to {request.role}",
-            "user_id": user_id
+            "message": f"Roles updated to {', '.join(request.roles)}",
+            "user_id": user_id,
+            "roles": request.roles
         }
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to update user role: {e}")
+        logger.error(f"Failed to update user roles: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
