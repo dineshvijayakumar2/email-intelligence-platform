@@ -135,15 +135,18 @@ class EmailOperations:
                     failed += len(batch)
                     continue
                 
-                # Insert batch
-                result = self.client.table('emails').insert(prepared_batch).execute()
-                
+                # Use upsert to handle duplicates gracefully
+                result = self.client.table('emails').upsert(
+                    prepared_batch,
+                    on_conflict='message_id,mailbox_id'
+                ).execute()
+
                 if result.data:
                     success += len(prepared_batch)
-                    logger.info(f"Batch {batch_num}: Inserted {len(prepared_batch)} emails")
+                    logger.info(f"Batch {batch_num}: Upserted {len(prepared_batch)} emails")
                 else:
                     failed += len(batch)
-                    errors.append(f"Batch {batch_num}: No data returned from insert")
+                    errors.append(f"Batch {batch_num}: No data returned from upsert")
                 
             except Exception as e:
                 failed += len(batch)
