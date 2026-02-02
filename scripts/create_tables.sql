@@ -469,6 +469,112 @@ GRANT EXECUTE ON FUNCTION get_distinct_mailboxes() TO anon, authenticated;
 COMMENT ON FUNCTION get_distinct_mailboxes() IS 'Returns mailbox names for filter dropdowns';
 
 -- =========================================================================
+-- RBAC Helper Functions
+-- =========================================================================
+
+-- Get mailbox IDs accessible to a user based on their roles
+CREATE OR REPLACE FUNCTION get_user_accessible_mailboxes(p_user_id UUID)
+RETURNS TABLE(mailbox_id UUID) AS $$
+DECLARE
+  v_roles TEXT[];
+BEGIN
+  SELECT roles INTO v_roles FROM user_profiles WHERE id = p_user_id;
+
+  IF v_roles IS NULL THEN
+    RETURN;
+  END IF;
+
+  -- If user has admin role, return all mailboxes
+  IF 'admin' = ANY(v_roles) THEN
+    RETURN QUERY SELECT id FROM mailboxes WHERE is_active = true;
+    RETURN;
+  END IF;
+
+  -- Collect mailboxes based on all roles
+  -- Use UNION to combine results from different roles
+  IF 'account_manager' = ANY(v_roles) THEN
+    -- Account Manager: their own mailboxes
+    RETURN QUERY
+      SELECT id FROM mailboxes
+      WHERE user_id = p_user_id AND is_active = true;
+  END IF;
+
+  IF 'client_manager' = ANY(v_roles) THEN
+    -- Client Manager: mailboxes of assigned clients
+    RETURN QUERY
+      SELECT m.id FROM mailboxes m
+      WHERE m.client_id IN (
+        SELECT client_id FROM user_client_assignments WHERE user_id = p_user_id
+      ) AND m.is_active = true
+      AND m.id NOT IN (
+        -- Avoid duplicates if already returned by account_manager role
+        SELECT id FROM mailboxes WHERE user_id = p_user_id AND is_active = true
+      );
+  END IF;
+END;
+$$ LANGUAGE plpgsql STABLE SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION get_user_accessible_mailboxes TO authenticated;
+
+COMMENT ON FUNCTION get_user_accessible_mailboxes IS 'Returns mailbox IDs accessible to a user based on their roles (supports multiple roles)';
+
+-- Helper function to check if user has a specific role
+CREATE OR REPLACE FUNCTION user_has_role(p_user_id UUID, p_role TEXT)
+RETURNS BOOLEAN AS $$
+DECLARE
+  v_roles TEXT[];
+BEGIN
+  SELECT roles INTO v_roles FROM user_profiles WHERE id = p_user_id;
+  RETURN p_role = ANY(v_roles);
+END;
+$$ LANGUAGE plpgsql STABLE SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION user_has_role TO authenticated;
+
+COMMENT ON FUNCTION user_has_role IS 'Checks if a user has a specific role';
+
+-- Trigger function to auto-create user_profile on Supabase Auth signup
+CREATE OR REPLACE FUNCTION handle_new_user()
+RETURNS TRIGGER
+SECURITY DEFINER
+SET search_path = public
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  -- Insert into user_profiles with roles array
+  INSERT INTO public.user_profiles (id, email, name, roles, is_active)
+  VALUES (
+    NEW.id,
+    NEW.email,
+    COALESCE(
+      NEW.raw_user_meta_data->>'full_name',
+      NEW.raw_user_meta_data->>'name',
+      split_part(NEW.email, '@', 1)
+    ),
+    ARRAY['account_manager']::TEXT[],  -- Default role as array
+    true
+  )
+  ON CONFLICT (id) DO NOTHING;
+
+  RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
+  RAISE WARNING 'Failed to create user profile for %: %', NEW.email, SQLERRM;
+  RETURN NEW;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION handle_new_user TO service_role;
+GRANT EXECUTE ON FUNCTION handle_new_user TO postgres;
+
+COMMENT ON FUNCTION handle_new_user IS 'Trigger function to automatically create user_profile when a new user signs up via Supabase Auth';
+
+-- Note: The actual trigger on auth.users must be created manually:
+-- DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+-- CREATE TRIGGER on_auth_user_created
+--   AFTER INSERT ON auth.users
+--   FOR EACH ROW EXECUTE FUNCTION handle_new_user();
+
+-- =========================================================================
 -- Stage 2 Phase 2: Business Hierarchy Tables
 -- =========================================================================
 
@@ -485,6 +591,46 @@ CREATE TABLE IF NOT EXISTS account_managers (
 );
 
 COMMENT ON TABLE account_managers IS 'Platform users who manage client relationships';
+
+-- User Profiles (Supabase Auth Integration with RBAC)
+-- Extends Supabase auth.users with role-based access control
+CREATE TABLE IF NOT EXISTS user_profiles (
+  id UUID PRIMARY KEY,  -- References auth.users(id) - FK added after auth.users exists
+  email TEXT NOT NULL,
+  name TEXT NOT NULL,
+  roles TEXT[] NOT NULL DEFAULT ARRAY['account_manager'::TEXT],  -- Multiple roles support
+  is_active BOOLEAN DEFAULT true,
+  avatar_url TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT user_profiles_roles_check CHECK (
+    roles <@ ARRAY['admin', 'client_manager', 'account_manager']::TEXT[] AND
+    cardinality(roles) > 0
+  )
+);
+
+-- Indexes for user_profiles
+CREATE INDEX IF NOT EXISTS idx_user_profiles_email ON user_profiles(email);
+CREATE INDEX IF NOT EXISTS idx_user_profiles_roles ON user_profiles USING GIN(roles);
+CREATE INDEX IF NOT EXISTS idx_user_profiles_active ON user_profiles(is_active) WHERE is_active = true;
+
+COMMENT ON TABLE user_profiles IS 'User profiles extending Supabase auth.users with RBAC. Users can have multiple roles.';
+COMMENT ON COLUMN user_profiles.roles IS 'Array of user roles: admin, client_manager, account_manager. Users can have multiple roles.';
+COMMENT ON COLUMN user_profiles.id IS 'Foreign key to auth.users(id) in Supabase Auth';
+
+-- User-Client Assignments (for client_manager role)
+CREATE TABLE IF NOT EXISTS user_client_assignments (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
+  client_id UUID,  -- FK to clients(id) - added after clients table exists
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, client_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_client_user ON user_client_assignments(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_client_client ON user_client_assignments(client_id);
+
+COMMENT ON TABLE user_client_assignments IS 'Assigns client_manager users to specific clients for access control';
 
 -- Clients (Consulting Clients)
 CREATE TABLE IF NOT EXISTS clients (
@@ -597,6 +743,8 @@ CREATE INDEX IF NOT EXISTS idx_customer_companies_domains_gin ON customer_compan
 -- Business hierarchy update triggers
 CREATE TRIGGER update_account_managers_updated_at BEFORE UPDATE
     ON account_managers FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_user_profiles_updated_at BEFORE UPDATE
+    ON user_profiles FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_clients_updated_at BEFORE UPDATE
     ON clients FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_customer_companies_updated_at BEFORE UPDATE
@@ -608,10 +756,17 @@ CREATE TRIGGER update_customer_recognition_rules_updated_at BEFORE UPDATE
 
 -- Business hierarchy permissions
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE account_managers TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE ON TABLE user_profiles TO authenticated;
+GRANT SELECT, INSERT, DELETE ON TABLE user_client_assignments TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE clients TO anon, authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE customer_companies TO anon, authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE customer_contacts TO anon, authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE customer_recognition_rules TO anon, authenticated;
+
+-- Add foreign key constraints (after dependent tables exist)
+ALTER TABLE user_client_assignments
+  ADD CONSTRAINT user_client_assignments_client_id_fkey
+  FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE;
 
 -- Note: ANALYZE statements moved to end of file
 
