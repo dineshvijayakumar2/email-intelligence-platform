@@ -1,4 +1,4 @@
-# Update Context - January 28, 2026
+# Update Context - January 30, 2026
 
 ## Session Summary
 
@@ -16,7 +16,7 @@ Based on updated user stories, Stage 2 is now organized into 3 sprints:
 | Epic | Status |
 |------|--------|
 | Account Manager & Client Hierarchy | Backend Complete |
-| Role-Based Access Control | **Complete** (Migration Required) |
+| Role-Based Access Control | **Complete** - Production Deployed |
 | Gmail OAuth Integration | **Complete** |
 | Outlook OAuth Integration | Pending |
 | Date Range Processing | Complete |
@@ -127,7 +127,16 @@ Based on updated user stories, Stage 2 is now organized into 3 sprints:
 - **Authentication Flow**:
   - Supabase Auth supports Google OAuth, Microsoft OAuth, email/password
   - Frontend uses `@supabase/supabase-js` for OAuth flows and token management
-  - Backend verifies JWT tokens using PyJWT with `SUPABASE_JWT_SECRET`
+  - Backend verifies JWT tokens using PyJWT with dual algorithm support:
+    - **ES256/RS256**: JWKS-based verification (primary, for newer Supabase projects)
+    - **HS256**: Shared secret verification (fallback, for legacy tokens)
+  - Automatic algorithm detection from JWT header with graceful fallback
+- **Production Deployment**:
+  - ✅ Deployed to Railway and fully operational
+  - ✅ ES256 JWT verification working with JWKS endpoint
+  - ✅ User profiles loading correctly
+  - ✅ OAuth redirects configured for production domain
+  - ✅ All authentication flows tested and verified
 - **Database Schema** (`scripts/migrations/010_create_user_profiles.sql`):
   - `user_profiles` table extending Supabase `auth.users`
   - `user_client_assignments` table for client manager role assignments
@@ -136,6 +145,10 @@ Based on updated user stories, Stage 2 is now organized into 3 sprints:
   - Auto-create user profile trigger on signup
 - **Backend Implementation**:
   - `backend/src/dependencies/auth.py` - JWT verification and user profile fetching
+    - **ES256 Support**: Uses PyJWKClient to fetch public keys from `{SUPABASE_URL}/auth/v1/.well-known/jwks.json`
+    - **Algorithm Detection**: Inspects JWT header to determine algorithm (ES256/RS256/HS256)
+    - **Graceful Fallback**: Falls back to HS256 with shared secret if JWKS fails
+    - **Lazy Loading**: JWKS client initialized on first ES256 token
   - `backend/src/routers/auth.py` - Auth endpoints:
     - `GET /api/auth/me` - Get current user profile with accessible mailboxes
     - `GET /api/auth/users` - List all users (admin only)
@@ -247,18 +260,12 @@ Based on updated user stories, Stage 2 is now organized into 3 sprints:
 ## Next Steps
 
 ### Immediate (Sprint 1 Continuation)
-1. **Complete RBAC Setup** (Prerequisites for production use)
-   - Run migration `scripts/migrations/010_create_user_profiles.sql` in Supabase
-   - Create initial user profiles for existing Supabase auth users
-   - Set first user as admin role
-   - Test login flow and mailbox access controls
-
-2. **Outlook OAuth Integration**
+1. **Outlook OAuth Integration** (Final Sprint 1 Epic)
    - Implement Microsoft Graph OAuth
    - Import Outlook rules
    - Handle token refresh
 
-3. **Gmail Filter Import** (Optional Enhancement)
+2. **Gmail Filter Import** (Optional Enhancement)
    - Import Gmail filters to platform rules
    - Display imported filters in UI
 

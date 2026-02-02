@@ -24,7 +24,7 @@ A comprehensive email intelligence platform for processing, analyzing, and extra
 
 **Sprint 1 - Foundation (Weeks 1-3)**:
 - Account Manager & Client Hierarchy (Backend Complete)
-- Role-Based Access Control (**Complete** - Migration Required)
+- Role-Based Access Control (**Complete** - Production Deployed)
 - Gmail LIVE Sync Integration (**Complete**)
 - Outlook OAuth Integration (Pending)
 - Date Range Processing (Complete)
@@ -91,7 +91,7 @@ A comprehensive email intelligence platform for processing, analyzing, and extra
 - **Row Level Security**: Database-level access control with RLS policies
 - **User Management**: Admin interface for role assignment and client assignments
 - **Protected Routes**: Frontend route guards based on user role
-- **JWT Verification**: Secure token-based authentication
+- **JWT Verification**: ES256 (JWKS) and HS256 token support with automatic fallback
 
 ### Error Tracking & Monitoring (Stage 2)
 - **Dedicated Errors Page**: View and manage processing errors by job
@@ -123,7 +123,7 @@ A comprehensive email intelligence platform for processing, analyzing, and extra
 | Epic | Description | Status |
 |------|-------------|--------|
 | Account Manager & Client Hierarchy | Admin creates AMs, assigns clients, tenant isolation | Backend Complete |
-| Role-Based Access Control | Admin, Client Manager, Account Manager roles with RLS and Supabase Auth | **Complete** |
+| Role-Based Access Control | Admin, Client Manager, Account Manager roles with RLS and Supabase Auth | **Complete** - Production Deployed |
 | Gmail LIVE Sync | Connect Gmail via OAuth, automatic sync every 15 min (configurable), link to mailboxes | **Complete** |
 | Outlook OAuth Integration | Connect Outlook, import rules, token refresh | Pending |
 | Date Range Processing | Select date range for initial sync, re-process historical | Complete |
