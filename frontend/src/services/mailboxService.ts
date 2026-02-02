@@ -9,6 +9,8 @@ export interface Mailbox {
   total_emails: number;
   last_sync_at: string | null;
   created_at: string;
+  client_id?: string | null;  // Stage 2: Assignment to client
+  user_id?: string | null;     // Stage 2: Assignment to account manager
   connection_config?: {
     file_path?: string;
     file_source?: 'local' | 'google_drive';

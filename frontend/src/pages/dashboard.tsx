@@ -451,26 +451,56 @@ export const Dashboard: React.FC = () => {
               </div>
             </div>
 
-            {/* Outlook Integration - Coming Soon */}
+            {/* Outlook LIVE Integration - Per-Mailbox */}
             <div
               style={{
-                background: 'linear-gradient(135deg, rgba(0, 120, 212, 0.08) 0%, rgba(106, 57, 172, 0.08) 100%)',
-                border: '1px dashed rgba(0, 120, 212, 0.3)',
+                background: 'linear-gradient(135deg, rgba(0, 120, 212, 0.08) 0%, rgba(0, 183, 195, 0.08) 100%)',
+                border: '1px solid rgba(0, 120, 212, 0.2)',
                 borderRadius: 12,
-                padding: 20,
-                opacity: 0.7,
+                padding: 16,
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
                 <WindowsOutlined style={{ fontSize: 24, color: '#0078d4' }} />
-                <div>
-                  <Text strong style={{ color: '#0078d4' }}>Microsoft 365</Text>
-                  <Text type="secondary" style={{ display: 'block', fontSize: 12 }}>Coming Soon</Text>
+                <div style={{ flex: 1 }}>
+                  <Text strong style={{ color: '#0078d4' }}>Outlook LIVE Sync</Text>
+                  <Text type="secondary" style={{ display: 'block', fontSize: 12 }}>
+                    O365 & personal Microsoft accounts
+                  </Text>
                 </div>
               </div>
-              <Text type="secondary" style={{ fontSize: 13 }}>
-                Outlook & Exchange integration via Microsoft Graph API.
-              </Text>
+
+              {/* Show mailboxes with Outlook sync */}
+              {mailboxes.filter(m => m.type && ['mbox', 'pst', 'olm'].includes(m.type)).length > 0 ? (
+                <div style={{ fontSize: 13 }}>
+                  <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+                    Link Outlook to archive mailboxes:
+                  </Text>
+                  <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                    {mailboxes.filter(m => m.type && ['mbox', 'pst', 'olm'].includes(m.type)).slice(0, 3).map(m => (
+                      <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 12 }}>{m.name}</Text>
+                        <Link to={`/mailboxes/edit/${m.id}`} style={{ fontSize: 11, color: '#0078d4' }}>
+                          Configure
+                        </Link>
+                      </div>
+                    ))}
+                    {mailboxes.filter(m => m.type && ['mbox', 'pst', 'olm'].includes(m.type)).length > 3 && (
+                      <Link to="/mailboxes" style={{ fontSize: 12, color: '#0078d4' }}>
+                        + {mailboxes.filter(m => m.type && ['mbox', 'pst', 'olm'].includes(m.type)).length - 3} more mailboxes
+                      </Link>
+                    )}
+                  </Space>
+                </div>
+              ) : (
+                <Alert
+                  message="No archive mailboxes"
+                  description="Create a mailbox (MBOX, PST, or OLM) to enable Outlook LIVE sync."
+                  type="info"
+                  showIcon={false}
+                  style={{ background: 'transparent', border: 'none', padding: 0 }}
+                />
+              )}
             </div>
           </div>
         </Col>

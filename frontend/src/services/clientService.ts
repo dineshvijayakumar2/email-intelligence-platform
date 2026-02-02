@@ -9,13 +9,18 @@ import config from '../config.js';
 
 export type ClientStatus = 'active' | 'inactive' | 'prospect';
 
+export interface AccountManagerSummary {
+  id: string;
+  name: string;
+  email: string;
+}
+
 export interface Client {
   id: string;
   client_name: string;
   client_label?: string;
   industry?: string;
   status: ClientStatus;
-  account_manager_id?: string;
   uses_quickbase: boolean;
   uses_printiq: boolean;
   notes?: string;
@@ -24,7 +29,7 @@ export interface Client {
 }
 
 export interface ClientWithStats extends Client {
-  account_manager_name?: string;
+  account_managers: AccountManagerSummary[];
   total_customer_companies: number;
   total_customer_contacts: number;
   total_mailboxes: number;
@@ -37,7 +42,7 @@ export interface ClientSummary {
   client_name: string;
   client_label?: string;
   status: ClientStatus;
-  account_manager_name?: string;
+  account_managers: AccountManagerSummary[];
   customer_company_count: number;
   contact_count: number;
   mailbox_count: number;
@@ -49,7 +54,6 @@ export interface ClientCreate {
   client_label?: string;
   industry?: string;
   status?: ClientStatus;
-  account_manager_id?: string;
   notes?: string;
   uses_quickbase?: boolean;
   quickbase_realm?: string;
@@ -64,7 +68,6 @@ export interface ClientUpdate {
   client_label?: string;
   industry?: string;
   status?: ClientStatus;
-  account_manager_id?: string;
   notes?: string;
   uses_quickbase?: boolean;
   quickbase_realm?: string;

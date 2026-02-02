@@ -9,9 +9,13 @@ const config = {
   supabaseUrl: import.meta.env.VITE_SUPABASE_URL || '',
   supabaseAnonKey: import.meta.env.VITE_SUPABASE_ANON_KEY || '',
 
-  // Google Drive
+  // Google Drive & Gmail
   googleClientId: import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
   googleRedirectUri: import.meta.env.VITE_GOOGLE_REDIRECT_URI || 'http://localhost:3000/auth/google/callback',
+
+  // Microsoft (Outlook/O365)
+  microsoftClientId: import.meta.env.VITE_MICROSOFT_CLIENT_ID || '',
+  microsoftRedirectUri: import.meta.env.VITE_MICROSOFT_REDIRECT_URI || 'http://localhost:3000/auth/microsoft/callback',
 
   // Environment
   isDevelopment: import.meta.env.DEV,
