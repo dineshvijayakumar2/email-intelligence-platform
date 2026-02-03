@@ -4,7 +4,7 @@
  * Admin-only page for managing users, roles, and client assignments.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Table,
   Card,
@@ -79,7 +79,9 @@ const roleConfig = {
 };
 
 const UsersPage: React.FC = () => {
-  const { isAdmin } = useAuth();
+  const { profile } = useAuth();
+  const isAdmin = useMemo(() => profile?.roles?.includes('admin'), [profile?.roles]);
+
   const [users, setUsers] = useState<User[]>([]);
   const [clients, setClients] = useState<ClientSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -101,7 +103,12 @@ const UsersPage: React.FC = () => {
       const data = await api.get<User[]>('/auth/users');
       console.log('API Response:', data);
       console.log('First user:', data?.[0]);
-      setUsers(data || []);
+      // Only update state if we got valid data (not null)
+      if (data !== null) {
+        setUsers(data || []);
+      } else {
+        console.warn('Received null from users API, keeping existing data');
+      }
     } catch (error) {
       console.error('Failed to load users:', error);
       message.error('Failed to load users');
