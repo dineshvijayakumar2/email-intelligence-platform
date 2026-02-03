@@ -34,7 +34,7 @@ export const MailboxCreateForm: React.FC = () => {
   const [form] = Form.useForm();
   const [loading, setLoading] = React.useState(false);
   const [testing, setTesting] = React.useState(false);
-  const [selectedType, setSelectedType] = React.useState('mbox');
+  const [selectedType, setSelectedType] = React.useState('gmail');
   const [fileSource, setFileSource] = React.useState<'local' | 'google_drive'>('local');
   const [googleDriveFile, setGoogleDriveFile] = React.useState<any>(null);
   const [googleDriveConnected, setGoogleDriveConnected] = React.useState(false);
@@ -221,7 +221,7 @@ export const MailboxCreateForm: React.FC = () => {
           onFinish={onFinish}
           initialValues={{
             is_active: true,
-            mailbox_type: 'mbox',
+            mailbox_type: 'gmail',
           }}
         >
           <Form.Item
