@@ -55,7 +55,7 @@ from src.services.outlook_sync_service import get_outlook_sync_service, OutlookS
 
 # Stage 2: Authentication & RBAC
 from src.routers.auth import router as auth_router, init_auth_router
-from src.dependencies.auth import init_auth_dependencies, require_role, get_accessible_mailbox_ids
+from src.dependencies.auth import init_auth_dependencies, require_role, get_current_user, get_accessible_mailbox_ids
 
 # Configure logging to both file and console
 import logging.handlers
