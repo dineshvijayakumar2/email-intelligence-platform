@@ -1,4 +1,5 @@
-import config from '../config';
+import api from './apiClient';
+import { mailboxService } from './mailboxService';
 
 export interface DashboardStats {
   totalEmails: number;
@@ -43,14 +44,13 @@ export const dashboardService = {
   // Get dashboard statistics
   async getDashboardStats(): Promise<DashboardStats> {
     try {
-      const response = await fetch(`${config.apiBaseUrl}/dashboard/stats`);
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const stats = await response.json();
-      return stats;
+      const stats = await api.get<DashboardStats>('/dashboard/stats');
+      return stats || {
+        totalEmails: 0,
+        totalMailboxes: 0,
+        todayEmails: 0,
+        processingJobs: 0,
+      };
     } catch (error) {
       console.error('Error fetching dashboard stats:', error);
       return {
@@ -72,15 +72,9 @@ export const dashboardService = {
     }
 
     try {
-      const response = await fetch(`${config.apiBaseUrl}/processing-jobs`);
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const jobs = await response.json();
-      processingJobsCache = { data: jobs, timestamp: now };
-      return jobs;
+      const jobs = await api.get<any[]>('/processing-jobs');
+      processingJobsCache = { data: jobs || [], timestamp: now };
+      return jobs || [];
     } catch (error) {
       console.error('Error fetching processing jobs:', error);
       return processingJobsCache.data || [];
@@ -135,13 +129,7 @@ export const dashboardService = {
   // Get mailbox summaries
   async getMailboxSummaries(): Promise<MailboxSummary[]> {
     try {
-      const response = await fetch(`${config.apiBaseUrl}/mailboxes`);
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const mailboxes = await response.json();
+      const mailboxes = await mailboxService.getMailboxes();
 
       return mailboxes.map((m: any) => ({
         id: m.id,

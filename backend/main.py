@@ -55,7 +55,7 @@ from src.services.outlook_sync_service import get_outlook_sync_service, OutlookS
 
 # Stage 2: Authentication & RBAC
 from src.routers.auth import router as auth_router, init_auth_router
-from src.dependencies.auth import init_auth_dependencies, require_role
+from src.dependencies.auth import init_auth_dependencies, require_role, get_accessible_mailbox_ids
 
 # Configure logging to both file and console
 import logging.handlers
@@ -209,7 +209,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=allow_credentials,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -579,6 +579,8 @@ class MailboxConfig(BaseModel):
     mailbox_type: str
     is_active: bool = True
     connection_config: Optional[Dict[str, Any]] = {}
+    client_id: Optional[str] = None
+    user_id: Optional[str] = None
 
 class ProcessingJobConfig(BaseModel):
     """
@@ -895,13 +897,21 @@ async def health_check():
 
 # Mailbox endpoints
 @app.get("/api/mailboxes")
-async def get_mailboxes():
-    """Get all mailboxes with email counts - Optimized with RPC or simple fallback"""
+async def get_mailboxes(accessible_mailbox_ids: list = Depends(get_accessible_mailbox_ids)):
+    """Get mailboxes accessible to current user with email counts - Filtered by role"""
     try:
         sb = get_supabase()
 
-        # Get mailboxes first
-        mailboxes_result = sb.table('mailboxes').select('*').order('created_at', desc=True).execute()
+        # Debug logging
+        logger.info(f"[Mailboxes API] Accessible mailbox IDs: {len(accessible_mailbox_ids)} - {accessible_mailbox_ids}")
+
+        # If user has no accessible mailboxes, return empty list
+        if not accessible_mailbox_ids:
+            logger.warning("[Mailboxes API] No accessible mailboxes for user")
+            return []
+
+        # Get only accessible mailboxes
+        mailboxes_result = sb.table('mailboxes').select('*').in_('id', accessible_mailbox_ids).order('created_at', desc=True).execute()
 
         if not mailboxes_result.data:
             return []
@@ -912,7 +922,9 @@ async def get_mailboxes():
             counts_result = sb.rpc('get_email_counts_by_mailbox', {}).execute()
             if counts_result.data:
                 for row in counts_result.data:
-                    count_map[row['mailbox_id']] = row['email_count']
+                    # Only include counts for accessible mailboxes
+                    if row['mailbox_id'] in accessible_mailbox_ids:
+                        count_map[row['mailbox_id']] = row['email_count']
         except Exception as rpc_error:
             logger.debug(f"RPC not available, using fallback: {rpc_error}")
             # Fallback: get counts individually (simple sync approach)
@@ -969,9 +981,11 @@ async def create_mailbox(mailbox_data: MailboxConfig):
             "is_active": mailbox_data.is_active,
             "connection_config": mailbox_data.connection_config,
             "created_at": datetime.now(timezone.utc).isoformat(),
-            "total_emails": 0
+            "total_emails": 0,
+            "client_id": mailbox_data.client_id,
+            "user_id": mailbox_data.user_id,
         }
-        
+
         # Add email_address if provided
         if mailbox_data.email_address:
             insert_data["email_address"] = mailbox_data.email_address
@@ -1003,8 +1017,10 @@ async def update_mailbox(mailbox_id: str, mailbox_data: MailboxConfig):
             "mailbox_type": mailbox_data.mailbox_type,
             "is_active": mailbox_data.is_active,
             "connection_config": mailbox_data.connection_config,
+            "client_id": mailbox_data.client_id,
+            "user_id": mailbox_data.user_id,
         }
-        
+
         # Add email_address if provided
         if mailbox_data.email_address:
             update_data["email_address"] = mailbox_data.email_address

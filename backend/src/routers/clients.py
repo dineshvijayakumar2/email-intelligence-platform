@@ -130,17 +130,19 @@ async def list_clients(
             account_managers = []
             if user_ids:
                 am_result = _supabase.table('user_profiles').select(
-                    'id, name, email'
-                ).in_('id', user_ids).eq('role', 'account_manager').execute()
+                    'id, name, email, roles'
+                ).in_('id', user_ids).execute()
 
                 if am_result.data:
                     from ..models.client import AccountManagerSummary
+                    # Filter to only those with account_manager role
                     account_managers = [
                         AccountManagerSummary(
                             id=am['id'],
                             name=am['name'],
                             email=am['email']
                         ) for am in am_result.data
+                        if 'account_manager' in (am.get('roles') or [])
                     ]
 
             # Get email count
@@ -221,17 +223,19 @@ async def get_client(client_id: str):
         account_managers = []
         if user_ids:
             am_result = _supabase.table('user_profiles').select(
-                'id, name, email'
-            ).in_('id', user_ids).eq('role', 'account_manager').execute()
+                'id, name, email, roles'
+            ).in_('id', user_ids).execute()
 
             if am_result.data:
                 from ..models.client import AccountManagerSummary
+                # Filter to only those with account_manager role
                 account_managers = [
                     AccountManagerSummary(
                         id=am['id'],
                         name=am['name'],
                         email=am['email']
                     ) for am in am_result.data
+                    if 'account_manager' in (am.get('roles') or [])
                 ]
 
         email_result = _supabase.table('emails').select(

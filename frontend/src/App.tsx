@@ -6,6 +6,7 @@ import { ConfigProvider } from 'antd';
 import { AuthProvider } from './contexts/AuthContext';
 import { ProtectedRoute, AdminRoute } from './components/ProtectedRoute';
 import { LoginPage } from './pages/login';
+import { ResetPasswordPage } from './pages/reset-password';
 
 // Components
 import { Layout } from './components/layout';
@@ -31,6 +32,7 @@ function App() {
           <Routes>
             {/* Public routes */}
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
 
             {/* Protected routes - require authentication */}
             <Route

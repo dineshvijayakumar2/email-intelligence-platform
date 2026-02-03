@@ -254,10 +254,29 @@ async def list_users(
 
         users = []
         for u in (result.data or []):
-            # Get assigned clients for client_manager users
+            # Get assigned clients based on user role
             assigned_clients = []
             user_roles = u.get('roles', [])
+
+            # Determine which table to query based on role priority
+            # Priority: client_manager > account_manager
             if 'client_manager' in user_roles:
+                # Client managers: fetch from client_manager_assignments (oversight)
+                clients_result = _supabase.table('client_manager_assignments').select(
+                    'client_id, clients(id, client_name, client_label, status)'
+                ).eq('user_id', u['id']).execute()
+
+                assigned_clients = [
+                    {
+                        'id': str(c['client_id']),
+                        'client_name': c['clients']['client_name'] if c.get('clients') else 'Unknown',
+                        'client_label': c['clients'].get('client_label') if c.get('clients') else None,
+                        'status': c['clients'].get('status') if c.get('clients') else 'active'
+                    }
+                    for c in (clients_result.data or [])
+                ]
+            elif 'account_manager' in user_roles:
+                # Account managers: fetch from user_client_assignments (operational)
                 clients_result = _supabase.table('user_client_assignments').select(
                     'client_id, clients(id, client_name, client_label, status)'
                 ).eq('user_id', u['id']).execute()
@@ -546,7 +565,11 @@ async def update_user_client_assignments(
     """
     Bulk update client assignments for a user (admin only).
 
-    Replaces all current client assignments with the provided list.
+    Automatically determines the correct assignment table based on user's role:
+    - account_manager: Uses user_client_assignments (operational access)
+    - client_manager: Uses client_manager_assignments (oversight access)
+
+    Replaces all current assignments with the provided list.
 
     Args:
         user_id: UUID of the user
@@ -556,16 +579,32 @@ async def update_user_client_assignments(
         Success message
     """
     try:
-        # Verify user exists
-        user_result = _supabase.table('user_profiles').select('id, role').eq(
+        # Verify user exists and get their roles
+        user_result = _supabase.table('user_profiles').select('id, roles').eq(
             'id', user_id
         ).single().execute()
 
         if not user_result.data:
             raise HTTPException(status_code=404, detail="User not found")
 
-        # Delete all existing assignments
-        _supabase.table('user_client_assignments').delete().eq(
+        user_roles = user_result.data.get('roles', [])
+
+        # Determine which table to use based on role
+        # Priority: client_manager > account_manager
+        if 'client_manager' in user_roles:
+            assignment_table = 'client_manager_assignments'
+            assignment_type = 'oversight'
+        elif 'account_manager' in user_roles:
+            assignment_table = 'user_client_assignments'
+            assignment_type = 'operational'
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="User must have account_manager or client_manager role for client assignments"
+            )
+
+        # Delete all existing assignments from the appropriate table
+        _supabase.table(assignment_table).delete().eq(
             'user_id', user_id
         ).execute()
 
@@ -588,15 +627,16 @@ async def update_user_client_assignments(
                     {'user_id': user_id, 'client_id': client_id}
                     for client_id in valid_client_ids
                 ]
-                _supabase.table('user_client_assignments').insert(assignments).execute()
+                _supabase.table(assignment_table).insert(assignments).execute()
 
-        logger.info(f"User {user_id} client assignments updated by {current_user['user_id']}")
+        logger.info(f"User {user_id} {assignment_type} client assignments updated by {current_user['user_id']}")
 
         return {
             "success": True,
-            "message": f"Updated {len(request.client_ids)} client assignments",
+            "message": f"Updated {len(request.client_ids)} {assignment_type} client assignments",
             "user_id": user_id,
-            "assigned_count": len(request.client_ids)
+            "assigned_count": len(request.client_ids),
+            "assignment_type": assignment_type
         }
 
     except HTTPException:
@@ -607,23 +647,24 @@ async def update_user_client_assignments(
 
 
 # =============================================================================
-# Client Assignment Endpoints (for client_manager role)
+# Account Manager Client Assignment Endpoints
 # =============================================================================
+# Assigns account_managers to clients for operational access to mailboxes
 
 @router.post("/users/{user_id}/clients/{client_id}")
-async def assign_client_to_user(
+async def assign_client_to_account_manager(
     user_id: str,
     client_id: str,
     current_user: dict = Depends(require_role('admin'))
 ):
     """
-    Assign a client to a user (admin only).
+    Assign a client to an account_manager (admin only).
 
-    This is primarily used for client_manager role to grant them access
-    to specific clients' mailboxes.
+    This gives the account_manager operational access to mailboxes
+    belonging to the specified client.
 
     Args:
-        user_id: UUID of the user
+        user_id: UUID of the account_manager
         client_id: UUID of the client
 
     Returns:
@@ -631,7 +672,7 @@ async def assign_client_to_user(
     """
     try:
         # Verify user exists
-        user_result = _supabase.table('user_profiles').select('id, role').eq(
+        user_result = _supabase.table('user_profiles').select('id, roles').eq(
             'id', user_id
         ).single().execute()
 
@@ -741,4 +782,142 @@ async def get_user_clients(
 
     except Exception as e:
         logger.error(f"Failed to get user clients: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# Client Manager Assignment Endpoints
+# =============================================================================
+# Assigns client_managers to clients for oversight/management (not direct mailbox access)
+
+@router.post("/users/{user_id}/managed-clients/{client_id}")
+async def assign_client_to_manager(
+    user_id: str,
+    client_id: str,
+    current_user: dict = Depends(require_role('admin'))
+):
+    """
+    Assign a client to a client_manager for oversight (admin only).
+
+    This allows the client_manager to oversee account_managers working on this client
+    and view mailboxes for this client.
+
+    Args:
+        user_id: UUID of the client_manager
+        client_id: UUID of the client
+
+    Returns:
+        Success message
+    """
+    try:
+        # Verify user exists and has client_manager role
+        user_result = _supabase.table('user_profiles').select('id, roles').eq(
+            'id', user_id
+        ).single().execute()
+
+        if not user_result.data:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Verify client exists
+        client_result = _supabase.table('clients').select('id, client_name').eq(
+            'id', client_id
+        ).single().execute()
+
+        if not client_result.data:
+            raise HTTPException(status_code=404, detail="Client not found")
+
+        # Check if assignment already exists
+        existing = _supabase.table('client_manager_assignments').select('id').eq(
+            'user_id', user_id
+        ).eq('client_id', client_id).execute()
+
+        if existing.data:
+            raise HTTPException(status_code=400, detail="Client already assigned to this manager")
+
+        # Create assignment
+        _supabase.table('client_manager_assignments').insert({
+            'user_id': user_id,
+            'client_id': client_id
+        }).execute()
+
+        logger.info(f"Client {client_id} assigned to client_manager {user_id} by {current_user['user_id']}")
+
+        return {
+            "success": True,
+            "message": f"Client '{client_result.data['client_name']}' assigned to client manager",
+            "user_id": user_id,
+            "client_id": client_id
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to assign client to manager: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/users/{user_id}/managed-clients/{client_id}")
+async def unassign_client_from_manager(
+    user_id: str,
+    client_id: str,
+    current_user: dict = Depends(require_role('admin'))
+):
+    """
+    Remove client assignment from a client_manager (admin only).
+
+    Args:
+        user_id: UUID of the client_manager
+        client_id: UUID of the client
+
+    Returns:
+        Success message
+    """
+    try:
+        result = _supabase.table('client_manager_assignments').delete().eq(
+            'user_id', user_id
+        ).eq('client_id', client_id).execute()
+
+        logger.info(f"Client {client_id} unassigned from client_manager {user_id} by {current_user['user_id']}")
+
+        return {
+            "success": True,
+            "message": "Client manager assignment removed",
+            "user_id": user_id,
+            "client_id": client_id
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to unassign client from manager: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/users/{user_id}/managed-clients", response_model=List[ClientAssignment])
+async def get_manager_clients(
+    user_id: str,
+    current_user: dict = Depends(require_role('admin'))
+):
+    """
+    Get clients assigned to a specific client_manager (admin only).
+
+    Args:
+        user_id: UUID of the client_manager
+
+    Returns:
+        List of clients they manage
+    """
+    try:
+        result = _supabase.table('client_manager_assignments').select(
+            'client_id, clients(client_name)'
+        ).eq('user_id', user_id).execute()
+
+        return [
+            ClientAssignment(
+                client_id=str(r['client_id']),
+                client_name=r['clients']['client_name'] if r.get('clients') else 'Unknown'
+            )
+            for r in (result.data or [])
+        ]
+
+    except Exception as e:
+        logger.error(f"Failed to get manager clients: {e}")
         raise HTTPException(status_code=500, detail=str(e))

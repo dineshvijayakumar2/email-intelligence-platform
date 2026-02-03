@@ -47,7 +47,9 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requir
 
   // Check role requirements if specified
   if (requiredRoles && requiredRoles.length > 0 && profile) {
-    if (!requiredRoles.includes(profile.role)) {
+    // Check if user has any of the required roles
+    const hasRequiredRole = profile.roles?.some(role => requiredRoles.includes(role));
+    if (!hasRequiredRole) {
       // Redirect to home with insufficient permissions
       return <Navigate to="/" state={{ error: 'Insufficient permissions' }} replace />;
     }

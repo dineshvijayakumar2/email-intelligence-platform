@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Table,
   Space,
@@ -47,7 +47,7 @@ const { RangePicker } = DatePicker;
 export const MailboxList: React.FC = () => {
   const navigate = useNavigate();
   const { profile } = useAuth();
-  const isAdmin = profile?.role === 'admin';
+  const isAdmin = useMemo(() => profile?.roles?.includes('admin'), [profile?.roles]);
 
   const [mailboxes, setMailboxes] = useState<Mailbox[]>([]);
   const [loading, setLoading] = useState(true);
@@ -87,9 +87,17 @@ export const MailboxList: React.FC = () => {
   const userId = getUserId();
 
   useEffect(() => {
+    // Only load once on mount, not on every isAdmin change
     loadMailboxes();
     checkGmailConnection();
     checkOutlookConnection();
+    if (isAdmin) {
+      loadClientsAndUsers();
+    }
+  }, []); // Empty dependency array - only run once on mount
+
+  // Separate effect for when isAdmin changes (to load clients/users)
+  useEffect(() => {
     if (isAdmin) {
       loadClientsAndUsers();
     }
@@ -131,10 +139,14 @@ export const MailboxList: React.FC = () => {
 
     try {
       setLoading(true);
+      console.log(`[Mailboxes] API call ${retryCount + 1} starting...`);
       const data = await mailboxService.getMailboxes();
+      console.log('[Mailboxes] API returned:', data);
+      console.log('[Mailboxes] Loaded mailboxes:', data?.length || 0, 'items');
+      console.log('[Mailboxes] User role:', profile?.roles);
       setMailboxes(data);
     } catch (error) {
-      console.error('Error loading mailboxes:', error);
+      console.error(`[Mailboxes] Error on attempt ${retryCount + 1}:`, error);
 
       // Retry up to 2 times with exponential backoff for transient errors
       if (retryCount < 2) {
@@ -665,14 +677,31 @@ export const MailboxList: React.FC = () => {
               options={
                 assignmentType === 'client'
                   ? clients.map(c => ({ label: c.client_name, value: c.id }))
-                  : users.map(u => ({ label: `${u.name} (${u.email})`, value: u.id }))
+                  : (() => {
+                      // Filter users based on mailbox's client assignment
+                      const mailboxClientId = selectedMailboxForAssignment?.client_id;
+                      let filteredUsers = users;
+
+                      if (mailboxClientId) {
+                        // Show only account_managers assigned to this mailbox's client
+                        filteredUsers = users.filter((u: any) => {
+                          const hasAccountManagerRole = u.roles?.includes('account_manager');
+                          const isAssignedToClient = u.assigned_clients?.some((c: any) => c.id === mailboxClientId);
+                          return hasAccountManagerRole && isAssignedToClient;
+                        });
+                      }
+
+                      return filteredUsers.map(u => ({ label: `${u.name} (${u.email})`, value: u.id }));
+                    })()
               }
             />
             <div style={{ marginTop: 16 }}>
               <Text type="secondary" style={{ fontSize: 12 }}>
                 {assignmentType === 'client'
                   ? 'Assign this mailbox to a client. Client Managers assigned to this client will be able to access it.'
-                  : 'Assign this mailbox to an account manager. Only this user will be able to access and manage this mailbox.'}
+                  : selectedMailboxForAssignment?.client_id
+                    ? 'Assign this mailbox to an account manager who is assigned to this client.'
+                    : 'First assign this mailbox to a client, then assign an account manager.'}
               </Text>
             </div>
           </div>

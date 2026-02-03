@@ -31,6 +31,8 @@ interface AuthContextType {
   signUp: (email: string, password: string, name: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  resetPasswordRequest: (email: string) => Promise<void>;
+  resetPassword: (newPassword: string) => Promise<void>;
   isAuthenticated: boolean;
   isAdmin: boolean;
   isClientManager: boolean;
@@ -160,6 +162,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setProfile(null);
   };
 
+  const resetPasswordRequest = async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    if (error) throw error;
+  };
+
+  const resetPassword = async (newPassword: string) => {
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+    if (error) throw error;
+  };
+
   const value: AuthContextType = {
     user,
     session,
@@ -171,6 +187,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     signUp,
     signOut,
     refreshProfile,
+    resetPasswordRequest,
+    resetPassword,
     isAuthenticated: !!user,
     isAdmin: profile?.roles?.includes('admin') ?? false,
     isClientManager: profile?.roles?.includes('client_manager') ?? false,

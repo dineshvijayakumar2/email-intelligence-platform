@@ -365,6 +365,16 @@ class EmailProcessor:
                 except Exception as e:
                     logger.warning(f"Failed to update total_records: {e}")
 
+                # Update mailbox last_sync_at timestamp when job completes successfully
+                try:
+                    from datetime import timezone
+                    self.db_ops.client.table('mailboxes').update({
+                        'last_sync_at': datetime.now(timezone.utc).isoformat()
+                    }).eq('id', self.mailbox_id).execute()
+                    logger.debug(f"Updated last_sync_at for mailbox {self.mailbox_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to update mailbox last_sync_at: {e}")
+
                 logger.info(f"Processing completed for job {job_id}: {result['total']} examined ({result['success']} inserted, {result['skipped']} skipped duplicates, {result['failed']} failed, {self.filtered_count} filtered by date range)")
                 if result['failed'] > 0 and result.get('errors'):
                     logger.warning(f"Job {job_id} had {result['failed']} failures. First few errors: {result['errors'][:3]}")

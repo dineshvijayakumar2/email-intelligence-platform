@@ -146,11 +146,13 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
           <Text type="secondary" style={{ fontSize: 12 }}>
             {profile?.email}
           </Text>
-          {profile?.role && (
+          {profile?.roles && profile.roles.length > 0 && (
             <div style={{ marginTop: 4 }}>
-              <Tag color={roleConfig[profile.role]?.color || 'default'}>
-                {roleConfig[profile.role]?.label || profile.role}
-              </Tag>
+              {profile.roles.map(role => (
+                <Tag key={role} color={roleConfig[role]?.color || 'default'} style={{ marginBottom: 4 }}>
+                  {roleConfig[role]?.label || role}
+                </Tag>
+              ))}
             </div>
           )}
         </div>
@@ -221,12 +223,17 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
                 </Avatar>
                 <div>
                   <div style={{ fontWeight: 500 }}>{profile.name}</div>
-                  <Tag
-                    color={roleConfig[profile.role]?.color || 'default'}
-                    style={{ margin: 0, marginTop: 4 }}
-                  >
-                    {roleConfig[profile.role]?.label || profile.role}
-                  </Tag>
+                  <div style={{ marginTop: 4 }}>
+                    {profile.roles?.map(role => (
+                      <Tag
+                        key={role}
+                        color={roleConfig[role]?.color || 'default'}
+                        style={{ marginRight: 4, marginBottom: 4 }}
+                      >
+                        {roleConfig[role]?.label || role}
+                      </Tag>
+                    ))}
+                  </div>
                 </div>
               </Space>
             </div>

@@ -30,6 +30,9 @@ import GoogleDrivePicker from './GoogleDrivePicker';
 import GoogleDriveConnection from './GoogleDriveConnection';
 import gmailService, { MailboxGmailStatus } from '../services/gmailService';
 import outlookService, { MailboxOutlookStatus } from '../services/outlookService';
+import { clientService, Client } from '../services/clientService';
+import { userService, UserProfile } from '../services/userService';
+import { useAuth } from '../contexts/AuthContext';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -67,6 +70,16 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
   const [showSyncSettings, setShowSyncSettings] = React.useState(false);
   const [savingConfig, setSavingConfig] = React.useState(false);
 
+  // Manual sync state
+  const [syncing, setSyncing] = React.useState(false);
+
+  // Client and user assignment state
+  const [clients, setClients] = React.useState<any[]>([]);
+  const [users, setUsers] = React.useState<any[]>([]);
+  const [selectedClientId, setSelectedClientId] = React.useState<string | null>(null);
+  const { profile } = useAuth();
+  const isAdmin = profile?.roles?.includes('admin');
+
   // Generate a consistent user ID based on browser fingerprint or use a stored value
   // In a real app, this would come from authentication context (JWT, session, etc.)
   const getUserId = () => {
@@ -87,13 +100,34 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
   const userId = getUserId();
 
   useEffect(() => {
-    if (mailboxId) {
-      loadMailboxData();
-      loadMailboxGmailStatus();
-      loadMailboxOutlookStatus();
-    }
-    loadSyncConfig();
+    const init = async () => {
+      // Load clients and users FIRST, then mailbox data
+      await loadClientsAndUsers();
+
+      if (mailboxId) {
+        await loadMailboxData();
+        loadMailboxGmailStatus();
+        loadMailboxOutlookStatus();
+      }
+      loadSyncConfig();
+    };
+
+    init();
   }, [mailboxId]);
+
+  const loadClientsAndUsers = async () => {
+    try {
+      // Load clients
+      const clientsData = await clientService.list();
+      setClients(clientsData.clients || []);
+
+      // Load all users (will be filtered based on client selection)
+      const usersData = await userService.getUsers();
+      setUsers(usersData || []);
+    } catch (error) {
+      console.error('Error loading clients and users:', error);
+    }
+  };
 
   const loadSyncConfig = async () => {
     try {
@@ -268,14 +302,21 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
       }
       
       setMailboxData(data);
-      
+
+      // Set selected client for filtering users FIRST (before setting form values)
+      if (data.client_id) {
+        setSelectedClientId(data.client_id);
+      }
+
       // Set form values and derive state from mailbox configuration
       form.setFieldsValue({
         name: data.name,
         email_address: data.email_address,
         mailbox_type: data.mailbox_type,
         is_active: data.is_active,
-        file_path: data.connection_config?.file_path || ''
+        file_path: data.connection_config?.file_path || '',
+        client_id: data.client_id || null,
+        user_id: data.user_id || null
       });
       
       // Determine file source and setup state
@@ -326,7 +367,9 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
         name: values.name,
         mailbox_type: values.mailbox_type,
         is_active: values.is_active,
-        connection_config: connectionConfig
+        connection_config: connectionConfig,
+        client_id: values.client_id || null,
+        user_id: values.user_id || null
       };
 
       // Only add email_address if provided
@@ -342,6 +385,19 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
       message.error("Failed to update mailbox");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleMailboxSync = async () => {
+    try {
+      setSyncing(true);
+      await mailboxService.syncMailbox(mailboxId);
+      message.success('Sync triggered successfully');
+    } catch (error) {
+      console.error('Error syncing mailbox:', error);
+      message.error('Failed to trigger sync');
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -786,6 +842,68 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
             </>
           )}
 
+          {/* Client and Account Manager Assignment - only visible to admins */}
+          {isAdmin && (
+            <>
+              <Divider>Assignment</Divider>
+
+              <Form.Item
+                name="client_id"
+                label="Assign to Client"
+                help="Assign this mailbox to a client. Client managers assigned to this client will be able to access it."
+              >
+                <Select
+                  placeholder="Select a client (optional)"
+                  allowClear
+                  showSearch
+                  optionFilterProp="label"
+                  onChange={(value) => {
+                    setSelectedClientId(value || null);
+                    // Clear user selection when client changes
+                    form.setFieldValue('user_id', null);
+                  }}
+                  options={clients.map(c => ({
+                    label: c.client_name,
+                    value: c.id
+                  }))}
+                />
+              </Form.Item>
+
+              <Form.Item
+                name="user_id"
+                label="Assign to Account Manager"
+                help={
+                  selectedClientId || form.getFieldValue('client_id')
+                    ? 'Assign this mailbox to an account manager assigned to the selected client.'
+                    : 'First assign this mailbox to a client to see available account managers.'
+                }
+              >
+                <Select
+                  placeholder={(selectedClientId || form.getFieldValue('client_id')) ? 'Select account manager (optional)' : 'Select a client first'}
+                  allowClear
+                  showSearch
+                  optionFilterProp="label"
+                  disabled={!selectedClientId && !form.getFieldValue('client_id')}
+                  options={(() => {
+                    const clientId = selectedClientId || form.getFieldValue('client_id');
+                    if (!clientId) return [];
+
+                    return users
+                      .filter((u: any) => {
+                        const hasAccountManagerRole = u.roles?.includes('account_manager');
+                        const isAssignedToClient = u.assigned_clients?.some((c: any) => c.id === clientId);
+                        return hasAccountManagerRole && isAssignedToClient;
+                      })
+                      .map((u: any) => ({
+                        label: `${u.name} (${u.email})`,
+                        value: u.id
+                      }));
+                  })()}
+                />
+              </Form.Item>
+            </>
+          )}
+
           <Form.Item
             name="is_active"
             label="Active"
@@ -798,6 +916,13 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
             <Space>
               <Button type="primary" htmlType="submit" loading={loading}>
                 Update Mailbox
+              </Button>
+              <Button
+                icon={<SyncOutlined spin={syncing} />}
+                onClick={handleMailboxSync}
+                loading={syncing}
+              >
+                Sync Now
               </Button>
               <Button onClick={() => navigate('/mailboxes')}>
                 Cancel

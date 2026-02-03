@@ -473,6 +473,11 @@ COMMENT ON FUNCTION get_distinct_mailboxes() IS 'Returns mailbox names for filte
 -- =========================================================================
 
 -- Get mailbox IDs accessible to a user based on their roles
+--
+-- Role Hierarchy:
+-- - admin: Full access to all mailboxes
+-- - account_manager: Access to mailboxes of assigned clients OR own mailboxes
+-- - client_manager: View access to mailboxes of clients they oversee
 CREATE OR REPLACE FUNCTION get_user_accessible_mailboxes(p_user_id UUID)
 RETURNS TABLE(mailbox_id UUID) AS $$
 DECLARE
@@ -480,35 +485,32 @@ DECLARE
 BEGIN
   SELECT roles INTO v_roles FROM user_profiles WHERE id = p_user_id;
 
-  IF v_roles IS NULL THEN
-    RETURN;
-  END IF;
-
-  -- If user has admin role, return all mailboxes
+  -- Admin: all mailboxes
   IF 'admin' = ANY(v_roles) THEN
     RETURN QUERY SELECT id FROM mailboxes WHERE is_active = true;
-    RETURN;
-  END IF;
 
-  -- Collect mailboxes based on all roles
-  -- Use UNION to combine results from different roles
-  IF 'account_manager' = ANY(v_roles) THEN
-    -- Account Manager: their own mailboxes
-    RETURN QUERY
-      SELECT id FROM mailboxes
-      WHERE user_id = p_user_id AND is_active = true;
-  END IF;
-
-  IF 'client_manager' = ANY(v_roles) THEN
-    -- Client Manager: mailboxes of assigned clients
+  -- Account Manager: mailboxes of assigned clients OR own mailboxes
+  ELSIF 'account_manager' = ANY(v_roles) THEN
     RETURN QUERY
       SELECT m.id FROM mailboxes m
-      WHERE m.client_id IN (
-        SELECT client_id FROM user_client_assignments WHERE user_id = p_user_id
-      ) AND m.is_active = true
-      AND m.id NOT IN (
-        -- Avoid duplicates if already returned by account_manager role
-        SELECT id FROM mailboxes WHERE user_id = p_user_id AND is_active = true
+      WHERE m.is_active = true
+      AND (
+        -- Mailboxes of clients they're assigned to
+        m.client_id IN (
+          SELECT client_id FROM user_client_assignments WHERE user_id = p_user_id
+        )
+        OR
+        -- Their own mailboxes (directly assigned)
+        m.user_id = p_user_id
+      );
+
+  -- Client Manager: mailboxes of clients they manage (for oversight)
+  ELSIF 'client_manager' = ANY(v_roles) THEN
+    RETURN QUERY
+      SELECT m.id FROM mailboxes m
+      WHERE m.is_active = true
+      AND m.client_id IN (
+        SELECT client_id FROM client_manager_assignments WHERE user_id = p_user_id
       );
   END IF;
 END;
@@ -618,7 +620,7 @@ COMMENT ON TABLE user_profiles IS 'User profiles extending Supabase auth.users w
 COMMENT ON COLUMN user_profiles.roles IS 'Array of user roles: admin, client_manager, account_manager. Users can have multiple roles.';
 COMMENT ON COLUMN user_profiles.id IS 'Foreign key to auth.users(id) in Supabase Auth';
 
--- User-Client Assignments (for client_manager role)
+-- User-Client Assignments (for account_manager role - operational assignments)
 CREATE TABLE IF NOT EXISTS user_client_assignments (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
@@ -630,7 +632,21 @@ CREATE TABLE IF NOT EXISTS user_client_assignments (
 CREATE INDEX IF NOT EXISTS idx_user_client_user ON user_client_assignments(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_client_client ON user_client_assignments(client_id);
 
-COMMENT ON TABLE user_client_assignments IS 'Assigns client_manager users to specific clients for access control';
+COMMENT ON TABLE user_client_assignments IS 'Tracks which account_managers are assigned to which clients (operational assignments)';
+
+-- Client Manager Assignments (for client_manager role - oversight/management)
+CREATE TABLE IF NOT EXISTS client_manager_assignments (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
+  client_id UUID,  -- FK to clients(id) - added after clients table exists
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, client_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_client_manager_user ON client_manager_assignments(user_id);
+CREATE INDEX IF NOT EXISTS idx_client_manager_client ON client_manager_assignments(client_id);
+
+COMMENT ON TABLE client_manager_assignments IS 'Tracks which client_managers oversee which clients (for managing account managers)';
 
 -- Clients (Consulting Clients)
 CREATE TABLE IF NOT EXISTS clients (
@@ -758,6 +774,7 @@ CREATE TRIGGER update_customer_recognition_rules_updated_at BEFORE UPDATE
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE account_managers TO anon, authenticated;
 GRANT SELECT, INSERT, UPDATE ON TABLE user_profiles TO authenticated;
 GRANT SELECT, INSERT, DELETE ON TABLE user_client_assignments TO authenticated;
+GRANT SELECT, INSERT, DELETE ON TABLE client_manager_assignments TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE clients TO anon, authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE customer_companies TO anon, authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE customer_contacts TO anon, authenticated;
@@ -766,6 +783,10 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE customer_recognition_rules TO anon
 -- Add foreign key constraints (after dependent tables exist)
 ALTER TABLE user_client_assignments
   ADD CONSTRAINT user_client_assignments_client_id_fkey
+  FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE;
+
+ALTER TABLE client_manager_assignments
+  ADD CONSTRAINT client_manager_assignments_client_id_fkey
   FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE;
 
 -- Note: ANALYZE statements moved to end of file

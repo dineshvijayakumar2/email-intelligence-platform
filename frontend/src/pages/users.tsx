@@ -48,7 +48,7 @@ interface User {
   id: string;
   email: string;
   name: string;
-  role: 'admin' | 'client_manager' | 'account_manager';
+  roles: Array<'admin' | 'client_manager' | 'account_manager'>;
   is_active: boolean;
   avatar_url?: string;
   created_at: string;
@@ -99,6 +99,8 @@ const UsersPage: React.FC = () => {
     setLoading(true);
     try {
       const data = await api.get<User[]>('/auth/users');
+      console.log('API Response:', data);
+      console.log('First user:', data?.[0]);
       setUsers(data || []);
     } catch (error) {
       console.error('Failed to load users:', error);
@@ -119,7 +121,7 @@ const UsersPage: React.FC = () => {
 
   const handleEditRole = (user: User) => {
     setSelectedUser(user);
-    form.setFieldsValue({ role: user.role });
+    form.setFieldsValue({ roles: user.roles || [] });
     setEditModalVisible(true);
   };
 
@@ -131,16 +133,16 @@ const UsersPage: React.FC = () => {
     setAssignModalVisible(true);
   };
 
-  const handleUpdateRole = async (values: { role: string }) => {
+  const handleUpdateRole = async (values: { roles: string[] }) => {
     if (!selectedUser) return;
 
     try {
-      await api.patch(`/auth/users/${selectedUser.id}/role`, { role: values.role });
-      message.success('User role updated successfully');
+      await api.patch(`/auth/users/${selectedUser.id}/roles`, { roles: values.roles });
+      message.success('User roles updated successfully');
       setEditModalVisible(false);
       loadUsers();
     } catch (error: any) {
-      message.error(error.message || 'Failed to update user role');
+      message.error(error.message || 'Failed to update user roles');
     }
   };
 
@@ -148,10 +150,15 @@ const UsersPage: React.FC = () => {
     if (!selectedUser) return;
 
     try {
+      // Use different endpoint based on role
+      // account_manager: /client-assignments (operational)
+      // client_manager: /client-assignments (will be updated to use managed-clients in backend)
       await api.put(`/auth/users/${selectedUser.id}/client-assignments`, {
         client_ids: values.client_ids,
       });
-      message.success('Client assignments updated successfully');
+
+      const roleType = selectedUser.roles?.includes('client_manager') ? 'oversight' : 'operational';
+      message.success(`Client ${roleType} assignments updated successfully`);
       setAssignModalVisible(false);
       loadUsers();
     } catch (error: any) {
@@ -206,40 +213,52 @@ const UsersPage: React.FC = () => {
       ),
     },
     {
-      title: 'Role',
-      dataIndex: 'role',
-      key: 'role',
-      render: (role: string) => {
-        const config = roleConfig[role as keyof typeof roleConfig];
-        return (
-          <Tooltip title={config?.description}>
-            <Tag color={config?.color} icon={config?.icon}>
-              {config?.label || role}
-            </Tag>
-          </Tooltip>
-        );
-      },
+      title: 'Roles',
+      dataIndex: 'roles',
+      key: 'roles',
+      render: (roles: string[]) => (
+        <>
+          {roles?.map(role => {
+            const config = roleConfig[role as keyof typeof roleConfig];
+            return (
+              <Tooltip key={role} title={config?.description}>
+                <Tag color={config?.color} icon={config?.icon} style={{ marginBottom: 4 }}>
+                  {config?.label || role}
+                </Tag>
+              </Tooltip>
+            );
+          })}
+        </>
+      ),
       filters: Object.entries(roleConfig).map(([value, config]) => ({
         text: config.label,
         value,
       })),
-      onFilter: (value: any, record: User) => record.role === value,
+      onFilter: (value: any, record: User) => record.roles?.includes(value),
     },
     {
       title: 'Assigned Clients',
       key: 'clients',
       render: (_: any, record: User) => {
-        if (record.role !== 'client_manager') {
+        // Show client assignments for both account_manager and client_manager roles
+        const hasClientRole = record.roles?.includes('account_manager') || record.roles?.includes('client_manager');
+        if (!hasClientRole) {
           return <Text type="secondary">-</Text>;
         }
         const clientCount = record.assigned_clients?.length || 0;
+        const roleLabel = record.roles?.includes('client_manager') ? 'Manages' : 'Assigned to';
         if (clientCount === 0) {
-          return <Text type="secondary">No clients assigned</Text>;
+          return <Text type="secondary">No clients {roleLabel.toLowerCase()}</Text>;
         }
         return (
           <Space wrap>
             {record.assigned_clients?.slice(0, 3).map((client) => (
-              <Tag key={client.id}>{client.client_name}</Tag>
+              <Tag
+                key={client.id}
+                color={record.roles?.includes('client_manager') ? 'blue' : 'green'}
+              >
+                {client.client_name}
+              </Tag>
             ))}
             {clientCount > 3 && <Tag>+{clientCount - 3} more</Tag>}
           </Space>
@@ -274,8 +293,8 @@ const UsersPage: React.FC = () => {
               size="small"
             />
           </Tooltip>
-          {record.role === 'client_manager' && (
-            <Tooltip title="Manage client assignments">
+          {(record.roles?.includes('client_manager') || record.roles?.includes('account_manager')) && (
+            <Tooltip title={record.roles?.includes('client_manager') ? 'Manage client oversight' : 'Assign to clients'}>
               <Button
                 type="text"
                 icon={<LinkOutlined />}
@@ -369,9 +388,9 @@ const UsersPage: React.FC = () => {
         />
       </div>
 
-      {/* Edit Role Modal */}
+      {/* Edit Roles Modal */}
       <Modal
-        title={`Edit Role - ${selectedUser?.name}`}
+        title={`Edit Roles - ${selectedUser?.name}`}
         open={editModalVisible}
         onCancel={() => setEditModalVisible(false)}
         footer={null}
@@ -379,19 +398,17 @@ const UsersPage: React.FC = () => {
       >
         <Form form={form} onFinish={handleUpdateRole} layout="vertical">
           <Form.Item
-            name="role"
-            label="User Role"
-            rules={[{ required: true, message: 'Please select a role' }]}
+            name="roles"
+            label="User Roles"
+            rules={[{ required: true, message: 'Please select at least one role' }]}
+            extra="Users can have multiple roles. Example: Admin can also be Account Manager to monitor mailboxes."
           >
-            <Select size="large">
+            <Select mode="multiple" size="large" placeholder="Select roles">
               {Object.entries(roleConfig).map(([value, config]) => (
                 <Select.Option key={value} value={value}>
                   <Space>
                     {config.icon}
                     <span>{config.label}</span>
-                    <Text type="secondary" style={{ fontSize: 12 }}>
-                      - {config.description}
-                    </Text>
                   </Space>
                 </Select.Option>
               ))}
@@ -401,7 +418,7 @@ const UsersPage: React.FC = () => {
             <Space>
               <Button onClick={() => setEditModalVisible(false)}>Cancel</Button>
               <Button type="primary" htmlType="submit" className="glass-button-primary">
-                Update Role
+                Update Roles
               </Button>
             </Space>
           </Form.Item>

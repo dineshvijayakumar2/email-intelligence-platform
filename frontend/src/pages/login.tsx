@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Form, Input, Button, Divider, Typography, Alert, Space, Card, Tabs } from 'antd';
+import { Form, Input, Button, Divider, Typography, Alert, Space, Card, Tabs, Modal, message } from 'antd';
 import {
   UserOutlined,
   LockOutlined,
@@ -19,13 +19,16 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { isSupabaseConfigured } from '../lib/supabase';
 import '../styles/login.css';
 
-const { Title, Text, Paragraph } = Typography;
+const { Title, Text, Paragraph, Link } = Typography;
 
 export const LoginPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>('login');
-  const { signInWithEmail, signInWithGoogle, signInWithMicrosoft, signUp, isAuthenticated } =
+  const [forgotPasswordModalVisible, setForgotPasswordModalVisible] = useState(false);
+  const [resetEmailSent, setResetEmailSent] = useState(false);
+  const [forgotPasswordForm] = Form.useForm();
+  const { signInWithEmail, signInWithGoogle, signInWithMicrosoft, signUp, resetPasswordRequest, isAuthenticated } =
     useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -86,6 +89,31 @@ export const LoginPage: React.FC = () => {
     } catch (err: any) {
       setError(err.message || 'Microsoft login failed');
     }
+  };
+
+  const handleForgotPassword = async (values: { email: string }) => {
+    setLoading(true);
+    try {
+      await resetPasswordRequest(values.email);
+      setResetEmailSent(true);
+      message.success('Password reset email sent! Please check your inbox.');
+      forgotPasswordForm.resetFields();
+    } catch (err: any) {
+      message.error(err.message || 'Failed to send reset email');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOpenForgotPassword = () => {
+    setResetEmailSent(false);
+    setForgotPasswordModalVisible(true);
+  };
+
+  const handleCloseForgotPassword = () => {
+    setForgotPasswordModalVisible(false);
+    setResetEmailSent(false);
+    forgotPasswordForm.resetFields();
   };
 
   if (!isConfigured) {
@@ -197,9 +225,15 @@ export const LoginPage: React.FC = () => {
                       <Form.Item
                         name="password"
                         rules={[{ required: true, message: 'Please enter your password' }]}
+                        style={{ marginBottom: 8 }}
                       >
                         <Input.Password prefix={<LockOutlined />} placeholder="Password" />
                       </Form.Item>
+                      <div style={{ textAlign: 'right', marginBottom: 16 }}>
+                        <Link onClick={handleOpenForgotPassword} style={{ fontSize: 14 }}>
+                          Forgot Password?
+                        </Link>
+                      </div>
                       <Form.Item style={{ marginBottom: 0 }}>
                         <Button
                           type="primary"
@@ -311,6 +345,59 @@ export const LoginPage: React.FC = () => {
           <Text type="secondary">Powered by Newbound Intelligence</Text>
         </div>
       </div>
+
+      {/* Forgot Password Modal */}
+      <Modal
+        title="Reset Password"
+        open={forgotPasswordModalVisible}
+        onCancel={handleCloseForgotPassword}
+        footer={null}
+        width={400}
+      >
+        {resetEmailSent ? (
+          <div style={{ textAlign: 'center', padding: '20px 0' }}>
+            <MailOutlined style={{ fontSize: 48, color: '#52c41a', marginBottom: 16 }} />
+            <Title level={4}>Check Your Email</Title>
+            <Paragraph type="secondary">
+              We've sent password reset instructions to your email address.
+              Please check your inbox and follow the link to reset your password.
+            </Paragraph>
+            <Button type="primary" onClick={handleCloseForgotPassword} block>
+              Back to Login
+            </Button>
+          </div>
+        ) : (
+          <>
+            <Paragraph type="secondary" style={{ marginBottom: 20 }}>
+              Enter your email address and we'll send you instructions to reset your password.
+            </Paragraph>
+            <Form form={forgotPasswordForm} onFinish={handleForgotPassword} layout="vertical">
+              <Form.Item
+                name="email"
+                rules={[
+                  { required: true, message: 'Please enter your email' },
+                  { type: 'email', message: 'Please enter a valid email' },
+                ]}
+              >
+                <Input
+                  prefix={<MailOutlined />}
+                  placeholder="Email address"
+                  size="large"
+                  autoFocus
+                />
+              </Form.Item>
+              <Form.Item style={{ marginBottom: 0 }}>
+                <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
+                  <Button onClick={handleCloseForgotPassword}>Cancel</Button>
+                  <Button type="primary" htmlType="submit" loading={loading}>
+                    Send Reset Link
+                  </Button>
+                </Space>
+              </Form.Item>
+            </Form>
+          </>
+        )}
+      </Modal>
     </div>
   );
 };

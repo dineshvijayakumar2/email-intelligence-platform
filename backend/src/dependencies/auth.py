@@ -247,12 +247,15 @@ async def get_accessible_mailbox_ids(current_user: Dict = Depends(get_current_us
         List of UUID strings for accessible mailboxes
     """
     try:
+        logger.info(f"[Auth] Getting accessible mailboxes for user {current_user['user_id']} with roles {current_user.get('roles', [])}")
         result = _supabase.rpc(
             'get_user_accessible_mailboxes',
             {'p_user_id': current_user['user_id']}
         ).execute()
 
-        return [r['mailbox_id'] for r in (result.data or [])]
+        mailbox_ids = [r['mailbox_id'] for r in (result.data or [])]
+        logger.info(f"[Auth] Found {len(mailbox_ids)} accessible mailboxes")
+        return mailbox_ids
     except Exception as e:
         logger.error(f"Failed to get accessible mailboxes: {e}")
         return []

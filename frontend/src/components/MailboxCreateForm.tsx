@@ -22,6 +22,9 @@ import { useNavigate } from "react-router-dom";
 import { mailboxService } from '../services/mailboxService';
 import GoogleDrivePicker from './GoogleDrivePicker';
 import GoogleDriveConnection from './GoogleDriveConnection';
+import { clientService } from '../services/clientService';
+import { userService } from '../services/userService';
+import { useAuth } from '../contexts/AuthContext';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -36,6 +39,32 @@ export const MailboxCreateForm: React.FC = () => {
   const [googleDriveFile, setGoogleDriveFile] = React.useState<any>(null);
   const [googleDriveConnected, setGoogleDriveConnected] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Client and user assignment state
+  const [clients, setClients] = React.useState<any[]>([]);
+  const [users, setUsers] = React.useState<any[]>([]);
+  const [selectedClientId, setSelectedClientId] = React.useState<string | null>(null);
+  const { profile } = useAuth();
+  const isAdmin = profile?.roles?.includes('admin');
+
+  // Load clients and users on mount
+  React.useEffect(() => {
+    loadClientsAndUsers();
+  }, []);
+
+  const loadClientsAndUsers = async () => {
+    try {
+      // Load clients
+      const clientsData = await clientService.list();
+      setClients(clientsData.clients || []);
+
+      // Load all users (will be filtered based on client selection)
+      const usersData = await userService.getUsers();
+      setUsers(usersData || []);
+    } catch (error) {
+      console.error('Error loading clients and users:', error);
+    }
+  };
   
   // Generate a consistent user ID based on browser fingerprint or use a stored value
   // In a real app, this would come from authentication context (JWT, session, etc.)
@@ -91,7 +120,9 @@ export const MailboxCreateForm: React.FC = () => {
         name: values.name,
         mailbox_type: values.mailbox_type,
         is_active: values.is_active,
-        connection_config: connectionConfig
+        connection_config: connectionConfig,
+        client_id: values.client_id || null,
+        user_id: values.user_id || null
       };
 
       // Only add email_address if provided
@@ -323,6 +354,67 @@ export const MailboxCreateForm: React.FC = () => {
                 style={{ display: 'none' }}
                 onChange={handleFileSelect}
               />
+            </>
+          )}
+
+          {/* Client and Account Manager Assignment - only visible to admins */}
+          {isAdmin && (
+            <>
+              <Divider>Assignment</Divider>
+
+              <Form.Item
+                name="client_id"
+                label="Assign to Client"
+                help="Assign this mailbox to a client. Client managers assigned to this client will be able to access it."
+              >
+                <Select
+                  placeholder="Select a client (optional)"
+                  allowClear
+                  showSearch
+                  optionFilterProp="label"
+                  onChange={(value) => {
+                    setSelectedClientId(value || null);
+                    // Clear user selection when client changes
+                    form.setFieldValue('user_id', null);
+                  }}
+                  options={clients.map(c => ({
+                    label: c.client_name,
+                    value: c.id
+                  }))}
+                />
+              </Form.Item>
+
+              <Form.Item
+                name="user_id"
+                label="Assign to Account Manager"
+                help={
+                  selectedClientId
+                    ? 'Assign this mailbox to an account manager assigned to the selected client.'
+                    : 'First assign this mailbox to a client to see available account managers.'
+                }
+              >
+                <Select
+                  placeholder={selectedClientId ? 'Select account manager (optional)' : 'Select a client first'}
+                  allowClear
+                  showSearch
+                  optionFilterProp="label"
+                  disabled={!selectedClientId}
+                  options={
+                    selectedClientId
+                      ? users
+                          .filter((u: any) => {
+                            const hasAccountManagerRole = u.roles?.includes('account_manager');
+                            const isAssignedToClient = u.assigned_clients?.some((c: any) => c.id === selectedClientId);
+                            return hasAccountManagerRole && isAssignedToClient;
+                          })
+                          .map((u: any) => ({
+                            label: `${u.name} (${u.email})`,
+                            value: u.id
+                          }))
+                      : []
+                  }
+                />
+              </Form.Item>
             </>
           )}
 
