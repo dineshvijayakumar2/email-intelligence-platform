@@ -13,10 +13,12 @@ import {
   Alert,
   Radio
 } from "antd";
-import { 
+import {
   CheckCircleOutlined,
   FolderOpenOutlined,
-  GoogleOutlined
+  GoogleOutlined,
+  WindowsOutlined,
+  InfoCircleOutlined
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import { mailboxService } from '../services/mailboxService';
@@ -251,11 +253,85 @@ export const MailboxCreateForm: React.FC = () => {
               placeholder="Select mailbox type"
               onChange={setSelectedType}
             >
-              <Option value="mbox">MBOX (Universal Format)</Option>
-              <Option value="pst">PST (Outlook Windows)</Option>
-              <Option value="olm">OLM (Outlook Mac)</Option>
+              <Select.OptGroup label="LIVE Mailboxes">
+                <Option value="gmail">Gmail</Option>
+                <Option value="outlook">Outlook / Office 365</Option>
+              </Select.OptGroup>
+              <Select.OptGroup label="Archive Files">
+                <Option value="mbox">MBOX (Universal Format)</Option>
+                <Option value="pst">PST (Outlook Windows)</Option>
+                <Option value="olm">OLM (Outlook Mac)</Option>
+              </Select.OptGroup>
             </Select>
           </Form.Item>
+
+          {/* Gmail LIVE Configuration */}
+          {selectedType === 'gmail' && (
+            <>
+              <Divider>Gmail LIVE Sync</Divider>
+              <Alert
+                message={
+                  <Space>
+                    <InfoCircleOutlined />
+                    <span>Gmail LIVE Mailbox</span>
+                  </Space>
+                }
+                description={
+                  <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                    <Text>
+                      After creating this mailbox, you'll be able to connect your Gmail account
+                      for automatic email synchronization.
+                    </Text>
+                    <div>
+                      <Text strong style={{ fontSize: 12 }}>Features:</Text>
+                      <ul style={{ margin: '4px 0', paddingLeft: 20 }}>
+                        <li><Text type="secondary" style={{ fontSize: 12 }}>Automatic email sync at configurable intervals</Text></li>
+                        <li><Text type="secondary" style={{ fontSize: 12 }}>Real-time updates from your Gmail inbox</Text></li>
+                        <li><Text type="secondary" style={{ fontSize: 12 }}>Secure OAuth2 authentication</Text></li>
+                      </ul>
+                    </div>
+                  </Space>
+                }
+                type="info"
+                icon={<GoogleOutlined style={{ color: '#4285f4' }} />}
+                style={{ marginBottom: 16, borderColor: '#4285f4' }}
+              />
+            </>
+          )}
+
+          {/* Outlook LIVE Configuration */}
+          {selectedType === 'outlook' && (
+            <>
+              <Divider>Outlook LIVE Sync</Divider>
+              <Alert
+                message={
+                  <Space>
+                    <InfoCircleOutlined />
+                    <span>Outlook LIVE Mailbox</span>
+                  </Space>
+                }
+                description={
+                  <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                    <Text>
+                      After creating this mailbox, you'll be able to connect your Outlook/Office 365
+                      account for automatic email synchronization.
+                    </Text>
+                    <div>
+                      <Text strong style={{ fontSize: 12 }}>Features:</Text>
+                      <ul style={{ margin: '4px 0', paddingLeft: 20 }}>
+                        <li><Text type="secondary" style={{ fontSize: 12 }}>Automatic email sync at configurable intervals</Text></li>
+                        <li><Text type="secondary" style={{ fontSize: 12 }}>Works with Office 365 and personal Outlook accounts</Text></li>
+                        <li><Text type="secondary" style={{ fontSize: 12 }}>Secure OAuth2 authentication</Text></li>
+                      </ul>
+                    </div>
+                  </Space>
+                }
+                type="info"
+                icon={<WindowsOutlined style={{ color: '#0078d4' }} />}
+                style={{ marginBottom: 16, borderColor: '#0078d4' }}
+              />
+            </>
+          )}
 
           {/* File Configuration - for all file-based types */}
           {['mbox', 'pst', 'olm'].includes(selectedType) && (
