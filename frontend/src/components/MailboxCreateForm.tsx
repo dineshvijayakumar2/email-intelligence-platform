@@ -509,15 +509,18 @@ export const MailboxCreateForm: React.FC = () => {
               <Button type="primary" htmlType="submit" loading={loading}>
                 Create Mailbox
               </Button>
-              <Button
-                type="default"
-                icon={<CheckCircleOutlined />}
-                onClick={testConnection}
-                loading={testing}
-                disabled={['mbox', 'pst', 'olm'].includes(selectedType) && ((fileSource === 'local' && !form.getFieldValue('file_path')) || (fileSource === 'google_drive' && (!googleDriveConnected || !googleDriveFile)))}
-              >
-                Test Connection
-              </Button>
+              {/* Test Connection only available for archive file types */}
+              {['mbox', 'pst', 'olm'].includes(selectedType) && (
+                <Button
+                  type="default"
+                  icon={<CheckCircleOutlined />}
+                  onClick={testConnection}
+                  loading={testing}
+                  disabled={(fileSource === 'local' && !form.getFieldValue('file_path')) || (fileSource === 'google_drive' && (!googleDriveConnected || !googleDriveFile))}
+                >
+                  Test Connection
+                </Button>
+              )}
               <Button onClick={() => navigate('/mailboxes')}>
                 Cancel
               </Button>
