@@ -1868,14 +1868,24 @@ async def generate_sample_emails(job_id: str, count: int):
             get_supabase().table('email_categories').insert(category_data).execute()
 
 @app.get("/api/processing-jobs")
-async def get_processing_jobs():
-    """Get all processing jobs"""
-    
+async def get_processing_jobs(
+    current_user: dict = Depends(get_current_user),
+    accessible_mailbox_ids: list = Depends(get_accessible_mailbox_ids)
+):
+    """Get processing jobs filtered by user's accessible mailboxes"""
+
     try:
-        # Try to get from database with mailbox join
+        logger.info(f"[Processing Jobs] User {current_user['user_id']} accessing with {len(accessible_mailbox_ids)} mailboxes")
+
+        # If user has no accessible mailboxes, return empty list
+        if not accessible_mailbox_ids:
+            logger.warning("[Processing Jobs] User has no accessible mailboxes")
+            return []
+
+        # Get processing jobs for accessible mailboxes only
         result = get_supabase().table('processing_jobs').select(
             'id, job_type, mailbox_id, status, total_records, processed_records, failed_records, filtered_records, started_at, completed_at, created_at, error_log, filter_start_date, filter_end_date, mailboxes(name)'
-        ).order('created_at', desc=True).execute()
+        ).in_('mailbox_id', accessible_mailbox_ids).order('created_at', desc=True).execute()
         
         jobs = []
         for job in result.data:
@@ -2700,41 +2710,49 @@ async def retry_failed_emails(job_id: str, max_attempts: int = 3):
 
 # Email analysis endpoints for dashboard
 @app.get("/api/dashboard/stats")
-async def get_dashboard_stats():
-    """Get dashboard statistics - Optimized with RPC or simple sequential fallback"""
+async def get_dashboard_stats(
+    current_user: dict = Depends(get_current_user),
+    accessible_mailbox_ids: list = Depends(get_accessible_mailbox_ids)
+):
+    """Get dashboard statistics filtered by user's accessible mailboxes"""
 
     try:
         sb = get_supabase()
 
-        # Try optimized RPC function first (single query instead of 4)
-        try:
-            result = sb.rpc('get_dashboard_stats', {}).execute()
-            if result.data and len(result.data) > 0:
-                stats = result.data[0]
-                return {
-                    "totalEmails": stats.get('total_emails', 0),
-                    "totalMailboxes": stats.get('total_mailboxes', 0),
-                    "todayEmails": stats.get('today_emails', 0),
-                    "processingJobs": stats.get('processing_jobs', 0)
-                }
-        except Exception as rpc_error:
-            logger.debug(f"RPC get_dashboard_stats not available, using fallback: {rpc_error}")
+        logger.info(f"[Dashboard Stats] User {current_user['user_id']} accessing with {len(accessible_mailbox_ids)} mailboxes")
 
-        # Fallback: Simple sequential queries (more reliable on Windows)
-        emails_count = sb.table('emails').select('id', count='exact').execute()
-        mailboxes_count = sb.table('mailboxes').select('id', count='exact').execute()
+        # If user has no accessible mailboxes, return zeros
+        if not accessible_mailbox_ids:
+            logger.warning("[Dashboard Stats] User has no accessible mailboxes")
+            return {
+                "totalEmails": 0,
+                "totalMailboxes": 0,
+                "todayEmails": 0,
+                "processingJobs": 0
+            }
 
+        # Count emails in accessible mailboxes
+        emails_count = sb.table('emails').select('id', count='exact').in_('mailbox_id', accessible_mailbox_ids).execute()
+
+        # Count accessible mailboxes
+        mailboxes_count = len(accessible_mailbox_ids)
+
+        # Count today's emails in accessible mailboxes
         today = datetime.now(timezone.utc).date().isoformat()
-        today_emails = sb.table('emails').select('id', count='exact').gte('sent_date', today).execute()
+        today_emails = sb.table('emails').select('id', count='exact').in_('mailbox_id', accessible_mailbox_ids).gte('sent_date', today).execute()
 
-        processing_jobs_count = sb.table('processing_jobs').select('id', count='exact').in_('status', ['pending', 'running', 'downloading']).execute()
+        # Count active processing jobs for accessible mailboxes
+        processing_jobs_count = sb.table('processing_jobs').select('id', count='exact').in_('mailbox_id', accessible_mailbox_ids).in_('status', ['pending', 'running', 'downloading']).execute()
 
-        return {
+        stats = {
             "totalEmails": emails_count.count or 0,
-            "totalMailboxes": mailboxes_count.count or 0,
+            "totalMailboxes": mailboxes_count,
             "todayEmails": today_emails.count or 0,
             "processingJobs": processing_jobs_count.count or 0
         }
+
+        logger.info(f"[Dashboard Stats] Returning stats: {stats}")
+        return stats
 
     except Exception as e:
         logger.error(f"Error fetching dashboard stats: {e}")
@@ -3456,34 +3474,55 @@ async def get_mailbox_names():
 # =========================================================================
 
 @app.get("/api/dashboard/volume")
-async def get_volume_data():
-    """Get email volume data for the last 7 days"""
+async def get_volume_data(
+    current_user: dict = Depends(get_current_user),
+    accessible_mailbox_ids: list = Depends(get_accessible_mailbox_ids)
+):
+    """Get email volume data for the last 7 days filtered by accessible mailboxes"""
     try:
         sb = get_supabase()
-        
-        # Get data for last 7 days
+
+        if not accessible_mailbox_ids:
+            return []
+
+        # Get data for last 7 days from emails table (aggregate by date)
         seven_days_ago = (datetime.now(timezone.utc) - timedelta(days=6)).date().isoformat()
         today = datetime.now(timezone.utc).date().isoformat()
-        
+
+        # Query emails in accessible mailboxes
         result = await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: sb.table('daily_email_volume').select('*').gte('date', seven_days_ago).lte('date', today).order('date', desc=False).execute()
+            lambda: sb.table('emails').select('sent_date, direction').in_('mailbox_id', accessible_mailbox_ids).gte('sent_date', seven_days_ago).lte('sent_date', today).execute()
         )
-        
+
+        # Aggregate by date
+        volume_by_date = {}
+        for item in result.data or []:
+            date = item['sent_date'][:10]  # Extract date part
+            if date not in volume_by_date:
+                volume_by_date[date] = {'inbound': 0, 'outbound': 0}
+
+            direction = item.get('direction', 'inbound')
+            if direction == 'outbound':
+                volume_by_date[date]['outbound'] += 1
+            else:
+                volume_by_date[date]['inbound'] += 1
+
         # Transform to expected format
         volume_data = []
-        for item in result.data or []:
+        for i in range(6, -1, -1):
+            date = (datetime.now(timezone.utc) - timedelta(days=i)).date().isoformat()
             volume_data.append({
-                'date': item['date'],
-                'inbound': item.get('inbound', 0),
-                'outbound': item.get('outbound', 0)
+                'date': date,
+                'inbound': volume_by_date.get(date, {}).get('inbound', 0),
+                'outbound': volume_by_date.get(date, {}).get('outbound', 0)
             })
-        
+
         return volume_data
-        
+
     except Exception as e:
         logger.error(f"Error fetching volume data: {e}", exc_info=True)
-        return get_mock_volume_data()
+        return []
 
 def get_mock_volume_data():
     """Fallback mock data for volume chart"""
@@ -3498,25 +3537,33 @@ def get_mock_volume_data():
     return data
 
 @app.get("/api/dashboard/categories")
-async def get_category_data():
-    """Get email category distribution"""
+async def get_category_data(
+    current_user: dict = Depends(get_current_user),
+    accessible_mailbox_ids: list = Depends(get_accessible_mailbox_ids)
+):
+    """Get email category distribution filtered by accessible mailboxes"""
     try:
         sb = get_supabase()
-        
+
+        if not accessible_mailbox_ids:
+            return []
+
+        # Get categories for emails in accessible mailboxes
+        # Note: email_categories table should have email_id, need to join with emails
         result = await asyncio.get_event_loop().run_in_executor(
             None,
-            lambda: sb.table('email_categories').select('category').execute()
+            lambda: sb.table('email_categories').select('category, email_id, emails!inner(mailbox_id)').in_('emails.mailbox_id', accessible_mailbox_ids).execute()
         )
-        
+
         # Count categories (exclude metadata)
         category_counts = {}
         for item in result.data or []:
             category = item.get('category')
             if category and not category.startswith('_meta_'):
                 category_counts[category] = category_counts.get(category, 0) + 1
-        
+
         colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#0088fe']
-        
+
         # Convert to chart format
         category_data = []
         for idx, (name, value) in enumerate(sorted(category_counts.items(), key=lambda x: x[1], reverse=True)[:5]):
@@ -3525,12 +3572,12 @@ async def get_category_data():
                 'value': value,
                 'color': colors[idx % len(colors)]
             })
-        
+
         return category_data
-        
+
     except Exception as e:
         logger.error(f"Error fetching category data: {e}", exc_info=True)
-        return get_mock_category_data()
+        return []
 
 def get_mock_category_data():
     """Fallback mock data for category chart"""
@@ -3555,11 +3602,17 @@ def get_category_label(category: str) -> str:
     return labels.get(category.lower(), category) if category else 'Unknown'
 
 @app.get("/api/dashboard/recent-emails")
-async def get_recent_emails():
-    """Get recent emails"""
+async def get_recent_emails(
+    current_user: dict = Depends(get_current_user),
+    accessible_mailbox_ids: list = Depends(get_accessible_mailbox_ids)
+):
+    """Get recent emails filtered by accessible mailboxes"""
     try:
         sb = get_supabase()
-        
+
+        if not accessible_mailbox_ids:
+            return []
+
         result = await asyncio.get_event_loop().run_in_executor(
             None,
             lambda: sb.table('emails').select("""
@@ -3569,7 +3622,7 @@ async def get_recent_emails():
                 sender_name,
                 sent_date,
                 email_categories(category)
-            """).order('sent_date', desc=True).limit(5).execute()
+            """).in_('mailbox_id', accessible_mailbox_ids).order('sent_date', desc=True).limit(5).execute()
         )
         
         recent_emails = []
