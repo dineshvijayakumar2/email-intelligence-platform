@@ -677,21 +677,28 @@ def _run_date_range_fetch(
             'started_at': datetime.now(timezone.utc).isoformat()
         }).eq('id', job_id).execute()
 
-        # Get user's Outlook credentials
-        integration = _supabase.table('user_integrations').select(
-            'access_token, refresh_token'
-        ).eq('user_id', user_id).eq('provider', 'outlook').execute()
+        # Get Outlook credentials from mailbox connection_config
+        mailbox = _supabase.table('mailboxes').select('connection_config').eq('id', mailbox_id).execute()
 
-        if not integration.data:
-            raise ValueError("Outlook not connected for this user")
+        if not mailbox.data:
+            raise ValueError("Mailbox not found")
 
-        token_data = integration.data[0]
+        connection_config = mailbox.data[0].get('connection_config', {}) or {}
+
+        if not connection_config.get('outlook_sync_enabled'):
+            raise ValueError("Outlook not connected for this mailbox")
+
+        access_token = connection_config.get('outlook_access_token')
+        refresh_token = connection_config.get('outlook_refresh_token')
+
+        if not access_token:
+            raise ValueError("Outlook access token not found in mailbox configuration")
 
         # Create and connect Outlook extractor
         extractor = OutlookExtractor(connection_config={
             'user_id': user_id,
-            'access_token': token_data['access_token'],
-            'refresh_token': token_data.get('refresh_token'),
+            'access_token': access_token,
+            'refresh_token': refresh_token,
             'mailbox_id': mailbox_id
         })
         extractor.connect()
