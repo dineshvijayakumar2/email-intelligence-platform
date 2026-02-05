@@ -471,13 +471,23 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
             label="Mailbox Type"
             rules={[{ required: true, message: 'Please select a mailbox type' }]}
           >
-            <Select 
+            <Select
               placeholder="Select mailbox type"
               onChange={setSelectedType}
             >
-              <Option value="mbox">MBOX (Universal Format)</Option>
-              <Option value="pst">PST (Outlook Windows)</Option>
-              <Option value="olm">OLM (Outlook Mac)</Option>
+              <Select.OptGroup label="LIVE Mailboxes">
+                <Option value="gmail">
+                  <Space><GoogleOutlined />Gmail</Space>
+                </Option>
+                <Option value="outlook">
+                  <Space><WindowsOutlined />Outlook / Office 365</Space>
+                </Option>
+              </Select.OptGroup>
+              <Select.OptGroup label="Archive Files">
+                <Option value="mbox">MBOX (Universal Format)</Option>
+                <Option value="pst">PST (Outlook Windows)</Option>
+                <Option value="olm">OLM (Outlook Mac)</Option>
+              </Select.OptGroup>
             </Select>
           </Form.Item>
 
@@ -581,10 +591,12 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
             </>
           )}
 
-          {/* Gmail LIVE Sync Section - only for archive mailboxes */}
-          {['mbox', 'pst', 'olm'].includes(selectedType) && (
+          {/* Gmail Connection Section - for gmail type OR archive mailboxes */}
+          {(selectedType === 'gmail' || ['mbox', 'pst', 'olm'].includes(selectedType)) && (
             <>
-              <Divider>Gmail LIVE Sync</Divider>
+              <Divider>
+                {selectedType === 'gmail' ? 'Gmail Connection' : 'Gmail LIVE Sync'}
+              </Divider>
               {mailboxGmailStatus?.connected ? (
                 // Connected - show status with sync controls
                 <div style={{ marginBottom: 16 }}>
@@ -718,8 +730,10 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
                       <Text strong style={{ fontSize: 16 }}>Connect Gmail for LIVE Sync</Text>
                     </div>
                     <Text type="secondary">
-                      Link a Gmail account to automatically sync new emails to this mailbox.
-                      Each mailbox can have its own Gmail connection.
+                      {selectedType === 'gmail'
+                        ? 'Connect your Gmail account to start syncing emails from this mailbox.'
+                        : 'Link a Gmail account to automatically sync new emails to this mailbox. Each mailbox can have its own Gmail connection.'
+                      }
                     </Text>
                     <Button
                       type="primary"
@@ -732,7 +746,7 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
                         borderColor: '#4285f4'
                       }}
                     >
-                      Connect Gmail Account
+                      {selectedType === 'gmail' ? 'Connect Gmail' : 'Connect Gmail Account'}
                     </Button>
                   </Space>
                 </div>
@@ -740,10 +754,12 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
             </>
           )}
 
-          {/* Outlook LIVE Sync Section - only for archive mailboxes */}
-          {['mbox', 'pst', 'olm'].includes(selectedType) && (
+          {/* Outlook Connection Section - for outlook type OR archive mailboxes */}
+          {(selectedType === 'outlook' || ['mbox', 'pst', 'olm'].includes(selectedType)) && (
             <>
-              <Divider>Outlook LIVE Sync</Divider>
+              <Divider>
+                {selectedType === 'outlook' ? 'Outlook Connection' : 'Outlook LIVE Sync'}
+              </Divider>
               {mailboxOutlookStatus?.connected ? (
                 // Connected - show status with sync controls
                 <div style={{ marginBottom: 16 }}>
@@ -820,8 +836,10 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
                       <Text strong style={{ fontSize: 16 }}>Connect Outlook for LIVE Sync</Text>
                     </div>
                     <Text type="secondary">
-                      Link an Outlook account (O365 or personal) to automatically sync new emails to this mailbox.
-                      Each mailbox can have its own Outlook connection.
+                      {selectedType === 'outlook'
+                        ? 'Connect your Outlook account (O365 or personal) to start syncing emails from this mailbox.'
+                        : 'Link an Outlook account (O365 or personal) to automatically sync new emails to this mailbox. Each mailbox can have its own Outlook connection.'
+                      }
                     </Text>
                     <Button
                       type="primary"
@@ -834,7 +852,7 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
                         borderColor: '#0078d4'
                       }}
                     >
-                      Connect Outlook Account
+                      {selectedType === 'outlook' ? 'Connect Outlook' : 'Connect Outlook Account'}
                     </Button>
                   </Space>
                 </div>
