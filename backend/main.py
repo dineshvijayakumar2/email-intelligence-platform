@@ -2916,16 +2916,20 @@ def transform_email_data(item: dict) -> EmailResponse:
     )
 
 @app.post("/api/emails")
-async def get_emails_with_filters(request: EmailRequest):
+async def get_emails_with_filters(
+    request: EmailRequest,
+    accessible_mailbox_ids: list = Depends(get_accessible_mailbox_ids)
+):
     """
     SCALABLE EMAIL QUERY ENDPOINT - Fixed category filter with same approach
-    
+
     Industry best practices for handling millions of emails:
     1. Cursor-based pagination for better performance
     2. Efficient single query with proper joins
     3. Database indexing strategy
     4. Query optimization with selective fields
     5. Caching for metadata (categories, mailboxes)
+    6. Row-level security - only accessible mailboxes
     """
     try:
         sb = get_supabase()
@@ -2955,21 +2959,31 @@ async def get_emails_with_filters(request: EmailRequest):
         
         # Mailbox filter (most selective - apply first)
         if filters.mailbox and filters.mailbox.strip():
-            # First get mailbox ID, then filter by it
+            # First get mailbox ID from accessible mailboxes only
             try:
-                mailbox_result = sb.table('mailboxes').select('id').eq('name', filters.mailbox).execute()
+                # Filter by name AND accessible mailbox IDs
+                mailbox_result = sb.table('mailboxes').select('id').eq('name', filters.mailbox).in_('id', accessible_mailbox_ids).execute()
                 if mailbox_result.data:
                     mailbox_id = mailbox_result.data[0]['id']
                     base_query = base_query.eq('mailbox_id', mailbox_id)
                     filters_applied.append(f"mailbox={filters.mailbox}")
                 else:
-                    # No matching mailbox found, return empty results
-                    logger.warning(f"No mailbox found with name: {filters.mailbox}")
+                    # No matching accessible mailbox found, return empty results
+                    logger.warning(f"No accessible mailbox found with name: {filters.mailbox}")
                     return EmailListResponse(emails=[], totalCount=0)
             except Exception as e:
                 logger.error(f"Error filtering by mailbox: {e}")
                 # Continue without mailbox filter
-        
+        else:
+            # No specific mailbox filter - restrict to accessible mailboxes only
+            if accessible_mailbox_ids:
+                base_query = base_query.in_('mailbox_id', accessible_mailbox_ids)
+                filters_applied.append(f"accessible_mailboxes={len(accessible_mailbox_ids)}")
+            else:
+                # User has no accessible mailboxes, return empty
+                logger.warning("User has no accessible mailboxes")
+                return EmailListResponse(emails=[], totalCount=0)
+
         # Folder filter (highly selective)
         if filters.folder and filters.folder.strip():
             base_query = base_query.eq('folder_path', filters.folder)
@@ -3015,12 +3029,17 @@ async def get_emails_with_filters(request: EmailRequest):
         # Apply same filters to count query (exclude joins for count)
         if filters.mailbox and filters.mailbox.strip():
             try:
-                mailbox_result = sb.table('mailboxes').select('id').eq('name', filters.mailbox).execute()
+                # Filter by name AND accessible mailbox IDs
+                mailbox_result = sb.table('mailboxes').select('id').eq('name', filters.mailbox).in_('id', accessible_mailbox_ids).execute()
                 if mailbox_result.data:
                     mailbox_id = mailbox_result.data[0]['id']
                     count_query = count_query.eq('mailbox_id', mailbox_id)
             except Exception:
                 pass  # Skip mailbox filter for count if it fails
+        else:
+            # No specific mailbox filter - restrict to accessible mailboxes
+            if accessible_mailbox_ids:
+                count_query = count_query.in_('mailbox_id', accessible_mailbox_ids)
         if filters.folder and filters.folder.strip():
             count_query = count_query.eq('folder_path', filters.folder)
         if filters.dateRange and len(filters.dateRange) == 2:
