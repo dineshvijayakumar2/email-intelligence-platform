@@ -6,6 +6,7 @@
  */
 
 import config from '../config';
+import { getAccessToken } from '../lib/supabase';
 
 // Response interfaces
 export interface GmailConnectionStatus {
@@ -374,11 +375,18 @@ class GmailService {
     maxEmails?: number
   ): Promise<{ success: boolean; message: string; job_id?: string }> {
     try {
+      // Get auth token from Supabase session
+      const token = await getAccessToken();
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch(`${config.apiBaseUrl}/gmail/fetch-date-range`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           mailbox_id: mailboxId,
           user_id: userId,
