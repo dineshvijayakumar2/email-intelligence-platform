@@ -166,7 +166,13 @@ export const MailboxList: React.FC = () => {
       console.log('[Mailboxes] API returned:', data);
       console.log('[Mailboxes] Loaded mailboxes:', data?.length || 0, 'items');
       console.log('[Mailboxes] User role:', profile?.roles);
-      setMailboxes(data);
+
+      // Only update state if we got valid data (not null)
+      if (data !== null) {
+        setMailboxes(data || []);
+      } else {
+        console.warn('[Mailboxes] Received null from API, keeping existing data');
+      }
     } catch (error) {
       console.error(`[Mailboxes] Error on attempt ${retryCount + 1}:`, error);
 
