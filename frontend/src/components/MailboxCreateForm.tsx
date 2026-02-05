@@ -132,9 +132,16 @@ export const MailboxCreateForm: React.FC = () => {
         mailboxData.email_address = values.email_address;
       }
 
-      await mailboxService.createMailbox(mailboxData);
-      message.success("Mailbox created successfully");
-      navigate('/mailboxes');
+      const response = await mailboxService.createMailbox(mailboxData);
+
+      // For LIVE mailboxes (gmail, outlook), redirect to edit page to connect
+      if (['gmail', 'outlook'].includes(values.mailbox_type)) {
+        message.success("Mailbox created! Now connect your account to start syncing.");
+        navigate(`/mailboxes/${response.id}/edit`);
+      } else {
+        message.success("Mailbox created successfully");
+        navigate('/mailboxes');
+      }
     } catch (error) {
       console.error('Error creating mailbox:', error);
       message.error("Failed to create mailbox");
@@ -272,15 +279,14 @@ export const MailboxCreateForm: React.FC = () => {
               <Alert
                 message={
                   <Space>
-                    <InfoCircleOutlined />
-                    <span>Gmail LIVE Mailbox</span>
+                    <GoogleOutlined />
+                    <span><strong>Gmail LIVE Mailbox</strong></span>
                   </Space>
                 }
                 description={
                   <Space direction="vertical" size={8} style={{ width: '100%' }}>
-                    <Text>
-                      After creating this mailbox, you'll be able to connect your Gmail account
-                      for automatic email synchronization.
+                    <Text strong>
+                      After clicking "Create Mailbox", you'll be redirected to connect your Gmail account.
                     </Text>
                     <div>
                       <Text strong style={{ fontSize: 12 }}>Features:</Text>
@@ -293,7 +299,7 @@ export const MailboxCreateForm: React.FC = () => {
                   </Space>
                 }
                 type="info"
-                icon={<GoogleOutlined style={{ color: '#4285f4' }} />}
+                icon={<GoogleOutlined style={{ color: '#4285f4', fontSize: 20 }} />}
                 style={{ marginBottom: 16, borderColor: '#4285f4' }}
               />
             </>
@@ -306,15 +312,14 @@ export const MailboxCreateForm: React.FC = () => {
               <Alert
                 message={
                   <Space>
-                    <InfoCircleOutlined />
-                    <span>Outlook LIVE Mailbox</span>
+                    <WindowsOutlined />
+                    <span><strong>Outlook LIVE Mailbox</strong></span>
                   </Space>
                 }
                 description={
                   <Space direction="vertical" size={8} style={{ width: '100%' }}>
-                    <Text>
-                      After creating this mailbox, you'll be able to connect your Outlook/Office 365
-                      account for automatic email synchronization.
+                    <Text strong>
+                      After clicking "Create Mailbox", you'll be redirected to connect your Outlook account.
                     </Text>
                     <div>
                       <Text strong style={{ fontSize: 12 }}>Features:</Text>
@@ -327,7 +332,7 @@ export const MailboxCreateForm: React.FC = () => {
                   </Space>
                 }
                 type="info"
-                icon={<WindowsOutlined style={{ color: '#0078d4' }} />}
+                icon={<WindowsOutlined style={{ color: '#0078d4', fontSize: 20 }} />}
                 style={{ marginBottom: 16, borderColor: '#0078d4' }}
               />
             </>
