@@ -656,11 +656,17 @@ class OutlookService {
     mailboxId: string
   ): Promise<{ success: boolean; outlook_email?: string; message: string }> {
     try {
+      const token = await getAccessToken();
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch(`${config.apiBaseUrl}/outlook/mailbox/${mailboxId}/connect`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           code: code,
           redirect_uri: config.microsoftRedirectUri
@@ -691,8 +697,15 @@ class OutlookService {
    */
   async disconnectFromMailbox(mailboxId: string): Promise<{ success: boolean; message: string }> {
     try {
+      const token = await getAccessToken();
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch(`${config.apiBaseUrl}/outlook/mailbox/${mailboxId}/disconnect`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers
       });
 
       if (!response.ok) {
@@ -719,7 +732,15 @@ class OutlookService {
    */
   async getMailboxOutlookStatus(mailboxId: string): Promise<MailboxOutlookStatus> {
     try {
-      const response = await fetch(`${config.apiBaseUrl}/outlook/mailbox/${mailboxId}/status`);
+      const token = await getAccessToken();
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const response = await fetch(`${config.apiBaseUrl}/outlook/mailbox/${mailboxId}/status`, {
+        headers
+      });
 
       if (!response.ok) {
         throw new Error(`Failed to get mailbox Outlook status: ${response.status}`);
@@ -742,8 +763,15 @@ class OutlookService {
    */
   async triggerMailboxSync(mailboxId: string): Promise<{ success: boolean; message: string }> {
     try {
+      const token = await getAccessToken();
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch(`${config.apiBaseUrl}/outlook/mailbox/${mailboxId}/sync`, {
-        method: 'POST'
+        method: 'POST',
+        headers
       });
 
       if (!response.ok) {

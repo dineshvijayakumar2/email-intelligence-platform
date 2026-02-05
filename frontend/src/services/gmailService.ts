@@ -526,12 +526,19 @@ class GmailService {
             console.log('[GmailService] Authorization code received for mailbox');
 
             try {
+              // Get auth token for authenticated request
+              const token = await getAccessToken();
+              const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+              };
+              if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+              }
+
               // Send authorization code to backend for THIS mailbox
               const backendResponse = await fetch(`${config.apiBaseUrl}/gmail/mailbox/${mailboxId}/connect`, {
                 method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
+                headers,
                 body: JSON.stringify({
                   code: response.code
                 })
@@ -573,8 +580,15 @@ class GmailService {
    */
   async disconnectFromMailbox(mailboxId: string): Promise<{ success: boolean; message: string }> {
     try {
+      const token = await getAccessToken();
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch(`${config.apiBaseUrl}/gmail/mailbox/${mailboxId}/disconnect`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers
       });
 
       if (!response.ok) {
@@ -601,7 +615,15 @@ class GmailService {
    */
   async getMailboxGmailStatus(mailboxId: string): Promise<MailboxGmailStatus> {
     try {
-      const response = await fetch(`${config.apiBaseUrl}/gmail/mailbox/${mailboxId}/status`);
+      const token = await getAccessToken();
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const response = await fetch(`${config.apiBaseUrl}/gmail/mailbox/${mailboxId}/status`, {
+        headers
+      });
 
       if (!response.ok) {
         throw new Error(`Failed to get mailbox Gmail status: ${response.status}`);
@@ -624,8 +646,15 @@ class GmailService {
    */
   async triggerMailboxSync(mailboxId: string): Promise<{ success: boolean; message: string }> {
     try {
+      const token = await getAccessToken();
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch(`${config.apiBaseUrl}/gmail/mailbox/${mailboxId}/sync`, {
-        method: 'POST'
+        method: 'POST',
+        headers
       });
 
       if (!response.ok) {
