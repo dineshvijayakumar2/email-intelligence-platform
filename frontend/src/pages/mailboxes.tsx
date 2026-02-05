@@ -74,23 +74,6 @@ export const MailboxList: React.FC = () => {
   const [users, setUsers] = useState<any[]>([]);
   const [assignmentLoading, setAssignmentLoading] = useState(false);
 
-  // Get user ID from localStorage (same pattern as other components)
-  const getUserId = () => {
-    let userId = localStorage.getItem('user_id');
-    if (!userId) {
-      const fingerprint = [
-        navigator.userAgent,
-        navigator.language,
-        screen.width + 'x' + screen.height,
-        new Date().getTimezoneOffset()
-      ].join('|');
-      userId = 'user_' + btoa(fingerprint).replace(/[^a-zA-Z0-9]/g, '').substring(0, 16);
-      localStorage.setItem('user_id', userId);
-    }
-    return userId;
-  };
-  const userId = getUserId();
-
   useEffect(() => {
     // Only load once on mount, not on every isAdmin change
     loadMailboxes();
@@ -117,8 +100,9 @@ export const MailboxList: React.FC = () => {
   }, [isAdmin]);
 
   const checkGmailConnection = async () => {
+    if (!profile?.id) return;
     try {
-      const connected = await gmailService.isConnected(userId);
+      const connected = await gmailService.isConnected(profile.id);
       setGmailConnected(connected);
     } catch (error) {
       console.error('Error checking Gmail connection:', error);
@@ -126,8 +110,9 @@ export const MailboxList: React.FC = () => {
   };
 
   const checkOutlookConnection = async () => {
+    if (!profile?.id) return;
     try {
-      const connected = await outlookService.isConnected(userId);
+      const connected = await outlookService.isConnected(profile.id);
       setOutlookConnected(connected);
     } catch (error) {
       console.error('Error checking Outlook connection:', error);
@@ -253,11 +238,16 @@ export const MailboxList: React.FC = () => {
       return;
     }
 
+    if (!profile?.id) {
+      message.error('User not authenticated');
+      return;
+    }
+
     try {
       setLinkingMailboxId(mailboxId);
       message.loading({ content: `Linking Gmail to ${mailboxName}...`, key: 'link-gmail' });
 
-      const result = await gmailService.extendMailboxWithGmail(mailboxId, userId);
+      const result = await gmailService.extendMailboxWithGmail(mailboxId, profile.id);
 
       if (result.success) {
         message.success({ content: result.message, key: 'link-gmail' });
@@ -279,11 +269,16 @@ export const MailboxList: React.FC = () => {
       return;
     }
 
+    if (!profile?.id) {
+      message.error('User not authenticated');
+      return;
+    }
+
     try {
       setLinkingMailboxId(mailboxId);
       message.loading({ content: `Linking Outlook to ${mailboxName}...`, key: 'link-outlook' });
 
-      const result = await outlookService.extendMailboxWithOutlook(mailboxId, userId);
+      const result = await outlookService.extendMailboxWithOutlook(mailboxId, profile.id);
 
       if (result.success) {
         message.success({ content: result.message, key: 'link-outlook' });
@@ -307,6 +302,11 @@ export const MailboxList: React.FC = () => {
   const handleDateRangeFetch = async (values: any) => {
     if (!selectedMailboxForFetch) return;
 
+    if (!profile?.id) {
+      message.error('User not authenticated');
+      return;
+    }
+
     const { dateRange, maxEmails } = values;
     if (!dateRange || dateRange.length !== 2) {
       message.error('Please select a date range');
@@ -320,7 +320,7 @@ export const MailboxList: React.FC = () => {
       setFetchingEmails(true);
       const result = await gmailService.fetchEmailsByDateRange(
         selectedMailboxForFetch.id,
-        userId,
+        profile.id,
         startDate,
         endDate,
         maxEmails
