@@ -11,7 +11,8 @@ import {
   DatePicker,
   InputNumber,
   Form,
-  Select
+  Select,
+  Dropdown
 } from "antd";
 import {
   PlusOutlined,
@@ -19,7 +20,6 @@ import {
   DeleteOutlined,
   SyncOutlined,
   MailOutlined,
-  PlayCircleOutlined,
   GoogleOutlined,
   WindowsOutlined,
   LinkOutlined,
@@ -27,7 +27,9 @@ import {
   HistoryOutlined,
   CalendarOutlined,
   TeamOutlined,
-  UserOutlined
+  UserOutlined,
+  DownOutlined,
+  EyeOutlined
 } from "@ant-design/icons";
 import dayjs from 'dayjs';
 import { useNavigate, useParams } from "react-router-dom";
@@ -477,27 +479,40 @@ export const MailboxList: React.FC = () => {
         const isArchiveType = ['mbox', 'pst', 'olm'].includes(record.mailbox_type);
         const canLinkGmail = isArchiveType && !isLiveEnabled && gmailConnected;
 
+        // Consolidated sync menu
+        const syncMenuItems = [
+          {
+            key: 'sync-now',
+            icon: <SyncOutlined />,
+            label: 'Sync Now',
+            onClick: () => handleSync(record.id, record.name)
+          },
+          ...(isLiveEnabled ? [{
+            key: 'fetch-range',
+            icon: <CalendarOutlined />,
+            label: 'Fetch Date Range',
+            onClick: () => handleOpenDateRangeFetch(record)
+          }] : []),
+          {
+            key: 'view-history',
+            icon: <EyeOutlined />,
+            label: 'View Sync History',
+            onClick: () => navigate('/processing')
+          }
+        ];
+
         return (
           <Space wrap>
-            <Button
+            <Dropdown.Button
               type="primary"
               size="small"
-              icon={<PlayCircleOutlined />}
-              onClick={() => navigate(`/mailboxes/process/${record.id}`)}
-              disabled={!record.is_active}
-            >
-              Process
-            </Button>
-            <Button
-              type="primary"
-              ghost
-              size="small"
-              icon={<SyncOutlined />}
+              icon={<DownOutlined />}
+              menu={{ items: syncMenuItems }}
               onClick={() => handleSync(record.id, record.name)}
               disabled={!record.is_active}
             >
-              Sync
-            </Button>
+              <SyncOutlined /> Sync
+            </Dropdown.Button>
             {/* Link Gmail button - only for archive mailboxes without LIVE sync */}
             {isArchiveType && !isLiveEnabled && (
               <Button
@@ -530,21 +545,6 @@ export const MailboxList: React.FC = () => {
                 }}
               >
                 <WindowsOutlined /> Link Outlook
-              </Button>
-            )}
-            {/* Fetch Historical button - only for mailboxes with LIVE sync enabled */}
-            {isLiveEnabled && (
-              <Button
-                size="small"
-                icon={<HistoryOutlined />}
-                onClick={() => handleOpenDateRangeFetch(record)}
-                title="Fetch historical emails from Gmail for a specific date range"
-                style={{
-                  color: '#52c41a',
-                  borderColor: '#52c41a'
-                }}
-              >
-                Fetch Historical
               </Button>
             )}
             <Button
