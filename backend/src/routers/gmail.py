@@ -19,12 +19,13 @@ Endpoints:
 - POST /api/gmail/cron-sync - External cron endpoint to trigger sync
 """
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 import logging
 import os
+from ..dependencies.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 

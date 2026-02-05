@@ -22,12 +22,13 @@ Endpoints:
 - POST /api/outlook/mailbox/{mailbox_id}/sync - Trigger mailbox sync
 """
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone, timedelta
 import logging
 import os
+from ..dependencies.auth import get_current_user
 import requests
 
 logger = logging.getLogger(__name__)
