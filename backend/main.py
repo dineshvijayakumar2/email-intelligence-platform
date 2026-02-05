@@ -1451,6 +1451,9 @@ async def process_emails_real(job_id: str, config: ProcessingJobConfig):
     """
     REAL email processing (replaces simulate_processing)
     Processes actual emails from MBOX/IMAP/POP3/Outlook sources
+
+    Note: Gmail/Outlook LIVE jobs are handled by their own background tasks
+    (_run_date_range_fetch in gmail.py/outlook.py) and should skip this function.
     """
 
     downloaded_file_path = None  # Track downloaded file for cleanup
@@ -1459,6 +1462,11 @@ async def process_emails_real(job_id: str, config: ProcessingJobConfig):
 
     try:
         logger.info(f"Starting REAL email processing for job {job_id}")
+
+        # Skip Gmail/Outlook LIVE jobs - they're handled by their own background tasks
+        if config.mailbox_type in ['gmail', 'outlook']:
+            logger.info(f"Skipping job {job_id} - {config.mailbox_type} LIVE jobs are handled by their own background tasks")
+            return
 
         # Immediately update status to 'running' so user sees it's active
         await update_job_status(job_id, "running", {
