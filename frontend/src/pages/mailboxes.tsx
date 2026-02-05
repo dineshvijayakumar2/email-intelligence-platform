@@ -152,11 +152,17 @@ export const MailboxList: React.FC = () => {
       console.log('[Mailboxes] Loaded mailboxes:', data?.length || 0, 'items');
       console.log('[Mailboxes] User role:', profile?.roles);
 
-      // Only update state if we got valid data (not null)
-      if (data !== null) {
-        setMailboxes(data || []);
+      // Only update state if we got valid data
+      // Don't clear existing mailboxes if API returns empty array unexpectedly
+      if (data !== null && data !== undefined) {
+        // If we have existing mailboxes and API returns empty, it might be a transient error
+        if (Array.isArray(data) && data.length === 0 && mailboxes.length > 0) {
+          console.warn('[Mailboxes] API returned empty array but we have existing data - keeping existing mailboxes');
+        } else {
+          setMailboxes(data || []);
+        }
       } else {
-        console.warn('[Mailboxes] Received null from API, keeping existing data');
+        console.warn('[Mailboxes] Received null/undefined from API, keeping existing data');
       }
     } catch (error) {
       console.error(`[Mailboxes] Error on attempt ${retryCount + 1}:`, error);
