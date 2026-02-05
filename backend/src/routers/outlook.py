@@ -556,7 +556,11 @@ async def extend_mailbox_with_outlook(request: ExtendMailboxRequest):
 # =========================================================================
 
 @router.post("/fetch-date-range")
-async def fetch_emails_by_date_range(request: DateRangeFetchRequest, background_tasks: BackgroundTasks):
+async def fetch_emails_by_date_range(
+    request: DateRangeFetchRequest,
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(get_current_user)
+):
     """
     Fetch emails from Outlook for a specific date range.
 
@@ -567,9 +571,14 @@ async def fetch_emails_by_date_range(request: DateRangeFetchRequest, background_
 
     Args:
         request: Contains mailbox_id, user_id, start_date, end_date, max_emails
+        current_user: Authenticated user (injected by dependency)
 
     Returns:
         Job ID and status for tracking the fetch progress
+
+    Security:
+        - Admins can fetch from any mailbox
+        - Non-admins can only fetch from mailboxes they own
     """
     try:
         # Validate mailbox exists and has Outlook LIVE sync enabled
@@ -589,9 +598,11 @@ async def fetch_emails_by_date_range(request: DateRangeFetchRequest, background_
                 detail="Mailbox does not have Outlook LIVE sync enabled. Please link Outlook first."
             )
 
-        # Check user ID matches
+        # Check user ID matches - unless user is admin
         outlook_user_id = connection_config.get('outlook_user_id')
-        if outlook_user_id != request.user_id:
+        is_admin = 'admin' in current_user.get('roles', [])
+
+        if not is_admin and outlook_user_id != current_user['user_id']:
             raise HTTPException(
                 status_code=403,
                 detail="User ID does not match the Outlook account linked to this mailbox"
