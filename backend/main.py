@@ -1960,6 +1960,36 @@ async def get_processing_jobs(
                 effective_status = 'downloading'
                 logger.debug(f"Job {job['id']} status overridden to 'downloading' - percent: {download_percent}, speed: {download_speed_mbps}")
 
+            # Calculate duration
+            duration_str = None
+            duration_seconds = None
+            if job.get('started_at'):
+                try:
+                    started = datetime.fromisoformat(job['started_at'].replace('Z', '+00:00'))
+                    if job.get('completed_at'):
+                        # Completed job - calculate actual duration
+                        completed = datetime.fromisoformat(job['completed_at'].replace('Z', '+00:00'))
+                        duration_delta = completed - started
+                        duration_seconds = duration_delta.total_seconds()
+                    elif job.get('status') in ['running', 'downloading']:
+                        # Running job - calculate elapsed time
+                        now = datetime.now(timezone.utc)
+                        duration_delta = now - started
+                        duration_seconds = duration_delta.total_seconds()
+
+                    # Format duration string
+                    if duration_seconds:
+                        if duration_seconds < 60:
+                            duration_str = f"{duration_seconds:.0f}s"
+                        elif duration_seconds < 3600:
+                            duration_minutes = duration_seconds / 60
+                            duration_str = f"{duration_minutes:.1f}m"
+                        else:
+                            duration_hours = duration_seconds / 3600
+                            duration_str = f"{duration_hours:.1f}h"
+                except (ValueError, TypeError) as e:
+                    logger.debug(f"Error calculating duration for job {job['id']}: {e}")
+
             job_data = {
                 **job,
                 "mailbox_name": job.get('mailboxes', {}).get('name') if job.get('mailboxes') else 'Unknown Mailbox',
@@ -1971,7 +2001,9 @@ async def get_processing_jobs(
                 "estimated_time_remaining": eta_str,
                 "estimated_seconds_remaining": estimated_seconds,
                 "download_percent": download_percent,
-                "download_speed_mbps": download_speed_mbps
+                "download_speed_mbps": download_speed_mbps,
+                "duration": duration_str,
+                "duration_seconds": duration_seconds
             }
             # Remove the nested mailboxes object
             if 'mailboxes' in job_data:

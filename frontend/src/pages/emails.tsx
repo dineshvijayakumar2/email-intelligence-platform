@@ -35,6 +35,8 @@ import {
 import { emailService, Email, EmailFilters } from '../services/emailService';
 import { mailboxService, Mailbox } from '../services/mailboxService';
 import { useAuth } from '../contexts/AuthContext';
+import SyncStatusBar from '../components/SyncStatusBar';
+import { dashboardService } from '../services/dashboardService';
 
 const { Text, Title } = Typography;
 const { Option } = Select;
@@ -399,6 +401,7 @@ export const EmailList: React.FC = () => {
   const [foldersLoading, setFoldersLoading] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [processingJobs, setProcessingJobs] = useState<any[]>([]);
   const [filters, setFilters] = useState<EmailFilters>({
     search: '',
     category: '',
@@ -519,9 +522,24 @@ export const EmailList: React.FC = () => {
     }
   }, []);
 
+  // Load processing jobs for sync status
+  const loadProcessingJobs = useCallback(async () => {
+    try {
+      const jobs = await dashboardService._fetchProcessingJobs();
+      setProcessingJobs(jobs || []);
+    } catch (error) {
+      console.error('Error loading processing jobs:', error);
+    }
+  }, []);
+
   useEffect(() => {
     loadEmails();
     loadFilterOptions();
+    loadProcessingJobs();
+
+    // Poll for job updates every 5 seconds
+    const interval = setInterval(loadProcessingJobs, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -757,6 +775,15 @@ export const EmailList: React.FC = () => {
             </Tooltip>
           </div>
         </div>
+
+        {/* Sync Status Bar */}
+        {filters.mailbox && mailboxIdMap[filters.mailbox] && (
+          <SyncStatusBar
+            selectedMailboxIds={[mailboxIdMap[filters.mailbox]]}
+            jobs={processingJobs}
+            onViewDetails={() => window.location.href = '/processing'}
+          />
+        )}
 
         {/* Content Area */}
         <div className="mail-content">

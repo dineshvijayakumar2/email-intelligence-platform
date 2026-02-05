@@ -40,6 +40,8 @@ import { useAuth } from '../contexts/AuthContext';
 import mailboxAssignmentService from '../services/mailboxAssignmentService';
 import clientService from '../services/clientService';
 import { userService } from '../services/userService';
+import ProcessingStatusBadge from '../components/ProcessingStatusBadge';
+import { dashboardService } from '../services/dashboardService';
 
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -54,6 +56,7 @@ export const MailboxList: React.FC = () => {
   const [gmailConnected, setGmailConnected] = useState(false);
   const [outlookConnected, setOutlookConnected] = useState(false);
   const [linkingMailboxId, setLinkingMailboxId] = useState<string | null>(null);
+  const [processingJobs, setProcessingJobs] = useState<any[]>([]);
 
   // Date range fetch modal state
   const [dateRangeModalVisible, setDateRangeModalVisible] = useState(false);
@@ -91,9 +94,17 @@ export const MailboxList: React.FC = () => {
     loadMailboxes();
     checkGmailConnection();
     checkOutlookConnection();
+    loadProcessingJobs();
     if (isAdmin) {
       loadClientsAndUsers();
     }
+
+    // Poll for job updates every 5 seconds
+    const interval = setInterval(() => {
+      loadProcessingJobs();
+    }, 5000);
+
+    return () => clearInterval(interval);
   }, []); // Empty dependency array - only run once on mount
 
   // Separate effect for when isAdmin changes (to load clients/users)
@@ -131,6 +142,15 @@ export const MailboxList: React.FC = () => {
       setUsers(usersData || []);
     } catch (error) {
       console.error('Error loading clients and users:', error);
+    }
+  };
+
+  const loadProcessingJobs = async () => {
+    try {
+      const jobs = await dashboardService._fetchProcessingJobs();
+      setProcessingJobs(jobs || []);
+    } catch (error) {
+      console.error('Error loading processing jobs:', error);
     }
   };
 
@@ -374,6 +394,18 @@ export const MailboxList: React.FC = () => {
         <Tag color={isActive ? 'success' : 'default'}>
           {isActive ? 'Active' : 'Inactive'}
         </Tag>
+      ),
+    },
+    {
+      title: 'Sync Status',
+      key: 'sync_status',
+      render: (_: any, record: Mailbox) => (
+        <ProcessingStatusBadge
+          mailboxId={record.id}
+          jobs={processingJobs}
+          showProgress={false}
+          onClick={() => navigate('/processing')}
+        />
       ),
     },
     ...(isAdmin ? [{
