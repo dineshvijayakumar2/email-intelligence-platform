@@ -347,9 +347,10 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
     try {
       setLoading(true);
 
-      // Build connection config based on file source
-      const connectionConfig: any = {};
-      
+      // Start with existing connection config to preserve Gmail/Outlook connections
+      const connectionConfig: any = { ...(mailboxData?.connection_config || {}) };
+
+      // Only update file-related fields for file-based mailbox types
       if (['mbox', 'pst', 'olm'].includes(values.mailbox_type)) {
         if (fileSource === 'google_drive' && googleDriveFile) {
           // Use Google Drive configuration with OAuth2
@@ -360,8 +361,14 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
         } else {
           connectionConfig.file_path = values.file_path;
           connectionConfig.file_source = 'local';
+          // Clear Google Drive fields if switching to local
+          delete connectionConfig.google_drive_file_id;
+          delete connectionConfig.google_drive_file_name;
         }
       }
+
+      // Note: Gmail/Outlook connection fields (gmail_sync_enabled, gmail_access_token, etc.)
+      // are preserved from the existing connection_config and not modified here
 
       const mailboxUpdateData: any = {
         name: values.name,
