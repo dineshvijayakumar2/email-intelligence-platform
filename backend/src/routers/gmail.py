@@ -909,7 +909,11 @@ async def update_gmail_config(config: GmailConfigUpdate):
 # =========================================================================
 
 @router.post("/mailbox/{mailbox_id}/connect")
-async def connect_gmail_to_mailbox(mailbox_id: str, request: MailboxGmailConnectRequest):
+async def connect_gmail_to_mailbox(
+    mailbox_id: str,
+    request: MailboxGmailConnectRequest,
+    current_user: dict = Depends(get_current_user)
+):
     """
     Connect Gmail account directly to a specific mailbox.
 
@@ -999,6 +1003,7 @@ async def connect_gmail_to_mailbox(mailbox_id: str, request: MailboxGmailConnect
         # Build Gmail config for mailbox
         gmail_config = {
             'gmail_sync_enabled': True,
+            'gmail_user_id': current_user['user_id'],  # Store authenticated user ID
             'gmail_email': gmail_email,
             'gmail_access_token': access_token,
             'gmail_refresh_token': refresh_token,

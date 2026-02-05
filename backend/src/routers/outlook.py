@@ -826,7 +826,11 @@ async def update_outlook_config(config: OutlookConfigUpdate):
 # =========================================================================
 
 @router.post("/mailbox/{mailbox_id}/connect")
-async def connect_outlook_to_mailbox(mailbox_id: str, request: MailboxOutlookConnectRequest):
+async def connect_outlook_to_mailbox(
+    mailbox_id: str,
+    request: MailboxOutlookConnectRequest,
+    current_user: dict = Depends(get_current_user)
+):
     """
     Connect Outlook account directly to a specific mailbox.
 
@@ -873,6 +877,7 @@ async def connect_outlook_to_mailbox(mailbox_id: str, request: MailboxOutlookCon
         # Build Outlook config for mailbox
         outlook_config = {
             'outlook_sync_enabled': True,
+            'outlook_user_id': current_user['user_id'],  # Store authenticated user ID
             'outlook_email': outlook_email,
             'outlook_access_token': access_token,
             'outlook_refresh_token': refresh_token,
