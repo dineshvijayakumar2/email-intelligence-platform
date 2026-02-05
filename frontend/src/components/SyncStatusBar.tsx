@@ -43,10 +43,35 @@ export const SyncStatusBar: React.FC<SyncStatusBarProps> = ({
            ['running', 'downloading', 'pending'].includes(job.status)
   );
 
-  // Find recent failed jobs for selected mailboxes
-  const failedJobs = jobs.filter(
-    job => selectedMailboxIds.includes(job.mailbox_id) && job.status === 'failed'
-  );
+  // Find relevant failed jobs - only show if there's no more recent successful job for the same mailbox
+  const failedJobs = jobs.filter(job => {
+    if (!selectedMailboxIds.includes(job.mailbox_id) || job.status !== 'failed') {
+      return false;
+    }
+
+    // Check if there's a more recent completed job for the same mailbox
+    const hasMoreRecentSuccess = jobs.some(otherJob =>
+      otherJob.mailbox_id === job.mailbox_id &&
+      otherJob.status === 'completed' &&
+      otherJob.completed_at &&
+      job.completed_at &&
+      new Date(otherJob.completed_at).getTime() > new Date(job.completed_at).getTime()
+    );
+
+    // Don't show this failure if there's a more recent success
+    if (hasMoreRecentSuccess) {
+      return false;
+    }
+
+    // Only show recent failures (last hour)
+    if (job.completed_at) {
+      const completedTime = new Date(job.completed_at).getTime();
+      const oneHourAgo = Date.now() - (60 * 60 * 1000);
+      return completedTime > oneHourAgo;
+    }
+
+    return true;
+  });
 
   if (activeJobs.length === 0 && failedJobs.length === 0) {
     return null; // Don't show anything if no active/failed jobs

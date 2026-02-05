@@ -1,5 +1,6 @@
 import config from '../config';
 import { filterCache, FILTER_KEYS } from './filterCacheService';
+import { getAccessToken } from '../lib/supabase';
 
 export interface Email {
   id: string;
@@ -47,11 +48,17 @@ export const emailService = {
   // Get emails with filters and pagination - now uses backend API
   async getEmails(filters: EmailFilters = {}, page = 1, pageSize = 20): Promise<{ emails: Email[]; totalCount: number }> {
     try {
+      const token = await getAccessToken();
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch(`${config.apiBaseUrl}/emails`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           filters,
           page,
@@ -75,7 +82,15 @@ export const emailService = {
   // Get a single email by ID - now uses backend API
   async getEmail(id: string): Promise<Email | null> {
     try {
-      const response = await fetch(`${config.apiBaseUrl}/emails/${id}`);
+      const token = await getAccessToken();
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const response = await fetch(`${config.apiBaseUrl}/emails/${id}`, {
+        headers
+      });
 
       if (!response.ok) {
         if (response.status === 404) {
