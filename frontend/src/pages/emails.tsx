@@ -441,7 +441,17 @@ export const EmailList: React.FC = () => {
 
   // Load emails
   const loadEmails = useCallback(async (append: boolean = false) => {
+    // CRITICAL: Never load emails without a mailbox selected
+    if (!filters.mailbox) {
+      console.log('[EmailList] Skipping email load - no mailbox selected');
+      setLoading(false);
+      setEmails([]);
+      setTotalCount(0);
+      return;
+    }
+
     try {
+      console.log('[EmailList] Loading emails for mailbox:', filters.mailbox);
       setLoading(true);
       const { emails: emailData, totalCount: total } = await emailService.getEmails(
         filters,
@@ -553,7 +563,7 @@ export const EmailList: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    loadEmails();
+    // Don't call loadEmails() here - it will be called by the effect that watches filters
     loadFilterOptions();
     loadProcessingJobs();
 
@@ -613,18 +623,34 @@ export const EmailList: React.FC = () => {
 
   // Handlers
   const handleFilterChange = (key: keyof EmailFilters, value: any) => {
+    // For filters that affect email list, show immediate feedback
+    if (key === 'folder' || key === 'category' || key === 'isOutbound') {
+      setEmails([]);
+      setTotalCount(0); // Clear count to force skeleton display
+      setLoading(true);
+      setSelectedEmail(null);
+      setSelectedEmailId(null);
+    }
     setFilters(prev => ({ ...prev, [key]: value }));
     setCurrentPage(1);
   };
 
   const handleFolderSelect = (folderKey: string) => {
+    // Optimistically clear emails and show loading for instant feedback
+    setEmails([]);
+    setTotalCount(0); // Clear count to force skeleton display
+    setLoading(true);
+    setSelectedEmail(null);
+    setSelectedEmailId(null);
+    setCurrentPage(1);
+
     if (folderKey === '') {
-      handleFilterChange('folder', '');
+      setFilters(prev => ({ ...prev, folder: '' }));
     } else {
       // Find matching folder from the folders list, or use the key directly
       const matchedFolder = folders.find(f => f.toLowerCase().includes(folderKey.toLowerCase()));
       // Use matched folder if found, otherwise use the key itself for filtering
-      handleFilterChange('folder', matchedFolder || folderKey);
+      setFilters(prev => ({ ...prev, folder: matchedFolder || folderKey }));
     }
   };
 
@@ -671,10 +697,16 @@ export const EmailList: React.FC = () => {
   };
 
   const handleRefresh = () => {
+    if (!filters.mailbox) {
+      console.log('[EmailList] Cannot refresh - no mailbox selected');
+      return;
+    }
+    setEmails([]);
+    setLoading(true);
     setCurrentPage(1); // Reset to first page on refresh
-    loadEmails(false); // Fresh load, don't append
     setSelectedEmail(null);
     setSelectedEmailId(null);
+    loadEmails(false); // Fresh load, don't append
   };
 
   const handleLoadMore = () => {
