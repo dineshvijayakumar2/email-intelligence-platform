@@ -1,4 +1,4 @@
-# Update Context - January 30, 2026
+# Update Context - February 6, 2026
 
 ## Session Summary
 
@@ -204,6 +204,27 @@ Based on updated user stories, Stage 2 is now organized into 3 sprints:
 - Split migration scripts for Railway timeout issues
 - Fixed Gmail OAuth scope validation error
 - Fixed Supabase client initialization errors
+
+#### 11. Mailbox Switching & Filtering UX Improvements (Complete - Feb 6, 2026)
+- **Problem**: Mailbox switching showed stale data briefly before loading new content, causing user confusion
+- **Solution Implemented**:
+  1. **Route-Based Navigation** - Each mailbox has its own URL (`/emails/:mailboxId`, `/processing/:mailboxId`)
+  2. **Instant Skeleton Feedback** - Clear old content immediately and show loading skeleton
+  3. **Removed "All Mailboxes" View** - Always require mailbox selection in Emails page
+  4. **React Strict Mode Fix** - Handle double-mounting gracefully in MailboxSelector
+  5. **Processing Page Filtering** - Filter jobs by mailbox with instant feedback
+- **Key Files Modified**:
+  - `frontend/src/App.tsx` - Added mailbox routes (`/emails/:mailboxId`, `/processing/:mailboxId`)
+  - `frontend/src/pages/emails.tsx` - Route-based navigation, instant skeleton display, strict guards
+  - `frontend/src/pages/processing.tsx` - Added mailbox filtering with MailboxSelector dropdown
+  - `frontend/src/components/MailboxSelector.tsx` - Fixed React Strict Mode issue, supports single/multiple modes
+  - `scripts/troubleshooting/fix_accessible_mailboxes.sql` - Fixed RPC function for roles array support
+- **Technical Details**:
+  - **Mailbox Switching Flow**: Select mailbox → clear data → navigate to URL → load fresh data
+  - **Folder Switching Flow**: Select folder → clear emails/count → show skeleton → load data
+  - **Processing Page Filtering**: Select mailbox → clear jobs → navigate → filter by mailbox_id
+  - **Guards**: Prevent loading without valid mailbox selection
+  - **Optimistic UI**: Clear old data immediately before navigation for instant perceived performance
 
 ---
 
