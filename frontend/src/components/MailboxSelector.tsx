@@ -47,13 +47,23 @@ export const MailboxSelector: React.FC<MailboxSelectorProps> = ({
 
   const loadMailboxes = async () => {
     try {
+      console.log('[MailboxSelector] Loading mailboxes...');
       setLoading(true);
       const data = await mailboxService.getMailboxes();
-      // Filter to active mailboxes only
-      setMailboxes(data.filter((m) => m.is_active));
+      console.log('[MailboxSelector] Received mailboxes:', data);
+
+      // Only update if we got valid data (don't overwrite with empty due to React Strict Mode remounts)
+      if (data && data.length > 0) {
+        // Filter to active mailboxes only
+        const active = data.filter((m) => m.is_active);
+        console.log('[MailboxSelector] Active mailboxes:', active.length);
+        setMailboxes(active);
+      } else {
+        console.warn('[MailboxSelector] Received empty/null data, keeping existing mailboxes');
+      }
     } catch (error) {
-      console.error('Failed to load mailboxes:', error);
-      setMailboxes([]);
+      console.error('[MailboxSelector] Failed to load mailboxes:', error);
+      // Don't clear mailboxes on error - keep existing data
     } finally {
       setLoading(false);
     }

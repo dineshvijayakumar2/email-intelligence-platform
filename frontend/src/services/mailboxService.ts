@@ -63,8 +63,24 @@ export interface CreateGoogleDriveMailboxData extends Omit<CreateMailboxData, 'f
 export const mailboxService = {
   // Get all mailboxes
   async getMailboxes(): Promise<Mailbox[]> {
-    const mailboxes = await api.get<Mailbox[]>('/mailboxes');
-    return mailboxes || [];
+    console.log('[MailboxService] Fetching mailboxes from /mailboxes...');
+    try {
+      const mailboxes = await api.get<Mailbox[]>('/mailboxes');
+      console.log('[MailboxService] API response:', mailboxes);
+      console.log('[MailboxService] Response type:', typeof mailboxes);
+      console.log('[MailboxService] Is array:', Array.isArray(mailboxes));
+
+      if (!mailboxes) {
+        console.warn('[MailboxService] API returned null/undefined, returning empty array');
+        return [];
+      }
+
+      console.log('[MailboxService] Returning', mailboxes.length, 'mailboxes');
+      return mailboxes;
+    } catch (error) {
+      console.error('[MailboxService] Error fetching mailboxes:', error);
+      return [];
+    }
   },
 
   // Get a single mailbox by ID

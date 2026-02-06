@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   Typography,
   Tag,
@@ -37,6 +38,7 @@ import { mailboxService, Mailbox } from '../services/mailboxService';
 import { useAuth } from '../contexts/AuthContext';
 import SyncStatusBar from '../components/SyncStatusBar';
 import { dashboardService } from '../services/dashboardService';
+import MailboxSelector from '../components/MailboxSelector';
 
 const { Text, Title } = Typography;
 const { Option } = Select;
@@ -379,6 +381,10 @@ const EmailDetailPanel: React.FC<{
 
 // Main Email List Component
 export const EmailList: React.FC = () => {
+  // Router hooks for mailbox-based navigation
+  const { mailboxId } = useParams<{ mailboxId?: string }>();
+  const navigate = useNavigate();
+
   // Auth context for user's accessible mailboxes
   const { profile } = useAuth();
 
@@ -397,6 +403,8 @@ export const EmailList: React.FC = () => {
   const [categories, setCategories] = useState<string[]>([]);
   const [accessibleMailboxes, setAccessibleMailboxes] = useState<Mailbox[]>([]);
   const [mailboxIdMap, setMailboxIdMap] = useState<Record<string, string>>({}); // name -> id mapping
+  const [mailboxIdToNameMap, setMailboxIdToNameMap] = useState<Record<string, string>>({}); // id -> name mapping
+  const [selectedMailboxIds, setSelectedMailboxIds] = useState<string[]>([]); // For MailboxSelector component
   const [folders, setFolders] = useState<string[]>([]);
   const [foldersLoading, setFoldersLoading] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
@@ -459,34 +467,46 @@ export const EmailList: React.FC = () => {
   const loadFilterOptions = useCallback(async () => {
     try {
       setFiltersLoading(true);
-      const [categoriesData, mailboxListResponse, foldersData] = await Promise.all([
+      console.log('[EmailList] Loading filter options...');
+      const [categoriesData, mailboxListResponse] = await Promise.all([
         emailService.getEmailCategories(),
         mailboxService.getMailboxes(),
-        emailService.getFolderNames(), // Load all folders initially
+        // Don't load folders initially - wait for mailbox selection
       ]);
+      console.log('[EmailList] Raw mailbox response:', mailboxListResponse);
       setCategories(categoriesData);
 
-      // Filter to active mailboxes and create ID map
+      // Filter to active mailboxes and create ID maps
       const activeMailboxes = mailboxListResponse.filter((m: Mailbox) => m.is_active);
+      console.log('[EmailList] Active mailboxes after filtering:', activeMailboxes);
+      console.log('[EmailList] All mailboxes (including inactive):', mailboxListResponse);
       setAccessibleMailboxes(activeMailboxes);
 
       const idMap: Record<string, string> = {};
+      const idToNameMap: Record<string, string> = {};
       activeMailboxes.forEach((m: Mailbox) => {
         idMap[m.name] = m.id;
+        idToNameMap[m.id] = m.name;
       });
       setMailboxIdMap(idMap);
-      setFolders(foldersData);
-
-      // Auto-select first mailbox if none selected (no "all mailboxes" view)
-      if (activeMailboxes.length > 0 && !filters.mailbox) {
-        setFilters(prev => ({ ...prev, mailbox: activeMailboxes[0].name }));
-      }
+      setMailboxIdToNameMap(idToNameMap);
+      // Folders will be loaded after mailbox selection
     } catch (error) {
-      console.error('Error loading filter options:', error);
+      console.error('[EmailList] Error loading filter options:', error);
+      message.error('Failed to load mailboxes. Please refresh the page.');
     } finally {
       setFiltersLoading(false);
     }
-  }, [filters.mailbox]);
+  }, []); // No dependencies - only run once on mount
+
+  // Navigate to first mailbox if none is selected (separate effect)
+  useEffect(() => {
+    // Wait for mailboxes to be loaded
+    if (accessibleMailboxes.length > 0 && !mailboxId) {
+      console.log('[EmailList] No mailbox in URL, navigating to first mailbox:', accessibleMailboxes[0]);
+      navigate(`/emails/${accessibleMailboxes[0].id}`, { replace: true });
+    }
+  }, [accessibleMailboxes, mailboxId, navigate]);
 
   // Load folders for a specific mailbox (dynamic) - uses cached mailboxIdMap
   const loadFoldersForMailbox = useCallback(async (mailboxName: string) => {
@@ -543,9 +563,15 @@ export const EmailList: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    loadEmails(isLoadingMoreRef.current);
-    isLoadingMoreRef.current = false; // Reset after loading
-  }, [filters, currentPage]);
+    // Only load emails if a mailbox is selected
+    if (filters.mailbox) {
+      loadEmails(isLoadingMoreRef.current);
+      isLoadingMoreRef.current = false; // Reset after loading
+    } else {
+      console.log('[EmailList] No mailbox selected, skipping email load');
+      setLoading(false);
+    }
+  }, [filters, currentPage, loadEmails]);
 
   // Reload folders when mailbox selection changes
   useEffect(() => {
@@ -555,6 +581,35 @@ export const EmailList: React.FC = () => {
       setFilters(prev => ({ ...prev, folder: '' }));
     }
   }, [filters.mailbox, mailboxIdMap, loadFoldersForMailbox]);
+
+  // Sync selectedMailboxIds with filters.mailbox (for initial load)
+  useEffect(() => {
+    if (filters.mailbox && mailboxIdMap[filters.mailbox]) {
+      const mailboxId = mailboxIdMap[filters.mailbox];
+      if (!selectedMailboxIds.includes(mailboxId)) {
+        setSelectedMailboxIds([mailboxId]);
+      }
+    }
+  }, [filters.mailbox, mailboxIdMap]);
+
+  // Sync URL param (mailboxId) with component state
+  useEffect(() => {
+    if (mailboxId && mailboxIdToNameMap[mailboxId]) {
+      const mailboxName = mailboxIdToNameMap[mailboxId];
+      console.log('[EmailList] URL mailbox changed:', mailboxId, '->', mailboxName);
+
+      // Update selected mailbox IDs for the dropdown
+      setSelectedMailboxIds([mailboxId]);
+
+      // Update filters with the mailbox name (triggers email loading)
+      setFilters(prev => ({ ...prev, mailbox: mailboxName }));
+
+      // Clear any selected email when switching mailboxes
+      setSelectedEmail(null);
+      setSelectedEmailId(null);
+      setCurrentPage(1);
+    }
+  }, [mailboxId, mailboxIdToNameMap]);
 
   // Handlers
   const handleFilterChange = (key: keyof EmailFilters, value: any) => {
@@ -574,7 +629,36 @@ export const EmailList: React.FC = () => {
   };
 
   const handleMailboxSelect = (mailbox: string) => {
+    // Clear emails immediately to avoid showing stale data
+    setEmails([]);
+    setLoading(true);
+    setSelectedEmail(null);
+    setSelectedEmailId(null);
+    // Reset page to 1
+    setCurrentPage(1);
+    // Update mailbox filter
     handleFilterChange('mailbox', mailbox);
+  };
+
+  // Handler for MailboxSelector component (uses IDs) - navigates to new route
+  const handleMailboxSelectorChange = (mailboxIds: string[]) => {
+    console.log('[EmailList] Mailbox selector changed:', mailboxIds);
+    if (mailboxIds.length === 0) return; // Don't allow empty selection
+
+    const selectedMailboxId = mailboxIds[0];
+    console.log('[EmailList] Navigating to /emails/' + selectedMailboxId);
+
+    // Optimistically update UI immediately for instant feedback
+    setEmails([]);
+    setLoading(true);
+    setSelectedEmail(null);
+    setSelectedEmailId(null);
+    setSelectedMailboxIds([selectedMailboxId]);
+    setCurrentPage(1);
+    setFolders([]); // Clear folders until new ones load
+
+    // Navigate to the mailbox-specific route
+    navigate(`/emails/${selectedMailboxId}`);
   };
 
   const handleEmailSelect = (email: Email) => {
@@ -616,7 +700,7 @@ export const EmailList: React.FC = () => {
       <div className={`mail-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
         {/* Sidebar Header */}
         <div className="mail-sidebar-header">
-          <Text strong style={{ fontSize: 16, color: 'white' }}>Mail</Text>
+          <Text strong style={{ fontSize: 16, color: 'white' }}>Folders</Text>
           <Tooltip title={sidebarCollapsed ? 'Expand' : 'Collapse'}>
             <Button
               type="text"
@@ -628,54 +712,45 @@ export const EmailList: React.FC = () => {
           </Tooltip>
         </div>
 
-        {/* Mailboxes Section */}
-        <div className="mail-sidebar-section">
-          <div className="mail-sidebar-section-title">
-            <MailOutlined /> {!sidebarCollapsed && 'Mailboxes'}
-          </div>
-          <div className="mail-sidebar-items">
-            {accessibleMailboxes.map(mailbox => (
-              <div
-                key={mailbox.id}
-                className={`mail-sidebar-item ${filters.mailbox === mailbox.name ? 'active' : ''}`}
-                onClick={() => handleMailboxSelect(mailbox.name)}
-              >
-                <InboxOutlined />
-                {!sidebarCollapsed && <span>{mailbox.name}</span>}
-              </div>
-            ))}
-          </div>
-        </div>
-
         {/* Folders Section */}
         <div className="mail-sidebar-section">
           <div className="mail-sidebar-section-title">
             {foldersLoading ? <SyncOutlined spin /> : <FolderOutlined />} {!sidebarCollapsed && 'Folders'}
           </div>
           <div className="mail-sidebar-items">
-            {systemFolders.map(folder => (
-              <div
-                key={folder.key}
-                className={`mail-sidebar-item ${currentFolderKey === folder.key ? 'active' : ''}`}
-                onClick={() => handleFolderSelect(folder.key)}
-              >
-                {folder.icon}
-                {!sidebarCollapsed && <span>{folder.label}</span>}
-              </div>
-            ))}
-            {additionalFolders.length > 0 && (
+            {!filters.mailbox ? (
+              !sidebarCollapsed && (
+                <div style={{ padding: '12px', textAlign: 'center', color: 'rgba(255,255,255,0.5)', fontSize: 12 }}>
+                  Select a mailbox
+                </div>
+              )
+            ) : (
               <>
-                <div className="mail-sidebar-divider" />
-                {additionalFolders.map(folder => (
+                {systemFolders.map(folder => (
                   <div
-                    key={folder}
-                    className={`mail-sidebar-item ${filters.folder === folder ? 'active' : ''}`}
-                    onClick={() => handleFilterChange('folder', folder)}
+                    key={folder.key}
+                    className={`mail-sidebar-item ${currentFolderKey === folder.key ? 'active' : ''}`}
+                    onClick={() => handleFolderSelect(folder.key)}
                   >
-                    <FolderOutlined />
-                    {!sidebarCollapsed && <span>{folder}</span>}
+                    {folder.icon}
+                    {!sidebarCollapsed && <span>{folder.label}</span>}
                   </div>
                 ))}
+                {additionalFolders.length > 0 && (
+                  <>
+                    <div className="mail-sidebar-divider" />
+                    {additionalFolders.map(folder => (
+                      <div
+                        key={folder}
+                        className={`mail-sidebar-item ${filters.folder === folder ? 'active' : ''}`}
+                        onClick={() => handleFilterChange('folder', folder)}
+                      >
+                        <FolderOutlined />
+                        {!sidebarCollapsed && <span>{folder}</span>}
+                      </div>
+                    ))}
+                  </>
+                )}
               </>
             )}
           </div>
@@ -698,6 +773,16 @@ export const EmailList: React.FC = () => {
           </div>
 
           <div className="mail-topbar-right">
+            {/* Mailbox Selector */}
+            <MailboxSelector
+              value={selectedMailboxIds}
+              onChange={handleMailboxSelectorChange}
+              mode="single"
+              placeholder="Select mailbox"
+              size="middle"
+              allowClear={false}
+            />
+
             {/* Filter Button */}
             <Dropdown
               trigger={['click']}
@@ -785,22 +870,34 @@ export const EmailList: React.FC = () => {
           />
         )}
 
-        {/* Content Area */}
-        <div className="mail-content">
+        {/* Content Area - Key based on mailbox to ensure fresh mount */}
+        <div className="mail-content" key={filters.mailbox || 'no-mailbox'}>
           {/* Email List */}
           <div className={`mail-list-panel ${selectedEmail ? 'has-detail' : ''}`}>
             {/* Stats bar */}
             <div className="mail-list-stats">
               <Text type="secondary" style={{ fontSize: 13 }}>
-                {totalCount.toLocaleString()} email{totalCount !== 1 ? 's' : ''}
-                {filters.mailbox && ` in ${filters.mailbox}`}
-                {filters.folder && ` • ${filters.folder}`}
+                {loading && emails.length === 0 ? (
+                  'Loading emails...'
+                ) : (
+                  <>
+                    {totalCount.toLocaleString()} email{totalCount !== 1 ? 's' : ''}
+                    {filters.mailbox && ` in ${filters.mailbox}`}
+                    {filters.folder && ` • ${filters.folder}`}
+                  </>
+                )}
               </Text>
             </div>
 
             {/* Email List */}
             <div className="mail-list-content">
-              {loading && emails.length === 0 ? (
+              {!filters.mailbox ? (
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description="Select a mailbox to view emails"
+                  style={{ marginTop: 60 }}
+                />
+              ) : loading && emails.length === 0 ? (
                 <div className="mail-list-loading">
                   {[1, 2, 3, 4, 5].map(i => (
                     <div key={i} className="email-skeleton">

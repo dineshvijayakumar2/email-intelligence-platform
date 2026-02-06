@@ -96,6 +96,16 @@ function App() {
               }
             />
             <Route
+              path="/emails/:mailboxId"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <EmailList />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/processing"
               element={
                 <ProtectedRoute>

@@ -169,9 +169,21 @@ export async function apiRequest<T>(
 
       // Handle empty responses
       const text = await response.text();
-      if (!text) return null;
+      console.log(`[API] Response text for ${endpoint}:`, text ? `${text.substring(0, 100)}...` : '(empty)');
 
-      return JSON.parse(text) as T;
+      if (!text) {
+        console.warn(`[API] Empty response body for ${method} ${endpoint}`);
+        return null;
+      }
+
+      try {
+        const parsed = JSON.parse(text) as T;
+        console.log(`[API] Parsed response for ${endpoint}:`, Array.isArray(parsed) ? `Array(${parsed.length})` : typeof parsed);
+        return parsed;
+      } catch (parseError) {
+        console.error(`[API] JSON parse error for ${endpoint}:`, parseError, 'Text:', text);
+        throw new Error(`Invalid JSON response from ${endpoint}`);
+      }
 
     } catch (error: any) {
       lastError = error;
