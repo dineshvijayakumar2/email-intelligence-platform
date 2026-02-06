@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card,
   Table,
@@ -32,6 +33,8 @@ import {
 } from "@ant-design/icons";
 import { processingService, ProcessingJob } from '../services/processingService';
 import { ErrorDisplay } from '../components/ErrorDisplay';
+import { MailboxSelector } from '../components/MailboxSelector';
+import { mailboxService } from '../services/mailboxService';
 
 const { Text } = Typography;
 
@@ -63,15 +66,68 @@ const formatProcessingSpeed = (emailsPerSecond: number | undefined): string => {
 };
 
 export const ProcessingJobs: React.FC = () => {
+  const { mailboxId } = useParams<{ mailboxId?: string }>();
+  const navigate = useNavigate();
+
   const [jobs, setJobs] = useState<ProcessingJob[]>([]);
+  const [allJobs, setAllJobs] = useState<ProcessingJob[]>([]); // Store all jobs before filtering
   const [loading, setLoading] = useState(true);
   const [selectedJob, setSelectedJob] = useState<ProcessingJob | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [reprocessingJobs, setReprocessingJobs] = useState<Set<string>>(new Set());
   const [restartingJobs, setRestartingJobs] = useState<Set<string>>(new Set());
 
+  // Mailbox selection state
+  const [selectedMailboxId, setSelectedMailboxId] = useState<string | null>(null);
+  const [mailboxIdToNameMap, setMailboxIdToNameMap] = useState<Record<string, string>>({});
+
   // Track if component is mounted to avoid state updates after unmount
   const isMountedRef = useRef(true);
+
+  // Load mailboxes to build ID-to-name mapping
+  useEffect(() => {
+    const loadMailboxes = async () => {
+      try {
+        const mailboxes = await mailboxService.getMailboxes();
+        const idToNameMap: Record<string, string> = {};
+        mailboxes.forEach(mailbox => {
+          idToNameMap[mailbox.id] = mailbox.name;
+        });
+        setMailboxIdToNameMap(idToNameMap);
+      } catch (error) {
+        console.error('Failed to load mailboxes:', error);
+      }
+    };
+    loadMailboxes();
+  }, []);
+
+  // Sync URL parameter with mailbox selection
+  useEffect(() => {
+    if (mailboxId && mailboxIdToNameMap[mailboxId]) {
+      console.log('[ProcessingJobs] URL param mailboxId:', mailboxId);
+      setSelectedMailboxId(mailboxId);
+    } else if (!mailboxId) {
+      // No mailbox in URL - show all jobs
+      setSelectedMailboxId(null);
+    }
+  }, [mailboxId, mailboxIdToNameMap]);
+
+  // Filter jobs based on selected mailbox
+  useEffect(() => {
+    console.log('[ProcessingJobs] Filtering jobs. Selected mailbox:', selectedMailboxId);
+    console.log('[ProcessingJobs] All jobs count:', allJobs.length);
+
+    if (selectedMailboxId) {
+      // Filter jobs for selected mailbox
+      const filtered = allJobs.filter(job => job.mailbox_id === selectedMailboxId);
+      console.log('[ProcessingJobs] Filtered jobs count:', filtered.length);
+      setJobs(filtered);
+    } else {
+      // No mailbox selected - show all jobs
+      console.log('[ProcessingJobs] No mailbox selected, showing all jobs');
+      setJobs(allJobs);
+    }
+  }, [selectedMailboxId, allJobs]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -98,7 +154,8 @@ export const ProcessingJobs: React.FC = () => {
       const jobsData = await processingService.getProcessingJobs();
       // Only update state if component is still mounted
       if (isMountedRef.current) {
-        setJobs(jobsData);
+        setAllJobs(jobsData); // Store all jobs
+        // Filtering will be done by the effect that watches selectedMailboxId
       }
     } catch (error) {
       // Only show error if component is still mounted and it's not a cancelled request
@@ -502,6 +559,29 @@ export const ProcessingJobs: React.FC = () => {
   const runningJobs = jobs.filter(job => job.status === 'running');
   const interruptedJobs = jobs.filter(job => job.status === 'interrupted');
 
+  // Handler for mailbox selection change
+  const handleMailboxChange = (mailboxIds: string[]) => {
+    console.log('[ProcessingJobs] Mailbox selection changed:', mailboxIds);
+
+    // Optimistically clear jobs and show loading for instant feedback
+    setJobs([]);
+    setLoading(true);
+
+    if (mailboxIds.length === 1) {
+      // Single mailbox selected - navigate to that mailbox's URL
+      navigate(`/processing/${mailboxIds[0]}`);
+    } else if (mailboxIds.length === 0) {
+      // No mailbox selected - navigate to /processing (show all)
+      navigate('/processing');
+    } else {
+      // Multiple mailboxes - just use the first one for now
+      navigate(`/processing/${mailboxIds[0]}`);
+    }
+
+    // Turn off loading after a brief moment (jobs will be filtered by effect)
+    setTimeout(() => setLoading(false), 300);
+  };
+
   return (
     <div className="glass-page-bg" style={{ padding: 24 }}>
       {/* Header */}
@@ -511,15 +591,23 @@ export const ProcessingJobs: React.FC = () => {
             Monitor extraction and processing job status
           </Text>
         </div>
-        <Button
-          type="primary"
-          icon={<ReloadOutlined />}
-          onClick={refreshJobs}
-          loading={loading}
-          className="glass-button-primary"
-        >
-          Refresh
-        </Button>
+        <Space>
+          <MailboxSelector
+            value={selectedMailboxId ? [selectedMailboxId] : []}
+            onChange={handleMailboxChange}
+            placeholder="Filter by mailbox"
+            mode="single"
+          />
+          <Button
+            type="primary"
+            icon={<ReloadOutlined />}
+            onClick={refreshJobs}
+            loading={loading}
+            className="glass-button-primary"
+          >
+            Refresh
+          </Button>
+        </Space>
       </div>
 
       {/* Interrupted Jobs Alert */}
