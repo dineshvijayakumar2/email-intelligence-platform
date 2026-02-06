@@ -6,13 +6,16 @@ All notable changes to the Email Intelligence Platform will be documented in thi
 
 ### Added
 - Route-based navigation for mailbox selection (`/emails/:mailboxId`)
+- Route-based filtering for Processing page (`/processing/:mailboxId`)
+- Mailbox selector dropdown on Processing page header
 - Instant skeleton feedback when switching mailboxes, folders, or filters
 - Empty states when no mailbox is selected
 - Debug logging for mailbox loading and email fetching
 
 ### Changed
 - Moved mailbox selector from left sidebar to top-right dropdown (Gmail-style UX)
-- Removed "all mailboxes" view - always require mailbox selection
+- Processing page now filters jobs by selected mailbox (shows all when none selected)
+- Removed "all mailboxes" view - always require mailbox selection in Emails page
 - Optimized folder switching to show skeleton immediately
 - Stats bar now updates only after new data loads (not during loading)
 

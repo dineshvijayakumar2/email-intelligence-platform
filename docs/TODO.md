@@ -3,18 +3,9 @@
 ## High Priority
 
 ### Processing Page UX Improvements
-- [ ] Add route-based filtering to Processing page
-  - [ ] Consider `/processing/:mailboxId` or `/processing?mailbox=id&status=running`
-  - [ ] Add MailboxSelector to top-right like Emails page
-  - [ ] Add status filter dropdown (All, Running, Completed, Failed, etc.)
-- [ ] Add skeleton views during refresh/filter changes
-  - [ ] Show skeleton table rows when loading
-  - [ ] Clear old data immediately when switching filters
-  - [ ] Instant feedback when clicking refresh
-- [ ] Optimize filter switching performance
-  - [ ] Optimistic UI updates
-  - [ ] Clear totalCount when switching
-  - [ ] Show loading state immediately
+- [ ] Add status filter dropdown (All, Running, Completed, Failed, etc.)
+  - Currently filtering by mailbox only
+  - Could add additional status filtering in dropdown
 
 ### Code Cleanup
 - [ ] Remove debug console.logs once UX is stable
@@ -72,6 +63,7 @@
 
 ## Completed ✅
 
+### Emails Page
 - [x] Route-based navigation for emails (`/emails/:mailboxId`)
 - [x] Move mailbox selector to top-right dropdown
 - [x] Instant skeleton feedback for mailbox switching
@@ -81,7 +73,17 @@
 - [x] Add proper empty states
 - [x] Fix initial loadEmails() call
 - [x] Add strict mailbox guards
+
+### Processing Page
+- [x] Route-based filtering (`/processing/:mailboxId`)
+- [x] Add MailboxSelector to top-right header
+- [x] Instant loading feedback when switching mailboxes
+- [x] Filter jobs by selected mailbox
+- [x] Optimistic UI updates for filter switching
+
+### General
 - [x] Organize troubleshooting scripts into `scripts/troubleshooting/`
+- [x] Move documentation to `docs/` folder
 
 ## Blocked/Waiting
 

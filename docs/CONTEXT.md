@@ -2,28 +2,37 @@
 
 ## Recent Changes (2026-02-06)
 
-### Mailbox Switching UX Improvements
+### Mailbox Switching & Filtering UX Improvements
 
 **Problem**: Mailbox switching showed stale data briefly before loading new content, causing user confusion.
 
 **Solution Implemented**:
-1. **Route-Based Navigation** - Each mailbox has its own URL (`/emails/:mailboxId`)
+1. **Route-Based Navigation** - Each mailbox has its own URL (`/emails/:mailboxId`, `/processing/:mailboxId`)
 2. **Instant Skeleton Feedback** - Clear old content immediately and show loading skeleton
-3. **Removed "All Mailboxes" View** - Always require mailbox selection
+3. **Removed "All Mailboxes" View** - Always require mailbox selection in Emails page
 4. **React Strict Mode Fix** - Handle double-mounting gracefully in MailboxSelector
+5. **Processing Page Filtering** - Filter jobs by mailbox with instant feedback
 
 ### Key Files Modified
 
 #### Frontend
-- `frontend/src/App.tsx` - Added `/emails/:mailboxId` route
+- `frontend/src/App.tsx` - Added mailbox routes:
+  - `/emails/:mailboxId` - Mailbox-specific email view
+  - `/processing/:mailboxId` - Mailbox-filtered processing jobs
 - `frontend/src/pages/emails.tsx` - Major UX improvements:
   - Route-based mailbox navigation with URL params
   - Instant skeleton display when switching folders/filters
   - Removed initial `loadEmails()` call that loaded all emails
   - Added strict guards to prevent loading without valid mailbox
   - Clear `totalCount` when switching to force skeleton display
+- `frontend/src/pages/processing.tsx` - Added mailbox filtering:
+  - Route-based filtering with `/processing/:mailboxId`
+  - MailboxSelector dropdown in header
+  - Filter jobs by selected mailbox (shows all when none selected)
+  - Instant loading feedback when switching mailboxes
 - `frontend/src/components/MailboxSelector.tsx` - Fixed React Strict Mode issue
   - Preserve good data when API returns null on second mount
+  - Supports both single and multiple selection modes
 - `frontend/src/services/apiClient.ts` - Added debug logging
 - `frontend/src/services/mailboxService.ts` - Added debug logging
 
@@ -46,6 +55,14 @@
 3. Update filters.folder
 4. Email loading effect triggers → loads emails
 5. Stats bar shows "Loading emails..." instead of stale count
+
+#### Processing Page Filtering Flow
+1. User selects mailbox from dropdown → `handleMailboxChange()`
+2. Immediately clear jobs, set loading=true
+3. Navigate to `/processing/:mailboxId` (or `/processing` for all jobs)
+4. URL sync effect picks up mailboxId → sets selectedMailboxId
+5. Filter effect triggers → filters allJobs by mailbox_id
+6. Table displays filtered jobs with loading state
 
 ### Guards to Prevent "All Mailboxes" Loading
 ```typescript
@@ -79,12 +96,10 @@ if (data && data.length > 0) {
 ## Next Steps
 
 ### To Do
-- [ ] Apply same UX improvements to Processing page:
-  - [ ] Route-based filtering (`/processing/:mailboxId` or `/processing?mailbox=id`)
-  - [ ] Skeleton views during refresh/filter changes
-  - [ ] Instant feedback when switching status filters
+- [ ] Add status filter dropdown to Processing page (All, Running, Completed, Failed)
 - [ ] Consider removing debug console.logs once stable
 - [ ] Add E2E tests for mailbox switching flow
+- [ ] Add E2E tests for Processing page filtering
 
 ### Known Issues
 None currently
