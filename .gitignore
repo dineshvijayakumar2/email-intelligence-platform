@@ -69,9 +69,7 @@ service-account.json
 secrets/
 .secrets/
 
-# Troubleshooting, migrations, and test scripts (temporary/local)
-scripts/troubleshooting/
-scripts/migrations/
+# Test scripts (can be temporary/local)
 tests/
 **/test_*.py
 **/test_*.js
