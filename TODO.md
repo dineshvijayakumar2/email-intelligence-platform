@@ -81,6 +81,7 @@
 - [x] Add proper empty states
 - [x] Fix initial loadEmails() call
 - [x] Add strict mailbox guards
+- [x] Organize troubleshooting scripts into `scripts/troubleshooting/`
 
 ## Blocked/Waiting
 
