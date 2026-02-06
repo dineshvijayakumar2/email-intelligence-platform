@@ -2,74 +2,9 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Recent Improvements
+**For detailed development history and recent changes, see [UPDATE_CONTEXT.md](UPDATE_CONTEXT.md)**
 
-### Jan 28, 2026
-1. **Per-Mailbox Gmail Integration**: Each mailbox can now have its own Gmail connection
-   - Gmail tokens stored directly in `mailboxes.connection_config` JSONB
-   - Multiple Gmail accounts supported (one per mailbox)
-   - Direct OAuth flow from mailbox edit page
-   - No global account management needed
-   - New endpoints: `/api/gmail/mailbox/{id}/connect`, `/disconnect`, `/status`, `/sync`
-   - Sync service updated to loop by mailboxes with Gmail tokens
-   - Dashboard shows per-mailbox Gmail summary instead of global connection
-   - Migration script for existing connections: `007_migrate_gmail_to_mailbox.sql`
-
-### Jan 27, 2026
-1. **Gmail LIVE Sync Complete**: Full implementation of Gmail OAuth integration with automatic 15-minute sync
-   - OAuth2 authentication with Google consent screen
-   - Incremental sync using historyId (only fetches new emails)
-   - Background sync service with configurable interval (1-1440 minutes)
-   - Link existing mailboxes to Gmail for continuous sync
-   - Frontend UI for connection status, sync controls, and settings
-2. **Configurable Sync Interval**: Added frontend UI to configure Gmail sync frequency
-   - `PUT /api/gmail/config` endpoint for updating sync interval
-   - `app_config` database table for persistent configuration
-   - Changes apply immediately to running sync service
-   - Settings panel in MailboxEditForm and GmailConnection components
-3. **Error Tracking Page**: New dedicated errors page (`frontend/src/pages/errors.tsx`)
-   - View errors by processing job with filtering
-   - Job errors summary with error type breakdown
-   - Batch error log display from `processing_jobs.error_log`
-   - Failed message IDs tracking and sample display
-   - Retry failed emails functionality
-4. **Date-Based Email Filtering**: Filter emails by date range
-   - Date range picker in emails page
-   - Gmail date-range fetch for historical imports
-5. **Download Before Processing**: Performance optimization for large files
-   - Parallel multi-threaded download option in Advanced Settings
-   - Faster than streaming for Google Drive files 5GB+
-   - Progress tracking with download speed display
-6. **Dashboard Redesign**: Updated dashboard with improved metrics
-   - Gmail LIVE sync status card
-   - Processing job status with progress
-   - Email statistics with trend indicators
-   - Optimized database queries with PostgreSQL functions
-
-### Jan 20, 2026
-1. **Daemon Thread Error Fixed**: Removed faulty `DaemonThreadPoolExecutor` from `main.py` and `parallel_downloader.py`. Now uses regular `ThreadPoolExecutor` + proper cancellation mechanisms.
-2. **Railway Migration Optimization**: Split `001_add_error_handling.sql` into `001a/001b/001c` to avoid timeout on large tables.
-3. **Stage 2 Scope Revised**: Updated to 3-sprint structure (Foundation, Intelligence, AI Layer) per new user stories.
-
-### Jan 19, 2026
-1. **Parallel Download Option**: Added "Download Before Processing" in Advanced Settings for large Google Drive files (faster than streaming for 5GB+ files)
-2. **Frontend API Client**: Centralized API client (`frontend/src/services/apiClient.ts`) with timeout, retry, and connection status tracking
-3. **Connection Status Hook**: `frontend/src/hooks/useConnectionStatus.ts` for detecting backend disconnection
-4. **Interrupted Job Status**: Jobs interrupted by server restart are now marked as `interrupted` and can be restarted
-
-### Jan 14, 2026
-1. **MBOX Streaming**: MBOX files now stream from Google Drive (no download) - consistent with OLM streaming
-2. **Unified Streaming Architecture**: Both MBOX and OLM use streaming approach for cancellable, memory-efficient processing
-
-### Jan 8, 2025
-1. **Single .env file**: All configuration now in root .env file (no more frontend/.env.local)
-2. **Google Drive Integration**: Frontend can authenticate and select files from Google Drive
-3. **Redis Required**: Redis is now mandatory for job processing (no fallback mode)
-4. **Cleaned Structure**: Test files and temporary scripts moved to dev-scripts/
-5. **RemoteZip Streaming**: Industry-standard implementation for processing 65GB+ OLM files directly from Google Drive
-6. **Progress Tracking with ETA**: Real-time processing speed and estimated time remaining calculations
-
-## Common Development Commands
+## Quick Start
 
 ### Start the Application
 ```bash
@@ -88,7 +23,6 @@ cd frontend
 npm install                          # Install dependencies
 npm start                           # Start development server
 npm run build                       # Build for production
-npm test                            # Run tests
 ```
 
 ### Backend Development
@@ -113,19 +47,12 @@ redis-server
 redis-cli ping
 ```
 
-### Testing
-```bash
-# Test email tagging
-python dev-scripts/test_email_tagging.py
-
-# Test MBOX extraction
-python -m src.extractors.mbox_extractor /path/to/file.mbox
-```
+---
 
 ## High-Level Architecture
 
 ### System Overview
-Email processing platform with FastAPI backend and React frontend, supporting MBOX/PST/OLM formats with **mandatory Redis** for real-time progress tracking and Google Drive integration.
+Email processing platform with FastAPI backend and React frontend, supporting MBOX/PST/OLM/Gmail/Outlook formats with **mandatory Redis** for real-time progress tracking and Google Drive integration.
 
 ### Core Processing Pipeline
 ```
@@ -141,66 +68,83 @@ Frontend → FastAPI → ThreadPool (20 workers) → Email Processing Pipeline
 #### Backend (FastAPI)
 - **main.py**: API endpoints, job control, ThreadPoolExecutor for concurrent processing
 - **Redis Required**: Application won't start without Redis connection
-- **email_processor.py**: Main pipeline orchestrator in src/processors/
-- **Extractors** (src/extractors/): Stream-based file processors for MBOX/PST/OLM
-- **email_tagger.py**: Rule-based tagging engine (20+ tags) in src/processors/
+- **email_processor.py**: Main pipeline orchestrator in `src/processors/`
+- **Extractors** (`src/extractors/`): Stream-based file processors for MBOX/PST/OLM/Gmail
+- **email_tagger.py**: Rule-based tagging engine (20+ tags) in `src/processors/`
 - **Redis Managers**: JobProgressManager and JobQueueManager for real-time updates
-- **Routers** (src/routers/): Business hierarchy endpoints (account_managers, clients, customers, contacts)
+- **Routers** (`src/routers/`): Business hierarchy and API endpoints
+- **Auth** (`src/dependencies/auth.py`): Supabase JWT verification with ES256/HS256 support
 
 #### Frontend (React/TypeScript)
-- **Pages**: dashboard, mailboxes, emails, processing, clients, customers, contacts (in frontend/src/pages/)
-- **Google Drive Integration**: GoogleDrivePicker component and googleDriveService
-- **Services**: API integration layer (frontend/src/services/)
+- **Pages**: dashboard, mailboxes, emails, processing, clients, users (in `frontend/src/pages/`)
+- **Auth**: Supabase Auth with Google/Microsoft OAuth + email/password
+- **Components**: MailboxSelector, ProtectedRoute, Layout with role-based access
+- **Services**: API integration layer (`frontend/src/services/`)
 - **Auto-refresh**: Polls job status every 2-5 seconds
-- **Config**: Single config.js loads from root .env
 
 #### Data Layer
-- **Supabase PostgreSQL**: Primary data storage
+- **Supabase PostgreSQL**: Primary data storage with Row-Level Security (RLS)
 - **Redis (REQUIRED)**: Progress cache and job queue management
-- **Tables**: emails, email_categories (tags), processing_jobs, mailboxes, folders, account_managers, clients, customer_companies, customer_contacts, user_integrations, gmail_filters, app_config
+- **Tables**: emails, processing_jobs, mailboxes, folders, user_profiles, user_client_assignments, clients, customer_companies, customer_contacts
 
-### Important Implementation Details
+---
 
-#### Google Drive Integration
+## Important Implementation Details
+
+### Authentication & Authorization
+- **Supabase Auth**: Email/password, Google OAuth, Microsoft OAuth
+- **3 User Roles**:
+  - **Admin**: Access to all mailboxes, user management
+  - **Client Manager**: Access to mailboxes of assigned clients
+  - **Account Manager**: Access to own mailboxes only
+- **JWT Verification**: Backend supports ES256/RS256 (JWKS) and HS256 (shared secret)
+- **RLS Policies**: Row-level security enforces access control at database level
+
+### Route-Based Navigation (Feb 2026)
+- **Emails Page**: `/emails/:mailboxId` - Each mailbox has its own URL
+- **Processing Page**: `/processing/:mailboxId` - Filter jobs by mailbox
+- **Benefits**: Deep linking, browser back/forward, instant skeleton feedback
+- **Pattern**: URL as source of truth → Optimistic UI updates → Load fresh data
+
+### Google Drive Integration
 - Frontend authenticates with Google OAuth2
-- File picker allows selecting email archives from Drive
-- **Unified Streaming Architecture** (Updated Jan 14, 2026):
+- **Unified Streaming Architecture**:
   - **OLM Files**: RemoteZip streaming for large archives (65GB+)
-    - No full download required - uses targeted byte-range requests
-    - Central Directory scanning for efficient ZIP navigation
-    - Smart retry logic with exponential backoff for network resilience
   - **MBOX Files**: Text streaming with line-by-line processing
-    - Streams text content in chunks (default 5MB)
-    - No full download required - processes on-the-fly
-    - Cancellable during processing
-    - Consistent UX with OLM streaming
-  - Both formats support graceful cancellation and real-time progress tracking
+  - No full download required - processes on-the-fly
+  - Cancellable during processing
 - Supports MBOX, PST, OLM files in Drive
 
-#### Redis as Primary Job System
+### Gmail & Outlook LIVE Sync
+- **Per-Mailbox Architecture**: Each mailbox stores its own OAuth tokens
+- Gmail: OAuth2 with incremental sync using historyId
+- Background sync service with configurable interval
+- Tokens stored in `mailboxes.connection_config` JSONB
+
+### Redis as Primary Job System
 - No longer optional - application requires Redis
 - Updates on every email processed
 - Database sync every 100 emails
 - TTL configurable via REDIS_TTL_DAYS
-- Connection via REDIS_URL environment variable
 
-#### Environment Configuration
+---
 
-Separate environment files for backend and frontend:
+## Environment Configuration
 
-**Backend Environment (`backend/.env.development` or `backend/.env.production`)**:
-```
+### Backend Environment (`backend/.env.development` or `backend/.env.production`)
+```bash
 # Supabase Configuration
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your_anon_key
 SUPABASE_SERVICE_KEY=your_service_role_key
+SUPABASE_JWT_SECRET=your_jwt_secret
 
 # Redis Configuration (REQUIRED)
 REDIS_URL=redis://localhost:6379  # Development
 REDIS_URL=${Redis.REDIS_URL}       # Production (Railway)
 REDIS_TTL_DAYS=7
 
-# Google Drive API Configuration
+# Google Drive & Gmail API
 GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
 GOOGLE_REDIRECT_URI=http://localhost:3000/auth/google/callback
@@ -211,71 +155,144 @@ API_PORT=8000
 SECRET_KEY=your_secret_key
 ```
 
-**Frontend Environment (`frontend/.env.development` or `frontend/.env.production`)**:
-```
+### Frontend Environment (`frontend/.env.development` or `frontend/.env.production`)
+```bash
 # API Configuration
 VITE_API_BASE_URL=http://localhost:8000/api  # Development
 VITE_API_BASE_URL=https://${{backend.RAILWAY_PRIVATE_DOMAIN}}/api  # Production
 
-# Google Drive Configuration
+# Supabase Authentication
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your_anon_key
+
+# Google Drive & Gmail
 VITE_GOOGLE_CLIENT_ID=your_google_client_id
 VITE_GOOGLE_REDIRECT_URI=http://localhost:3000/auth/google/callback
 ```
 
-Note: Example files are provided as `.env.example` in each directory. Environment files are ignored by git for security.
+**Note**: Example files are provided as `.env.example` in each directory. Environment files are ignored by git for security.
 
-### File Structure Changes
+---
 
-- **dev-scripts/**: Development and test scripts (moved from root)
-- **frontend/src/config.js**: Central configuration file
-- **frontend/src/services/googleDriveService.ts**: Google Drive API integration
-- **frontend/src/components/GoogleDrivePicker.tsx**: File selection UI
-- **Environment files**: Separated by service
-  - **backend/.env.development**, **backend/.env.production**: Backend-specific configuration
-  - **frontend/.env.development**, **frontend/.env.production**: Frontend-specific configuration
-  - **backend/.env.example**, **frontend/.env.example**: Template files for reference
-- **src/storage/**: Cloud storage streaming modules
-  - **remote_zip_google_drive.py**: RemoteZip implementation for Google Drive
-  - **google_drive_stream.py**: Streaming wrapper for Drive files
-  - **google_drive_text_stream.py**: Text file streaming for MBOX
-  - **cloud_stream_wrapper.py**: Base streaming interface
-  - **smart_zip_reader.py**: Efficient ZIP Central Directory scanner
-- **src/routers/**: Business hierarchy API routers (Stage 2)
+## File Structure
 
-### Instructions
-Please follow the below best practices while doing coding.
-1. Don't hardcode gdrive that may be different in different machines. Please make sure that the code is not too specific for the folder setup during the current implementation
-2. Make sure that the overall pipeline of email processing activities remains consistent for all mailbox types
-3. When suggesting any database changes for fixes, please make sure the original database setup script files are also updated so that when doing new deployment, the issues don't reoccur and doesn't need separate migration.
-4. Make sure you don't keep the fix scripts in the main code base
-5. When you make changes that require backend to restart, mimic change in main.py that will auto-shutdown and restart the backend service
-6. Do git sync to the main branch when performing major changes to the codebase.
-7. Create docs only in docs folder. Create a new one only if it's a major functionality newly implemented. Otherwise, update the existing docs.
-8. Keep the environment configuration centralized in the root folder and create separate files for dev and prod
-9. **Always use designated ports for services**: Backend must run on port 8000, Frontend must run on port 3000. Before starting a service, check if the port is in use and kill the old process. Never start services on different ports (e.g., 3001, 3002, 8001). Always verify the service started on the correct port.
-10. **Thread daemon status**: In Python, you cannot change a thread's daemon status after it has started. When creating custom ThreadPoolExecutors with daemon threads, you must set `daemon=True` during thread creation, not after. The standard ThreadPoolExecutor doesn't support this directly.
-11. **Frontend service pattern**: All frontend API services should use the centralized `apiClient.ts` for consistent error handling, timeouts, and connection status tracking. Use `silentOnNetworkError: true` for polling requests.
-12. **Job status handling**: Always include all active statuses (`pending`, `running`, `downloading`) when checking for active jobs in both frontend and backend.
-13. **Railway SQL migrations**: For large tables (10M+ rows), split migrations into smaller files. Cannot use `CREATE INDEX CONCURRENTLY` in Railway SQL runner (runs in transaction block).
+### Key Directories
+- **backend/src/**: Python backend source code
+  - **extractors/**: Email file processors (MBOX, PST, OLM, Gmail, Outlook)
+  - **processors/**: Email processing pipeline (normalizer, tagger)
+  - **routers/**: FastAPI route handlers
+  - **services/**: Background services (Gmail sync, etc.)
+  - **dependencies/**: FastAPI dependencies (auth, etc.)
+  - **storage/**: Cloud storage streaming (Google Drive)
+- **frontend/src/**: React frontend source code
+  - **pages/**: Main application pages
+  - **components/**: Reusable React components
+  - **services/**: API integration layer
+  - **contexts/**: React contexts (AuthContext, etc.)
+  - **lib/**: Third-party library initialization (Supabase)
+- **docs/**: Documentation
+  - **UPDATE_CONTEXT.md**: Comprehensive development history
+  - **CHANGELOG.md**: User-facing release notes
+  - **TODO.md**: Active task tracking
+  - **CLAUDE.md**: This file
+- **scripts/**: Utility scripts
+  - **migrations/**: Database migration scripts
+  - **troubleshooting/**: Diagnostic and fix scripts
 
-## Stage 2 Sprint Structure
+---
 
-### Sprint 1: Foundation (Weeks 1-3)
-- Account Manager & Client Hierarchy
-- Role-Based Access Control
-- Gmail/Outlook OAuth Integration
-- Date Range Processing
+## Development Best Practices
 
-### Sprint 2: Intelligence (Weeks 4-6)
-- Customer Recognition System (domain/keyword rules)
-- Rules Management Interface
-- Contact Database (auto-extract from email headers)
-- Communication History
+### Critical Rules
 
-### Sprint 3: AI Layer (Weeks 7-9)
-- AI Email Classification (type, priority, sentiment)
-- Business Entity Extraction (quote numbers, PO numbers, amounts)
-- Manual Correction UI (trust building)
-- Accuracy Testing & Metrics
+1. **Port Management**:
+   - Backend MUST run on port 8000
+   - Frontend MUST run on port 3000
+   - Check and kill old processes before starting services
+   - Never use alternative ports (3001, 8001, etc.)
 
-See `docs/UPDATE_CONTEXT.md` for current progress and next steps.
+2. **Documentation**:
+   - Create docs ONLY in `docs/` folder
+   - Update existing docs instead of creating new ones
+   - Reference UPDATE_CONTEXT.md for historical changes
+
+3. **Database Changes**:
+   - Update original migration scripts when fixing issues
+   - Don't keep fix scripts in main codebase
+   - Use `scripts/migrations/` for new migrations
+   - Use `scripts/troubleshooting/` for diagnostic scripts
+
+4. **Git Workflow**:
+   - Commit to main branch for major changes
+   - Include descriptive commit messages
+   - Co-author commits: `Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>`
+
+5. **Frontend Service Pattern**:
+   - All frontend API services MUST use centralized `apiClient.ts`
+   - Use `silentOnNetworkError: true` for polling requests
+   - Implement proper timeout and retry logic
+
+6. **Thread Management** (Python):
+   - Cannot change thread daemon status after starting
+   - Don't use custom ThreadPoolExecutor with daemon threads
+   - Use standard ThreadPoolExecutor + proper cancellation
+
+7. **Job Status Handling**:
+   - Always include all active statuses: `pending`, `running`, `downloading`
+   - Check for active jobs in both frontend and backend
+
+8. **Railway SQL Migrations**:
+   - Split large migrations for 10M+ row tables
+   - Cannot use `CREATE INDEX CONCURRENTLY` in Railway SQL runner
+   - Keep migration files under 5-minute execution time
+
+9. **Environment Configuration**:
+   - Keep environment files centralized in service directories
+   - Separate files for dev and prod (`*.env.development`, `*.env.production`)
+   - Never hardcode paths or credentials
+
+10. **Code Paths**:
+    - Don't hardcode paths specific to local machines
+    - Ensure pipeline consistency across all mailbox types
+    - Use environment variables for configurable paths
+
+### UX Patterns (Feb 2026)
+
+When adding new filters/views:
+1. Clear old data immediately (setData([]), setCount(0))
+2. Set loading=true
+3. Update filters/navigate to new URL
+4. Let effects handle data loading
+5. Ensure skeleton displays during loading
+
+When adding new routes:
+- Use route params for primary filters (mailbox, job, client)
+- Use query params for secondary filters (date range, status)
+- Always sync URL with component state
+- Handle direct URL access (page refresh)
+
+---
+
+## Current Development Focus
+
+**Sprint 1: Foundation (In Progress)**
+- ✅ Account Manager & Client Hierarchy
+- ✅ Role-Based Access Control with Supabase Auth
+- ✅ Gmail OAuth Integration (Per-Mailbox)
+- ✅ Mailbox Switching & Filtering UX
+- ⏳ Outlook OAuth Integration (Next)
+
+See [UPDATE_CONTEXT.md](UPDATE_CONTEXT.md) for detailed progress and [TODO.md](TODO.md) for active task list.
+
+---
+
+## Environment Notes
+
+- **Platform**: Windows 11
+- **Python**: 3.13
+- **Node**: Latest LTS
+- **Backend Port**: 8000
+- **Frontend Port**: 3000
+- **Redis**: Required for job tracking
+- **Database**: Supabase PostgreSQL
+- **Production**: Railway deployment
