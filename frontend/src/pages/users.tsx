@@ -37,12 +37,22 @@ import {
   ReloadOutlined,
   CheckCircleOutlined,
   StopOutlined,
+  MailOutlined,
+  InboxOutlined,
 } from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../services/apiClient';
 import { clientService, ClientSummary } from '../services/clientService';
+import { mailboxService, Mailbox } from '../services/mailboxService';
 
 const { Title, Text } = Typography;
+
+interface MailboxSummary {
+  id: string;
+  name: string;
+  email_address?: string;
+  mailbox_type: string;
+}
 
 interface User {
   id: string;
@@ -54,6 +64,7 @@ interface User {
   created_at: string;
   updated_at: string;
   assigned_clients?: ClientSummary[];
+  assigned_mailboxes?: MailboxSummary[];
 }
 
 // Role configuration
@@ -84,17 +95,21 @@ const UsersPage: React.FC = () => {
 
   const [users, setUsers] = useState<User[]>([]);
   const [clients, setClients] = useState<ClientSummary[]>([]);
+  const [mailboxes, setMailboxes] = useState<Mailbox[]>([]);
   const [loading, setLoading] = useState(true);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [assignModalVisible, setAssignModalVisible] = useState(false);
+  const [mailboxModalVisible, setMailboxModalVisible] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [searchText, setSearchText] = useState('');
   const [form] = Form.useForm();
   const [assignForm] = Form.useForm();
+  const [mailboxForm] = Form.useForm();
 
   useEffect(() => {
     loadUsers();
     loadClients();
+    loadMailboxes();
   }, []);
 
   const loadUsers = async () => {
@@ -123,6 +138,15 @@ const UsersPage: React.FC = () => {
       setClients(response.clients);
     } catch (error) {
       console.error('Failed to load clients:', error);
+    }
+  };
+
+  const loadMailboxes = async () => {
+    try {
+      const data = await mailboxService.getMailboxes();
+      setMailboxes(data);
+    } catch (error) {
+      console.error('Failed to load mailboxes:', error);
     }
   };
 
@@ -170,6 +194,30 @@ const UsersPage: React.FC = () => {
       loadUsers();
     } catch (error: any) {
       message.error(error.message || 'Failed to update client assignments');
+    }
+  };
+
+  const handleManageMailboxes = (user: User) => {
+    setSelectedUser(user);
+    mailboxForm.setFieldsValue({
+      mailbox_ids: user.assigned_mailboxes?.map((m) => m.id) || [],
+    });
+    setMailboxModalVisible(true);
+  };
+
+  const handleUpdateMailboxAssignments = async (values: { mailbox_ids: string[] }) => {
+    if (!selectedUser) return;
+
+    try {
+      await api.put(`/auth/users/${selectedUser.id}/mailbox-assignments`, {
+        mailbox_ids: values.mailbox_ids,
+      });
+
+      message.success('Mailbox assignments updated successfully');
+      setMailboxModalVisible(false);
+      loadUsers();
+    } catch (error: any) {
+      message.error(error.message || 'Failed to update mailbox assignments');
     }
   };
 
@@ -273,6 +321,26 @@ const UsersPage: React.FC = () => {
       },
     },
     {
+      title: 'Assigned Mailboxes',
+      key: 'mailboxes',
+      render: (_: any, record: User) => {
+        const mailboxCount = record.assigned_mailboxes?.length || 0;
+        if (mailboxCount === 0) {
+          return <Text type="secondary">No mailboxes</Text>;
+        }
+        return (
+          <Space wrap>
+            {record.assigned_mailboxes?.slice(0, 2).map((mailbox) => (
+              <Tag key={mailbox.id} icon={<InboxOutlined />} color="purple">
+                {mailbox.name}
+              </Tag>
+            ))}
+            {mailboxCount > 2 && <Tag>+{mailboxCount - 2} more</Tag>}
+          </Space>
+        );
+      },
+    },
+    {
       title: 'Status',
       key: 'status',
       render: (_: any, record: User) => (
@@ -310,6 +378,14 @@ const UsersPage: React.FC = () => {
               />
             </Tooltip>
           )}
+          <Tooltip title="Assign mailboxes">
+            <Button
+              type="text"
+              icon={<MailOutlined />}
+              onClick={() => handleManageMailboxes(record)}
+              size="small"
+            />
+          </Tooltip>
           <Tooltip title={record.is_active ? 'Deactivate' : 'Activate'}>
             <Popconfirm
               title={`${record.is_active ? 'Deactivate' : 'Activate'} user?`}
@@ -474,6 +550,62 @@ const UsersPage: React.FC = () => {
               <Button onClick={() => setAssignModalVisible(false)}>Cancel</Button>
               <Button type="primary" htmlType="submit" className="glass-button-primary">
                 Update Assignments
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* Assign Mailboxes Modal */}
+      <Modal
+        title={`Manage Mailbox Assignments - ${selectedUser?.name}`}
+        open={mailboxModalVisible}
+        onCancel={() => setMailboxModalVisible(false)}
+        footer={null}
+        className="glass-modal"
+        width={600}
+      >
+        <Form form={mailboxForm} onFinish={handleUpdateMailboxAssignments} layout="vertical">
+          <Form.Item
+            name="mailbox_ids"
+            label="Assigned Mailboxes"
+            extra="Directly assign specific mailboxes to this user. This gives them access regardless of client assignments."
+          >
+            <Select
+              mode="multiple"
+              size="large"
+              placeholder="Select mailboxes to assign"
+              optionFilterProp="label"
+              showSearch
+              filterOption={(input, option) =>
+                (option?.label?.toString() || '').toLowerCase().includes(input.toLowerCase())
+              }
+            >
+              {mailboxes.map((mailbox) => (
+                <Select.Option
+                  key={mailbox.id}
+                  value={mailbox.id}
+                  label={`${mailbox.name} ${mailbox.email_address || ''}`}
+                >
+                  <Space>
+                    <InboxOutlined />
+                    <span>{mailbox.name}</span>
+                    {mailbox.email_address && (
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        ({mailbox.email_address})
+                      </Text>
+                    )}
+                    <Tag style={{ marginLeft: 'auto' }}>{mailbox.mailbox_type.toUpperCase()}</Tag>
+                  </Space>
+                </Select.Option>
+              ))}
+            </Select>
+          </Form.Item>
+          <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
+            <Space>
+              <Button onClick={() => setMailboxModalVisible(false)}>Cancel</Button>
+              <Button type="primary" htmlType="submit" className="glass-button-primary">
+                Update Mailbox Assignments
               </Button>
             </Space>
           </Form.Item>

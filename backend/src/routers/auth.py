@@ -76,8 +76,16 @@ class ClientAssignmentsUpdate(BaseModel):
     client_ids: List[str]
 
 
+class MailboxSummary(BaseModel):
+    """Summary of a mailbox for user assignment display"""
+    id: str
+    name: str
+    email_address: Optional[str] = None
+    mailbox_type: str
+
+
 class UserWithClients(BaseModel):
-    """User with assigned clients"""
+    """User with assigned clients and mailboxes"""
     id: str
     email: str
     name: str
@@ -87,6 +95,7 @@ class UserWithClients(BaseModel):
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
     assigned_clients: List[dict] = []
+    assigned_mailboxes: List[MailboxSummary] = []
 
 
 # =============================================================================
@@ -291,6 +300,21 @@ async def list_users(
                     for c in (clients_result.data or [])
                 ]
 
+            # Fetch mailboxes directly assigned to this user
+            mailboxes_result = _supabase.table('mailboxes').select(
+                'id, name, email_address, mailbox_type'
+            ).eq('user_id', u['id']).execute()
+
+            assigned_mailboxes = [
+                MailboxSummary(
+                    id=str(m['id']),
+                    name=m['name'],
+                    email_address=m.get('email_address'),
+                    mailbox_type=m['mailbox_type']
+                )
+                for m in (mailboxes_result.data or [])
+            ]
+
             users.append(UserWithClients(
                 id=str(u['id']),
                 email=u['email'],
@@ -300,7 +324,8 @@ async def list_users(
                 avatar_url=u.get('avatar_url'),
                 created_at=u.get('created_at'),
                 updated_at=u.get('updated_at'),
-                assigned_clients=assigned_clients
+                assigned_clients=assigned_clients,
+                assigned_mailboxes=assigned_mailboxes
             ))
 
         return users
@@ -643,6 +668,90 @@ async def update_user_client_assignments(
         raise
     except Exception as e:
         logger.error(f"Failed to update client assignments: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class MailboxAssignmentsUpdate(BaseModel):
+    """Bulk mailbox assignments update"""
+    mailbox_ids: List[str]
+
+
+@router.put("/users/{user_id}/mailbox-assignments")
+async def update_user_mailbox_assignments(
+    user_id: str,
+    request: MailboxAssignmentsUpdate,
+    current_user: dict = Depends(require_role('admin'))
+):
+    """
+    Bulk update mailbox assignments for a user (admin only).
+
+    Assigns the specified mailboxes directly to the user (sets user_id on mailbox).
+    Any mailboxes previously assigned to this user but not in the new list
+    will have their user_id set to NULL.
+
+    Args:
+        user_id: UUID of the user
+        request: List of mailbox_ids to assign
+
+    Returns:
+        Success message with assignment counts
+    """
+    try:
+        # Verify user exists
+        user_result = _supabase.table('user_profiles').select('id, name').eq(
+            'id', user_id
+        ).single().execute()
+
+        if not user_result.data:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Get currently assigned mailboxes
+        current_result = _supabase.table('mailboxes').select('id').eq(
+            'user_id', user_id
+        ).execute()
+        current_mailbox_ids = {str(m['id']) for m in (current_result.data or [])}
+
+        # Calculate which mailboxes to add and remove
+        new_mailbox_ids = set(request.mailbox_ids)
+        to_add = new_mailbox_ids - current_mailbox_ids
+        to_remove = current_mailbox_ids - new_mailbox_ids
+
+        # Remove assignments (set user_id to NULL)
+        if to_remove:
+            _supabase.table('mailboxes').update({
+                'user_id': None
+            }).in_('id', list(to_remove)).execute()
+            logger.info(f"Removed {len(to_remove)} mailbox assignments from user {user_id}")
+
+        # Add new assignments
+        if to_add:
+            # Verify mailboxes exist
+            mailboxes_result = _supabase.table('mailboxes').select('id').in_(
+                'id', list(to_add)
+            ).execute()
+            valid_mailbox_ids = [str(m['id']) for m in (mailboxes_result.data or [])]
+
+            if valid_mailbox_ids:
+                _supabase.table('mailboxes').update({
+                    'user_id': user_id
+                }).in_('id', valid_mailbox_ids).execute()
+                logger.info(f"Added {len(valid_mailbox_ids)} mailbox assignments to user {user_id}")
+
+        logger.info(f"User {user_id} mailbox assignments updated by {current_user['user_id']}")
+
+        return {
+            "success": True,
+            "message": f"Updated mailbox assignments: {len(to_add)} added, {len(to_remove)} removed",
+            "user_id": user_id,
+            "total_assigned": len(new_mailbox_ids),
+            "added": len(to_add),
+            "removed": len(to_remove)
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update mailbox assignments: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
