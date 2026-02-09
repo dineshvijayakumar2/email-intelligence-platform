@@ -19,6 +19,7 @@ import { ProcessingJobs } from './pages/processing';
 import ErrorsPage from './pages/errors';
 import ClientsPage from './pages/clients';
 import UsersPage from './pages/users';
+import OAuthCallback from './pages/oauth-callback';
 
 // Theme and styles
 import { antTheme } from './theme/glassTheme';
@@ -179,6 +180,10 @@ function App() {
                 </AdminRoute>
               }
             />
+
+            {/* OAuth callback routes - for popup windows */}
+            <Route path="/auth/microsoft/callback" element={<OAuthCallback />} />
+            <Route path="/auth/google/callback" element={<OAuthCallback />} />
 
             {/* Catch-all - redirect to dashboard */}
             <Route path="*" element={<Navigate to="/" replace />} />

@@ -1482,9 +1482,41 @@ async def process_emails_real(job_id: str, config: ProcessingJobConfig):
     try:
         logger.info(f"Starting REAL email processing for job {job_id}")
 
-        # Skip Gmail/Outlook LIVE jobs - they're handled by their own background tasks
+        # Handle Gmail/Outlook LIVE jobs - trigger their sync services instead
         if config.mailbox_type in ['gmail', 'outlook_live']:
-            logger.info(f"Skipping job {job_id} - {config.mailbox_type} LIVE jobs are handled by their own background tasks")
+            logger.info(f"Job {job_id} is for {config.mailbox_type} LIVE mailbox - triggering sync service")
+
+            # Update job status to running
+            await update_job_status(job_id, "running", {
+                "started_at": datetime.now(timezone.utc).isoformat()
+            })
+
+            try:
+                if config.mailbox_type == 'outlook_live' and _outlook_sync_service:
+                    # Trigger Outlook sync for this mailbox
+                    await _outlook_sync_service.trigger_mailbox_sync(config.mailbox_id)
+                    await update_job_status(job_id, "completed", {
+                        "completed_at": datetime.now(timezone.utc).isoformat(),
+                        "error_log": ["Outlook LIVE sync triggered successfully. Emails will sync in background."]
+                    })
+                elif config.mailbox_type == 'gmail' and _gmail_sync_service:
+                    # Trigger Gmail sync for this mailbox
+                    await _gmail_sync_service.trigger_mailbox_sync(config.mailbox_id)
+                    await update_job_status(job_id, "completed", {
+                        "completed_at": datetime.now(timezone.utc).isoformat(),
+                        "error_log": ["Gmail LIVE sync triggered successfully. Emails will sync in background."]
+                    })
+                else:
+                    await update_job_status(job_id, "failed", {
+                        "completed_at": datetime.now(timezone.utc).isoformat(),
+                        "error_log": [f"{config.mailbox_type} sync service not available. Please check server configuration."]
+                    })
+            except Exception as sync_error:
+                logger.error(f"Failed to trigger {config.mailbox_type} sync: {sync_error}")
+                await update_job_status(job_id, "failed", {
+                    "completed_at": datetime.now(timezone.utc).isoformat(),
+                    "error_log": [f"Failed to trigger sync: {str(sync_error)}"]
+                })
             return
 
         # Register job-mailbox mapping for WebSocket broadcasts

@@ -183,15 +183,23 @@ export const Dashboard: React.FC = () => {
       title: 'Mailbox',
       dataIndex: 'name',
       key: 'name',
-      render: (name: string, record: MailboxSummary) => (
-        <Space>
-          <InboxOutlined style={{ color: record.isActive ? '#667eea' : '#999' }} />
-          <Text strong>{name}</Text>
-          <Tag color={record.type === 'mbox' ? 'green' : record.type === 'pst' ? 'blue' : 'purple'}>
-            {record.type.toUpperCase()}
-          </Tag>
-        </Space>
-      ),
+      render: (name: string, record: MailboxSummary) => {
+        const isLive = ['gmail', 'outlook_live'].includes(record.type);
+        const typeColor = record.type === 'gmail' ? 'red' :
+                         record.type === 'outlook_live' ? 'blue' :
+                         record.type === 'mbox' ? 'green' :
+                         record.type === 'pst' ? 'geekblue' : 'purple';
+        return (
+          <Space>
+            <InboxOutlined style={{ color: record.isActive ? '#667eea' : '#999' }} />
+            <Text strong>{name}</Text>
+            <Tag color={typeColor}>
+              {record.type === 'outlook_live' ? 'OUTLOOK' : record.type.toUpperCase()}
+              {isLive && ' LIVE'}
+            </Tag>
+          </Space>
+        );
+      },
     },
     {
       title: 'Emails',
@@ -201,7 +209,7 @@ export const Dashboard: React.FC = () => {
       render: (count: number) => <Text>{count.toLocaleString()}</Text>,
     },
     {
-      title: 'Last Processed',
+      title: 'Last Sync',
       dataIndex: 'lastSync',
       key: 'lastSync',
       render: (date: string | null) => (
@@ -211,17 +219,34 @@ export const Dashboard: React.FC = () => {
     {
       title: '',
       key: 'action',
-      width: 100,
-      render: (_: any, record: MailboxSummary) => (
-        <Button
-          type="link"
-          size="small"
-          onClick={() => navigate(`/mailboxes/process/${record.id}`)}
-          disabled={!record.isActive}
-        >
-          Process
-        </Button>
-      ),
+      width: 120,
+      render: (_: any, record: MailboxSummary) => {
+        const isLive = ['gmail', 'outlook_live'].includes(record.type);
+        return (
+          <Space size={4}>
+            {isLive ? (
+              <Button
+                type="link"
+                size="small"
+                icon={<SyncOutlined />}
+                onClick={() => navigate(`/mailboxes/edit/${record.id}`)}
+                disabled={!record.isActive}
+              >
+                Sync
+              </Button>
+            ) : (
+              <Button
+                type="link"
+                size="small"
+                onClick={() => navigate(`/mailboxes/process/${record.id}`)}
+                disabled={!record.isActive}
+              >
+                Process
+              </Button>
+            )}
+          </Space>
+        );
+      },
     },
   ];
 

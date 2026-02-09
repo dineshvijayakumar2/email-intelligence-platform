@@ -152,7 +152,7 @@ class OutlookExtractor(BaseExtractor):
         return {
             'Authorization': f'Bearer {self.access_token}',
             'Content-Type': 'application/json',
-            'Prefer': 'outlook.body-content-type="text"'  # Request plain text body
+            'Prefer': 'outlook.body-content-type="html"'  # Request HTML body for rich text formatting
         }
 
     def _refresh_access_token(self) -> bool:
@@ -579,7 +579,8 @@ class OutlookExtractor(BaseExtractor):
 
             if body_type == 'html':
                 body_html = body_content
-                body_text = msg.get('bodyPreview', '')
+                # Extract plain text from HTML for search indexing
+                body_text = self._html_to_text(body_content)
             else:
                 body_text = body_content
                 body_html = ''
@@ -811,3 +812,23 @@ class OutlookExtractor(BaseExtractor):
         self.refresh_token = None
         self.folder_map = {}
         logger.info("Outlook extractor disconnected")
+
+    def _html_to_text(self, html_content: str) -> str:
+        """Convert HTML to plain text for search indexing and fallback display"""
+        if not html_content:
+            return ''
+
+        # Strip HTML tags
+        text = re.sub(r'<style[^>]*>.*?</style>', '', html_content, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r'<script[^>]*>.*?</script>', '', text, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r'<[^>]+>', ' ', text)
+        # Decode HTML entities
+        text = re.sub(r'&nbsp;', ' ', text)
+        text = re.sub(r'&amp;', '&', text)
+        text = re.sub(r'&lt;', '<', text)
+        text = re.sub(r'&gt;', '>', text)
+        text = re.sub(r'&quot;', '"', text)
+        text = re.sub(r'&#39;', "'", text)
+        # Normalize whitespace
+        text = re.sub(r'\s+', ' ', text)
+        return text.strip()
