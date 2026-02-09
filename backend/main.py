@@ -1483,7 +1483,7 @@ async def process_emails_real(job_id: str, config: ProcessingJobConfig):
         logger.info(f"Starting REAL email processing for job {job_id}")
 
         # Skip Gmail/Outlook LIVE jobs - they're handled by their own background tasks
-        if config.mailbox_type in ['gmail', 'outlook']:
+        if config.mailbox_type in ['gmail', 'outlook_live']:
             logger.info(f"Skipping job {job_id} - {config.mailbox_type} LIVE jobs are handled by their own background tasks")
             return
 
