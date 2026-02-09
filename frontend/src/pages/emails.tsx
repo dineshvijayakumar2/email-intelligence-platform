@@ -35,10 +35,8 @@ import {
 } from "@ant-design/icons";
 import { emailService, Email, EmailFilters } from '../services/emailService';
 import { mailboxService, Mailbox } from '../services/mailboxService';
-import { useAuth } from '../contexts/AuthContext';
 import SyncStatusBar from '../components/SyncStatusBar';
 import { dashboardService } from '../services/dashboardService';
-import MailboxSelector from '../components/MailboxSelector';
 
 const { Text, Title } = Typography;
 const { Option } = Select;
@@ -382,19 +380,15 @@ const EmailDetailPanel: React.FC<{
 // Main Email List Component
 export const EmailList: React.FC = () => {
   // Router hooks for mailbox-based navigation
-  const { mailboxId } = useParams<{ mailboxId?: string }>();
+  const { mailboxId, emailId } = useParams<{ mailboxId?: string; emailId?: string }>();
   const navigate = useNavigate();
-
-  // Auth context for user's accessible mailboxes
-  const { profile } = useAuth();
 
   // State
   const [emails, setEmails] = useState<Email[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filtersLoading, setFiltersLoading] = useState(true);
   const [totalCount, setTotalCount] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize] = useState(50);
+  const [pageSize] = useState(25); // Reduced from 50 for faster initial load
   const isLoadingMoreRef = useRef(false); // Track if we're loading more vs fresh load
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
   const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null);
@@ -402,14 +396,16 @@ export const EmailList: React.FC = () => {
   const [detailExpanded, setDetailExpanded] = useState(false);
   const [categories, setCategories] = useState<string[]>([]);
   const [accessibleMailboxes, setAccessibleMailboxes] = useState<Mailbox[]>([]);
+  const [mailboxesLoading, setMailboxesLoading] = useState(true); // Track if mailboxes are still loading
   const [mailboxIdMap, setMailboxIdMap] = useState<Record<string, string>>({}); // name -> id mapping
   const [mailboxIdToNameMap, setMailboxIdToNameMap] = useState<Record<string, string>>({}); // id -> name mapping
-  const [selectedMailboxIds, setSelectedMailboxIds] = useState<string[]>([]); // For MailboxSelector component
   const [folders, setFolders] = useState<string[]>([]);
   const [foldersLoading, setFoldersLoading] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [processingJobs, setProcessingJobs] = useState<any[]>([]);
+  const processingJobsRef = useRef<any[]>([]); // Ref to prevent stale closure
+
   const [filters, setFilters] = useState<EmailFilters>({
     search: '',
     category: '',
@@ -443,7 +439,6 @@ export const EmailList: React.FC = () => {
   const loadEmails = useCallback(async (append: boolean = false) => {
     // CRITICAL: Never load emails without a mailbox selected
     if (!filters.mailbox) {
-      console.log('[EmailList] Skipping email load - no mailbox selected');
       setLoading(false);
       setEmails([]);
       setTotalCount(0);
@@ -451,7 +446,6 @@ export const EmailList: React.FC = () => {
     }
 
     try {
-      console.log('[EmailList] Loading emails for mailbox:', filters.mailbox);
       setLoading(true);
       const { emails: emailData, totalCount: total } = await emailService.getEmails(
         filters,
@@ -476,25 +470,21 @@ export const EmailList: React.FC = () => {
   // Load filter options (categories and mailboxes - static)
   const loadFilterOptions = useCallback(async () => {
     try {
-      setFiltersLoading(true);
-      console.log('[EmailList] Loading filter options...');
+      setMailboxesLoading(true);
       const [categoriesData, mailboxListResponse] = await Promise.all([
         emailService.getEmailCategories(),
         mailboxService.getMailboxes(),
         // Don't load folders initially - wait for mailbox selection
       ]);
-      console.log('[EmailList] Raw mailbox response:', mailboxListResponse);
       setCategories(categoriesData);
 
-      // Filter to active mailboxes and create ID maps
-      const activeMailboxes = mailboxListResponse.filter((m: Mailbox) => m.is_active);
-      console.log('[EmailList] Active mailboxes after filtering:', activeMailboxes);
-      console.log('[EmailList] All mailboxes (including inactive):', mailboxListResponse);
-      setAccessibleMailboxes(activeMailboxes);
+      // Store all mailboxes and create ID maps from ALL mailboxes
+      // This allows navigation to any mailbox (active or not)
+      setAccessibleMailboxes(mailboxListResponse);
 
       const idMap: Record<string, string> = {};
       const idToNameMap: Record<string, string> = {};
-      activeMailboxes.forEach((m: Mailbox) => {
+      mailboxListResponse.forEach((m: Mailbox) => {
         idMap[m.name] = m.id;
         idToNameMap[m.id] = m.name;
       });
@@ -505,7 +495,7 @@ export const EmailList: React.FC = () => {
       console.error('[EmailList] Error loading filter options:', error);
       message.error('Failed to load mailboxes. Please refresh the page.');
     } finally {
-      setFiltersLoading(false);
+      setMailboxesLoading(false);
     }
   }, []); // No dependencies - only run once on mount
 
@@ -513,7 +503,6 @@ export const EmailList: React.FC = () => {
   useEffect(() => {
     // Wait for mailboxes to be loaded
     if (accessibleMailboxes.length > 0 && !mailboxId) {
-      console.log('[EmailList] No mailbox in URL, navigating to first mailbox:', accessibleMailboxes[0]);
       navigate(`/emails/${accessibleMailboxes[0].id}`, { replace: true });
     }
   }, [accessibleMailboxes, mailboxId, navigate]);
@@ -552,13 +541,28 @@ export const EmailList: React.FC = () => {
     }
   }, []);
 
+  // Keep processingJobs ref in sync with state
+  useEffect(() => {
+    processingJobsRef.current = processingJobs;
+  }, [processingJobs]);
+
   // Load processing jobs for sync status
   const loadProcessingJobs = useCallback(async () => {
     try {
       const jobs = await dashboardService._fetchProcessingJobs();
-      setProcessingJobs(jobs || []);
+      // Preserve existing data if API returns empty (transient failure)
+      const currentJobs = processingJobsRef.current;
+      if (jobs && Array.isArray(jobs)) {
+        // Only clear if we got a valid response - empty array when we have data might be transient
+        if (jobs.length === 0 && currentJobs.length > 0) {
+          // Keep existing data on empty response
+          return;
+        }
+        setProcessingJobs(jobs);
+      }
     } catch (error) {
       console.error('Error loading processing jobs:', error);
+      // Don't clear existing data on error
     }
   }, []);
 
@@ -578,7 +582,6 @@ export const EmailList: React.FC = () => {
       loadEmails(isLoadingMoreRef.current);
       isLoadingMoreRef.current = false; // Reset after loading
     } else {
-      console.log('[EmailList] No mailbox selected, skipping email load');
       setLoading(false);
     }
   }, [filters, currentPage, loadEmails]);
@@ -587,39 +590,44 @@ export const EmailList: React.FC = () => {
   useEffect(() => {
     if (filters.mailbox && mailboxIdMap[filters.mailbox]) {
       loadFoldersForMailbox(filters.mailbox);
-      // Reset folder filter when mailbox changes
-      setFilters(prev => ({ ...prev, folder: '' }));
     }
   }, [filters.mailbox, mailboxIdMap, loadFoldersForMailbox]);
 
-  // Sync selectedMailboxIds with filters.mailbox (for initial load)
-  useEffect(() => {
-    if (filters.mailbox && mailboxIdMap[filters.mailbox]) {
-      const mailboxId = mailboxIdMap[filters.mailbox];
-      if (!selectedMailboxIds.includes(mailboxId)) {
-        setSelectedMailboxIds([mailboxId]);
-      }
-    }
-  }, [filters.mailbox, mailboxIdMap]);
-
   // Sync URL param (mailboxId) with component state
   useEffect(() => {
+    // Wait for mailboxes to be loaded before trying to sync
+    if (mailboxesLoading) return;
+
     if (mailboxId && mailboxIdToNameMap[mailboxId]) {
       const mailboxName = mailboxIdToNameMap[mailboxId];
-      console.log('[EmailList] URL mailbox changed:', mailboxId, '->', mailboxName);
-
-      // Update selected mailbox IDs for the dropdown
-      setSelectedMailboxIds([mailboxId]);
 
       // Update filters with the mailbox name (triggers email loading)
       setFilters(prev => ({ ...prev, mailbox: mailboxName }));
 
-      // Clear any selected email when switching mailboxes
+      // Clear any selected email when switching mailboxes (unless emailId is in URL)
+      if (!emailId) {
+        setSelectedEmail(null);
+        setSelectedEmailId(null);
+      }
+      setCurrentPage(1);
+    } else if (mailboxId && Object.keys(mailboxIdToNameMap).length > 0) {
+      // Mailbox ID from URL not found in accessible mailboxes
+      console.warn(`[EmailList] Mailbox ${mailboxId} not found in accessible mailboxes, redirecting to mailboxes page`);
+      message.warning('Mailbox not found or not accessible');
+      navigate('/mailboxes', { replace: true });
+    }
+  }, [mailboxId, mailboxIdToNameMap, emailId, mailboxesLoading, navigate]);
+
+  // Load email detail when emailId changes in URL
+  useEffect(() => {
+    if (emailId && emailId !== selectedEmailId) {
+      loadEmailDetails(emailId);
+    } else if (!emailId && selectedEmailId) {
+      // URL has no emailId but we have one selected - clear it
       setSelectedEmail(null);
       setSelectedEmailId(null);
-      setCurrentPage(1);
     }
-  }, [mailboxId, mailboxIdToNameMap]);
+  }, [emailId, selectedEmailId, loadEmailDetails]);
 
   // Handlers
   const handleFilterChange = (key: keyof EmailFilters, value: any) => {
@@ -647,58 +655,41 @@ export const EmailList: React.FC = () => {
     if (folderKey === '') {
       setFilters(prev => ({ ...prev, folder: '' }));
     } else {
-      // Find matching folder from the folders list, or use the key directly
-      const matchedFolder = folders.find(f => f.toLowerCase().includes(folderKey.toLowerCase()));
+      // Try to find matching folder with increasing specificity:
+      // 1. Exact match (case-sensitive)
+      let matchedFolder = folders.find(f => f === folderKey);
+
+      // 2. If no exact match, try case-insensitive exact match
+      if (!matchedFolder) {
+        matchedFolder = folders.find(f => f.toLowerCase() === folderKey.toLowerCase());
+      }
+
+      // 3. If still no match, try case-insensitive includes (for system folders like 'inbox', 'sent')
+      if (!matchedFolder) {
+        matchedFolder = folders.find(f => f.toLowerCase().includes(folderKey.toLowerCase()));
+      }
+
       // Use matched folder if found, otherwise use the key itself for filtering
       setFilters(prev => ({ ...prev, folder: matchedFolder || folderKey }));
     }
   };
 
-  const handleMailboxSelect = (mailbox: string) => {
-    // Clear emails immediately to avoid showing stale data
-    setEmails([]);
-    setLoading(true);
-    setSelectedEmail(null);
-    setSelectedEmailId(null);
-    // Reset page to 1
-    setCurrentPage(1);
-    // Update mailbox filter
-    handleFilterChange('mailbox', mailbox);
-  };
-
-  // Handler for MailboxSelector component (uses IDs) - navigates to new route
-  const handleMailboxSelectorChange = (mailboxIds: string[]) => {
-    console.log('[EmailList] Mailbox selector changed:', mailboxIds);
-    if (mailboxIds.length === 0) return; // Don't allow empty selection
-
-    const selectedMailboxId = mailboxIds[0];
-    console.log('[EmailList] Navigating to /emails/' + selectedMailboxId);
-
-    // Optimistically update UI immediately for instant feedback
-    setEmails([]);
-    setLoading(true);
-    setSelectedEmail(null);
-    setSelectedEmailId(null);
-    setSelectedMailboxIds([selectedMailboxId]);
-    setCurrentPage(1);
-    setFolders([]); // Clear folders until new ones load
-
-    // Navigate to the mailbox-specific route
-    navigate(`/emails/${selectedMailboxId}`);
-  };
-
   const handleEmailSelect = (email: Email) => {
-    loadEmailDetails(email.id);
+    // Navigate to email detail route - this will trigger the effect to load details
+    if (mailboxId) {
+      navigate(`/emails/${mailboxId}/${email.id}`);
+    }
   };
 
   const handleCloseDetail = () => {
-    setSelectedEmail(null);
-    setSelectedEmailId(null);
+    // Navigate back to mailbox view - this will trigger the effect to clear details
+    if (mailboxId) {
+      navigate(`/emails/${mailboxId}`);
+    }
   };
 
   const handleRefresh = () => {
     if (!filters.mailbox) {
-      console.log('[EmailList] Cannot refresh - no mailbox selected');
       return;
     }
     setEmails([]);
@@ -732,7 +723,22 @@ export const EmailList: React.FC = () => {
       <div className={`mail-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
         {/* Sidebar Header */}
         <div className="mail-sidebar-header">
-          <Text strong style={{ fontSize: 16, color: 'white' }}>Folders</Text>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+            <Tooltip title="Back to Mailboxes">
+              <Button
+                type="text"
+                size="small"
+                icon={<LeftOutlined />}
+                onClick={() => navigate('/mailboxes')}
+                style={{ color: 'rgba(255,255,255,0.8)' }}
+              />
+            </Tooltip>
+            {!sidebarCollapsed && (
+              <Text strong style={{ fontSize: 14, color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {filters.mailbox || 'Loading...'}
+              </Text>
+            )}
+          </div>
           <Tooltip title={sidebarCollapsed ? 'Expand' : 'Collapse'}>
             <Button
               type="text"
@@ -750,7 +756,19 @@ export const EmailList: React.FC = () => {
             {foldersLoading ? <SyncOutlined spin /> : <FolderOutlined />} {!sidebarCollapsed && 'Folders'}
           </div>
           <div className="mail-sidebar-items">
-            {!filters.mailbox ? (
+            {mailboxesLoading || (foldersLoading && !filters.mailbox) ? (
+              // Skeleton loader while loading
+              !sidebarCollapsed && (
+                <div style={{ padding: '8px 12px' }}>
+                  {[1, 2, 3, 4, 5].map(i => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                      <Skeleton.Avatar active size={16} shape="square" style={{ opacity: 0.3 }} />
+                      <Skeleton.Input active size="small" style={{ width: 80, height: 14, opacity: 0.3 }} />
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : !filters.mailbox ? (
               !sidebarCollapsed && (
                 <div style={{ padding: '12px', textAlign: 'center', color: 'rgba(255,255,255,0.5)', fontSize: 12 }}>
                   Select a mailbox
@@ -805,16 +823,6 @@ export const EmailList: React.FC = () => {
           </div>
 
           <div className="mail-topbar-right">
-            {/* Mailbox Selector */}
-            <MailboxSelector
-              value={selectedMailboxIds}
-              onChange={handleMailboxSelectorChange}
-              mode="single"
-              placeholder="Select mailbox"
-              size="middle"
-              allowClear={false}
-            />
-
             {/* Filter Button */}
             <Dropdown
               trigger={['click']}
@@ -898,7 +906,7 @@ export const EmailList: React.FC = () => {
           <SyncStatusBar
             selectedMailboxIds={[mailboxIdMap[filters.mailbox]]}
             jobs={processingJobs}
-            onViewDetails={() => window.location.href = '/processing'}
+            onViewDetails={() => navigate('/processing')}
           />
         )}
 
@@ -923,13 +931,7 @@ export const EmailList: React.FC = () => {
 
             {/* Email List */}
             <div className="mail-list-content">
-              {!filters.mailbox ? (
-                <Empty
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description="Select a mailbox to view emails"
-                  style={{ marginTop: 60 }}
-                />
-              ) : loading && emails.length === 0 ? (
+              {mailboxesLoading || (loading && emails.length === 0) ? (
                 <div className="mail-list-loading">
                   {[1, 2, 3, 4, 5].map(i => (
                     <div key={i} className="email-skeleton">
@@ -941,6 +943,12 @@ export const EmailList: React.FC = () => {
                     </div>
                   ))}
                 </div>
+              ) : !filters.mailbox ? (
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description="Select a mailbox to view emails"
+                  style={{ marginTop: 60 }}
+                />
               ) : emails.length === 0 ? (
                 <Empty
                   image={Empty.PRESENTED_IMAGE_SIMPLE}

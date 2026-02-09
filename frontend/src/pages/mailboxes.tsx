@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   Table,
   Space,
@@ -12,7 +12,8 @@ import {
   InputNumber,
   Form,
   Select,
-  Dropdown
+  Dropdown,
+  Skeleton
 } from "antd";
 import {
   PlusOutlined,
@@ -29,7 +30,8 @@ import {
   TeamOutlined,
   UserOutlined,
   DownOutlined,
-  EyeOutlined
+  EyeOutlined,
+  ExclamationCircleOutlined
 } from "@ant-design/icons";
 import dayjs from 'dayjs';
 import { useNavigate, useParams } from "react-router-dom";
@@ -59,6 +61,7 @@ export const MailboxList: React.FC = () => {
   const [outlookConnected, setOutlookConnected] = useState(false);
   const [linkingMailboxId, setLinkingMailboxId] = useState<string | null>(null);
   const [processingJobs, setProcessingJobs] = useState<any[]>([]);
+  const [processingJobsLoading, setProcessingJobsLoading] = useState(true); // Track loading state for processing jobs
 
   // Date range fetch modal state
   const [dateRangeModalVisible, setDateRangeModalVisible] = useState(false);
@@ -73,23 +76,47 @@ export const MailboxList: React.FC = () => {
   const [clients, setClients] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [assignmentLoading, setAssignmentLoading] = useState(false);
+  const [clientsUsersLoading, setClientsUsersLoading] = useState(true); // Track loading state for client/user data
+
+  // Track if component is mounted to prevent state updates after unmount
+  const isMountedRef = useRef(true);
+  // Use ref to track mailboxes for stale closure prevention
+  const mailboxesRef = useRef<Mailbox[]>([]);
+  // Use ref to track processingJobs for stale closure prevention
+  const processingJobsRef = useRef<any[]>([]);
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    mailboxesRef.current = mailboxes;
+  }, [mailboxes]);
 
   useEffect(() => {
+    processingJobsRef.current = processingJobs;
+  }, [processingJobs]);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+
     // Only load once on mount, not on every isAdmin change
     loadMailboxes();
     checkGmailConnection();
     checkOutlookConnection();
-    loadProcessingJobs();
+    loadProcessingJobs(true); // Initial load - show skeleton
     if (isAdmin) {
       loadClientsAndUsers();
     }
 
     // Poll for job updates every 5 seconds
     const interval = setInterval(() => {
-      loadProcessingJobs();
+      if (isMountedRef.current) {
+        loadProcessingJobs();
+      }
     }, 5000);
 
-    return () => clearInterval(interval);
+    return () => {
+      isMountedRef.current = false;
+      clearInterval(interval);
+    };
   }, []); // Empty dependency array - only run once on mount
 
   // Separate effect for when isAdmin changes (to load clients/users)
@@ -121,6 +148,7 @@ export const MailboxList: React.FC = () => {
 
   const loadClientsAndUsers = async () => {
     try {
+      setClientsUsersLoading(true);
       const [clientsData, usersData] = await Promise.all([
         clientService.list(),
         userService.getAccountManagers()
@@ -129,15 +157,38 @@ export const MailboxList: React.FC = () => {
       setUsers(usersData || []);
     } catch (error) {
       console.error('Error loading clients and users:', error);
+    } finally {
+      setClientsUsersLoading(false);
     }
   };
 
-  const loadProcessingJobs = async () => {
+  const loadProcessingJobs = async (isInitialLoad = false) => {
     try {
+      // Only show loading skeleton on initial load, not on polling updates
+      if (isInitialLoad) {
+        setProcessingJobsLoading(true);
+      }
       const jobs = await dashboardService._fetchProcessingJobs();
-      setProcessingJobs(jobs || []);
+      // Only update if component is still mounted
+      if (!isMountedRef.current) return;
+
+      // Preserve existing data if API returns empty (transient failure)
+      const currentJobs = processingJobsRef.current;
+      if (jobs && Array.isArray(jobs)) {
+        // Only clear if we got a valid response - empty array when we have data might be transient
+        if (jobs.length === 0 && currentJobs.length > 0) {
+          // Keep existing data on empty response
+          return;
+        }
+        setProcessingJobs(jobs);
+      }
     } catch (error) {
       console.error('Error loading processing jobs:', error);
+      // Don't clear existing data on error
+    } finally {
+      if (isMountedRef.current) {
+        setProcessingJobsLoading(false);
+      }
     }
   };
 
@@ -145,18 +196,22 @@ export const MailboxList: React.FC = () => {
     let shouldStopLoading = true;
 
     try {
-      setLoading(true);
-      console.log(`[Mailboxes] API call ${retryCount + 1} starting...`);
+      if (isMountedRef.current) {
+        setLoading(true);
+      }
       const data = await mailboxService.getMailboxes();
-      console.log('[Mailboxes] API returned:', data);
-      console.log('[Mailboxes] Loaded mailboxes:', data?.length || 0, 'items');
-      console.log('[Mailboxes] User role:', profile?.roles);
+
+      // Don't update state if component is unmounted
+      if (!isMountedRef.current) return;
 
       // Only update state if we got valid data
       // Don't clear existing mailboxes if API returns empty array unexpectedly
       if (data !== null && data !== undefined) {
+        // Use ref to get current mailboxes (avoids stale closure)
+        const currentMailboxes = mailboxesRef.current;
+
         // If we have existing mailboxes and API returns empty, it might be a transient error
-        if (Array.isArray(data) && data.length === 0 && mailboxes.length > 0) {
+        if (Array.isArray(data) && data.length === 0 && currentMailboxes.length > 0) {
           console.warn('[Mailboxes] API returned empty array but we have existing data - keeping existing mailboxes');
         } else {
           setMailboxes(data || []);
@@ -168,7 +223,7 @@ export const MailboxList: React.FC = () => {
       console.error(`[Mailboxes] Error on attempt ${retryCount + 1}:`, error);
 
       // Retry up to 2 times with exponential backoff for transient errors
-      if (retryCount < 2) {
+      if (retryCount < 2 && isMountedRef.current) {
         const delay = Math.pow(2, retryCount) * 500; // 500ms, 1000ms
         shouldStopLoading = false; // Keep loading spinner while retrying
         setTimeout(() => loadMailboxes(retryCount + 1), delay);
@@ -176,12 +231,12 @@ export const MailboxList: React.FC = () => {
       }
 
       // Only show error after retries exhausted and if we have no mailboxes to display
-      // This prevents error flash when data eventually loads successfully
-      if (mailboxes.length === 0) {
+      // Use ref to get current mailboxes (avoids stale closure)
+      if (mailboxesRef.current.length === 0 && isMountedRef.current) {
         message.error('Failed to load mailboxes. Please check your connection and try again.');
       }
     } finally {
-      if (shouldStopLoading) {
+      if (shouldStopLoading && isMountedRef.current) {
         setLoading(false);
       }
     }
@@ -413,20 +468,63 @@ export const MailboxList: React.FC = () => {
     {
       title: 'Sync Status',
       key: 'sync_status',
-      render: (_: any, record: Mailbox) => (
-        <ProcessingStatusBadge
-          mailboxId={record.id}
-          jobs={processingJobs}
-          showProgress={false}
-          onClick={() => navigate('/processing')}
-        />
-      ),
+      render: (_: any, record: Mailbox) => {
+        // Show skeleton while processing jobs are loading
+        if (processingJobsLoading) {
+          return <Skeleton.Input active size="small" style={{ width: 80 }} />;
+        }
+        return (
+          <ProcessingStatusBadge
+            mailboxId={record.id}
+            jobs={processingJobs}
+            showProgress={false}
+            onClick={() => navigate(`/processing/${record.id}`)}
+          />
+        );
+      },
+    },
+    {
+      title: 'Errors',
+      key: 'errors',
+      width: 100,
+      render: (_: any, record: Mailbox) => {
+        // Show skeleton while processing jobs are loading
+        if (processingJobsLoading) {
+          return <Skeleton.Input active size="small" style={{ width: 50 }} />;
+        }
+
+        // Count failed jobs for this mailbox
+        const failedJobs = processingJobs.filter(
+          j => j.mailbox_id === record.id && (j.status === 'failed' || j.failed_records > 0)
+        );
+        const totalFailed = failedJobs.reduce((sum, j) => sum + (j.failed_records || 0), 0);
+
+        if (totalFailed === 0 && failedJobs.length === 0) {
+          return <Text type="secondary">-</Text>;
+        }
+
+        return (
+          <Button
+            type="link"
+            danger
+            size="small"
+            icon={<ExclamationCircleOutlined />}
+            onClick={() => navigate(`/errors/${record.id}`)}
+          >
+            {totalFailed > 0 ? totalFailed : failedJobs.length}
+          </Button>
+        );
+      },
     },
     ...(isAdmin ? [{
       title: 'Client',
       dataIndex: 'client_id',
       key: 'client_id',
       render: (clientId: string, record: any) => {
+        // Show skeleton while clients are loading
+        if (clientsUsersLoading) {
+          return <Skeleton.Input active size="small" style={{ width: 100 }} />;
+        }
         const client = clients.find(c => c.id === clientId);
         return client ? (
           <Space>
@@ -450,6 +548,10 @@ export const MailboxList: React.FC = () => {
       dataIndex: 'user_id',
       key: 'user_id',
       render: (userId: string, record: any) => {
+        // Show skeleton while users are loading
+        if (clientsUsersLoading) {
+          return <Skeleton.Input active size="small" style={{ width: 100 }} />;
+        }
         const user = users.find(u => u.id === userId);
         return user ? (
           <Space>
@@ -469,10 +571,20 @@ export const MailboxList: React.FC = () => {
       },
     }] : []),
     {
-      title: 'Total Emails',
+      title: 'Emails',
       dataIndex: 'total_emails',
       key: 'total_emails',
-      render: (count: number) => count.toLocaleString(),
+      render: (count: number, record: Mailbox) => (
+        <Button
+          type="link"
+          size="small"
+          icon={<MailOutlined />}
+          onClick={() => navigate(`/emails/${record.id}`)}
+          style={{ padding: 0 }}
+        >
+          {count.toLocaleString()}
+        </Button>
+      ),
     },
     {
       title: 'Last Sync',
@@ -603,19 +715,37 @@ export const MailboxList: React.FC = () => {
 
       {/* Table */}
       <div className="glass-table-container fade-in-up stagger-1">
-        <Table
-          dataSource={mailboxes}
-          columns={columns}
-          loading={loading}
-          rowKey="id"
-          pagination={{
-            pageSize: 10,
-            showSizeChanger: true,
-            showQuickJumper: true,
-            showTotal: (total, range) =>
-              `${range[0]}-${range[1]} of ${total} mailboxes`,
-          }}
-        />
+        {loading && mailboxes.length === 0 ? (
+          <div style={{ padding: 24 }}>
+            {[1, 2, 3, 4, 5].map(i => (
+              <div key={i} style={{ display: 'flex', gap: 16, marginBottom: 20, alignItems: 'center' }}>
+                <Skeleton.Input active size="small" style={{ width: 140 }} />
+                <Skeleton.Button active size="small" style={{ width: 60 }} />
+                <Skeleton.Input active size="small" style={{ width: 100 }} />
+                <Skeleton.Input active size="small" style={{ width: 80 }} />
+                <Skeleton.Input active size="small" style={{ width: 70 }} />
+                <Skeleton.Input active size="small" style={{ width: 90 }} />
+                <Space>
+                  <Skeleton.Button active size="small" />
+                  <Skeleton.Button active size="small" />
+                </Space>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <Table
+            dataSource={mailboxes}
+            columns={columns}
+            rowKey="id"
+            pagination={{
+              pageSize: 10,
+              showSizeChanger: true,
+              showQuickJumper: true,
+              showTotal: (total, range) =>
+                `${range[0]}-${range[1]} of ${total} mailboxes`,
+            }}
+          />
+        )}
       </div>
 
       {/* Date Range Fetch Modal */}

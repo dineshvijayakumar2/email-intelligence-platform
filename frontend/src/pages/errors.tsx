@@ -44,7 +44,7 @@ import {
   SyncOutlined,
   RobotOutlined,
 } from '@ant-design/icons';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams, useParams, useNavigate } from 'react-router-dom';
 import {
   errorService,
   ErrorSummary,
@@ -88,6 +88,9 @@ const phaseIcons: Record<string, React.ReactNode> = {
 };
 
 const ErrorsPage: React.FC = () => {
+  // URL params for mailbox filtering
+  const { mailboxId: mailboxIdFromUrl } = useParams<{ mailboxId?: string }>();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const jobIdFromUrl = searchParams.get('jobId');
   const tabFromUrl = searchParams.get('tab') || 'all';
@@ -97,7 +100,7 @@ const ErrorsPage: React.FC = () => {
   const [jobs, setJobs] = useState<ProcessingJob[]>([]);
   const [mailboxes, setMailboxes] = useState<MailboxOption[]>([]);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(jobIdFromUrl);
-  const [selectedMailboxId, setSelectedMailboxId] = useState<string | null>(null);
+  const [selectedMailboxId, setSelectedMailboxId] = useState<string | null>(mailboxIdFromUrl || null);
   const [activeTab, setActiveTab] = useState<string>(tabFromUrl);
 
   // Job Errors state (from job_errors table)
@@ -225,6 +228,19 @@ const ErrorsPage: React.FC = () => {
     }
   }, [jobIdFromUrl, jobs]);
 
+  // Auto-select mailbox from URL param when jobs are loaded
+  useEffect(() => {
+    if (mailboxIdFromUrl && jobs.length > 0) {
+      setSelectedMailboxId(mailboxIdFromUrl);
+      // Find first job with errors for this mailbox
+      const jobsForMailbox = jobs.filter(j => j.mailbox_id === mailboxIdFromUrl);
+      const jobWithErrors = jobsForMailbox.find(j => j.failed_records > 0) || jobsForMailbox[0];
+      if (jobWithErrors && !selectedJobId) {
+        setSelectedJobId(jobWithErrors.id);
+      }
+    }
+  }, [mailboxIdFromUrl, jobs, selectedJobId]);
+
   // Load errors when job selected
   useEffect(() => {
     if (selectedJobId) {
@@ -257,11 +273,17 @@ const ErrorsPage: React.FC = () => {
   const handleMailboxFilter = (mailboxId: string | null) => {
     setSelectedMailboxId(mailboxId);
     if (mailboxId) {
+      // Navigate to URL with mailbox filter
+      navigate(`/errors/${mailboxId}`);
       // Find first job with errors for this mailbox
       const job = jobs.find(j => j.mailbox_id === mailboxId && j.failed_records > 0);
       if (job) {
         setSelectedJobId(job.id);
       }
+    } else {
+      // Clear mailbox filter - navigate to base errors page
+      navigate('/errors');
+      setSelectedJobId(null);
     }
   };
 

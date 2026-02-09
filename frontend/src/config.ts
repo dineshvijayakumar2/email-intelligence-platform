@@ -1,9 +1,31 @@
 // Configuration loaded from frontend environment variables
 // All variables must be prefixed with VITE_ to be exposed to the client
 
+// Helper to derive WebSocket URL from API URL
+const deriveWsUrl = (apiUrl: string): string => {
+  if (import.meta.env.VITE_WS_BASE_URL) {
+    return import.meta.env.VITE_WS_BASE_URL;
+  }
+  // Convert http(s) to ws(s)
+  if (apiUrl.startsWith('http://')) {
+    return apiUrl.replace('http://', 'ws://').replace('/api', '');
+  }
+  if (apiUrl.startsWith('https://')) {
+    return apiUrl.replace('https://', 'wss://').replace('/api', '');
+  }
+  // Relative URL - use current origin
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${window.location.host}`;
+};
+
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api';
+
 const config = {
   // API - Use environment variable, fallback to relative path
-  apiBaseUrl: import.meta.env.VITE_API_BASE_URL || '/api',
+  apiBaseUrl,
+
+  // WebSocket - Derived from API URL or use explicit env variable
+  wsBaseUrl: deriveWsUrl(apiBaseUrl),
 
   // Supabase (for auth)
   supabaseUrl: import.meta.env.VITE_SUPABASE_URL || '',

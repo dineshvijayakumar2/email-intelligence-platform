@@ -57,6 +57,11 @@ from src.services.outlook_sync_service import get_outlook_sync_service, OutlookS
 from src.routers.auth import router as auth_router, init_auth_router
 from src.dependencies.auth import init_auth_dependencies, require_role, get_current_user, get_accessible_mailbox_ids
 
+# WebSocket for real-time updates
+from src.websocket.routes import router as websocket_router
+from src.websocket.manager import init_connection_manager, get_connection_manager
+from src.websocket.auth import init_websocket_auth
+
 # Configure logging to both file and console
 import logging.handlers
 import sys
@@ -304,7 +309,7 @@ try:
     if src_path not in sys.path:
         sys.path.insert(0, src_path)
 
-    from src.utils.progress_tracker import initialize_progress_managers
+    from src.utils.progress_tracker import initialize_progress_managers, register_job_mailbox, unregister_job
     initialize_progress_managers(progress_manager, queue_manager)
     logger.info("Shared progress tracker initialized")
 except Exception as e:
@@ -401,6 +406,8 @@ def update_job_progress_redis(job_id: str, processed: int, failed: int = 0, sync
 
     Returns:
         True if should sync to database (every 100 emails or 30 seconds)
+
+    Note: WebSocket broadcasts are handled by the shared progress_tracker module.
     """
     if not progress_manager:
         # Redis not available, always sync to DB
@@ -487,6 +494,9 @@ app.include_router(errors_router, prefix="/api")
 app.include_router(gmail_router, prefix="/api")
 app.include_router(outlook_router, prefix="/api")
 
+# WebSocket router (no /api prefix - WebSocket uses /ws directly)
+app.include_router(websocket_router)
+
 # Sync service instances (initialized in startup event)
 _gmail_sync_service: GmailSyncService = None
 _outlook_sync_service: OutlookSyncService = None
@@ -502,6 +512,15 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"Failed to initialize business hierarchy routers: {e}")
         # Don't fail startup - routers will init on first use
+
+    # Initialize WebSocket infrastructure
+    try:
+        init_connection_manager()
+        init_websocket_auth(get_supabase())
+        logger.info("WebSocket infrastructure initialized")
+    except Exception as e:
+        logger.warning(f"Failed to initialize WebSocket: {e}")
+        # Don't fail startup - WebSocket is optional enhancement
 
     # Initialize Gmail sync service (Stage 2)
     try:
@@ -1468,6 +1487,12 @@ async def process_emails_real(job_id: str, config: ProcessingJobConfig):
             logger.info(f"Skipping job {job_id} - {config.mailbox_type} LIVE jobs are handled by their own background tasks")
             return
 
+        # Register job-mailbox mapping for WebSocket broadcasts
+        try:
+            register_job_mailbox(job_id, config.mailbox_id)
+        except Exception:
+            pass  # Non-critical
+
         # Immediately update status to 'running' so user sees it's active
         await update_job_status(job_id, "running", {
             "started_at": datetime.now(timezone.utc).isoformat()
@@ -1808,15 +1833,41 @@ async def process_emails_real(job_id: str, config: ProcessingJobConfig):
 
 async def update_job_status(job_id: str, status: str, updates: Dict[str, Any]):
     """Update job status in database and memory"""
-    
+
     update_data = {"status": status, **updates}
-    
+
     # Update database
     get_supabase().table('processing_jobs').update(update_data).eq('id', job_id).execute()
-    
+
     # Update in-memory job
     if job_id in active_jobs:
         active_jobs[job_id].update(update_data)
+
+    # Broadcast status update via WebSocket
+    try:
+        manager = get_connection_manager()
+        if manager:
+            # Get mailbox_id for the job
+            mailbox_id = None
+            if job_id in active_jobs:
+                mailbox_id = active_jobs[job_id].get('mailbox_id')
+            else:
+                job_result = get_supabase().table('processing_jobs').select('mailbox_id').eq('id', job_id).execute()
+                if job_result.data:
+                    mailbox_id = job_result.data[0].get('mailbox_id')
+
+            if mailbox_id:
+                # Get current progress from Redis for complete update
+                progress = get_job_progress(job_id)
+                await manager.broadcast_job_update(job_id, mailbox_id, {
+                    'status': status,
+                    'processed_records': progress.get('processed', 0),
+                    'failed_records': progress.get('failed', 0),
+                    'total_records': progress.get('total_records', 0),
+                    **updates
+                })
+    except Exception as e:
+        logger.debug(f"WebSocket broadcast failed (non-critical): {e}")
 
 async def generate_sample_emails(job_id: str, count: int):
     """Generate sample email data for demonstration"""
@@ -1877,23 +1928,34 @@ async def generate_sample_emails(job_id: str, count: int):
 
 @app.get("/api/processing-jobs")
 async def get_processing_jobs(
+    mailbox_id: str = None,
     current_user: dict = Depends(get_current_user),
     accessible_mailbox_ids: list = Depends(get_accessible_mailbox_ids)
 ):
-    """Get processing jobs filtered by user's accessible mailboxes"""
+    """Get processing jobs filtered by user's accessible mailboxes. Optionally filter by specific mailbox_id."""
 
     try:
-        logger.info(f"[Processing Jobs] User {current_user['user_id']} accessing with {len(accessible_mailbox_ids)} mailboxes")
+        logger.info(f"[Processing Jobs] User {current_user['user_id']} accessing with {len(accessible_mailbox_ids)} mailboxes, filter mailbox_id={mailbox_id}")
 
         # If user has no accessible mailboxes, return empty list
         if not accessible_mailbox_ids:
             logger.warning("[Processing Jobs] User has no accessible mailboxes")
             return []
 
-        # Get processing jobs for accessible mailboxes only
+        # Determine which mailbox IDs to filter by
+        if mailbox_id:
+            # If specific mailbox requested, verify it's accessible
+            if mailbox_id not in accessible_mailbox_ids:
+                logger.warning(f"[Processing Jobs] Requested mailbox {mailbox_id} not in accessible list")
+                return []
+            filter_mailbox_ids = [mailbox_id]
+        else:
+            filter_mailbox_ids = accessible_mailbox_ids
+
+        # Get processing jobs for the filtered mailboxes
         result = get_supabase().table('processing_jobs').select(
             'id, job_type, mailbox_id, status, total_records, processed_records, failed_records, filtered_records, started_at, completed_at, created_at, error_log, filter_start_date, filter_end_date, mailboxes(name)'
-        ).in_('mailbox_id', accessible_mailbox_ids).order('created_at', desc=True).execute()
+        ).in_('mailbox_id', filter_mailbox_ids).order('created_at', desc=True).execute()
         
         jobs = []
         for job in result.data:

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { Row, Col, Statistic, Typography, Table, Tag, Button, Empty, Space, Alert } from "antd";
+import React, { useState, useEffect, useRef } from "react";
+import { Row, Col, Statistic, Typography, Table, Tag, Button, Empty, Space, Alert, Skeleton } from "antd";
 import {
   MailOutlined,
   InboxOutlined,
@@ -46,32 +46,67 @@ export const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [initialLoadDone, setInitialLoadDone] = useState(false);
 
+  // Track if component is mounted to prevent state updates after unmount
+  const isMountedRef = useRef(true);
+
   useEffect(() => {
+    isMountedRef.current = true;
     loadDashboardData(true); // Initial load with loading indicator
     // Refresh every 30 seconds silently (no loading flash)
-    const interval = setInterval(() => loadDashboardData(false), 30000);
-    return () => clearInterval(interval);
+    const interval = setInterval(() => {
+      if (isMountedRef.current) {
+        loadDashboardData(false);
+      }
+    }, 30000);
+    return () => {
+      isMountedRef.current = false;
+      clearInterval(interval);
+    };
   }, []);
 
   const loadDashboardData = async (showLoading = false) => {
     try {
       // Only show loading spinner on initial load, not on background refreshes
-      if (showLoading && !initialLoadDone) {
+      if (showLoading && !initialLoadDone && isMountedRef.current) {
         setLoading(true);
       }
 
       // Use optimized method that fetches all data efficiently (avoids duplicate API calls)
       const data = await dashboardService.getAllDashboardData();
 
-      setStats(data.stats);
-      setProcessingOverview(data.processingOverview);
-      setMailboxes(data.mailboxes);
-      setRecentJobs(data.recentJobs);
+      // Only update state if component is still mounted
+      if (!isMountedRef.current) return;
+
+      // On first load, always update. On subsequent loads, preserve existing data if API returns empty
+      const isFirstLoad = !initialLoadDone;
+
+      // Update stats - always on first load, or if we have valid data
+      if (isFirstLoad || data.stats.totalEmails > 0 || data.stats.totalMailboxes > 0) {
+        setStats(data.stats);
+      }
+
+      // Update processing overview - always on first load, or if we have valid data
+      if (isFirstLoad || data.processingOverview.totalProcessed > 0 || data.processingOverview.activeJobs > 0 || data.processingOverview.completedToday > 0) {
+        setProcessingOverview(data.processingOverview);
+      }
+
+      // Update mailboxes - always on first load, or if we have data
+      if (isFirstLoad || data.mailboxes.length > 0) {
+        setMailboxes(data.mailboxes);
+      }
+
+      // Update recent jobs - always on first load, or if we have data
+      if (isFirstLoad || data.recentJobs.length > 0) {
+        setRecentJobs(data.recentJobs);
+      }
     } catch (error) {
       console.error('Error loading dashboard data:', error);
+      // Don't reset state on error - keep existing data
     } finally {
-      setLoading(false);
-      setInitialLoadDone(true);
+      if (isMountedRef.current) {
+        setLoading(false);
+        setInitialLoadDone(true);
+      }
     }
   };
 
@@ -203,51 +238,77 @@ export const Dashboard: React.FC = () => {
       <Row gutter={[16, 16]} className="fade-in-up stagger-1">
         <Col xs={24} sm={12} lg={6}>
           <div className="glass-card" style={{ padding: 24 }}>
-            <Statistic
-              title="Total Emails Archived"
-              value={stats.totalEmails}
-              prefix={<MailOutlined />}
-              valueStyle={{ color: "#667eea" }}
-              loading={loading}
-            />
-          </div>
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <div className="glass-card" style={{ padding: 24 }}>
-            <Statistic
-              title="Active Mailboxes"
-              value={stats.totalMailboxes}
-              prefix={<InboxOutlined />}
-              valueStyle={{ color: "#52c41a" }}
-              loading={loading}
-            />
-          </div>
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <div className="glass-card" style={{ padding: 24 }}>
-            <Statistic
-              title="Active Jobs"
-              value={processingOverview.activeJobs}
-              prefix={processingOverview.activeJobs > 0 ? <SyncOutlined spin /> : <PlayCircleOutlined />}
-              valueStyle={{ color: processingOverview.activeJobs > 0 ? "#667eea" : "#999" }}
-              loading={loading}
-            />
-            {processingOverview.activeJobs > 0 && (
-              <Link to="/processing" style={{ fontSize: 12, color: '#667eea' }}>
-                View active jobs <ArrowRightOutlined />
-              </Link>
+            {loading ? (
+              <div>
+                <Skeleton.Input active size="small" style={{ width: 120, marginBottom: 12 }} />
+                <Skeleton.Input active style={{ width: 80, height: 32 }} />
+              </div>
+            ) : (
+              <Statistic
+                title="Total Emails Archived"
+                value={stats.totalEmails}
+                prefix={<MailOutlined />}
+                valueStyle={{ color: "#667eea" }}
+              />
             )}
           </div>
         </Col>
         <Col xs={24} sm={12} lg={6}>
           <div className="glass-card" style={{ padding: 24 }}>
-            <Statistic
-              title="Emails Processed Today"
-              value={stats.todayEmails}
-              prefix={<CheckCircleOutlined />}
-              valueStyle={{ color: "#52c41a" }}
-              loading={loading}
-            />
+            {loading ? (
+              <div>
+                <Skeleton.Input active size="small" style={{ width: 100, marginBottom: 12 }} />
+                <Skeleton.Input active style={{ width: 60, height: 32 }} />
+              </div>
+            ) : (
+              <Statistic
+                title="Active Mailboxes"
+                value={stats.totalMailboxes}
+                prefix={<InboxOutlined />}
+                valueStyle={{ color: "#52c41a" }}
+              />
+            )}
+          </div>
+        </Col>
+        <Col xs={24} sm={12} lg={6}>
+          <div className="glass-card" style={{ padding: 24 }}>
+            {loading ? (
+              <div>
+                <Skeleton.Input active size="small" style={{ width: 80, marginBottom: 12 }} />
+                <Skeleton.Input active style={{ width: 50, height: 32 }} />
+              </div>
+            ) : (
+              <>
+                <Statistic
+                  title="Active Jobs"
+                  value={processingOverview.activeJobs}
+                  prefix={processingOverview.activeJobs > 0 ? <SyncOutlined spin /> : <PlayCircleOutlined />}
+                  valueStyle={{ color: processingOverview.activeJobs > 0 ? "#667eea" : "#999" }}
+                />
+                {processingOverview.activeJobs > 0 && (
+                  <Link to="/processing" style={{ fontSize: 12, color: '#667eea' }}>
+                    View active jobs <ArrowRightOutlined />
+                  </Link>
+                )}
+              </>
+            )}
+          </div>
+        </Col>
+        <Col xs={24} sm={12} lg={6}>
+          <div className="glass-card" style={{ padding: 24 }}>
+            {loading ? (
+              <div>
+                <Skeleton.Input active size="small" style={{ width: 130, marginBottom: 12 }} />
+                <Skeleton.Input active style={{ width: 70, height: 32 }} />
+              </div>
+            ) : (
+              <Statistic
+                title="Emails Processed Today"
+                value={stats.todayEmails}
+                prefix={<CheckCircleOutlined />}
+                valueStyle={{ color: "#52c41a" }}
+              />
+            )}
           </div>
         </Col>
       </Row>
@@ -265,14 +326,25 @@ export const Dashboard: React.FC = () => {
                 </Link>
               </div>
             </div>
-            {recentJobs.length > 0 ? (
+            {loading ? (
+              <div style={{ padding: 16 }}>
+                {[1, 2, 3, 4].map(i => (
+                  <div key={i} style={{ display: 'flex', gap: 16, marginBottom: 16, alignItems: 'center' }}>
+                    <Skeleton.Input active size="small" style={{ width: 120 }} />
+                    <Skeleton.Input active size="small" style={{ width: 80 }} />
+                    <Skeleton.Button active size="small" style={{ width: 70 }} />
+                    <Skeleton.Input active size="small" style={{ width: 60 }} />
+                    <Skeleton.Input active size="small" style={{ width: 80 }} />
+                  </div>
+                ))}
+              </div>
+            ) : recentJobs.length > 0 ? (
               <Table
                 dataSource={recentJobs}
                 columns={jobColumns}
                 pagination={false}
                 size="small"
                 rowKey="id"
-                loading={loading}
               />
             ) : (
               <div style={{ padding: 48, textAlign: 'center' }}>
@@ -297,41 +369,57 @@ export const Dashboard: React.FC = () => {
             <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 20 }}>
               Today's Processing Summary
             </Text>
-            <Row gutter={[16, 24]}>
-              <Col span={12}>
-                <Statistic
-                  title="Jobs Completed"
-                  value={processingOverview.completedToday}
-                  prefix={<CheckCircleOutlined style={{ color: '#52c41a' }} />}
-                  valueStyle={{ fontSize: 28 }}
-                  loading={loading}
-                />
-              </Col>
-              <Col span={12}>
-                <Statistic
-                  title="Jobs Failed"
-                  value={processingOverview.failedToday}
-                  prefix={<ExclamationCircleOutlined style={{ color: processingOverview.failedToday > 0 ? '#ff4d4f' : '#999' }} />}
-                  valueStyle={{ fontSize: 28, color: processingOverview.failedToday > 0 ? '#ff4d4f' : undefined }}
-                  loading={loading}
-                />
-              </Col>
-              <Col span={24}>
-                <Statistic
-                  title="Total Emails Processed (All Time)"
-                  value={processingOverview.totalProcessed}
-                  prefix={<MailOutlined style={{ color: '#667eea' }} />}
-                  valueStyle={{ fontSize: 28 }}
-                  loading={loading}
-                />
-              </Col>
-            </Row>
-            {processingOverview.failedToday > 0 && (
-              <div style={{ marginTop: 16 }}>
-                <Link to="/errors" style={{ color: '#ff4d4f' }}>
-                  <ExclamationCircleOutlined /> View error details <ArrowRightOutlined />
-                </Link>
-              </div>
+            {loading ? (
+              <Row gutter={[16, 24]}>
+                <Col span={12}>
+                  <Skeleton.Input active size="small" style={{ width: 90, marginBottom: 8 }} />
+                  <Skeleton.Input active style={{ width: 60, height: 28 }} />
+                </Col>
+                <Col span={12}>
+                  <Skeleton.Input active size="small" style={{ width: 70, marginBottom: 8 }} />
+                  <Skeleton.Input active style={{ width: 50, height: 28 }} />
+                </Col>
+                <Col span={24}>
+                  <Skeleton.Input active size="small" style={{ width: 180, marginBottom: 8 }} />
+                  <Skeleton.Input active style={{ width: 80, height: 28 }} />
+                </Col>
+              </Row>
+            ) : (
+              <>
+                <Row gutter={[16, 24]}>
+                  <Col span={12}>
+                    <Statistic
+                      title="Jobs Completed"
+                      value={processingOverview.completedToday}
+                      prefix={<CheckCircleOutlined style={{ color: '#52c41a' }} />}
+                      valueStyle={{ fontSize: 28 }}
+                    />
+                  </Col>
+                  <Col span={12}>
+                    <Statistic
+                      title="Jobs Failed"
+                      value={processingOverview.failedToday}
+                      prefix={<ExclamationCircleOutlined style={{ color: processingOverview.failedToday > 0 ? '#ff4d4f' : '#999' }} />}
+                      valueStyle={{ fontSize: 28, color: processingOverview.failedToday > 0 ? '#ff4d4f' : undefined }}
+                    />
+                  </Col>
+                  <Col span={24}>
+                    <Statistic
+                      title="Total Emails Processed (All Time)"
+                      value={processingOverview.totalProcessed}
+                      prefix={<MailOutlined style={{ color: '#667eea' }} />}
+                      valueStyle={{ fontSize: 28 }}
+                    />
+                  </Col>
+                </Row>
+                {processingOverview.failedToday > 0 && (
+                  <div style={{ marginTop: 16 }}>
+                    <Link to="/errors" style={{ color: '#ff4d4f' }}>
+                      <ExclamationCircleOutlined /> View error details <ArrowRightOutlined />
+                    </Link>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </Col>
@@ -350,14 +438,25 @@ export const Dashboard: React.FC = () => {
                 </Link>
               </div>
             </div>
-            {mailboxes.length > 0 ? (
+            {loading ? (
+              <div style={{ padding: 16 }}>
+                {[1, 2, 3].map(i => (
+                  <div key={i} style={{ display: 'flex', gap: 16, marginBottom: 16, alignItems: 'center' }}>
+                    <Skeleton.Avatar active size="small" />
+                    <Skeleton.Input active size="small" style={{ width: 140 }} />
+                    <Skeleton.Button active size="small" style={{ width: 50 }} />
+                    <Skeleton.Input active size="small" style={{ width: 60 }} />
+                    <Skeleton.Input active size="small" style={{ width: 90 }} />
+                  </div>
+                ))}
+              </div>
+            ) : mailboxes.length > 0 ? (
               <Table
                 dataSource={mailboxes}
                 columns={mailboxColumns}
                 pagination={false}
                 size="small"
                 rowKey="id"
-                loading={loading}
               />
             ) : (
               <div style={{ padding: 48, textAlign: 'center' }}>

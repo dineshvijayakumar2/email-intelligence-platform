@@ -81,9 +81,11 @@ export const processingService = {
     };
   },
 
-  // Get all processing jobs (with silent network error handling for polling)
-  async getProcessingJobs(silent: boolean = false): Promise<ProcessingJob[]> {
-    const jobs = await api.get<ProcessingJob[]>('/processing-jobs', {
+  // Get processing jobs (with silent network error handling for polling)
+  // Optional mailbox_id parameter to filter by specific mailbox at the backend level
+  async getProcessingJobs(silent: boolean = false, mailboxId?: string): Promise<ProcessingJob[]> {
+    const url = mailboxId ? `/processing-jobs?mailbox_id=${mailboxId}` : '/processing-jobs';
+    const jobs = await api.get<ProcessingJob[]>(url, {
       silentOnNetworkError: silent,
       timeout: 5000, // Shorter timeout for polling
     });

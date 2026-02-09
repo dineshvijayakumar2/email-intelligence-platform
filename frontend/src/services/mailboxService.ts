@@ -61,26 +61,39 @@ export interface CreateGoogleDriveMailboxData extends Omit<CreateMailboxData, 'f
 }
 
 export const mailboxService = {
-  // Get all mailboxes
+  // Get all mailboxes (with retry for auth race condition)
   async getMailboxes(): Promise<Mailbox[]> {
-    console.log('[MailboxService] Fetching mailboxes from /mailboxes...');
-    try {
-      const mailboxes = await api.get<Mailbox[]>('/mailboxes');
-      console.log('[MailboxService] API response:', mailboxes);
-      console.log('[MailboxService] Response type:', typeof mailboxes);
-      console.log('[MailboxService] Is array:', Array.isArray(mailboxes));
+    const maxRetries = 2;
+    let lastError: Error | null = null;
 
-      if (!mailboxes) {
-        console.warn('[MailboxService] API returned null/undefined, returning empty array');
-        return [];
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const mailboxes = await api.get<Mailbox[]>('/mailboxes');
+
+        if (!mailboxes) {
+          // Null response might mean auth wasn't ready - retry after short delay
+          if (attempt < maxRetries) {
+            console.debug(`[MailboxService] Got null response, retrying (attempt ${attempt + 1}/${maxRetries + 1})...`);
+            await new Promise(resolve => setTimeout(resolve, 500));
+            continue;
+          }
+          console.warn('[MailboxService] API returned null after retries, returning empty array');
+          return [];
+        }
+
+        return mailboxes;
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        if (attempt < maxRetries) {
+          console.debug(`[MailboxService] Error, retrying (attempt ${attempt + 1}/${maxRetries + 1})...`);
+          await new Promise(resolve => setTimeout(resolve, 500));
+          continue;
+        }
       }
-
-      console.log('[MailboxService] Returning', mailboxes.length, 'mailboxes');
-      return mailboxes;
-    } catch (error) {
-      console.error('[MailboxService] Error fetching mailboxes:', error);
-      return [];
     }
+
+    console.error('[MailboxService] Error fetching mailboxes after retries:', lastError);
+    return [];
   },
 
   // Get a single mailbox by ID

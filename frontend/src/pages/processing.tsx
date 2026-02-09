@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card,
@@ -15,7 +15,9 @@ import {
   Alert,
   Popconfirm,
   Popover,
-  message
+  message,
+  Skeleton,
+  Badge
 } from "antd";
 import {
   PlayCircleOutlined,
@@ -29,12 +31,15 @@ import {
   ExclamationCircleOutlined,
   SyncOutlined,
   CalendarOutlined,
-  CloudDownloadOutlined
+  CloudDownloadOutlined,
+  WifiOutlined,
+  ApiOutlined
 } from "@ant-design/icons";
 import { processingService, ProcessingJob } from '../services/processingService';
 import { ErrorDisplay } from '../components/ErrorDisplay';
 import { MailboxSelector } from '../components/MailboxSelector';
 import { mailboxService } from '../services/mailboxService';
+import { useJobUpdates } from '../hooks/useJobUpdates';
 
 const { Text } = Typography;
 
@@ -69,9 +74,6 @@ export const ProcessingJobs: React.FC = () => {
   const { mailboxId } = useParams<{ mailboxId?: string }>();
   const navigate = useNavigate();
 
-  const [jobs, setJobs] = useState<ProcessingJob[]>([]);
-  const [allJobs, setAllJobs] = useState<ProcessingJob[]>([]); // Store all jobs before filtering
-  const [loading, setLoading] = useState(true);
   const [selectedJob, setSelectedJob] = useState<ProcessingJob | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [reprocessingJobs, setReprocessingJobs] = useState<Set<string>>(new Set());
@@ -81,8 +83,12 @@ export const ProcessingJobs: React.FC = () => {
   const [selectedMailboxId, setSelectedMailboxId] = useState<string | null>(null);
   const [mailboxIdToNameMap, setMailboxIdToNameMap] = useState<Record<string, string>>({});
 
-  // Track if component is mounted to avoid state updates after unmount
-  const isMountedRef = useRef(true);
+  // Use WebSocket-based job updates with polling fallback
+  const { jobs, isLoading: loading, isRealtime, refresh: refreshJobs } = useJobUpdates({
+    mailboxId: mailboxId || undefined,
+    allJobs: !mailboxId, // Subscribe to all jobs if no specific mailbox
+    fallbackPollingMs: 5000,
+  });
 
   // Load mailboxes to build ID-to-name mapping
   useEffect(() => {
@@ -104,71 +110,12 @@ export const ProcessingJobs: React.FC = () => {
   // Sync URL parameter with mailbox selection
   useEffect(() => {
     if (mailboxId && mailboxIdToNameMap[mailboxId]) {
-      console.log('[ProcessingJobs] URL param mailboxId:', mailboxId);
       setSelectedMailboxId(mailboxId);
     } else if (!mailboxId) {
       // No mailbox in URL - show all jobs
       setSelectedMailboxId(null);
     }
   }, [mailboxId, mailboxIdToNameMap]);
-
-  // Filter jobs based on selected mailbox
-  useEffect(() => {
-    console.log('[ProcessingJobs] Filtering jobs. Selected mailbox:', selectedMailboxId);
-    console.log('[ProcessingJobs] All jobs count:', allJobs.length);
-
-    if (selectedMailboxId) {
-      // Filter jobs for selected mailbox
-      const filtered = allJobs.filter(job => job.mailbox_id === selectedMailboxId);
-      console.log('[ProcessingJobs] Filtered jobs count:', filtered.length);
-      setJobs(filtered);
-    } else {
-      // No mailbox selected - show all jobs
-      console.log('[ProcessingJobs] No mailbox selected, showing all jobs');
-      setJobs(allJobs);
-    }
-  }, [selectedMailboxId, allJobs]);
-
-  useEffect(() => {
-    isMountedRef.current = true;
-    loadJobs(true); // Show loading on initial load
-
-    // Auto-refresh every 5 seconds (without loading spinner)
-    const interval = setInterval(() => {
-      if (isMountedRef.current) {
-        loadJobs(false);
-      }
-    }, 5000);
-
-    return () => {
-      isMountedRef.current = false;
-      clearInterval(interval);
-    };
-  }, []);
-
-  const loadJobs = async (showLoading = false) => {
-    try {
-      if (showLoading && isMountedRef.current) {
-        setLoading(true);
-      }
-      const jobsData = await processingService.getProcessingJobs();
-      // Only update state if component is still mounted
-      if (isMountedRef.current) {
-        setAllJobs(jobsData); // Store all jobs
-        // Filtering will be done by the effect that watches selectedMailboxId
-      }
-    } catch (error) {
-      // Only show error if component is still mounted and it's not a cancelled request
-      if (isMountedRef.current) {
-        console.error('Error loading jobs:', error);
-        message.error('Failed to load processing jobs');
-      }
-    } finally {
-      if (showLoading && isMountedRef.current) {
-        setLoading(false);
-      }
-    }
-  };
 
   const showJobDetails = (job: ProcessingJob) => {
     setSelectedJob(job);
@@ -179,7 +126,7 @@ export const ProcessingJobs: React.FC = () => {
     try {
       await processingService.controlJob(jobId, action);
       message.success(`${action.charAt(0).toUpperCase() + action.slice(1)} job ${jobId}`);
-      loadJobs(); // Reload jobs to show updated status
+      refreshJobs(); // Reload jobs to show updated status
     } catch (error) {
       message.error(`Failed to ${action} job`);
     }
@@ -189,7 +136,7 @@ export const ProcessingJobs: React.FC = () => {
     try {
       await processingService.deleteJob(jobId);
       message.success(`Deleted job ${jobId}`);
-      loadJobs(); // Reload jobs
+      refreshJobs(); // Reload jobs
     } catch (error) {
       message.error('Failed to delete job');
     }
@@ -197,18 +144,15 @@ export const ProcessingJobs: React.FC = () => {
 
   const handleReprocessJob = async (jobId: string) => {
     try {
-      console.log(`Starting reprocessing for job ${jobId}`);
-
       // Mark this job as being reprocessed
       setReprocessingJobs(prev => new Set(prev).add(jobId));
 
-      const result = await processingService.reprocessJob(jobId);
-      console.log('Reprocessing job created:', result);
+      await processingService.reprocessJob(jobId);
 
       message.success(`Reprocessing started! Watch for the new "Reprocessing" job in the list.`);
 
       // Reload jobs to show the new reprocessing job
-      await loadJobs();
+      refreshJobs();
 
       // Remove from reprocessing set
       setReprocessingJobs(prev => {
@@ -235,7 +179,7 @@ export const ProcessingJobs: React.FC = () => {
       if (result.cached_file_available) {
         message.info('Using cached download - processing will start faster!');
       }
-      await loadJobs();
+      refreshJobs();
     } catch (error) {
       console.error('Failed to restart job:', error);
       message.error(`Failed to restart job: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -248,8 +192,8 @@ export const ProcessingJobs: React.FC = () => {
     }
   };
 
-  const refreshJobs = () => {
-    loadJobs(true); // Show loading when manually refreshing
+  const handleManualRefresh = () => {
+    refreshJobs();
     message.info('Refreshing job status...');
   };
 
@@ -557,16 +501,9 @@ export const ProcessingJobs: React.FC = () => {
   ];
 
   const runningJobs = jobs.filter(job => job.status === 'running');
-  const interruptedJobs = jobs.filter(job => job.status === 'interrupted');
 
   // Handler for mailbox selection change
   const handleMailboxChange = (mailboxIds: string[]) => {
-    console.log('[ProcessingJobs] Mailbox selection changed:', mailboxIds);
-
-    // Optimistically clear jobs and show loading for instant feedback
-    setJobs([]);
-    setLoading(true);
-
     if (mailboxIds.length === 1) {
       // Single mailbox selected - navigate to that mailbox's URL
       navigate(`/processing/${mailboxIds[0]}`);
@@ -577,9 +514,6 @@ export const ProcessingJobs: React.FC = () => {
       // Multiple mailboxes - just use the first one for now
       navigate(`/processing/${mailboxIds[0]}`);
     }
-
-    // Turn off loading after a brief moment (jobs will be filtered by effect)
-    setTimeout(() => setLoading(false), 300);
   };
 
   return (
@@ -592,6 +526,21 @@ export const ProcessingJobs: React.FC = () => {
           </Text>
         </div>
         <Space>
+          {/* Real-time indicator */}
+          <Tooltip title={isRealtime ? 'Real-time updates via WebSocket' : 'Polling updates (WebSocket disconnected)'}>
+            <Badge
+              status={isRealtime ? 'processing' : 'default'}
+              text={
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {isRealtime ? (
+                    <><WifiOutlined style={{ color: '#52c41a', marginRight: 4 }} />Live</>
+                  ) : (
+                    <><ApiOutlined style={{ marginRight: 4 }} />Polling</>
+                  )}
+                </Text>
+              }
+            />
+          </Tooltip>
           <MailboxSelector
             value={selectedMailboxId ? [selectedMailboxId] : []}
             onChange={handleMailboxChange}
@@ -601,7 +550,7 @@ export const ProcessingJobs: React.FC = () => {
           <Button
             type="primary"
             icon={<ReloadOutlined />}
-            onClick={refreshJobs}
+            onClick={handleManualRefresh}
             loading={loading}
             className="glass-button-primary"
           >
@@ -609,21 +558,6 @@ export const ProcessingJobs: React.FC = () => {
           </Button>
         </Space>
       </div>
-
-      {/* Interrupted Jobs Alert */}
-      {interruptedJobs.length > 0 && (
-        <div className="fade-in-up stagger-1" style={{ marginBottom: 24 }}>
-          <Alert
-            message="Jobs Interrupted by Server Restart"
-            description={
-              `${interruptedJobs.length} job(s) were interrupted during a deployment. Click the green play button to restart them. Cached downloads will be reused if available.`
-            }
-            type="warning"
-            showIcon
-            style={{ borderRadius: 12 }}
-          />
-        </div>
-      )}
 
       {/* Active Jobs Alert */}
       {runningJobs.length > 0 && (
@@ -643,24 +577,43 @@ export const ProcessingJobs: React.FC = () => {
 
       {/* Table */}
       <div className="glass-table-container fade-in-up stagger-2">
-        <Table
-          dataSource={jobs}
-          columns={columns}
-          loading={loading}
-          rowKey="id"
-          size="small"
-          pagination={{
-            pageSize: 10,
-            showSizeChanger: true,
-            showTotal: (total, range) =>
-              `${range[0]}-${range[1]} of ${total} jobs`,
-          }}
-          rowClassName={(record) => {
-            if (record.status === 'failed') return 'error-row';
-            if (record.status === 'running') return 'running-row';
-            return '';
-          }}
-        />
+        {loading && jobs.length === 0 ? (
+          <div style={{ padding: 24 }}>
+            {[1, 2, 3, 4, 5].map(i => (
+              <div key={i} style={{ display: 'flex', gap: 16, marginBottom: 20, alignItems: 'center' }}>
+                <Skeleton.Input active size="small" style={{ width: 70 }} />
+                <Skeleton.Button active size="small" style={{ width: 80 }} />
+                <Skeleton.Input active size="small" style={{ width: 120 }} />
+                <Skeleton.Button active size="small" style={{ width: 80 }} />
+                <Skeleton.Input active size="small" style={{ width: 200 }} />
+                <Skeleton.Input active size="small" style={{ width: 80 }} />
+                <Skeleton.Input active size="small" style={{ width: 80 }} />
+                <Space>
+                  <Skeleton.Button active size="small" />
+                  <Skeleton.Button active size="small" />
+                </Space>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <Table
+            dataSource={jobs}
+            columns={columns}
+            rowKey="id"
+            size="small"
+            pagination={{
+              pageSize: 10,
+              showSizeChanger: true,
+              showTotal: (total, range) =>
+                `${range[0]}-${range[1]} of ${total} jobs`,
+            }}
+            rowClassName={(record) => {
+              if (record.status === 'failed') return 'error-row';
+              if (record.status === 'running') return 'running-row';
+              return '';
+            }}
+          />
+        )}
       </div>
 
       {/* Job Details Modal */}
@@ -761,7 +714,7 @@ export const ProcessingJobs: React.FC = () => {
               <ErrorDisplay
                 jobId={selectedJob.id}
                 failedCount={selectedJob.failed_records}
-                onRetryComplete={() => loadJobs(false)}
+                onRetryComplete={() => refreshJobs()}
               />
             )}
           </Space>

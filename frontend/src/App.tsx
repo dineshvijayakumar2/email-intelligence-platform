@@ -4,6 +4,7 @@ import { ConfigProvider } from 'antd';
 
 // Auth
 import { AuthProvider } from './contexts/AuthContext';
+import { WebSocketProvider } from './contexts/WebSocketContext';
 import { ProtectedRoute, AdminRoute } from './components/ProtectedRoute';
 import { LoginPage } from './pages/login';
 import { ResetPasswordPage } from './pages/reset-password';
@@ -29,6 +30,7 @@ function App() {
     <BrowserRouter>
       <ConfigProvider theme={antTheme}>
         <AuthProvider>
+          <WebSocketProvider>
           <Routes>
             {/* Public routes */}
             <Route path="/login" element={<LoginPage />} />
@@ -106,6 +108,16 @@ function App() {
               }
             />
             <Route
+              path="/emails/:mailboxId/:emailId"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <EmailList />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/processing"
               element={
                 <ProtectedRoute>
@@ -127,6 +139,16 @@ function App() {
             />
             <Route
               path="/errors"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <ErrorsPage />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/errors/:mailboxId"
               element={
                 <ProtectedRoute>
                   <Layout>
@@ -161,6 +183,7 @@ function App() {
             {/* Catch-all - redirect to dashboard */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          </WebSocketProvider>
         </AuthProvider>
       </ConfigProvider>
     </BrowserRouter>
