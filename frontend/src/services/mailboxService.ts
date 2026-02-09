@@ -36,6 +36,9 @@ export interface CreateMailboxData {
   connection_config?: Record<string, any>;
   // File path for file-based mailboxes (MBOX/PST/OLM)
   file_path?: string;
+  // RBAC: Assignment fields
+  client_id?: string | null;
+  user_id?: string | null;
 }
 
 // Helper to check if mailbox has Gmail LIVE sync enabled
@@ -58,6 +61,7 @@ export interface CreateGoogleDriveMailboxData extends Omit<CreateMailboxData, 'f
   google_drive_file_id: string;
   google_drive_file_name: string;
   user_id: string; // Required for OAuth2 token lookup
+  assigned_user_id?: string | null; // For RBAC mailbox assignment
 }
 
 export const mailboxService = {
@@ -120,13 +124,14 @@ export const mailboxService = {
       user_id: mailboxData.user_id // Include user_id for backend token lookup
     };
 
-    // Create mailbox data
-    const createData: CreateMailboxData = {
+    // Create mailbox data with RBAC user assignment
+    const createData: any = {
       name: mailboxData.name,
       email_address: mailboxData.email_address,
       mailbox_type: mailboxData.mailbox_type,
       is_active: mailboxData.is_active,
-      connection_config: connectionConfig
+      connection_config: connectionConfig,
+      user_id: mailboxData.assigned_user_id || null // RBAC: assign mailbox to user
     };
 
     return await this.createMailbox(createData);

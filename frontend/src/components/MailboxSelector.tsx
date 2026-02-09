@@ -8,8 +8,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { Select, Space, Typography, Badge, Tooltip } from 'antd';
-import { InboxOutlined, SyncOutlined, CloudOutlined, MailOutlined } from '@ant-design/icons';
+import { InboxOutlined, SyncOutlined, CloudOutlined } from '@ant-design/icons';
 import { mailboxService, Mailbox, hasGmailLiveSync } from '../services/mailboxService';
+
+// Re-export hook from its dedicated file for backwards compatibility
+export { useMailboxSelection } from '../hooks/useMailboxSelection';
 
 const { Text } = Typography;
 
@@ -154,32 +157,6 @@ export const MailboxSelector: React.FC<MailboxSelectorProps> = ({
       ))}
     </Select>
   );
-};
-
-/**
- * Hook to manage mailbox selection state with persistence
- */
-export const useMailboxSelection = (defaultValue: string[] = []) => {
-  const storageKey = 'selectedMailboxIds';
-
-  const [selectedMailboxIds, setSelectedMailboxIds] = useState<string[]>(() => {
-    try {
-      const stored = localStorage.getItem(storageKey);
-      return stored ? JSON.parse(stored) : defaultValue;
-    } catch {
-      return defaultValue;
-    }
-  });
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(selectedMailboxIds));
-    } catch {
-      // Ignore storage errors
-    }
-  }, [selectedMailboxIds]);
-
-  return [selectedMailboxIds, setSelectedMailboxIds] as const;
 };
 
 export default MailboxSelector;

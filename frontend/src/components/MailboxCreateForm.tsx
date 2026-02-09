@@ -49,13 +49,16 @@ export const MailboxCreateForm: React.FC = () => {
   const { profile } = useAuth();
   const isAdmin = profile?.roles?.includes('admin');
 
-  // Load clients and users on mount
+  // Load clients and users on mount (only for admins)
   React.useEffect(() => {
     loadClientsAndUsers();
-  }, []);
+  }, [isAdmin]);
 
   const loadClientsAndUsers = async () => {
     try {
+      // Only admins need clients and users for assignment
+      if (!isAdmin) return;
+
       // Load clients
       const clientsData = await clientService.list();
       setClients(clientsData.clients || []);
@@ -97,6 +100,11 @@ export const MailboxCreateForm: React.FC = () => {
       // All file-based types (MBOX, PST, OLM) use file_path or Google Drive
       if (['mbox', 'pst', 'olm'].includes(values.mailbox_type)) {
         if (fileSource === 'google_drive' && googleDriveFile) {
+          // For non-admins, automatically assign the mailbox to themselves
+          const assignedUserId = isAdmin
+            ? (values.user_id || null)
+            : profile?.id || null;
+
           // Use the new Google Drive mailbox creation method with OAuth2
           const googleDriveData = {
             name: values.name,
@@ -105,7 +113,8 @@ export const MailboxCreateForm: React.FC = () => {
             is_active: values.is_active,
             google_drive_file_id: googleDriveFile.id,
             google_drive_file_name: googleDriveFile.name,
-            user_id: userId
+            user_id: userId, // For OAuth2 token lookup
+            assigned_user_id: assignedUserId // For RBAC mailbox assignment
           };
 
           await mailboxService.createGoogleDriveMailbox(googleDriveData);
@@ -118,13 +127,19 @@ export const MailboxCreateForm: React.FC = () => {
         }
       }
 
+      // For non-admins, automatically assign the mailbox to themselves
+      // For admins, use the selected user_id from the form (or null)
+      const assignedUserId = isAdmin
+        ? (values.user_id || null)
+        : profile?.id || null;
+
       const mailboxData: any = {
         name: values.name,
         mailbox_type: values.mailbox_type,
         is_active: values.is_active,
         connection_config: connectionConfig,
         client_id: values.client_id || null,
-        user_id: values.user_id || null
+        user_id: assignedUserId
       };
 
       // Only add email_address if provided
@@ -134,8 +149,8 @@ export const MailboxCreateForm: React.FC = () => {
 
       const response = await mailboxService.createMailbox(mailboxData);
 
-      // For LIVE mailboxes (gmail, outlook), redirect to edit page to connect
-      if (['gmail', 'outlook'].includes(values.mailbox_type)) {
+      // For LIVE mailboxes (gmail, outlook_live), redirect to edit page to connect
+      if (['gmail', 'outlook_live'].includes(values.mailbox_type)) {
         message.success("Mailbox created! Now connect your account to start syncing.");
         navigate(`/mailboxes/${response.id}/edit`);
       } else {
@@ -262,7 +277,7 @@ export const MailboxCreateForm: React.FC = () => {
             >
               <Select.OptGroup label="LIVE Mailboxes">
                 <Option value="gmail">Gmail</Option>
-                <Option value="outlook">Outlook / Office 365</Option>
+                <Option value="outlook_live">Outlook / Office 365</Option>
               </Select.OptGroup>
               <Select.OptGroup label="Archive Files">
                 <Option value="mbox">MBOX (Universal Format)</Option>
@@ -306,7 +321,7 @@ export const MailboxCreateForm: React.FC = () => {
           )}
 
           {/* Outlook LIVE Configuration */}
-          {selectedType === 'outlook' && (
+          {selectedType === 'outlook_live' && (
             <>
               <Divider>Outlook LIVE Sync</Divider>
               <Alert
