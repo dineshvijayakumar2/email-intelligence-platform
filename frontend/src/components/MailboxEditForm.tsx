@@ -12,7 +12,9 @@ import {
   Divider,
   Alert,
   Radio,
-  InputNumber
+  InputNumber,
+  Modal,
+  DatePicker
 } from "antd";
 import {
   FolderOpenOutlined,
@@ -22,8 +24,11 @@ import {
   CheckCircleOutlined,
   SyncOutlined,
   SettingOutlined,
-  SaveOutlined
+  SaveOutlined,
+  CalendarOutlined,
+  HistoryOutlined
 } from "@ant-design/icons";
+import dayjs from 'dayjs';
 import { useNavigate, useParams } from "react-router-dom";
 import { mailboxService, Mailbox } from '../services/mailboxService';
 import GoogleDrivePicker from './GoogleDrivePicker';
@@ -72,6 +77,11 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
 
   // Manual sync state
   const [syncing, setSyncing] = React.useState(false);
+
+  // Date range fetch state
+  const [dateRangeModalVisible, setDateRangeModalVisible] = React.useState(false);
+  const [fetchingEmails, setFetchingEmails] = React.useState(false);
+  const [dateRangeForm] = Form.useForm();
 
   // Client and user assignment state
   const [clients, setClients] = React.useState<any[]>([]);
@@ -294,6 +304,65 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
       message.error('Failed to trigger Outlook sync');
     } finally {
       setSyncingOutlook(false);
+    }
+  };
+
+  // Fetch emails by date range
+  const handleDateRangeFetch = async (values: any) => {
+    if (!profile?.id) {
+      message.error('User not authenticated');
+      return;
+    }
+
+    const { dateRange, maxEmails } = values;
+    if (!dateRange || dateRange.length !== 2) {
+      message.error('Please select a date range');
+      return;
+    }
+
+    const startDate = dateRange[0].format('YYYY-MM-DD');
+    const endDate = dateRange[1].format('YYYY-MM-DD');
+
+    // Determine which service to use
+    const isOutlookType = selectedType === 'outlook_live' || mailboxOutlookStatus?.connected;
+    const isGmailType = selectedType === 'gmail' || mailboxGmailStatus?.connected;
+
+    try {
+      setFetchingEmails(true);
+      let result;
+
+      if (isOutlookType && mailboxOutlookStatus?.connected) {
+        result = await outlookService.fetchEmailsByDateRange(
+          mailboxId,
+          profile.id,
+          startDate,
+          endDate,
+          maxEmails
+        );
+      } else if (isGmailType && mailboxGmailStatus?.connected) {
+        result = await gmailService.fetchEmailsByDateRange(
+          mailboxId,
+          profile.id,
+          startDate,
+          endDate,
+          maxEmails
+        );
+      } else {
+        message.error('No LIVE sync connection available');
+        return;
+      }
+
+      if (result.success) {
+        message.success(`${result.message}. Job ID: ${result.job_id}`);
+        setDateRangeModalVisible(false);
+        dateRangeForm.resetFields();
+      } else {
+        message.error(result.message);
+      }
+    } catch (error) {
+      message.error('Failed to start email fetch');
+    } finally {
+      setFetchingEmails(false);
     }
   };
 
@@ -654,6 +723,16 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
                         </Button>
                         <Button
                           size="small"
+                          icon={<CalendarOutlined />}
+                          onClick={() => {
+                            dateRangeForm.resetFields();
+                            setDateRangeModalVisible(true);
+                          }}
+                        >
+                          Fetch Range
+                        </Button>
+                        <Button
+                          size="small"
                           danger
                           icon={<DisconnectOutlined />}
                           onClick={handleDisconnectGmail}
@@ -817,6 +896,16 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
                         </Button>
                         <Button
                           size="small"
+                          icon={<CalendarOutlined />}
+                          onClick={() => {
+                            dateRangeForm.resetFields();
+                            setDateRangeModalVisible(true);
+                          }}
+                        >
+                          Fetch Range
+                        </Button>
+                        <Button
+                          size="small"
                           danger
                           icon={<DisconnectOutlined />}
                           onClick={handleDisconnectOutlook}
@@ -959,6 +1048,89 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
           </Form.Item>
         </Form>
       </Card>
+
+      {/* Date Range Fetch Modal */}
+      <Modal
+        title={
+          <Space>
+            <HistoryOutlined />
+            <span>Fetch Emails by Date Range</span>
+          </Space>
+        }
+        open={dateRangeModalVisible}
+        onCancel={() => {
+          setDateRangeModalVisible(false);
+          dateRangeForm.resetFields();
+        }}
+        footer={null}
+        width={480}
+      >
+        <Form
+          form={dateRangeForm}
+          layout="vertical"
+          onFinish={handleDateRangeFetch}
+          initialValues={{ maxEmails: 500 }}
+        >
+          <Alert
+            message="Historical Email Fetch"
+            description={
+              mailboxOutlookStatus?.connected
+                ? "Fetch historical emails from your connected Outlook account for a specific date range."
+                : "Fetch historical emails from your connected Gmail account for a specific date range."
+            }
+            type="info"
+            style={{ marginBottom: 16 }}
+          />
+
+          <Form.Item
+            name="dateRange"
+            label="Date Range"
+            rules={[{ required: true, message: 'Please select a date range' }]}
+          >
+            <DatePicker.RangePicker
+              style={{ width: '100%' }}
+              disabledDate={(current) => current && current > dayjs().endOf('day')}
+              presets={[
+                { label: 'Last 7 Days', value: [dayjs().subtract(7, 'day'), dayjs()] },
+                { label: 'Last 30 Days', value: [dayjs().subtract(30, 'day'), dayjs()] },
+                { label: 'Last 90 Days', value: [dayjs().subtract(90, 'day'), dayjs()] },
+                { label: 'Last Year', value: [dayjs().subtract(1, 'year'), dayjs()] },
+              ]}
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="maxEmails"
+            label="Maximum Emails"
+            help="Limit the number of emails to fetch (max 5000)"
+          >
+            <InputNumber
+              min={1}
+              max={5000}
+              style={{ width: '100%' }}
+            />
+          </Form.Item>
+
+          <Form.Item style={{ marginBottom: 0, marginTop: 24 }}>
+            <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
+              <Button onClick={() => {
+                setDateRangeModalVisible(false);
+                dateRangeForm.resetFields();
+              }}>
+                Cancel
+              </Button>
+              <Button
+                type="primary"
+                htmlType="submit"
+                loading={fetchingEmails}
+                icon={<CalendarOutlined />}
+              >
+                Fetch Emails
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
     </Space>
   );
 };

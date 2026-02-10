@@ -24,6 +24,11 @@ export interface Mailbox {
     gmail_extended_at?: string;
     original_type?: string;
     initial_history_id?: string;
+    // Outlook LIVE sync fields
+    outlook_user_id?: string;
+    outlook_sync_enabled?: boolean;
+    outlook_email?: string;
+    outlook_extended_at?: string;
   };
   sync_enabled?: boolean;
 }
@@ -44,6 +49,26 @@ export interface CreateMailboxData {
 // Helper to check if mailbox has Gmail LIVE sync enabled
 export const hasGmailLiveSync = (mailbox: Mailbox): boolean => {
   return !!(mailbox.connection_config?.gmail_sync_enabled);
+};
+
+// Helper to check if mailbox has Outlook LIVE sync enabled
+export const hasOutlookLiveSync = (mailbox: Mailbox): boolean => {
+  return !!(mailbox.connection_config?.outlook_sync_enabled);
+};
+
+// Helper to check if mailbox has any LIVE sync enabled (Gmail or Outlook)
+export const hasLiveSync = (mailbox: Mailbox): boolean => {
+  return hasGmailLiveSync(mailbox) || hasOutlookLiveSync(mailbox);
+};
+
+// Helper to get the LIVE sync type ('gmail', 'outlook', or null)
+export const getLiveSyncType = (mailbox: Mailbox): 'gmail' | 'outlook' | null => {
+  if (hasGmailLiveSync(mailbox)) return 'gmail';
+  if (hasOutlookLiveSync(mailbox)) return 'outlook';
+  // Check mailbox type for pure LIVE mailboxes
+  if (mailbox.mailbox_type === 'gmail') return 'gmail';
+  if (mailbox.mailbox_type === 'outlook_live') return 'outlook';
+  return null;
 };
 
 // Helper to get mailbox source type label

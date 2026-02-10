@@ -35,7 +35,7 @@ import {
 } from "@ant-design/icons";
 import dayjs from 'dayjs';
 import { useNavigate, useParams } from "react-router-dom";
-import { mailboxService, Mailbox, hasGmailLiveSync } from '../services/mailboxService';
+import { mailboxService, Mailbox, hasGmailLiveSync, hasOutlookLiveSync, hasLiveSync, getLiveSyncType } from '../services/mailboxService';
 import { MailboxCreateForm } from '../components/MailboxCreateForm';
 import { MailboxEditForm } from '../components/MailboxEditForm';
 import gmailService from '../services/gmailService';
@@ -377,15 +377,31 @@ export const MailboxList: React.FC = () => {
     const startDate = dateRange[0].format('YYYY-MM-DD');
     const endDate = dateRange[1].format('YYYY-MM-DD');
 
+    // Determine which service to use based on sync type
+    const syncType = getLiveSyncType(selectedMailboxForFetch);
+
     try {
       setFetchingEmails(true);
-      const result = await gmailService.fetchEmailsByDateRange(
-        selectedMailboxForFetch.id,
-        profile.id,
-        startDate,
-        endDate,
-        maxEmails
-      );
+      let result;
+
+      if (syncType === 'outlook') {
+        result = await outlookService.fetchEmailsByDateRange(
+          selectedMailboxForFetch.id,
+          profile.id,
+          startDate,
+          endDate,
+          maxEmails
+        );
+      } else {
+        // Default to Gmail
+        result = await gmailService.fetchEmailsByDateRange(
+          selectedMailboxForFetch.id,
+          profile.id,
+          startDate,
+          endDate,
+          maxEmails
+        );
+      }
 
       if (result.success) {
         message.success(`${result.message}. Job ID: ${result.job_id}`);
@@ -599,9 +615,11 @@ export const MailboxList: React.FC = () => {
       title: 'Actions',
       key: 'actions',
       render: (_: any, record: Mailbox) => {
-        const isLiveEnabled = hasGmailLiveSync(record);
+        const isGmailLive = hasGmailLiveSync(record);
+        const isOutlookLive = hasOutlookLiveSync(record);
+        const isAnyLiveSync = hasLiveSync(record) || ['gmail', 'outlook_live'].includes(record.mailbox_type);
         const isArchiveType = ['mbox', 'pst', 'olm'].includes(record.mailbox_type);
-        const canLinkGmail = isArchiveType && !isLiveEnabled && gmailConnected;
+        const canLinkGmail = isArchiveType && !isGmailLive && gmailConnected;
 
         // Consolidated sync menu
         const syncMenuItems = [
@@ -611,7 +629,7 @@ export const MailboxList: React.FC = () => {
             label: 'Sync Now',
             onClick: () => handleSync(record.id, record.name)
           },
-          ...(isLiveEnabled ? [{
+          ...(isAnyLiveSync ? [{
             key: 'fetch-range',
             icon: <CalendarOutlined />,
             label: 'Fetch Date Range',
@@ -637,8 +655,8 @@ export const MailboxList: React.FC = () => {
             >
               <SyncOutlined /> Sync
             </Dropdown.Button>
-            {/* Link Gmail button - only for archive mailboxes without LIVE sync */}
-            {isArchiveType && !isLiveEnabled && (
+            {/* Link Gmail button - only for archive mailboxes without Gmail LIVE sync */}
+            {isArchiveType && !isGmailLive && (
               <Button
                 size="small"
                 icon={<LinkOutlined />}
@@ -654,8 +672,8 @@ export const MailboxList: React.FC = () => {
                 <GoogleOutlined /> Link Gmail
               </Button>
             )}
-            {/* Link Outlook button - only for archive mailboxes without LIVE sync */}
-            {isArchiveType && !isLiveEnabled && (
+            {/* Link Outlook button - only for archive mailboxes without Outlook LIVE sync */}
+            {isArchiveType && !isOutlookLive && (
               <Button
                 size="small"
                 icon={<LinkOutlined />}
@@ -761,12 +779,19 @@ export const MailboxList: React.FC = () => {
         footer={null}
         destroyOnClose
       >
-        <div style={{ marginBottom: 16 }}>
-          <Text type="secondary">
-            Pull historical emails from Gmail for <strong>{selectedMailboxForFetch?.name}</strong> within a specific date range.
-            This uses the LIVE sync connection to fetch older emails on-demand.
-          </Text>
-        </div>
+        {(() => {
+          const syncType = selectedMailboxForFetch ? getLiveSyncType(selectedMailboxForFetch) : null;
+          const providerName = syncType === 'outlook' ? 'Outlook' : 'Gmail';
+          const providerIcon = syncType === 'outlook' ? <WindowsOutlined style={{ color: '#0078d4' }} /> : <GoogleOutlined style={{ color: '#4285f4' }} />;
+          return (
+            <div style={{ marginBottom: 16 }}>
+              <Text type="secondary">
+                Pull historical emails from {providerIcon} <strong>{providerName}</strong> for <strong>{selectedMailboxForFetch?.name}</strong> within a specific date range.
+                This uses the LIVE sync connection to fetch older emails on-demand.
+              </Text>
+            </div>
+          );
+        })()}
 
         <Form
           form={dateRangeForm}
