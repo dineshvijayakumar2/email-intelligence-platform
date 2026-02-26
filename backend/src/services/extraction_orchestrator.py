@@ -154,12 +154,12 @@ class ExtractionOrchestrator:
         """
         try:
             if self.extraction_mode == 'full':
-                # All emails
+                # All emails in this mailbox (any processing status)
                 response = (
                     self.client.table('emails')
                     .select('id')
                     .eq('mailbox_id', self.mailbox_id)
-                    .eq('processing_status', 'success')
+                    .neq('processing_status', 'failed')
                     .execute()
                 )
                 logger.info(f"Full extraction mode: Processing all emails")
@@ -178,7 +178,7 @@ class ExtractionOrchestrator:
                     self.client.table('emails')
                     .select('id')
                     .eq('mailbox_id', self.mailbox_id)
-                    .eq('processing_status', 'success')
+                    .neq('processing_status', 'failed')
                     .gte('sent_date', date_range_start.isoformat())
                     .lte('sent_date', date_range_end.isoformat())
                     .execute()
