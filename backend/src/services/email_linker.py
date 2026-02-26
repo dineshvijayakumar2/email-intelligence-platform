@@ -20,6 +20,7 @@ Author: Sprint 2 Implementation
 
 from typing import List, Dict, Optional, Set, Tuple
 import logging
+import time
 from datetime import datetime
 
 from ..database.supabase_client import SupabaseClient
@@ -66,6 +67,29 @@ class EmailLinker:
         self._company_cache: Dict[str, str] = {}  # domain -> company_id
 
         logger.info(f"EmailLinker initialized for mailbox {mailbox_id}, client {self.client_id}")
+
+    @staticmethod
+    def _execute_with_retry(query_builder, max_retries: int = 3, base_delay: float = 2.0):
+        """Execute a Supabase query with retry for transient errors (SSL, network, 5xx)."""
+        last_error = None
+        for attempt in range(max_retries + 1):
+            try:
+                return query_builder.execute()
+            except Exception as e:
+                last_error = e
+                error_str = str(e)
+                is_transient = any(kw in error_str for kw in [
+                    'SSL handshake failed', '525', '502', '503', '504',
+                    'Connection reset', 'Connection refused', 'timed out',
+                    'JSON could not be generated', 'ECONNRESET', 'ETIMEDOUT',
+                ])
+                if is_transient and attempt < max_retries:
+                    delay = base_delay * (2 ** attempt)
+                    logger.warning(f"Transient Supabase error (attempt {attempt + 1}/{max_retries + 1}), retrying in {delay}s: {error_str[:200]}")
+                    time.sleep(delay)
+                    continue
+                raise
+        raise last_error
 
     def _fetch_client_id(self) -> str:
         """
@@ -293,13 +317,12 @@ class EmailLinker:
                 for i in range(0, len(email_ids), ID_CHUNK_SIZE):
                     chunk = email_ids[i:i + ID_CHUNK_SIZE]
                     chunk_num = i // ID_CHUNK_SIZE + 1
-                    response = (
+                    response = self._execute_with_retry(
                         self.client.table('emails')
                         .select(COLUMNS)
                         .eq('mailbox_id', self.mailbox_id)
                         .in_('id', chunk)
                         .order('sent_date', desc=False)
-                        .execute()
                     )
                     raw_batch = response.data or []
                     filtered = [e for e in raw_batch if e.get('processing_status') != 'failed']
@@ -309,18 +332,19 @@ class EmailLinker:
                 return all_emails
 
             # General fetch with pagination — get count first
-            count_resp = (
-                self.client.table('emails')
-                .select('id', count='exact')
-                .eq('mailbox_id', self.mailbox_id)
-                .is_('customer_contact_id', 'null')
-                .execute()
-            ) if not force_relink else (
-                self.client.table('emails')
-                .select('id', count='exact')
-                .eq('mailbox_id', self.mailbox_id)
-                .execute()
-            )
+            if not force_relink:
+                count_resp = self._execute_with_retry(
+                    self.client.table('emails')
+                    .select('id', count='exact')
+                    .eq('mailbox_id', self.mailbox_id)
+                    .is_('customer_contact_id', 'null')
+                )
+            else:
+                count_resp = self._execute_with_retry(
+                    self.client.table('emails')
+                    .select('id', count='exact')
+                    .eq('mailbox_id', self.mailbox_id)
+                )
             total_to_link = count_resp.count or 0
             estimated_pages = (total_to_link + PAGE_SIZE - 1) // PAGE_SIZE
             logger.info(f"Email linking: {total_to_link} emails to link, ~{estimated_pages} pages of {PAGE_SIZE}")
@@ -340,11 +364,10 @@ class EmailLinker:
                 if not force_relink:
                     query = query.is_('customer_contact_id', 'null')
 
-                response = (
+                response = self._execute_with_retry(
                     query
                     .order('sent_date', desc=False)
                     .range(offset, offset + PAGE_SIZE - 1)
-                    .execute()
                 )
                 raw_batch = response.data or []
                 filtered = [e for e in raw_batch if e.get('processing_status') != 'failed']

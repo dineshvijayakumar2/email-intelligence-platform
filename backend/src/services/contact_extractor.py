@@ -19,6 +19,7 @@ from typing import List, Dict, Optional, Set, Tuple
 from dataclasses import dataclass, asdict
 import logging
 import re
+import time
 from datetime import datetime
 
 from ..database.supabase_client import SupabaseClient
@@ -140,6 +141,29 @@ class ContactExtractor:
 
         logger.info(f"ContactExtractor initialized for mailbox {mailbox_id}")
 
+    @staticmethod
+    def _execute_with_retry(query_builder, max_retries: int = 3, base_delay: float = 2.0):
+        """Execute a Supabase query with retry for transient errors (SSL, network, 5xx)."""
+        last_error = None
+        for attempt in range(max_retries + 1):
+            try:
+                return query_builder.execute()
+            except Exception as e:
+                last_error = e
+                error_str = str(e)
+                is_transient = any(kw in error_str for kw in [
+                    'SSL handshake failed', '525', '502', '503', '504',
+                    'Connection reset', 'Connection refused', 'timed out',
+                    'JSON could not be generated', 'ECONNRESET', 'ETIMEDOUT',
+                ])
+                if is_transient and attempt < max_retries:
+                    delay = base_delay * (2 ** attempt)
+                    logger.warning(f"Transient Supabase error (attempt {attempt + 1}/{max_retries + 1}), retrying in {delay}s: {error_str[:200]}")
+                    time.sleep(delay)
+                    continue
+                raise
+        raise last_error
+
     def extract_contacts(
         self,
         exclude_mailing_lists: bool = False,  # Changed default to False
@@ -234,24 +258,22 @@ class ContactExtractor:
 
             # Small limit: single query
             if limit and limit <= PAGE_SIZE:
-                response = (
+                response = self._execute_with_retry(
                     self.client.table('emails')
                     .select(COLUMNS)
                     .eq('mailbox_id', self.mailbox_id)
                     .order('sent_date', desc=False)
                     .limit(limit)
-                    .execute()
                 )
                 result = [e for e in (response.data or []) if e.get('processing_status') != 'failed']
                 logger.info(f"Fetched {len(result)} emails (limit={limit})")
                 return result
 
             # Get total count for visibility
-            count_resp = (
+            count_resp = self._execute_with_retry(
                 self.client.table('emails')
                 .select('id', count='exact')
                 .eq('mailbox_id', self.mailbox_id)
-                .execute()
             )
             total_in_db = count_resp.count or 0
             estimated_pages = (total_in_db + PAGE_SIZE - 1) // PAGE_SIZE
@@ -264,13 +286,12 @@ class ContactExtractor:
 
             while True:
                 page += 1
-                response = (
+                response = self._execute_with_retry(
                     self.client.table('emails')
                     .select(COLUMNS)
                     .eq('mailbox_id', self.mailbox_id)
                     .order('sent_date', desc=False)
                     .range(offset, offset + PAGE_SIZE - 1)
-                    .execute()
                 )
                 raw_batch = response.data or []
                 filtered = [e for e in raw_batch if e.get('processing_status') != 'failed']

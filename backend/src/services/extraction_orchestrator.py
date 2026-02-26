@@ -31,6 +31,7 @@ Author: Sprint 2 Implementation
 
 from typing import Dict, Optional, List, Any
 import logging
+import time
 from datetime import datetime
 from uuid import uuid4
 import traceback
@@ -145,13 +146,48 @@ class ExtractionOrchestrator:
             logger.error(f"Failed to fetch client_id: {e}")
             raise
 
+    @staticmethod
+    def _execute_with_retry(query_builder, max_retries: int = 3, base_delay: float = 2.0):
+        """
+        Execute a Supabase query with retry for transient errors (SSL, network, 5xx).
+
+        Args:
+            query_builder: A Supabase query builder ready to .execute()
+            max_retries: Maximum retry attempts (default 3)
+            base_delay: Base delay in seconds, doubles each retry (2s, 4s, 8s)
+
+        Returns:
+            The query response
+
+        Raises:
+            The last exception if all retries exhausted
+        """
+        last_error = None
+        for attempt in range(max_retries + 1):
+            try:
+                return query_builder.execute()
+            except Exception as e:
+                last_error = e
+                error_str = str(e)
+                # Retry on transient errors: SSL, network, 5xx codes
+                is_transient = any(keyword in error_str for keyword in [
+                    'SSL handshake failed', '525', '502', '503', '504',
+                    'Connection reset', 'Connection refused', 'timed out',
+                    'JSON could not be generated', 'ECONNRESET', 'ETIMEDOUT',
+                ])
+                if is_transient and attempt < max_retries:
+                    delay = base_delay * (2 ** attempt)
+                    logger.warning(f"Transient Supabase error (attempt {attempt + 1}/{max_retries + 1}), retrying in {delay}s: {error_str[:200]}")
+                    time.sleep(delay)
+                    continue
+                raise
+        raise last_error
+
     def _get_emails_in_scope(self) -> tuple[List[str], Optional[str], Optional[str]]:
         """
         Get email IDs to process based on extraction mode.
 
         Paginates in batches of 500 to avoid Supabase row limits.
-        Uses or_ filter to include emails where processing_status is NULL
-        (PostgreSQL's != 'failed' excludes NULLs).
 
         Returns:
             Tuple of (email_ids, date_range_start, date_range_end)
@@ -160,11 +196,10 @@ class ExtractionOrchestrator:
         try:
             if self.extraction_mode == 'full':
                 # Get total count first for visibility
-                count_resp = (
+                count_resp = self._execute_with_retry(
                     self.client.table('emails')
                     .select('id', count='exact')
                     .eq('mailbox_id', self.mailbox_id)
-                    .execute()
                 )
                 total_in_db = count_resp.count or 0
                 estimated_pages = (total_in_db + PAGE_SIZE - 1) // PAGE_SIZE
@@ -176,13 +211,12 @@ class ExtractionOrchestrator:
 
                 while True:
                     page += 1
-                    response = (
+                    response = self._execute_with_retry(
                         self.client.table('emails')
                         .select('id, processing_status')
                         .eq('mailbox_id', self.mailbox_id)
                         .order('created_at')
                         .range(offset, offset + PAGE_SIZE - 1)
-                        .execute()
                     )
                     raw_batch = response.data or []
                     filtered = [e for e in raw_batch if e.get('processing_status') != 'failed']
@@ -205,13 +239,12 @@ class ExtractionOrchestrator:
                 logger.info(f"Date range: {date_range_start.isoformat()} to {date_range_end.isoformat()}")
 
                 # Get total count for date range
-                count_resp = (
+                count_resp = self._execute_with_retry(
                     self.client.table('emails')
                     .select('id', count='exact')
                     .eq('mailbox_id', self.mailbox_id)
                     .gte('sent_date', date_range_start.isoformat())
                     .lte('sent_date', date_range_end.isoformat())
-                    .execute()
                 )
                 total_in_range = count_resp.count or 0
                 estimated_pages = (total_in_range + PAGE_SIZE - 1) // PAGE_SIZE
@@ -223,7 +256,7 @@ class ExtractionOrchestrator:
 
                 while True:
                     page += 1
-                    response = (
+                    response = self._execute_with_retry(
                         self.client.table('emails')
                         .select('id, processing_status')
                         .eq('mailbox_id', self.mailbox_id)
@@ -231,7 +264,6 @@ class ExtractionOrchestrator:
                         .lte('sent_date', date_range_end.isoformat())
                         .order('sent_date')
                         .range(offset, offset + PAGE_SIZE - 1)
-                        .execute()
                     )
                     raw_batch = response.data or []
                     filtered = [e for e in raw_batch if e.get('processing_status') != 'failed']
