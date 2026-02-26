@@ -1,0 +1,734 @@
+"""
+Company Resolver Service - Sprint 2
+
+Purpose: Group contacts by domain and resolve to customer_companies
+Step 4 of 13-step extraction pipeline
+
+Features:
+- Groups contacts by email domain
+- Classifies domains (internal, free_provider, customer)
+- Matches to existing companies or creates new ones
+- Handles free email providers (gmail.com, yahoo.com, etc.)
+- Uses domain_parser for company name generation
+- Returns company records with metadata
+
+Classification Logic:
+1. Internal domains → Skip (user's own organization)
+2. Free providers → Create individual contact companies (or group)
+3. Corporate domains → Create/update customer_companies
+
+Author: Sprint 2 Implementation
+"""
+
+from typing import List, Dict, Optional, Set, Tuple
+from dataclasses import dataclass, asdict
+import logging
+from datetime import datetime
+from collections import defaultdict
+
+from ..database.supabase_client import SupabaseClient
+from ..utils.domain_parser import (
+    extract_domain,
+    normalize_domain,
+    domain_to_company_name,
+    get_root_domain
+)
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ResolvedCompany:
+    """Company resolved from domain grouping"""
+    # Company identification
+    company_id: Optional[str]  # UUID if existing, None if new
+    company_name: str
+    domain: str
+    domain_classification: str  # 'internal', 'free_provider', 'customer', 'unknown'
+
+    # Contact statistics
+    contact_count: int
+    total_emails: int
+    sender_count: int
+    recipient_count: int
+
+    # Metadata
+    email_domains: List[str]  # All domains seen for this company
+    is_new: bool  # True if company doesn't exist in DB
+    first_seen: datetime
+    last_seen: datetime
+
+    # Contact IDs associated with this company
+    contact_emails: List[str]
+
+
+class CompanyResolver:
+    """
+    Resolve contacts to customer_companies by domain
+
+    Usage:
+        resolver = CompanyResolver(client_id="uuid-here")
+
+        # Resolve from extracted contacts
+        companies = resolver.resolve_companies(contacts)
+
+        # Upsert to database
+        upserted = resolver.upsert_companies(companies)
+    """
+
+    def __init__(self, client_id: str):
+        """
+        Initialize company resolver
+
+        Args:
+            client_id: Client UUID for company resolution
+        """
+        self.client_id = client_id
+        self.client = SupabaseClient.get_client(use_service_key=True)
+
+        # Cache for lookups
+        self._internal_domains: Set[str] = set()
+        self._free_providers: Set[str] = set()
+        self._existing_companies: Dict[str, Dict] = {}  # domain -> company record
+
+        # Load reference data
+        self._load_internal_domains()
+        self._load_free_providers()
+        self._load_existing_companies()
+
+        logger.info(f"CompanyResolver initialized for client {client_id}")
+        logger.info(f"Loaded {len(self._internal_domains)} internal domains, "
+                   f"{len(self._free_providers)} free providers, "
+                   f"{len(self._existing_companies)} existing companies")
+
+    def _load_internal_domains(self):
+        """Load internal domains for this client"""
+        try:
+            response = (
+                self.client.table('internal_domains')
+                .select('domain')
+                .eq('client_id', self.client_id)
+                .execute()
+            )
+
+            for row in response.data:
+                self._internal_domains.add(row['domain'].lower())
+
+            logger.debug(f"Loaded internal domains: {self._internal_domains}")
+
+        except Exception as e:
+            logger.error(f"Failed to load internal domains: {e}")
+            # Continue with empty set
+
+    def _load_free_providers(self):
+        """Load free email providers from reference table"""
+        try:
+            response = (
+                self.client.table('free_email_providers')
+                .select('domain')
+                .execute()
+            )
+
+            for row in response.data:
+                self._free_providers.add(row['domain'].lower())
+
+            logger.debug(f"Loaded {len(self._free_providers)} free email providers")
+
+        except Exception as e:
+            logger.error(f"Failed to load free providers: {e}")
+            # Continue with empty set
+
+    def _load_existing_companies(self):
+        """Load existing companies for this client"""
+        try:
+            response = (
+                self.client.table('customer_companies')
+                .select('id, company_name, email_domains, created_at')
+                .eq('client_id', self.client_id)
+                .execute()
+            )
+
+            for row in response.data:
+                # Index by each domain in email_domains JSONB array
+                email_domains = row.get('email_domains', [])
+
+                for domain in email_domains:
+                    self._existing_companies[domain.lower()] = row
+
+            logger.debug(f"Loaded {len(response.data)} existing companies "
+                        f"with {len(self._existing_companies)} domain mappings")
+
+        except Exception as e:
+            logger.error(f"Failed to load existing companies: {e}")
+            # Continue with empty dict
+
+    def classify_domain(self, domain: str) -> str:
+        """
+        Classify domain as internal, free_provider, or customer
+
+        Args:
+            domain: Email domain
+
+        Returns:
+            Classification: 'internal', 'free_provider', 'customer', or 'unknown'
+        """
+        domain_lower = domain.lower()
+
+        # Check internal domains first
+        if domain_lower in self._internal_domains:
+            return 'internal'
+
+        # Check free providers
+        if domain_lower in self._free_providers:
+            return 'free_provider'
+
+        # Check if we have an existing company for this domain
+        if domain_lower in self._existing_companies:
+            return 'customer'
+
+        # New customer domain
+        return 'customer'
+
+    def _parse_datetime(self, date_value) -> datetime:
+        """
+        Safely parse datetime from string or datetime object
+
+        Args:
+            date_value: String or datetime object
+
+        Returns:
+            datetime object
+        """
+        if isinstance(date_value, datetime):
+            return date_value
+        elif isinstance(date_value, str):
+            return datetime.fromisoformat(date_value.replace('Z', '+00:00'))
+        else:
+            raise ValueError(f"Invalid date value type: {type(date_value)}")
+
+    def resolve_companies(
+        self,
+        contacts: List[Dict],
+        exclude_internal: bool = True,
+        group_free_providers: bool = False
+    ) -> List[ResolvedCompany]:
+        """
+        Resolve contacts to companies by grouping by domain
+
+        Args:
+            contacts: List of extracted contact dictionaries
+            exclude_internal: Skip internal domains
+            group_free_providers: If True, group all free provider contacts
+                                 under "Individual Contacts" bucket.
+                                 If False, create separate company per person.
+
+        Returns:
+            List of resolved companies
+        """
+        logger.info(f"Resolving {len(contacts)} contacts to companies")
+        logger.info(f"Options: exclude_internal={exclude_internal}, "
+                   f"group_free_providers={group_free_providers}")
+
+        # Group contacts by domain
+        domain_groups = self._group_by_domain(contacts)
+
+        logger.info(f"Grouped contacts into {len(domain_groups)} domains")
+
+        # Resolve each domain group to a company
+        companies = []
+
+        excluded_internal_count = 0
+
+        for domain, domain_contacts in domain_groups.items():
+            # Classify domain
+            classification = self.classify_domain(domain)
+
+            # Skip internal domains if requested
+            if classification == 'internal' and exclude_internal:
+                excluded_internal_count += len(domain_contacts)
+                continue
+
+            # Handle free providers
+            if classification == 'free_provider':
+                if group_free_providers:
+                    # Add to "Individual Contacts" bucket (handled separately)
+                    # For now, skip or create individual companies
+                    pass
+                else:
+                    # Create individual company per email address
+                    for contact in domain_contacts:
+                        company = self._create_individual_company(contact)
+                        companies.append(company)
+                    continue
+
+            # Regular customer domain - create company
+            company = self._create_company_from_domain(domain, domain_contacts, classification)
+            companies.append(company)
+
+        logger.info(f"Resolved {len(companies)} companies "
+                   f"({excluded_internal_count} internal contacts excluded)")
+
+        return companies
+
+    def _group_by_domain(self, contacts: List[Dict]) -> Dict[str, List[Dict]]:
+        """
+        Group contacts by email domain
+
+        Args:
+            contacts: List of contact dictionaries
+
+        Returns:
+            Dictionary mapping domain -> list of contacts
+        """
+        domain_groups = defaultdict(list)
+
+        for contact in contacts:
+            domain = contact.get('domain')
+            if domain:
+                domain_groups[domain.lower()].append(contact)
+
+        return dict(domain_groups)
+
+    def _create_company_from_domain(
+        self,
+        domain: str,
+        contacts: List[Dict],
+        classification: str
+    ) -> ResolvedCompany:
+        """
+        Create company record from domain and contacts
+
+        Args:
+            domain: Email domain
+            contacts: List of contacts from this domain
+            classification: Domain classification
+
+        Returns:
+            ResolvedCompany instance
+        """
+        # Check if company already exists
+        existing_company = self._existing_companies.get(domain.lower())
+
+        if existing_company:
+            company_id = existing_company['id']
+            company_name = existing_company['company_name']
+            is_new = False
+        else:
+            company_id = None
+            company_name = domain_to_company_name(domain)
+            is_new = True
+
+        # Calculate statistics
+        contact_count = len(contacts)
+        total_emails = sum(int(c.get('total_emails', 0) or 0) for c in contacts)
+        sender_count = sum(1 for c in contacts if int(c.get('as_sender_count', 0) or 0) > 0)
+        recipient_count = sum(1 for c in contacts if int(c.get('as_recipient_count', 0) or 0) > 0)
+
+        # Get date range
+        first_seen = min(
+            self._parse_datetime(c['first_seen_date'])
+            for c in contacts
+        )
+        last_seen = max(
+            self._parse_datetime(c['last_seen_date'])
+            for c in contacts
+        )
+
+        # Get all domains (in case of subdomains)
+        email_domains = list(set(c.get('domain') for c in contacts if c.get('domain')))
+
+        # Get contact emails
+        contact_emails = [c['email'] for c in contacts]
+
+        return ResolvedCompany(
+            company_id=company_id,
+            company_name=company_name,
+            domain=domain,
+            domain_classification=classification,
+            contact_count=contact_count,
+            total_emails=total_emails,
+            sender_count=sender_count,
+            recipient_count=recipient_count,
+            email_domains=email_domains,
+            is_new=is_new,
+            first_seen=first_seen,
+            last_seen=last_seen,
+            contact_emails=contact_emails
+        )
+
+    def _create_individual_company(self, contact: Dict) -> ResolvedCompany:
+        """
+        Create individual company for free provider contact
+
+        Used when group_free_providers=False
+
+        Args:
+            contact: Contact dictionary
+
+        Returns:
+            ResolvedCompany instance
+        """
+        # Use contact full name or email as company name
+        if contact.get('display_name'):
+            company_name = contact['display_name']
+        elif contact.get('first_name') or contact.get('last_name'):
+            parts = [contact.get('first_name', ''), contact.get('last_name', '')]
+            company_name = ' '.join(p for p in parts if p).strip()
+        else:
+            # Use email prefix
+            company_name = contact['email'].split('@')[0].replace('.', ' ').title()
+
+        first_seen = self._parse_datetime(contact['first_seen_date'])
+        last_seen = self._parse_datetime(contact['last_seen_date'])
+
+        return ResolvedCompany(
+            company_id=None,
+            company_name=company_name,
+            domain=contact['domain'],
+            domain_classification='free_provider',
+            contact_count=1,
+            total_emails=int(contact.get('total_emails', 0) or 0),
+            sender_count=1 if int(contact.get('as_sender_count', 0) or 0) > 0 else 0,
+            recipient_count=1 if int(contact.get('as_recipient_count', 0) or 0) > 0 else 0,
+            email_domains=[contact['domain']],
+            is_new=True,
+            first_seen=first_seen,
+            last_seen=last_seen,
+            contact_emails=[contact['email']]
+        )
+
+    def upsert_companies(self, companies: List[ResolvedCompany]) -> Dict:
+        """
+        Upsert companies to database (batch upsert with ON CONFLICT)
+
+        Creates new companies or updates existing ones
+
+        Args:
+            companies: List of resolved companies
+
+        Returns:
+            Dictionary with statistics
+        """
+        logger.info(f"Upserting {len(companies)} companies to database (batch mode)")
+
+        if not companies:
+            return {
+                'total_companies': 0,
+                'created': 0,
+                'updated': 0,
+                'errors': []
+            }
+
+        # Deduplicate companies by name (case-insensitive)
+        # PostgreSQL upsert can't handle duplicate rows in same batch
+        company_map: Dict[str, ResolvedCompany] = {}
+        for company in companies:
+            name_lower = company.company_name.lower()
+            if name_lower in company_map:
+                # Merge with existing
+                existing = company_map[name_lower]
+                existing.email_domains = list(set(existing.email_domains + company.email_domains))
+                existing.contact_emails = list(set(existing.contact_emails + company.contact_emails))
+                existing.contact_count = max(existing.contact_count, company.contact_count)
+                existing.total_emails += company.total_emails
+                existing.last_seen = max(existing.last_seen, company.last_seen)
+                existing.first_seen = min(existing.first_seen, company.first_seen)
+            else:
+                company_map[name_lower] = company
+
+        deduplicated_companies = list(company_map.values())
+
+        if len(deduplicated_companies) < len(companies):
+            logger.info(f"Deduplicated {len(companies)} companies to {len(deduplicated_companies)} unique companies")
+
+        # Fetch all existing companies for this client (single query)
+        existing_response = (
+            self.client.table('customer_companies')
+            .select('id, company_name, email_domains')
+            .eq('client_id', self.client_id)
+            .execute()
+        )
+
+        # Build lookup: company_name → existing record
+        existing_companies = {
+            row['company_name'].lower(): row
+            for row in existing_response.data
+        }
+
+        logger.info(f"Found {len(existing_companies)} existing companies in database")
+
+        # Prepare batch upsert data
+        upsert_data = []
+        timestamp = datetime.utcnow().isoformat()
+
+        for company in deduplicated_companies:
+            company_name_lower = company.company_name.lower()
+            existing = existing_companies.get(company_name_lower)
+
+            # Merge email domains if updating
+            if existing:
+                existing_domains = set(existing.get('email_domains', []))
+                new_domains = list(existing_domains.union(set(company.email_domains)))
+            else:
+                new_domains = company.email_domains
+
+            company_data = {
+                'client_id': self.client_id,
+                'company_name': company.company_name,
+                'email_domains': new_domains,
+                'contact_count': company.contact_count,
+                'first_contact_date': company.first_seen.isoformat(),
+                'last_contact_date': company.last_seen.isoformat(),
+                'updated_at': timestamp
+            }
+
+            if not existing:
+                company_data['created_at'] = timestamp
+
+            upsert_data.append(company_data)
+
+        # Batch upsert (100 per batch)
+        # Use ON CONFLICT because customer_companies has unique constraint on (client_id, company_name)
+        batch_size = 100
+        created_count = 0
+        updated_count = 0
+        errors = []
+
+        for i in range(0, len(upsert_data), batch_size):
+            batch = upsert_data[i:i + batch_size]
+
+            try:
+                # Upsert with ON CONFLICT on unique constraint
+                response = (
+                    self.client.table('customer_companies')
+                    .upsert(batch, on_conflict='client_id,company_name')
+                    .execute()
+                )
+
+                # Count how many were new vs updated
+                batch_names = {item['company_name'].lower() for item in batch}
+                new_in_batch = len(batch_names - existing_companies.keys())
+                updated_in_batch = len(batch_names & existing_companies.keys())
+
+                created_count += new_in_batch
+                updated_count += updated_in_batch
+
+                logger.info(f"Upserted batch {i//batch_size + 1}: "
+                          f"{new_in_batch} new, {updated_in_batch} updated")
+
+                # Update company IDs from response
+                if response.data:
+                    for row in response.data:
+                        company_name_lower = row['company_name'].lower()
+                        # Find matching company object and update its ID
+                        for company in deduplicated_companies:
+                            if company.company_name.lower() == company_name_lower:
+                                company.company_id = row['id']
+                                break
+
+            except Exception as e:
+                logger.error(f"Failed to upsert batch: {e}")
+                # Add all companies in this batch to errors
+                for item in batch:
+                    errors.append({
+                        'company_name': item['company_name'],
+                        'domain': item.get('email_domains', [None])[0],
+                        'error': str(e)
+                    })
+
+        logger.info(f"Company upsert complete: {created_count} created, "
+                   f"{updated_count} updated, {len(errors)} errors")
+
+        return {
+            'total_companies': len(deduplicated_companies),
+            'original_count': len(companies),
+            'created': created_count,
+            'updated': updated_count,
+            'errors': errors
+        }
+
+    def _create_company(self, company: ResolvedCompany):
+        """
+        Create new company in database (or update if duplicate name exists)
+
+        Args:
+            company: ResolvedCompany instance
+        """
+        insert_data = {
+            'client_id': self.client_id,
+            'company_name': company.company_name,
+            'email_domains': company.email_domains,
+            'contact_count': company.contact_count,
+            'first_contact_date': company.first_seen.isoformat(),
+            'last_contact_date': company.last_seen.isoformat(),
+            'created_at': datetime.utcnow().isoformat(),
+            'updated_at': datetime.utcnow().isoformat(),
+        }
+
+        try:
+            response = (
+                self.client.table('customer_companies')
+                .insert(insert_data)
+                .execute()
+            )
+
+            if response.data:
+                # Update cache
+                company.company_id = response.data[0]['id']
+                for domain in company.email_domains:
+                    self._existing_companies[domain.lower()] = response.data[0]
+
+                logger.debug(f"Created company: {company.company_name} (ID: {company.company_id})")
+
+        except Exception as e:
+            # Check if it's a duplicate key error
+            error_str = str(e)
+            if 'duplicate key' in error_str or '23505' in error_str:
+                # Company with this name already exists, fetch and update it
+                logger.warning(f"Company {company.company_name} already exists, updating instead")
+
+                existing = (
+                    self.client.table('customer_companies')
+                    .select('*')
+                    .eq('client_id', self.client_id)
+                    .eq('company_name', company.company_name)
+                    .execute()
+                )
+
+                if existing.data:
+                    # Update the existing company
+                    company.company_id = existing.data[0]['id']
+                    company.is_new = False
+                    self._update_company(company)
+                else:
+                    # Unexpected: duplicate error but can't find existing
+                    raise
+            else:
+                # Different error, re-raise
+                raise
+
+    def _update_company(self, company: ResolvedCompany):
+        """
+        Update existing company in database
+
+        Args:
+            company: ResolvedCompany instance
+        """
+        # Get existing record
+        existing = self._existing_companies.get(company.domain.lower())
+
+        if not existing:
+            logger.warning(f"Company {company.company_name} marked as existing but not in cache")
+            return
+
+        # Merge email_domains (keep existing + add new)
+        existing_domains = set(existing.get('email_domains', []))
+        new_domains = existing_domains.union(set(company.email_domains))
+
+        update_data = {
+            'email_domains': list(new_domains),
+            'contact_count': company.contact_count,
+            'last_contact_date': company.last_seen.isoformat(),
+            'updated_at': datetime.utcnow().isoformat(),
+        }
+
+        response = (
+            self.client.table('customer_companies')
+            .update(update_data)
+            .eq('id', company.company_id)
+            .execute()
+        )
+
+        logger.debug(f"Updated company: {company.company_name} (ID: {company.company_id})")
+
+    def get_resolution_summary(self, companies: List[ResolvedCompany]) -> Dict:
+        """
+        Get summary statistics of company resolution
+
+        Args:
+            companies: List of resolved companies
+
+        Returns:
+            Dictionary with resolution statistics
+        """
+        total = len(companies)
+        new_companies = sum(1 for c in companies if c.is_new)
+        existing_companies = sum(1 for c in companies if not c.is_new)
+
+        by_classification = defaultdict(int)
+        for company in companies:
+            by_classification[company.domain_classification] += 1
+
+        total_contacts = sum(c.contact_count for c in companies)
+        total_emails = sum(c.total_emails for c in companies)
+
+        return {
+            'total_companies': total,
+            'new_companies': new_companies,
+            'existing_companies': existing_companies,
+            'by_classification': dict(by_classification),
+            'total_contacts': total_contacts,
+            'total_emails': total_emails,
+        }
+
+
+# Example usage
+if __name__ == '__main__':
+    import sys
+    import json
+
+    if len(sys.argv) < 3:
+        print("Usage: python -m backend.src.services.company_resolver <client_id> <contacts_json_file>")
+        print("\ncontacts_json_file should contain output from contact_extractor")
+        sys.exit(1)
+
+    client_id = sys.argv[1]
+    contacts_file = sys.argv[2]
+
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+
+    # Load contacts
+    with open(contacts_file, 'r') as f:
+        contacts = json.load(f)
+
+    logger.info(f"Loaded {len(contacts)} contacts from {contacts_file}")
+
+    # Resolve companies
+    resolver = CompanyResolver(client_id=client_id)
+    companies = resolver.resolve_companies(
+        contacts=contacts,
+        exclude_internal=True,
+        group_free_providers=False
+    )
+
+    # Print summary
+    summary = resolver.get_resolution_summary(companies)
+    print("\n=== Company Resolution Summary ===")
+    for key, value in summary.items():
+        print(f"{key}: {value}")
+
+    # Upsert to database
+    print("\nUpserting companies to database...")
+    upsert_result = resolver.upsert_companies(companies)
+
+    print("\n=== Upsert Results ===")
+    for key, value in upsert_result.items():
+        if key != 'errors':
+            print(f"{key}: {value}")
+
+    if upsert_result['errors']:
+        print(f"\nErrors: {len(upsert_result['errors'])}")
+        for error in upsert_result['errors'][:5]:
+            print(f"  - {error['company_name']}: {error['error']}")
+
+    # Print top 10 companies
+    companies.sort(key=lambda c: c.total_emails, reverse=True)
+    print("\n=== Top 10 Companies by Email Volume ===")
+    for i, company in enumerate(companies[:10], 1):
+        status = "NEW" if company.is_new else "EXISTING"
+        print(f"{i}. [{status}] {company.company_name} ({company.domain}) - "
+              f"{company.contact_count} contacts, {company.total_emails} emails")

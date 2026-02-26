@@ -633,7 +633,8 @@ class EmailOperations:
                 'recipients': email.get('recipients', []),
                 'cc_list': email.get('cc_list', []),
                 'bcc_list': email.get('bcc_list', []),
-                'raw_headers': email.get('raw_headers', {})
+                'raw_headers': email.get('raw_headers', {}),
+                'processing_status': email.get('processing_status', 'success')
             }
             
             # Validate JSON fields

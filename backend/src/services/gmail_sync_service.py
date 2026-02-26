@@ -155,7 +155,12 @@ class GmailSyncService:
 
                 config = mailbox.get('connection_config') or {}
 
-                # Skip if in error state and not enough time has passed
+                # Skip if auth has expired - requires user to reconnect (no retry loop)
+                if config.get('gmail_sync_status') == 'auth_expired':
+                    logger.debug(f"Skipping mailbox {mailbox_id} - authentication expired, user reconnection required")
+                    continue
+
+                # Skip if in transient error state and not enough time has passed
                 if config.get('gmail_sync_status') == 'error':
                     last_sync = config.get('gmail_last_sync_at')
                     if last_sync:
@@ -206,6 +211,8 @@ class GmailSyncService:
             })
 
             if not extractor.connect():
+                if extractor.auth_expired:
+                    raise ConnectionError(f"AUTH_EXPIRED: {extractor.auth_error or 'Refresh token revoked or expired'}")
                 raise ConnectionError("Failed to connect to Gmail API")
 
             # Create processing job
@@ -259,9 +266,18 @@ class GmailSyncService:
             logger.info(f"Gmail sync completed for mailbox {mailbox_name}: {success_count} emails synced")
 
         except Exception as e:
-            logger.error(f"Gmail sync failed for mailbox {mailbox_id}: {e}")
-            logger.error(traceback.format_exc())
-            await self._update_mailbox_sync_status(mailbox_id, 'error', error=str(e))
+            error_str = str(e)
+            is_auth_error = 'AUTH_EXPIRED:' in error_str or any(
+                pat in error_str.lower() for pat in ['invalid_grant', 'token has been expired or revoked']
+            )
+            if is_auth_error:
+                user_msg = "Authentication expired. Please reconnect your Gmail account."
+                logger.error(f"Gmail auth expired for mailbox {mailbox_id} - user reconnection required")
+                await self._update_mailbox_sync_status(mailbox_id, 'auth_expired', error=user_msg)
+            else:
+                logger.error(f"Gmail sync failed for mailbox {mailbox_id}: {e}")
+                logger.error(traceback.format_exc())
+                await self._update_mailbox_sync_status(mailbox_id, 'error', error=error_str)
 
     async def _update_mailbox_sync_status(
         self,
@@ -294,15 +310,20 @@ class GmailSyncService:
                 current_count = config.get('gmail_email_count') or 0
                 config['gmail_email_count'] = current_count + email_count
 
-            if error:
+            if status == 'auth_expired':
+                config['gmail_requires_reauth'] = True
+                config['gmail_sync_error'] = error[:500] if error else 'Authentication expired'
+            elif error:
                 config['gmail_sync_error'] = error[:500]  # Truncate long errors
             elif status == 'idle':
                 config['gmail_sync_error'] = None
+                config['gmail_requires_reauth'] = False
 
             # Update mailbox
-            self.supabase.table('mailboxes').update({
-                'connection_config': config
-            }).eq('id', mailbox_id).execute()
+            update_data = {'connection_config': config}
+            if status == 'idle':
+                update_data['last_sync_at'] = datetime.now(timezone.utc).isoformat()
+            self.supabase.table('mailboxes').update(update_data).eq('id', mailbox_id).execute()
 
         except Exception as e:
             logger.error(f"Failed to update mailbox sync status: {e}")
@@ -411,6 +432,8 @@ class GmailSyncService:
             })
 
             if not extractor.connect():
+                if extractor.auth_expired:
+                    raise ConnectionError(f"AUTH_EXPIRED: {extractor.auth_error or 'Refresh token revoked or expired'}")
                 raise ConnectionError("Failed to connect to Gmail API")
 
             # Create processing job
@@ -464,9 +487,18 @@ class GmailSyncService:
             logger.info(f"Gmail sync completed for user {user_id}: {success_count} emails synced")
 
         except Exception as e:
-            logger.error(f"Gmail sync failed for user {user_id}: {e}")
-            logger.error(traceback.format_exc())
-            await self._update_sync_status(user_id, 'error', error=str(e))
+            error_str = str(e)
+            is_auth_error = 'AUTH_EXPIRED:' in error_str or any(
+                pat in error_str.lower() for pat in ['invalid_grant', 'token has been expired or revoked']
+            )
+            if is_auth_error:
+                user_msg = "Authentication expired. Please reconnect your Gmail account."
+                logger.error(f"Gmail auth expired for user {user_id} - user reconnection required")
+                await self._update_sync_status(user_id, 'auth_expired', error=user_msg)
+            else:
+                logger.error(f"Gmail sync failed for user {user_id}: {e}")
+                logger.error(traceback.format_exc())
+                await self._update_sync_status(user_id, 'error', error=error_str)
 
     async def _get_gmail_mailbox(self, user_id: str) -> Optional[Dict]:
         """

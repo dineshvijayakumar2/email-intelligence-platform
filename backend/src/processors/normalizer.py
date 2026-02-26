@@ -3,6 +3,8 @@ from typing import Dict, Optional, List
 import logging
 import re
 
+from ..utils.domain_parser import is_noreply_address
+
 logger = logging.getLogger(__name__)
 
 class EmailNormalizer:
@@ -227,9 +229,7 @@ class EmailNormalizer:
             return 'Spam'
 
         # 3. Check for system/automated emails → could be in Updates/Notifications
-        system_senders = ['noreply@', 'no-reply@', 'donotreply@', 'automated@',
-                         'system@', 'notification@']
-        if sender_email and any(sender_email.startswith(sender) for sender in system_senders):
+        if sender_email and is_noreply_address(sender_email):
             logger.debug("  → Inferred: Inbox (system sender)")
             return 'Inbox'
 

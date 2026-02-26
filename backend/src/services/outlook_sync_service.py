@@ -155,7 +155,12 @@ class OutlookSyncService:
 
                 config = mailbox.get('connection_config') or {}
 
-                # Skip if in error state and not enough time has passed
+                # Skip if auth has expired - requires user to reconnect (no retry loop)
+                if config.get('outlook_sync_status') == 'auth_expired':
+                    logger.debug(f"Skipping mailbox {mailbox_id} - authentication expired, user reconnection required")
+                    continue
+
+                # Skip if in transient error state and not enough time has passed
                 if config.get('outlook_sync_status') == 'error':
                     last_sync = config.get('outlook_last_sync_at')
                     if last_sync:
@@ -206,6 +211,8 @@ class OutlookSyncService:
             })
 
             if not extractor.connect():
+                if extractor.auth_expired:
+                    raise ConnectionError(f"AUTH_EXPIRED: {extractor.auth_error or 'Refresh token revoked or expired'}")
                 raise ConnectionError("Failed to connect to Outlook API")
 
             # Create processing job
@@ -259,9 +266,21 @@ class OutlookSyncService:
             logger.info(f"Outlook sync completed for mailbox {mailbox_name}: {success_count} emails synced")
 
         except Exception as e:
-            logger.error(f"Outlook sync failed for mailbox {mailbox_id}: {e}")
-            logger.error(traceback.format_exc())
-            await self._update_mailbox_sync_status(mailbox_id, 'error', error=str(e))
+            error_str = str(e)
+            is_auth_error = 'AUTH_EXPIRED:' in error_str or any(
+                pat in error_str.lower() for pat in [
+                    'invalid_grant', 'failed to refresh access token',
+                    'aadsts70008', 'aadsts700082', 'aadsts70043'
+                ]
+            )
+            if is_auth_error:
+                user_msg = "Authentication expired. Please reconnect your Outlook account."
+                logger.error(f"Outlook auth expired for mailbox {mailbox_id} - user reconnection required")
+                await self._update_mailbox_sync_status(mailbox_id, 'auth_expired', error=user_msg)
+            else:
+                logger.error(f"Outlook sync failed for mailbox {mailbox_id}: {e}")
+                logger.error(traceback.format_exc())
+                await self._update_mailbox_sync_status(mailbox_id, 'error', error=error_str)
 
     async def _update_mailbox_sync_status(
         self,
@@ -294,15 +313,20 @@ class OutlookSyncService:
                 current_count = config.get('outlook_email_count') or 0
                 config['outlook_email_count'] = current_count + email_count
 
-            if error:
+            if status == 'auth_expired':
+                config['outlook_requires_reauth'] = True
+                config['outlook_sync_error'] = error[:500] if error else 'Authentication expired'
+            elif error:
                 config['outlook_sync_error'] = error[:500]  # Truncate long errors
             elif status == 'idle':
                 config['outlook_sync_error'] = None
+                config['outlook_requires_reauth'] = False
 
             # Update mailbox
-            self.supabase.table('mailboxes').update({
-                'connection_config': config
-            }).eq('id', mailbox_id).execute()
+            update_data = {'connection_config': config}
+            if status == 'idle':
+                update_data['last_sync_at'] = datetime.now(timezone.utc).isoformat()
+            self.supabase.table('mailboxes').update(update_data).eq('id', mailbox_id).execute()
 
         except Exception as e:
             logger.error(f"Failed to update mailbox sync status: {e}")

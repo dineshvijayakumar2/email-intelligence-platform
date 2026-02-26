@@ -3,6 +3,8 @@ import re
 import logging
 from datetime import datetime
 
+from ..utils.domain_parser import is_noreply_address
+
 logger = logging.getLogger(__name__)
 
 class EmailAutomationCategorizer:
@@ -109,9 +111,9 @@ class EmailAutomationCategorizer:
     
     def _classify_sender_type(self, sender: str, headers: Dict) -> str:
         """Classify the type of sender"""
-        
+
         # System/automated senders
-        if any(pattern in sender for pattern in ['noreply', 'no-reply', 'donotreply', 'automated', 'system']):
+        if is_noreply_address(sender):
             return 'system'
         
         # Marketing automation platforms
@@ -174,7 +176,7 @@ class EmailAutomationCategorizer:
         headers = email.get('raw_headers', {})
         
         # Sender indicators
-        if 'noreply' in sender:
+        if is_noreply_address(sender):
             indicators.append('noreply_sender')
         
         # Template indicators

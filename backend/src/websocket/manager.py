@@ -263,14 +263,26 @@ class ConnectionManager:
             message: Message dict to send
         """
         websocket = self.active_connections.get(connection_id)
-        if websocket:
-            try:
-                await websocket.send_json(message)
-                self.stats['total_messages_sent'] += 1
-            except Exception as e:
-                logger.error(f"[WebSocket] Failed to send to {connection_id}: {e}")
-                # Connection may be dead, clean it up
-                await self.disconnect(connection_id)
+        if not websocket:
+            logger.warning(f"[WebSocket] Connection {connection_id} not found")
+            return
+
+        try:
+            await websocket.send_json(message)
+            self.stats['total_messages_sent'] += 1
+        except RuntimeError as e:
+            # WebSocket state errors (not connected, already closed, need to accept first, etc.)
+            error_str = str(e).lower()
+            if "not connected" in error_str or "accept" in error_str or "closed" in error_str:
+                logger.debug(f"[WebSocket] Connection {connection_id} invalid state: {e}")
+            else:
+                logger.error(f"[WebSocket] Runtime error sending to {connection_id}: {e}")
+            # Connection is in bad state, clean it up
+            await self.disconnect(connection_id)
+        except Exception as e:
+            logger.error(f"[WebSocket] Unexpected error sending to {connection_id}: {e}")
+            # Connection may be dead, clean it up
+            await self.disconnect(connection_id)
 
     async def broadcast_to_room(self, room: str, message: dict, exclude: Set[str] = None):
         """

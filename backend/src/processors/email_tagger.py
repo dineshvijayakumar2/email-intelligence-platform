@@ -11,6 +11,8 @@ import re
 import logging
 from datetime import datetime
 
+from ..utils.domain_parser import is_noreply_address
+
 logger = logging.getLogger(__name__)
 
 
@@ -294,16 +296,9 @@ class EmailTagger:
         sender = email.get('sender_email', '').lower()
         sender_name = email.get('sender_name', '').lower()
 
-        # System sender patterns
-        system_patterns = [
-            'noreply@', 'no-reply@', 'donotreply@', 'do-not-reply@',
-            'system@', 'automated@', 'daemon@', 'mailer-daemon@',
-            'postmaster@', 'root@'
-        ]
-
-        for pattern in system_patterns:
-            if sender.startswith(pattern):
-                return True
+        # Use domain_parser utility for system sender detection
+        if is_noreply_address(sender):
+            return True
 
         # Known system domains
         for domain in self.system_domains:

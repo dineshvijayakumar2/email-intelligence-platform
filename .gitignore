@@ -58,6 +58,12 @@ yarn-error.log*
 *.db
 *.sqlite
 
+# Extraction results (local test output)
+extraction_results_*.json
+
+# Word temp files
+~$*
+
 # Secrets and sensitive files
 *.pem
 *.key

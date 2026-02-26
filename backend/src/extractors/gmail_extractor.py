@@ -88,6 +88,8 @@ class GmailExtractor(BaseExtractor):
         # Token management
         self.credentials = None
         self.tokens_refreshed = False
+        self.auth_expired = False
+        self.auth_error = None
 
         logger.info(f"GmailExtractor initialized for user: {self.user_id}, labels: {self.labels_to_sync}")
 
@@ -143,7 +145,15 @@ class GmailExtractor(BaseExtractor):
             return True
 
         except Exception as e:
-            logger.error(f"Failed to connect to Gmail: {e}")
+            error_msg = str(e)
+            # Detect auth expiry - refresh token revoked or expired (cannot auto-recover)
+            auth_patterns = ['invalid_grant', 'token has been expired or revoked', 'token_expired', 'revoked']
+            if any(pat in error_msg.lower() for pat in auth_patterns):
+                self.auth_expired = True
+                self.auth_error = error_msg
+                logger.error(f"Gmail authentication expired (refresh token revoked): {e}")
+            else:
+                logger.error(f"Failed to connect to Gmail: {e}")
             return False
 
     def _load_labels(self):

@@ -39,6 +39,9 @@ from src.routers.clients import router as clients_router, init_clients_router
 from src.routers.customers import router as customers_router, init_customers_router
 from src.routers.contacts import router as contacts_router, init_contacts_router
 
+# Sprint 2 Phase 5A: Analytics Router
+from src.routers.analytics import router as analytics_router, init_analytics_router
+
 # Stage 2: Error Router
 from src.routers.errors import router as errors_router, init_error_router
 
@@ -470,6 +473,7 @@ def initialize_business_hierarchy_routers():
     init_clients_router(sb)
     init_customers_router(sb)
     init_contacts_router(sb)
+    init_analytics_router(sb)  # Sprint 2 Phase 5A
     # Initialize error router with Supabase client and job error logger
     error_logger = get_error_logger()
     init_error_router(
@@ -490,6 +494,7 @@ app.include_router(account_managers_router, prefix="/api")
 app.include_router(clients_router, prefix="/api")
 app.include_router(customers_router, prefix="/api")
 app.include_router(contacts_router, prefix="/api")
+app.include_router(analytics_router, prefix="/api/v1")  # Sprint 2 Phase 5A
 app.include_router(errors_router, prefix="/api")
 app.include_router(gmail_router, prefix="/api")
 app.include_router(outlook_router, prefix="/api")
@@ -921,9 +926,6 @@ async def get_mailboxes(accessible_mailbox_ids: list = Depends(get_accessible_ma
     try:
         sb = get_supabase()
 
-        # Debug logging
-        logger.info(f"[Mailboxes API] Accessible mailbox IDs: {len(accessible_mailbox_ids)} - {accessible_mailbox_ids}")
-
         # If user has no accessible mailboxes, return empty list
         if not accessible_mailbox_ids:
             logger.warning("[Mailboxes API] No accessible mailboxes for user")
@@ -966,7 +968,7 @@ async def get_mailboxes(accessible_mailbox_ids: list = Depends(get_accessible_ma
         return mailboxes_with_counts
 
     except Exception as e:
-        logger.error(f"Error fetching mailboxes: {e}")
+        logger.error(f"Error fetching mailboxes: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to fetch mailboxes: {str(e)}")
 
 @app.get("/api/mailboxes/{mailbox_id}")
@@ -1029,7 +1031,32 @@ async def update_mailbox(mailbox_id: str, mailbox_data: MailboxConfig):
     """Update an existing mailbox"""
     try:
         sb = get_supabase()
-        
+
+        # Fetch current mailbox to validate email_address changes
+        current_mailbox = sb.table('mailboxes').select('*').eq('id', mailbox_id).single().execute()
+        if not current_mailbox.data:
+            raise HTTPException(status_code=404, detail="Mailbox not found")
+
+        # Validate email_address if being updated
+        if mailbox_data.email_address:
+            current_config = current_mailbox.data.get('connection_config') or {}
+            gmail_email = current_config.get('gmail_email')
+            outlook_email = current_config.get('outlook_email')
+
+            # If there's a Gmail connection, email must match
+            if gmail_email and mailbox_data.email_address.lower() != gmail_email.lower():
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Cannot change email address to {mailbox_data.email_address}. This mailbox is connected to Gmail account {gmail_email}. Please disconnect Gmail first or use the connected email address."
+                )
+
+            # If there's an Outlook connection, email must match
+            if outlook_email and mailbox_data.email_address.lower() != outlook_email.lower():
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Cannot change email address to {mailbox_data.email_address}. This mailbox is connected to Outlook account {outlook_email}. Please disconnect Outlook first or use the connected email address."
+                )
+
         # Prepare update data
         update_data = {
             "name": mailbox_data.name,
@@ -1985,9 +2012,10 @@ async def get_processing_jobs(
             filter_mailbox_ids = accessible_mailbox_ids
 
         # Get processing jobs for the filtered mailboxes
+        # Note: error_log excluded from list response (can be 100KB+ per job, use /processing-jobs/{id} for details)
         result = get_supabase().table('processing_jobs').select(
-            'id, job_type, mailbox_id, status, total_records, processed_records, failed_records, filtered_records, started_at, completed_at, created_at, error_log, filter_start_date, filter_end_date, mailboxes(name)'
-        ).in_('mailbox_id', filter_mailbox_ids).order('created_at', desc=True).execute()
+            'id, job_type, mailbox_id, status, total_records, processed_records, failed_records, filtered_records, started_at, completed_at, created_at, filter_start_date, filter_end_date, mailboxes(name)'
+        ).in_('mailbox_id', filter_mailbox_ids).order('created_at', desc=True).limit(100).execute()
         
         jobs = []
         for job in result.data:

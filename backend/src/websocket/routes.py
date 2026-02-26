@@ -44,7 +44,16 @@ async def websocket_endpoint(
     manager = get_connection_manager()
     if not manager:
         logger.error("[WebSocket] Connection manager not initialized")
-        await websocket.close(code=1011, reason="Server not ready")
+        try:
+            # Must accept before closing or sending
+            await websocket.accept()
+            await websocket.send_json({
+                'type': 'error',
+                'data': {'message': 'Server not ready. Please try again.'},
+            })
+            await websocket.close(code=1011, reason="Server not ready")
+        except Exception as e:
+            logger.debug(f"[WebSocket] Could not send server error: {e}")
         return
 
     connection_id = None
@@ -79,9 +88,16 @@ async def websocket_endpoint(
     except Exception as e:
         logger.error(f"[WebSocket] Error: {e}")
         try:
+            # If connection wasn't established (authentication failed), accept before closing
+            if connection_id is None:
+                await websocket.accept()
+                await websocket.send_json({
+                    'type': 'error',
+                    'data': {'message': str(e)[:200]},
+                })
             await websocket.close(code=1011, reason=str(e)[:120])
-        except Exception:
-            pass
+        except Exception as close_error:
+            logger.debug(f"[WebSocket] Could not close cleanly: {close_error}")
     finally:
         if connection_id:
             await manager.disconnect(connection_id)

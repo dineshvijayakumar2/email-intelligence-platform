@@ -3,6 +3,8 @@ import re
 import logging
 from datetime import datetime
 
+from ..utils.domain_parser import is_noreply_address
+
 logger = logging.getLogger(__name__)
 
 class IndustryStandardCategorizer:
@@ -98,7 +100,7 @@ class IndustryStandardCategorizer:
         subject = email.get('subject', '').lower()
         
         # No-reply senders (often transactional)
-        if any(pattern in sender for pattern in ['noreply', 'no-reply', 'donotreply']):
+        if is_noreply_address(sender):
             # Check if it's transactional, not promotional
             for keyword in self.transactional_keywords:
                 if keyword in subject:
@@ -226,7 +228,7 @@ class OutlookStyleCategorizer:
             return {'focused': False, 'reason': 'promotional'}
         
         # Not focused if automated
-        if any(term in sender for term in ['noreply', 'no-reply', 'automated']):
+        if is_noreply_address(sender):
             return {'focused': False, 'reason': 'automated'}
         
         # Focused if personal conversation indicators
