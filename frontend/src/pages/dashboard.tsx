@@ -43,19 +43,66 @@ export const Dashboard: React.FC = () => {
   });
   const [mailboxes, setMailboxes] = useState<MailboxSummary[]>([]);
   const [recentJobs, setRecentJobs] = useState<RecentJob[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [initialLoadDone, setInitialLoadDone] = useState(false);
+
+  // Split loading into two independent sections for progressive rendering:
+  // statsLoading: stats cards + mailboxes table (fast, served from cache)
+  // processingLoading: processing overview + recent jobs (needs /processing-jobs)
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [processingLoading, setProcessingLoading] = useState(true);
 
   // Track if component is mounted to prevent state updates after unmount
   const isMountedRef = useRef(true);
 
+  const loadFastData = async () => {
+    try {
+      const [newStats, newMailboxes] = await Promise.all([
+        dashboardService.getDashboardStats(),
+        dashboardService.getMailboxSummaries(),
+      ]);
+      if (!isMountedRef.current) return;
+      setStats(newStats);
+      // Preserve non-empty data on background refresh
+      if (newMailboxes.length > 0 || mailboxes.length === 0) {
+        setMailboxes(newMailboxes);
+      }
+    } catch (error) {
+      console.error('Error loading dashboard stats:', error);
+    } finally {
+      if (isMountedRef.current) setStatsLoading(false);
+    }
+  };
+
+  const loadProcessingData = async () => {
+    try {
+      const [overview, jobs] = await Promise.all([
+        dashboardService.getProcessingOverview(),
+        dashboardService.getRecentJobs(5),
+      ]);
+      if (!isMountedRef.current) return;
+      // Preserve non-empty data on background refresh
+      if (overview.totalProcessed > 0 || overview.activeJobs > 0 || overview.completedToday > 0 || processingOverview.totalProcessed === 0) {
+        setProcessingOverview(overview);
+      }
+      if (jobs.length > 0 || recentJobs.length === 0) {
+        setRecentJobs(jobs);
+      }
+    } catch (error) {
+      console.error('Error loading processing data:', error);
+    } finally {
+      if (isMountedRef.current) setProcessingLoading(false);
+    }
+  };
+
   useEffect(() => {
     isMountedRef.current = true;
-    loadDashboardData(true); // Initial load with loading indicator
-    // Refresh every 30 seconds silently (no loading flash)
+    // Load both sections in parallel - each renders independently as it arrives
+    loadFastData();
+    loadProcessingData();
+    // Background refresh every 30 seconds (no loading flash)
     const interval = setInterval(() => {
       if (isMountedRef.current) {
-        loadDashboardData(false);
+        loadFastData();
+        loadProcessingData();
       }
     }, 30000);
     return () => {
@@ -63,52 +110,6 @@ export const Dashboard: React.FC = () => {
       clearInterval(interval);
     };
   }, []);
-
-  const loadDashboardData = async (showLoading = false) => {
-    try {
-      // Only show loading spinner on initial load, not on background refreshes
-      if (showLoading && !initialLoadDone && isMountedRef.current) {
-        setLoading(true);
-      }
-
-      // Use optimized method that fetches all data efficiently (avoids duplicate API calls)
-      const data = await dashboardService.getAllDashboardData();
-
-      // Only update state if component is still mounted
-      if (!isMountedRef.current) return;
-
-      // On first load, always update. On subsequent loads, preserve existing data if API returns empty
-      const isFirstLoad = !initialLoadDone;
-
-      // Update stats - always on first load, or if we have valid data
-      if (isFirstLoad || data.stats.totalEmails > 0 || data.stats.totalMailboxes > 0) {
-        setStats(data.stats);
-      }
-
-      // Update processing overview - always on first load, or if we have valid data
-      if (isFirstLoad || data.processingOverview.totalProcessed > 0 || data.processingOverview.activeJobs > 0 || data.processingOverview.completedToday > 0) {
-        setProcessingOverview(data.processingOverview);
-      }
-
-      // Update mailboxes - always on first load, or if we have data
-      if (isFirstLoad || data.mailboxes.length > 0) {
-        setMailboxes(data.mailboxes);
-      }
-
-      // Update recent jobs - always on first load, or if we have data
-      if (isFirstLoad || data.recentJobs.length > 0) {
-        setRecentJobs(data.recentJobs);
-      }
-    } catch (error) {
-      console.error('Error loading dashboard data:', error);
-      // Don't reset state on error - keep existing data
-    } finally {
-      if (isMountedRef.current) {
-        setLoading(false);
-        setInitialLoadDone(true);
-      }
-    }
-  };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -184,7 +185,7 @@ export const Dashboard: React.FC = () => {
       dataIndex: 'name',
       key: 'name',
       render: (name: string, record: MailboxSummary) => {
-        const isLive = ['gmail', 'outlook_live'].includes(record.type);
+        const isLive = record.hasLiveSync || ['gmail', 'outlook_live'].includes(record.type);
         const typeColor = record.type === 'gmail' ? 'red' :
                          record.type === 'outlook_live' ? 'blue' :
                          record.type === 'mbox' ? 'green' :
@@ -221,7 +222,7 @@ export const Dashboard: React.FC = () => {
       key: 'action',
       width: 120,
       render: (_: any, record: MailboxSummary) => {
-        const isLive = ['gmail', 'outlook_live'].includes(record.type);
+        const isLive = record.hasLiveSync || ['gmail', 'outlook_live'].includes(record.type);
         return (
           <Space size={4}>
             {isLive ? (
@@ -263,7 +264,7 @@ export const Dashboard: React.FC = () => {
       <Row gutter={[16, 16]} className="fade-in-up stagger-1">
         <Col xs={24} sm={12} lg={6}>
           <div className="glass-card" style={{ padding: 24 }}>
-            {loading ? (
+            {statsLoading ? (
               <div>
                 <Skeleton.Input active size="small" style={{ width: 120, marginBottom: 12 }} />
                 <Skeleton.Input active style={{ width: 80, height: 32 }} />
@@ -280,7 +281,7 @@ export const Dashboard: React.FC = () => {
         </Col>
         <Col xs={24} sm={12} lg={6}>
           <div className="glass-card" style={{ padding: 24 }}>
-            {loading ? (
+            {statsLoading ? (
               <div>
                 <Skeleton.Input active size="small" style={{ width: 100, marginBottom: 12 }} />
                 <Skeleton.Input active style={{ width: 60, height: 32 }} />
@@ -297,7 +298,7 @@ export const Dashboard: React.FC = () => {
         </Col>
         <Col xs={24} sm={12} lg={6}>
           <div className="glass-card" style={{ padding: 24 }}>
-            {loading ? (
+            {processingLoading ? (
               <div>
                 <Skeleton.Input active size="small" style={{ width: 80, marginBottom: 12 }} />
                 <Skeleton.Input active style={{ width: 50, height: 32 }} />
@@ -321,7 +322,7 @@ export const Dashboard: React.FC = () => {
         </Col>
         <Col xs={24} sm={12} lg={6}>
           <div className="glass-card" style={{ padding: 24 }}>
-            {loading ? (
+            {statsLoading ? (
               <div>
                 <Skeleton.Input active size="small" style={{ width: 130, marginBottom: 12 }} />
                 <Skeleton.Input active style={{ width: 70, height: 32 }} />
@@ -351,7 +352,7 @@ export const Dashboard: React.FC = () => {
                 </Link>
               </div>
             </div>
-            {loading ? (
+            {processingLoading ? (
               <div style={{ padding: 16 }}>
                 {[1, 2, 3, 4].map(i => (
                   <div key={i} style={{ display: 'flex', gap: 16, marginBottom: 16, alignItems: 'center' }}>
@@ -394,7 +395,7 @@ export const Dashboard: React.FC = () => {
             <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 20 }}>
               Today's Processing Summary
             </Text>
-            {loading ? (
+            {processingLoading ? (
               <Row gutter={[16, 24]}>
                 <Col span={12}>
                   <Skeleton.Input active size="small" style={{ width: 90, marginBottom: 8 }} />
@@ -463,7 +464,7 @@ export const Dashboard: React.FC = () => {
                 </Link>
               </div>
             </div>
-            {loading ? (
+            {statsLoading ? (
               <div style={{ padding: 16 }}>
                 {[1, 2, 3].map(i => (
                   <div key={i} style={{ display: 'flex', gap: 16, marginBottom: 16, alignItems: 'center' }}>

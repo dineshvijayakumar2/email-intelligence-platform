@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Button, Card, Space, Tag, Typography, message, Spin, Statistic, Tooltip, Progress, InputNumber, Divider } from 'antd';
+import { Alert, Button, Card, Space, Tag, Typography, message, Spin, Statistic, Tooltip, Progress, InputNumber, Divider } from 'antd';
 import {
   GoogleOutlined,
   DisconnectOutlined,
@@ -17,6 +17,7 @@ import {
   ClockCircleOutlined,
   SettingOutlined,
   SaveOutlined,
+  ReloadOutlined,
 } from '@ant-design/icons';
 import gmailService, { GmailConnectionStatus } from '../services/gmailService';
 
@@ -174,6 +175,8 @@ const GmailConnection: React.FC<GmailConnectionProps> = ({
     }
   };
 
+  const isAuthExpired = status?.sync_status === 'auth_expired' || status?.requires_reauth === true;
+
   const getSyncStatusTag = () => {
     if (!status) return null;
 
@@ -182,6 +185,12 @@ const GmailConnection: React.FC<GmailConnectionProps> = ({
         return (
           <Tag color="processing" icon={<SyncOutlined spin />}>
             Syncing
+          </Tag>
+        );
+      case 'auth_expired':
+        return (
+          <Tag color="warning" icon={<ExclamationCircleOutlined />}>
+            Reconnect Required
           </Tag>
         );
       case 'error':
@@ -244,26 +253,41 @@ const GmailConnection: React.FC<GmailConnectionProps> = ({
             )}
           </div>
           {status?.connected ? (
-            <Space size={4}>
-              <Button
-                size="small"
-                icon={<SyncOutlined spin={syncing || status.sync_status === 'syncing'} />}
-                onClick={handleSyncNow}
-                loading={syncing}
-                disabled={status.sync_status === 'syncing'}
-              >
-                Sync Now
-              </Button>
-              <Button
-                size="small"
-                type="text"
-                danger
-                icon={<DisconnectOutlined />}
-                onClick={handleDisconnect}
-                loading={connecting}
-                title="Disconnect Gmail"
-              />
-            </Space>
+            isAuthExpired ? (
+              <Space size={4}>
+                <Button
+                  type="primary"
+                  size="small"
+                  danger
+                  icon={<ReloadOutlined />}
+                  onClick={handleConnect}
+                  loading={connecting}
+                >
+                  Reconnect
+                </Button>
+              </Space>
+            ) : (
+              <Space size={4}>
+                <Button
+                  size="small"
+                  icon={<SyncOutlined spin={syncing || status.sync_status === 'syncing'} />}
+                  onClick={handleSyncNow}
+                  loading={syncing}
+                  disabled={status.sync_status === 'syncing'}
+                >
+                  Sync Now
+                </Button>
+                <Button
+                  size="small"
+                  type="text"
+                  danger
+                  icon={<DisconnectOutlined />}
+                  onClick={handleDisconnect}
+                  loading={connecting}
+                  title="Disconnect Gmail"
+                />
+              </Space>
+            )
           ) : (
             <Button
               type="primary"
@@ -278,21 +302,31 @@ const GmailConnection: React.FC<GmailConnectionProps> = ({
         </div>
 
         {status?.connected ? (
-          <Space direction="vertical" size={4} style={{ width: '100%' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                <MailOutlined style={{ marginRight: 4 }} />
-                {status.email_count.toLocaleString()} emails synced
-              </Text>
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                <ClockCircleOutlined style={{ marginRight: 4 }} />
-                {gmailService.formatRelativeTime(status.last_sync_at)}
-              </Text>
-            </div>
-            {status.sync_status === 'syncing' && (
-              <Progress percent={99} status="active" showInfo={false} size="small" />
-            )}
-          </Space>
+          isAuthExpired ? (
+            <Alert
+              type="warning"
+              showIcon
+              message="Authentication expired"
+              description="Your Gmail token has been revoked. Reconnect to restore automatic sync."
+              style={{ borderRadius: 8 }}
+            />
+          ) : (
+            <Space direction="vertical" size={4} style={{ width: '100%' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  <MailOutlined style={{ marginRight: 4 }} />
+                  {status.email_count.toLocaleString()} emails synced
+                </Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  <ClockCircleOutlined style={{ marginRight: 4 }} />
+                  {gmailService.formatRelativeTime(status.last_sync_at)}
+                </Text>
+              </div>
+              {status.sync_status === 'syncing' && (
+                <Progress percent={99} status="active" showInfo={false} size="small" />
+              )}
+            </Space>
+          )
         ) : (
           <Text type="secondary" style={{ fontSize: 13 }}>
             Connect Gmail for real-time email sync. Auto-sync every {syncInterval} minutes.
@@ -319,24 +353,38 @@ const GmailConnection: React.FC<GmailConnectionProps> = ({
       }
       extra={
         status?.connected ? (
-          <Space>
-            <Button
-              icon={<SyncOutlined spin={syncing || status.sync_status === 'syncing'} />}
-              onClick={handleSyncNow}
-              loading={syncing}
-              disabled={status.sync_status === 'syncing'}
-            >
-              Sync Now
-            </Button>
-            <Button
-              danger
-              icon={<DisconnectOutlined />}
-              onClick={handleDisconnect}
-              loading={connecting}
-            >
-              Disconnect
-            </Button>
-          </Space>
+          isAuthExpired ? (
+            <Space>
+              <Button
+                type="primary"
+                danger
+                icon={<ReloadOutlined />}
+                onClick={handleConnect}
+                loading={connecting}
+              >
+                Reconnect Gmail
+              </Button>
+            </Space>
+          ) : (
+            <Space>
+              <Button
+                icon={<SyncOutlined spin={syncing || status.sync_status === 'syncing'} />}
+                onClick={handleSyncNow}
+                loading={syncing}
+                disabled={status.sync_status === 'syncing'}
+              >
+                Sync Now
+              </Button>
+              <Button
+                danger
+                icon={<DisconnectOutlined />}
+                onClick={handleDisconnect}
+                loading={connecting}
+              >
+                Disconnect
+              </Button>
+            </Space>
+          )
         ) : (
           <Button
             type="primary"
@@ -351,6 +399,28 @@ const GmailConnection: React.FC<GmailConnectionProps> = ({
     >
       {status?.connected ? (
         <Space direction="vertical" size="large" style={{ width: '100%' }}>
+          {/* Auth Expired Banner */}
+          {isAuthExpired && (
+            <Alert
+              type="warning"
+              showIcon
+              message="Gmail authentication has expired"
+              description="Your refresh token has been revoked or expired. Automatic sync has stopped. Click 'Reconnect Gmail' to restore sync."
+              action={
+                <Button
+                  type="primary"
+                  danger
+                  size="small"
+                  icon={<ReloadOutlined />}
+                  onClick={handleConnect}
+                  loading={connecting}
+                >
+                  Reconnect Gmail
+                </Button>
+              }
+            />
+          )}
+
           {/* Stats Row */}
           <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
             <Statistic

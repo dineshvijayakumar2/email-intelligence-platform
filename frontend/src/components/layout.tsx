@@ -25,6 +25,8 @@ import {
   LogoutOutlined,
   DownOutlined,
   CrownOutlined,
+  BarChartOutlined,
+  RocketOutlined,
 } from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -38,6 +40,13 @@ const pageTitles: Record<string, string> = {
   '/emails': 'Emails',
   '/processing': 'Processing Jobs',
   '/errors': 'Error Logs',
+  '/analytics': 'Analytics',
+  '/analytics/contacts': 'Contact Analytics',
+  '/analytics/companies': 'Company Analytics',
+  '/analytics/threads': 'Thread Analytics',
+  '/analytics/response-times': 'Response Times',
+  '/analytics/patterns': 'Communication Patterns',
+  '/extraction': 'Extraction Management',
   '/clients': 'Clients',
   '/users': 'User Management',
 };
@@ -105,6 +114,24 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
       label: <Link to="/errors">Errors</Link>,
     },
     {
+      key: '/analytics',
+      icon: <BarChartOutlined />,
+      label: 'Analytics',
+      children: [
+        { key: '/analytics', label: <Link to="/analytics">Dashboard</Link> },
+        { key: '/analytics/contacts', label: <Link to="/analytics/contacts">Contacts</Link> },
+        { key: '/analytics/companies', label: <Link to="/analytics/companies">Companies</Link> },
+        { key: '/analytics/threads', label: <Link to="/analytics/threads">Threads</Link> },
+        { key: '/analytics/response-times', label: <Link to="/analytics/response-times">Response Times</Link> },
+        { key: '/analytics/patterns', label: <Link to="/analytics/patterns">Patterns</Link> },
+      ],
+    },
+    {
+      key: '/extraction',
+      icon: <RocketOutlined />,
+      label: <Link to="/extraction">Extraction</Link>,
+    },
+    {
       key: '/clients',
       icon: <TeamOutlined />,
       label: <Link to="/clients">Clients</Link>,
@@ -127,13 +154,16 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
     if (pageTitles[location.pathname]) {
       return location.pathname;
     }
-    // Check for partial match (for nested routes)
+    // Check for partial match (for nested routes) — longest match wins
+    let bestMatch = '/';
+    let bestLen = 0;
     for (const path of Object.keys(pageTitles)) {
-      if (path !== '/' && location.pathname.startsWith(path)) {
-        return path;
+      if (path !== '/' && location.pathname.startsWith(path) && path.length > bestLen) {
+        bestMatch = path;
+        bestLen = path.length;
       }
     }
-    return '/';
+    return bestMatch;
   };
 
   // User dropdown menu items

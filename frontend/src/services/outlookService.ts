@@ -41,9 +41,10 @@ export interface OutlookConnectionStatus {
   user_id: string;
   connected: boolean;
   last_sync_at: string | null;
-  sync_status: 'idle' | 'syncing' | 'error' | 'disconnected';
+  sync_status: 'idle' | 'syncing' | 'error' | 'auth_expired' | 'disconnected';
   email_count: number;
   error: string | null;
+  requires_reauth?: boolean;
 }
 
 export interface OutlookSyncStatus {
@@ -68,10 +69,11 @@ export interface MailboxOutlookStatus {
   connected: boolean;
   outlook_email?: string;
   last_sync_at?: string;
-  sync_status: 'idle' | 'syncing' | 'error' | 'disconnected';
+  sync_status: 'idle' | 'syncing' | 'error' | 'auth_expired' | 'disconnected';
   email_count: number;
   error?: string;
   connected_at?: string;
+  requires_reauth?: boolean;
 }
 
 // Microsoft OAuth scopes

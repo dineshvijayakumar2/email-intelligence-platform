@@ -21,6 +21,17 @@ import ClientsPage from './pages/clients';
 import UsersPage from './pages/users';
 import OAuthCallback from './pages/oauth-callback';
 
+// Analytics pages
+import { AnalyticsDashboard } from './pages/analytics/dashboard';
+import { ContactsAnalytics } from './pages/analytics/contacts';
+import { ContactDetail } from './pages/analytics/contact-detail';
+import { CompaniesAnalytics } from './pages/analytics/companies';
+import { CompanyDetail } from './pages/analytics/company-detail';
+import { ThreadAnalytics } from './pages/analytics/threads';
+import { ResponseTimesAnalytics } from './pages/analytics/response-times';
+import { CommunicationPatterns } from './pages/analytics/patterns';
+import { ExtractionManagement } from './pages/extraction';
+
 // Theme and styles
 import { antTheme } from './theme/glassTheme';
 import './styles/glass.css';
@@ -168,6 +179,17 @@ function App() {
                 </ProtectedRoute>
               }
             />
+
+            {/* Analytics routes */}
+            <Route path="/analytics" element={<ProtectedRoute><Layout><AnalyticsDashboard /></Layout></ProtectedRoute>} />
+            <Route path="/analytics/contacts" element={<ProtectedRoute><Layout><ContactsAnalytics /></Layout></ProtectedRoute>} />
+            <Route path="/analytics/contacts/:contactId" element={<ProtectedRoute><Layout><ContactDetail /></Layout></ProtectedRoute>} />
+            <Route path="/analytics/companies" element={<ProtectedRoute><Layout><CompaniesAnalytics /></Layout></ProtectedRoute>} />
+            <Route path="/analytics/companies/:companyId" element={<ProtectedRoute><Layout><CompanyDetail /></Layout></ProtectedRoute>} />
+            <Route path="/analytics/threads" element={<ProtectedRoute><Layout><ThreadAnalytics /></Layout></ProtectedRoute>} />
+            <Route path="/analytics/response-times" element={<ProtectedRoute><Layout><ResponseTimesAnalytics /></Layout></ProtectedRoute>} />
+            <Route path="/analytics/patterns" element={<ProtectedRoute><Layout><CommunicationPatterns /></Layout></ProtectedRoute>} />
+            <Route path="/extraction" element={<ProtectedRoute><Layout><ExtractionManagement /></Layout></ProtectedRoute>} />
 
             {/* Admin-only routes */}
             <Route

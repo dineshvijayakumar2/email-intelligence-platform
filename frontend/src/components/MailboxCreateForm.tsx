@@ -258,12 +258,16 @@ export const MailboxCreateForm: React.FC = () => {
 
           <Form.Item
             name="email_address"
-            label="Email Address (Optional)"
+            label="Email Address"
+            tooltip="Will be automatically derived when you connect Gmail/Outlook or upload archive file"
             rules={[
               { type: 'email', message: 'Please enter a valid email address' },
             ]}
           >
-            <Input placeholder="user@domain.com (optional)" />
+            <Input
+              disabled
+              placeholder="Will be auto-populated from connection or archive"
+            />
           </Form.Item>
 
           <Form.Item

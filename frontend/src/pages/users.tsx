@@ -115,7 +115,7 @@ const UsersPage: React.FC = () => {
   const loadUsers = async () => {
     setLoading(true);
     try {
-      const data = await api.get<User[]>('/auth/users');
+      const data = await api.get<User[]>('/auth/users', { timeout: 15000 });
       console.log('API Response:', data);
       console.log('First user:', data?.[0]);
       // Only update state if we got valid data (not null)

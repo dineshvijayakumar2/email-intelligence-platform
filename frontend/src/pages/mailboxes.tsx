@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
+  Alert,
   Table,
   Space,
   Button,
@@ -61,7 +62,6 @@ export const MailboxList: React.FC = () => {
   const [outlookConnected, setOutlookConnected] = useState(false);
   const [linkingMailboxId, setLinkingMailboxId] = useState<string | null>(null);
   const [processingJobs, setProcessingJobs] = useState<any[]>([]);
-  const [processingJobsLoading, setProcessingJobsLoading] = useState(true); // Track loading state for processing jobs
 
   // Date range fetch modal state
   const [dateRangeModalVisible, setDateRangeModalVisible] = useState(false);
@@ -90,6 +90,14 @@ export const MailboxList: React.FC = () => {
     mailboxesRef.current = mailboxes;
   }, [mailboxes]);
 
+  // Mailboxes where Gmail or Outlook auth has expired and needs user reconnection
+  const mailboxesWithExpiredAuth = useMemo(() => {
+    return mailboxes.filter(m => {
+      const cfg = (m.connection_config || {}) as Record<string, unknown>;
+      return cfg.gmail_sync_status === 'auth_expired' || cfg.outlook_sync_status === 'auth_expired';
+    });
+  }, [mailboxes]);
+
   useEffect(() => {
     processingJobsRef.current = processingJobs;
   }, [processingJobs]);
@@ -101,7 +109,7 @@ export const MailboxList: React.FC = () => {
     loadMailboxes();
     checkGmailConnection();
     checkOutlookConnection();
-    loadProcessingJobs(true); // Initial load - show skeleton
+    loadProcessingJobs();
     if (isAdmin) {
       loadClientsAndUsers();
     }
@@ -162,83 +170,46 @@ export const MailboxList: React.FC = () => {
     }
   };
 
-  const loadProcessingJobs = async (isInitialLoad = false) => {
+  const loadProcessingJobs = async () => {
     try {
-      // Only show loading skeleton on initial load, not on polling updates
-      if (isInitialLoad) {
-        setProcessingJobsLoading(true);
-      }
       const jobs = await dashboardService._fetchProcessingJobs();
-      // Only update if component is still mounted
       if (!isMountedRef.current) return;
 
       // Preserve existing data if API returns empty (transient failure)
-      const currentJobs = processingJobsRef.current;
       if (jobs && Array.isArray(jobs)) {
-        // Only clear if we got a valid response - empty array when we have data might be transient
-        if (jobs.length === 0 && currentJobs.length > 0) {
-          // Keep existing data on empty response
-          return;
+        if (jobs.length > 0 || processingJobsRef.current.length === 0) {
+          setProcessingJobs(jobs);
         }
-        setProcessingJobs(jobs);
       }
     } catch (error) {
       console.error('Error loading processing jobs:', error);
-      // Don't clear existing data on error
-    } finally {
-      if (isMountedRef.current) {
-        setProcessingJobsLoading(false);
-      }
     }
   };
 
-  const loadMailboxes = async (retryCount = 0) => {
-    let shouldStopLoading = true;
-
+  const loadMailboxes = async () => {
     try {
-      if (isMountedRef.current) {
-        setLoading(true);
-      }
+      if (isMountedRef.current) setLoading(true);
       const data = await mailboxService.getMailboxes();
 
-      // Don't update state if component is unmounted
       if (!isMountedRef.current) return;
 
-      // Only update state if we got valid data
-      // Don't clear existing mailboxes if API returns empty array unexpectedly
-      if (data !== null && data !== undefined) {
-        // Use ref to get current mailboxes (avoids stale closure)
-        const currentMailboxes = mailboxesRef.current;
+      console.log('[Mailboxes] Loaded data:', data?.length || 0, 'mailboxes');
 
-        // If we have existing mailboxes and API returns empty, it might be a transient error
-        if (Array.isArray(data) && data.length === 0 && currentMailboxes.length > 0) {
-          console.warn('[Mailboxes] API returned empty array but we have existing data - keeping existing mailboxes');
-        } else {
-          setMailboxes(data || []);
-        }
+      // Preserve existing data if service returns empty (transient hiccup)
+      if (data && data.length > 0) {
+        setMailboxes(data);
+      } else if (mailboxesRef.current.length === 0) {
+        // Only set empty if we have no existing data
+        setMailboxes(data || []);
       } else {
-        console.warn('[Mailboxes] Received null/undefined from API, keeping existing data');
+        console.warn('[Mailboxes] Received empty data, preserving existing mailboxes');
       }
     } catch (error) {
-      console.error(`[Mailboxes] Error on attempt ${retryCount + 1}:`, error);
-
-      // Retry up to 2 times with exponential backoff for transient errors
-      if (retryCount < 2 && isMountedRef.current) {
-        const delay = Math.pow(2, retryCount) * 500; // 500ms, 1000ms
-        shouldStopLoading = false; // Keep loading spinner while retrying
-        setTimeout(() => loadMailboxes(retryCount + 1), delay);
-        return;
-      }
-
-      // Only show error after retries exhausted and if we have no mailboxes to display
-      // Use ref to get current mailboxes (avoids stale closure)
-      if (mailboxesRef.current.length === 0 && isMountedRef.current) {
-        message.error('Failed to load mailboxes. Please check your connection and try again.');
-      }
+      console.error('[Mailboxes] Error loading mailboxes:', error);
+      // Show error message to user
+      message.error('Failed to load mailboxes. Please refresh the page.');
     } finally {
-      if (shouldStopLoading && isMountedRef.current) {
-        setLoading(false);
-      }
+      if (isMountedRef.current) setLoading(false);
     }
   };
 
@@ -311,7 +282,35 @@ export const MailboxList: React.FC = () => {
       const result = await gmailService.extendMailboxWithGmail(mailboxId, profile.id);
 
       if (result.success) {
+        const linkedEmail = (result.mailbox as any)?.connection_config?.gmail_email;
+        const currentMailbox = mailboxes.find(m => m.id === mailboxId);
+
+        // Validate: prevent linking a different Gmail account
+        if (linkedEmail && currentMailbox?.email_address) {
+          if (linkedEmail.toLowerCase() !== currentMailbox.email_address.toLowerCase()) {
+            message.error({
+              content: `Cannot link ${linkedEmail}. This mailbox is already associated with ${currentMailbox.email_address}. Please use the same account or remove the existing link first.`,
+              key: 'link-gmail',
+              duration: 6,
+            });
+            setLinkingMailboxId(null);
+            return;
+          }
+        }
+
+        // Auto-populate email_address if available and not set
+        if (linkedEmail && currentMailbox && !currentMailbox.email_address) {
+          try {
+            await mailboxService.updateMailbox(mailboxId, {
+              email_address: linkedEmail
+            });
+          } catch (updateError) {
+            console.error('Failed to auto-populate email_address:', updateError);
+          }
+        }
+
         message.success({ content: result.message, key: 'link-gmail' });
+        mailboxService.clearCache();
         loadMailboxes(); // Reload to show updated status
       } else {
         message.error({ content: result.message, key: 'link-gmail' });
@@ -342,13 +341,141 @@ export const MailboxList: React.FC = () => {
       const result = await outlookService.extendMailboxWithOutlook(mailboxId, profile.id);
 
       if (result.success) {
+        const linkedEmail = (result.mailbox as any)?.connection_config?.outlook_email;
+        const currentMailbox = mailboxes.find(m => m.id === mailboxId);
+
+        // Validate: prevent linking a different Outlook account
+        if (linkedEmail && currentMailbox?.email_address) {
+          if (linkedEmail.toLowerCase() !== currentMailbox.email_address.toLowerCase()) {
+            message.error({
+              content: `Cannot link ${linkedEmail}. This mailbox is already associated with ${currentMailbox.email_address}. Please use the same account or remove the existing link first.`,
+              key: 'link-outlook',
+              duration: 6,
+            });
+            setLinkingMailboxId(null);
+            return;
+          }
+        }
+
+        // Auto-populate email_address if available and not set
+        if (linkedEmail && currentMailbox && !currentMailbox.email_address) {
+          try {
+            await mailboxService.updateMailbox(mailboxId, {
+              email_address: linkedEmail
+            });
+          } catch (updateError) {
+            console.error('Failed to auto-populate email_address:', updateError);
+          }
+        }
+
         message.success({ content: result.message, key: 'link-outlook' });
+        mailboxService.clearCache();
         loadMailboxes(); // Reload to show updated status
       } else {
         message.error({ content: result.message, key: 'link-outlook' });
       }
     } catch (error) {
       message.error({ content: 'Failed to link Outlook', key: 'link-outlook' });
+    } finally {
+      setLinkingMailboxId(null);
+    }
+  };
+
+  const handleReconnectGmail = async (mailboxId: string, mailboxName: string) => {
+    try {
+      setLinkingMailboxId(mailboxId);
+      message.loading({ content: `Reconnecting Gmail for ${mailboxName}...`, key: 'reconnect-gmail' });
+      const result = await gmailService.connectToMailbox(mailboxId);
+      if (result.success) {
+        const linkedEmail = result.gmail_email;
+        const currentMailbox = mailboxes.find(m => m.id === mailboxId);
+
+        // Validate: prevent reconnecting with a different Gmail account
+        if (linkedEmail && currentMailbox?.email_address) {
+          if (linkedEmail.toLowerCase() !== currentMailbox.email_address.toLowerCase()) {
+            message.error({
+              content: `Cannot reconnect with ${linkedEmail}. This mailbox is associated with ${currentMailbox.email_address}. Please use the same Gmail account.`,
+              key: 'reconnect-gmail',
+              duration: 6,
+            });
+            setLinkingMailboxId(null);
+            return;
+          }
+        }
+
+        // Auto-populate email_address if available and not set
+        if (linkedEmail && currentMailbox && !currentMailbox.email_address) {
+          try {
+            await mailboxService.updateMailbox(mailboxId, {
+              email_address: linkedEmail
+            });
+          } catch (updateError) {
+            console.error('Failed to auto-populate email_address:', updateError);
+          }
+        }
+
+        message.success({ content: result.message || 'Gmail reconnected successfully', key: 'reconnect-gmail' });
+        mailboxService.clearCache();
+        loadMailboxes();
+      } else {
+        message.error({ content: result.message || 'Failed to reconnect Gmail', key: 'reconnect-gmail' });
+      }
+    } catch (error: any) {
+      if (error?.message?.includes('cancelled')) {
+        message.info({ content: 'Reconnection cancelled', key: 'reconnect-gmail' });
+      } else {
+        message.error({ content: error?.message || 'Failed to reconnect Gmail', key: 'reconnect-gmail' });
+      }
+    } finally {
+      setLinkingMailboxId(null);
+    }
+  };
+
+  const handleReconnectOutlook = async (mailboxId: string, mailboxName: string) => {
+    try {
+      setLinkingMailboxId(mailboxId);
+      message.loading({ content: `Reconnecting Outlook for ${mailboxName}...`, key: 'reconnect-outlook' });
+      const result = await outlookService.connectToMailbox(mailboxId);
+      if (result.success) {
+        const linkedEmail = result.outlook_email;
+        const currentMailbox = mailboxes.find(m => m.id === mailboxId);
+
+        // Validate: prevent reconnecting with a different Outlook account
+        if (linkedEmail && currentMailbox?.email_address) {
+          if (linkedEmail.toLowerCase() !== currentMailbox.email_address.toLowerCase()) {
+            message.error({
+              content: `Cannot reconnect with ${linkedEmail}. This mailbox is associated with ${currentMailbox.email_address}. Please use the same Outlook account.`,
+              key: 'reconnect-outlook',
+              duration: 6,
+            });
+            setLinkingMailboxId(null);
+            return;
+          }
+        }
+
+        // Auto-populate email_address if available and not set
+        if (linkedEmail && currentMailbox && !currentMailbox.email_address) {
+          try {
+            await mailboxService.updateMailbox(mailboxId, {
+              email_address: linkedEmail
+            });
+          } catch (updateError) {
+            console.error('Failed to auto-populate email_address:', updateError);
+          }
+        }
+
+        message.success({ content: result.message || 'Outlook reconnected successfully', key: 'reconnect-outlook' });
+        mailboxService.clearCache();
+        loadMailboxes();
+      } else {
+        message.error({ content: result.message || 'Failed to reconnect Outlook', key: 'reconnect-outlook' });
+      }
+    } catch (error: any) {
+      if (error?.message?.includes('cancelled')) {
+        message.info({ content: 'Reconnection cancelled', key: 'reconnect-outlook' });
+      } else {
+        message.error({ content: error?.message || 'Failed to reconnect Outlook', key: 'reconnect-outlook' });
+      }
     } finally {
       setLinkingMailboxId(null);
     }
@@ -406,8 +533,8 @@ export const MailboxList: React.FC = () => {
       if (result.success) {
         message.success(`${result.message}. Job ID: ${result.job_id}`);
         setDateRangeModalVisible(false);
-        // Navigate to processing page to see the job
-        navigate('/processing');
+        // Navigate to processing page filtered to this mailbox
+        navigate(`/processing/${selectedMailboxForFetch.id}`);
       } else {
         message.error(result.message);
       }
@@ -416,6 +543,15 @@ export const MailboxList: React.FC = () => {
     } finally {
       setFetchingEmails(false);
     }
+  };
+
+  // Helper: Detect email provider from domain for validation
+  const getEmailProvider = (email?: string): 'gmail' | 'outlook' | 'unknown' => {
+    if (!email) return 'unknown';
+    const domain = email.toLowerCase().split('@')[1];
+    if (domain === 'gmail.com') return 'gmail';
+    if (['outlook.com', 'hotmail.com', 'live.com', 'msn.com'].includes(domain)) return 'outlook';
+    return 'unknown';
   };
 
   const columns = [
@@ -456,15 +592,22 @@ export const MailboxList: React.FC = () => {
         };
         const isLiveEnabled = hasGmailLiveSync(record);
         const displayType = record.connection_config?.original_type || type;
+        const cfg = (record.connection_config || {}) as Record<string, unknown>;
+        const isAuthExpired = cfg.gmail_sync_status === 'auth_expired' || cfg.outlook_sync_status === 'auth_expired';
 
         return (
           <Space size={4}>
             <Tag color={colors[displayType] || 'default'}>
               {labels[displayType] || displayType.toUpperCase()}
             </Tag>
-            {isLiveEnabled && (
+            {isLiveEnabled && !isAuthExpired && (
               <Tag color="cyan" icon={<ThunderboltOutlined />}>
                 LIVE
+              </Tag>
+            )}
+            {isAuthExpired && (
+              <Tag color="warning" icon={<ExclamationCircleOutlined />}>
+                Reconnect
               </Tag>
             )}
           </Space>
@@ -484,30 +627,20 @@ export const MailboxList: React.FC = () => {
     {
       title: 'Sync Status',
       key: 'sync_status',
-      render: (_: any, record: Mailbox) => {
-        // Show skeleton while processing jobs are loading
-        if (processingJobsLoading) {
-          return <Skeleton.Input active size="small" style={{ width: 80 }} />;
-        }
-        return (
-          <ProcessingStatusBadge
-            mailboxId={record.id}
-            jobs={processingJobs}
-            showProgress={false}
-            onClick={() => navigate(`/processing/${record.id}`)}
-          />
-        );
-      },
+      render: (_: any, record: Mailbox) => (
+        <ProcessingStatusBadge
+          mailboxId={record.id}
+          jobs={processingJobs}
+          showProgress={false}
+          onClick={() => navigate(`/processing/${record.id}`)}
+        />
+      ),
     },
     {
       title: 'Errors',
       key: 'errors',
       width: 100,
       render: (_: any, record: Mailbox) => {
-        // Show skeleton while processing jobs are loading
-        if (processingJobsLoading) {
-          return <Skeleton.Input active size="small" style={{ width: 50 }} />;
-        }
 
         // Count failed jobs for this mailbox
         const failedJobs = processingJobs.filter(
@@ -619,7 +752,19 @@ export const MailboxList: React.FC = () => {
         const isOutlookLive = hasOutlookLiveSync(record);
         const isAnyLiveSync = hasLiveSync(record) || ['gmail', 'outlook_live'].includes(record.mailbox_type);
         const isArchiveType = ['mbox', 'pst', 'olm'].includes(record.mailbox_type);
-        const canLinkGmail = isArchiveType && !isGmailLive && gmailConnected;
+        const actionCfg = (record.connection_config || {}) as Record<string, unknown>;
+        const gmailAuthExpired = actionCfg.gmail_sync_status === 'auth_expired';
+        const outlookAuthExpired = actionCfg.outlook_sync_status === 'auth_expired';
+
+        // Guardrail 1: Mutual exclusivity - don't allow linking to both providers
+        const isAlreadyLinked = isGmailLive || isOutlookLive;
+
+        // Guardrail 2: Email domain validation - only show appropriate Link button
+        const emailProvider = getEmailProvider(record.email_address);
+        const canLinkGmail = isArchiveType && !isAlreadyLinked && gmailConnected &&
+          (emailProvider === 'gmail' || emailProvider === 'unknown');
+        const canLinkOutlook = isArchiveType && !isAlreadyLinked && outlookConnected &&
+          (emailProvider === 'outlook' || emailProvider === 'unknown');
 
         // Consolidated sync menu
         const syncMenuItems = [
@@ -639,7 +784,7 @@ export const MailboxList: React.FC = () => {
             key: 'view-history',
             icon: <EyeOutlined />,
             label: 'View Sync History',
-            onClick: () => navigate('/processing')
+            onClick: () => navigate(`/processing/${record.id}`)
           }
         ];
 
@@ -655,35 +800,56 @@ export const MailboxList: React.FC = () => {
             >
               <SyncOutlined /> Sync
             </Dropdown.Button>
-            {/* Link Gmail button - only for archive mailboxes without Gmail LIVE sync */}
-            {isArchiveType && !isGmailLive && (
+            {/* Reconnect buttons - shown when OAuth token has expired */}
+            {gmailAuthExpired && (
+              <Button
+                size="small"
+                danger
+                icon={<GoogleOutlined />}
+                onClick={() => handleReconnectGmail(record.id, record.name)}
+                loading={linkingMailboxId === record.id}
+              >
+                Reconnect Gmail
+              </Button>
+            )}
+            {outlookAuthExpired && (
+              <Button
+                size="small"
+                danger
+                icon={<WindowsOutlined />}
+                onClick={() => handleReconnectOutlook(record.id, record.name)}
+                loading={linkingMailboxId === record.id}
+              >
+                Reconnect Outlook
+              </Button>
+            )}
+            {/* Link Gmail - enforces mutual exclusivity and email domain validation */}
+            {canLinkGmail && (
               <Button
                 size="small"
                 icon={<LinkOutlined />}
                 onClick={() => handleLinkGmail(record.id, record.name)}
-                disabled={!canLinkGmail}
                 loading={linkingMailboxId === record.id}
-                title={!gmailConnected ? 'Connect Gmail from Dashboard first' : 'Link Gmail for LIVE sync'}
+                title="Link Gmail account for LIVE sync"
                 style={{
-                  color: gmailConnected ? '#4285f4' : undefined,
-                  borderColor: gmailConnected ? '#4285f4' : undefined
+                  color: '#4285f4',
+                  borderColor: '#4285f4'
                 }}
               >
                 <GoogleOutlined /> Link Gmail
               </Button>
             )}
-            {/* Link Outlook button - only for archive mailboxes without Outlook LIVE sync */}
-            {isArchiveType && !isOutlookLive && (
+            {/* Link Outlook - enforces mutual exclusivity and email domain validation */}
+            {canLinkOutlook && (
               <Button
                 size="small"
                 icon={<LinkOutlined />}
                 onClick={() => handleLinkOutlook(record.id, record.name)}
-                disabled={!outlookConnected}
                 loading={linkingMailboxId === record.id}
-                title={!outlookConnected ? 'Connect Outlook from Dashboard first' : 'Link Outlook for LIVE sync'}
+                title="Link Outlook account for LIVE sync"
                 style={{
-                  color: outlookConnected ? '#0078d4' : undefined,
-                  borderColor: outlookConnected ? '#0078d4' : undefined
+                  color: '#0078d4',
+                  borderColor: '#0078d4'
                 }}
               >
                 <WindowsOutlined /> Link Outlook
@@ -730,6 +896,18 @@ export const MailboxList: React.FC = () => {
           Add Mailbox
         </Button>
       </div>
+
+      {/* Auth Expired Banner */}
+      {mailboxesWithExpiredAuth.length > 0 && (
+        <Alert
+          type="warning"
+          showIcon
+          message={`${mailboxesWithExpiredAuth.length} mailbox${mailboxesWithExpiredAuth.length > 1 ? 'es need' : ' needs'} reauthentication`}
+          description={`${mailboxesWithExpiredAuth.map(m => m.name).join(', ')} — the Gmail or Outlook connection has expired. Find the mailbox below and click the Reconnect action to restore sync.`}
+          style={{ marginBottom: 16, borderRadius: 8 }}
+          closable
+        />
+      )}
 
       {/* Table */}
       <div className="glass-table-container fade-in-up stagger-1">

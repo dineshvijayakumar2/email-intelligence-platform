@@ -11,8 +11,6 @@ import { getAccessToken } from '../lib/supabase';
 // Connection status tracking
 let isConnected = true;
 let connectionListeners: ((connected: boolean) => void)[] = [];
-let lastConnectionCheck = 0;
-const CONNECTION_CHECK_INTERVAL = 5000; // 5 seconds
 
 /**
  * Subscribe to connection status changes
@@ -121,9 +119,9 @@ export async function apiRequest<T>(
     method = 'GET',
     body,
     headers = {},
-    timeout = 10000,
+    timeout = 5000,
     retries = 2,
-    retryDelay = 1000,
+    retryDelay = 300,
     silentOnNetworkError = false,
   } = options;
 
@@ -164,34 +162,24 @@ export async function apiRequest<T>(
         } catch {
           if (errorText) errorDetail = errorText;
         }
+        console.error(`[API] Error response for ${endpoint}: ${response.status} ${response.statusText} - ${errorDetail}`);
         throw new Error(errorDetail);
       }
 
       // Handle empty responses
       const text = await response.text();
-      console.log(`[API] Response text for ${endpoint}:`, text ? `${text.substring(0, 100)}...` : '(empty)');
-
-      if (!text) {
-        console.warn(`[API] Empty response body for ${method} ${endpoint}`);
-        return null;
-      }
+      if (!text) return null;
 
       try {
-        const parsed = JSON.parse(text) as T;
-        console.log(`[API] Parsed response for ${endpoint}:`, Array.isArray(parsed) ? `Array(${parsed.length})` : typeof parsed);
-        return parsed;
-      } catch (parseError) {
-        console.error(`[API] JSON parse error for ${endpoint}:`, parseError, 'Text:', text);
+        return JSON.parse(text) as T;
+      } catch {
         throw new Error(`Invalid JSON response from ${endpoint}`);
       }
 
     } catch (error: any) {
       lastError = error;
-
       // AbortError means request was intentionally cancelled (timeout or component unmount)
-      // Don't retry these - just return null silently
       if (error.name === 'AbortError') {
-        console.debug(`[API] Request aborted: ${method} ${endpoint}`);
         return null;
       }
 

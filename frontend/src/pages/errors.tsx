@@ -53,8 +53,7 @@ import {
   JobErrorsSummary,
   JobErrorLog,
 } from '../services/errorService';
-// @ts-ignore
-import config from '../config.js';
+import { dashboardService } from '../services/dashboardService';
 
 const { Text, Paragraph } = Typography;
 const { Option } = Select;
@@ -127,9 +126,7 @@ const ErrorsPage: React.FC = () => {
   const loadJobsWithErrors = useCallback(async () => {
     setLoading(true);
     try {
-      const url = `${config.apiBaseUrl}/processing-jobs`;
-      const response = await fetch(url);
-      const allJobs: ProcessingJob[] = await response.json();
+      const allJobs: ProcessingJob[] = await dashboardService._fetchProcessingJobs();
 
       // Show all jobs with valid mailbox_id (any job may have errors logged)
       const validJobs = allJobs.filter(j => j.mailbox_id);
@@ -572,13 +569,16 @@ const ErrorsPage: React.FC = () => {
   ];
 
   // Calculate stats
-  const totalFailedAcrossJobs = jobs.reduce((sum, j) => sum + j.failed_records, 0);
-  const jobsWithErrorsCount = jobs.length;
-
-  // Filter jobs by mailbox if selected
+  // Filter jobs by mailbox if selected (computed first so stats can use it)
   const filteredJobs = selectedMailboxId
     ? jobs.filter(j => j.mailbox_id === selectedMailboxId)
     : jobs;
+
+  // When coming from a specific mailbox URL, scope stats to that mailbox
+  const statsJobs = mailboxIdFromUrl ? filteredJobs : jobs;
+  const totalFailedAcrossJobs = statsJobs.reduce((sum, j) => sum + (j.failed_records || 0), 0);
+  const failedJobsCount = statsJobs.filter(j => j.status === 'failed' || j.failed_records > 0).length;
+  const jobsWithErrorsCount = statsJobs.length;
 
   return (
     <div className="glass-page-bg" style={{ padding: 24 }}>
@@ -626,9 +626,9 @@ const ErrorsPage: React.FC = () => {
         <Col span={6}>
           <div className="glass-card" style={{ padding: 24 }}>
             <Statistic
-              title="Total Jobs"
-              value={jobsWithErrorsCount}
-              valueStyle={{ color: jobsWithErrorsCount > 0 ? '#667eea' : '#3f8600' }}
+              title={mailboxIdFromUrl ? 'Jobs with Issues' : 'Total Jobs'}
+              value={mailboxIdFromUrl ? failedJobsCount : jobsWithErrorsCount}
+              valueStyle={{ color: (mailboxIdFromUrl ? failedJobsCount : jobsWithErrorsCount) > 0 ? '#667eea' : '#3f8600' }}
               prefix={<WarningOutlined />}
             />
           </div>
@@ -639,6 +639,9 @@ const ErrorsPage: React.FC = () => {
               title="Failed Emails"
               value={totalFailedAcrossJobs}
               valueStyle={{ color: totalFailedAcrossJobs > 0 ? '#cf1322' : '#3f8600' }}
+              suffix={totalFailedAcrossJobs === 0 && failedJobsCount > 0
+                ? <Text type="secondary" style={{ fontSize: 12 }}> (see error log)</Text>
+                : null}
             />
           </div>
         </Col>
@@ -697,8 +700,13 @@ const ErrorsPage: React.FC = () => {
             >
               {filteredJobs.map(job => (
                 <Option key={job.id} value={job.id}>
-                  {job.mailbox_name || 'Unknown'} - {job.failed_records} failed
-                  ({new Date(job.created_at).toLocaleDateString()})
+                  {job.mailbox_name || 'Unknown'} -{' '}
+                  {job.failed_records > 0
+                    ? `${job.failed_records} failed emails`
+                    : job.status === 'failed'
+                      ? 'job failed (see error log)'
+                      : `${job.failed_records} failed`
+                  }{' '}({new Date(job.created_at).toLocaleDateString()})
                 </Option>
               ))}
             </Select>

@@ -537,12 +537,22 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
 
           <Form.Item
             name="email_address"
-            label="Email Address (Optional)"
+            label="Email Address"
+            tooltip="Auto-derived from Gmail/Outlook connection or archive file"
             rules={[
               { type: 'email', message: 'Please enter a valid email address' },
             ]}
           >
-            <Input placeholder="user@domain.com (optional)" />
+            <Input
+              disabled
+              placeholder={
+                mailboxData?.connection_config?.gmail_email
+                  ? `${mailboxData.connection_config.gmail_email} (from Gmail)`
+                  : mailboxData?.connection_config?.outlook_email
+                  ? `${mailboxData.connection_config.outlook_email} (from Outlook)`
+                  : 'Will be derived from connection or archive'
+              }
+            />
           </Form.Item>
 
           <Form.Item

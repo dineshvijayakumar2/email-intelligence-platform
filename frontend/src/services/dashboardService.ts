@@ -1,5 +1,5 @@
 import api from './apiClient';
-import { mailboxService } from './mailboxService';
+import { mailboxService, hasLiveSync } from './mailboxService';
 
 export interface DashboardStats {
   totalEmails: number;
@@ -23,6 +23,7 @@ export interface MailboxSummary {
   lastSync: string | null;
   isActive: boolean;
   type: string;
+  hasLiveSync: boolean;
 }
 
 export interface RecentJob {
@@ -39,6 +40,9 @@ export interface RecentJob {
 // Cache for processing jobs to avoid duplicate API calls
 let processingJobsCache: { data: any[] | null; timestamp: number } = { data: null, timestamp: 0 };
 const CACHE_TTL = 5000; // 5 seconds cache
+
+// In-flight deduplication: parallel callers share the same request
+let _processingJobsInFlight: Promise<any[]> | null = null;
 
 export const dashboardService = {
   // Get dashboard statistics
@@ -62,7 +66,8 @@ export const dashboardService = {
     }
   },
 
-  // Internal: Fetch processing jobs with caching to avoid duplicate calls
+  // Internal: Fetch processing jobs with caching and in-flight deduplication
+  // Parallel callers (e.g. getProcessingOverview + getRecentJobs) share one request
   async _fetchProcessingJobs(): Promise<any[]> {
     const now = Date.now();
 
@@ -71,14 +76,33 @@ export const dashboardService = {
       return processingJobsCache.data;
     }
 
-    try {
-      const jobs = await api.get<any[]>('/processing-jobs');
-      processingJobsCache = { data: jobs || [], timestamp: now };
-      return jobs || [];
-    } catch (error) {
-      console.error('Error fetching processing jobs:', error);
-      return processingJobsCache.data || [];
+    // Deduplicate: if a fetch is already in-flight, all callers wait for it
+    if (_processingJobsInFlight) {
+      return _processingJobsInFlight;
     }
+
+    const doFetch = async (): Promise<any[]> => {
+      try {
+        // Single call - apiClient handles retries internally
+        const jobs = await api.get<any[]>('/processing-jobs', { timeout: 15000 });
+        if (jobs) {
+          processingJobsCache = { data: jobs, timestamp: Date.now() };
+          return jobs;
+        }
+        return processingJobsCache.data || [];
+      } catch (error: any) {
+        if (error?.name !== 'AbortError') {
+          console.error('[DashboardService] Error fetching processing jobs:', error?.message);
+        }
+        return processingJobsCache.data || [];
+      }
+    };
+
+    _processingJobsInFlight = doFetch().finally(() => {
+      _processingJobsInFlight = null;
+    });
+
+    return _processingJobsInFlight;
   },
 
   // Get processing overview for dashboard
@@ -138,6 +162,7 @@ export const dashboardService = {
         lastSync: m.last_sync_at,
         isActive: m.is_active,
         type: m.mailbox_type,
+        hasLiveSync: hasLiveSync(m),
       }));
     } catch (error) {
       console.error('Error fetching mailbox summaries:', error);

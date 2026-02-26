@@ -89,40 +89,54 @@ export interface CreateGoogleDriveMailboxData extends Omit<CreateMailboxData, 'f
   assigned_user_id?: string | null; // For RBAC mailbox assignment
 }
 
+// Module-level cache for mailboxes (30s TTL - avoids redundant API calls on same page)
+let _mailboxCache: { data: Mailbox[] | null; timestamp: number } = { data: null, timestamp: 0 };
+const MAILBOX_CACHE_TTL = 30000;
+// In-flight deduplication: parallel callers (MailboxSelector + page) share one request
+let _mailboxInFlight: Promise<Mailbox[]> | null = null;
+
 export const mailboxService = {
-  // Get all mailboxes (with retry for auth race condition)
+  // Clear mailbox cache (call after mutations: create/update/delete)
+  clearCache() {
+    _mailboxCache = { data: null, timestamp: 0 };
+  },
+
+  // Get all mailboxes (with in-flight deduplication + caching)
   async getMailboxes(): Promise<Mailbox[]> {
-    const maxRetries = 2;
-    let lastError: Error | null = null;
-
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
-        const mailboxes = await api.get<Mailbox[]>('/mailboxes');
-
-        if (!mailboxes) {
-          // Null response might mean auth wasn't ready - retry after short delay
-          if (attempt < maxRetries) {
-            console.debug(`[MailboxService] Got null response, retrying (attempt ${attempt + 1}/${maxRetries + 1})...`);
-            await new Promise(resolve => setTimeout(resolve, 500));
-            continue;
-          }
-          console.warn('[MailboxService] API returned null after retries, returning empty array');
-          return [];
-        }
-
-        return mailboxes;
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error));
-        if (attempt < maxRetries) {
-          console.debug(`[MailboxService] Error, retrying (attempt ${attempt + 1}/${maxRetries + 1})...`);
-          await new Promise(resolve => setTimeout(resolve, 500));
-          continue;
-        }
-      }
+    const now = Date.now();
+    if (_mailboxCache.data && (now - _mailboxCache.timestamp) < MAILBOX_CACHE_TTL) {
+      return _mailboxCache.data;
     }
 
-    console.error('[MailboxService] Error fetching mailboxes after retries:', lastError);
-    return [];
+    // Deduplicate: if a fetch is already in-flight, all callers wait for it
+    if (_mailboxInFlight) {
+      return _mailboxInFlight;
+    }
+
+    const doFetch = async (): Promise<Mailbox[]> => {
+      try {
+        // Single call - apiClient handles retries internally (2 retries, 300ms delay)
+        const mailboxes = await api.get<Mailbox[]>('/mailboxes', { timeout: 10000 });
+
+        if (!mailboxes) {
+          console.warn('[MailboxService] API returned null');
+          return _mailboxCache.data || [];
+        }
+
+        _mailboxCache = { data: mailboxes, timestamp: Date.now() };
+        return mailboxes;
+      } catch (error) {
+        console.error('[MailboxService] Error fetching mailboxes:', error);
+        // Return cached data if available, empty array otherwise
+        return _mailboxCache.data || [];
+      }
+    };
+
+    _mailboxInFlight = doFetch().finally(() => {
+      _mailboxInFlight = null;
+    });
+
+    return _mailboxInFlight;
   },
 
   // Get a single mailbox by ID
@@ -136,6 +150,7 @@ export const mailboxService = {
     if (!mailbox) {
       throw new Error('Failed to create mailbox');
     }
+    this.clearCache();
     return mailbox;
   },
 
@@ -168,12 +183,14 @@ export const mailboxService = {
     if (!mailbox) {
       throw new Error('Failed to update mailbox');
     }
+    this.clearCache();
     return mailbox;
   },
 
   // Delete a mailbox
   async deleteMailbox(id: string): Promise<void> {
     await api.delete(`/mailboxes/${id}`);
+    this.clearCache();
   },
 
   // Trigger sync for a mailbox
