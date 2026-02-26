@@ -281,14 +281,14 @@ class CommunicationPatternAnalyzer:
         try:
             response = (
                 self.client.table('emails')
-                .select('id, thread_id, sent_date, is_outbound, customer_contact_id')
+                .select('id, thread_id, sent_date, is_outbound, customer_contact_id, processing_status')
                 .eq('customer_contact_id', contact_id)
-                .or_('processing_status.neq.failed,processing_status.is.null')
                 .order('sent_date', desc=False)
                 .execute()
             )
 
-            return response.data
+            # Filter out failed in Python (includes NULLs)
+            return [e for e in (response.data or []) if e.get('processing_status') != 'failed']
 
         except Exception as e:
             logger.error(f"Failed to fetch emails for contact {contact_id}: {e}")
@@ -328,9 +328,9 @@ class CommunicationPatternAnalyzer:
                 # Get first email in thread
                 first_email = (
                     self.client.table('emails')
-                    .select('is_outbound')
+                    .select('is_outbound, processing_status')
                     .eq('thread_id', thread_id)
-                    .or_('processing_status.neq.failed,processing_status.is.null')
+                    .neq('processing_status', 'failed')
                     .order('sent_date', desc=False)
                     .limit(1)
                     .execute()
@@ -397,7 +397,7 @@ class CommunicationPatternAnalyzer:
                 .select('id', count='exact')
                 .eq('customer_contact_id', contact_id)
                 .eq('is_outbound', 'false')  # PostgREST expects lowercase string
-                .or_('processing_status.neq.failed,processing_status.is.null')
+                .neq('processing_status', 'failed')
                 .execute()
             )
 

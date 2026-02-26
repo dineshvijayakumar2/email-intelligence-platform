@@ -294,12 +294,13 @@ class EmailLinker:
                         self.client.table('emails')
                         .select(COLUMNS)
                         .eq('mailbox_id', self.mailbox_id)
-                        .or_('processing_status.neq.failed,processing_status.is.null')
                         .in_('id', chunk)
                         .order('sent_date', desc=False)
                         .execute()
                     )
                     batch = response.data or []
+                    # Filter out failed in Python (includes NULLs)
+                    batch = [e for e in batch if e.get('processing_status') != 'failed']
                     all_emails.extend(batch)
                     logger.info(f"Fetched email ID chunk {i // ID_CHUNK_SIZE + 1}: {len(batch)} emails")
                 logger.info(f"Total emails fetched by ID: {len(all_emails)}")
@@ -314,7 +315,6 @@ class EmailLinker:
                     self.client.table('emails')
                     .select(COLUMNS)
                     .eq('mailbox_id', self.mailbox_id)
-                    .or_('processing_status.neq.failed,processing_status.is.null')
                 )
 
                 if not force_relink:
@@ -327,8 +327,9 @@ class EmailLinker:
                     .execute()
                 )
                 batch = response.data or []
-                all_emails.extend(batch)
-                logger.info(f"Fetched link page {offset // PAGE_SIZE + 1}: {len(batch)} emails (total: {len(all_emails)})")
+                filtered = [e for e in batch if e.get('processing_status') != 'failed']
+                all_emails.extend(filtered)
+                logger.info(f"Fetched link page {offset // PAGE_SIZE + 1}: {len(filtered)} emails (total: {len(all_emails)})")
 
                 if len(batch) < PAGE_SIZE:
                     break
@@ -519,12 +520,12 @@ class EmailLinker:
             Dictionary with linking statistics
         """
         try:
-            # Total emails (include NULL processing_status)
+            # Total emails (exclude only explicitly failed)
             total_response = (
                 self.client.table('emails')
                 .select('id', count='exact')
                 .eq('mailbox_id', self.mailbox_id)
-                .or_('processing_status.neq.failed,processing_status.is.null')
+                .neq('processing_status', 'failed')
                 .execute()
             )
             total_emails = total_response.count
@@ -534,7 +535,7 @@ class EmailLinker:
                 self.client.table('emails')
                 .select('id', count='exact')
                 .eq('mailbox_id', self.mailbox_id)
-                .or_('processing_status.neq.failed,processing_status.is.null')
+                .neq('processing_status', 'failed')
                 .not_.is_('customer_contact_id', 'null')
                 .execute()
             )
@@ -545,7 +546,7 @@ class EmailLinker:
                 self.client.table('emails')
                 .select('id', count='exact')
                 .eq('mailbox_id', self.mailbox_id)
-                .or_('processing_status.neq.failed,processing_status.is.null')
+                .neq('processing_status', 'failed')
                 .not_.is_('customer_company_id', 'null')
                 .execute()
             )

@@ -141,7 +141,7 @@ class ResponseTimeTracker:
         """
         PAGE_SIZE = 500
         COLUMNS = ('id, thread_id, sent_date, subject, is_outbound, '
-                   'customer_contact_id, customer_company_id, raw_headers')
+                   'customer_contact_id, customer_company_id, raw_headers, processing_status')
         try:
             all_emails = []
             offset = 0
@@ -151,7 +151,6 @@ class ResponseTimeTracker:
                     self.client.table('emails')
                     .select(COLUMNS)
                     .eq('mailbox_id', self.mailbox_id)
-                    .or_('processing_status.neq.failed,processing_status.is.null')
                     .not_.is_('thread_id', 'null')
                     .order('sent_date', desc=False)
                 )
@@ -159,12 +158,13 @@ class ResponseTimeTracker:
                 if limit and limit <= PAGE_SIZE:
                     query = query.limit(limit)
                     response = query.execute()
-                    all_emails = response.data or []
+                    all_emails = [e for e in (response.data or []) if e.get('processing_status') != 'failed']
                     break
 
                 response = query.range(offset, offset + PAGE_SIZE - 1).execute()
                 batch = response.data or []
-                all_emails.extend(batch)
+                filtered = [e for e in batch if e.get('processing_status') != 'failed']
+                all_emails.extend(filtered)
 
                 if len(batch) < PAGE_SIZE:
                     break

@@ -230,7 +230,7 @@ class ContactExtractor:
         try:
             PAGE_SIZE = 500
             COLUMNS = ('id, sender_email, sender_name, recipients, cc_list, bcc_list, '
-                       'sent_date, raw_headers, is_outbound')
+                       'sent_date, raw_headers, is_outbound, processing_status')
             all_emails = []
             offset = 0
 
@@ -240,12 +240,12 @@ class ContactExtractor:
                     self.client.table('emails')
                     .select(COLUMNS)
                     .eq('mailbox_id', self.mailbox_id)
-                    .or_('processing_status.neq.failed,processing_status.is.null')
                     .order('sent_date', desc=False)
                     .limit(limit)
                     .execute()
                 )
-                return response.data or []
+                # Filter out failed in Python (includes NULLs)
+                return [e for e in (response.data or []) if e.get('processing_status') != 'failed']
 
             # Paginated fetch
             while True:
@@ -253,14 +253,14 @@ class ContactExtractor:
                     self.client.table('emails')
                     .select(COLUMNS)
                     .eq('mailbox_id', self.mailbox_id)
-                    .or_('processing_status.neq.failed,processing_status.is.null')
                     .order('sent_date', desc=False)
                     .range(offset, offset + PAGE_SIZE - 1)
                     .execute()
                 )
                 batch = response.data or []
-                all_emails.extend(batch)
-                logger.info(f"Fetched email page {offset // PAGE_SIZE + 1}: {len(batch)} emails (total: {len(all_emails)})")
+                filtered = [e for e in batch if e.get('processing_status') != 'failed']
+                all_emails.extend(filtered)
+                logger.info(f"Fetched email page {offset // PAGE_SIZE + 1}: {len(filtered)} emails (total: {len(all_emails)})")
 
                 if len(batch) < PAGE_SIZE:
                     break

@@ -163,21 +163,21 @@ class ExtractionOrchestrator:
                 offset = 0
 
                 while True:
-                    # Rebuild query each iteration to avoid stale builder state
                     response = (
                         self.client.table('emails')
-                        .select('id')
+                        .select('id, processing_status')
                         .eq('mailbox_id', self.mailbox_id)
-                        .or_('processing_status.neq.failed,processing_status.is.null')
                         .order('created_at')
                         .range(offset, offset + PAGE_SIZE - 1)
                         .execute()
                     )
                     batch = response.data or []
+                    # Filter out failed in Python (includes NULLs — Python None != 'failed' is True)
+                    batch = [e for e in batch if e.get('processing_status') != 'failed']
                     all_rows.extend(batch)
                     logger.info(f"Full mode page {offset // PAGE_SIZE + 1}: fetched {len(batch)} emails (total so far: {len(all_rows)})")
 
-                    if len(batch) < PAGE_SIZE:
+                    if len(response.data or []) < PAGE_SIZE:
                         break
                     offset += PAGE_SIZE
 
@@ -198,9 +198,8 @@ class ExtractionOrchestrator:
                 while True:
                     response = (
                         self.client.table('emails')
-                        .select('id')
+                        .select('id, processing_status')
                         .eq('mailbox_id', self.mailbox_id)
-                        .or_('processing_status.neq.failed,processing_status.is.null')
                         .gte('sent_date', date_range_start.isoformat())
                         .lte('sent_date', date_range_end.isoformat())
                         .order('sent_date')
@@ -208,8 +207,9 @@ class ExtractionOrchestrator:
                         .execute()
                     )
                     batch = response.data or []
-                    all_rows.extend(batch)
-                    logger.info(f"Incremental page {offset // PAGE_SIZE + 1}: fetched {len(batch)} emails (total so far: {len(all_rows)})")
+                    filtered = [e for e in batch if e.get('processing_status') != 'failed']
+                    all_rows.extend(filtered)
+                    logger.info(f"Incremental page {offset // PAGE_SIZE + 1}: fetched {len(filtered)} emails (total so far: {len(all_rows)})")
 
                     if len(batch) < PAGE_SIZE:
                         break
