@@ -592,7 +592,10 @@ class CommunicationPatternAnalyzer:
                     'initiation_ratio': str(pattern.initiation_ratio),
                     'reply_rate': str(pattern.reply_rate),
                     'avg_thread_depth': str(pattern.avg_thread_depth),
-                    'engagement_trend': pattern.frequency_trend,
+                    'emails_per_month_avg': str(pattern.emails_per_month_avg),
+                    'frequency_trend': pattern.frequency_trend,
+                    'last_inbound_at': pattern.last_inbound_at.isoformat() if pattern.last_inbound_at else None,
+                    'last_outbound_at': pattern.last_outbound_at.isoformat() if pattern.last_outbound_at else None,
                     'last_contacted_at': max(
                         pattern.last_inbound_at or datetime.min,
                         pattern.last_outbound_at or datetime.min,

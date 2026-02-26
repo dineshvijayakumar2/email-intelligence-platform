@@ -217,7 +217,8 @@ class EngagementScorer:
                        'avg_response_time_seconds, '
                        'open_thread_count, dropped_thread_count, '
                        'avg_emails_per_month, frequency_trend, '
-                       'decision_maker_count, highest_seniority')
+                       'decision_maker_count, highest_seniority, '
+                       'last_contact_date')
                 .eq('client_id', self.client_id)
                 .execute()
             )
@@ -296,16 +297,16 @@ class EngagementScorer:
         """
         company_id = company['id']
 
-        # Calculate individual factor scores (similar to contact but aggregated)
+        # Calculate individual factor scores from actual company data
         response_time_score = self._score_response_time(company.get('avg_response_time_seconds'))
         thread_completeness_score = self._score_thread_completeness(
             company.get('open_thread_count', 0),
             company.get('dropped_thread_count', 0)
         )
-        initiation_balance_score = 50.0  # Neutral for companies (calculated from contacts)
-        reply_rate_score = 70.0  # Placeholder for companies
+        initiation_balance_score = 50.0  # Neutral for companies (no per-company initiation tracking)
+        reply_rate_score = 50.0  # Neutral for companies (no per-company reply rate tracking)
         frequency_score = self._score_frequency(company.get('avg_emails_per_month'))
-        recency_score = 60.0  # Placeholder (would need to calculate from emails)
+        recency_score = self._score_company_recency(company.get('last_contact_date'))
 
         # Calculate bonuses
         decision_maker_bonus = 0.10 if company.get('decision_maker_count', 0) > 0 else 0.0
@@ -483,6 +484,38 @@ class EngagementScorer:
             return 0.0  # No contact
 
         last_contact = max(dates)
+        days_since = (now - last_contact).days
+
+        if days_since <= self.RECENT_DAYS:
+            return 100.0
+        elif days_since <= 30:
+            return 80.0
+        elif days_since <= 60:
+            return 60.0
+        elif days_since <= self.STALE_DAYS:
+            return 40.0
+        else:
+            return 10.0
+
+    def _score_company_recency(self, last_contact_date: Optional[str]) -> float:
+        """
+        Score company recency from last_contact_date (0-100)
+
+        Args:
+            last_contact_date: Last contact timestamp (ISO format)
+
+        Returns:
+            Score (0-100)
+        """
+        if not last_contact_date:
+            return 0.0
+
+        now = datetime.utcnow()
+        try:
+            last_contact = datetime.fromisoformat(last_contact_date.replace('Z', '+00:00')).replace(tzinfo=None)
+        except (ValueError, AttributeError):
+            return 0.0
+
         days_since = (now - last_contact).days
 
         if days_since <= self.RECENT_DAYS:
