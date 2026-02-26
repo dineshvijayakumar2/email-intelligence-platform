@@ -27,6 +27,7 @@ import {
   CrownOutlined,
   BarChartOutlined,
   RocketOutlined,
+  DatabaseOutlined,
 } from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -49,6 +50,7 @@ const pageTitles: Record<string, string> = {
   '/extraction': 'Extraction Management',
   '/clients': 'Clients',
   '/users': 'User Management',
+  '/admin/data': 'Admin Data View',
 };
 
 // Role labels and colors
@@ -136,13 +138,18 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
       icon: <TeamOutlined />,
       label: <Link to="/clients">Clients</Link>,
     },
-    // Admin-only menu item
+    // Admin-only menu items
     ...(isAdmin
       ? [
           {
             key: '/users',
             icon: <CrownOutlined />,
             label: <Link to="/users">Users</Link>,
+          },
+          {
+            key: '/admin/data',
+            icon: <DatabaseOutlined />,
+            label: <Link to="/admin/data">Data View</Link>,
           },
         ]
       : []),

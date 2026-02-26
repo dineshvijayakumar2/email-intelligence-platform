@@ -19,6 +19,7 @@ import { ProcessingJobs } from './pages/processing';
 import ErrorsPage from './pages/errors';
 import ClientsPage from './pages/clients';
 import UsersPage from './pages/users';
+import AdminDataViewPage from './pages/admin-data';
 import OAuthCallback from './pages/oauth-callback';
 
 // Analytics pages
@@ -202,6 +203,7 @@ function App() {
                 </AdminRoute>
               }
             />
+            <Route path="/admin/data" element={<AdminRoute><Layout><AdminDataViewPage /></Layout></AdminRoute>} />
 
             {/* OAuth callback routes - for popup windows */}
             <Route path="/auth/microsoft/callback" element={<OAuthCallback />} />
