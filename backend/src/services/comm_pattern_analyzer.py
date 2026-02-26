@@ -592,7 +592,11 @@ class CommunicationPatternAnalyzer:
                     'initiation_ratio': str(pattern.initiation_ratio),
                     'reply_rate': str(pattern.reply_rate),
                     'avg_thread_depth': str(pattern.avg_thread_depth),
-                    'engagement_trend': pattern.frequency_trend
+                    'engagement_trend': pattern.frequency_trend,
+                    'last_contacted_at': max(
+                        pattern.last_inbound_at or datetime.min,
+                        pattern.last_outbound_at or datetime.min,
+                    ).isoformat() if (pattern.last_inbound_at or pattern.last_outbound_at) else None,
                 })
 
             # Batch update via RPC

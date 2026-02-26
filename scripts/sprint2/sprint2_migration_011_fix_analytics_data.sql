@@ -50,6 +50,10 @@ BEGIN
         total_emails_sent = COALESCE(u.total_emails_sent::INTEGER, c.total_emails_sent),
         total_emails_received = COALESCE(u.total_emails_received::INTEGER, c.total_emails_received),
 
+        -- Contact dates (NEW — previously missing)
+        first_contacted_at = COALESCE(u.first_contacted_at::TIMESTAMPTZ, c.first_contacted_at),
+        last_contacted_at = COALESCE(u.last_contacted_at::TIMESTAMPTZ, c.last_contacted_at),
+
         -- Engagement score
         engagement_score = COALESCE(u.engagement_score::INTEGER, c.engagement_score),
 
@@ -69,6 +73,8 @@ BEGIN
         last_outbound_at TEXT,
         total_emails_sent TEXT,
         total_emails_received TEXT,
+        first_contacted_at TEXT,
+        last_contacted_at TEXT,
         engagement_score TEXT
     )
     WHERE c.id = u.contact_id;
@@ -186,7 +192,37 @@ BEGIN
     WHERE cc.id = counts.customer_contact_id;
 
     GET DIAGNOSTICS v_updated = ROW_COUNT;
-    RAISE NOTICE '3/7 Backfilled email counts for % contacts', v_updated;
+    RAISE NOTICE '3/8 Backfilled email counts for % contacts', v_updated;
+END $$;
+
+
+-- ============================================================================
+-- PART 3b: Backfill contact first_contacted_at / last_contacted_at
+-- ============================================================================
+
+DO $$
+DECLARE
+    v_updated INTEGER;
+BEGIN
+    UPDATE customer_contacts cc
+    SET
+        first_contacted_at = COALESCE(dates.first_date, cc.first_contacted_at),
+        last_contacted_at = COALESCE(dates.last_date, cc.last_contacted_at),
+        updated_at = NOW()
+    FROM (
+        SELECT
+            customer_contact_id,
+            MIN(sent_date) AS first_date,
+            MAX(sent_date) AS last_date
+        FROM emails
+        WHERE customer_contact_id IS NOT NULL
+          AND sent_date IS NOT NULL
+        GROUP BY customer_contact_id
+    ) dates
+    WHERE cc.id = dates.customer_contact_id;
+
+    GET DIAGNOSTICS v_updated = ROW_COUNT;
+    RAISE NOTICE '3b/8 Backfilled contact dates for % contacts', v_updated;
 END $$;
 
 
