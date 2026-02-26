@@ -23,13 +23,13 @@ export const EngagementBadge: React.FC<EngagementBadgeProps> = ({
 
   if (showBar) {
     return (
-      <Tooltip title={`${label} (${rounded}/100)`}>
+      <Tooltip title={`${label} engagement (${rounded}/100)`}>
         <Progress
           percent={rounded}
           size="small"
           strokeColor={color}
-          format={() => rounded}
-          style={{ width: size === 'small' ? 80 : 100 }}
+          format={() => `${label} ${rounded}`}
+          style={{ width: size === 'small' ? 110 : 130 }}
         />
       </Tooltip>
     );
@@ -37,7 +37,7 @@ export const EngagementBadge: React.FC<EngagementBadgeProps> = ({
 
   return (
     <Tag color={color} style={{ fontWeight: 600 }}>
-      {rounded}
+      {label} {rounded}
     </Tag>
   );
 };

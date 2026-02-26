@@ -101,11 +101,12 @@ export const CompaniesAnalytics: React.FC = () => {
 
   const handleTableChange: TableProps<CompanyAnalytics>['onChange'] = (_pagination, _filters, sorter) => {
     if (!sorter || Array.isArray(sorter)) return;
-    if (sorter.field && sorter.order) {
-      setSortBy(sorter.field as string);
+    const field = (sorter.columnKey ?? sorter.field) as string | undefined;
+    if (field && sorter.order) {
+      setSortBy(field);
       setSortDir(sorter.order === 'ascend' ? 'asc' : 'desc');
       setPage(1);
-    } else if (sorter.field && !sorter.order) {
+    } else if (!sorter.order) {
       setSortBy('engagement_score');
       setSortDir('desc');
       setPage(1);
@@ -128,7 +129,7 @@ export const CompaniesAnalytics: React.FC = () => {
       title: 'Score',
       dataIndex: 'engagement_score',
       key: 'engagement_score',
-      width: 80,
+      width: 120,
       sorter: true,
       sortOrder: getSortOrder('engagement_score'),
       render: (v: number) => <EngagementBadge score={v} />,
@@ -171,7 +172,7 @@ export const CompaniesAnalytics: React.FC = () => {
 
   const topColumns = [
     { title: 'Company', dataIndex: 'company_name', key: 'name' },
-    { title: 'Score', dataIndex: 'engagement_score', key: 'score', width: 80, render: (v: number) => <EngagementBadge score={v} /> },
+    { title: 'Score', dataIndex: 'engagement_score', key: 'score', width: 120, render: (v: number) => <EngagementBadge score={v} /> },
     { title: 'Emails', dataIndex: 'total_emails', key: 'emails', width: 80 },
     { title: 'Contacts', dataIndex: 'contact_count', key: 'contacts', width: 80 },
     { title: 'Last Contact', dataIndex: 'last_contact_date', key: 'last', width: 110, render: (v: string) => formatRelativeTime(v) },
@@ -181,7 +182,7 @@ export const CompaniesAnalytics: React.FC = () => {
     { title: 'Company', dataIndex: 'company_name', key: 'name' },
     { title: 'Days Silent', dataIndex: 'days_since_contact', key: 'days', width: 100, render: (v: number) => <Tag color={v > 90 ? 'red' : 'orange'}>{v}d</Tag> },
     { title: 'Contacts', dataIndex: 'contact_count', key: 'contacts', width: 80 },
-    { title: 'Score', dataIndex: 'engagement_score', key: 'score', width: 80, render: (v: number) => <EngagementBadge score={v} /> },
+    { title: 'Score', dataIndex: 'engagement_score', key: 'score', width: 120, render: (v: number) => <EngagementBadge score={v} /> },
   ];
 
   const statusColumns = [
@@ -216,7 +217,7 @@ export const CompaniesAnalytics: React.FC = () => {
                     size="small"
                   />
                   <Text>Min Score:</Text>
-                  <Slider value={minScore} onChange={v => { setMinScore(v); setPage(1); }} min={0} max={100} style={{ width: 120 }} />
+                  <Slider value={minScore} onChange={setMinScore} onChangeComplete={v => { setMinScore(v); setPage(1); }} min={0} max={100} style={{ width: 120 }} />
                 </Space>
                 <AnalyticsTable<CompanyAnalytics>
                   columns={allColumns}

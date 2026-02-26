@@ -87,10 +87,11 @@ export const ThreadAnalytics: React.FC = () => {
   const handleTableChange: TableProps<ThreadStatusSummary>['onChange'] = (_pagination, _filters, sorter) => {
     if (!sorter || Array.isArray(sorter)) return;
     if (sorter.field && sorter.order) {
-      setSortBy(sorter.field as string);
+      const field = (sorter.columnKey ?? sorter.field) as string;
+      setSortBy(field);
       setSortDir(sorter.order === 'ascend' ? 'asc' : 'desc');
       setPage(1);
-    } else if (sorter.field && !sorter.order) {
+    } else if (!sorter.order) {
       setSortBy('last_message_at');
       setSortDir('desc');
       setPage(1);

@@ -127,12 +127,12 @@ export const ContactsAnalytics: React.FC = () => {
 
   const handleTableChange: TableProps<ContactAnalytics>['onChange'] = (_pagination, _filters, sorter) => {
     if (!sorter || Array.isArray(sorter)) return;
-    if (sorter.field && sorter.order) {
-      setSortBy(sorter.field as string);
+    const field = (sorter.columnKey ?? sorter.field) as string | undefined;
+    if (field && sorter.order) {
+      setSortBy(field);
       setSortDir(sorter.order === 'ascend' ? 'asc' : 'desc');
       setContactsPage(1);
-    } else if (sorter.field && !sorter.order) {
-      // Reset to default when user clears sort
+    } else if (!sorter.order) {
       setSortBy('engagement_score');
       setSortDir('desc');
       setContactsPage(1);
@@ -175,7 +175,7 @@ export const ContactsAnalytics: React.FC = () => {
       title: 'Score',
       dataIndex: 'engagement_score',
       key: 'engagement_score',
-      width: 100,
+      width: 140,
       sorter: true,
       sortOrder: getSortOrder('engagement_score'),
       render: (v: number) => <EngagementBadge score={v} showBar size="small" />,
@@ -220,7 +220,7 @@ export const ContactsAnalytics: React.FC = () => {
         </div>
       ),
     },
-    { title: 'Score', dataIndex: 'engagement_score', key: 'score', width: 80, render: (v: number) => <EngagementBadge score={v} /> },
+    { title: 'Score', dataIndex: 'engagement_score', key: 'score', width: 120, render: (v: number) => <EngagementBadge score={v} /> },
     { title: 'Emails', dataIndex: 'total_emails', key: 'emails', width: 80 },
     { title: 'Last Contact', dataIndex: 'last_contacted_at', key: 'last', width: 110, render: (v: string) => formatRelativeTime(v) },
   ];
@@ -237,7 +237,7 @@ export const ContactsAnalytics: React.FC = () => {
       ),
     },
     { title: 'Days Silent', dataIndex: 'days_since_contact', key: 'days', width: 100, render: (v: number) => <Tag color={v > 90 ? 'red' : 'orange'}>{v}d</Tag> },
-    { title: 'Score', dataIndex: 'engagement_score', key: 'score', width: 80, render: (v: number) => <EngagementBadge score={v} /> },
+    { title: 'Score', dataIndex: 'engagement_score', key: 'score', width: 120, render: (v: number) => <EngagementBadge score={v} /> },
     { title: 'Last Contact', dataIndex: 'last_contacted_at', key: 'last', width: 110, render: (v: string) => formatRelativeTime(v) },
   ];
 
@@ -283,7 +283,7 @@ export const ContactsAnalytics: React.FC = () => {
                     size="small"
                   />
                   <Text>Min Score:</Text>
-                  <Slider value={minScore} onChange={v => { setMinScore(v); setContactsPage(1); }} min={0} max={100} style={{ width: 120 }} />
+                  <Slider value={minScore} onChange={setMinScore} onChangeComplete={v => { setMinScore(v); setContactsPage(1); }} min={0} max={100} style={{ width: 120 }} />
                   <Text>Decision Makers:</Text>
                   <Switch checked={dmOnly} onChange={v => { setDmOnly(v); setContactsPage(1); }} size="small" />
                 </Space>

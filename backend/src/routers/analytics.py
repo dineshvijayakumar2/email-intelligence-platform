@@ -399,7 +399,7 @@ async def list_contact_analytics(
 
         effective_sort = sort_by if sort_by in CONTACT_SORT_COLUMNS else 'engagement_score'
         desc = sort_dir.lower() != 'asc'
-        result = query.order(effective_sort, desc=desc).range(offset, offset + limit - 1).execute()
+        result = query.order(effective_sort, desc=desc, nullsfirst=False).range(offset, offset + limit - 1).execute()
 
         contacts = []
         for c in result.data:
@@ -760,7 +760,7 @@ async def list_company_analytics(
 
         effective_sort = sort_by if sort_by in COMPANY_SORT_COLUMNS else 'engagement_score'
         desc = sort_dir.lower() != 'asc'
-        result = query.order(effective_sort, desc=desc).range(offset, offset + limit - 1).execute()
+        result = query.order(effective_sort, desc=desc, nullsfirst=False).range(offset, offset + limit - 1).execute()
 
         # Calculate engagement status for each company
         def calculate_engagement_status(last_contact_date):
@@ -1131,7 +1131,7 @@ async def list_thread_statuses(
 
         effective_sort = sort_by if sort_by in THREAD_SORT_COLUMNS else 'last_message_at'
         desc = sort_dir.lower() != 'asc'
-        result = query.order(effective_sort, desc=desc).range(offset, offset + limit - 1).execute()
+        result = query.order(effective_sort, desc=desc, nullsfirst=False).range(offset, offset + limit - 1).execute()
 
         # Fetch contact/company names for enrichment
         threads = []
