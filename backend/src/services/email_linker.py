@@ -374,9 +374,9 @@ class EmailLinker:
                 all_emails.extend(filtered)
                 logger.info(f"Email link page {page}/{estimated_pages}: raw={len(raw_batch)}, kept={len(filtered)}, total so far={len(all_emails)}")
 
-                if len(raw_batch) < PAGE_SIZE:
+                if len(raw_batch) == 0:
                     break
-                offset += PAGE_SIZE
+                offset += len(raw_batch)
 
             logger.info(f"Email linking complete: {len(all_emails)} emails fetched (from {total_to_link} to link)")
             return all_emails
@@ -408,9 +408,9 @@ class EmailLinker:
                     email = row['email_address'].lower()
                     self._contact_cache[email] = row['id']
 
-                if len(batch) < PAGE_SIZE:
+                if len(batch) == 0:
                     break
-                offset += PAGE_SIZE
+                offset += len(batch)
 
             logger.info(f"Loaded {len(self._contact_cache)} contacts into cache")
 
@@ -449,9 +449,9 @@ class EmailLinker:
                     for domain in email_domains:
                         self._company_cache[domain.lower()] = company_id
 
-                if len(batch) < PAGE_SIZE:
+                if len(batch) == 0:
                     break
-                offset += PAGE_SIZE
+                offset += len(batch)
 
             logger.info(f"Loaded {company_count} companies with "
                        f"{len(self._company_cache)} domain mappings into cache")

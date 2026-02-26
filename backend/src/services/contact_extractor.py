@@ -298,9 +298,9 @@ class ContactExtractor:
                 all_emails.extend(filtered)
                 logger.info(f"Contact extraction page {page}/{estimated_pages}: raw={len(raw_batch)}, kept={len(filtered)}, total so far={len(all_emails)}")
 
-                if len(raw_batch) < PAGE_SIZE:
+                if len(raw_batch) == 0:
                     break
-                offset += PAGE_SIZE
+                offset += len(raw_batch)
 
                 if limit and len(all_emails) >= limit:
                     return all_emails[:limit]

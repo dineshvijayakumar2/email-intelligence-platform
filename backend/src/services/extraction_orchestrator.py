@@ -223,9 +223,9 @@ class ExtractionOrchestrator:
                     all_rows.extend(filtered)
                     logger.info(f"Full mode page {page}/{estimated_pages}: raw={len(raw_batch)}, kept={len(filtered)}, total so far={len(all_rows)}")
 
-                    if len(raw_batch) < PAGE_SIZE:
+                    if len(raw_batch) == 0:
                         break
-                    offset += PAGE_SIZE
+                    offset += len(raw_batch)  # Use actual count returned, not PAGE_SIZE
 
                 logger.info(f"Full extraction mode: Processing {len(all_rows)} emails (from {total_in_db} total)")
                 return [email['id'] for email in all_rows], None, None
@@ -270,9 +270,9 @@ class ExtractionOrchestrator:
                     all_rows.extend(filtered)
                     logger.info(f"Incremental page {page}/{estimated_pages}: raw={len(raw_batch)}, kept={len(filtered)}, total so far={len(all_rows)}")
 
-                    if len(raw_batch) < PAGE_SIZE:
+                    if len(raw_batch) == 0:
                         break
-                    offset += PAGE_SIZE
+                    offset += len(raw_batch)
 
                 logger.info(f"Incremental mode: Processing {len(all_rows)} emails (from {total_in_range} in range)")
                 return (

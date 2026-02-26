@@ -157,9 +157,9 @@ class ThreadTracker:
                 filtered = [e for e in batch if e.get('processing_status') != 'failed']
                 all_emails.extend(filtered)
 
-                if len(batch) < PAGE_SIZE:
+                if len(batch) == 0:
                     break
-                offset += PAGE_SIZE
+                offset += len(batch)
 
                 if limit and len(all_emails) >= limit:
                     all_emails = all_emails[:limit]
