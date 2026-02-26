@@ -395,7 +395,7 @@ async def list_contact_analytics(
             # Use lowercase string for boolean filter (PostgREST requirement)
             query = query.eq('is_decision_maker', 'true' if is_decision_maker else 'false')
         if min_engagement_score is not None:
-            query = query.gte('engagement_score', min_engagement_score)
+            query = query.gte('engagement_score', int(min_engagement_score))
 
         effective_sort = sort_by if sort_by in CONTACT_SORT_COLUMNS else 'engagement_score'
         desc = sort_dir.lower() != 'asc'
@@ -423,7 +423,7 @@ async def list_contact_analytics(
         if is_decision_maker is not None:
             count_query = count_query.eq('is_decision_maker', 'true' if is_decision_maker else 'false')
         if min_engagement_score is not None:
-            count_query = count_query.gte('engagement_score', min_engagement_score)
+            count_query = count_query.gte('engagement_score', int(min_engagement_score))
 
         count_result = count_query.execute()
         total = count_result.count if count_result.count else len(count_result.data)
@@ -756,7 +756,7 @@ async def list_company_analytics(
         if client_id:
             query = query.eq('client_id', client_id)
         if min_engagement_score is not None:
-            query = query.gte('engagement_score', min_engagement_score)
+            query = query.gte('engagement_score', int(min_engagement_score))
 
         effective_sort = sort_by if sort_by in COMPANY_SORT_COLUMNS else 'engagement_score'
         desc = sort_dir.lower() != 'asc'
@@ -803,7 +803,7 @@ async def list_company_analytics(
         if client_id:
             count_query = count_query.eq('client_id', client_id)
         if min_engagement_score is not None:
-            count_query = count_query.gte('engagement_score', min_engagement_score)
+            count_query = count_query.gte('engagement_score', int(min_engagement_score))
         count_result = count_query.execute()
         total = count_result.count if count_result.count else len(count_result.data)
 
