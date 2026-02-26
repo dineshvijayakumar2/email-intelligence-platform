@@ -43,6 +43,7 @@ export const ContactsAnalytics: React.FC = () => {
   const [contactsTotal, setContactsTotal] = useState(0);
   const [contactsPage, setContactsPage] = useState(1);
   const [minScore, setMinScore] = useState<number>(0);
+  const [sliderScore, setSliderScore] = useState<number>(0);
   const [dmOnly, setDmOnly] = useState(false);
   const [contactType, setContactType] = useState<string>('');
   const [sortBy, setSortBy] = useState<string>('engagement_score');
@@ -283,7 +284,7 @@ export const ContactsAnalytics: React.FC = () => {
                     size="small"
                   />
                   <Text>Min Score:</Text>
-                  <Slider value={minScore} onChange={setMinScore} onChangeComplete={v => { setMinScore(v); setContactsPage(1); }} min={0} max={100} style={{ width: 120 }} />
+                  <Slider value={sliderScore} onChange={setSliderScore} onChangeComplete={v => { setMinScore(v); setSliderScore(v); setContactsPage(1); }} min={0} max={100} style={{ width: 120 }} />
                   <Text>Decision Makers:</Text>
                   <Switch checked={dmOnly} onChange={v => { setDmOnly(v); setContactsPage(1); }} size="small" />
                 </Space>

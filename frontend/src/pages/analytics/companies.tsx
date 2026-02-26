@@ -26,7 +26,7 @@ const STATUS_OPTIONS = [
   { value: 'active', label: 'Active' },
   { value: 'quiet', label: 'Quiet' },
   { value: 'at_risk', label: 'At Risk' },
-  { value: 'unknown', label: 'Unknown' },
+  { value: 'unknown', label: 'No Activity' },
 ];
 
 export const CompaniesAnalytics: React.FC = () => {
@@ -41,6 +41,7 @@ export const CompaniesAnalytics: React.FC = () => {
   const [page, setPage] = useState(1);
   const [engagementStatus, setEngagementStatus] = useState<string>('');
   const [minScore, setMinScore] = useState<number>(0);
+  const [sliderScore, setSliderScore] = useState<number>(0);
   const [sortBy, setSortBy] = useState<string>('engagement_score');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
@@ -217,7 +218,7 @@ export const CompaniesAnalytics: React.FC = () => {
                     size="small"
                   />
                   <Text>Min Score:</Text>
-                  <Slider value={minScore} onChange={setMinScore} onChangeComplete={v => { setMinScore(v); setPage(1); }} min={0} max={100} style={{ width: 120 }} />
+                  <Slider value={sliderScore} onChange={setSliderScore} onChangeComplete={v => { setMinScore(v); setSliderScore(v); setPage(1); }} min={0} max={100} style={{ width: 120 }} />
                 </Space>
                 <AnalyticsTable<CompanyAnalytics>
                   columns={allColumns}

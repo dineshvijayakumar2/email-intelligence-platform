@@ -231,12 +231,12 @@ export const customerService = {
    * Get engagement status display label
    */
   getEngagementLabel(status?: EngagementStatus): string {
-    if (!status) return 'Unknown';
+    if (!status) return 'No Activity';
     const labels: Record<EngagementStatus, string> = {
       active: 'Active',
       quiet: 'Quiet',
       at_risk: 'At Risk',
-      unknown: 'Unknown',
+      unknown: 'No Activity',
     };
     return labels[status] || status;
   },

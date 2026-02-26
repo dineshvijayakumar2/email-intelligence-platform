@@ -684,5 +684,5 @@ export const engagementStatusConfig: Record<string, { label: string; color: stri
   active: { label: 'Active', color: 'green' },
   quiet: { label: 'Quiet', color: 'gold' },
   at_risk: { label: 'At Risk', color: 'red' },
-  unknown: { label: 'Unknown', color: 'default' },
+  unknown: { label: 'No Activity', color: 'default' },
 };
