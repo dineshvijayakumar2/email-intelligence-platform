@@ -159,10 +159,23 @@ class ExtractionOrchestrator:
         PAGE_SIZE = 500
         try:
             if self.extraction_mode == 'full':
+                # Get total count first for visibility
+                count_resp = (
+                    self.client.table('emails')
+                    .select('id', count='exact')
+                    .eq('mailbox_id', self.mailbox_id)
+                    .execute()
+                )
+                total_in_db = count_resp.count or 0
+                estimated_pages = (total_in_db + PAGE_SIZE - 1) // PAGE_SIZE
+                logger.info(f"Full mode: {total_in_db} total emails in mailbox, ~{estimated_pages} pages of {PAGE_SIZE}")
+
                 all_rows = []
                 offset = 0
+                page = 0
 
                 while True:
+                    page += 1
                     response = (
                         self.client.table('emails')
                         .select('id, processing_status')
@@ -171,17 +184,16 @@ class ExtractionOrchestrator:
                         .range(offset, offset + PAGE_SIZE - 1)
                         .execute()
                     )
-                    batch = response.data or []
-                    # Filter out failed in Python (includes NULLs — Python None != 'failed' is True)
-                    batch = [e for e in batch if e.get('processing_status') != 'failed']
-                    all_rows.extend(batch)
-                    logger.info(f"Full mode page {offset // PAGE_SIZE + 1}: fetched {len(batch)} emails (total so far: {len(all_rows)})")
+                    raw_batch = response.data or []
+                    filtered = [e for e in raw_batch if e.get('processing_status') != 'failed']
+                    all_rows.extend(filtered)
+                    logger.info(f"Full mode page {page}/{estimated_pages}: raw={len(raw_batch)}, kept={len(filtered)}, total so far={len(all_rows)}")
 
-                    if len(response.data or []) < PAGE_SIZE:
+                    if len(raw_batch) < PAGE_SIZE:
                         break
                     offset += PAGE_SIZE
 
-                logger.info(f"Full extraction mode: Processing all {len(all_rows)} emails")
+                logger.info(f"Full extraction mode: Processing {len(all_rows)} emails (from {total_in_db} total)")
                 return [email['id'] for email in all_rows], None, None
 
             else:  # incremental
@@ -192,10 +204,25 @@ class ExtractionOrchestrator:
                 logger.info(f"Incremental extraction mode: Looking back {self.lookback_days} days")
                 logger.info(f"Date range: {date_range_start.isoformat()} to {date_range_end.isoformat()}")
 
+                # Get total count for date range
+                count_resp = (
+                    self.client.table('emails')
+                    .select('id', count='exact')
+                    .eq('mailbox_id', self.mailbox_id)
+                    .gte('sent_date', date_range_start.isoformat())
+                    .lte('sent_date', date_range_end.isoformat())
+                    .execute()
+                )
+                total_in_range = count_resp.count or 0
+                estimated_pages = (total_in_range + PAGE_SIZE - 1) // PAGE_SIZE
+                logger.info(f"Incremental mode: {total_in_range} emails in date range, ~{estimated_pages} pages")
+
                 all_rows = []
                 offset = 0
+                page = 0
 
                 while True:
+                    page += 1
                     response = (
                         self.client.table('emails')
                         .select('id, processing_status')
@@ -206,16 +233,16 @@ class ExtractionOrchestrator:
                         .range(offset, offset + PAGE_SIZE - 1)
                         .execute()
                     )
-                    batch = response.data or []
-                    filtered = [e for e in batch if e.get('processing_status') != 'failed']
+                    raw_batch = response.data or []
+                    filtered = [e for e in raw_batch if e.get('processing_status') != 'failed']
                     all_rows.extend(filtered)
-                    logger.info(f"Incremental page {offset // PAGE_SIZE + 1}: fetched {len(filtered)} emails (total so far: {len(all_rows)})")
+                    logger.info(f"Incremental page {page}/{estimated_pages}: raw={len(raw_batch)}, kept={len(filtered)}, total so far={len(all_rows)}")
 
-                    if len(batch) < PAGE_SIZE:
+                    if len(raw_batch) < PAGE_SIZE:
                         break
                     offset += PAGE_SIZE
 
-                logger.info(f"Incremental mode: Found {len(all_rows)} emails in scope")
+                logger.info(f"Incremental mode: Processing {len(all_rows)} emails (from {total_in_range} in range)")
                 return (
                     [email['id'] for email in all_rows],
                     date_range_start.isoformat(),

@@ -287,9 +287,12 @@ class EmailLinker:
         try:
             # When specific email IDs are provided, chunk the in_ filter
             if email_ids:
+                total_chunks = (len(email_ids) + ID_CHUNK_SIZE - 1) // ID_CHUNK_SIZE
+                logger.info(f"Email linking: {len(email_ids)} IDs to fetch in {total_chunks} chunks of {ID_CHUNK_SIZE}")
                 all_emails = []
                 for i in range(0, len(email_ids), ID_CHUNK_SIZE):
                     chunk = email_ids[i:i + ID_CHUNK_SIZE]
+                    chunk_num = i // ID_CHUNK_SIZE + 1
                     response = (
                         self.client.table('emails')
                         .select(COLUMNS)
@@ -298,19 +301,36 @@ class EmailLinker:
                         .order('sent_date', desc=False)
                         .execute()
                     )
-                    batch = response.data or []
-                    # Filter out failed in Python (includes NULLs)
-                    batch = [e for e in batch if e.get('processing_status') != 'failed']
-                    all_emails.extend(batch)
-                    logger.info(f"Fetched email ID chunk {i // ID_CHUNK_SIZE + 1}: {len(batch)} emails")
-                logger.info(f"Total emails fetched by ID: {len(all_emails)}")
+                    raw_batch = response.data or []
+                    filtered = [e for e in raw_batch if e.get('processing_status') != 'failed']
+                    all_emails.extend(filtered)
+                    logger.info(f"Email link chunk {chunk_num}/{total_chunks}: raw={len(raw_batch)}, kept={len(filtered)}, total so far={len(all_emails)}")
+                logger.info(f"Email linking: {len(all_emails)} emails fetched from {len(email_ids)} IDs")
                 return all_emails
 
-            # General fetch with pagination
+            # General fetch with pagination — get count first
+            count_resp = (
+                self.client.table('emails')
+                .select('id', count='exact')
+                .eq('mailbox_id', self.mailbox_id)
+                .is_('customer_contact_id', 'null')
+                .execute()
+            ) if not force_relink else (
+                self.client.table('emails')
+                .select('id', count='exact')
+                .eq('mailbox_id', self.mailbox_id)
+                .execute()
+            )
+            total_to_link = count_resp.count or 0
+            estimated_pages = (total_to_link + PAGE_SIZE - 1) // PAGE_SIZE
+            logger.info(f"Email linking: {total_to_link} emails to link, ~{estimated_pages} pages of {PAGE_SIZE}")
+
             all_emails = []
             offset = 0
+            page = 0
 
             while True:
+                page += 1
                 query = (
                     self.client.table('emails')
                     .select(COLUMNS)
@@ -326,15 +346,16 @@ class EmailLinker:
                     .range(offset, offset + PAGE_SIZE - 1)
                     .execute()
                 )
-                batch = response.data or []
-                filtered = [e for e in batch if e.get('processing_status') != 'failed']
+                raw_batch = response.data or []
+                filtered = [e for e in raw_batch if e.get('processing_status') != 'failed']
                 all_emails.extend(filtered)
-                logger.info(f"Fetched link page {offset // PAGE_SIZE + 1}: {len(filtered)} emails (total: {len(all_emails)})")
+                logger.info(f"Email link page {page}/{estimated_pages}: raw={len(raw_batch)}, kept={len(filtered)}, total so far={len(all_emails)}")
 
-                if len(batch) < PAGE_SIZE:
+                if len(raw_batch) < PAGE_SIZE:
                     break
                 offset += PAGE_SIZE
 
+            logger.info(f"Email linking complete: {len(all_emails)} emails fetched (from {total_to_link} to link)")
             return all_emails
 
         except Exception as e:

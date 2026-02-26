@@ -231,8 +231,6 @@ class ContactExtractor:
             PAGE_SIZE = 500
             COLUMNS = ('id, sender_email, sender_name, recipients, cc_list, bcc_list, '
                        'sent_date, raw_headers, is_outbound, processing_status')
-            all_emails = []
-            offset = 0
 
             # Small limit: single query
             if limit and limit <= PAGE_SIZE:
@@ -244,11 +242,28 @@ class ContactExtractor:
                     .limit(limit)
                     .execute()
                 )
-                # Filter out failed in Python (includes NULLs)
-                return [e for e in (response.data or []) if e.get('processing_status') != 'failed']
+                result = [e for e in (response.data or []) if e.get('processing_status') != 'failed']
+                logger.info(f"Fetched {len(result)} emails (limit={limit})")
+                return result
+
+            # Get total count for visibility
+            count_resp = (
+                self.client.table('emails')
+                .select('id', count='exact')
+                .eq('mailbox_id', self.mailbox_id)
+                .execute()
+            )
+            total_in_db = count_resp.count or 0
+            estimated_pages = (total_in_db + PAGE_SIZE - 1) // PAGE_SIZE
+            logger.info(f"Contact extraction: {total_in_db} total emails in mailbox, ~{estimated_pages} pages of {PAGE_SIZE}")
 
             # Paginated fetch
+            all_emails = []
+            offset = 0
+            page = 0
+
             while True:
+                page += 1
                 response = (
                     self.client.table('emails')
                     .select(COLUMNS)
@@ -257,18 +272,19 @@ class ContactExtractor:
                     .range(offset, offset + PAGE_SIZE - 1)
                     .execute()
                 )
-                batch = response.data or []
-                filtered = [e for e in batch if e.get('processing_status') != 'failed']
+                raw_batch = response.data or []
+                filtered = [e for e in raw_batch if e.get('processing_status') != 'failed']
                 all_emails.extend(filtered)
-                logger.info(f"Fetched email page {offset // PAGE_SIZE + 1}: {len(filtered)} emails (total: {len(all_emails)})")
+                logger.info(f"Contact extraction page {page}/{estimated_pages}: raw={len(raw_batch)}, kept={len(filtered)}, total so far={len(all_emails)}")
 
-                if len(batch) < PAGE_SIZE:
+                if len(raw_batch) < PAGE_SIZE:
                     break
                 offset += PAGE_SIZE
 
                 if limit and len(all_emails) >= limit:
                     return all_emails[:limit]
 
+            logger.info(f"Contact extraction complete: {len(all_emails)} emails fetched (from {total_in_db} total)")
             return all_emails
 
         except Exception as e:
