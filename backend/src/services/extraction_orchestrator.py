@@ -145,6 +145,25 @@ class ExtractionOrchestrator:
             logger.error(f"Failed to fetch client_id: {e}")
             raise
 
+    def _fetch_all_paginated(self, query_builder) -> List[dict]:
+        """
+        Fetch all rows from a Supabase query, paginating past the 1000-row limit.
+        """
+        PAGE_SIZE = 1000
+        all_rows = []
+        offset = 0
+
+        while True:
+            response = query_builder.range(offset, offset + PAGE_SIZE - 1).execute()
+            batch = response.data or []
+            all_rows.extend(batch)
+
+            if len(batch) < PAGE_SIZE:
+                break  # Last page
+            offset += PAGE_SIZE
+
+        return all_rows
+
     def _get_emails_in_scope(self) -> tuple[List[str], Optional[str], Optional[str]]:
         """
         Get email IDs to process based on extraction mode
@@ -155,15 +174,16 @@ class ExtractionOrchestrator:
         try:
             if self.extraction_mode == 'full':
                 # All emails in this mailbox (any processing status)
-                response = (
+                query = (
                     self.client.table('emails')
                     .select('id')
                     .eq('mailbox_id', self.mailbox_id)
                     .neq('processing_status', 'failed')
-                    .execute()
+                    .order('created_at')
                 )
-                logger.info(f"Full extraction mode: Processing all emails")
-                return [email['id'] for email in response.data], None, None
+                rows = self._fetch_all_paginated(query)
+                logger.info(f"Full extraction mode: Processing all {len(rows)} emails")
+                return [email['id'] for email in rows], None, None
 
             else:  # incremental
                 # Only emails from last N days
@@ -174,18 +194,20 @@ class ExtractionOrchestrator:
                 logger.info(f"Incremental extraction mode: Looking back {self.lookback_days} days")
                 logger.info(f"Date range: {date_range_start.isoformat()} to {date_range_end.isoformat()}")
 
-                response = (
+                query = (
                     self.client.table('emails')
                     .select('id')
                     .eq('mailbox_id', self.mailbox_id)
                     .neq('processing_status', 'failed')
                     .gte('sent_date', date_range_start.isoformat())
                     .lte('sent_date', date_range_end.isoformat())
-                    .execute()
+                    .order('sent_date')
                 )
+                rows = self._fetch_all_paginated(query)
 
+                logger.info(f"Incremental mode: Found {len(rows)} emails in scope")
                 return (
-                    [email['id'] for email in response.data],
+                    [email['id'] for email in rows],
                     date_range_start.isoformat(),
                     date_range_end.isoformat()
                 )

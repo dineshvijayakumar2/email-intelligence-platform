@@ -278,24 +278,39 @@ class EmailLinker:
             List of email records
         """
         try:
-            query = (
-                self.client.table('emails')
-                .select('id, sender_email, recipients, is_outbound, processing_status')
-                .eq('mailbox_id', self.mailbox_id)
-                .eq('processing_status', 'success')
-            )
+            PAGE_SIZE = 1000
+            all_emails = []
+            offset = 0
 
-            # Filter by specific email IDs if provided
-            if email_ids:
-                query = query.in_('id', email_ids)
-            elif not force_relink:
-                # Only fetch unlinked emails (where customer_contact_id is null)
-                query = query.is_('customer_contact_id', 'null')
+            while True:
+                query = (
+                    self.client.table('emails')
+                    .select('id, sender_email, recipients, is_outbound, processing_status')
+                    .eq('mailbox_id', self.mailbox_id)
+                    .neq('processing_status', 'failed')
+                )
 
-            query = query.order('sent_date', desc=False)
+                # Filter by specific email IDs if provided
+                if email_ids:
+                    # in_ filter already limits results, no pagination needed
+                    query = query.in_('id', email_ids)
+                    query = query.order('sent_date', desc=False)
+                    response = query.execute()
+                    return response.data or []
+                elif not force_relink:
+                    query = query.is_('customer_contact_id', 'null')
 
-            response = query.execute()
-            return response.data
+                query = query.order('sent_date', desc=False)
+                query = query.range(offset, offset + PAGE_SIZE - 1)
+                response = query.execute()
+                batch = response.data or []
+                all_emails.extend(batch)
+
+                if len(batch) < PAGE_SIZE:
+                    break
+                offset += PAGE_SIZE
+
+            return all_emails
 
         except Exception as e:
             logger.error(f"Failed to fetch emails to link: {e}")
@@ -465,7 +480,7 @@ class EmailLinker:
                 self.client.table('emails')
                 .select('id', count='exact')
                 .eq('mailbox_id', self.mailbox_id)
-                .eq('processing_status', 'success')
+                .neq('processing_status', 'failed')
                 .execute()
             )
             total_emails = total_response.count
