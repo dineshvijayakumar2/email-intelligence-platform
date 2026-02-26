@@ -100,7 +100,7 @@ export const ContactDetail: React.FC = () => {
           <Col>
             <EngagementBadge score={contact.engagement_score} showBar />
             {contact.is_decision_maker && <Tag color="gold" style={{ marginLeft: 8 }}>Decision Maker</Tag>}
-            {contact.seniority_level && <Tag>{contact.seniority_level}</Tag>}
+            {contact.seniority_level && contact.seniority_level !== 'unknown' && <Tag>{contact.seniority_level}</Tag>}
           </Col>
         </Row>
       </div>
