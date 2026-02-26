@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Row, Col, Typography, Tabs, Tag, Space, Slider, Switch } from 'antd';
+import { Typography, Tabs, Tag, Space, Slider, Switch, Select, Alert } from 'antd';
+import type { TableProps } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { ClientSelector } from '../../components/analytics/ClientSelector';
 import { AnalyticsTable } from '../../components/analytics/AnalyticsTable';
@@ -20,6 +21,16 @@ import type {
 const { Text } = Typography;
 const PAGE_SIZE = 20;
 
+const CONTACT_TYPE_OPTIONS = [
+  { value: '', label: 'All Types' },
+  { value: 'person', label: 'Person' },
+  { value: 'automated', label: 'Automated' },
+  { value: 'shared', label: 'Shared' },
+  { value: 'mailing_list', label: 'Mailing List' },
+  { value: 'internal', label: 'Internal' },
+  { value: 'unknown', label: 'Unknown' },
+];
+
 export const ContactsAnalytics: React.FC = () => {
   const navigate = useNavigate();
   const isMountedRef = useRef(true);
@@ -33,6 +44,9 @@ export const ContactsAnalytics: React.FC = () => {
   const [contactsPage, setContactsPage] = useState(1);
   const [minScore, setMinScore] = useState<number>(0);
   const [dmOnly, setDmOnly] = useState(false);
+  const [contactType, setContactType] = useState<string>('');
+  const [sortBy, setSortBy] = useState<string>('engagement_score');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   // Top engaged state
   const [topEngaged, setTopEngaged] = useState<TopEngagedContact[]>([]);
@@ -60,7 +74,7 @@ export const ContactsAnalytics: React.FC = () => {
   useEffect(() => {
     if (!clientId) return;
     loadTab(activeTab);
-  }, [clientId, activeTab, contactsPage, dmsPage, minScore, dmOnly]);
+  }, [clientId, activeTab, contactsPage, dmsPage, minScore, dmOnly, contactType, sortBy, sortDir]);
 
   const loadTab = async (tab: string) => {
     if (!clientId) return;
@@ -73,6 +87,9 @@ export const ContactsAnalytics: React.FC = () => {
           offset: (contactsPage - 1) * PAGE_SIZE,
           min_engagement_score: minScore > 0 ? minScore : undefined,
           is_decision_maker: dmOnly ? true : undefined,
+          contact_type: contactType ? (contactType as ContactType) : undefined,
+          sort_by: sortBy,
+          sort_dir: sortDir,
         });
         if (isMountedRef.current) {
           setContacts(allResult.contacts);
@@ -103,10 +120,32 @@ export const ContactsAnalytics: React.FC = () => {
     }
   };
 
+  const getSortOrder = (field: string): 'ascend' | 'descend' | null => {
+    if (sortBy !== field) return null;
+    return sortDir === 'asc' ? 'ascend' : 'descend';
+  };
+
+  const handleTableChange: TableProps<ContactAnalytics>['onChange'] = (_pagination, _filters, sorter) => {
+    if (!sorter || Array.isArray(sorter)) return;
+    if (sorter.field && sorter.order) {
+      setSortBy(sorter.field as string);
+      setSortDir(sorter.order === 'ascend' ? 'asc' : 'desc');
+      setContactsPage(1);
+    } else if (sorter.field && !sorter.order) {
+      // Reset to default when user clears sort
+      setSortBy('engagement_score');
+      setSortDir('desc');
+      setContactsPage(1);
+    }
+  };
+
   const allColumns = [
     {
       title: 'Contact',
-      key: 'name',
+      key: 'full_name',
+      dataIndex: 'full_name',
+      sorter: true,
+      sortOrder: getSortOrder('full_name'),
       render: (_: any, r: ContactAnalytics) => (
         <div>
           <Text strong>{r.full_name || r.email_address}</Text>
@@ -117,7 +156,9 @@ export const ContactsAnalytics: React.FC = () => {
     {
       title: 'Company',
       dataIndex: 'company_name',
-      key: 'company',
+      key: 'company_name',
+      sorter: true,
+      sortOrder: getSortOrder('company_name'),
       render: (v: string) => v || <Text type="secondary">-</Text>,
     },
     {
@@ -133,21 +174,37 @@ export const ContactsAnalytics: React.FC = () => {
     {
       title: 'Score',
       dataIndex: 'engagement_score',
-      key: 'score',
+      key: 'engagement_score',
       width: 100,
+      sorter: true,
+      sortOrder: getSortOrder('engagement_score'),
       render: (v: number) => <EngagementBadge score={v} showBar size="small" />,
     },
     {
-      title: 'Emails',
-      key: 'emails',
+      title: 'Sent',
+      dataIndex: 'total_emails_sent',
+      key: 'total_emails_sent',
+      width: 70,
+      sorter: true,
+      sortOrder: getSortOrder('total_emails_sent'),
+      render: (v: number) => v || 0,
+    },
+    {
+      title: 'Received',
+      dataIndex: 'total_emails_received',
+      key: 'total_emails_received',
       width: 80,
-      render: (_: any, r: ContactAnalytics) => (r.total_emails_sent || 0) + (r.total_emails_received || 0),
+      sorter: true,
+      sortOrder: getSortOrder('total_emails_received'),
+      render: (v: number) => v || 0,
     },
     {
       title: 'Last Contact',
       dataIndex: 'last_contacted_at',
-      key: 'lastContact',
+      key: 'last_contacted_at',
       width: 110,
+      sorter: true,
+      sortOrder: getSortOrder('last_contacted_at'),
       render: (v: string) => formatRelativeTime(v),
     },
   ];
@@ -217,6 +274,14 @@ export const ContactsAnalytics: React.FC = () => {
             children: (
               <>
                 <Space style={{ marginBottom: 16 }} wrap>
+                  <Text>Type:</Text>
+                  <Select
+                    value={contactType}
+                    onChange={v => { setContactType(v); setContactsPage(1); }}
+                    options={CONTACT_TYPE_OPTIONS}
+                    style={{ width: 140 }}
+                    size="small"
+                  />
                   <Text>Min Score:</Text>
                   <Slider value={minScore} onChange={v => { setMinScore(v); setContactsPage(1); }} min={0} max={100} style={{ width: 120 }} />
                   <Text>Decision Makers:</Text>
@@ -231,6 +296,7 @@ export const ContactsAnalytics: React.FC = () => {
                   currentPage={contactsPage}
                   onPageChange={(p) => setContactsPage(p)}
                   onRowClick={handleRowClick}
+                  onChange={handleTableChange}
                   rowKey="id"
                 />
               </>
@@ -266,19 +332,31 @@ export const ContactsAnalytics: React.FC = () => {
           },
           {
             key: 'dm',
-            label: 'Decision Makers',
+            label: `Decision Makers (${dmsTotal})`,
             children: (
-              <AnalyticsTable<ContactAnalytics>
-                columns={allColumns}
-                data={dms}
-                total={dmsTotal}
-                loading={dmsLoading}
-                pageSize={PAGE_SIZE}
-                currentPage={dmsPage}
-                onPageChange={(p) => setDmsPage(p)}
-                onRowClick={handleRowClick}
-                rowKey="id"
-              />
+              <>
+                {dmsTotal === 0 && !dmsLoading && clientId && (
+                  <Alert
+                    type="info"
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                    message="No decision makers detected"
+                    description="Decision makers are contacts with C-level, VP, or Director titles. These are auto-detected from email signatures and job titles during extraction. If your contacts don't have professional titles in their email data, this section will be empty."
+                  />
+                )}
+                <AnalyticsTable<ContactAnalytics>
+                  columns={allColumns}
+                  data={dms}
+                  total={dmsTotal}
+                  loading={dmsLoading}
+                  pageSize={PAGE_SIZE}
+                  currentPage={dmsPage}
+                  onPageChange={(p) => setDmsPage(p)}
+                  onRowClick={handleRowClick}
+                  rowKey="id"
+                  emptyText="No decision makers found. Decision makers are auto-detected from job titles (C-level, VP, Director)."
+                />
+              </>
             ),
           },
           {

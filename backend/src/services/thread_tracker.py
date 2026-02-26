@@ -45,6 +45,8 @@ class ThreadStatus:
     is_overdue: bool
     primary_contact_id: Optional[str]
     primary_company_id: Optional[str]
+    subject: Optional[str] = None
+    message_count: int = 0
 
 
 class ThreadTracker:
@@ -131,7 +133,7 @@ class ThreadTracker:
             Dict mapping thread_id to list of email dicts
         """
         PAGE_SIZE = 500
-        COLUMNS = ('id, thread_id, sent_date, is_outbound, '
+        COLUMNS = ('id, thread_id, subject, sent_date, is_outbound, '
                    'customer_contact_id, customer_company_id, processing_status')
         try:
             all_emails = []
@@ -221,6 +223,14 @@ class ThreadTracker:
         # Check if overdue
         is_overdue = days_since_last > self.OVERDUE_DAYS and status in ['awaiting_response', 'awaiting_our_response']
 
+        # Get subject from first email in thread
+        subject = None
+        for email in emails:
+            s = email.get('subject')
+            if s and s.strip():
+                subject = s.strip()
+                break
+
         return ThreadStatus(
             thread_id=thread_id,
             status=status,
@@ -231,7 +241,9 @@ class ThreadTracker:
             days_since_last_email=days_since_last,
             is_overdue=is_overdue,
             primary_contact_id=primary_contact_id,
-            primary_company_id=primary_company_id
+            primary_company_id=primary_company_id,
+            subject=subject,
+            message_count=len(emails)
         )
 
     def _calculate_thread_depth(self, emails: List[Dict]) -> int:
@@ -357,6 +369,8 @@ class ThreadTracker:
         for status in thread_statuses:
             record = {
                 'thread_id': status.thread_id,
+                'subject': status.subject,
+                'message_count': status.message_count,
                 'status': status.status,
                 'last_email_id': status.last_email_id,
                 'last_email_date': status.last_email_date.isoformat(),
@@ -366,6 +380,8 @@ class ThreadTracker:
                 'is_overdue': status.is_overdue,
                 'primary_contact_id': status.primary_contact_id,
                 'primary_company_id': status.primary_company_id,
+                'customer_contact_id': status.primary_contact_id,
+                'customer_company_id': status.primary_company_id,
                 'created_at': timestamp,
                 'updated_at': timestamp
             }

@@ -326,6 +326,24 @@ async def get_extraction_progress(job_id: str):
 # CONTACT ANALYTICS ENDPOINTS (6 endpoints)
 # ============================================================================
 
+CONTACT_SORT_COLUMNS = {
+    'engagement_score', 'full_name', 'email_address',
+    'total_emails_sent', 'total_emails_received',
+    'last_contacted_at', 'created_at', 'company_name',
+}
+
+COMPANY_SORT_COLUMNS = {
+    'engagement_score', 'company_name', 'total_emails',
+    'contact_count', 'decision_maker_count',
+    'last_contact_date', 'created_at',
+}
+
+THREAD_SORT_COLUMNS = {
+    'last_message_at', 'message_count', 'days_since_last_email',
+    'status', 'created_at', 'subject',
+}
+
+
 @router.get("/contacts", response_model=ContactAnalyticsListResponse)
 async def list_contact_analytics(
     client_id: Optional[str] = Query(default=None),
@@ -333,6 +351,8 @@ async def list_contact_analytics(
     contact_type: Optional[ContactType] = Query(default=None),
     is_decision_maker: Optional[bool] = Query(default=None),
     min_engagement_score: Optional[float] = Query(default=None, ge=0, le=100),
+    sort_by: Optional[str] = Query(default=None, description="Sort column"),
+    sort_dir: str = Query(default="desc", description="asc or desc"),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0)
 ):
@@ -377,7 +397,9 @@ async def list_contact_analytics(
         if min_engagement_score is not None:
             query = query.gte('engagement_score', min_engagement_score)
 
-        result = query.order('engagement_score', desc=True).range(offset, offset + limit - 1).execute()
+        effective_sort = sort_by if sort_by in CONTACT_SORT_COLUMNS else 'engagement_score'
+        desc = sort_dir.lower() != 'asc'
+        result = query.order(effective_sort, desc=desc).range(offset, offset + limit - 1).execute()
 
         contacts = []
         for c in result.data:
@@ -701,6 +723,8 @@ async def list_company_analytics(
     client_id: Optional[str] = Query(default=None),
     engagement_status: Optional[EngagementStatus] = Query(default=None),
     min_engagement_score: Optional[float] = Query(default=None, ge=0, le=100),
+    sort_by: Optional[str] = Query(default=None, description="Sort column"),
+    sort_dir: str = Query(default="desc", description="asc or desc"),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0)
 ):
@@ -734,7 +758,9 @@ async def list_company_analytics(
         if min_engagement_score is not None:
             query = query.gte('engagement_score', min_engagement_score)
 
-        result = query.order('engagement_score', desc=True).range(offset, offset + limit - 1).execute()
+        effective_sort = sort_by if sort_by in COMPANY_SORT_COLUMNS else 'engagement_score'
+        desc = sort_dir.lower() != 'asc'
+        result = query.order(effective_sort, desc=desc).range(offset, offset + limit - 1).execute()
 
         # Calculate engagement status for each company
         def calculate_engagement_status(last_contact_date):
@@ -1060,6 +1086,8 @@ async def list_thread_statuses(
     client_id: Optional[str] = Query(default=None),
     mailbox_id: Optional[str] = Query(default=None),
     status: Optional[ThreadStatus] = Query(default=None),
+    sort_by: Optional[str] = Query(default=None, description="Sort column"),
+    sort_dir: str = Query(default="desc", description="asc or desc"),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0)
 ):
@@ -1081,17 +1109,29 @@ async def list_thread_statuses(
             '''
             thread_id, subject, customer_contact_id, customer_company_id,
             status, message_count, last_message_at, last_sender_is_outbound, days_since_last_email,
-            created_at
+            mailbox_id, created_at
             '''
         )
 
-        # Note: Need to join with emails table to filter by client_id/mailbox_id
-        # For now, fetch all and filter in memory (optimize later with views)
+        # Apply client_id filter via mailbox_id lookup
+        mailbox_ids = []
+        if client_id:
+            mailbox_result = _supabase.table('mailboxes').select('id').eq('client_id', client_id).execute()
+            mailbox_ids = [m['id'] for m in (mailbox_result.data or [])]
+            if mailbox_ids:
+                query = query.in_('mailbox_id', mailbox_ids[:500])
+            else:
+                # No mailboxes for client → return empty
+                return ThreadStatusListResponse(threads=[], total=0)
+        elif mailbox_id:
+            query = query.eq('mailbox_id', mailbox_id)
 
         if status:
             query = query.eq('status', status.value)
 
-        result = query.order('last_message_at', desc=True).range(offset, offset + limit - 1).execute()
+        effective_sort = sort_by if sort_by in THREAD_SORT_COLUMNS else 'last_message_at'
+        desc = sort_dir.lower() != 'asc'
+        result = query.order(effective_sort, desc=desc).range(offset, offset + limit - 1).execute()
 
         # Fetch contact/company names for enrichment
         threads = []
@@ -1131,8 +1171,12 @@ async def list_thread_statuses(
 
             threads.append(thread)
 
-        # Get total count
+        # Get total count (same filters)
         count_query = _supabase.table('thread_status').select('thread_id', count='exact')
+        if client_id and mailbox_ids:
+            count_query = count_query.in_('mailbox_id', mailbox_ids[:500])
+        elif mailbox_id:
+            count_query = count_query.eq('mailbox_id', mailbox_id)
         if status:
             count_query = count_query.eq('status', status.value)
         count_result = count_query.execute()

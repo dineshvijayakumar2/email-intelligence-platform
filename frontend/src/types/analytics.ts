@@ -371,6 +371,8 @@ export interface ClientSummary {
 export interface PaginationParams {
   limit?: number;
   offset?: number;
+  sort_by?: string;
+  sort_dir?: 'asc' | 'desc';
 }
 
 export interface ContactFilterParams extends PaginationParams {

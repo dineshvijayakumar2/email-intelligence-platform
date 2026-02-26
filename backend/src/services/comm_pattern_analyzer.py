@@ -587,8 +587,8 @@ class CommunicationPatternAnalyzer:
             for pattern in patterns:
                 updates.append({
                     'contact_id': pattern.contact_id,
-                    'total_inbound_emails': str(pattern.emails_received),
-                    'total_outbound_emails': str(pattern.emails_sent),
+                    'total_emails_received': str(pattern.emails_received),
+                    'total_emails_sent': str(pattern.emails_sent),
                     'initiation_ratio': str(pattern.initiation_ratio),
                     'reply_rate': str(pattern.reply_rate),
                     'avg_thread_depth': str(pattern.avg_thread_depth),

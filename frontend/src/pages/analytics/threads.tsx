@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Row, Col, Typography, Tabs, Tag } from 'antd';
+import { Row, Col, Typography, Tabs, Tag, Space, Select } from 'antd';
+import type { TableProps } from 'antd';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { ClientSelector } from '../../components/analytics/ClientSelector';
 import { AnalyticsTable } from '../../components/analytics/AnalyticsTable';
@@ -15,6 +16,16 @@ const STATUS_COLORS: Record<string, string> = {
   overdue: '#f5222d', dropped: '#999', ongoing: '#13c2c2',
 };
 
+const THREAD_STATUS_OPTIONS = [
+  { value: '', label: 'All Statuses' },
+  { value: 'complete', label: 'Complete' },
+  { value: 'awaiting_response', label: 'Awaiting Response' },
+  { value: 'awaiting_our_response', label: 'Awaiting Our Response' },
+  { value: 'overdue', label: 'Overdue' },
+  { value: 'dropped', label: 'Dropped' },
+  { value: 'ongoing', label: 'Ongoing' },
+];
+
 export const ThreadAnalytics: React.FC = () => {
   const isMountedRef = useRef(true);
   const [clientId, setClientId] = useState('');
@@ -24,6 +35,9 @@ export const ThreadAnalytics: React.FC = () => {
   const [threadsTotal, setThreadsTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string>('');
+  const [sortBy, setSortBy] = useState<string>('last_message_at');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   const [overdue, setOverdue] = useState<OverdueThread[]>([]);
   const [overdueLoading, setOverdueLoading] = useState(false);
@@ -36,13 +50,20 @@ export const ThreadAnalytics: React.FC = () => {
   useEffect(() => {
     if (!clientId) return;
     loadTab(activeTab);
-  }, [clientId, activeTab, page]);
+  }, [clientId, activeTab, page, statusFilter, sortBy, sortDir]);
 
   const loadTab = async (tab: string) => {
     switch (tab) {
       case 'all':
         setLoading(true);
-        const allResult = await threadsApi.list({ client_id: clientId, limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE });
+        const allResult = await threadsApi.list({
+          client_id: clientId,
+          limit: PAGE_SIZE,
+          offset: (page - 1) * PAGE_SIZE,
+          status: statusFilter ? (statusFilter as ThreadStatus) : undefined,
+          sort_by: sortBy,
+          sort_dir: sortDir,
+        });
         if (isMountedRef.current) { setThreads(allResult.threads); setThreadsTotal(allResult.total); setLoading(false); }
         break;
       case 'overdue':
@@ -58,21 +79,77 @@ export const ThreadAnalytics: React.FC = () => {
     }
   };
 
+  const getSortOrder = (field: string): 'ascend' | 'descend' | null => {
+    if (sortBy !== field) return null;
+    return sortDir === 'asc' ? 'ascend' : 'descend';
+  };
+
+  const handleTableChange: TableProps<ThreadStatusSummary>['onChange'] = (_pagination, _filters, sorter) => {
+    if (!sorter || Array.isArray(sorter)) return;
+    if (sorter.field && sorter.order) {
+      setSortBy(sorter.field as string);
+      setSortDir(sorter.order === 'ascend' ? 'asc' : 'desc');
+      setPage(1);
+    } else if (sorter.field && !sorter.order) {
+      setSortBy('last_message_at');
+      setSortDir('desc');
+      setPage(1);
+    }
+  };
+
   const allColumns = [
-    { title: 'Subject', dataIndex: 'subject', key: 'subject', ellipsis: true },
+    {
+      title: 'Subject',
+      dataIndex: 'subject',
+      key: 'subject',
+      ellipsis: true,
+      sorter: true,
+      sortOrder: getSortOrder('subject'),
+      render: (v: string, r: ThreadStatusSummary) => v || <Text type="secondary" style={{ fontSize: 12 }}>{r.thread_id?.slice(0, 16)}...</Text>,
+    },
     { title: 'Contact', key: 'contact', render: (_: any, r: ThreadStatusSummary) => r.contact_name || r.contact_email || '-' },
     { title: 'Company', dataIndex: 'company_name', key: 'company', render: (v: string) => v || '-' },
     {
       title: 'Status', dataIndex: 'status', key: 'status', width: 150,
+      sorter: true,
+      sortOrder: getSortOrder('status'),
       render: (v: ThreadStatus) => { const cfg = threadStatusConfig[v] || { label: v, color: 'default' }; return <Tag color={cfg.color}>{cfg.label}</Tag>; },
     },
-    { title: 'Messages', dataIndex: 'total_messages', key: 'msgs', width: 90 },
-    { title: 'Last Message', dataIndex: 'last_message_date', key: 'last', width: 110, render: (v: string) => formatRelativeTime(v) },
-    { title: 'Days', dataIndex: 'days_since_last_message', key: 'days', width: 70 },
+    {
+      title: 'Messages',
+      dataIndex: 'total_messages',
+      key: 'message_count',
+      width: 90,
+      sorter: true,
+      sortOrder: getSortOrder('message_count'),
+    },
+    {
+      title: 'Last Message',
+      dataIndex: 'last_message_date',
+      key: 'last_message_at',
+      width: 110,
+      sorter: true,
+      sortOrder: getSortOrder('last_message_at'),
+      render: (v: string) => formatRelativeTime(v),
+    },
+    {
+      title: 'Days',
+      dataIndex: 'days_since_last_message',
+      key: 'days_since_last_email',
+      width: 70,
+      sorter: true,
+      sortOrder: getSortOrder('days_since_last_email'),
+    },
   ];
 
   const overdueColumns = [
-    { title: 'Subject', dataIndex: 'subject', key: 'subject', ellipsis: true },
+    {
+      title: 'Subject',
+      dataIndex: 'subject',
+      key: 'subject',
+      ellipsis: true,
+      render: (v: string, r: OverdueThread) => v || <Text type="secondary" style={{ fontSize: 12 }}>{r.thread_id?.slice(0, 16)}...</Text>,
+    },
     { title: 'Contact', key: 'contact', render: (_: any, r: OverdueThread) => r.contact_name || r.contact_email || '-' },
     { title: 'Company', dataIndex: 'company_name', key: 'company', render: (v: string) => v || '-' },
     { title: 'Days Overdue', dataIndex: 'days_overdue', key: 'days', width: 110, render: (v: number) => <Tag color="red">{v}d overdue</Tag> },
@@ -95,7 +172,31 @@ export const ThreadAnalytics: React.FC = () => {
         <Tabs activeKey={activeTab} onChange={setActiveTab} items={[
           {
             key: 'all', label: `All Threads (${threadsTotal})`,
-            children: <AnalyticsTable columns={allColumns} data={threads} total={threadsTotal} loading={loading} pageSize={PAGE_SIZE} currentPage={page} onPageChange={setPage} rowKey="thread_id" />,
+            children: (
+              <>
+                <Space style={{ marginBottom: 16 }} wrap>
+                  <Text>Status:</Text>
+                  <Select
+                    value={statusFilter}
+                    onChange={v => { setStatusFilter(v); setPage(1); }}
+                    options={THREAD_STATUS_OPTIONS}
+                    style={{ width: 200 }}
+                    size="small"
+                  />
+                </Space>
+                <AnalyticsTable<ThreadStatusSummary>
+                  columns={allColumns}
+                  data={threads}
+                  total={threadsTotal}
+                  loading={loading}
+                  pageSize={PAGE_SIZE}
+                  currentPage={page}
+                  onPageChange={setPage}
+                  onChange={handleTableChange}
+                  rowKey="thread_id"
+                />
+              </>
+            ),
           },
           {
             key: 'overdue', label: `Overdue (${overdue.length})`,

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Typography, Tabs, Tag } from 'antd';
+import { Typography, Tabs, Tag, Space, Select, Slider } from 'antd';
+import type { TableProps } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { ClientSelector } from '../../components/analytics/ClientSelector';
 import { AnalyticsTable } from '../../components/analytics/AnalyticsTable';
@@ -20,6 +21,14 @@ import type {
 const { Text } = Typography;
 const PAGE_SIZE = 20;
 
+const STATUS_OPTIONS = [
+  { value: '', label: 'All Statuses' },
+  { value: 'active', label: 'Active' },
+  { value: 'quiet', label: 'Quiet' },
+  { value: 'at_risk', label: 'At Risk' },
+  { value: 'unknown', label: 'Unknown' },
+];
+
 export const CompaniesAnalytics: React.FC = () => {
   const navigate = useNavigate();
   const isMountedRef = useRef(true);
@@ -30,6 +39,10 @@ export const CompaniesAnalytics: React.FC = () => {
   const [companies, setCompanies] = useState<CompanyAnalytics[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
+  const [engagementStatus, setEngagementStatus] = useState<string>('');
+  const [minScore, setMinScore] = useState<number>(0);
+  const [sortBy, setSortBy] = useState<string>('engagement_score');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   const [topEngaged, setTopEngaged] = useState<TopEngagedCompany[]>([]);
   const [topLoading, setTopLoading] = useState(false);
@@ -45,14 +58,22 @@ export const CompaniesAnalytics: React.FC = () => {
   useEffect(() => {
     if (!clientId) return;
     loadTab(activeTab);
-  }, [clientId, activeTab, page]);
+  }, [clientId, activeTab, page, engagementStatus, minScore, sortBy, sortDir]);
 
   const loadTab = async (tab: string) => {
     if (!clientId) return;
     switch (tab) {
       case 'all':
         setLoading(true);
-        const allResult = await companiesApi.list({ client_id: clientId, limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE });
+        const allResult = await companiesApi.list({
+          client_id: clientId,
+          limit: PAGE_SIZE,
+          offset: (page - 1) * PAGE_SIZE,
+          engagement_status: engagementStatus ? (engagementStatus as EngagementStatus) : undefined,
+          min_engagement_score: minScore > 0 ? minScore : undefined,
+          sort_by: sortBy,
+          sort_dir: sortDir,
+        });
         if (isMountedRef.current) { setCompanies(allResult.companies); setTotal(allResult.total); setLoading(false); }
         break;
       case 'top':
@@ -73,17 +94,79 @@ export const CompaniesAnalytics: React.FC = () => {
     }
   };
 
+  const getSortOrder = (field: string): 'ascend' | 'descend' | null => {
+    if (sortBy !== field) return null;
+    return sortDir === 'asc' ? 'ascend' : 'descend';
+  };
+
+  const handleTableChange: TableProps<CompanyAnalytics>['onChange'] = (_pagination, _filters, sorter) => {
+    if (!sorter || Array.isArray(sorter)) return;
+    if (sorter.field && sorter.order) {
+      setSortBy(sorter.field as string);
+      setSortDir(sorter.order === 'ascend' ? 'asc' : 'desc');
+      setPage(1);
+    } else if (sorter.field && !sorter.order) {
+      setSortBy('engagement_score');
+      setSortDir('desc');
+      setPage(1);
+    }
+  };
+
   const allColumns = [
-    { title: 'Company', dataIndex: 'company_name', key: 'name' },
+    {
+      title: 'Company',
+      dataIndex: 'company_name',
+      key: 'company_name',
+      sorter: true,
+      sortOrder: getSortOrder('company_name'),
+    },
     {
       title: 'Status', dataIndex: 'engagement_status', key: 'status', width: 100,
       render: (v: EngagementStatus) => { const cfg = engagementStatusConfig[v] || engagementStatusConfig.unknown; return <Tag color={cfg.color}>{cfg.label}</Tag>; },
     },
-    { title: 'Score', dataIndex: 'engagement_score', key: 'score', width: 80, render: (v: number) => <EngagementBadge score={v} /> },
-    { title: 'Emails', dataIndex: 'total_emails', key: 'emails', width: 80 },
-    { title: 'Contacts', dataIndex: 'contact_count', key: 'contacts', width: 80 },
-    { title: 'DMs', dataIndex: 'decision_maker_count', key: 'dms', width: 60 },
-    { title: 'Last Contact', dataIndex: 'last_contact_date', key: 'last', width: 110, render: (v: string) => formatRelativeTime(v) },
+    {
+      title: 'Score',
+      dataIndex: 'engagement_score',
+      key: 'engagement_score',
+      width: 80,
+      sorter: true,
+      sortOrder: getSortOrder('engagement_score'),
+      render: (v: number) => <EngagementBadge score={v} />,
+    },
+    {
+      title: 'Emails',
+      dataIndex: 'total_emails',
+      key: 'total_emails',
+      width: 80,
+      sorter: true,
+      sortOrder: getSortOrder('total_emails'),
+      render: (v: number) => v || 0,
+    },
+    {
+      title: 'Contacts',
+      dataIndex: 'contact_count',
+      key: 'contact_count',
+      width: 80,
+      sorter: true,
+      sortOrder: getSortOrder('contact_count'),
+    },
+    {
+      title: 'DMs',
+      dataIndex: 'decision_maker_count',
+      key: 'decision_maker_count',
+      width: 60,
+      sorter: true,
+      sortOrder: getSortOrder('decision_maker_count'),
+    },
+    {
+      title: 'Last Contact',
+      dataIndex: 'last_contact_date',
+      key: 'last_contact_date',
+      width: 110,
+      sorter: true,
+      sortOrder: getSortOrder('last_contact_date'),
+      render: (v: string) => formatRelativeTime(v),
+    },
   ];
 
   const topColumns = [
@@ -118,7 +201,38 @@ export const CompaniesAnalytics: React.FC = () => {
       </div>
       <div className="fade-in-up stagger-1">
         <Tabs activeKey={activeTab} onChange={setActiveTab} items={[
-          { key: 'all', label: `All Companies (${total})`, children: <AnalyticsTable columns={allColumns} data={companies} total={total} loading={loading} pageSize={PAGE_SIZE} currentPage={page} onPageChange={setPage} onRowClick={(r) => navigate(`/analytics/companies/${r.id}`)} /> },
+          {
+            key: 'all',
+            label: `All Companies (${total})`,
+            children: (
+              <>
+                <Space style={{ marginBottom: 16 }} wrap>
+                  <Text>Status:</Text>
+                  <Select
+                    value={engagementStatus}
+                    onChange={v => { setEngagementStatus(v); setPage(1); }}
+                    options={STATUS_OPTIONS}
+                    style={{ width: 140 }}
+                    size="small"
+                  />
+                  <Text>Min Score:</Text>
+                  <Slider value={minScore} onChange={v => { setMinScore(v); setPage(1); }} min={0} max={100} style={{ width: 120 }} />
+                </Space>
+                <AnalyticsTable<CompanyAnalytics>
+                  columns={allColumns}
+                  data={companies}
+                  total={total}
+                  loading={loading}
+                  pageSize={PAGE_SIZE}
+                  currentPage={page}
+                  onPageChange={setPage}
+                  onRowClick={(r) => navigate(`/analytics/companies/${r.id}`)}
+                  onChange={handleTableChange}
+                  rowKey="id"
+                />
+              </>
+            ),
+          },
           { key: 'top', label: 'Top Engaged', children: <AnalyticsTable columns={topColumns} data={topEngaged} total={topEngaged.length} loading={topLoading} onRowClick={(r) => navigate(`/analytics/companies/${r.id}`)} /> },
           { key: 'atrisk', label: 'At Risk', children: <AnalyticsTable columns={atRiskColumns} data={atRisk} total={atRisk.length} loading={atRiskLoading} onRowClick={(r) => navigate(`/analytics/companies/${r.id}`)} /> },
           { key: 'status', label: 'By Engagement', children: <AnalyticsTable columns={statusColumns} data={statusGroups} total={statusGroups.length} loading={statusLoading} rowKey="engagement_status" /> },
