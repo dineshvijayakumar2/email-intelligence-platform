@@ -122,7 +122,7 @@ class ThreadTracker:
 
     def _fetch_threads(self, limit: Optional[int] = None) -> Dict[str, List[Dict]]:
         """
-        Fetch all emails grouped by thread_id
+        Fetch all emails grouped by thread_id, paginating in batches of 500.
 
         Args:
             limit: Optional limit for testing
@@ -130,32 +130,50 @@ class ThreadTracker:
         Returns:
             Dict mapping thread_id to list of email dicts
         """
+        PAGE_SIZE = 500
+        COLUMNS = ('id, thread_id, sent_date, is_outbound, '
+                   'customer_contact_id, customer_company_id')
         try:
-            query = (
-                self.client.table('emails')
-                .select('id, thread_id, sent_date, is_outbound, '
-                       'customer_contact_id, customer_company_id')
-                .eq('mailbox_id', self.mailbox_id)
-                .eq('processing_status', 'success')
-                .not_.is_('thread_id', 'null')
-                .order('sent_date', desc=False)
-            )
+            all_emails = []
+            offset = 0
 
-            if limit:
-                query = query.limit(limit)
+            while True:
+                query = (
+                    self.client.table('emails')
+                    .select(COLUMNS)
+                    .eq('mailbox_id', self.mailbox_id)
+                    .or_('processing_status.neq.failed,processing_status.is.null')
+                    .not_.is_('thread_id', 'null')
+                    .order('sent_date', desc=False)
+                )
 
-            response = query.execute()
-            emails = response.data
+                if limit and limit <= PAGE_SIZE:
+                    query = query.limit(limit)
+                    response = query.execute()
+                    all_emails = response.data or []
+                    break
+
+                response = query.range(offset, offset + PAGE_SIZE - 1).execute()
+                batch = response.data or []
+                all_emails.extend(batch)
+
+                if len(batch) < PAGE_SIZE:
+                    break
+                offset += PAGE_SIZE
+
+                if limit and len(all_emails) >= limit:
+                    all_emails = all_emails[:limit]
+                    break
 
             # Group by thread_id
             threads = {}
-            for email in emails:
+            for email in all_emails:
                 thread_id = email['thread_id']
                 if thread_id not in threads:
                     threads[thread_id] = []
                 threads[thread_id].append(email)
 
-            logger.info(f"Fetched {len(emails)} emails in {len(threads)} threads")
+            logger.info(f"Fetched {len(all_emails)} emails in {len(threads)} threads")
 
             return threads
 

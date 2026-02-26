@@ -216,7 +216,10 @@ class ContactExtractor:
 
     def _fetch_emails(self, limit: Optional[int] = None) -> List[Dict]:
         """
-        Fetch all successful emails from mailbox
+        Fetch all non-failed emails from mailbox, paginating in batches of 500.
+
+        Uses or_ filter to include emails where processing_status is NULL
+        (PostgreSQL's != 'failed' excludes NULLs).
 
         Args:
             limit: Optional limit for testing
@@ -225,29 +228,39 @@ class ContactExtractor:
             List of email records
         """
         try:
-            PAGE_SIZE = 1000
+            PAGE_SIZE = 500
+            COLUMNS = ('id, sender_email, sender_name, recipients, cc_list, bcc_list, '
+                       'sent_date, raw_headers, is_outbound')
             all_emails = []
             offset = 0
 
-            while True:
-                query = (
+            # Small limit: single query
+            if limit and limit <= PAGE_SIZE:
+                response = (
                     self.client.table('emails')
-                    .select('id, sender_email, sender_name, recipients, cc_list, bcc_list, '
-                           'sent_date, raw_headers, is_outbound')
+                    .select(COLUMNS)
                     .eq('mailbox_id', self.mailbox_id)
-                    .neq('processing_status', 'failed')
+                    .or_('processing_status.neq.failed,processing_status.is.null')
                     .order('sent_date', desc=False)
+                    .limit(limit)
+                    .execute()
                 )
+                return response.data or []
 
-                if limit and limit <= PAGE_SIZE:
-                    query = query.limit(limit)
-                    response = query.execute()
-                    return response.data or []
-
-                query = query.range(offset, offset + PAGE_SIZE - 1)
-                response = query.execute()
+            # Paginated fetch
+            while True:
+                response = (
+                    self.client.table('emails')
+                    .select(COLUMNS)
+                    .eq('mailbox_id', self.mailbox_id)
+                    .or_('processing_status.neq.failed,processing_status.is.null')
+                    .order('sent_date', desc=False)
+                    .range(offset, offset + PAGE_SIZE - 1)
+                    .execute()
+                )
                 batch = response.data or []
                 all_emails.extend(batch)
+                logger.info(f"Fetched email page {offset // PAGE_SIZE + 1}: {len(batch)} emails (total: {len(all_emails)})")
 
                 if len(batch) < PAGE_SIZE:
                     break

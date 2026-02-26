@@ -268,7 +268,10 @@ class EmailLinker:
         force_relink: bool
     ) -> List[Dict]:
         """
-        Fetch emails that need linking
+        Fetch emails that need linking, paginating in batches of 500.
+
+        Uses or_ filter to include emails where processing_status is NULL.
+        When email_ids is provided, chunks the in_ filter to avoid URL length limits.
 
         Args:
             email_ids: Optional specific email IDs
@@ -277,34 +280,55 @@ class EmailLinker:
         Returns:
             List of email records
         """
+        COLUMNS = 'id, sender_email, recipients, is_outbound, processing_status'
+        PAGE_SIZE = 500
+        ID_CHUNK_SIZE = 500  # Max IDs per in_ filter to stay under URL limits
+
         try:
-            PAGE_SIZE = 1000
+            # When specific email IDs are provided, chunk the in_ filter
+            if email_ids:
+                all_emails = []
+                for i in range(0, len(email_ids), ID_CHUNK_SIZE):
+                    chunk = email_ids[i:i + ID_CHUNK_SIZE]
+                    response = (
+                        self.client.table('emails')
+                        .select(COLUMNS)
+                        .eq('mailbox_id', self.mailbox_id)
+                        .or_('processing_status.neq.failed,processing_status.is.null')
+                        .in_('id', chunk)
+                        .order('sent_date', desc=False)
+                        .execute()
+                    )
+                    batch = response.data or []
+                    all_emails.extend(batch)
+                    logger.info(f"Fetched email ID chunk {i // ID_CHUNK_SIZE + 1}: {len(batch)} emails")
+                logger.info(f"Total emails fetched by ID: {len(all_emails)}")
+                return all_emails
+
+            # General fetch with pagination
             all_emails = []
             offset = 0
 
             while True:
                 query = (
                     self.client.table('emails')
-                    .select('id, sender_email, recipients, is_outbound, processing_status')
+                    .select(COLUMNS)
                     .eq('mailbox_id', self.mailbox_id)
-                    .neq('processing_status', 'failed')
+                    .or_('processing_status.neq.failed,processing_status.is.null')
                 )
 
-                # Filter by specific email IDs if provided
-                if email_ids:
-                    # in_ filter already limits results, no pagination needed
-                    query = query.in_('id', email_ids)
-                    query = query.order('sent_date', desc=False)
-                    response = query.execute()
-                    return response.data or []
-                elif not force_relink:
+                if not force_relink:
                     query = query.is_('customer_contact_id', 'null')
 
-                query = query.order('sent_date', desc=False)
-                query = query.range(offset, offset + PAGE_SIZE - 1)
-                response = query.execute()
+                response = (
+                    query
+                    .order('sent_date', desc=False)
+                    .range(offset, offset + PAGE_SIZE - 1)
+                    .execute()
+                )
                 batch = response.data or []
                 all_emails.extend(batch)
+                logger.info(f"Fetched link page {offset // PAGE_SIZE + 1}: {len(batch)} emails (total: {len(all_emails)})")
 
                 if len(batch) < PAGE_SIZE:
                     break
@@ -318,21 +342,30 @@ class EmailLinker:
 
     def _load_contact_cache(self):
         """
-        Load customer_contacts into cache for fast lookups
+        Load customer_contacts into cache for fast lookups.
+        Paginates in batches of 500 to handle >1000 contacts.
 
         Cache structure: email (lowercase) -> contact_id
         """
+        PAGE_SIZE = 500
         try:
-            response = (
-                self.client.table('customer_contacts')
-                .select('id, email_address')
-                .eq('client_id', self.client_id)
-                .execute()
-            )
+            offset = 0
+            while True:
+                response = (
+                    self.client.table('customer_contacts')
+                    .select('id, email_address')
+                    .eq('client_id', self.client_id)
+                    .range(offset, offset + PAGE_SIZE - 1)
+                    .execute()
+                )
+                batch = response.data or []
+                for row in batch:
+                    email = row['email_address'].lower()
+                    self._contact_cache[email] = row['id']
 
-            for row in response.data:
-                email = row['email_address'].lower()
-                self._contact_cache[email] = row['id']
+                if len(batch) < PAGE_SIZE:
+                    break
+                offset += PAGE_SIZE
 
             logger.info(f"Loaded {len(self._contact_cache)} contacts into cache")
 
@@ -342,29 +375,40 @@ class EmailLinker:
 
     def _load_company_cache(self):
         """
-        Load customer_companies into cache for fast lookups
+        Load customer_companies into cache for fast lookups.
+        Paginates in batches of 500 to handle >1000 companies.
 
         Cache structure: domain (lowercase) -> company_id
 
         Note: Uses email_domains JSONB array to map all domains
         """
+        PAGE_SIZE = 500
+        company_count = 0
         try:
-            response = (
-                self.client.table('customer_companies')
-                .select('id, email_domains')
-                .eq('client_id', self.client_id)
-                .execute()
-            )
+            offset = 0
+            while True:
+                response = (
+                    self.client.table('customer_companies')
+                    .select('id, email_domains')
+                    .eq('client_id', self.client_id)
+                    .range(offset, offset + PAGE_SIZE - 1)
+                    .execute()
+                )
+                batch = response.data or []
+                company_count += len(batch)
 
-            for row in response.data:
-                company_id = row['id']
-                email_domains = row.get('email_domains', [])
+                for row in batch:
+                    company_id = row['id']
+                    email_domains = row.get('email_domains', [])
 
-                # Map each domain to this company
-                for domain in email_domains:
-                    self._company_cache[domain.lower()] = company_id
+                    for domain in email_domains:
+                        self._company_cache[domain.lower()] = company_id
 
-            logger.info(f"Loaded {len(response.data)} companies with "
+                if len(batch) < PAGE_SIZE:
+                    break
+                offset += PAGE_SIZE
+
+            logger.info(f"Loaded {company_count} companies with "
                        f"{len(self._company_cache)} domain mappings into cache")
 
         except Exception as e:
@@ -475,12 +519,12 @@ class EmailLinker:
             Dictionary with linking statistics
         """
         try:
-            # Total emails
+            # Total emails (include NULL processing_status)
             total_response = (
                 self.client.table('emails')
                 .select('id', count='exact')
                 .eq('mailbox_id', self.mailbox_id)
-                .neq('processing_status', 'failed')
+                .or_('processing_status.neq.failed,processing_status.is.null')
                 .execute()
             )
             total_emails = total_response.count
@@ -490,7 +534,7 @@ class EmailLinker:
                 self.client.table('emails')
                 .select('id', count='exact')
                 .eq('mailbox_id', self.mailbox_id)
-                .eq('processing_status', 'success')
+                .or_('processing_status.neq.failed,processing_status.is.null')
                 .not_.is_('customer_contact_id', 'null')
                 .execute()
             )
@@ -501,7 +545,7 @@ class EmailLinker:
                 self.client.table('emails')
                 .select('id', count='exact')
                 .eq('mailbox_id', self.mailbox_id)
-                .eq('processing_status', 'success')
+                .or_('processing_status.neq.failed,processing_status.is.null')
                 .not_.is_('customer_company_id', 'null')
                 .execute()
             )

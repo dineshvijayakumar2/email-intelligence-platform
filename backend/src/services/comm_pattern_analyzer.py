@@ -283,7 +283,7 @@ class CommunicationPatternAnalyzer:
                 self.client.table('emails')
                 .select('id, thread_id, sent_date, is_outbound, customer_contact_id')
                 .eq('customer_contact_id', contact_id)
-                .eq('processing_status', 'success')
+                .or_('processing_status.neq.failed,processing_status.is.null')
                 .order('sent_date', desc=False)
                 .execute()
             )
@@ -330,7 +330,7 @@ class CommunicationPatternAnalyzer:
                     self.client.table('emails')
                     .select('is_outbound')
                     .eq('thread_id', thread_id)
-                    .eq('processing_status', 'success')
+                    .or_('processing_status.neq.failed,processing_status.is.null')
                     .order('sent_date', desc=False)
                     .limit(1)
                     .execute()
@@ -397,7 +397,7 @@ class CommunicationPatternAnalyzer:
                 .select('id', count='exact')
                 .eq('customer_contact_id', contact_id)
                 .eq('is_outbound', 'false')  # PostgREST expects lowercase string
-                .eq('processing_status', 'success')
+                .or_('processing_status.neq.failed,processing_status.is.null')
                 .execute()
             )
 
