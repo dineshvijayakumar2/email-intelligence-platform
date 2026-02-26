@@ -73,6 +73,8 @@ Frontend → FastAPI → ThreadPool (20 workers) → Email Processing Pipeline
 - **email_tagger.py**: Rule-based tagging engine (20+ tags) in `src/processors/`
 - **Redis Managers**: JobProgressManager and JobQueueManager for real-time updates
 - **Routers** (`src/routers/`): Business hierarchy and API endpoints
+- **Analytics Router** (`src/routers/analytics.py`): 30 REST endpoints for extraction and analytics
+- **Extraction Services** (`src/services/`): 8 specialized services for 13-step pipeline
 - **Auth** (`src/dependencies/auth.py`): Supabase JWT verification with ES256/HS256 support
 
 #### Frontend (React/TypeScript)
@@ -85,7 +87,9 @@ Frontend → FastAPI → ThreadPool (20 workers) → Email Processing Pipeline
 #### Data Layer
 - **Supabase PostgreSQL**: Primary data storage with Row-Level Security (RLS)
 - **Redis (REQUIRED)**: Progress cache and job queue management
-- **Tables**: emails, processing_jobs, mailboxes, folders, user_profiles, user_client_assignments, clients, customer_companies, customer_contacts
+- **Core Tables**: emails, processing_jobs, mailboxes, folders, user_profiles, user_client_assignments, clients
+- **Sprint 2 Tables**: customer_companies, customer_contacts, extraction_jobs, email_response_metrics, thread_status, unified_email_rules, internal_domains, free_email_providers
+- **Database Schema**: v1.8 (10 Sprint 2 migrations)
 
 ---
 
@@ -192,8 +196,10 @@ VITE_MICROSOFT_REDIRECT_URI=http://localhost:3001/auth/microsoft/callback
 - **backend/src/**: Python backend source code
   - **extractors/**: Email file processors (MBOX, PST, OLM, Gmail, Outlook)
   - **processors/**: Email processing pipeline (normalizer, tagger)
-  - **routers/**: FastAPI route handlers
-  - **services/**: Background services (Gmail sync, etc.)
+  - **routers/**: FastAPI route handlers (including analytics.py with 30 endpoints)
+  - **services/**: Extraction pipeline services (8 services) + background sync services
+  - **models/**: Pydantic models (analytics.py with 41 models + 5 enums)
+  - **utils/**: Domain parser, name parser, title parser
   - **dependencies/**: FastAPI dependencies (auth, etc.)
   - **storage/**: Cloud storage streaming (Google Drive)
 - **frontend/src/**: React frontend source code
@@ -208,7 +214,8 @@ VITE_MICROSOFT_REDIRECT_URI=http://localhost:3001/auth/microsoft/callback
   - **TODO.md**: Active task tracking
   - **CLAUDE.md**: This file
 - **scripts/**: Utility scripts
-  - **migrations/**: Database migration scripts
+  - **migrations/**: Stage 1 database migration scripts
+  - **sprint2/**: Sprint 2 migrations (001-010) + master schema v1.8
   - **troubleshooting/**: Diagnostic and fix scripts
 
 ---
@@ -237,7 +244,7 @@ VITE_MICROSOFT_REDIRECT_URI=http://localhost:3001/auth/microsoft/callback
 4. **Git Workflow**:
    - Commit to main branch for major changes
    - Include descriptive commit messages
-   - Co-author commits: `Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>`
+   - Co-author commits: `Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>`
 
 5. **Frontend Service Pattern**:
    - All frontend API services MUST use centralized `apiClient.ts`
@@ -296,47 +303,59 @@ When adding new routes:
 - ✅ Outlook OAuth Integration
 - ✅ Mailbox Switching & Filtering UX
 
-**Sprint 2: Customer Data Extraction** - ✅ **BACKEND COMPLETE** | ⏳ **FRONTEND IN PROGRESS**
+**Sprint 2: Customer Data Extraction** - ✅ **COMPLETE** (Backend + Production)
 - ✅ Phase 1-4: Core extraction pipeline (13 steps) with engagement analytics
 - ✅ Phase 5A: Analytics API (30 REST endpoints - all tested)
 - ✅ Phase 5B: Incremental extraction mode (Migration 010)
-- ✅ **Stability Fixes**: Performance (620KB→20KB), WebSocket, email guardrails, LIVE sync fixes
-- ⏳ **Phase 6: Frontend Analytics Dashboard** (CURRENT FOCUS)
+- ✅ Phase 6: Production deployment with 5 critical fixes
+- ✅ **Production verified:** 26,654 emails across 54 pages processed successfully
+- ✅ **Stability Fixes**: Performance, WebSocket, email guardrails, pagination, NULL handling, retry
 
-### Phase 6: Frontend Analytics Dashboard (2-3 weeks)
+### Sprint 2 Backend Architecture
 
-**Goal:** Build Next.js dashboard to consume all 30 analytics endpoints
+**13-Step Extraction Pipeline** (`backend/src/services/extraction_orchestrator.py`):
+```
+Validate → Extract Contacts → Deduplicate → Resolve Companies
+→ Upsert Contacts → Upsert Companies → Classify Roles → Update Roles
+→ Link Emails → Calculate Engagement → Track Threads → Analyze Patterns → Complete
+```
 
-**Timeline:**
-- **Week 1:** Setup + Dashboard + Shared Components
-- **Week 2:** Analytics Pages (Contacts, Companies, Threads)
-- **Week 3:** Advanced Features (Patterns, Extraction) + Polish
+**8 Backend Services:**
+- `contact_extractor.py` — Email address extraction + deduplication + type classification
+- `company_resolver.py` — Domain → company grouping with free provider handling
+- `role_classifier.py` — Job title → seniority + functional role + decision-maker flag
+- `email_linker.py` — Batch FK backfill (emails → contacts/companies), 100% link rate
+- `engagement_scorer.py` — 8-factor scoring (0-100 scale)
+- `response_time_tracker.py` — Response time calculations with auto-reply detection
+- `thread_tracker.py` — Thread status evaluation (6 states)
+- `comm_pattern_analyzer.py` — Initiation ratio, reply rate, frequency trends
 
-**Tech Stack:**
-- Next.js 14 (App Router) + TypeScript
-- TailwindCSS + shadcn/ui
-- Recharts for charts
-- Axios for API calls
+**30 Analytics API Endpoints** at `/api/v1/analytics/`:
+- Extraction Control (5) | Contact Analytics (6) | Company Analytics (5)
+- Thread Analytics (4) | Response Times (4) | Comm Patterns (4) | Dashboard (2)
 
-**8 Main Pages:**
-1. Dashboard - Overview metrics + charts
-2. Contacts Analytics - List, detail, top-engaged, at-risk, decision-makers
-3. Companies Analytics - List, detail, top-engaged, at-risk
-4. Thread Analytics - All threads, overdue, by-status
-5. Response Times - Stats and charts
-6. Communication Patterns - Initiation, frequency, trends
-7. Extraction Jobs - Trigger, progress, history
-8. Detail Pages - Contact/company drill-down
+**Critical Production Patterns:**
+1. Python-side filtering for NULL handling (NOT Supabase `.neq()`)
+2. `len(batch) == 0` break condition (NOT `< PAGE_SIZE`)
+3. `_execute_with_retry()` for transient Supabase/SSL errors
+4. Lowercase strings `'true'`/`'false'` for Supabase boolean filters
+5. Batch limits: 100/update, 500/`.in_()` filter
 
-**Key Features:**
-- Real-time job progress with polling
-- Filterable tables with pagination
-- Multiple chart types (line, bar, pie, heatmap)
-- Export to CSV
-- Responsive design
-- Accessibility (WCAG AA)
+### Current Focus: Sprint 3 — AI Semantic Intelligence
 
-See [TODO.md](TODO.md) for detailed task breakdown and [CONTINUATION_GUIDE.md](CONTINUATION_GUIDE.md) for implementation details.
+**Immediate tasks:**
+1. **Admin Data View** — Raw table browser for all Supabase tables (search, filter, sort)
+2. **AI Usage Tracking** — Admin dashboard for Claude API cost monitoring
+
+**Sprint 3 Phases:**
+1. **Semantic Intent Engine** — AI intent classification, sentiment drift, urgency detection
+2. **Entity & Opportunity Extraction** — Competitors, products, budget mentions, lead scoring 2.0
+3. **Relationship Insights** — Influence mapping, gap analysis, AI relationship summaries
+4. **Proactive Actions** — Suggested responses, churn alerts, marketing trigger exports
+
+**AI Strategy:** Claude API (latest model, cost-optimized) with per-request usage tracking
+
+See [TODO.md](TODO.md) for detailed task list and [CONTINUATION_GUIDE.md](CONTINUATION_GUIDE.md) for implementation plan.
 
 ---
 

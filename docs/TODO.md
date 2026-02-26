@@ -1,119 +1,67 @@
 # TODO List
 
-## CURRENT FOCUS: Frontend Analytics Dashboard (Phase 6)
+## CURRENT FOCUS: Admin Data View + Sprint 3 AI Layer
 
-**Timeline:** 2-3 weeks | **Tech Stack:** Next.js 14 + TypeScript + TailwindCSS + Recharts
-**Goal:** Build analytics dashboard consuming all 30 backend endpoints
+### Immediate: Admin Data View
+- [ ] Build admin page to browse raw Supabase table data
+- [ ] Support all tables (emails, customer_contacts, customer_companies, extraction_jobs, thread_status, email_response_metrics, etc.)
+- [ ] Add search, column filters, and sorting
+- [ ] Add pagination with configurable page size
+- [ ] Basic report/export options (CSV)
+- [ ] Admin-only access (role check)
 
-### Week 1: Core Infrastructure + Dashboard (5 days)
+### Sprint 3 Phase 1: Semantic Intent & Sentiment Engine
+- [ ] Create `AIIntentProcessor` service — classify emails into strategic categories
+  - Categories: Pricing Inquiry, Feature Request, Expansion Signal, Churn Risk
+  - Use Claude API (latest model, cost-optimized)
+- [ ] Add `sentiment_score` field to customer_contacts and emails
+- [ ] Build sentiment drift detection — track tone shifts across email threads
+- [ ] Create urgency detection — identify hidden urgency from email body context
+- [ ] Update `normalizer.py` to include `body_summary` and `detected_sentiment` fields
+- [ ] Modify `email_tagger.py` to call Claude API for intent classification on emails >100 chars
+- [ ] Build AI usage tracking table and admin dashboard for cost control
 
-#### Day 1-2: Project Setup
-- [ ] Initialize Next.js 14 project with TypeScript
-- [ ] Setup TailwindCSS + shadcn/ui component library
-- [ ] Create base layout with navigation
-- [ ] Setup Axios API client (apiClient.ts)
-- [ ] Define TypeScript types (mirror Pydantic models from backend)
-- [ ] Create api/analytics.ts with all 30 endpoint wrappers
-- [ ] Create api/extraction.ts for extraction endpoints
-- [ ] Setup environment variables (.env.local)
-- [ ] Configure CORS if needed
+### Sprint 3 Phase 2: Entity & Opportunity Extraction
+- [ ] Automate detection of competitors, product names, budget mentions in emails
+- [ ] Modify `engagement_scorer.py` to weight buying signals (procurement, legal review, implementation timeline)
+- [ ] Use Claude to infer job functions from email signatures when `title_parser.py` fails
+- [ ] Create `business_entities` table for extracted entities
 
-#### Day 3-4: Main Dashboard Page
-- [ ] Create dashboard page layout
-- [ ] Implement 4 metric cards (contacts, companies, threads, avg response time)
-- [ ] Add engagement overview chart (6-month line chart)
-- [ ] Create thread status breakdown (pie chart)
-- [ ] Build top engaged contacts table (top 10)
-- [ ] Build top engaged companies table (top 10)
-- [ ] Add at-risk alerts section
-- [ ] Integrate GET /api/v1/analytics/dashboard endpoint
+### Sprint 3 Phase 3: Hidden Network & Relationship Insights
+- [ ] Implement influence mapping — track high-seniority CC entries as "Stakeholder Entry" insights
+- [ ] Build communication gap analysis — flag single-contact-dependency risk
+- [ ] Add relationship summarization — Claude-generated 3-sentence executive summaries
+- [ ] Add summary to contact-detail page
 
-#### Day 5: Shared Components
-- [ ] Create MetricCard component (reusable)
-- [ ] Create LoadingState/Skeleton components
-- [ ] Create ErrorBoundary component
-- [ ] Create Pagination component (reusable)
-- [ ] Create FilterPanel component
-- [ ] Create EmptyState component
-- [ ] Create usePagination hook
-- [ ] Create useAnalytics hook
-
-### Week 2: Analytics Pages (5 days)
-
-#### Day 6-7: Contacts Analytics
-- [ ] Create contacts list page (/analytics/contacts)
-- [ ] Implement contacts data table with sorting
-- [ ] Add pagination controls (limit: 100, max: 500)
-- [ ] Add filters (contact_type, engagement_score, is_decision_maker)
-- [ ] Create contact detail modal/page
-- [ ] Build top engaged contacts page (/analytics/contacts/top-engaged)
-- [ ] Build at-risk contacts page (/analytics/contacts/at-risk)
-- [ ] Build decision makers page (/analytics/contacts/decision-makers)
-- [ ] Add export to CSV functionality
-- [ ] Integrate 6 contact endpoints
-
-#### Day 8-9: Companies Analytics
-- [ ] Create companies list page (/analytics/companies)
-- [ ] Implement companies cards/table view
-- [ ] Add pagination + filters (engagement_status)
-- [ ] Create company detail page (/analytics/companies/{id})
-- [ ] Show company contacts in detail page
-- [ ] Build top engaged companies page
-- [ ] Build at-risk companies page
-- [ ] Add companies by engagement status view
-- [ ] Integrate 5 company endpoints
-
-#### Day 10: Thread Analytics
-- [ ] Create all threads page (/analytics/threads)
-- [ ] Add thread status filters (complete, overdue, dropped, etc.)
-- [ ] Create overdue threads page (critical view)
-- [ ] Build thread status breakdown visualization
-- [ ] Create thread detail view
-- [ ] Add threads by contact view
-- [ ] Integrate 4 thread endpoints
-
-### Week 3: Advanced Features + Polish (5 days)
-
-#### Day 11-12: Response Times & Patterns
-- [ ] Create response time analytics page
-- [ ] Build response time stats cards (avg, median, min, max)
-- [ ] Create slowest responders table
-- [ ] Add response time chart (bar/line)
-- [ ] Create communication patterns page
-- [ ] Build initiation ratio visualization (donut chart)
-- [ ] Create frequency patterns heatmap
-- [ ] Add engagement trends chart (line chart over time)
-- [ ] Integrate 8 endpoints (4 response + 4 pattern)
-
-#### Day 13-14: Extraction Job Management
-- [ ] Create extraction trigger page (/extraction)
-- [ ] Build extraction form (mailbox selector, mode, options)
-- [ ] Add mode selector radio (Full vs Incremental)
-- [ ] Create lookback days slider (1-365 days)
-- [ ] Add extraction options checkboxes
-- [ ] Build job history table with pagination
-- [ ] Create real-time progress bar with polling (usePolling hook)
-- [ ] Build job detail modal
-- [ ] Add cancel job functionality
-- [ ] Integrate 5 extraction endpoints
-
-#### Day 15: Polish & Testing
-- [ ] Add loading states to all pages
-- [ ] Implement error handling for all API calls
-- [ ] Make responsive design (mobile, tablet, desktop)
-- [ ] Add accessibility features (ARIA labels, keyboard nav)
-- [ ] Optimize performance (lazy loading, code splitting)
-- [ ] Create end-to-end tests with Playwright/Cypress
-- [ ] Final UX polish and bug fixes
+### Sprint 3 Phase 4: Proactive "Next Best Action"
+- [ ] Build suggested responses — AI-drafted replies based on thread history and intent
+- [ ] Create proactive churn alerts — auto-flag accounts with >30% engagement velocity drop
+- [ ] Build marketing trigger exports — identify champions, export to CSV/CRM
+- [ ] Update dashboard with "Top Opportunities" card based on AI-detected buying signals
 
 ---
 
-## High Priority (After Frontend Dashboard)
+## Frontend Analytics Dashboard (Phase 6)
+
+**Status:** Planned (deferred until after admin data view + AI layer)
+**Tech Stack:** React + Vite + Ant Design + Recharts (existing frontend)
+
+### Analytics Pages to Build
+- [ ] Analytics dashboard page (overview metrics + charts)
+- [ ] Contacts analytics (list, detail, top-engaged, at-risk, decision-makers)
+- [ ] Companies analytics (list, detail, top-engaged, at-risk)
+- [ ] Thread analytics (all threads, overdue, by-status)
+- [ ] Response times (stats, charts, slowest responders)
+- [ ] Communication patterns (initiation, frequency, trends)
+- [ ] Extraction job management (trigger, progress, history)
+- [ ] Contact/company detail drill-down pages
+
+---
+
+## High Priority
 
 ### Processing Page UX Improvements
 - [ ] Add status filter dropdown (All, Running, Completed, Failed, etc.)
-  - Currently filtering by mailbox only
-  - Could add additional status filtering in dropdown
 
 ### Code Cleanup
 - [x] ~~Remove debug console.logs from apiClient.ts~~ (cleaned up Feb 2026)
@@ -121,7 +69,7 @@
 - [ ] Remove debug console.logs from MailboxSelector.tsx
 - [ ] Remove debug console.logs from emails.tsx loading
 - [ ] Remove unused handler `handleMailboxSelect` from emails.tsx
-- [ ] Fix deprecated `dropdownRender` usage in emails.tsx (use `dropdownRender` prop properly)
+- [ ] Fix deprecated `dropdownRender` usage in emails.tsx
 
 ## Medium Priority
 
@@ -169,6 +117,20 @@
 - [ ] Saved searches/filters
 
 ## Completed ✅
+
+### Sprint 2 Backend — ALL PHASES COMPLETE (Feb 2026)
+- [x] **Phase 1-2:** 13-step extraction pipeline (orchestrator + 8 services + 3 utilities)
+- [x] **Phase 4:** Engagement analytics (response times, thread tracking, comm patterns, 8-factor scoring)
+- [x] **Phase 5A:** 30 REST API analytics endpoints (2,886 lines, 41 Pydantic models)
+- [x] **Phase 5B:** Incremental extraction mode (Migration 010, configurable lookback)
+- [x] **Phase 6:** Production deployment + 5 critical fixes:
+  - NULL processing_status exclusion → Python-side filtering
+  - Supabase .or_() compatibility → removed server-side filter
+  - Pagination off-by-one → len==0 break condition
+  - Transient SSL errors → retry with exponential backoff
+  - Count visibility → upfront COUNT + page X/Y logging
+- [x] **Production verified:** 26,654 emails across 54 pages processed successfully
+- [x] **10 database migrations** run and verified (v1.8 master schema)
 
 ### Performance & Stability Fixes (Feb 23-24, 2026)
 - [x] **CRITICAL**: Remove `error_log` from `/processing-jobs` SELECT (620KB → ~20KB response)
