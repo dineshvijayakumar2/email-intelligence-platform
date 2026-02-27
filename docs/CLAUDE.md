@@ -78,10 +78,10 @@ Frontend → FastAPI → ThreadPool (20 workers) → Email Processing Pipeline
 - **Auth** (`src/dependencies/auth.py`): Supabase JWT verification with ES256/HS256 support
 
 #### Frontend (React/TypeScript)
-- **Pages**: dashboard, mailboxes, emails, processing, clients, users (in `frontend/src/pages/`)
+- **Pages**: dashboard, mailboxes, emails, processing, clients, users, analytics (6 pages), admin data view
 - **Auth**: Supabase Auth with Google/Microsoft OAuth + email/password
-- **Components**: MailboxSelector, ProtectedRoute, Layout with role-based access
-- **Services**: API integration layer (`frontend/src/services/`)
+- **Components**: MailboxSelector, ProtectedRoute, Layout with role-based access, AnalyticsTable, EngagementBadge, ChartCard, MetricCard, ClientSelector
+- **Services**: API integration layer (`frontend/src/services/`) including analyticsService (30 endpoint wrappers with caching + deduplication)
 - **Auto-refresh**: Polls job status every 2-5 seconds
 
 #### Data Layer
@@ -89,7 +89,7 @@ Frontend → FastAPI → ThreadPool (20 workers) → Email Processing Pipeline
 - **Redis (REQUIRED)**: Progress cache and job queue management
 - **Core Tables**: emails, processing_jobs, mailboxes, folders, user_profiles, user_client_assignments, clients
 - **Sprint 2 Tables**: customer_companies, customer_contacts, extraction_jobs, email_response_metrics, thread_status, unified_email_rules, internal_domains, free_email_providers
-- **Database Schema**: v1.8 (10 Sprint 2 migrations)
+- **Database Schema**: v1.8+ (12 Sprint 2 migrations)
 
 ---
 
@@ -215,7 +215,7 @@ VITE_MICROSOFT_REDIRECT_URI=http://localhost:3001/auth/microsoft/callback
   - **CLAUDE.md**: This file
 - **scripts/**: Utility scripts
   - **migrations/**: Stage 1 database migration scripts
-  - **sprint2/**: Sprint 2 migrations (001-010) + master schema v1.8
+  - **sprint2/**: Sprint 2 migrations (001-012) + master schema v1.8+
   - **troubleshooting/**: Diagnostic and fix scripts
 
 ---
@@ -303,13 +303,16 @@ When adding new routes:
 - ✅ Outlook OAuth Integration
 - ✅ Mailbox Switching & Filtering UX
 
-**Sprint 2: Customer Data Extraction** - ✅ **COMPLETE** (Backend + Production)
+**Sprint 2: Customer Data Extraction** - ✅ **COMPLETE** (Backend + Frontend + Production)
 - ✅ Phase 1-4: Core extraction pipeline (13 steps) with engagement analytics
 - ✅ Phase 5A: Analytics API (30 REST endpoints - all tested)
 - ✅ Phase 5B: Incremental extraction mode (Migration 010)
 - ✅ Phase 6: Production deployment with 5 critical fixes
 - ✅ **Production verified:** 26,654 emails across 54 pages processed successfully
 - ✅ **Stability Fixes**: Performance, WebSocket, email guardrails, pagination, NULL handling, retry
+- ✅ **Analytics Frontend**: 6 pages (dashboard, contacts, companies, threads, contact-detail, company-detail) with sorting, filtering, engagement badges
+- ✅ **Admin Data View**: Raw table browser with search, sort, pagination, CSV export
+- ✅ **Post-Production Fixes** (Feb 26-27): Scoring accuracy, slider UX, label clarity, backfill migrations 011-012
 
 ### Sprint 2 Backend Architecture
 
@@ -340,12 +343,23 @@ Validate → Extract Contacts → Deduplicate → Resolve Companies
 3. `_execute_with_retry()` for transient Supabase/SSL errors
 4. Lowercase strings `'true'`/`'false'` for Supabase boolean filters
 5. Batch limits: 100/update, 500/`.in_()` filter
+6. Cast float params to `int()` before Supabase `.gte()` on INTEGER columns
+7. Ant Design v5 Slider: use `onChangeComplete` for API triggers, `onChange` only for visual state
+8. `nullsfirst=False` in Supabase `.order()` to push NULLs to end in DESC sort
 
 ### Current Focus: Sprint 3 — AI Semantic Intelligence
 
+**Recently Completed (Feb 26-27):**
+- Admin Data View (raw table browser with search, sort, pagination, CSV export)
+- Analytics Frontend (6 pages: dashboard, contacts, companies, threads, contact-detail, company-detail)
+- Engagement score display (labels: High/Medium/Low/Very Low alongside numeric scores)
+- Sorting + filtering on all analytics tables (server-side sort, engagement status/type/score filters)
+- Migration 011: Fix RPC functions for email counts, contact dates, thread data
+- Migration 012: Backfill scoring input fields (last_inbound/outbound, emails_per_month_avg, initiation_ratio, reply_rate, frequency_trend)
+- Fixed uniform engagement scores: comm_pattern_analyzer now sends all fields, company scorer uses real data
+
 **Immediate tasks:**
-1. **Admin Data View** — Raw table browser for all Supabase tables (search, filter, sort)
-2. **AI Usage Tracking** — Admin dashboard for Claude API cost monitoring
+1. **AI Usage Tracking** — Admin dashboard for Claude API cost monitoring
 
 **Sprint 3 Phases:**
 1. **Semantic Intent Engine** — AI intent classification, sentiment drift, urgency detection

@@ -1,14 +1,6 @@
 # TODO List
 
-## CURRENT FOCUS: Admin Data View + Sprint 3 AI Layer
-
-### Immediate: Admin Data View
-- [ ] Build admin page to browse raw Supabase table data
-- [ ] Support all tables (emails, customer_contacts, customer_companies, extraction_jobs, thread_status, email_response_metrics, etc.)
-- [ ] Add search, column filters, and sorting
-- [ ] Add pagination with configurable page size
-- [ ] Basic report/export options (CSV)
-- [ ] Admin-only access (role check)
+## CURRENT FOCUS: Sprint 3 AI Layer
 
 ### Sprint 3 Phase 1: Semantic Intent & Sentiment Engine
 - [ ] Create `AIIntentProcessor` service — classify emails into strategic categories
@@ -41,20 +33,19 @@
 
 ---
 
-## Frontend Analytics Dashboard (Phase 6)
+## Frontend Analytics Dashboard
 
-**Status:** Planned (deferred until after admin data view + AI layer)
-**Tech Stack:** React + Vite + Ant Design + Recharts (existing frontend)
+**Status:** ✅ COMPLETE (Feb 2026)
+**Tech Stack:** React + Vite + Ant Design + Recharts
 
-### Analytics Pages to Build
-- [ ] Analytics dashboard page (overview metrics + charts)
-- [ ] Contacts analytics (list, detail, top-engaged, at-risk, decision-makers)
-- [ ] Companies analytics (list, detail, top-engaged, at-risk)
-- [ ] Thread analytics (all threads, overdue, by-status)
-- [ ] Response times (stats, charts, slowest responders)
-- [ ] Communication patterns (initiation, frequency, trends)
-- [ ] Extraction job management (trigger, progress, history)
-- [ ] Contact/company detail drill-down pages
+### Analytics Pages — ALL COMPLETE
+- [x] Analytics dashboard page (overview metrics, client selector, extraction trigger)
+- [x] Contacts analytics (All/Top/At-Risk/DMs/By-Type tabs, sort, filter, score slider)
+- [x] Companies analytics (All/Top/At-Risk/By-Engagement tabs, sort, filter, score slider)
+- [x] Thread analytics (All/Overdue/By-Status tabs, status chart, sort, filter)
+- [x] Contact detail drill-down (stats, threads, communication patterns)
+- [x] Company detail drill-down (stats, top contacts, threads)
+- [x] Admin Data View (raw table browser, search, sort, pagination, CSV export)
 
 ---
 
@@ -118,6 +109,24 @@
 
 ## Completed ✅
 
+### Post-Production Fixes (Feb 26-27, 2026)
+- [x] **Fix uniform engagement scores** — comm_pattern_analyzer missing 3 fields + wrong field name, company scorer had hardcoded values
+- [x] **Migration 011** — Fix RPC functions for email counts, contact dates, thread data
+- [x] **Migration 012** — Backfill scoring input fields (last_inbound/outbound, emails_per_month_avg, initiation_ratio, reply_rate, frequency_trend)
+- [x] **Fix 'unknown' seniority label** — Hide seniority tag when value is 'unknown' on contact detail page
+- [x] **Fix min score 500 error** — Cast float to int before Supabase `.gte()` on INTEGER columns
+- [x] **Engagement label display** — Show "High"/"Medium"/"Low"/"Very Low" labels alongside numeric scores
+- [x] **Slider UX fix** — Use `onChangeComplete` instead of `onChange` for API triggers (contacts + companies pages)
+
+### Analytics Frontend — COMPLETE (Feb 26-27, 2026)
+- [x] Dashboard page (client selector, overview metrics, extraction trigger)
+- [x] Contacts page (All/Top/At-Risk/DMs/By-Type tabs, sort, filter, engagement score slider)
+- [x] Companies page (All/Top/At-Risk/By-Engagement tabs, sort, filter, score slider)
+- [x] Threads page (All/Overdue/By-Status tabs, status chart, sort, filter)
+- [x] Contact detail page (stats, threads, communication patterns, engagement badge)
+- [x] Company detail page (stats, top contacts, threads)
+- [x] Admin Data View (raw table browser with search, sort, pagination, CSV export)
+
 ### Sprint 2 Backend — ALL PHASES COMPLETE (Feb 2026)
 - [x] **Phase 1-2:** 13-step extraction pipeline (orchestrator + 8 services + 3 utilities)
 - [x] **Phase 4:** Engagement analytics (response times, thread tracking, comm patterns, 8-factor scoring)
@@ -130,7 +139,7 @@
   - Transient SSL errors → retry with exponential backoff
   - Count visibility → upfront COUNT + page X/Y logging
 - [x] **Production verified:** 26,654 emails across 54 pages processed successfully
-- [x] **10 database migrations** run and verified (v1.8 master schema)
+- [x] **12 database migrations** run and verified (v1.8+ master schema)
 
 ### Performance & Stability Fixes (Feb 23-24, 2026)
 - [x] **CRITICAL**: Remove `error_log` from `/processing-jobs` SELECT (620KB → ~20KB response)

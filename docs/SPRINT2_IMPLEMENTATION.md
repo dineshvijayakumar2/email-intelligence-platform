@@ -1,8 +1,8 @@
 # Sprint 2: Customer Data Extraction Pipeline — Implementation Guide
 
-> **Version:** 4.0 Production-Ready | **Date:** February 26, 2026
+> **Version:** 5.0 Production-Ready | **Date:** February 27, 2026
 > **Stack:** Python 3.11+ / FastAPI / Supabase (PostgreSQL) / Railway
-> **Sprint Status:** ALL PHASES COMPLETE ✅ | Production Tested (26,000+ emails) ✅
+> **Sprint Status:** ALL PHASES COMPLETE ✅ | Production Tested (26,000+ emails) ✅ | Analytics Frontend COMPLETE ✅
 > **Depends On:** Sprint 1 (complete) | **Prepares For:** Sprint 3 (AI Semantic Intelligence)
 
 ---
@@ -157,6 +157,90 @@ def _execute_with_retry(query_builder, max_retries=3, base_delay=2.0):
 | Pagination off-by-one | 5 services (8 locations) | All 54 pages processed correctly |
 | SSL retry logic | 3 services | Resilient to transient Cloudflare errors |
 | Count visibility | 3 services | Clear logging of extraction progress |
+
+---
+
+## Post-Production Fixes (Feb 26-27, 2026)
+
+Fixes discovered during analytics frontend testing with real production data:
+
+### Fix 1: Uniform Engagement Scores (Contacts=33, Companies=51)
+**Problem:** All contacts had engagement_score=33 and all companies had engagement_score=51. Scores should vary based on actual email patterns.
+
+**Root Cause (4 issues):**
+1. `comm_pattern_analyzer.save_patterns()` was NOT sending `emails_per_month_avg`, `last_inbound_at`, `last_outbound_at` to the database
+2. Field name mismatch: code sent `engagement_trend` but column is `frequency_trend`
+3. Company scorer had hardcoded `reply_rate_score=70.0` and `recency_score=60.0` instead of real data
+4. These NULL fields caused the engagement scorer to use neutral fallback values → uniform scores
+
+**Solution:**
+- Fixed `comm_pattern_analyzer.py` to include all missing fields in save_patterns()
+- Fixed field name from `engagement_trend` to `frequency_trend`
+- Added `_score_company_recency()` method to `engagement_scorer.py` using real `last_contact_date`
+- Changed company `reply_rate_score` from hardcoded `70.0` to neutral `50.0`
+- Created Migration 012 to backfill scoring input fields from email data
+
+**Files Modified:** `backend/src/services/comm_pattern_analyzer.py`, `backend/src/services/engagement_scorer.py`
+
+### Fix 2: Migration 012 — Backfill Scoring Input Fields
+**Problem:** Existing contacts/companies had NULL scoring fields because the pipeline never populated them.
+
+**Solution:** 6-part SQL backfill migration (`scripts/sprint2/sprint2_migration_012_backfill_scoring_fields.sql`):
+1. Backfill `last_inbound_at` / `last_outbound_at` from emails table
+2. Backfill `emails_per_month_avg` from email counts and date ranges
+3. Backfill `initiation_ratio` from thread_status + first email sender
+4. Backfill `reply_rate` from inbound/outbound email counts
+5. Backfill company `avg_emails_per_month` from email counts
+6. Backfill `frequency_trend` from recent vs older email volume
+
+### Fix 3: Migration 011 — Fix RPC Functions
+**Problem:** Analytics RPC functions had incorrect query logic for email counts, contact dates, and thread data.
+
+**Solution:** Migration 011 (`scripts/sprint2/sprint2_migration_011_fix_analytics_data.sql`) fixes RPC function logic.
+
+### Fix 4: Min Engagement Score 500 Error
+**Problem:** Ant Design v5 Slider sends float values (e.g., `29.0`). PostgreSQL rejects `"29.0"` for INTEGER column `engagement_score` with error: `invalid input syntax for type integer: "29.0"`.
+
+**Solution:** Cast `min_engagement_score` to `int()` before passing to Supabase `.gte()` filter — applied to 4 locations (contacts query + count, companies query + count).
+
+**File Modified:** `backend/src/routers/analytics.py`
+
+### Fix 5: "Unknown" Seniority Label Display
+**Problem:** Contact detail page showed "unknown" as a visible `<Tag>` element when `seniority_level='unknown'`.
+
+**Solution:** Added guard `contact.seniority_level !== 'unknown'` to JSX rendering.
+
+**File Modified:** `frontend/src/pages/analytics/contact-detail.tsx`
+
+### Fix 6: Engagement Score UX Improvements
+**Problem:** Score column showed raw numbers (43, 33, 0) without context. Slider triggered API on every drag pixel.
+
+**Solution:**
+- `EngagementBadge` now shows label + score: "High 85", "Medium 43", "Low 22"
+- Slider uses `onChangeComplete` (fires on release) instead of `onChange` (fires on every pixel)
+
+**Files Modified:** `frontend/src/components/analytics/EngagementBadge.tsx`, `frontend/src/pages/analytics/contacts.tsx`, `frontend/src/pages/analytics/companies.tsx`
+
+### Analytics Frontend (Complete)
+| Page | Route | Features |
+|------|-------|----------|
+| Dashboard | `/analytics` | Client selector, overview metrics, extraction trigger |
+| Contacts | `/analytics/contacts` | All/Top/At-Risk/DMs/By-Type tabs, sort, filter, score slider |
+| Companies | `/analytics/companies` | All/Top/At-Risk/By-Engagement tabs, sort, filter, score slider |
+| Threads | `/analytics/threads` | All/Overdue/By-Status tabs, status chart, sort, filter |
+| Contact Detail | `/analytics/contacts/:id` | Stats, threads, communication patterns |
+| Company Detail | `/analytics/companies/:id` | Stats, top contacts, threads |
+| Admin Data View | `/admin/data` | Raw table browser, search, sort, pagination, CSV export |
+
+### Post-Production Fixes Summary
+| Fix | Files Modified | Impact |
+|-----|---------------|--------|
+| Uniform engagement scores | comm_pattern_analyzer.py, engagement_scorer.py | Scores now vary based on real email patterns |
+| Migration 012 backfill | sprint2_migration_012 | Existing data populated for scoring |
+| Migration 011 RPC fix | sprint2_migration_011 | Correct analytics data queries |
+| Min score 500 error | analytics.py router | Float-to-int casting for Supabase filters |
+| Unknown seniority label | contact-detail.tsx | Hidden when value is 'unknown' |
+| Engagement UX | EngagementBadge, contacts, companies | Label display + slider onChangeComplete |
 
 ---
 
@@ -1439,6 +1523,22 @@ def derive_relationship_status(company_stats: dict) -> str:
 - [x] 6.7 Production test: 26,654 emails across 54 pages processed successfully
 - [x] 6.8 Performance verified: Full mode ~1.5min, Incremental ~15-30s
 
+### Phase 7: Analytics Frontend & Post-Production Fixes — COMPLETE ✅
+
+- [x] 7.1 Analytics dashboard page (client selector, metrics, extraction trigger)
+- [x] 7.2 Contacts analytics page (5 tabs, sort, filter, engagement score slider)
+- [x] 7.3 Companies analytics page (4 tabs, sort, filter, score slider)
+- [x] 7.4 Threads analytics page (3 tabs, status chart, sort, filter)
+- [x] 7.5 Contact detail page (stats, threads, communication patterns)
+- [x] 7.6 Company detail page (stats, top contacts, threads)
+- [x] 7.7 Admin Data View (raw table browser, search, sort, pagination, CSV export)
+- [x] 7.8 Fix uniform engagement scores (missing fields + hardcoded values)
+- [x] 7.9 Migration 011: Fix RPC functions for analytics data
+- [x] 7.10 Migration 012: Backfill scoring input fields from email data
+- [x] 7.11 Fix min_engagement_score 500 error (float-to-int casting)
+- [x] 7.12 Fix 'unknown' seniority label display on contact detail
+- [x] 7.13 Engagement badge UX (show labels + scores, fix slider onChangeComplete)
+
 ---
 
 ## 10. Edge Cases & Notes
@@ -1470,9 +1570,13 @@ def derive_relationship_status(company_stats: dict) -> str:
 
 Sprint 3 transitions the platform from metadata tracking to **Semantic & Intent Intelligence** using the Claude API.
 
-**Immediate Next Steps (Before Sprint 3):**
-1. **Admin Data View** — Raw table browser for all Supabase tables with search, filters, sort
-2. **AI Usage Tracking** — Admin dashboard for monitoring Claude API costs and usage
+**Pre-Sprint 3 Prerequisites — COMPLETE:**
+- ✅ Admin Data View (raw table browser with search, sort, pagination, CSV export)
+- ✅ Analytics Frontend (6 pages with full interactivity)
+- ✅ Post-production scoring fixes (12 migrations, varied engagement scores)
+
+**Immediate Next Step:**
+1. **AI Usage Tracking** — Admin dashboard for monitoring Claude API costs and usage
 
 **Phase 1: Semantic Intent & Sentiment Engine**
 - `AIIntentProcessor` — Classify emails: Pricing Inquiry, Feature Request, Expansion Signal, Churn Risk
