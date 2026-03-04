@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-MAX_BODY_LENGTH = 500  # chars after sanitization — controls cost
+MAX_BODY_LENGTH = 300  # chars after sanitization — reduced from 500 for ~40% cost savings
 
 
 # ---------------------------------------------------------------------------

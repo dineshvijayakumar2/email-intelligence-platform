@@ -21,7 +21,7 @@ import re
 import time
 import logging
 from typing import Optional, List, Dict, Any, Literal
-from datetime import datetime
+from datetime import datetime, timedelta
 from pydantic import BaseModel, confloat, constr
 
 from .ai_client import get_ai_client, AIResponse
@@ -36,7 +36,8 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 PROMPT_VERSION = "v1.2"
 SCORING_VERSION = "v1.0"
-BATCH_SIZE = 10  # emails per Claude Haiku call
+BATCH_SIZE = 20  # emails per Claude Haiku call (doubled from 10 for cost reduction)
+DEFAULT_LOOKBACK_DAYS = 7  # Default: only analyze emails from last 7 days
 
 # ---------------------------------------------------------------------------
 # Pre-filter patterns — skip these emails entirely (saves ~$0.001/email)
@@ -75,6 +76,9 @@ AUTOMATED_SENDER_PATTERNS = [
 _AUTOMATED_SUBJECT_RE = [re.compile(p, re.IGNORECASE) for p in AUTOMATED_SUBJECT_PATTERNS]
 _AUTOMATED_SENDER_RE = [re.compile(p, re.IGNORECASE) for p in AUTOMATED_SENDER_PATTERNS]
 
+# Forward-only pattern: subject starts with Fwd:/FW: and body is short (just forwarding, no commentary)
+_FORWARD_SUBJECT_RE = re.compile(r'^(?:fwd?|fw)\s*:', re.IGNORECASE)
+
 
 def is_automated_email(email: dict) -> bool:
     """
@@ -92,6 +96,40 @@ def is_automated_email(email: dict) -> bool:
     # Check sender patterns
     for pattern in _AUTOMATED_SENDER_RE:
         if pattern.search(sender):
+            return True
+
+    return False
+
+
+def is_forward_only_email(email: dict) -> bool:
+    """
+    Detect forward-only emails with no commentary added.
+    These are low-value for AI analysis — the original email they forwarded
+    will be analyzed separately when it arrives.
+    """
+    subject = email.get("subject") or ""
+    body = email.get("body_text") or ""
+
+    if not _FORWARD_SUBJECT_RE.match(subject):
+        return False
+
+    # Forward-only: body is very short (< 50 chars of original content)
+    # or body starts with forwarded message markers with no text before them
+    body_stripped = body.strip()
+    if len(body_stripped) < 50:
+        return True
+
+    # Check if body is just forwarded content with no added commentary
+    forward_markers = [
+        "---------- forwarded message ----------",
+        "-----original message-----",
+        "begin forwarded message",
+        "from:",  # Sometimes forwards just start with the headers
+    ]
+    body_lower = body_stripped.lower()
+    for marker in forward_markers:
+        idx = body_lower.find(marker)
+        if idx != -1 and idx < 30:  # Marker appears near the start
             return True
 
     return False
@@ -483,14 +521,23 @@ class AIEmailAnalyzer:
         self,
         mailbox_id: str,
         limit: int = 50,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
     ) -> List[dict]:
         """
         Get emails that haven't been analyzed yet OR failed previously.
 
-        Hybrid pre-filtering (3 layers, all free):
-        1. Rule-based tags from EmailTagger (email_categories: spam, marketing, system, automated)
-        2. Sprint 2 auto-replies (email_response_metrics) + noreply contacts (customer_contacts)
-        3. Local regex patterns (fallback for untagged emails)
+        Args:
+            mailbox_id: Target mailbox UUID
+            limit: Max emails to return
+            date_from: ISO date string — only analyze emails sent after this date
+            date_to: ISO date string — only analyze emails sent before this date
+
+        Hybrid pre-filtering (4 layers, all free):
+        1. Date range filter (default: last 7 days) — avoids processing old emails
+        2. Rule-based tags from EmailTagger (email_categories: spam, marketing, system, automated)
+        3. Sprint 2 auto-replies (email_response_metrics) + noreply contacts (customer_contacts)
+        4. Local regex patterns (forward-only, automated subjects/senders)
 
         This saves ~$0.001/email by avoiding AI calls on low-value emails.
         """
@@ -521,18 +568,26 @@ class AIEmailAnalyzer:
         skip_ids |= self._get_noreply_contact_ids(mailbox_id)
         logger.info(f"Pre-filter: {len(skip_ids)} emails to skip ({rule_based_count} rule-based tags, {len(skip_ids) - rule_based_count} auto-reply/noreply)")
 
-        # Step 3: Fetch emails from mailbox (with Sprint 2 linked data)
+        # Step 3: Fetch emails from mailbox with date filter
         all_emails = []
         skipped_count = 0
+        forward_skipped = 0
         offset = 0
         while len(all_emails) < limit:
             fetch_size = min(PAGE_SIZE, limit - len(all_emails) + 200)  # overfetch to account for filtering
-            resp = self._execute_with_retry(
+            query = (
                 self.client.table("emails")
                 .select("id,mailbox_id,subject,body_text,sender_email,sender_name,sent_date,direction,thread_id,is_reply,client_id,customer_contact_id,customer_company_id")
                 .eq("mailbox_id", mailbox_id)
                 .order("sent_date", desc=True)
-                .range(offset, offset + fetch_size - 1)
+            )
+            # Apply date range filter
+            if date_from:
+                query = query.gte("sent_date", date_from)
+            if date_to:
+                query = query.lte("sent_date", date_to)
+            resp = self._execute_with_retry(
+                query.range(offset, offset + fetch_size - 1)
             )
             batch = resp.data or []
             if len(batch) == 0:
@@ -559,12 +614,24 @@ class AIEmailAnalyzer:
                     skipped_count += 1
                     continue
 
+                # Skip forward-only emails (no commentary added)
+                if is_forward_only_email(email):
+                    self._mark_skipped(eid, mailbox_id, email.get("client_id"), "forward_only")
+                    analyzed_ids.add(eid)
+                    forward_skipped += 1
+                    continue
+
                 all_emails.append(email)
                 if len(all_emails) >= limit:
                     break
 
-        if skipped_count > 0:
-            logger.info(f"Pre-filtered {skipped_count} automated/auto-reply emails (saved ~${skipped_count * 0.001:.3f})")
+        total_skipped = skipped_count + forward_skipped
+        if total_skipped > 0:
+            logger.info(
+                f"Pre-filtered {total_skipped} emails "
+                f"({skipped_count} automated/auto-reply, {forward_skipped} forward-only) "
+                f"— saved ~${total_skipped * 0.001:.3f}"
+            )
 
         return all_emails
 
@@ -1054,16 +1121,33 @@ class AIEmailAnalyzer:
         mailbox_id: str,
         client_id: Optional[str] = None,
         max_emails: int = 5000,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
     ) -> dict:
         """
         Loop through all unanalyzed emails in batches.
+
+        Args:
+            mailbox_id: Target mailbox UUID
+            client_id: Optional client UUID for scoping
+            max_emails: Max emails to process
+            date_from: ISO date string — only analyze emails after this date (default: 7 days ago)
+            date_to: ISO date string — only analyze emails before this date (default: now)
 
         Circuit breaker: stops after 3 consecutive batches with 0 successes
         (e.g., API key invalid, no credits, service down).
 
         Returns:
-            {"total_analyzed": int, "total_failed": int, "batches": int}
+            {"total_analyzed": int, "total_failed": int, "batches": int, "date_range": dict}
         """
+        # Apply default date range: last 7 days if not specified
+        if not date_from:
+            date_from = (datetime.utcnow() - timedelta(days=DEFAULT_LOOKBACK_DAYS)).isoformat()
+        if not date_to:
+            date_to = datetime.utcnow().isoformat()
+
+        logger.info(f"Analyzing emails from {date_from} to {date_to} for mailbox {mailbox_id}")
+
         total_analyzed = 0
         total_failed = 0
         batch_count = 0
@@ -1074,7 +1158,10 @@ class AIEmailAnalyzer:
             # Fetch next batch of unanalyzed emails
             remaining = max_emails - total_analyzed - total_failed
             fetch_limit = min(BATCH_SIZE, remaining)
-            emails = self._get_unanalyzed_emails(mailbox_id, limit=fetch_limit)
+            emails = self._get_unanalyzed_emails(
+                mailbox_id, limit=fetch_limit,
+                date_from=date_from, date_to=date_to,
+            )
 
             if not emails:
                 logger.info("No more unanalyzed emails found")
@@ -1107,6 +1194,7 @@ class AIEmailAnalyzer:
             "total_analyzed": total_analyzed,
             "total_failed": total_failed,
             "batches": batch_count,
+            "date_range": {"from": date_from, "to": date_to},
         }
 
     # ------------------------------------------------------------------

@@ -122,6 +122,8 @@ class AnalyzeRequest(BaseModel):
     """Request to trigger AI analysis on a mailbox."""
     max_emails: int = Field(default=500, ge=1, le=5000, description="Max emails to analyze")
     client_id: Optional[str] = Field(default=None, description="Client UUID for scoping")
+    date_from: Optional[str] = Field(default=None, description="ISO date — only analyze emails after this (default: 7 days ago)")
+    date_to: Optional[str] = Field(default=None, description="ISO date — only analyze emails before this (default: now)")
 
 
 class ReanalyzeRequest(BaseModel):

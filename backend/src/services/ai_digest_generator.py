@@ -257,7 +257,10 @@ class AIDigestGenerator:
     # Context gathering (all Python-side, $0 cost)
     # ------------------------------------------------------------------
     def _gather_context(self, mailbox_id: str, client_id: Optional[str], target_date: date) -> dict:
-        """Gather all context needed for digest generation."""
+        """Gather all context needed for digest generation.
+
+        Uses strict date filtering — only considers emails/intelligence from the target date.
+        """
         date_start = datetime.combine(target_date, datetime.min.time()).isoformat()
         date_end = datetime.combine(target_date, datetime.max.time()).isoformat()
 
@@ -274,11 +277,11 @@ class AIDigestGenerator:
         if bucket_engine:
             bucket_summary = bucket_engine.get_bucket_summary(mailbox_id, client_id)
 
-        # Top signal emails (high business_signal_score)
-        top_signal_emails = self._get_top_signal_emails(mailbox_id, limit=10)
+        # Top signal emails — filtered by target date (not all-time)
+        top_signal_emails = self._get_top_signal_emails(mailbox_id, date_start, date_end, limit=10)
 
-        # High priority/urgent emails
-        priority_emails = self._get_priority_emails(mailbox_id, limit=10)
+        # High priority/urgent emails — filtered by target date
+        priority_emails = self._get_priority_emails(mailbox_id, date_start, date_end, limit=10)
 
         return {
             "in_count": in_count,
@@ -333,8 +336,8 @@ class AIDigestGenerator:
             logger.warning(f"Failed to count threads: {e}")
             return 0, 0
 
-    def _get_top_signal_emails(self, mailbox_id: str, limit: int = 10) -> list[dict]:
-        """Get top emails by business_signal_score for context."""
+    def _get_top_signal_emails(self, mailbox_id: str, date_start: str, date_end: str, limit: int = 10) -> list[dict]:
+        """Get top emails by business_signal_score for context, filtered by date."""
         try:
             resp = self._execute_with_retry(
                 self.client.table("ai_email_intelligence")
@@ -344,6 +347,8 @@ class AIDigestGenerator:
                 .eq("mailbox_id", mailbox_id)
                 .eq("processing_status", "completed")
                 .gt("business_signal_score", "0")
+                .gte("created_at", date_start)
+                .lte("created_at", date_end)
                 .order("business_signal_score", desc=True)
                 .range(0, limit - 1)
             )
@@ -371,8 +376,8 @@ class AIDigestGenerator:
             logger.warning(f"Failed to get signal emails: {e}")
             return []
 
-    def _get_priority_emails(self, mailbox_id: str, limit: int = 10) -> list[dict]:
-        """Get recent urgent/critical emails for context."""
+    def _get_priority_emails(self, mailbox_id: str, date_start: str, date_end: str, limit: int = 10) -> list[dict]:
+        """Get urgent/critical emails for context, filtered by date."""
         try:
             resp = self._execute_with_retry(
                 self.client.table("ai_email_intelligence")
@@ -381,6 +386,8 @@ class AIDigestGenerator:
                 .eq("mailbox_id", mailbox_id)
                 .eq("processing_status", "completed")
                 .in_("urgency", ["critical", "high"])
+                .gte("created_at", date_start)
+                .lte("created_at", date_end)
                 .order("created_at", desc=True)
                 .range(0, limit - 1)
             )

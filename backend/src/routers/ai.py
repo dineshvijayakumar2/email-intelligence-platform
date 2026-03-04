@@ -122,6 +122,8 @@ async def trigger_analysis(
                 mailbox_id=mailbox_id,
                 client_id=client_id,
                 max_emails=data.max_emails,
+                date_from=data.date_from,
+                date_to=data.date_to,
             )
             logger.info(f"Analysis complete for {mailbox_id}: {result}")
 
