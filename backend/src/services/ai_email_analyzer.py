@@ -281,6 +281,57 @@ def clean_llm_output(text: str) -> str:
     return text.strip()
 
 
+def repair_truncated_json(text: str) -> Optional[list]:
+    """Try to recover partial results from truncated JSON array.
+
+    When max_tokens cuts off the LLM response mid-JSON, we find the last
+    complete object in the array and parse everything up to that point.
+    Returns None if repair fails.
+    """
+    text = text.strip()
+    if not text.startswith("["):
+        return None
+
+    # Find the last complete object by looking for "},\n  {" or "}\n]" boundaries
+    last_complete = -1
+    brace_depth = 0
+    in_string = False
+    escape_next = False
+
+    for i, ch in enumerate(text):
+        if escape_next:
+            escape_next = False
+            continue
+        if ch == '\\' and in_string:
+            escape_next = True
+            continue
+        if ch == '"' and not escape_next:
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == '{':
+            brace_depth += 1
+        elif ch == '}':
+            brace_depth -= 1
+            if brace_depth == 0:
+                last_complete = i
+
+    if last_complete <= 0:
+        return None
+
+    # Take everything up to last complete object, close the array
+    truncated = text[:last_complete + 1].rstrip().rstrip(",") + "\n]"
+    try:
+        parsed = json.loads(truncated)
+        if isinstance(parsed, list) and len(parsed) > 0:
+            logger.info(f"Repaired truncated JSON: recovered {len(parsed)} items")
+            return parsed
+    except json.JSONDecodeError:
+        pass
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Business signal scoring (deterministic Python — never in prompts)
 # ---------------------------------------------------------------------------
@@ -838,11 +889,14 @@ class AIEmailAnalyzer:
             cleaned = clean_llm_output(ai_response.content)
             parsed = json.loads(cleaned)
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse AI response as JSON: {e}")
-            # All items in this batch fail
-            for eid in expected_email_ids:
-                failed.append({"email_id": eid, "error": f"json_parse: {str(e)[:200]}"})
-            return valid, failed
+            logger.warning(f"Failed to parse AI response as JSON: {e}")
+            # Try to repair truncated JSON (common when max_tokens cuts off response)
+            parsed = repair_truncated_json(cleaned)
+            if parsed is None:
+                logger.error(f"JSON repair also failed, entire batch lost")
+                for eid in expected_email_ids:
+                    failed.append({"email_id": eid, "error": f"json_parse: {str(e)[:200]}"})
+                return valid, failed
 
         if not isinstance(parsed, list):
             parsed = [parsed]
@@ -1025,8 +1079,9 @@ class AIEmailAnalyzer:
         emails_json = self._format_emails_for_prompt(emails)
         user_message = USER_PROMPT_TEMPLATE.format(emails_json=emails_json)
 
-        # Call Claude Haiku
-        ai_response = self.ai_client.call_haiku(SYSTEM_PROMPT, user_message)
+        # Call Claude Haiku — scale max_tokens with batch size (~500 tokens per email)
+        max_tokens = max(4096, len(emails) * 500)
+        ai_response = self.ai_client.call_haiku(SYSTEM_PROMPT, user_message, max_tokens=max_tokens)
 
         if ai_response is None:
             # API failure — mark all as failed
