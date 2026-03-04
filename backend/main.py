@@ -1127,7 +1127,7 @@ async def delete_mailbox(mailbox_id: str):
             "ai_usage_log",
             "unified_email_rules",
             "thread_status",
-            "email_response_metrics",
+            # email_response_metrics has no mailbox_id — cascades via email_id
         ]
         for table in related_tables:
             try:
