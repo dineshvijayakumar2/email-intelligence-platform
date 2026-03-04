@@ -278,12 +278,15 @@ class EmailRulesService:
     def _query_rules_table(self, table: str, mailbox_id: str, user_id: str,
                            provider_user_id: str, mailbox_user_id: str):
         """Query a rules/filters table with mailbox_id → user_id fallback chain."""
-        # Prefer mailbox_id lookup (new schema)
-        resp = self.client.table(table).select("*").eq(
-            "mailbox_id", mailbox_id
-        ).execute()
-        if resp.data:
-            return resp
+        # Prefer mailbox_id lookup (new schema — may not exist pre-migration)
+        try:
+            resp = self.client.table(table).select("*").eq(
+                "mailbox_id", mailbox_id
+            ).execute()
+            if resp.data:
+                return resp
+        except Exception:
+            pass  # Column doesn't exist yet, fall through to user_id
         # Fallback: query by user_id (pre-migration data)
         if user_id:
             resp = self.client.table(table).select("*").eq(
@@ -296,7 +299,9 @@ class EmailRulesService:
             resp = self.client.table(table).select("*").eq(
                 "user_id", mailbox_user_id
             ).execute()
-        return resp
+            return resp
+        # Return empty-like response
+        return type('Resp', (), {'data': []})()
 
     # ------------------------------------------------------------------
     # Fetch rules for all mailboxes of a client
