@@ -42,13 +42,13 @@ const DigestPage: React.FC = () => {
   const [bucketSummary, setBucketSummary] = useState<BucketSummary | null>(null);
   const [error, setError] = useState<string>('');
 
-  const loadDigest = useCallback(async () => {
+  const loadDigest = useCallback(async (force = false) => {
     if (!mailboxId) return;
     setLoading(true);
     setError('');
     try {
       const [digestData, summaryData] = await Promise.all([
-        digestApi.get(mailboxId, selectedDate),
+        digestApi.get(mailboxId, selectedDate, undefined, force),
         bucketApi.getSummary(mailboxId),
       ]);
       if (!isMountedRef.current) return;
@@ -83,8 +83,8 @@ const DigestPage: React.FC = () => {
             onChange={(d) => d && setSelectedDate(d.format('YYYY-MM-DD'))}
             allowClear={false}
           />
-          <Button icon={<ReloadOutlined />} onClick={loadDigest} loading={loading}>
-            Refresh
+          <Button icon={<ReloadOutlined />} onClick={() => loadDigest(true)} loading={loading}>
+            Regenerate
           </Button>
         </Space>
       </div>

@@ -1105,19 +1105,59 @@ async def update_mailbox(mailbox_id: str, mailbox_data: MailboxConfig):
 
 @app.delete("/api/mailboxes/{mailbox_id}")
 async def delete_mailbox(mailbox_id: str):
-    """Delete a mailbox"""
+    """Delete a mailbox and all related data.
+
+    Explicitly deletes related records first to avoid Supabase statement
+    timeout on large cascade deletes.
+    """
     try:
         sb = get_supabase()
-        
+
         # Check if mailbox exists
         check_result = sb.table('mailboxes').select('id').eq('id', mailbox_id).execute()
         if not check_result.data:
             raise HTTPException(status_code=404, detail="Mailbox not found")
-        
-        # Delete the mailbox
+
+        # Delete related records explicitly to avoid cascade timeout.
+        # Order: AI layer → Sprint 2 analytics → emails → folders → mailbox
+        related_tables = [
+            "ai_daily_digests",
+            "ai_email_intelligence",
+            "ai_business_entities",
+            "ai_usage_log",
+            "unified_email_rules",
+            "thread_status",
+            "email_response_metrics",
+        ]
+        for table in related_tables:
+            try:
+                sb.table(table).delete().eq("mailbox_id", mailbox_id).execute()
+            except Exception as e:
+                logger.warning(f"Failed to clean {table} for mailbox {mailbox_id}: {e}")
+
+        # Delete emails in batches (can be large)
+        deleted_total = 0
+        while True:
+            batch = sb.table("emails").select("id").eq("mailbox_id", mailbox_id).limit(500).execute()
+            ids = [r["id"] for r in (batch.data or [])]
+            if not ids:
+                break
+            sb.table("emails").delete().in_("id", ids).execute()
+            deleted_total += len(ids)
+            logger.info(f"Deleted {deleted_total} emails for mailbox {mailbox_id}...")
+
+        # Clean up folders and processing jobs
+        for table in ["folders", "processing_jobs"]:
+            try:
+                sb.table(table).delete().eq("mailbox_id", mailbox_id).execute()
+            except Exception as e:
+                logger.warning(f"Failed to clean {table} for mailbox {mailbox_id}: {e}")
+
+        # Finally delete the mailbox itself
         sb.table('mailboxes').delete().eq('id', mailbox_id).execute()
-        
-        return {"message": "Mailbox deleted successfully"}
+
+        logger.info(f"Mailbox {mailbox_id} deleted with {deleted_total} emails")
+        return {"message": "Mailbox deleted successfully", "emails_deleted": deleted_total}
 
     except HTTPException:
         raise

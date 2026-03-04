@@ -415,23 +415,23 @@ export const EmailList: React.FC = () => {
     isOutbound: '',
   });
 
-  // System folders that always show
+  // System folders that always show — keys MUST be proper case to match DB folder_path values
   const systemFolders = useMemo(() => [
     { key: '', label: 'All Mail', icon: <AppstoreOutlined /> },
-    { key: 'inbox', label: 'Inbox', icon: <InboxOutlined /> },
-    { key: 'sent', label: 'Sent', icon: <SendOutlined /> },
-    { key: 'starred', label: 'Starred', icon: <StarOutlined /> },
-    { key: 'trash', label: 'Trash', icon: <DeleteOutlined /> },
+    { key: 'Inbox', label: 'Inbox', icon: <InboxOutlined /> },
+    { key: 'Sent', label: 'Sent', icon: <SendOutlined /> },
+    { key: 'Starred', label: 'Starred', icon: <StarOutlined /> },
+    { key: 'Trash', label: 'Trash', icon: <DeleteOutlined /> },
   ], []);
 
-  // Get current folder key for highlighting
+  // Get current folder key for highlighting — must return proper case to match system folder keys
   const currentFolderKey = useMemo(() => {
     if (!filters.folder) return '';
     const lower = filters.folder.toLowerCase();
-    if (lower.includes('inbox')) return 'inbox';
-    if (lower.includes('sent')) return 'sent';
-    if (lower.includes('starred') || lower.includes('flagged')) return 'starred';
-    if (lower.includes('trash') || lower.includes('deleted')) return 'trash';
+    if (lower.includes('inbox')) return 'Inbox';
+    if (lower.includes('sent')) return 'Sent';
+    if (lower.includes('starred') || lower.includes('flagged')) return 'Starred';
+    if (lower.includes('trash') || lower.includes('deleted')) return 'Trash';
     return filters.folder;
   }, [filters.folder]);
 

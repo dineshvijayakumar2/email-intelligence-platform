@@ -303,11 +303,15 @@ export const entityApi = {
 
 export const digestApi = {
   /** GET /ai/digest/{mailbox_id}?date=YYYY-MM-DD — Get/generate digest */
-  async get(mailboxId: string, date?: string, clientId?: string): Promise<DailyDigest | null> {
-    const qs = buildQuery({ date, client_id: clientId });
+  async get(mailboxId: string, date?: string, clientId?: string, force?: boolean): Promise<DailyDigest | null> {
+    const qs = buildQuery({ date, client_id: clientId, force: force ? 'true' : undefined });
     const key = `digest-${mailboxId}-${date || 'today'}`;
-    const cached = getCached<DailyDigest>(key, CACHE_TTL_LONG);
-    if (cached) return cached;
+
+    // Skip frontend cache when forcing regeneration
+    if (!force) {
+      const cached = getCached<DailyDigest>(key, CACHE_TTL_LONG);
+      if (cached) return cached;
+    }
 
     try {
       const result = await api.get<DailyDigest>(

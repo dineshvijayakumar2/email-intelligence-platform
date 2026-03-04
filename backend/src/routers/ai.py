@@ -580,12 +580,14 @@ async def get_digest(
     mailbox_id: str,
     date: Optional[str] = Query(default=None, description="Date in YYYY-MM-DD format"),
     client_id: Optional[str] = Query(default=None),
+    force: bool = Query(default=False, description="Force regeneration, bypassing cache"),
     accessible_ids: list = Depends(get_accessible_mailbox_ids),
 ):
     """
     Get daily digest for a mailbox. Returns cached digest or generates new one.
 
     If no date provided, uses today. Uses cache-first strategy.
+    Pass force=true to bypass cache and regenerate.
     """
     _validate_mailbox_access(mailbox_id, accessible_ids)
     from datetime import date as date_type
@@ -600,11 +602,18 @@ async def get_digest(
         raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
 
     try:
-        result = generator.get_digest_or_generate(
-            mailbox_id=mailbox_id,
-            client_id=client_id,
-            digest_date=target_date,
-        )
+        if force:
+            result = generator.generate_digest(
+                mailbox_id=mailbox_id,
+                client_id=client_id,
+                digest_date=target_date,
+            )
+        else:
+            result = generator.get_digest_or_generate(
+                mailbox_id=mailbox_id,
+                client_id=client_id,
+                digest_date=target_date,
+            )
         if result is None:
             raise HTTPException(
                 status_code=503,

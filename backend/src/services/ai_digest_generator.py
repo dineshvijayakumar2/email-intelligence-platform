@@ -260,7 +260,10 @@ class AIDigestGenerator:
     def _gather_context(self, mailbox_id: str, client_id: Optional[str], target_date: date) -> dict:
         """Gather all context needed for digest generation.
 
-        Uses strict date filtering — only considers emails/intelligence from the target date.
+        Uses strict date filtering — only considers emails whose sent_date falls
+        within the target date window.  The ai_email_intelligence rows are filtered
+        by matching email_id (via sent_date on the emails table), NOT by their own
+        created_at timestamp (which reflects analysis time, not send time).
         """
         date_start = datetime.combine(target_date, datetime.min.time()).isoformat()
         date_end = datetime.combine(target_date, datetime.max.time()).isoformat()
@@ -278,11 +281,15 @@ class AIDigestGenerator:
         if bucket_engine:
             bucket_summary = bucket_engine.get_bucket_summary(mailbox_id, client_id)
 
-        # Top signal emails — filtered by target date (not all-time)
-        top_signal_emails = self._get_top_signal_emails(mailbox_id, date_start, date_end, limit=10)
+        # Get email IDs that were actually sent/received on the target date
+        # This is used to filter ai_email_intelligence by sent_date, not analysis created_at
+        date_email_ids = self._get_email_ids_for_date_range(mailbox_id, date_start, date_end)
 
-        # High priority/urgent emails — filtered by target date
-        priority_emails = self._get_priority_emails(mailbox_id, date_start, date_end, limit=10)
+        # Top signal emails — filtered by sent_date via email IDs
+        top_signal_emails = self._get_top_signal_emails(mailbox_id, date_email_ids, limit=10)
+
+        # High priority/urgent emails — filtered by sent_date via email IDs
+        priority_emails = self._get_priority_emails(mailbox_id, date_email_ids, limit=10)
 
         return {
             "in_count": in_count,
@@ -337,27 +344,66 @@ class AIDigestGenerator:
             logger.warning(f"Failed to count threads: {e}")
             return 0, 0
 
-    def _get_top_signal_emails(self, mailbox_id: str, date_start: str, date_end: str, limit: int = 10) -> list[dict]:
-        """Get top emails by business_signal_score for context, filtered by date."""
+    def _get_email_ids_for_date_range(self, mailbox_id: str, date_start: str, date_end: str) -> list[str]:
+        """Get email IDs whose sent_date falls within the date range.
+
+        Used to bridge the emails table (has sent_date) with ai_email_intelligence
+        (which only has created_at = analysis timestamp, NOT email send time).
+        """
         try:
-            resp = self._execute_with_retry(
-                self.client.table("ai_email_intelligence")
-                .select("email_id,intent,urgency,sentiment,summary,"
-                        "suggested_action,primary_bucket,business_signal_score,"
-                        "confidence")
-                .eq("mailbox_id", mailbox_id)
-                .eq("processing_status", "completed")
-                .gt("business_signal_score", "0")
-                .gte("created_at", date_start)
-                .lte("created_at", date_end)
-                .order("business_signal_score", desc=True)
-                .range(0, limit - 1)
-            )
-            rows = resp.data or []
+            all_ids: list[str] = []
+            offset = 0
+            PAGE = 500
+            while True:
+                resp = self._execute_with_retry(
+                    self.client.table("emails")
+                    .select("id")
+                    .eq("mailbox_id", mailbox_id)
+                    .gte("sent_date", date_start)
+                    .lte("sent_date", date_end)
+                    .range(offset, offset + PAGE - 1)
+                )
+                batch = resp.data or []
+                all_ids.extend(r["id"] for r in batch)
+                if len(batch) == 0:
+                    break
+                offset += len(batch)
+            logger.info(f"Digest: {len(all_ids)} emails found for date range {date_start[:10]}")
+            return all_ids
+        except Exception as e:
+            logger.warning(f"Failed to get email IDs for date range: {e}")
+            return []
+
+    def _get_top_signal_emails(self, mailbox_id: str, email_ids: list[str], limit: int = 10) -> list[dict]:
+        """Get top emails by business_signal_score, filtered by email IDs (sent_date)."""
+        if not email_ids:
+            return []
+        try:
+            # Chunk email IDs (Supabase max 500 per .in_())
+            all_rows: list[dict] = []
+            for i in range(0, len(email_ids), 500):
+                chunk = email_ids[i:i + 500]
+                resp = self._execute_with_retry(
+                    self.client.table("ai_email_intelligence")
+                    .select("email_id,intent,urgency,sentiment,summary,"
+                            "suggested_action,primary_bucket,business_signal_score,"
+                            "confidence")
+                    .eq("mailbox_id", mailbox_id)
+                    .eq("processing_status", "completed")
+                    .gt("business_signal_score", "0")
+                    .in_("email_id", chunk)
+                    .order("business_signal_score", desc=True)
+                    .range(0, limit - 1)
+                )
+                all_rows.extend(resp.data or [])
+
+            # Sort and limit across chunks
+            all_rows.sort(key=lambda r: r.get("business_signal_score", 0), reverse=True)
+            rows = all_rows[:limit]
 
             # Enrich with sender name
-            email_ids = [r["email_id"] for r in rows if r.get("email_id")]
-            sender_lookup = self._get_email_senders(email_ids)
+            row_email_ids = [r["email_id"] for r in rows if r.get("email_id")]
+            sender_lookup = self._get_email_senders(row_email_ids)
 
             results = []
             for row in rows:
@@ -377,25 +423,33 @@ class AIDigestGenerator:
             logger.warning(f"Failed to get signal emails: {e}")
             return []
 
-    def _get_priority_emails(self, mailbox_id: str, date_start: str, date_end: str, limit: int = 10) -> list[dict]:
-        """Get urgent/critical emails for context, filtered by date."""
+    def _get_priority_emails(self, mailbox_id: str, email_ids: list[str], limit: int = 10) -> list[dict]:
+        """Get urgent/critical emails, filtered by email IDs (sent_date)."""
+        if not email_ids:
+            return []
         try:
-            resp = self._execute_with_retry(
-                self.client.table("ai_email_intelligence")
-                .select("email_id,intent,urgency,sentiment,summary,"
-                        "suggested_action,primary_bucket,confidence")
-                .eq("mailbox_id", mailbox_id)
-                .eq("processing_status", "completed")
-                .in_("urgency", ["critical", "high"])
-                .gte("created_at", date_start)
-                .lte("created_at", date_end)
-                .order("created_at", desc=True)
-                .range(0, limit - 1)
-            )
-            rows = resp.data or []
+            all_rows: list[dict] = []
+            for i in range(0, len(email_ids), 500):
+                chunk = email_ids[i:i + 500]
+                resp = self._execute_with_retry(
+                    self.client.table("ai_email_intelligence")
+                    .select("email_id,intent,urgency,sentiment,summary,"
+                            "suggested_action,primary_bucket,confidence")
+                    .eq("mailbox_id", mailbox_id)
+                    .eq("processing_status", "completed")
+                    .in_("urgency", ["critical", "high"])
+                    .in_("email_id", chunk)
+                    .order("confidence", desc=True)
+                    .range(0, limit - 1)
+                )
+                all_rows.extend(resp.data or [])
 
-            email_ids = [r["email_id"] for r in rows if r.get("email_id")]
-            sender_lookup = self._get_email_senders(email_ids)
+            # Sort by confidence and limit across chunks
+            all_rows.sort(key=lambda r: r.get("confidence", 0), reverse=True)
+            rows = all_rows[:limit]
+
+            row_email_ids = [r["email_id"] for r in rows if r.get("email_id")]
+            sender_lookup = self._get_email_senders(row_email_ids)
 
             results = []
             for row in rows:
