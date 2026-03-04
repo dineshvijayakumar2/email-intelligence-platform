@@ -258,6 +258,7 @@ class EmailRulesService:
         # live_type requires tokens; for reads we also check mailbox_type
         check_gmail = live_type == "gmail" or mailbox_type == "gmail"
         check_outlook = live_type == "outlook" or mailbox_type in ("outlook", "outlook_live")
+        logger.info(f"[Rules] get_unified_rules({mailbox_id}): type={mailbox_type}, live={live_type}, check_gmail={check_gmail}, check_outlook={check_outlook}, user_id={user_id}")
 
         # Gmail filters
         if check_gmail:
@@ -283,15 +284,17 @@ class EmailRulesService:
             resp = self.client.table(table).select("*").eq(
                 "mailbox_id", mailbox_id
             ).execute()
+            logger.info(f"[Rules] _query_rules_table({table}) by mailbox_id={mailbox_id}: {len(resp.data or [])} rows")
             if resp.data:
                 return resp
-        except Exception:
-            pass  # Column doesn't exist yet, fall through to user_id
+        except Exception as e:
+            logger.info(f"[Rules] _query_rules_table({table}) mailbox_id query failed: {e}")
         # Fallback: query by user_id (pre-migration data)
         if user_id:
             resp = self.client.table(table).select("*").eq(
                 "user_id", user_id
             ).execute()
+            logger.info(f"[Rules] _query_rules_table({table}) by user_id={user_id}: {len(resp.data or [])} rows")
             if resp.data:
                 return resp
         # Last fallback: try mailbox user_id
@@ -572,6 +575,7 @@ class EmailRulesService:
             resp = self.client.table("mailboxes").select(
                 "id,name,email_address,mailbox_type,connection_config,user_id"
             ).eq("client_id", client_id).execute()
+            logger.info(f"[Rules] _get_client_mailboxes({client_id}): found {len(resp.data or [])} mailboxes")
             return resp.data or []
         except Exception as e:
             logger.warning(f"Failed to fetch mailboxes for client {client_id}: {e}")
