@@ -212,6 +212,7 @@ async def import_rules(
                     user_id,
                     access_token=config.get("gmail_access_token"),
                     refresh_token=config.get("gmail_refresh_token"),
+                    mailbox_id=mailbox_id,
                 )
             except (ValueError, ConnectionError) as e:
                 logger.warning(f"Gmail import skipped for mailbox {mailbox_id}: {e}")

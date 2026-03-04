@@ -255,10 +255,16 @@ class EmailRulesService:
 
         # Gmail filters — check LIVE connection, not just mailbox_type
         if live_type == "gmail":
+            # Prefer mailbox_id lookup (new schema), fallback to user_id
             gmail_resp = self.client.table("gmail_filters").select("*").eq(
-                "user_id", user_id
+                "mailbox_id", mailbox_id
             ).execute()
-            # Fallback: if config user_id found nothing, try mailbox user_id
+            # Fallback: query by user_id if no mailbox_id matches (pre-migration data)
+            if not gmail_resp.data:
+                gmail_resp = self.client.table("gmail_filters").select("*").eq(
+                    "user_id", user_id
+                ).execute()
+            # Last fallback: try mailbox user_id
             if not gmail_resp.data and provider_user_id and mailbox_user_id and provider_user_id != mailbox_user_id:
                 gmail_resp = self.client.table("gmail_filters").select("*").eq(
                     "user_id", mailbox_user_id

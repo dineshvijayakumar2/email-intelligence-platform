@@ -1220,6 +1220,7 @@ GRANT EXECUTE ON FUNCTION invalidate_download(UUID) TO anon, authenticated;
 CREATE TABLE IF NOT EXISTS gmail_filters (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id TEXT NOT NULL,           -- User who owns this filter
+    mailbox_id UUID,                 -- Links to mailboxes.id
     filter_id TEXT NOT NULL,         -- Gmail's filter ID
     criteria JSONB NOT NULL,         -- Filter criteria: {from, to, subject, hasAttachment, query, etc.}
     action JSONB NOT NULL,           -- Filter action: {addLabelIds, removeLabelIds, forward, etc.}
@@ -1229,8 +1230,9 @@ CREATE TABLE IF NOT EXISTS gmail_filters (
     UNIQUE(user_id, filter_id)
 );
 
--- Index for fast lookup by user
+-- Indexes for fast lookups
 CREATE INDEX IF NOT EXISTS idx_gmail_filters_user ON gmail_filters(user_id);
+CREATE INDEX IF NOT EXISTS idx_gmail_filters_mailbox ON gmail_filters(mailbox_id) WHERE mailbox_id IS NOT NULL;
 
 -- Trigger to update updated_at
 CREATE TRIGGER update_gmail_filters_updated_at BEFORE UPDATE

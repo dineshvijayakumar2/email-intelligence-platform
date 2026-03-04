@@ -690,7 +690,7 @@ class GmailSyncService:
 
         await self._sync_mailbox(mailbox)
 
-    async def import_filters(self, user_id: str, access_token: str = None, refresh_token: str = None) -> List[Dict]:
+    async def import_filters(self, user_id: str, access_token: str = None, refresh_token: str = None, mailbox_id: str = None) -> List[Dict]:
         """
         Import Gmail filters for a user (S1-08)
 
@@ -698,6 +698,7 @@ class GmailSyncService:
             user_id: User ID
             access_token: Optional token from mailbox connection_config
             refresh_token: Optional refresh token from mailbox connection_config
+            mailbox_id: Optional mailbox ID to link filters to
 
         Returns:
             List of imported filter records
@@ -746,6 +747,8 @@ class GmailSyncService:
                     'is_active': True,
                     'updated_at': datetime.now(timezone.utc).isoformat()
                 }
+                if mailbox_id:
+                    filter_record['mailbox_id'] = mailbox_id
 
                 # Upsert filter
                 self.supabase.table('gmail_filters').upsert(
