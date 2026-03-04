@@ -525,10 +525,10 @@ class EmailRulesService:
         if mailbox_type == "gmail":
             return "gmail"  # type is gmail but may lack tokens (auth expired)
 
-        # Outlook: native outlook_live type OR archive extended with outlook
+        # Outlook: native outlook/outlook_live type OR archive extended with outlook
         if config.get("outlook_sync_enabled") and config.get("outlook_access_token"):
             return "outlook"
-        if mailbox_type == "outlook_live":
+        if mailbox_type in ("outlook", "outlook_live"):
             return "outlook"  # type is outlook but may lack tokens
 
         return ""
