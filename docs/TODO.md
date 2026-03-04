@@ -1,35 +1,81 @@
 # TODO List
 
+## NEXT UP: Invite User System
+
+### Invite User — Restrict Open Sign-Up (Planned)
+Design: `docs/INVITE_USER_SMTPLESS.md`
+
+- [ ] Migration 014: Create `pending_invites` table + user_profiles invite columns
+- [ ] Backend: `invites.py` router — 6 endpoints (create, validate, accept, list, resend, revoke)
+- [ ] Backend: Auto-create inactive mailbox on invite acceptance (detect gmail/outlook from email domain)
+- [ ] Register invites router in `main.py`
+- [ ] Frontend: Remove "Create Account" tab from login page (invite-only)
+- [ ] Frontend: `InviteUserModal.tsx` — two-step modal (form → delivery options)
+- [ ] Frontend: `invite-accept.tsx` — public invite acceptance page with OAuth/magic link sign-in
+- [ ] Frontend: Update Users page — "Invite User" button + pending invites in table
+- [ ] Frontend: Update AuthContext — invite acceptance check on login
+- [ ] Frontend: Dashboard banner — "Connect your email" prompt for unconnected mailboxes
+
+---
+
+## PRIORITY FIXES: Sprint 3 AI Issues
+
+### Fix 1: "Analyse New Emails" processes age-old emails
+**Problem:** `ai_email_analyzer.py` fetches ALL unanalyzed emails with no date filter — processes years-old emails instead of recent ones.
+**Solution:**
+- [ ] Add `date_from`/`date_to` params to `POST /ai/analyze/{mailbox_id}` endpoint
+- [ ] Default to **last 7 days** when no date range specified
+- [ ] Add `.gte("sent_date", date_from).lte("sent_date", date_to)` filter to email selection query
+- [ ] Frontend: Add date range picker to analysis trigger (default: last 7 days)
+- **Files:** `backend/src/services/ai_email_analyzer.py`, `backend/src/routers/ai.py`, frontend analysis trigger
+
+### Fix 2: Daily Digest processes old emails — add Weekly Digest
+**Problem:** `ai_digest_generator.py` generates a daily digest but considers old analyzed emails, not just that day's mail.
+**Solution:**
+- [ ] **Daily Digest:** Only process emails from last 1 calendar day (24h window of the selected mailbox)
+- [ ] **Weekly Digest:** New mode — process last 7 complete days of the selected mailbox
+- [ ] Add `digest_type` param (`daily` | `weekly`) to `GET /ai/digest/{mailbox_id}`
+- [ ] Filter `ai_email_intelligence` by `sent_date` within the digest time window (not just `created_at`)
+- [ ] Adjust prompt to reflect time scope ("Here are today's emails" vs "Here is this week's summary")
+- [ ] Frontend: Toggle between Daily/Weekly digest view
+- **Files:** `backend/src/services/ai_digest_generator.py`, `backend/src/routers/ai.py`, frontend digest page
+
+### Fix 3: Reduce AI processing cost by 50%+
+**Problem:** Current cost ~$0.001/email with Haiku (batch of 10). Target: halve it.
+**Solution — multiple levers:**
+- [ ] **Increase batch size:** 10 → 20 emails per Claude call (halves per-call overhead, ~40% cost reduction)
+- [ ] **Reduce body truncation:** 500 → 300 chars (reduces input tokens by ~40%)
+- [ ] **Smarter pre-filtering:** Skip emails with body < 50 chars (trivial one-liners have no business signal)
+- [ ] **Skip forwards-only:** Detect "FW:" with no added body — skip these as zero-signal
+- [ ] **Cache aggressively:** Skip re-analysis of emails already in `ai_email_intelligence` even if prompt version matches
+- [ ] Update `MAX_BODY_LENGTH` and `BATCH_SIZE` constants in `ai_email_analyzer.py` and `ai_privacy_filter.py`
+- [ ] Validate cost reduction via `GET /ai/usage/costs` before and after
+- **Files:** `backend/src/services/ai_email_analyzer.py`, `backend/src/services/ai_privacy_filter.py`, `backend/src/services/ai_client.py`
+
+---
+
 ## CURRENT FOCUS: Sprint 3 AI Layer
 
-### Sprint 3 Phase 1: Semantic Intent & Sentiment Engine
-- [ ] Create `AIIntentProcessor` service — classify emails into strategic categories
-  - Categories: Pricing Inquiry, Feature Request, Expansion Signal, Churn Risk
-  - Use Claude API (latest model, cost-optimized)
-- [ ] Add `sentiment_score` field to customer_contacts and emails
-- [ ] Build sentiment drift detection — track tone shifts across email threads
-- [ ] Create urgency detection — identify hidden urgency from email body context
-- [ ] Update `normalizer.py` to include `body_summary` and `detected_sentiment` fields
-- [ ] Modify `email_tagger.py` to call Claude API for intent classification on emails >100 chars
-- [ ] Build AI usage tracking table and admin dashboard for cost control
+Full plan: `docs/AI_MVP_PLAN.md` (3-week session-by-session plan + implementation status)
 
-### Sprint 3 Phase 2: Entity & Opportunity Extraction
-- [ ] Automate detection of competitors, product names, budget mentions in emails
-- [ ] Modify `engagement_scorer.py` to weight buying signals (procurement, legal review, implementation timeline)
-- [ ] Use Claude to infer job functions from email signatures when `title_parser.py` fails
-- [ ] Create `business_entities` table for extracted entities
+### Week 1: Intelligence Engine + Buckets + Digest — ✅ COMPLETE
+- [x] Session 1: DB migration + AI client + privacy filter + usage tracker
+- [x] Session 2: Email analyzer (classify + extract entities + justify)
+- [x] Session 3: Action bucket engine (zero AI cost)
+- [x] Session 4: Entity aggregator + all API endpoints (19 endpoints in `ai.py`)
+- [x] Session 5: Digest service (bucket-aware)
 
-### Sprint 3 Phase 3: Hidden Network & Relationship Insights
-- [ ] Implement influence mapping — track high-seniority CC entries as "Stakeholder Entry" insights
-- [ ] Build communication gap analysis — flag single-contact-dependency risk
-- [ ] Add relationship summarization — Claude-generated 3-sentence executive summaries
-- [ ] Add summary to contact-detail page
+### Week 2: Dashboard Integration + Opportunities — PARTIAL (Frontend pages done, backend integration pending)
+- [x] Session 6: Digest + Smart Inbox frontend (4 pages: inbox, digest, opportunities, usage)
+- [ ] Session 7: Relationship summary service (`ai_relationship_summarizer.py`)
+- [ ] Session 8: Company detail page AI cards
+- [ ] Session 9: Opportunities page Tab 5 (Budget Discussions) — 4 of 5 tabs done
+- [ ] Session 10: AM Comparison + Gap Alerts
 
-### Sprint 3 Phase 4: Proactive "Next Best Action"
-- [ ] Build suggested responses — AI-drafted replies based on thread history and intent
-- [ ] Create proactive churn alerts — auto-flag accounts with >30% engagement velocity drop
-- [ ] Build marketing trigger exports — identify champions, export to CSV/CRM
-- [ ] Update dashboard with "Top Opportunities" card based on AI-detected buying signals
+### Week 3: Polish + Deploy — NOT STARTED
+- [ ] Session 11: Navigation + usage page + cross-linking (sidebar done, Quick Insights not built)
+- [ ] Session 12: Integration testing
+- [ ] Session 13: Production deploy + docs
 
 ---
 
@@ -108,6 +154,13 @@
 - [ ] Saved searches/filters
 
 ## Completed ✅
+
+### Documentation Cleanup (Mar 3, 2026)
+- [x] Consolidated AI MVP plans (v2, v3, v3.1, v3.2) into single `AI_MVP_PLAN.md` (final)
+- [x] Updated CLAUDE.md with invite system plan + current status
+- [x] Updated CONTINUATION_GUIDE.md with invite system + AI MVP references
+- [x] Updated TODO.md with structured Sprint 3 session plan
+- [x] Documented invite user system requirements in `INVITE_USER_SMTPLESS.md`
 
 ### Post-Production Fixes (Feb 26-27, 2026)
 - [x] **Fix uniform engagement scores** — comm_pattern_analyzer missing 3 fields + wrong field name, company scorer had hardcoded values

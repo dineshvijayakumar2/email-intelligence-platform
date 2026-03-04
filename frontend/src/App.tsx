@@ -31,7 +31,14 @@ import { CompanyDetail } from './pages/analytics/company-detail';
 import { ThreadAnalytics } from './pages/analytics/threads';
 import { ResponseTimesAnalytics } from './pages/analytics/response-times';
 import { CommunicationPatterns } from './pages/analytics/patterns';
+import { EmailRulesPage } from './pages/analytics/email-rules';
 import { ExtractionManagement } from './pages/extraction';
+
+// Intelligence pages (Sprint 3)
+import InboxPage from './pages/intelligence/inbox';
+import DigestPage from './pages/intelligence/digest';
+import OpportunitiesPage from './pages/intelligence/opportunities';
+import UsagePage from './pages/intelligence/usage';
 
 // Theme and styles
 import { antTheme } from './theme/glassTheme';
@@ -189,8 +196,15 @@ function App() {
             <Route path="/analytics/companies/:companyId" element={<ProtectedRoute><Layout><CompanyDetail /></Layout></ProtectedRoute>} />
             <Route path="/analytics/threads" element={<ProtectedRoute><Layout><ThreadAnalytics /></Layout></ProtectedRoute>} />
             <Route path="/analytics/response-times" element={<ProtectedRoute><Layout><ResponseTimesAnalytics /></Layout></ProtectedRoute>} />
+            <Route path="/analytics/email-rules" element={<ProtectedRoute><Layout><EmailRulesPage /></Layout></ProtectedRoute>} />
             <Route path="/analytics/patterns" element={<ProtectedRoute><Layout><CommunicationPatterns /></Layout></ProtectedRoute>} />
             <Route path="/extraction" element={<ProtectedRoute><Layout><ExtractionManagement /></Layout></ProtectedRoute>} />
+
+            {/* Intelligence routes (Sprint 3) */}
+            <Route path="/intelligence/inbox" element={<ProtectedRoute><Layout><InboxPage /></Layout></ProtectedRoute>} />
+            <Route path="/intelligence/digest" element={<ProtectedRoute><Layout><DigestPage /></Layout></ProtectedRoute>} />
+            <Route path="/intelligence/opportunities" element={<ProtectedRoute><Layout><OpportunitiesPage /></Layout></ProtectedRoute>} />
+            <Route path="/intelligence/usage" element={<AdminRoute><Layout><UsagePage /></Layout></AdminRoute>} />
 
             {/* Admin-only routes */}
             <Route

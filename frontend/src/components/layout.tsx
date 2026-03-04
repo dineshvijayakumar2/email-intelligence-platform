@@ -14,7 +14,6 @@ import {
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   DashboardOutlined,
-  MailOutlined,
   InboxOutlined,
   SettingOutlined,
   ExclamationCircleOutlined,
@@ -28,6 +27,8 @@ import {
   BarChartOutlined,
   RocketOutlined,
   DatabaseOutlined,
+  BulbOutlined,
+  MailOutlined,
 } from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -38,7 +39,11 @@ const { Title, Text } = Typography;
 const pageTitles: Record<string, string> = {
   '/': 'Dashboard',
   '/mailboxes': 'Mailboxes',
-  '/emails': 'Emails',
+  '/intelligence/inbox': 'Smart Inbox',
+  '/intelligence/digest': 'Daily Digest',
+  '/intelligence/opportunities': 'Opportunities',
+  '/intelligence/usage': 'AI Usage',
+  '/emails': 'All Emails',
   '/processing': 'Processing Jobs',
   '/errors': 'Error Logs',
   '/analytics': 'Analytics',
@@ -46,6 +51,7 @@ const pageTitles: Record<string, string> = {
   '/analytics/companies': 'Company Analytics',
   '/analytics/threads': 'Thread Analytics',
   '/analytics/response-times': 'Response Times',
+  '/analytics/email-rules': 'Email Rules',
   '/analytics/patterns': 'Communication Patterns',
   '/extraction': 'Extraction Management',
   '/clients': 'Clients',
@@ -101,6 +107,17 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
       label: <Link to="/mailboxes">Mailboxes</Link>,
     },
     {
+      key: '/intelligence',
+      icon: <BulbOutlined />,
+      label: 'Intelligence',
+      children: [
+        { key: '/intelligence/inbox', label: <Link to="/intelligence/inbox">Smart Inbox</Link> },
+        { key: '/intelligence/digest', label: <Link to="/intelligence/digest">Daily Digest</Link> },
+        { key: '/intelligence/opportunities', label: <Link to="/intelligence/opportunities">Opportunities</Link> },
+        ...(isAdmin ? [{ key: '/intelligence/usage', label: <Link to="/intelligence/usage">AI Usage</Link> }] : []),
+      ],
+    },
+    {
       key: '/emails',
       icon: <MailOutlined />,
       label: <Link to="/emails">Emails</Link>,
@@ -125,6 +142,7 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
         { key: '/analytics/companies', label: <Link to="/analytics/companies">Companies</Link> },
         { key: '/analytics/threads', label: <Link to="/analytics/threads">Threads</Link> },
         { key: '/analytics/response-times', label: <Link to="/analytics/response-times">Response Times</Link> },
+        { key: '/analytics/email-rules', label: <Link to="/analytics/email-rules">Email Rules</Link> },
         { key: '/analytics/patterns', label: <Link to="/analytics/patterns">Patterns</Link> },
       ],
     },

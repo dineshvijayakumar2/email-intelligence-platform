@@ -20,7 +20,7 @@ A comprehensive email intelligence platform for processing, analyzing, and extra
 - Google Drive OAuth2 integration for seamless file access
 
 ### Stage 2: Complete - Business Intelligence Layer
-**Status**: Sprint 1 & Sprint 2 Backend Complete (February 26, 2026)
+**Status**: Sprint 1 & Sprint 2 FULLY COMPLETE (February 26, 2026)
 
 **Sprint 1 - Foundation (Weeks 1-3)** - **COMPLETE**:
 - Account Manager & Client Hierarchy (Production Deployed)
@@ -29,7 +29,7 @@ A comprehensive email intelligence platform for processing, analyzing, and extra
 - Outlook LIVE Sync Integration (Production Deployed)
 - Date Range Processing (Gmail & Outlook)
 
-**Sprint 2 - Customer Data Extraction (Weeks 4-6)** - **BACKEND COMPLETE**:
+**Sprint 2 - Customer Data Extraction (Weeks 4-6)** - **COMPLETE**:
 - 13-step extraction pipeline processing 26,000+ emails
 - Contact database with auto-extraction, deduplication, role classification
 - Company resolution with domain grouping and engagement scoring
@@ -39,14 +39,33 @@ A comprehensive email intelligence platform for processing, analyzing, and extra
 - 30 REST API analytics endpoints (all tested)
 - Incremental extraction mode (full + incremental with configurable lookback)
 - Production-grade pagination, retry logic, and batch processing
+- Analytics Frontend: 6 pages (Dashboard, Contacts, Companies, Threads, Errors, Email Rules)
 
-**Sprint 3 - AI Semantic Intelligence (Next)**:
-- AI Intent Classification (pricing inquiry, feature request, churn risk)
-- Sentiment Drift Detection (tone shift tracking across threads)
-- Business Entity Extraction (competitors, products, budget mentions)
-- Lead Scoring 2.0 (buying signal detection)
-- Influence Mapping & Relationship Summarization
-- Proactive Churn Alerts & Next Best Action recommendations
+### Stage 3: In Progress - AI Semantic Intelligence
+**Status**: Sprint 3 Week 1 + Frontend COMPLETE (March 3, 2026)
+
+**Sprint 3 - AI Layer (Week 1 COMPLETE)**:
+- Three-layer AI architecture: Per-Email AI → Action Bucket Engine → Aggregation
+- Claude API integration (Haiku for per-email, Sonnet for digests) with cost tracking
+- PII privacy filter (strips credit cards, SSN, API keys, passwords before AI)
+- Multi-axis email classification (intent, action_type, business_signal, sentiment, urgency)
+- 8 Action Buckets (Buying Signal, Expansion, Churn Risk, Competitor Threat + 4 relationship-level)
+- Entity extraction (competitors, products, amounts, dates)
+- Daily AI digest generator with executive summaries
+- Email rules engine (auto-tag, auto-forward, priority escalation)
+- 19 AI API endpoints + 4 rules endpoints
+- AI Usage & Cost monitoring dashboard
+
+**Sprint 3 - Frontend (COMPLETE)**:
+- Smart Inbox with AI annotations and confidence-gated bucket tags
+- Daily Digest page with AI-generated summaries
+- Opportunities page (4 tabs: Buying Signals, Expansion, Churn Risk, Competitor)
+- Usage & Monitoring dashboard (cost tracking, model usage, processing stats)
+
+**Sprint 3 - Remaining (Sessions 7-13)**:
+- Relationship Intelligence (influence mapping, gap analysis, AI summaries)
+- Advanced Actions (suggested responses, churn alerts, marketing exports)
+- Integration & Polish (end-to-end testing, performance optimization)
 
 ---
 
@@ -182,7 +201,7 @@ The 13-step extraction pipeline automatically processes all emails in a mailbox 
 
 ### Sprint 2: Customer Data Extraction
 **Goal**: Automatic customer recognition, contact database, engagement analytics
-**Status**: **BACKEND COMPLETE** (February 26, 2026)
+**Status**: **COMPLETE** (February 26, 2026)
 
 | Epic | Description | Status |
 |------|-------------|--------|
@@ -195,28 +214,25 @@ The 13-step extraction pipeline automatically processes all emails in a mailbox 
 | Analytics API | 30 REST endpoints across 7 categories (extraction, contacts, companies, threads, etc.) | **Complete** |
 | Incremental Extraction | Full + incremental modes with configurable lookback (1-365 days) | **Complete** |
 | Production Fixes | Pagination (26K+ emails), NULL handling, retry logic, batch processing | **Complete** |
-| Admin Data View | Raw table data browser with search, filters, sort for all tables | Pending |
-| Frontend Dashboard | Analytics dashboard consuming 30 endpoints with charts and tables | Pending |
+| Analytics Frontend | 6 pages: Dashboard, Contacts, Companies, Threads, Errors, Email Rules | **Complete** |
 
 ### Sprint 3: AI Semantic Intelligence
 **Goal**: AI-powered semantic analysis, intent classification, and proactive relationship intelligence
+**Status**: **Week 1 + Frontend COMPLETE** (March 3, 2026)
 
-| Phase | Epic | Description | Status |
-|-------|------|-------------|--------|
-| 1 | Semantic Intent Engine | AI intent classification (pricing inquiry, feature request, expansion signal, churn risk) | Planned |
-| 1 | Sentiment Drift Detection | Track tone shifts across email threads using Claude API | Planned |
-| 1 | Urgency Detection | Detect hidden urgency from email body context | Planned |
-| 2 | Business Entity Extraction | Detect competitors, product names, budget mentions in emails | Planned |
-| 2 | Lead Scoring 2.0 | Weight buying signals (procurement, legal review, implementation timeline) | Planned |
-| 2 | AI Contact Enrichment | Infer job functions from email signatures and content via Claude | Planned |
-| 3 | Influence Mapping | Track stakeholder entry via CC patterns and seniority detection | Planned |
-| 3 | Communication Gap Analysis | Flag single-point-of-contact risk in company relationships | Planned |
-| 3 | Relationship Summarization | AI-generated 3-sentence executive summaries of relationship history | Planned |
-| 4 | Suggested Responses | AI-drafted responses based on thread history and detected intent | Planned |
-| 4 | Proactive Churn Alerts | Auto-flag accounts with >30% engagement velocity drop in 1 week | Planned |
-| 4 | Marketing Trigger Exports | Identify champions for case study recruitment, export to CSV/CRM | Planned |
+| Session | Description | Status |
+|---------|-------------|--------|
+| 1-2 | AI Client + Privacy Filter + Usage Tracker + DB Schema | **Complete** |
+| 3 | Per-Email AI Analyzer (multi-axis classification, entity extraction) | **Complete** |
+| 4 | Action Bucket Engine (8 buckets, confidence-gated) | **Complete** |
+| 5 | Entity Aggregator + Daily Digest Generator | **Complete** |
+| 6 | Email Rules Engine (auto-tag, auto-forward, priority escalation) | **Complete** |
+| 6b | Frontend: Smart Inbox, Digest, Opportunities, Usage pages | **Complete** |
+| 7-8 | Relationship Intelligence (influence mapping, gap analysis, AI summaries) | Pending |
+| 9-10 | Advanced Actions (suggested responses, churn alerts, marketing exports) | Pending |
+| 11-13 | Integration, testing, optimization, production deployment | Pending |
 
-**AI Model Strategy**: Claude API (latest model, cost-optimized) with admin usage tracking and cost control
+**AI Architecture**: Three-layer design — Per-Email AI (Claude Haiku ~$0.001/email) → Action Bucket Engine (pure Python) → Aggregation Layer (pure Python). Admin usage tracking with cost control.
 
 ---
 
@@ -299,6 +315,10 @@ Run in Supabase SQL Editor:
 15. `scripts/sprint2/sprint2_migration_009_comm_pattern_calcs.sql`
 16. `scripts/sprint2/sprint2_migration_010_incremental_mode.sql`
 
+**Sprint 3 Migrations (AI Layer):**
+17. `scripts/sprint3/sprint3_migration_013_ai_layer.sql` (AI tables + enums + indexes)
+18. `scripts/sprint3/sprint3_migration_014_add_skipped_status.sql` (skipped status for pre-filtered emails)
+
 See `scripts/sprint2/README_MIGRATIONS.md` for detailed migration guide.
 
 After running migrations, create initial admin user:
@@ -340,9 +360,11 @@ npm run dev
 
 - [Claude Code Instructions](docs/CLAUDE.md) - Development guidelines and best practices
 - [Sprint 2 Implementation](docs/SPRINT2_IMPLEMENTATION.md) - Complete extraction pipeline guide
+- [Sprint 3 AI MVP Plan](docs/AI_MVP_PLAN.md) - Full AI layer design (13 sessions, 3-layer architecture)
+- [Sprint 3 Implementation Plan](docs/SPRINT3_IMPLEMENTATION_PLAN.md) - Sprint 3 session-by-session plan
+- [Invite User System](docs/INVITE_USER_SMTPLESS.md) - Admin-controlled user onboarding (planned)
 - [Sprint 2 Migrations](scripts/sprint2/README_MIGRATIONS.md) - Database migration guide (10 migrations)
 - [Continuation Guide](docs/CONTINUATION_GUIDE.md) - Session handoff and next steps
-- [Update Context](docs/UPDATE_CONTEXT.md) - Current session state and progress
 - [Google OAuth Setup](docs/GOOGLE_OAUTH_SETUP.md) - Gmail LIVE sync and Google Drive setup
 - [Azure AD OAuth Setup](docs/AZURE_OAUTH_SETUP.md) - Outlook LIVE sync and Microsoft login
 - [Google Drive Integration](docs/GOOGLE_DRIVE_INTEGRATION.md) - OAuth setup and file access
@@ -356,14 +378,16 @@ npm run dev
 
 ### Backend
 - **Framework**: FastAPI 0.104+
-- **Database**: Supabase (PostgreSQL) with 10 Sprint 2 migrations
+- **Database**: Supabase (PostgreSQL) with 10 Sprint 2 + 2 Sprint 3 migrations
 - **Authentication**: Supabase Auth + PyJWT
 - **Cache**: Redis 7.0+
-- **AI**: Claude API (Sprint 3 - cost-optimized with usage tracking)
+- **AI**: Claude API (Haiku for per-email analysis, Sonnet for digests) with PII filter + cost tracking
 - **Cloud Storage**: Google Drive API
 - **Processing**: ThreadPoolExecutor (20 workers)
 - **Extraction Pipeline**: 13-step orchestrator with 8 specialized services
 - **Analytics**: 30 REST endpoints with pagination, filtering, and batch operations
+- **AI Services**: 7 services (client, privacy filter, usage tracker, analyzer, bucket engine, aggregator, digest)
+- **AI API**: 19 AI endpoints + 4 rules endpoints
 
 ### Frontend
 - **Framework**: React 18 + TypeScript
@@ -433,8 +457,8 @@ MIT License - see LICENSE file for details
 
 ---
 
-**Stage 1 Complete | Stage 2 Sprint 1 + Sprint 2 Backend Complete**
+**Stage 1 Complete | Stage 2 Complete | Stage 3 (AI) In Progress — Week 1 + Frontend Complete**
 
-*Last Updated: February 26, 2026*
+*Last Updated: March 3, 2026*
 
 *Built with Python, TypeScript, React, Supabase Auth, Claude AI, Google Cloud APIs, and Microsoft Graph API*

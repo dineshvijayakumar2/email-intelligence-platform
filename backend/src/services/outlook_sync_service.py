@@ -747,6 +747,153 @@ class OutlookSyncService:
         }
 
 
+    # =====================================================================
+    # Outlook Inbox Rules Import
+    # =====================================================================
+
+    async def import_rules(self, user_id: str = None, mailbox_id: str = None) -> List[Dict]:
+        """
+        Import inbox rules from Outlook via Microsoft Graph API.
+
+        Supports two modes:
+        1. user_id → reads tokens from user_integrations (legacy)
+        2. mailbox_id → reads tokens from mailbox connection_config (preferred)
+
+        Returns:
+            List of imported rule records
+        """
+        access_token = None
+        refresh_token = None
+
+        if mailbox_id:
+            result = self.supabase.table('mailboxes').select(
+                'connection_config,user_id'
+            ).eq('id', mailbox_id).execute()
+
+            if not result.data:
+                raise ValueError(f"Mailbox {mailbox_id} not found")
+
+            mailbox_row = result.data[0]
+            config = mailbox_row.get('connection_config') or {}
+            if not config.get('outlook_access_token'):
+                raise ValueError(f"Mailbox {mailbox_id} does not have Outlook connected")
+
+            access_token = config['outlook_access_token']
+            refresh_token = config.get('outlook_refresh_token')
+            # Resolve user_id: config > mailbox row > fallback to mailbox_id
+            user_id = (
+                config.get('outlook_user_id')
+                or mailbox_row.get('user_id')
+                or user_id
+                or mailbox_id
+            )
+
+        elif user_id:
+            result = self.supabase.table('user_integrations').select(
+                'access_token, refresh_token'
+            ).eq('user_id', user_id).eq('provider', 'outlook').execute()
+
+            if not result.data:
+                raise ValueError(f"No Outlook integration found for user {user_id}")
+
+            access_token = result.data[0]['access_token']
+            refresh_token = result.data[0].get('refresh_token')
+        else:
+            raise ValueError("Either user_id or mailbox_id must be provided")
+
+        # Fetch rules from Microsoft Graph
+        headers = {
+            'Authorization': f'Bearer {access_token}',
+            'Content-Type': 'application/json',
+        }
+
+        import requests as http_requests
+        response = http_requests.get(
+            'https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messageRules',
+            headers=headers,
+        )
+
+        # If 401, try token refresh
+        if response.status_code == 401 and refresh_token:
+            logger.info("Token expired, attempting refresh for rules import")
+            new_token = self._refresh_token_for_import(refresh_token)
+            if new_token:
+                access_token = new_token
+                headers['Authorization'] = f'Bearer {access_token}'
+                response = http_requests.get(
+                    'https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messageRules',
+                    headers=headers,
+                )
+                # Update stored token
+                if mailbox_id:
+                    await self._update_mailbox_token(mailbox_id, access_token)
+
+        response.raise_for_status()
+        rules = response.json().get('value', [])
+        imported = []
+
+        for rule_data in rules:
+            rule_record = {
+                'user_id': user_id,
+                'rule_id': rule_data['id'],
+                'display_name': rule_data.get('displayName', ''),
+                'sequence': rule_data.get('sequence', 0),
+                'is_enabled': rule_data.get('isEnabled', True),
+                'conditions': rule_data.get('conditions') or {},
+                'actions': rule_data.get('actions') or {},
+                'exceptions': rule_data.get('exceptions') or {},
+                'updated_at': datetime.now(timezone.utc).isoformat(),
+            }
+
+            self.supabase.table('outlook_rules').upsert(
+                rule_record,
+                on_conflict='user_id,rule_id',
+            ).execute()
+
+            imported.append(rule_record)
+
+        logger.info(f"Imported {len(imported)} Outlook rules for user {user_id}")
+        return imported
+
+    def _refresh_token_for_import(self, refresh_token: str) -> Optional[str]:
+        """Refresh access token for rules import. Returns new access_token or None."""
+        try:
+            client_id = os.getenv("MICROSOFT_CLIENT_ID")
+            client_secret = os.getenv("MICROSOFT_CLIENT_SECRET")
+            tenant_id = os.getenv("MICROSOFT_TENANT_ID", "common")
+
+            if not client_id or not client_secret:
+                return None
+
+            import requests as http_requests
+            token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
+            response = http_requests.post(token_url, data={
+                'client_id': client_id,
+                'client_secret': client_secret,
+                'refresh_token': refresh_token,
+                'grant_type': 'refresh_token',
+                'scope': 'openid profile email offline_access Mail.Read User.Read MailboxSettings.Read',
+            })
+            response.raise_for_status()
+            return response.json().get('access_token')
+        except Exception as e:
+            logger.error(f"Token refresh failed for rules import: {e}")
+            return None
+
+    async def _update_mailbox_token(self, mailbox_id: str, new_token: str):
+        """Update the access token in mailbox connection_config after refresh."""
+        try:
+            result = self.supabase.table('mailboxes').select('connection_config').eq('id', mailbox_id).execute()
+            if result.data:
+                config = result.data[0].get('connection_config') or {}
+                config['outlook_access_token'] = new_token
+                self.supabase.table('mailboxes').update({
+                    'connection_config': config,
+                }).eq('id', mailbox_id).execute()
+        except Exception as e:
+            logger.warning(f"Failed to update mailbox token: {e}")
+
+
 # =========================================================================
 # Singleton instance management
 # =========================================================================

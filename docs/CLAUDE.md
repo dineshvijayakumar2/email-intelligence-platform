@@ -98,11 +98,17 @@ Frontend → FastAPI → ThreadPool (20 workers) → Email Processing Pipeline
 ### Authentication & Authorization
 - **Supabase Auth**: Email/password, Google OAuth, Microsoft OAuth
 - **3 User Roles**:
-  - **Admin**: Access to all mailboxes, user management
-  - **Client Manager**: Access to mailboxes of assigned clients
+  - **Admin**: Access to all mailboxes, user management, invite users
+  - **Client Manager**: Access to mailboxes of assigned clients, invite users
   - **Account Manager**: Access to own mailboxes only
 - **JWT Verification**: Backend supports ES256/RS256 (JWKS) and HS256 (shared secret)
 - **RLS Policies**: Row-level security enforces access control at database level
+- **User Onboarding**: Invite-only (no open sign-up). See `docs/INVITE_USER_SMTPLESS.md` for design.
+  - Admin creates invite → assigns role + client
+  - User accepts via magic link, shared link, or direct OAuth login
+  - On acceptance: user_profiles created, client assigned, mailbox auto-created (inactive)
+  - Dashboard prompts new user to authorize Gmail/Outlook OAuth to activate mailbox
+  - **Status:** Planned — implementation pending
 
 ### Route-Based Navigation (Feb 2026)
 - **Emails Page**: `/emails/:mailboxId` - Each mailbox has its own URL
@@ -213,6 +219,8 @@ VITE_MICROSOFT_REDIRECT_URI=http://localhost:3001/auth/microsoft/callback
   - **CHANGELOG.md**: User-facing release notes
   - **TODO.md**: Active task tracking
   - **CLAUDE.md**: This file
+  - **AI_MVP_PLAN.md**: Sprint 3 AI MVP plan (final)
+  - **INVITE_USER_SMTPLESS.md**: Invite user system design (SMTP-less)
 - **scripts/**: Utility scripts
   - **migrations/**: Stage 1 database migration scripts
   - **sprint2/**: Sprint 2 migrations (001-012) + master schema v1.8+
@@ -347,29 +355,43 @@ Validate → Extract Contacts → Deduplicate → Resolve Companies
 7. Ant Design v5 Slider: use `onChangeComplete` for API triggers, `onChange` only for visual state
 8. `nullsfirst=False` in Supabase `.order()` to push NULLs to end in DESC sort
 
-### Current Focus: Sprint 3 — AI Semantic Intelligence
+### Upcoming: Invite User System (Planned)
 
-**Recently Completed (Feb 26-27):**
-- Admin Data View (raw table browser with search, sort, pagination, CSV export)
-- Analytics Frontend (6 pages: dashboard, contacts, companies, threads, contact-detail, company-detail)
-- Engagement score display (labels: High/Medium/Low/Very Low alongside numeric scores)
-- Sorting + filtering on all analytics tables (server-side sort, engagement status/type/score filters)
-- Migration 011: Fix RPC functions for email counts, contact dates, thread data
-- Migration 012: Backfill scoring input fields (last_inbound/outbound, emails_per_month_avg, initiation_ratio, reply_rate, frequency_trend)
-- Fixed uniform engagement scores: comm_pattern_analyzer now sends all fields, company scorer uses real data
+Restrict open sign-up — admin-controlled user onboarding via invite system.
+- **Design doc:** `docs/INVITE_USER_SMTPLESS.md`
+- **Key features:** 3-path invite flow (magic link, shared link, direct OAuth), auto-mailbox creation on acceptance, dashboard connection prompt
+- **Backend:** `invites.py` router (6 endpoints), `pending_invites` table, migration 014
+- **Frontend:** InviteUserModal, InviteAcceptPage, Users page integration, login page sign-up removal
 
-**Immediate tasks:**
-1. **AI Usage Tracking** — Admin dashboard for Claude API cost monitoring
+### Sprint 3: AI Semantic Intelligence — IN PROGRESS (Week 1 Complete, Week 2 Partial)
 
-**Sprint 3 Phases:**
-1. **Semantic Intent Engine** — AI intent classification, sentiment drift, urgency detection
-2. **Entity & Opportunity Extraction** — Competitors, products, budget mentions, lead scoring 2.0
-3. **Relationship Insights** — Influence mapping, gap analysis, AI relationship summaries
-4. **Proactive Actions** — Suggested responses, churn alerts, marketing trigger exports
+**Three-Layer Architecture** (see [AI_MVP_PLAN.md](AI_MVP_PLAN.md) for full plan + implementation status):
+1. **Per-Email AI** (Claude Haiku, ~$0.001/email) — classify + extract entities + justify in ONE API call
+2. **Action Bucket Engine** (pure Python, $0) — translates AI scores into 8 business action buckets
+3. **Aggregation Layer** (pure Python, $0) — entity rollup, daily digest, relationship summaries
 
-**AI Strategy:** Claude API (latest model, cost-optimized) with per-request usage tracking
+**What's Built (Sessions 1-6):**
+- 7 backend AI services: `ai_client.py`, `ai_privacy_filter.py`, `ai_usage_tracker.py`, `ai_email_analyzer.py`, `ai_action_bucket_engine.py`, `ai_entity_aggregator.py`, `ai_digest_generator.py`
+- 19 API endpoints in `backend/src/routers/ai.py` + 4 in `rules.py`
+- Backend models: `backend/src/models/ai.py`, `backend/src/models/rules.py`
+- 4 frontend pages: Smart Inbox (`/intelligence/inbox`), Daily Digest (`/intelligence/digest`), Opportunities (`/intelligence/opportunities`), Usage (`/intelligence/usage`)
+- 2 shared components: `ActionBucketTag`, `FeedbackButtons`
+- Frontend service: `aiService.ts` (16 endpoints, TTL cache, dedup), `rulesService.ts`
+- Types: `ai.ts` (13 enums, comprehensive interfaces)
+- Email Rules page: `/analytics/email-rules`
 
-See [TODO.md](TODO.md) for detailed task list and [CONTINUATION_GUIDE.md](CONTINUATION_GUIDE.md) for implementation plan.
+**What's Remaining (Sessions 7-13):**
+- Relationship summary service + company detail AI cards
+- AM comparison + gap alerts (bucket-enriched)
+- Main dashboard Quick Insights card + cross-linking
+- Integration testing + production deployment
+
+**Known Issues to Fix:**
+1. Email analysis has no date filter — processes all unanalyzed emails (fix: add date_from/date_to, default 7 days)
+2. Digest considers old emails, no weekly mode (fix: add digest_type daily/weekly, filter by sent_date)
+3. AI cost too high (fix: batch 10→20, body 500→300 chars, skip trivial/forwards)
+
+See [TODO.md](TODO.md) for task list, [CONTINUATION_GUIDE.md](CONTINUATION_GUIDE.md) for handoff, [AI_MVP_PLAN.md](AI_MVP_PLAN.md) for session-by-session plan.
 
 ---
 

@@ -45,6 +45,12 @@ from src.routers.analytics import router as analytics_router, init_analytics_rou
 # Admin Data View Router
 from src.routers.admin import router as admin_router, init_admin_router
 
+# Sprint 3: AI Intelligence Router
+from src.routers.ai import router as ai_router, init_ai_router
+
+# Email Rules Intelligence
+from src.routers.rules import router as rules_router, init_rules_router
+
 # Stage 2: Error Router
 from src.routers.errors import router as errors_router, init_error_router
 
@@ -478,6 +484,8 @@ def initialize_business_hierarchy_routers():
     init_contacts_router(sb)
     init_analytics_router(sb)  # Sprint 2 Phase 5A
     init_admin_router(sb)  # Admin Data View
+    init_ai_router(sb)  # Sprint 3 AI Intelligence
+    init_rules_router(sb)  # Email Rules Intelligence
     # Initialize error router with Supabase client and job error logger
     error_logger = get_error_logger()
     init_error_router(
@@ -500,6 +508,8 @@ app.include_router(customers_router, prefix="/api")
 app.include_router(contacts_router, prefix="/api")
 app.include_router(analytics_router, prefix="/api/v1")  # Sprint 2 Phase 5A
 app.include_router(admin_router, prefix="/api/v1")  # Admin Data View
+app.include_router(ai_router, prefix="/api/v1")  # Sprint 3 AI Intelligence
+app.include_router(rules_router, prefix="/api/v1")  # Email Rules Intelligence
 app.include_router(errors_router, prefix="/api")
 app.include_router(gmail_router, prefix="/api")
 app.include_router(outlook_router, prefix="/api")

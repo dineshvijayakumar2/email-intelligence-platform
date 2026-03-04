@@ -2,36 +2,39 @@
 # Python 3.9+
 
 # Core API
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-python-multipart==0.0.6
-aiofiles==23.2.1
+fastapi>=0.104.1
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
+aiofiles>=23.2.1
 
 # Database
-supabase==2.0.2
-psycopg2-binary==2.9.9
-redis==5.0.1
+supabase>=2.0.2
+psycopg2-binary>=2.9.9
+redis>=5.0.1
 
 # Configuration
-python-dotenv==1.0.0
-pydantic==2.5.0
+python-dotenv>=1.0.0
+pydantic>=2.5.0
 
 # Email Processing
-flanker==0.9.11
-python-dateutil==2.8.2
-email-validator==2.1.0
+flanker>=0.9.11
+python-dateutil>=2.8.2
+email-validator>=2.1.0
 
 # Azure/Outlook
-msal==1.25.0
-requests==2.31.0
-httpx==0.24.1
+msal>=1.25.0
+requests>=2.31.0
+httpx>=0.24.1
+
+# AI / Claude API
+anthropic>=0.42.0
 
 # Utilities
-tqdm==4.66.1
-pyyaml==6.0.1
+tqdm>=4.66.1
+pyyaml>=6.0.1
 
 # Authentication
-PyJWT==2.8.0
+PyJWT>=2.8.0
 
 # Google Drive
 google-auth>=2.23.0

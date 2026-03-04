@@ -1,7 +1,7 @@
 # Continuation Guide — Sprint 3: AI Semantic Intelligence
 
-**Last Updated:** 2026-02-27
-**Current Status:** Sprint 2 FULLY COMPLETE ✅ | Analytics Frontend COMPLETE ✅ | Admin Data View COMPLETE ✅ | Ready for Sprint 3
+**Last Updated:** 2026-03-03
+**Current Status:** Sprint 2 COMPLETE ✅ | Sprint 3 AI Week 1 COMPLETE ✅ | Sprint 3 Frontend (4 pages) COMPLETE ✅ | Invite User System PLANNED | AI Priority Fixes PENDING
 
 ---
 
@@ -9,22 +9,24 @@
 
 **Copy/paste this:**
 
-> "Sprint 2 is FULLY COMPLETE including frontend. Check `docs/CONTINUATION_GUIDE.md` and `MEMORY.md` for full context.
+> "Sprint 2 COMPLETE. Sprint 3 AI Layer partially built. Check `docs/CONTINUATION_GUIDE.md` and `MEMORY.md` for full context.
 >
 > **What's complete:**
-> - 13-step extraction pipeline processing 26,000+ emails in production
-> - 30 REST API analytics endpoints (all tested)
-> - 12 database migrations (master schema v1.8+)
-> - Analytics frontend: 6 pages (dashboard, contacts, companies, threads, contact-detail, company-detail)
-> - Admin Data View: raw table browser with search, sort, pagination, CSV export
-> - Post-production fixes: scoring accuracy, slider UX, label clarity, backfill migrations
-> - 100% email link rate, ~1.5min full extraction, ~15-30s incremental
+> - Sprint 2: 13-step extraction pipeline, 30 analytics endpoints, 12 migrations, 6 analytics pages + Admin Data View
+> - Sprint 3 Week 1: 7 AI backend services, 19 API endpoints, action bucket engine, digest service
+> - Sprint 3 Frontend: 4 intelligence pages (Smart Inbox, Digest, Opportunities, Usage), 2 shared components, aiService.ts, types
+>
+> **What's planned (not yet implemented):**
+> - **Invite User System** — Restrict open sign-up, admin-controlled onboarding. Design: `docs/INVITE_USER_SMTPLESS.md`
+> - **AI Priority Fixes** — Date-range filtering, daily/weekly digest, 50% cost reduction
+> - **Sprint 3 Sessions 7-13** — Relationship summaries, company AI cards, AM comparison, gap alerts, testing, deploy
 >
 > **What to build next:**
-> 1. **Sprint 3 AI Layer** — Semantic intent classification, sentiment tracking, entity extraction
-> 2. **AI Usage Tracking** — Admin dashboard for Claude API cost monitoring
+> 1. **AI Priority Fixes** — Fix 3 issues before continuing (see TODO.md)
+> 2. **Sprint 3 Sessions 7-13** — See `docs/AI_MVP_PLAN.md` for plan + implementation status
+> 3. **Invite User System** — See `docs/INVITE_USER_SMTPLESS.md` for full design
 >
-> Start with Sprint 3 Phase 1: Semantic Intent & Sentiment Engine."
+> Start with AI Priority Fixes, then continue Sprint 3 Sessions 7-13."
 
 ---
 
@@ -104,74 +106,86 @@ Analytics API (30 endpoints at /api/v1/analytics/):
 
 ---
 
+## Sprint 3 AI Implementation Status
+
+### What's Built (Sessions 1-6) ✅
+
+**Backend Services (7):** All in `backend/src/services/`
+- `ai_client.py` — Claude Haiku + Sonnet, rate limiting, retry, budget caps ($2/day, $16/month)
+- `ai_privacy_filter.py` — Strips PII, MAX_BODY_LENGTH=500
+- `ai_usage_tracker.py` — Per-operation cost tracking
+- `ai_email_analyzer.py` — BATCH_SIZE=10, 12 intent categories, entity extraction
+- `ai_action_bucket_engine.py` — 8 bucket types (4 email-level + 4 relationship-level), zero cost
+- `ai_entity_aggregator.py` — Entity rollup into `ai_business_entities`
+- `ai_digest_generator.py` — Claude Sonnet, daily digest with bucket language
+
+**API Endpoints (23):**
+- `backend/src/routers/ai.py` — 19 endpoints (analyze, intelligence, action items, feedback, entities, digest, summaries, usage)
+- `backend/src/routers/rules.py` — 4 endpoints (email rules CRUD)
+
+**Frontend Pages (4):** All at `/intelligence/`
+- Smart Inbox — filters, bucket chips, detail drawer, feedback buttons, analysis trigger
+- Daily Digest — date picker, bucket summary bar, action items, highlights
+- Opportunities — 4 tabs (Action Items, Opportunities, Competitors, Entities)
+- Usage & Monitoring — admin controls, budget tracking, cost breakdown, health metrics
+
+**Frontend Infrastructure:**
+- `aiService.ts` (16 endpoints, TTL cache, dedup), `rulesService.ts`
+- `ActionBucketTag.tsx`, `FeedbackButtons.tsx` shared components
+- `ai.ts` types (13 enums, comprehensive interfaces)
+- Email Rules page at `/analytics/email-rules`
+
+---
+
 ## Next Steps: What to Build
 
-### Step 1: Admin Data View (Immediate)
+### Step 1: AI Priority Fixes (3 Issues)
 
-Build a frontend page for admins to browse raw data from all Supabase tables.
+**Fix 1: Analysis processes age-old emails**
+- `ai_email_analyzer.py` has no date filter — fetches ALL unanalyzed emails regardless of age
+- Add `date_from`/`date_to` params, default to **last 7 days**
+- Files: `ai_email_analyzer.py`, `ai.py` router, frontend analysis trigger
 
-**Requirements:**
-- Table selector dropdown (all tables: emails, customer_contacts, customer_companies, extraction_jobs, thread_status, email_response_metrics, etc.)
-- Data table with all columns visible
-- Search across all columns
-- Column-level filters (text, number ranges, date ranges, enum dropdowns)
-- Sortable columns (click header to sort ASC/DESC)
-- Pagination with configurable page size (25/50/100/250)
-- Export to CSV
-- Admin-only access (role check)
+**Fix 2: Daily Digest considers old emails + add Weekly Digest**
+- Digest should only process emails within its time window (1 day or 7 days)
+- Add `digest_type` param (`daily` | `weekly`) to digest endpoint
+- Daily = last 24h, Weekly = last 7 complete days
+- Files: `ai_digest_generator.py`, `ai.py` router, frontend digest page
 
-**Implementation approach:**
-- Add a new route `/admin/data` in the existing React + Vite + Ant Design frontend
-- Use Ant Design `Table` component with built-in sorting and filtering
-- API: create a generic `/api/v1/admin/tables/{table_name}` endpoint that accepts query params for search, filters, sort, pagination
-- Backend validates table name against allowed list (prevent SQL injection)
+**Fix 3: Reduce AI cost by 50%+**
+- Increase batch size: 10 → 20 emails per call (~40% cost reduction)
+- Reduce body truncation: 500 → 300 chars (~40% fewer input tokens)
+- Skip trivial emails: body < 50 chars, forwards-only with no added text
+- Files: `ai_email_analyzer.py`, `ai_privacy_filter.py`
 
-### Step 2: Sprint 3 — AI Semantic Intelligence
+### Step 2: Sprint 3 Sessions 7-13 (Remaining)
 
-Transition from metadata tracking to **Semantic & Intent Intelligence** using Claude API.
+Full plan + status in `docs/AI_MVP_PLAN.md`.
 
-**AI Model Strategy:**
-- Use Claude API (latest model) in cost-optimized way
-- Track usage per request in `ai_usage_log` table (model, tokens, cost, timestamp)
-- Admin dashboard showing total cost, cost per mailbox, cost per operation type
-- Batch processing to minimize API calls
-- Cache results to avoid re-analyzing unchanged emails
+| Session | Deliverable | Status |
+|---------|------------|--------|
+| 7 | Relationship summary service (`ai_relationship_summarizer.py`) | Not started |
+| 8 | Company detail page AI cards | Not started |
+| 9 | Opportunities Tab 5 (Budget Discussions) | Not started |
+| 10 | AM Comparison + Gap Alerts (bucket-enriched) | Not started |
+| 11 | Main dashboard Quick Insights + cross-linking | Not started |
+| 12 | Integration testing (`test_ai_pipeline.py`) | Not started |
+| 13 | Production deployment + documentation | Not started |
 
-**Phase 1: Semantic Intent & Sentiment Engine**
+### Step 3: Invite User System (Planned)
 
-| Task | Service to Create/Modify | Description |
-|------|--------------------------|-------------|
-| Intent Classification | NEW: `ai_intent_processor.py` | Classify emails: Pricing Inquiry, Feature Request, Expansion Signal, Churn Risk |
-| Sentiment Detection | MODIFY: `engagement_scorer.py` | Add `sentiment_score` using Claude body text analysis |
-| Urgency Detection | NEW: `ai_intent_processor.py` | Detect hidden urgency from email body |
-| Normalizer Update | MODIFY: `normalizer.py` | Add `body_summary` and `detected_sentiment` to normalized email |
-| Tagger Enhancement | MODIFY: `email_tagger.py` | Call Claude API for intent classification on emails >100 chars |
-| AI Usage Tracking | NEW: `ai_usage_tracker.py` | Track model, tokens, cost per API call |
+Restrict open sign-up with admin-controlled user onboarding. Full design in `docs/INVITE_USER_SMTPLESS.md`.
 
-**Phase 2: Entity & Opportunity Extraction**
+**Summary:**
+- Admin creates invite (role + client assignment) → user accepts via magic link, shared URL, or direct OAuth
+- On acceptance: `user_profiles` created, client assigned, inactive mailbox auto-created from email domain
+- Dashboard banner prompts new user to authorize Gmail/Outlook OAuth to activate mailbox
+- Login page "Create Account" tab removed — invite-only onboarding
 
-| Task | Service to Modify | Description |
-|------|-------------------|-------------|
-| Entity Extraction | `extraction_orchestrator.py` | Detect competitors, product names, budget mentions |
-| Lead Scoring 2.0 | `engagement_scorer.py` | Weight buying signals (procurement, legal review, timeline) |
-| AI Enrichment | `title_parser.py` fallback | Infer job functions from email signatures via Claude |
-
-**Phase 3: Hidden Network & Relationship Insights**
-
-| Task | Service to Create | Description |
-|------|-------------------|-------------|
-| Influence Mapping | NEW: `influence_mapper.py` | Track high-seniority CC entries as "Stakeholder Entry" |
-| Gap Analysis | NEW: `relationship_analyzer.py` | Flag single-contact dependency risk |
-| Summarization | NEW: `relationship_summarizer.py` | 3-sentence executive summaries via Claude |
-
-**Phase 4: Proactive "Next Best Action"**
-
-| Task | Description |
-|------|-------------|
-| Suggested Responses | AI-drafted replies based on thread history + intent |
-| Churn Alerts | Auto-flag accounts with >30% engagement velocity drop in 1 week |
-| Marketing Exports | Identify champions for case study recruitment, CSV/CRM export |
-| Dashboard Update | "Top Opportunities" card based on AI-detected buying signals |
+**Implementation scope:**
+- Migration 014: `pending_invites` table + user_profiles invite tracking columns
+- Backend: `invites.py` router (6 endpoints: create, validate, accept, list, resend, revoke)
+- Frontend: InviteUserModal, InviteAcceptPage, Users page update, AuthContext invite hook, dashboard connection banner
 
 ---
 
@@ -189,12 +203,29 @@ backend/src/services/
 ├── response_time_tracker.py    — Response time calculations
 ├── thread_tracker.py           — Thread status evaluation
 └── comm_pattern_analyzer.py    — Communication pattern analysis
+```
+
+### Sprint 3 AI Backend (Sessions 1-5 Complete)
+```
+backend/src/services/
+├── ai_client.py                — Claude API client (Haiku + Sonnet), rate limiting, retry, budgets
+├── ai_privacy_filter.py        — Strip PII before AI (MAX_BODY_LENGTH=500)
+├── ai_usage_tracker.py         — Per-operation cost tracking to ai_usage_log
+├── ai_email_analyzer.py        — Unified classify + entities + justify (BATCH_SIZE=10)
+├── ai_action_bucket_engine.py  — 8 action buckets (pure Python, $0)
+├── ai_entity_aggregator.py     — Entity rollup into ai_business_entities
+├── ai_digest_generator.py      — Daily digest (Claude Sonnet)
+└── email_rules_service.py      — Email rules CRUD
 
 backend/src/models/
-└── analytics.py                — 41 Pydantic models + 5 enums
+├── analytics.py                — 41 Pydantic models + 5 enums (Sprint 2)
+├── ai.py                       — AI request/response Pydantic models
+└── rules.py                    — Email rules Pydantic models
 
 backend/src/routers/
-└── analytics.py                — 30 REST API endpoints
+├── analytics.py                — 30 REST API endpoints (Sprint 2)
+├── ai.py                       — 19 AI intelligence endpoints
+└── rules.py                    — 4 email rules endpoints
 
 backend/src/utils/
 ├── domain_parser.py            — Email → domain extraction
@@ -207,12 +238,38 @@ scripts/sprint2/
 └── README_MIGRATIONS.md        — Migration guide
 ```
 
+### Sprint 3 Frontend (Sessions 6 Complete)
+```
+frontend/src/pages/intelligence/
+├── inbox.tsx                   — Smart Inbox (bucket filters, detail drawer, feedback)
+├── digest.tsx                  — Daily Digest (date picker, bucket summary, action items)
+├── opportunities.tsx           — Opportunities (4 tabs: actions, opps, competitors, entities)
+└── usage.tsx                   — Usage & Monitoring (admin controls, cost breakdown)
+
+frontend/src/components/ai/
+├── ActionBucketTag.tsx         — Confidence-gated bucket display with justification tooltip
+└── FeedbackButtons.tsx         — 👍/👎 with structured feedback + override
+
+frontend/src/services/
+├── aiService.ts                — 16 AI endpoint wrappers (TTL cache, dedup)
+└── rulesService.ts             — Email rules CRUD service
+
+frontend/src/types/
+└── ai.ts                       — 13 enums, comprehensive AI interfaces
+
+frontend/src/pages/analytics/
+└── email-rules.tsx             — Email rules management page
+```
+
 ### Documentation
 ```
 docs/
-├── SPRINT2_IMPLEMENTATION.md   — Full implementation guide (pipeline, services, algorithms)
+├── CLAUDE.md                   — Development guidelines & architecture
 ├── CONTINUATION_GUIDE.md       — This file (next conversation handoff)
 ├── TODO.md                     — Active task tracking
-├── CLAUDE.md                   — Development guidelines
+├── AI_MVP_PLAN.md              — Sprint 3 AI MVP plan (final, 3-week session plan)
+├── INVITE_USER_SMTPLESS.md     — Invite user system design (SMTP-less, planned)
+├── SPRINT2_IMPLEMENTATION.md   — Sprint 2 implementation guide
+├── SPRINT3_IMPLEMENTATION_PLAN.md — Sprint 3 technical architecture
 └── QUICK_START_PHASE5.md       — Phase 5 quick start (historical)
 ```

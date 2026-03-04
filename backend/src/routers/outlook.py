@@ -1067,3 +1067,57 @@ async def _run_mailbox_sync(mailbox_id: str):
         await _sync_service.trigger_mailbox_sync(mailbox_id)
     except Exception as e:
         logger.error(f"Background mailbox sync failed for {mailbox_id}: {e}")
+
+
+# =========================================================================
+# Outlook Rules Endpoints
+# =========================================================================
+
+@router.get("/{user_id}/rules")
+async def get_outlook_rules(user_id: str):
+    """
+    Get imported Outlook rules for a user.
+
+    Returns:
+        List of imported rules from outlook_rules table
+    """
+    try:
+        result = _supabase.table('outlook_rules').select('*').eq(
+            'user_id', user_id
+        ).order('sequence').execute()
+
+        return {
+            "rules": result.data or [],
+            "total": len(result.data or [])
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to get Outlook rules: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{user_id}/import-rules")
+async def import_outlook_rules(user_id: str):
+    """
+    Import inbox rules from Outlook via Microsoft Graph API.
+
+    Fetches rules from the user's Outlook account and stores them
+    in the outlook_rules table for analysis.
+    """
+    try:
+        if not _sync_service:
+            raise HTTPException(status_code=503, detail="Sync service not available")
+
+        rules = await _sync_service.import_rules(user_id=user_id)
+
+        return {
+            "status": "success",
+            "imported_count": len(rules),
+            "rules": rules
+        }
+
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to import Outlook rules: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
