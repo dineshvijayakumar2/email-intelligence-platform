@@ -1252,6 +1252,7 @@ COMMENT ON COLUMN gmail_filters.action IS 'Gmail filter action: {addLabelIds, re
 CREATE TABLE IF NOT EXISTS outlook_rules (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id TEXT NOT NULL,
+    mailbox_id UUID,                 -- Links to mailboxes.id
     rule_id TEXT NOT NULL,           -- Microsoft Graph rule ID
     display_name TEXT,               -- Rule display name
     sequence INTEGER,                -- Rule priority/order
@@ -1265,8 +1266,9 @@ CREATE TABLE IF NOT EXISTS outlook_rules (
     UNIQUE(user_id, rule_id)
 );
 
--- Index for fast lookups
+-- Indexes for fast lookups
 CREATE INDEX IF NOT EXISTS idx_outlook_rules_user ON outlook_rules(user_id);
+CREATE INDEX IF NOT EXISTS idx_outlook_rules_mailbox ON outlook_rules(mailbox_id) WHERE mailbox_id IS NOT NULL;
 
 -- Update trigger for updated_at
 CREATE TRIGGER update_outlook_rules_updated_at

@@ -268,10 +268,16 @@ class EmailRulesService:
 
         # Outlook rules — check LIVE connection, not just mailbox_type
         if live_type == "outlook":
+            # Prefer mailbox_id lookup (new schema), fallback to user_id
             outlook_resp = self.client.table("outlook_rules").select("*").eq(
-                "user_id", user_id
+                "mailbox_id", mailbox_id
             ).execute()
-            # Fallback: if config user_id found nothing, try mailbox user_id
+            # Fallback: query by user_id if no mailbox_id matches (pre-migration data)
+            if not outlook_resp.data:
+                outlook_resp = self.client.table("outlook_rules").select("*").eq(
+                    "user_id", user_id
+                ).execute()
+            # Last fallback: try mailbox user_id
             if not outlook_resp.data and provider_user_id and mailbox_user_id and provider_user_id != mailbox_user_id:
                 outlook_resp = self.client.table("outlook_rules").select("*").eq(
                     "user_id", mailbox_user_id
@@ -519,17 +525,17 @@ class EmailRulesService:
         config = mailbox.get("connection_config") or {}
         mailbox_type = mailbox.get("mailbox_type", "")
 
-        # Gmail: native gmail type OR archive extended with gmail
+        # Gmail: needs actual tokens to be considered LIVE
         if config.get("gmail_sync_enabled") and config.get("gmail_access_token"):
             return "gmail"
-        if mailbox_type == "gmail":
-            return "gmail"  # type is gmail but may lack tokens (auth expired)
+        if mailbox_type == "gmail" and config.get("gmail_access_token"):
+            return "gmail"
 
-        # Outlook: native outlook/outlook_live type OR archive extended with outlook
+        # Outlook: needs actual tokens to be considered LIVE
         if config.get("outlook_sync_enabled") and config.get("outlook_access_token"):
             return "outlook"
-        if mailbox_type in ("outlook", "outlook_live"):
-            return "outlook"  # type is outlook but may lack tokens
+        if mailbox_type in ("outlook", "outlook_live") and config.get("outlook_access_token"):
+            return "outlook"
 
         return ""
 

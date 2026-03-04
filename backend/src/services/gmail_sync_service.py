@@ -690,25 +690,30 @@ class GmailSyncService:
 
         await self._sync_mailbox(mailbox)
 
-    async def import_filters(self, user_id: str) -> List[Dict]:
+    async def import_filters(self, user_id: str, access_token: str = None, refresh_token: str = None) -> List[Dict]:
         """
         Import Gmail filters for a user (S1-08)
 
         Args:
             user_id: User ID
+            access_token: Optional token from mailbox connection_config
+            refresh_token: Optional refresh token from mailbox connection_config
 
         Returns:
             List of imported filter records
         """
-        # Get user tokens
-        result = self.supabase.table('user_integrations').select(
-            'access_token, refresh_token'
-        ).eq('user_id', user_id).eq('provider', 'gmail').execute()
+        # Use provided tokens or look up from user_integrations
+        if access_token:
+            tokens = {'access_token': access_token, 'refresh_token': refresh_token or ''}
+        else:
+            result = self.supabase.table('user_integrations').select(
+                'access_token, refresh_token'
+            ).eq('user_id', user_id).eq('provider', 'gmail').execute()
 
-        if not result.data:
-            raise ValueError(f"No Gmail integration found for user {user_id}")
+            if not result.data:
+                raise ValueError(f"No Gmail integration found for user {user_id}")
 
-        tokens = result.data[0]
+            tokens = result.data[0]
 
         # Import here to avoid circular imports
         from ..extractors.gmail_extractor import GmailExtractor

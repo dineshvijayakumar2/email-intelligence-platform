@@ -844,6 +844,8 @@ class OutlookSyncService:
                 'exceptions': rule_data.get('exceptions') or {},
                 'updated_at': datetime.now(timezone.utc).isoformat(),
             }
+            if mailbox_id:
+                rule_record['mailbox_id'] = mailbox_id
 
             self.supabase.table('outlook_rules').upsert(
                 rule_record,

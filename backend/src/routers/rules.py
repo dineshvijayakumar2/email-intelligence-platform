@@ -43,8 +43,11 @@ def _validate_mailbox_access(mailbox_id: str, accessible_ids: list):
         raise HTTPException(status_code=403, detail="You don't have access to this mailbox")
 
 
-def _validate_client_access(client_id: str, accessible_ids: list):
+def _validate_client_access(client_id: str, accessible_ids: list, user: dict = None):
     """Raise 403 if user has no accessible mailboxes for this client."""
+    # Admin bypass — admins can access all clients
+    if user and 'admin' in (user.get('roles') or []):
+        return
     if not accessible_ids:
         raise HTTPException(status_code=403, detail="You don't have access to any mailboxes")
     try:
@@ -66,6 +69,7 @@ def _validate_client_access(client_id: str, accessible_ids: list):
 @router.get("/analytics/{client_id}", response_model=RulesAnalyticsResponse)
 async def get_rules_analytics(
     client_id: str,
+    current_user: dict = Depends(get_current_user),
     accessible_ids: list = Depends(get_accessible_mailbox_ids),
 ):
     """
@@ -74,7 +78,7 @@ async def get_rules_analytics(
     Returns per-mailbox metrics: rule counts, signal distribution,
     covered domains, forwarding rules, etc.
     """
-    _validate_client_access(client_id, accessible_ids)
+    _validate_client_access(client_id, accessible_ids, current_user)
     service = get_email_rules_service()
     if not service:
         raise HTTPException(status_code=503, detail="Rules service not initialized")
@@ -100,6 +104,7 @@ async def get_rules_analytics(
 @router.get("/analytics/{client_id}/insights", response_model=RulesInsightsResponse)
 async def get_rules_insights(
     client_id: str,
+    current_user: dict = Depends(get_current_user),
     accessible_ids: list = Depends(get_accessible_mailbox_ids),
 ):
     """
@@ -108,7 +113,7 @@ async def get_rules_insights(
     Returns actionable recommendations: missing escalation rules,
     heavy mark-as-read usage, partial domain coverage, best practices.
     """
-    _validate_client_access(client_id, accessible_ids)
+    _validate_client_access(client_id, accessible_ids, current_user)
     service = get_email_rules_service()
     if not service:
         raise HTTPException(status_code=503, detail="Rules service not initialized")
@@ -202,7 +207,16 @@ async def import_rules(
             if not user_id:
                 raise HTTPException(status_code=400, detail="No user_id found for Gmail mailbox")
 
-            filters = await sync_service.import_filters(user_id)
+            try:
+                filters = await sync_service.import_filters(
+                    user_id,
+                    access_token=config.get("gmail_access_token"),
+                    refresh_token=config.get("gmail_refresh_token"),
+                )
+            except (ValueError, ConnectionError) as e:
+                logger.warning(f"Gmail import skipped for mailbox {mailbox_id}: {e}")
+                return {"status": "skipped", "source": "gmail", "imported_count": 0, "reason": str(e)}
+
             return {
                 "status": "success",
                 "source": "gmail",
@@ -216,7 +230,12 @@ async def import_rules(
             if not sync_service:
                 raise HTTPException(status_code=503, detail="Outlook sync service not available")
 
-            rules = await sync_service.import_rules(mailbox_id=mailbox_id)
+            try:
+                rules = await sync_service.import_rules(mailbox_id=mailbox_id)
+            except (ValueError, ConnectionError) as e:
+                logger.warning(f"Outlook import skipped for mailbox {mailbox_id}: {e}")
+                return {"status": "skipped", "source": "outlook", "imported_count": 0, "reason": str(e)}
+
             return {
                 "status": "success",
                 "source": "outlook",
@@ -224,10 +243,8 @@ async def import_rules(
             }
 
         else:
-            raise HTTPException(
-                status_code=400,
-                detail="No LIVE email connection found for this mailbox. Connect Gmail or Outlook first."
-            )
+            return {"status": "skipped", "source": "none", "imported_count": 0,
+                    "reason": "No LIVE email connection found"}
 
     except HTTPException:
         raise
