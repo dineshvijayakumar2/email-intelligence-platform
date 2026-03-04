@@ -607,7 +607,7 @@ class ActionBucketEngine:
     # ------------------------------------------------------------------
     def _get_email_ids_in_date_range(
         self, mailbox_id: str, date_from: str = None, date_to: str = None
-    ) -> set | None:
+    ) -> Optional[set]:
         """Get email IDs from the emails table within a sent_date range.
 
         Returns None if no date filtering needed, empty set if no emails match.
