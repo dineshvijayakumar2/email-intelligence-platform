@@ -241,6 +241,7 @@ class EmailRulesService:
 
         mailbox_email = mailbox.get("email_address") or mailbox.get("name", "")
         config = mailbox.get("connection_config") or {}
+        mailbox_type = mailbox.get("mailbox_type", "")
         live_type = self.get_live_connection_type(mailbox)
 
         rules = []
@@ -250,48 +251,52 @@ class EmailRulesService:
         mailbox_user_id = mailbox.get("user_id", "")
         user_id = provider_user_id or mailbox_user_id
 
-        if not user_id:
+        if not user_id and not mailbox_id:
             return []
 
-        # Gmail filters — check LIVE connection, not just mailbox_type
-        if live_type == "gmail":
-            # Prefer mailbox_id lookup (new schema), fallback to user_id
-            gmail_resp = self.client.table("gmail_filters").select("*").eq(
-                "mailbox_id", mailbox_id
-            ).execute()
-            # Fallback: query by user_id if no mailbox_id matches (pre-migration data)
-            if not gmail_resp.data:
-                gmail_resp = self.client.table("gmail_filters").select("*").eq(
-                    "user_id", user_id
-                ).execute()
-            # Last fallback: try mailbox user_id
-            if not gmail_resp.data and provider_user_id and mailbox_user_id and provider_user_id != mailbox_user_id:
-                gmail_resp = self.client.table("gmail_filters").select("*").eq(
-                    "user_id", mailbox_user_id
-                ).execute()
+        # Determine which tables to check for READ (broader than live_type for import)
+        # live_type requires tokens; for reads we also check mailbox_type
+        check_gmail = live_type == "gmail" or mailbox_type == "gmail"
+        check_outlook = live_type == "outlook" or mailbox_type in ("outlook", "outlook_live")
+
+        # Gmail filters
+        if check_gmail:
+            gmail_resp = self._query_rules_table("gmail_filters", mailbox_id, user_id,
+                                                  provider_user_id, mailbox_user_id)
             for row in (gmail_resp.data or []):
                 rules.append(self.normalize_gmail_filter(row, mailbox_id, mailbox_email))
 
-        # Outlook rules — check LIVE connection, not just mailbox_type
-        if live_type == "outlook":
-            # Prefer mailbox_id lookup (new schema), fallback to user_id
-            outlook_resp = self.client.table("outlook_rules").select("*").eq(
-                "mailbox_id", mailbox_id
-            ).execute()
-            # Fallback: query by user_id if no mailbox_id matches (pre-migration data)
-            if not outlook_resp.data:
-                outlook_resp = self.client.table("outlook_rules").select("*").eq(
-                    "user_id", user_id
-                ).execute()
-            # Last fallback: try mailbox user_id
-            if not outlook_resp.data and provider_user_id and mailbox_user_id and provider_user_id != mailbox_user_id:
-                outlook_resp = self.client.table("outlook_rules").select("*").eq(
-                    "user_id", mailbox_user_id
-                ).execute()
+        # Outlook rules
+        if check_outlook:
+            outlook_resp = self._query_rules_table("outlook_rules", mailbox_id, user_id,
+                                                    provider_user_id, mailbox_user_id)
             for row in (outlook_resp.data or []):
                 rules.append(self.normalize_outlook_rule(row, mailbox_id, mailbox_email))
 
         return rules
+
+    def _query_rules_table(self, table: str, mailbox_id: str, user_id: str,
+                           provider_user_id: str, mailbox_user_id: str):
+        """Query a rules/filters table with mailbox_id → user_id fallback chain."""
+        # Prefer mailbox_id lookup (new schema)
+        resp = self.client.table(table).select("*").eq(
+            "mailbox_id", mailbox_id
+        ).execute()
+        if resp.data:
+            return resp
+        # Fallback: query by user_id (pre-migration data)
+        if user_id:
+            resp = self.client.table(table).select("*").eq(
+                "user_id", user_id
+            ).execute()
+            if resp.data:
+                return resp
+        # Last fallback: try mailbox user_id
+        if provider_user_id and mailbox_user_id and provider_user_id != mailbox_user_id:
+            resp = self.client.table(table).select("*").eq(
+                "user_id", mailbox_user_id
+            ).execute()
+        return resp
 
     # ------------------------------------------------------------------
     # Fetch rules for all mailboxes of a client
@@ -366,7 +371,7 @@ class EmailRulesService:
                 "mailbox_id": mb_id,
                 "mailbox_email": mb_email,
                 "mailbox_type": mb_type,
-                "live_connection": live_type,  # 'gmail', 'outlook', or ''
+                "live_connection": live_type or (mb_type if mb_type in ("gmail", "outlook", "outlook_live") else ""),
                 "total_rules": len(mb_rules),
                 "active_rules": active_count,
                 "high_value_count": signal_counts["high_value"],
