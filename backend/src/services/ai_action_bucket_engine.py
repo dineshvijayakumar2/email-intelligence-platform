@@ -603,6 +603,37 @@ class ActionBucketEngine:
         return all_threads
 
     # ------------------------------------------------------------------
+    # Helper: get email IDs within a sent_date range
+    # ------------------------------------------------------------------
+    def _get_email_ids_in_date_range(
+        self, mailbox_id: str, date_from: str = None, date_to: str = None
+    ) -> set | None:
+        """Get email IDs from the emails table within a sent_date range.
+
+        Returns None if no date filtering needed, empty set if no emails match.
+        """
+        if not date_from and not date_to:
+            return None
+
+        query = self.client.table("emails").select("id").eq("mailbox_id", mailbox_id)
+        if date_from:
+            query = query.gte("sent_date", date_from)
+        if date_to:
+            query = query.lte("sent_date", date_to)
+
+        all_ids = set()
+        offset = 0
+        while True:
+            resp = self._execute_with_retry(query.range(offset, offset + 499))
+            batch = resp.data or []
+            all_ids.update(e["id"] for e in batch)
+            if len(batch) == 0:
+                break
+            offset += len(batch)
+
+        return all_ids
+
+    # ------------------------------------------------------------------
     # Action items — prioritized list across all buckets
     # ------------------------------------------------------------------
     def get_action_items(
@@ -611,13 +642,21 @@ class ActionBucketEngine:
         mailbox_id: str,
         min_confidence: float = 0.5,
         limit: int = 50,
+        date_from: str = None,
+        date_to: str = None,
     ) -> list[dict]:
         """
         Get prioritized action items from all buckets.
 
         Returns items sorted by severity (critical > high > medium) then confidence.
         Each item includes the email context for display.
+        Date-scoped via email sent_date when date_from/date_to provided.
         """
+        # Date filter: get valid email IDs in range
+        email_id_set = self._get_email_ids_in_date_range(mailbox_id, date_from, date_to)
+        if email_id_set is not None and not email_id_set:
+            return []
+
         # Fetch intel rows with buckets
         all_rows = []
         offset = 0
@@ -660,6 +699,10 @@ class ActionBucketEngine:
                     break
                 offset += len(batch)
             all_rows = all_rows_filtered
+
+        # Apply date filter (post-filter by email_id)
+        if email_id_set is not None:
+            all_rows = [r for r in all_rows if r.get("email_id") in email_id_set]
 
         # Build action items from buckets
         action_items = []
@@ -717,15 +760,23 @@ class ActionBucketEngine:
         self,
         mailbox_id: str,
         client_id: Optional[str] = None,
+        date_from: str = None,
+        date_to: str = None,
     ) -> dict:
         """
         Get summary counts per bucket type.
+        Date-scoped via email sent_date when date_from/date_to provided.
 
         Returns: {"buying_signal": 5, "churn_risk": 2, ...}
         """
+        # Date filter: get valid email IDs in range
+        email_id_set = self._get_email_ids_in_date_range(mailbox_id, date_from, date_to)
+        if email_id_set is not None and not email_id_set:
+            return {bucket: 0 for bucket in BUCKET_CONFIG}
+
         query = (
             self.client.table("ai_email_intelligence")
-            .select("primary_bucket")
+            .select("primary_bucket,email_id")
             .eq("mailbox_id", mailbox_id)
             .eq("processing_status", "completed")
         )
@@ -745,9 +796,11 @@ class ActionBucketEngine:
                 break
             offset += len(batch)
 
-        # Count by bucket
+        # Count by bucket (with date filter applied)
         summary = {bucket: 0 for bucket in BUCKET_CONFIG}
         for row in all_rows:
+            if email_id_set is not None and row.get("email_id") not in email_id_set:
+                continue
             bucket = row.get("primary_bucket")
             if bucket and bucket in summary:
                 summary[bucket] += 1

@@ -10,7 +10,7 @@ Router prefix: /ai, tags: ["ai-intelligence"]
 
 from fastapi import APIRouter, HTTPException, Query, BackgroundTasks, Depends
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 
 from ..dependencies.auth import get_current_user, require_role, get_accessible_mailbox_ids
@@ -82,6 +82,19 @@ def _validate_client_access(client_id: str, accessible_ids: list):
     except Exception as e:
         logger.error(f"Client access validation failed: {e}")
         raise HTTPException(status_code=500, detail="Access validation error")
+
+
+# Default date range for read queries
+DEFAULT_READ_LOOKBACK_DAYS = 30
+
+
+def _default_date_range(date_from: str = None, date_to: str = None, lookback_days: int = DEFAULT_READ_LOOKBACK_DAYS):
+    """Apply default 30-day lookback if no dates provided."""
+    if not date_from:
+        date_from = (datetime.utcnow() - timedelta(days=lookback_days)).isoformat()
+    if not date_to:
+        date_to = datetime.utcnow().isoformat()
+    return date_from, date_to
 
 
 # ============================================================================
@@ -263,18 +276,21 @@ async def get_intelligence(
     has_competitor_mention: Optional[bool] = Query(default=None),
     min_confidence: Optional[float] = Query(default=None, ge=0.0, le=1.0),
     processing_status: Optional[str] = Query(default=None),
+    date_from: Optional[str] = Query(default=None, description="Filter by email sent_date >= (ISO). Default: 30 days ago"),
+    date_to: Optional[str] = Query(default=None, description="Filter by email sent_date <= (ISO). Default: now"),
     accessible_ids: list = Depends(get_accessible_mailbox_ids),
 ):
     """
     List AI intelligence results for a mailbox with filters.
 
-    Supports 12 filter dimensions + pagination.
+    Supports 12 filter dimensions + pagination + date range.
     """
     _validate_mailbox_access(mailbox_id, accessible_ids)
     analyzer = get_email_analyzer()
     if not analyzer:
         raise HTTPException(status_code=503, detail="AI analyzer not initialized")
 
+    date_from, date_to = _default_date_range(date_from, date_to)
     try:
         result = analyzer.get_intelligence(
             mailbox_id=mailbox_id,
@@ -291,6 +307,8 @@ async def get_intelligence(
             has_competitor_mention=has_competitor_mention,
             min_confidence=min_confidence,
             processing_status=processing_status,
+            date_from=date_from,
+            date_to=date_to,
         )
         return IntelligenceListResponse(**result)
     except Exception as e:
@@ -327,24 +345,30 @@ async def get_action_items(
     client_id: Optional[str] = Query(default=None),
     min_confidence: float = Query(default=0.5, ge=0.0, le=1.0),
     limit: int = Query(default=50, ge=1, le=200),
+    date_from: Optional[str] = Query(default=None, description="Filter by email sent_date >= (ISO). Default: 30 days ago"),
+    date_to: Optional[str] = Query(default=None, description="Filter by email sent_date <= (ISO). Default: now"),
     accessible_ids: list = Depends(get_accessible_mailbox_ids),
 ):
     """
     Get prioritized action items from all buckets.
 
     Sorted by severity (critical > high > medium) then confidence.
+    Date-scoped to last 30 days by default.
     """
     _validate_mailbox_access(mailbox_id, accessible_ids)
     engine = get_bucket_engine()
     if not engine:
         raise HTTPException(status_code=503, detail="Bucket engine not initialized")
 
+    date_from, date_to = _default_date_range(date_from, date_to)
     try:
         items = engine.get_action_items(
             client_id=client_id or "",
             mailbox_id=mailbox_id,
             min_confidence=min_confidence,
             limit=limit,
+            date_from=date_from,
+            date_to=date_to,
         )
         return ActionItemsResponse(
             items=[ActionItem(**item) for item in items],
@@ -359,18 +383,23 @@ async def get_action_items(
 async def get_bucket_summary(
     mailbox_id: str,
     client_id: Optional[str] = Query(default=None),
+    date_from: Optional[str] = Query(default=None, description="Filter by email sent_date >= (ISO). Default: 30 days ago"),
+    date_to: Optional[str] = Query(default=None, description="Filter by email sent_date <= (ISO). Default: now"),
     accessible_ids: list = Depends(get_accessible_mailbox_ids),
 ):
-    """Get bucket counts summary for a mailbox."""
+    """Get bucket counts summary for a mailbox. Date-scoped to last 30 days by default."""
     _validate_mailbox_access(mailbox_id, accessible_ids)
     engine = get_bucket_engine()
     if not engine:
         raise HTTPException(status_code=503, detail="Bucket engine not initialized")
 
+    date_from, date_to = _default_date_range(date_from, date_to)
     try:
         summary = engine.get_bucket_summary(
             mailbox_id=mailbox_id,
             client_id=client_id,
+            date_from=date_from,
+            date_to=date_to,
         )
         total = sum(summary.values())
         return BucketSummary(**summary, total=total)
@@ -502,19 +531,24 @@ async def get_opportunity_signals(
     client_id: str,
     mailbox_id: str = Query(..., description="Mailbox UUID"),
     limit: int = Query(default=50, ge=1, le=200),
+    date_from: Optional[str] = Query(default=None, description="Filter by email sent_date >= (ISO). Default: 30 days ago"),
+    date_to: Optional[str] = Query(default=None, description="Filter by email sent_date <= (ISO). Default: now"),
     accessible_ids: list = Depends(get_accessible_mailbox_ids),
 ):
-    """Get opportunity signals (emails with high business signals)."""
+    """Get opportunity signals (emails with high business signals). Date-scoped to last 30 days by default."""
     _validate_mailbox_access(mailbox_id, accessible_ids)
     aggregator = get_entity_aggregator()
     if not aggregator:
         raise HTTPException(status_code=503, detail="Entity aggregator not initialized")
 
+    date_from, date_to = _default_date_range(date_from, date_to)
     try:
         signals = aggregator.get_opportunity_signals(
             client_id=client_id,
             mailbox_id=mailbox_id,
             limit=limit,
+            date_from=date_from,
+            date_to=date_to,
         )
         return OpportunitySignalsResponse(
             items=[OpportunitySignal(**s) for s in signals],

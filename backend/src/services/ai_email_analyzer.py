@@ -1198,6 +1198,37 @@ class AIEmailAnalyzer:
         }
 
     # ------------------------------------------------------------------
+    # Helper: get email IDs within a sent_date range
+    # ------------------------------------------------------------------
+    def _get_email_ids_in_date_range(
+        self, mailbox_id: str, date_from: Optional[str], date_to: Optional[str]
+    ) -> Optional[list]:
+        """Get email IDs from the emails table within a sent_date range.
+
+        Returns None if no date filtering needed, empty list if no emails match.
+        """
+        if not date_from and not date_to:
+            return None
+
+        query = self.client.table("emails").select("id").eq("mailbox_id", mailbox_id)
+        if date_from:
+            query = query.gte("sent_date", date_from)
+        if date_to:
+            query = query.lte("sent_date", date_to)
+
+        all_ids = []
+        offset = 0
+        while True:
+            resp = self._execute_with_retry(query.range(offset, offset + 499))
+            batch = resp.data or []
+            all_ids.extend(e["id"] for e in batch)
+            if len(batch) == 0:
+                break
+            offset += len(batch)
+
+        return all_ids
+
+    # ------------------------------------------------------------------
     # Query intelligence results
     # ------------------------------------------------------------------
     def get_intelligence(
@@ -1216,12 +1247,19 @@ class AIEmailAnalyzer:
         has_competitor_mention: Optional[bool] = None,
         min_confidence: Optional[float] = None,
         processing_status: Optional[str] = None,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
     ) -> dict:
         """
         Query analyzed emails with filters. Joins with emails table for display fields.
 
         Returns: {"items": [...], "total": int, "page": int, "page_size": int}
         """
+        # Date filtering: get email IDs in date range (uses emails.sent_date)
+        valid_email_ids = self._get_email_ids_in_date_range(mailbox_id, date_from, date_to)
+        if valid_email_ids is not None and not valid_email_ids:
+            return {"items": [], "page": page, "page_size": page_size}
+
         # Build query on ai_email_intelligence
         query = (
             self.client.table("ai_email_intelligence")
@@ -1229,6 +1267,10 @@ class AIEmailAnalyzer:
             .eq("mailbox_id", mailbox_id)
             .order("created_at", desc=True)
         )
+
+        # Apply date filter via email IDs
+        if valid_email_ids is not None:
+            query = query.in_("email_id", valid_email_ids[:500])
 
         # Apply filters
         if intent:

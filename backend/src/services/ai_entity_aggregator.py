@@ -184,6 +184,37 @@ class AIEntityAggregator:
             entry["contexts"].append(context)
 
     # ------------------------------------------------------------------
+    # Helper: get email IDs within a sent_date range
+    # ------------------------------------------------------------------
+    def _get_email_ids_in_date_range(
+        self, mailbox_id: str, date_from: str = None, date_to: str = None
+    ) -> set | None:
+        """Get email IDs from the emails table within a sent_date range.
+
+        Returns None if no date filtering needed, empty set if no emails match.
+        """
+        if not date_from and not date_to:
+            return None
+
+        query = self.client.table("emails").select("id").eq("mailbox_id", mailbox_id)
+        if date_from:
+            query = query.gte("sent_date", date_from)
+        if date_to:
+            query = query.lte("sent_date", date_to)
+
+        all_ids = set()
+        offset = 0
+        while True:
+            resp = self._execute_with_retry(query.range(offset, offset + 499))
+            batch = resp.data or []
+            all_ids.update(e["id"] for e in batch)
+            if len(batch) == 0:
+                break
+            offset += len(batch)
+
+        return all_ids
+
+    # ------------------------------------------------------------------
     # Query methods
     # ------------------------------------------------------------------
     def get_entities(
@@ -230,11 +261,19 @@ class AIEntityAggregator:
         client_id: str,
         mailbox_id: str,
         limit: int = 50,
+        date_from: str = None,
+        date_to: str = None,
     ) -> list[dict]:
         """
         Get emails with high business signals (buying intent, budget, expansion).
         These are the top opportunities to pursue.
+        Date-scoped via email sent_date when date_from/date_to provided.
         """
+        # Date filter: get valid email IDs in range
+        email_id_set = self._get_email_ids_in_date_range(mailbox_id, date_from, date_to)
+        if email_id_set is not None and not email_id_set:
+            return []
+
         # Fetch intel rows with high signal scores
         all_rows = []
         offset = 0
@@ -252,10 +291,13 @@ class AIEntityAggregator:
                 .range(offset, offset + PAGE_SIZE - 1)
             )
             batch = resp.data or []
+            # Apply date filter
+            if email_id_set is not None:
+                batch = [r for r in batch if r.get("email_id") in email_id_set]
             all_rows.extend(batch)
-            if len(batch) == 0 or len(all_rows) >= limit:
+            if len(resp.data or []) == 0 or len(all_rows) >= limit:
                 break
-            offset += len(batch)
+            offset += len(resp.data or [])
 
         all_rows = all_rows[:limit]
 
