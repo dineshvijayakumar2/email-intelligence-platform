@@ -277,7 +277,11 @@ class GmailExtractor(BaseExtractor):
 
     def _extract_full(self, max_emails: Optional[int] = None) -> Iterator[Dict]:
         """
-        Full extraction - fetch all messages from configured labels
+        Full extraction - fetch all messages from configured labels.
+
+        Iterates each label separately because Gmail's labelIds parameter
+        uses AND logic (returns only messages with ALL labels). Querying
+        per label ensures we get INBOX emails + SENT emails correctly.
 
         Args:
             max_emails: Maximum emails to extract
@@ -286,61 +290,70 @@ class GmailExtractor(BaseExtractor):
             Standardized email dictionaries
         """
         extracted = 0
-        page_token = None
+        seen_message_ids = set()  # Deduplicate across labels
 
-        while True:
-            try:
-                # List messages from configured labels
-                results = self.service.users().messages().list(
-                    userId='me',
-                    labelIds=self.labels_to_sync,
-                    maxResults=min(self.MESSAGES_PER_REQUEST, max_emails - extracted if max_emails else self.MESSAGES_PER_REQUEST),
-                    pageToken=page_token
-                ).execute()
+        for label_id in self.labels_to_sync:
+            logger.info(f"Gmail full sync: fetching label {label_id}")
+            page_token = None
 
-                messages = results.get('messages', [])
+            while True:
+                if max_emails and extracted >= max_emails:
+                    logger.info(f"Reached max_emails limit: {max_emails}")
+                    return
 
-                if not messages:
-                    break
+                try:
+                    remaining = (max_emails - extracted) if max_emails else self.MESSAGES_PER_REQUEST
+                    results = self.service.users().messages().list(
+                        userId='me',
+                        labelIds=[label_id],
+                        maxResults=min(self.MESSAGES_PER_REQUEST, remaining),
+                        pageToken=page_token
+                    ).execute()
 
-                for msg_ref in messages:
-                    if max_emails and extracted >= max_emails:
-                        logger.info(f"Reached max_emails limit: {max_emails}")
-                        return
+                    messages = results.get('messages', [])
 
-                    try:
-                        # Fetch full message with retry
-                        msg = self._get_message_with_retry(msg_ref['id'])
+                    if not messages:
+                        break
 
-                        if msg:
-                            email_dict = self._parse_gmail_message(msg)
-                            if email_dict:
-                                self._update_stats(True)
-                                extracted += 1
-                                yield email_dict
+                    for msg_ref in messages:
+                        if max_emails and extracted >= max_emails:
+                            return
 
-                    except Exception as e:
-                        self._update_stats(False, f"Failed to fetch message {msg_ref['id']}: {e}")
-                        logger.warning(f"Failed to parse message {msg_ref['id']}: {e}")
+                        msg_id = msg_ref['id']
+                        if msg_id in seen_message_ids:
+                            continue
+                        seen_message_ids.add(msg_id)
 
-                # Log progress every batch
-                logger.info(f"Gmail extraction progress: {extracted} emails fetched")
+                        try:
+                            msg = self._get_message_with_retry(msg_id)
 
-                page_token = results.get('nextPageToken')
-                if not page_token:
-                    break
+                            if msg:
+                                email_dict = self._parse_gmail_message(msg)
+                                if email_dict:
+                                    self._update_stats(True)
+                                    extracted += 1
+                                    yield email_dict
 
-            except Exception as e:
-                logger.error(f"Error listing messages: {e}")
-                self.stats['errors'].append(str(e))
-                # Try to continue with next page if possible
-                if 'rateLimitExceeded' in str(e):
-                    logger.warning("Rate limit hit, waiting 60s...")
-                    time.sleep(60)
-                else:
-                    raise
+                        except Exception as e:
+                            self._update_stats(False, f"Failed to fetch message {msg_id}: {e}")
+                            logger.warning(f"Failed to parse message {msg_id}: {e}")
 
-        logger.info(f"Gmail full sync completed: {extracted} emails extracted")
+                    logger.info(f"Gmail extraction progress: {extracted} emails fetched (label: {label_id})")
+
+                    page_token = results.get('nextPageToken')
+                    if not page_token:
+                        break
+
+                except Exception as e:
+                    logger.error(f"Error listing messages for label {label_id}: {e}")
+                    self.stats['errors'].append(str(e))
+                    if 'rateLimitExceeded' in str(e):
+                        logger.warning("Rate limit hit, waiting 60s...")
+                        time.sleep(60)
+                    else:
+                        raise
+
+        logger.info(f"Gmail full sync completed: {extracted} emails extracted across {len(self.labels_to_sync)} labels")
 
     def _extract_incremental(self, max_emails: Optional[int] = None) -> Iterator[Dict]:
         """
