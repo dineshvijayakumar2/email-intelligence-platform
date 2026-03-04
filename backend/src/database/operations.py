@@ -121,7 +121,7 @@ class EmailOperations:
         for i in range(0, total, batch_size):
             batch = emails[i:i + batch_size]
             batch_num = i // batch_size + 1
-            
+
             try:
                 # Prepare batch data
                 prepared_batch = []
@@ -129,12 +129,27 @@ class EmailOperations:
                     prepared_email = self._prepare_email_for_insert(email, mailbox_id)
                     if prepared_email:
                         prepared_batch.append(prepared_email)
-                
+
                 if not prepared_batch:
                     logger.warning(f"Batch {batch_num}: No valid emails to insert")
                     failed += len(batch)
                     continue
-                
+
+                # Deduplicate within batch to prevent PostgreSQL error 21000
+                # "ON CONFLICT DO UPDATE command cannot affect row a second time"
+                seen_keys = {}
+                deduped = []
+                for row in prepared_batch:
+                    key = (row.get('message_id'), row.get('mailbox_id'))
+                    if key in seen_keys:
+                        deduped[seen_keys[key]] = row  # keep latest
+                    else:
+                        seen_keys[key] = len(deduped)
+                        deduped.append(row)
+                if len(deduped) < len(prepared_batch):
+                    logger.info(f"Batch {batch_num}: Removed {len(prepared_batch) - len(deduped)} duplicates within batch")
+                prepared_batch = deduped
+
                 # Use upsert to handle duplicates gracefully
                 result = self.client.table('emails').upsert(
                     prepared_batch,
@@ -147,7 +162,7 @@ class EmailOperations:
                 else:
                     failed += len(batch)
                     errors.append(f"Batch {batch_num}: No data returned from upsert")
-                
+
             except Exception as e:
                 failed += len(batch)
                 error_msg = f"Batch {batch_num} failed: {str(e)}"
