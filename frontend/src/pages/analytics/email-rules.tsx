@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Row, Col, Typography, Table, Tag, Button, Tabs, Alert, Card, Tooltip, Spin, message, Empty } from 'antd';
 import {
-  FilterOutlined, ImportOutlined, InfoCircleOutlined,
+  FilterOutlined, SyncOutlined, ImportOutlined, InfoCircleOutlined,
   WarningOutlined, CheckCircleOutlined, SwapOutlined,
 } from '@ant-design/icons';
 import { ClientSelector } from '../../components/analytics/ClientSelector';
@@ -36,80 +36,70 @@ export const EmailRulesPage: React.FC = () => {
   const [insights, setInsights] = useState<RulesInsight[]>([]);
   const [allRules, setAllRules] = useState<UnifiedRule[]>([]);
   const [loading, setLoading] = useState(false);
-  const [importing, setImporting] = useState<string | null>(null); // mailbox_id being imported
+  const [syncing, setSyncing] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
 
   useEffect(() => { isMountedRef.current = true; return () => { isMountedRef.current = false; }; }, []);
 
-  // Load analytics + insights when client changes
+  // Helper: load all data via single combined API call
+  const loadData = async (cId: string) => {
+    const result = await rulesApi.fullAnalytics(cId);
+    if (!isMountedRef.current) return;
+    setAnalytics(result.analytics);
+    setInsights(result.insights?.insights || []);
+    setAllRules(result.rules || []);
+    setLastSyncedAt(result.last_rules_import_at);
+  };
+
+  // Load analytics + insights + rules when client changes (read-only, no imports)
   useEffect(() => {
     if (!clientId) return;
     const load = async () => {
       setLoading(true);
-
-      // Step 1: Get initial analytics to find LIVE mailboxes
-      const initialAnalytics = await rulesApi.analytics(clientId);
-      if (!isMountedRef.current) return;
-
-      // Step 2: Auto-import rules for LIVE-connected mailboxes
-      const liveMailboxes = (initialAnalytics?.mailboxes || []).filter(mb => mb.live_connection);
-      if (liveMailboxes.length > 0) {
-        await Promise.allSettled(
-          liveMailboxes.map(mb => rulesApi.importRules(mb.mailbox_id))
-        );
-        if (!isMountedRef.current) return;
-        // Clear cache so we get fresh data after import
-        clearRulesCache();
-      }
-
-      // Step 3: Load fresh analytics + insights (after import)
-      const [analyticsData, insightsData] = await Promise.all([
-        liveMailboxes.length > 0 ? rulesApi.analytics(clientId) : Promise.resolve(initialAnalytics),
-        rulesApi.insights(clientId),
-      ]);
-      if (!isMountedRef.current) return;
-      setAnalytics(analyticsData);
-      setInsights(insightsData?.insights || []);
-
-      // Step 4: Collect all rules from each mailbox
-      const rules: UnifiedRule[] = [];
-      for (const mb of analyticsData?.mailboxes || []) {
-        if (mb.total_rules > 0) {
-          const resp = await rulesApi.list(mb.mailbox_id);
-          rules.push(...(resp?.items || []));
-        }
-      }
-      if (isMountedRef.current) {
-        setAllRules(rules);
-        setLoading(false);
-      }
+      await loadData(clientId);
+      if (isMountedRef.current) setLoading(false);
     };
     load();
   }, [clientId]);
 
+  // Sync: import rules from all LIVE mailboxes, then refresh
+  const handleSyncRules = async () => {
+    if (!analytics) return;
+    const liveMailboxes = (analytics.mailboxes || []).filter(mb => mb.live_connection);
+    if (liveMailboxes.length === 0) {
+      message.info('No LIVE mailbox connections to sync.');
+      return;
+    }
+    setSyncing(true);
+    try {
+      const results = await Promise.allSettled(
+        liveMailboxes.map(mb => rulesApi.importRules(mb.mailbox_id))
+      );
+      const totalImported = results
+        .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled')
+        .reduce((sum, r) => sum + (r.value?.imported_count || 0), 0);
+      message.success(`Synced ${totalImported} rules from ${liveMailboxes.length} mailbox(es)`);
+      clearRulesCache();
+      await loadData(clientId);
+    } catch {
+      message.error('Failed to sync rules. Check mail server connections.');
+    } finally {
+      if (isMountedRef.current) setSyncing(false);
+    }
+  };
+
   // Import rules for a single mailbox
   const handleImport = async (mailboxId: string) => {
-    setImporting(mailboxId);
+    setSyncing(true);
     try {
       const result = await rulesApi.importRules(mailboxId);
       message.success(`Imported ${result.imported_count} rules from ${result.source}`);
       clearRulesCache();
-      // Reload
-      setClientId((prev) => { setClientId(''); return prev; }); // force re-fetch
-      setTimeout(() => setClientId(clientId), 100);
+      await loadData(clientId);
     } catch {
       message.error('Failed to import rules. Check mail server connection.');
     } finally {
-      setImporting(null);
-    }
-  };
-
-  // Import all mailboxes
-  const handleImportAll = async () => {
-    if (!analytics) return;
-    for (const mb of analytics.mailboxes) {
-      if (mb.live_connection) {
-        await handleImport(mb.mailbox_id);
-      }
+      if (isMountedRef.current) setSyncing(false);
     }
   };
 
@@ -161,9 +151,9 @@ export const EmailRulesPage: React.FC = () => {
         <Button
           size="small"
           icon={<ImportOutlined />}
-          loading={importing === r.mailbox_id}
+          loading={syncing}
           onClick={() => handleImport(r.mailbox_id)}
-          disabled={!r.live_connection}
+          disabled={!r.live_connection || syncing}
         >
           Import
         </Button>
@@ -253,15 +243,22 @@ export const EmailRulesPage: React.FC = () => {
             <Col>
               <ClientSelector value={clientId} onChange={setClientId} />
             </Col>
+            {lastSyncedAt && (
+              <Col>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  Last synced: {new Date(lastSyncedAt).toLocaleString()}
+                </Text>
+              </Col>
+            )}
             <Col>
               <Button
                 type="primary"
-                icon={<ImportOutlined />}
-                onClick={handleImportAll}
+                icon={<SyncOutlined spin={syncing} />}
+                onClick={handleSyncRules}
                 disabled={!analytics || analytics.total_mailboxes === 0}
-                loading={!!importing}
+                loading={syncing}
               >
-                Import All Rules
+                Sync Rules
               </Button>
             </Col>
           </Row>

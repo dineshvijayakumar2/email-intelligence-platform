@@ -119,7 +119,7 @@ export async function apiRequest<T>(
     method = 'GET',
     body,
     headers = {},
-    timeout = 5000,
+    timeout = 15000,
     retries = 2,
     retryDelay = 300,
     silentOnNetworkError = false,

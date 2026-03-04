@@ -91,6 +91,14 @@ export interface RulesInsightsResponse {
   total: number;
 }
 
+export interface RulesFullAnalyticsResponse {
+  analytics: RulesAnalyticsResponse;
+  insights: RulesInsightsResponse;
+  rules: UnifiedRule[];
+  total_rules: number;
+  last_rules_import_at: string | null;
+}
+
 // ============================================================================
 // CACHE
 // ============================================================================
@@ -163,7 +171,7 @@ export const rulesApi = {
     if (cached) return cached;
 
     try {
-      const resp = await api.get(`${API_PREFIX}/analytics/${clientId}`);
+      const resp = await api.get(`${API_PREFIX}/analytics/${clientId}`, { timeout: 30000 });
       if (!resp) {
         return { mailboxes: [], total_mailboxes: 0, total_rules: 0, avg_rules_per_mailbox: 0, mailboxes_with_no_rules: 0 };
       }
@@ -176,6 +184,32 @@ export const rulesApi = {
     }
   },
 
+  /** Get combined analytics + insights + all rules in one call (optimized) */
+  async fullAnalytics(clientId: string): Promise<RulesFullAnalyticsResponse> {
+    const cacheKey = `rules:full:${clientId}`;
+    const cached = getCached<RulesFullAnalyticsResponse>(cacheKey);
+    if (cached) return cached;
+
+    const empty: RulesFullAnalyticsResponse = {
+      analytics: { mailboxes: [], total_mailboxes: 0, total_rules: 0, avg_rules_per_mailbox: 0, mailboxes_with_no_rules: 0 },
+      insights: { insights: [], total: 0 },
+      rules: [],
+      total_rules: 0,
+      last_rules_import_at: null,
+    };
+
+    try {
+      const resp = await api.get(`${API_PREFIX}/analytics/${clientId}/full`, { timeout: 30000 });
+      if (!resp) return empty;
+      const data = resp as RulesFullAnalyticsResponse;
+      setCache(cacheKey, data);
+      return data;
+    } catch (error) {
+      console.error('[RulesService] Failed to get full analytics:', error);
+      return empty;
+    }
+  },
+
   /** Get derived insights from cross-AM comparison */
   async insights(clientId: string): Promise<RulesInsightsResponse> {
     const cacheKey = `rules:insights:${clientId}`;
@@ -183,7 +217,7 @@ export const rulesApi = {
     if (cached) return cached;
 
     try {
-      const resp = await api.get(`${API_PREFIX}/analytics/${clientId}/insights`);
+      const resp = await api.get(`${API_PREFIX}/analytics/${clientId}/insights`, { timeout: 30000 });
       if (!resp) {
         return { insights: [], total: 0 };
       }

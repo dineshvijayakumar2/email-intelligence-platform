@@ -119,3 +119,12 @@ class RulesInsightsResponse(BaseModel):
     """List of derived insights."""
     insights: List[RulesInsight] = []
     total: int = 0
+
+
+class RulesFullAnalyticsResponse(BaseModel):
+    """Combined analytics + insights + rules — single API call for the Email Rules page."""
+    analytics: RulesAnalyticsResponse = RulesAnalyticsResponse()
+    insights: RulesInsightsResponse = RulesInsightsResponse()
+    rules: List[UnifiedRule] = []
+    total_rules: int = 0
+    last_rules_import_at: Optional[str] = None

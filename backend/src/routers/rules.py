@@ -17,6 +17,7 @@ from ..models.rules import (
     UnifiedRule, RulesListResponse,
     RulesAnalyticsResponse, MailboxRulesMetrics,
     RulesInsightsResponse, RulesInsight,
+    RulesFullAnalyticsResponse,
 )
 from ..services.email_rules_service import get_email_rules_service
 
@@ -94,6 +95,50 @@ async def get_rules_analytics(
         )
     except Exception as e:
         logger.error(f"Failed to get rules analytics: {e}")
+        raise HTTPException(status_code=500, detail=str(e)[:200])
+
+
+# ============================================================================
+# FULL ANALYTICS ENDPOINT — combined analytics + insights + rules (1 call)
+# ============================================================================
+
+@router.get("/analytics/{client_id}/full", response_model=RulesFullAnalyticsResponse)
+async def get_rules_full_analytics(
+    client_id: str,
+    current_user: dict = Depends(get_current_user),
+    accessible_ids: list = Depends(get_accessible_mailbox_ids),
+):
+    """
+    Combined endpoint: analytics + insights + all rules in one response.
+
+    Optimized single-pass query (3 DB queries) that replaces 3 separate
+    API calls + N per-mailbox rule fetches.
+    """
+    _validate_client_access(client_id, accessible_ids, current_user)
+    service = get_email_rules_service()
+    if not service:
+        raise HTTPException(status_code=503, detail="Rules service not initialized")
+
+    try:
+        result = service.get_full_analytics(client_id)
+        return RulesFullAnalyticsResponse(
+            analytics=RulesAnalyticsResponse(
+                mailboxes=[MailboxRulesMetrics(**m) for m in result["analytics"]["mailboxes"]],
+                total_mailboxes=result["analytics"]["total_mailboxes"],
+                total_rules=result["analytics"]["total_rules"],
+                avg_rules_per_mailbox=result["analytics"]["avg_rules_per_mailbox"],
+                mailboxes_with_no_rules=result["analytics"]["mailboxes_with_no_rules"],
+            ),
+            insights=RulesInsightsResponse(
+                insights=[RulesInsight(**i) for i in result["insights"]],
+                total=len(result["insights"]),
+            ),
+            rules=[UnifiedRule(**r) for r in result["rules"]],
+            total_rules=len(result["rules"]),
+            last_rules_import_at=result.get("last_rules_import_at"),
+        )
+    except Exception as e:
+        logger.error(f"Failed to get full rules analytics: {e}")
         raise HTTPException(status_code=500, detail=str(e)[:200])
 
 

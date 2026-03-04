@@ -78,8 +78,18 @@ export const InboxPage: React.FC = () => {
 
   useEffect(() => {
     if (!mailboxId) return;
-    loadData();
-    loadBucketSummary();
+    const loadAll = async () => {
+      setLoading(true);
+      const [listResult, summary] = await Promise.all([
+        intelligenceApi.list(mailboxId, { ...filters, page, page_size: pageSize }),
+        bucketApi.getSummary(mailboxId),
+      ]);
+      if (!isMountedRef.current) return;
+      setItems(listResult.items || []);
+      setBucketSummary(summary);
+      setLoading(false);
+    };
+    loadAll();
   }, [mailboxId, page, filters]);
 
   const loadData = async () => {
@@ -93,11 +103,6 @@ export const InboxPage: React.FC = () => {
       setItems(result.items || []);
       setLoading(false);
     }
-  };
-
-  const loadBucketSummary = async () => {
-    const summary = await bucketApi.getSummary(mailboxId);
-    if (isMountedRef.current) setBucketSummary(summary);
   };
 
   const handleAnalyze = async () => {

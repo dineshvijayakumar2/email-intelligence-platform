@@ -49,24 +49,28 @@ const OpportunitiesPage: React.FC = () => {
     if (!mailboxId) return;
     setLoading(true);
     try {
-      // Fetch action items (these don't need client_id)
-      const actionsData = await bucketApi.getActionItems(mailboxId, clientId, 0.3, 100);
+      // Fire mailbox-scoped calls in parallel
+      const [actionsData, intelData] = await Promise.all([
+        bucketApi.getActionItems(mailboxId, clientId, 0.3, 100),
+        intelligenceApi.list(mailboxId, { page_size: 50, has_buying_signal: true }),
+      ]);
       if (!isMountedRef.current) return;
       setActionItems(actionsData.items || []);
-
-      // Fetch high-signal intelligence
-      const intelData = await intelligenceApi.list(mailboxId, {
-        page_size: 50,
-        has_buying_signal: true,
-      });
-      if (!isMountedRef.current) return;
       setOpportunities(intelData.items || []);
 
-      // Fetch entities if we have client_id
-      if (clientId) {
+      // Resolve client_id from results if not already set
+      const resolvedClientId = clientId ||
+        (actionsData.items?.[0] as any)?.client_id ||
+        (intelData.items?.[0] as any)?.client_id || '';
+      if (resolvedClientId && resolvedClientId !== clientId) {
+        setClientId(resolvedClientId);
+      }
+
+      // Fire entity calls in parallel (only if client_id available)
+      if (resolvedClientId) {
         const [compData, entityData] = await Promise.all([
-          entityApi.getCompetitors(clientId),
-          entityApi.list(clientId, undefined, 100),
+          entityApi.getCompetitors(resolvedClientId),
+          entityApi.list(resolvedClientId, undefined, 100),
         ]);
         if (!isMountedRef.current) return;
         setCompetitors(compData.competitors || []);
@@ -83,20 +87,10 @@ const OpportunitiesPage: React.FC = () => {
     if (mailboxId) loadData();
   }, [mailboxId, loadData]);
 
-  // Handle mailbox change — also resolve client_id
-  const handleMailboxChange = async (ids: string[]) => {
+  // Handle mailbox change — client_id resolved from loadData results
+  const handleMailboxChange = (ids: string[]) => {
     setMailboxIds(ids);
-    const id = ids[0] || '';
-    // Try to get client_id from first intelligence result
-    if (id) {
-      try {
-        const statsData = await intelligenceApi.list(id, { page_size: 1 });
-        const firstItem: any = statsData.items?.[0];
-        if (firstItem?.client_id) {
-          setClientId(firstItem.client_id);
-        }
-      } catch { /* ok */ }
-    }
+    setClientId('');
   };
 
   // Action Items columns

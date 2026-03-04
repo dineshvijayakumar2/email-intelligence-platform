@@ -155,6 +155,14 @@ Full plan: `docs/AI_MVP_PLAN.md` (3-week session-by-session plan + implementatio
 
 ## Completed ✅
 
+### Performance Optimizations (Mar 4, 2026)
+- [x] **Email Rules page**: Combined `/analytics/{client_id}/full` endpoint (3 DB queries, down from 66-151), read-only load, manual "Sync Rules" button
+- [x] **Email Rules backend**: Batch queries (`_batch_query_rules`), single-pass `get_full_analytics()`, extracted `_compute_insights()`
+- [x] **AuthContext**: Deduplicated `/api/auth/me` calls — `onAuthStateChange` as single source, `mounted` guard (was 4-5x per load)
+- [x] **apiClient timeout**: Increased default 5s → 15s, rules analytics 30s (fixed empty data from AbortError)
+- [x] **Inbox page**: Parallelized `loadData` + `loadBucketSummary` with `Promise.all()`
+- [x] **Opportunities page**: Parallelized 4 API calls with `Promise.all()`, removed wasteful client_id resolution call
+
 ### Documentation Cleanup (Mar 3, 2026)
 - [x] Consolidated AI MVP plans (v2, v3, v3.1, v3.2) into single `AI_MVP_PLAN.md` (final)
 - [x] Updated CLAUDE.md with invite system plan + current status

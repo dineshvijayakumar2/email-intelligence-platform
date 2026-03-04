@@ -258,7 +258,7 @@ class EmailRulesService:
         # live_type requires tokens; for reads we also check mailbox_type
         check_gmail = live_type == "gmail" or mailbox_type == "gmail"
         check_outlook = live_type == "outlook" or mailbox_type in ("outlook", "outlook_live")
-        logger.info(f"[Rules] get_unified_rules({mailbox_id}): type={mailbox_type}, live={live_type}, check_gmail={check_gmail}, check_outlook={check_outlook}, user_id={user_id}")
+        logger.debug(f"[Rules] get_unified_rules({mailbox_id}): type={mailbox_type}, live={live_type}, check_gmail={check_gmail}, check_outlook={check_outlook}")
 
         # Gmail filters
         if check_gmail:
@@ -284,17 +284,17 @@ class EmailRulesService:
             resp = self.client.table(table).select("*").eq(
                 "mailbox_id", mailbox_id
             ).execute()
-            logger.info(f"[Rules] _query_rules_table({table}) by mailbox_id={mailbox_id}: {len(resp.data or [])} rows")
+            logger.debug(f"[Rules] _query_rules_table({table}) by mailbox_id: {len(resp.data or [])} rows")
             if resp.data:
                 return resp
         except Exception as e:
-            logger.info(f"[Rules] _query_rules_table({table}) mailbox_id query failed: {e}")
+            logger.debug(f"[Rules] _query_rules_table({table}) mailbox_id query failed, falling back to user_id")
         # Fallback: query by user_id (pre-migration data)
         if user_id:
             resp = self.client.table(table).select("*").eq(
                 "user_id", user_id
             ).execute()
-            logger.info(f"[Rules] _query_rules_table({table}) by user_id={user_id}: {len(resp.data or [])} rows")
+            logger.debug(f"[Rules] _query_rules_table({table}) by user_id: {len(resp.data or [])} rows")
             if resp.data:
                 return resp
         # Last fallback: try mailbox user_id
@@ -306,27 +306,64 @@ class EmailRulesService:
         # Return empty-like response
         return type('Resp', (), {'data': []})()
 
+    def _batch_query_rules(self, table: str, mailbox_ids: list) -> list:
+        """Batch-fetch all rules/filters for a list of mailbox IDs in one query."""
+        if not mailbox_ids:
+            return []
+        all_rows = []
+        # Chunk mailbox_ids into groups of 500 (Supabase .in_() limit)
+        for i in range(0, len(mailbox_ids), 500):
+            chunk = mailbox_ids[i:i + 500]
+            try:
+                resp = self.client.table(table).select("*").in_(
+                    "mailbox_id", chunk
+                ).execute()
+                all_rows.extend(resp.data or [])
+            except Exception as e:
+                logger.warning(f"[Rules] _batch_query_rules({table}) failed: {e}")
+        return all_rows
+
     # ------------------------------------------------------------------
     # Fetch rules for all mailboxes of a client
     # ------------------------------------------------------------------
     def get_all_rules_for_client(self, client_id: str) -> dict:
         """
         Get unified rules for all mailboxes belonging to a client.
+        Uses batch queries (2 total) instead of per-mailbox queries.
 
         Returns:
-            {"rules": [...], "by_mailbox": {mailbox_id: [...]}}
+            {"rules": [...], "by_mailbox": {mailbox_id: [...]}, "_mailboxes": [...]}
         """
         mailboxes = self._get_client_mailboxes(client_id)
+        mb_ids = [m["id"] for m in mailboxes]
+        mb_lookup = {m["id"]: m for m in mailboxes}
+
+        # Batch-fetch all rules from both tables (2 queries instead of 2*N)
+        gmail_rows = self._batch_query_rules("gmail_filters", mb_ids)
+        outlook_rows = self._batch_query_rules("outlook_rules", mb_ids)
+
         all_rules = []
-        by_mailbox = {}
+        by_mailbox = {mb_id: [] for mb_id in mb_ids}
 
-        for mailbox in mailboxes:
-            mb_id = mailbox["id"]
-            mb_rules = self.get_unified_rules(mb_id)
-            all_rules.extend(mb_rules)
-            by_mailbox[mb_id] = mb_rules
+        for row in gmail_rows:
+            mb_id = row.get("mailbox_id", "")
+            mb = mb_lookup.get(mb_id, {})
+            mb_email = mb.get("email_address") or mb.get("name", "")
+            unified = self.normalize_gmail_filter(row, mb_id, mb_email)
+            all_rules.append(unified)
+            if mb_id in by_mailbox:
+                by_mailbox[mb_id].append(unified)
 
-        return {"rules": all_rules, "by_mailbox": by_mailbox}
+        for row in outlook_rows:
+            mb_id = row.get("mailbox_id", "")
+            mb = mb_lookup.get(mb_id, {})
+            mb_email = mb.get("email_address") or mb.get("name", "")
+            unified = self.normalize_outlook_rule(row, mb_id, mb_email)
+            all_rules.append(unified)
+            if mb_id in by_mailbox:
+                by_mailbox[mb_id].append(unified)
+
+        return {"rules": all_rules, "by_mailbox": by_mailbox, "_mailboxes": mailboxes}
 
     # ------------------------------------------------------------------
     # Cross-AM Analytics
@@ -338,16 +375,17 @@ class EmailRulesService:
         Returns per-mailbox metrics and aggregate stats.
         """
         data = self.get_all_rules_for_client(client_id)
-        mailboxes = self._get_client_mailboxes(client_id)
+        return self._compute_analytics(data["_mailboxes"], data["by_mailbox"])
 
-        mb_lookup = {m["id"]: m for m in mailboxes}
+    def _compute_analytics(self, mailboxes: list, by_mailbox: dict) -> dict:
+        """Compute per-mailbox metrics from pre-fetched mailboxes and grouped rules."""
         metrics_list = []
         total_rules = 0
         no_rules_count = 0
 
         for mailbox in mailboxes:
             mb_id = mailbox["id"]
-            mb_rules = data["by_mailbox"].get(mb_id, [])
+            mb_rules = by_mailbox.get(mb_id, [])
             mb_email = mailbox.get("email_address") or mailbox.get("name", "")
             mb_type = mailbox.get("mailbox_type", "")
             live_type = self.get_live_connection_type(mailbox)
@@ -409,6 +447,41 @@ class EmailRulesService:
         }
 
     # ------------------------------------------------------------------
+    # Full Analytics — single-pass combined response (3 DB queries)
+    # ------------------------------------------------------------------
+    def get_full_analytics(self, client_id: str) -> dict:
+        """
+        Compute analytics + insights + all rules in a single pass.
+
+        Only 3 DB queries: mailboxes, gmail_filters batch, outlook_rules batch.
+        Returns everything the Email Rules page needs.
+        """
+        data = self.get_all_rules_for_client(client_id)
+        mailboxes = data["_mailboxes"]
+        all_rules = data["rules"]
+        by_mailbox = data["by_mailbox"]
+
+        # Compute analytics from pre-fetched data
+        analytics = self._compute_analytics(mailboxes, by_mailbox)
+
+        # Compute insights from analytics metrics
+        insights = self._compute_insights(analytics["mailboxes"])
+
+        # Track latest import timestamp
+        last_import_at = None
+        for rule in all_rules:
+            imported = rule.get("imported_at")
+            if imported and (not last_import_at or imported > last_import_at):
+                last_import_at = imported
+
+        return {
+            "analytics": analytics,
+            "insights": insights,
+            "rules": all_rules,
+            "last_rules_import_at": last_import_at,
+        }
+
+    # ------------------------------------------------------------------
     # Insights Derivation
     # ------------------------------------------------------------------
     def get_rules_insights(self, client_id: str) -> list:
@@ -419,14 +492,16 @@ class EmailRulesService:
         affected mailboxes, and recommendation.
         """
         analytics = self.get_rules_analytics(client_id)
-        mailboxes = analytics["mailboxes"]
-        insights = []
+        return self._compute_insights(analytics["mailboxes"])
 
-        if not mailboxes:
+    def _compute_insights(self, mailboxes_metrics: list) -> list:
+        """Derive actionable insights from pre-computed per-mailbox metrics."""
+        insights = []
+        if not mailboxes_metrics:
             return insights
 
         # 1. Mailboxes with zero rules
-        no_rules = [m for m in mailboxes if m["total_rules"] == 0]
+        no_rules = [m for m in mailboxes_metrics if m["total_rules"] == 0]
         if no_rules:
             insights.append({
                 "insight_type": "no_rules",
@@ -440,8 +515,8 @@ class EmailRulesService:
             })
 
         # 2. No escalation rules
-        no_escalation = [m for m in mailboxes if m["total_rules"] > 0 and m["escalation_count"] == 0]
-        if no_escalation and len(mailboxes) > 1:
+        no_escalation = [m for m in mailboxes_metrics if m["total_rules"] > 0 and m["escalation_count"] == 0]
+        if no_escalation and len(mailboxes_metrics) > 1:
             insights.append({
                 "insight_type": "no_escalation",
                 "severity": "info",
@@ -454,29 +529,24 @@ class EmailRulesService:
             })
 
         # 3. Heavy mark-as-read / delete usage
-        heavy_dismiss = []
-        for m in mailboxes:
+        for m in mailboxes_metrics:
             if m["total_rules"] > 0:
                 dismiss_pct = (m["low_priority_count"] / m["total_rules"]) * 100
                 if dismiss_pct >= 40:
-                    heavy_dismiss.append((m, dismiss_pct))
-
-        if heavy_dismiss:
-            for m, pct in heavy_dismiss:
-                insights.append({
-                    "insight_type": "heavy_low_priority",
-                    "severity": "warning",
-                    "description": (
-                        f"{m['mailbox_email']} marks {pct:.0f}% of rules as "
-                        f"low-priority (skip inbox / mark read / delete). "
-                        f"This may cause important emails to be missed."
-                    ),
-                    "affected_mailboxes": [m["mailbox_email"]],
-                    "recommendation": "Review low-priority rules to ensure no important contacts or topics are being auto-dismissed.",
-                })
+                    insights.append({
+                        "insight_type": "heavy_low_priority",
+                        "severity": "warning",
+                        "description": (
+                            f"{m['mailbox_email']} marks {dismiss_pct:.0f}% of rules as "
+                            f"low-priority (skip inbox / mark read / delete). "
+                            f"This may cause important emails to be missed."
+                        ),
+                        "affected_mailboxes": [m["mailbox_email"]],
+                        "recommendation": "Review low-priority rules to ensure no important contacts or topics are being auto-dismissed.",
+                    })
 
         # 4. Best practice template — mailbox with most high-value rules
-        has_rules = [m for m in mailboxes if m["total_rules"] > 0]
+        has_rules = [m for m in mailboxes_metrics if m["total_rules"] > 0]
         if len(has_rules) > 1:
             best = max(has_rules, key=lambda m: m["high_value_count"])
             if best["high_value_count"] > 0:
@@ -500,16 +570,14 @@ class EmailRulesService:
                     })
 
         # 5. Domains covered by some but not all AMs
-        all_domains = set()
         domain_coverage = {}  # domain → set of mailbox_emails
-        for m in mailboxes:
+        for m in mailboxes_metrics:
             for domain in m["covered_domains"]:
-                all_domains.add(domain)
                 if domain not in domain_coverage:
                     domain_coverage[domain] = set()
                 domain_coverage[domain].add(m["mailbox_email"])
 
-        mailboxes_with_rules = [m for m in mailboxes if m["total_rules"] > 0]
+        mailboxes_with_rules = [m for m in mailboxes_metrics if m["total_rules"] > 0]
         if len(mailboxes_with_rules) > 1:
             for domain, covered_by in domain_coverage.items():
                 uncovered = [m["mailbox_email"] for m in mailboxes_with_rules if m["mailbox_email"] not in covered_by]
@@ -575,7 +643,7 @@ class EmailRulesService:
             resp = self.client.table("mailboxes").select(
                 "id,name,email_address,mailbox_type,connection_config,user_id"
             ).eq("client_id", client_id).execute()
-            logger.info(f"[Rules] _get_client_mailboxes({client_id}): found {len(resp.data or [])} mailboxes")
+            logger.debug(f"[Rules] _get_client_mailboxes: found {len(resp.data or [])} mailboxes")
             return resp.data or []
         except Exception as e:
             logger.warning(f"Failed to fetch mailboxes for client {client_id}: {e}")

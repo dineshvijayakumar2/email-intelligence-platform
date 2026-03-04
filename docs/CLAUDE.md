@@ -259,7 +259,9 @@ VITE_MICROSOFT_REDIRECT_URI=http://localhost:3001/auth/microsoft/callback
    - Use `silentOnNetworkError: true` for polling requests
    - apiClient has built-in retry (2 retries, 300ms delay) — do NOT add nested retries in service layers
    - Use in-flight deduplication pattern (shared Promise) to prevent duplicate API calls
-   - Default timeout: 5s (apiClient), 10s (mailboxService), 15s (dashboardService)
+   - Default timeout: 15s (apiClient), 10s (mailboxService), 15s (dashboardService), 30s (rulesService analytics)
+   - Use `Promise.all()` for independent parallel API calls — never fire-and-forget multiple async calls
+   - Analytics pages should be read-only on load (DB only) — external API calls (Gmail/Outlook) only on manual user action
 
 6. **Thread Management** (Python):
    - Cannot change thread daemon status after starting
@@ -372,13 +374,20 @@ Restrict open sign-up — admin-controlled user onboarding via invite system.
 
 **What's Built (Sessions 1-6):**
 - 7 backend AI services: `ai_client.py`, `ai_privacy_filter.py`, `ai_usage_tracker.py`, `ai_email_analyzer.py`, `ai_action_bucket_engine.py`, `ai_entity_aggregator.py`, `ai_digest_generator.py`
-- 19 API endpoints in `backend/src/routers/ai.py` + 4 in `rules.py`
+- 19 API endpoints in `backend/src/routers/ai.py` + 5 in `rules.py` (incl. combined `/analytics/{client_id}/full`)
 - Backend models: `backend/src/models/ai.py`, `backend/src/models/rules.py`
 - 4 frontend pages: Smart Inbox (`/intelligence/inbox`), Daily Digest (`/intelligence/digest`), Opportunities (`/intelligence/opportunities`), Usage (`/intelligence/usage`)
 - 2 shared components: `ActionBucketTag`, `FeedbackButtons`
-- Frontend service: `aiService.ts` (16 endpoints, TTL cache, dedup), `rulesService.ts`
+- Frontend service: `aiService.ts` (16 endpoints, TTL cache, dedup), `rulesService.ts` (with combined fullAnalytics)
 - Types: `ai.ts` (13 enums, comprehensive interfaces)
-- Email Rules page: `/analytics/email-rules`
+- Email Rules page: `/analytics/email-rules` (optimized: 1 API call, 3 DB queries, manual sync)
+
+**Performance Optimizations (Mar 4, 2026):**
+- Email Rules: Combined endpoint (3 DB queries, down from 66-151), read-only load, manual sync button
+- Inbox: `Promise.all()` for parallel data + bucket summary fetch
+- Opportunities: `Promise.all()` for parallel action items + intelligence fetch, removed wasteful client_id resolution
+- AuthContext: Deduplicated `/api/auth/me` calls (was 4-5x per page load)
+- apiClient: Default timeout increased 5s → 15s
 
 **What's Remaining (Sessions 7-13):**
 - Relationship summary service + company detail AI cards

@@ -1,7 +1,7 @@
 # Continuation Guide — Sprint 3: AI Semantic Intelligence
 
-**Last Updated:** 2026-03-03
-**Current Status:** Sprint 2 COMPLETE ✅ | Sprint 3 AI Week 1 COMPLETE ✅ | Sprint 3 Frontend (4 pages) COMPLETE ✅ | Invite User System PLANNED | AI Priority Fixes PENDING
+**Last Updated:** 2026-03-04
+**Current Status:** Sprint 2 COMPLETE ✅ | Sprint 3 AI Week 1 COMPLETE ✅ | Sprint 3 Frontend (4 pages) COMPLETE ✅ | Performance Optimizations COMPLETE ✅ | Invite User System PLANNED | AI Priority Fixes PENDING
 
 ---
 
@@ -130,10 +130,19 @@ Analytics API (30 endpoints at /api/v1/analytics/):
 - Usage & Monitoring — admin controls, budget tracking, cost breakdown, health metrics
 
 **Frontend Infrastructure:**
-- `aiService.ts` (16 endpoints, TTL cache, dedup), `rulesService.ts`
+- `aiService.ts` (16 endpoints, TTL cache, dedup), `rulesService.ts` (with combined `fullAnalytics`)
 - `ActionBucketTag.tsx`, `FeedbackButtons.tsx` shared components
 - `ai.ts` types (13 enums, comprehensive interfaces)
 - Email Rules page at `/analytics/email-rules`
+
+**Performance Optimizations (Mar 4, 2026):**
+- Email Rules: Combined `GET /analytics/{client_id}/full` endpoint (1 API call, 3 DB queries, down from 11 calls / 66-151 queries). Read-only page load, manual "Sync Rules" button for live imports.
+- Backend: `_batch_query_rules()` with `.in_()` + 500-ID chunking, `get_full_analytics()` single-pass method, `_compute_insights()` extracted for reuse
+- Inbox: `Promise.all()` for parallel intelligence list + bucket summary fetch
+- Opportunities: `Promise.all()` for parallel action items + intelligence fetch, removed wasteful `intelligenceApi.list(id, { page_size: 1 })` client_id resolution
+- AuthContext: Deduplicated `/api/auth/me` calls (was 4-5x per page load) — `onAuthStateChange` as single source + `mounted` guard
+- apiClient: Default timeout 5s → 15s, rules analytics 30s (fixed empty data from AbortError)
+- All other analytics pages already optimized (dashboard, contacts, companies, threads, patterns, response-times, digest, usage)
 
 ---
 

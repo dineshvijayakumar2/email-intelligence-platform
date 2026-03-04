@@ -85,20 +85,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [loadProfile]);
 
   useEffect(() => {
-    // Get initial session
+    let mounted = true;
+
+    // Get initial session state (sets user/session, but profile loaded by onAuthStateChange)
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!mounted) return;
       setSession(session);
       setUser(session?.user ?? null);
-      if (session?.access_token) {
-        loadProfile(session.access_token);
+      if (!session) {
+        setLoading(false);
       }
-      setLoading(false);
     });
 
-    // Listen for auth changes
+    // Single source for profile loading — fires INITIAL_SESSION on subscribe
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!mounted) return;
       setSession(session);
       setUser(session?.user ?? null);
 
@@ -111,9 +114,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (event === 'SIGNED_OUT') {
         setProfile(null);
       }
+
+      setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, [loadProfile]);
 
   const signInWithEmail = async (email: string, password: string) => {
