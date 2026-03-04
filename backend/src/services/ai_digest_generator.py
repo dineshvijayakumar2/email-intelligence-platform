@@ -124,6 +124,7 @@ class AIDigestGenerator:
                     'SSL handshake failed', '525', '502', '503', '504',
                     'Connection reset', 'Connection refused', 'timed out',
                     'JSON could not be generated', 'ECONNRESET', 'ETIMEDOUT',
+                    'ConnectionTerminated', 'PROTOCOL_ERROR',
                 ])
                 if is_transient and attempt < max_retries:
                     delay = base_delay * (2 ** attempt)
