@@ -297,11 +297,16 @@ class OutlookSyncService:
                 await self._update_mailbox_sync_status(mailbox_id, 'error', error=error_str)
 
     async def _trigger_post_sync_extraction(self, mailbox_id: str, emails_synced: int):
-        """Auto-trigger Sprint 2 extraction pipeline after successful sync."""
+        """Auto-trigger Sprint 2 extraction pipeline after successful sync (fire-and-forget)."""
         if emails_synced == 0:
             logger.info(f"No new emails for {mailbox_id}, skipping extraction")
             return
 
+        # Fire-and-forget: don't block sync completion
+        asyncio.create_task(self._run_extraction_background(mailbox_id))
+
+    async def _run_extraction_background(self, mailbox_id: str):
+        """Run extraction in a separate executor so it doesn't block sync threads."""
         try:
             from ..services.extraction_orchestrator import ExtractionOrchestrator
 
@@ -312,21 +317,26 @@ class OutlookSyncService:
                 use_redis=True,
             )
 
-            loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(
-                self.executor,
-                lambda: orchestrator.run_extraction(
-                    exclude_mailing_lists=True,
-                    exclude_noreply=True,
+            # Use a separate single-thread executor so it doesn't compete with sync pool
+            extraction_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="extraction")
+            try:
+                loop = asyncio.get_event_loop()
+                result = await loop.run_in_executor(
+                    extraction_executor,
+                    lambda: orchestrator.run_extraction(
+                        exclude_mailing_lists=True,
+                        exclude_noreply=True,
+                    )
                 )
-            )
 
-            if result.get('success'):
-                logger.info(f"Post-sync extraction completed for {mailbox_id}: "
-                            f"{result.get('steps_completed', 0)} steps, "
-                            f"{result.get('duration_seconds', 0):.1f}s")
-            else:
-                logger.warning(f"Post-sync extraction failed for {mailbox_id}: {result.get('error')}")
+                if result.get('success'):
+                    logger.info(f"Post-sync extraction completed for {mailbox_id}: "
+                                f"{result.get('steps_completed', 0)} steps, "
+                                f"{result.get('duration_seconds', 0):.1f}s")
+                else:
+                    logger.warning(f"Post-sync extraction failed for {mailbox_id}: {result.get('error')}")
+            finally:
+                extraction_executor.shutdown(wait=False)
 
         except Exception as e:
             logger.error(f"Post-sync extraction error for {mailbox_id}: {e}")
