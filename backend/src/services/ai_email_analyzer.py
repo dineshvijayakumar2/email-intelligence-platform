@@ -752,7 +752,7 @@ class AIEmailAnalyzer:
             try:
                 resp = self._execute_with_retry(
                     self.client.table("customer_companies")
-                    .select("id,name")
+                    .select("id,company_name")
                     .in_("id", chunk)
                 )
                 for c in (resp.data or []):
@@ -767,7 +767,7 @@ class AIEmailAnalyzer:
             email["_contact_job_title"] = contact.get("job_title") or ""
             email["_contact_seniority"] = contact.get("seniority_level") or ""
             email["_contact_functional_role"] = contact.get("functional_role") or ""
-            email["_company_name"] = company.get("name") or ""
+            email["_company_name"] = company.get("company_name") or ""
 
     # ------------------------------------------------------------------
     # Enrich emails with rule-based tags (from EmailTagger)
