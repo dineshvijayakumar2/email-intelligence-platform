@@ -318,7 +318,8 @@ export interface CommunicationPattern {
   thread_initiation_ratio?: number | null;
   total_threads?: number | null;
   reply_rate?: number | null;
-  avg_response_time_hours?: number | null;
+  avg_response_time_hours?: number | null;  // Our avg response time
+  their_avg_response_time_hours?: number | null;  // Their avg response time
   emails_per_week?: number | null;
   total_emails?: number | null;
   avg_thread_depth?: number | null;

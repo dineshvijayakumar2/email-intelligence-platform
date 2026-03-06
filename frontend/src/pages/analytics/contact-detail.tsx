@@ -150,8 +150,9 @@ export const ContactDetail: React.FC = () => {
       <Row gutter={[16, 16]} className="fade-in-up stagger-1">
         <Col xs={12} sm={6}><MetricCard title="Total Emails" value={totalEmails} /></Col>
         <Col xs={12} sm={6}><MetricCard title="Initiation Ratio" value={formatRatio(pattern?.thread_initiation_ratio)} /></Col>
-        <Col xs={12} sm={6}><MetricCard title="Reply Rate" value={formatRatio(pattern?.reply_rate)} /></Col>
-        <Col xs={12} sm={6}><MetricCard title="Avg Response" value={formatResponseTime(pattern?.avg_response_time_hours)} /></Col>
+        <Col xs={12} sm={6}><MetricCard title="Our Reply Rate" value={formatRatio(pattern?.reply_rate)} /></Col>
+        <Col xs={12} sm={6}><MetricCard title="Our Avg Response" value={formatResponseTime(pattern?.avg_response_time_hours)} /></Col>
+        <Col xs={12} sm={6}><MetricCard title="Their Avg Response" value={formatResponseTime(pattern?.their_avg_response_time_hours)} /></Col>
       </Row>
 
       {/* Details */}

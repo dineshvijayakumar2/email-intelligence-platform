@@ -1498,7 +1498,7 @@ async def get_response_time_stats(
     """
     try:
         query = _supabase.table('email_response_metrics').select(
-            'response_time_seconds, is_auto_reply'
+            'response_time_seconds, is_auto_reply, email_id'
         )
 
         if contact_id:
@@ -1525,14 +1525,42 @@ async def get_response_time_stats(
 
         import statistics
 
+        # Separate by direction if contact_id provided
+        our_avg = None
+        their_avg = None
+        if contact_id and result.data:
+            email_ids = [m['email_id'] for m in result.data if m.get('email_id') and m.get('is_auto_reply') is not True]
+            if email_ids:
+                # Fetch direction for responding emails (batch 500)
+                direction_map = {}
+                for i in range(0, len(email_ids), 500):
+                    batch_ids = email_ids[i:i+500]
+                    dir_result = _supabase.table('emails').select('id, is_outbound').in_('id', batch_ids).execute()
+                    for e in (dir_result.data or []):
+                        direction_map[e['id']] = e.get('is_outbound', False)
+
+                our_times = []
+                their_times = []
+                for m in result.data:
+                    if m.get('is_auto_reply') is True or not m.get('response_time_seconds'):
+                        continue
+                    is_outbound = direction_map.get(m['email_id'])
+                    if is_outbound is True:
+                        our_times.append(m['response_time_seconds'] / 3600.0)
+                    elif is_outbound is False:
+                        their_times.append(m['response_time_seconds'] / 3600.0)
+
+                our_avg = statistics.mean(our_times) if our_times else None
+                their_avg = statistics.mean(their_times) if their_times else None
+
         return ResponseTimeStats(
             total_responses=len(result.data),
             avg_response_time_hours=statistics.mean(response_times_hours) if response_times_hours else 0,
             median_response_time_hours=statistics.median(response_times_hours) if response_times_hours else None,
             min_response_time_hours=min(response_times_hours) if response_times_hours else 0,
             max_response_time_hours=max(response_times_hours) if response_times_hours else 0,
-            our_avg_response_time=None,  # Not tracked in current schema
-            their_avg_response_time=None,  # Not tracked in current schema
+            our_avg_response_time=our_avg,
+            their_avg_response_time=their_avg,
             auto_reply_count=auto_replies,
             auto_reply_percentage=(auto_replies / len(result.data) * 100) if result.data else 0
         )
@@ -1909,7 +1937,7 @@ async def get_contact_pattern(contact_id: str):
             '''
             id, email_address, full_name, company_name,
             initiation_ratio,
-            reply_rate, avg_response_time_seconds, avg_thread_depth,
+            reply_rate, avg_response_time_seconds, their_avg_response_time, avg_thread_depth,
             total_emails_sent, total_emails_received,
             first_contacted_at, last_contacted_at
             '''
@@ -1932,10 +1960,14 @@ async def get_contact_pattern(contact_id: str):
             if days_active > 0:
                 emails_per_week = (total_emails / days_active) * 7
 
-        # Convert response time from seconds to hours
+        # Convert response times from seconds to hours
         avg_response_time_hours = None
         if c.get('avg_response_time_seconds'):
             avg_response_time_hours = c['avg_response_time_seconds'] / 3600.0
+
+        their_avg_response_time_hours = None
+        if c.get('their_avg_response_time'):
+            their_avg_response_time_hours = c['their_avg_response_time'] / 3600.0
 
         return CommunicationPattern(
             contact_id=c['id'],
@@ -1946,6 +1978,7 @@ async def get_contact_pattern(contact_id: str):
             total_threads=None,  # Not tracked separately in schema
             reply_rate=c.get('reply_rate'),
             avg_response_time_hours=avg_response_time_hours,
+            their_avg_response_time_hours=their_avg_response_time_hours,
             emails_per_week=emails_per_week,
             total_emails=total_emails,
             avg_thread_depth=c.get('avg_thread_depth')

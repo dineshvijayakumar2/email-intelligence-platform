@@ -478,7 +478,8 @@ class CommunicationPattern(BaseModel):
 
     # Response behavior
     reply_rate: Optional[float] = None
-    avg_response_time_hours: Optional[float] = None
+    avg_response_time_hours: Optional[float] = None  # Our avg response time (how long we take to reply)
+    their_avg_response_time_hours: Optional[float] = None  # Their avg response time (how long they take to reply)
 
     # Frequency
     emails_per_week: Optional[float] = None

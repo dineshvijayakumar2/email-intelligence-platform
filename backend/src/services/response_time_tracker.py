@@ -406,21 +406,23 @@ class ResponseTimeTracker:
 
     def _calculate_contact_response_times(self, contact_id: str) -> Tuple[Optional[int], Optional[int]]:
         """
-        Calculate average response times for a contact
+        Calculate average response times for a contact, separated by direction.
 
         Args:
             contact_id: Contact UUID
 
         Returns:
             Tuple of (our_avg_response_time, their_avg_response_time) in seconds
+            - our_avg: how long WE take to reply to their emails
+            - their_avg: how long THEY take to reply to our emails
         """
         try:
-            # Get all response metrics for this contact
+            # Get response metrics with the responding email's direction
             response = (
                 self.client.table('email_response_metrics')
-                .select('response_time_seconds, is_auto_reply')
+                .select('response_time_seconds, is_auto_reply, email_id, emails!email_response_metrics_email_id_fkey(is_outbound)')
                 .eq('responder_contact_id', contact_id)
-                .eq('is_auto_reply', 'false')  # Exclude auto-replies (PostgREST expects lowercase string)
+                .eq('is_auto_reply', 'false')
                 .execute()
             )
 
@@ -429,14 +431,25 @@ class ResponseTimeTracker:
             if not metrics:
                 return None, None
 
-            # Calculate average (simple average for now, could be weighted by recency)
-            total_time = sum(m['response_time_seconds'] for m in metrics)
-            avg_time = int(total_time / len(metrics))
+            our_times = []
+            their_times = []
 
-            # For now, we'll use same value for both directions
-            # TODO: Separate by direction in future enhancement
+            for m in metrics:
+                email_data = m.get('emails')
+                time_sec = m.get('response_time_seconds', 0)
+                if not email_data or not time_sec:
+                    continue
+                if email_data.get('is_outbound') is True:
+                    # Our outbound reply to their inbound
+                    our_times.append(time_sec)
+                else:
+                    # Their inbound reply to our outbound
+                    their_times.append(time_sec)
 
-            return avg_time, avg_time
+            our_avg = int(sum(our_times) / len(our_times)) if our_times else None
+            their_avg = int(sum(their_times) / len(their_times)) if their_times else None
+
+            return our_avg, their_avg
 
         except Exception as e:
             logger.error(f"Failed to calculate response times for contact {contact_id}: {e}")

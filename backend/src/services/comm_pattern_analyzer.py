@@ -367,6 +367,9 @@ class CommunicationPatternAnalyzer:
         """
         Calculate reply rate (% of their emails we replied to)
 
+        Reply rate = (outbound replies to this contact's inbound emails) / (total inbound from contact)
+        We join response metrics back to the responding email to check is_outbound=true.
+
         Args:
             contact_id: Contact UUID
 
@@ -374,12 +377,12 @@ class CommunicationPatternAnalyzer:
             Reply rate as decimal (0.0 to 1.0)
         """
         try:
-            # Get response metrics where contact sent email (inbound)
-            # and we responded (outbound)
+            # Get response metrics for this contact, with responding email details
             response = (
                 self.client.table('email_response_metrics')
-                .select('id, is_auto_reply')
+                .select('id, is_auto_reply, email_id, emails!email_response_metrics_email_id_fkey(is_outbound)')
                 .eq('responder_contact_id', contact_id)
+                .eq('is_auto_reply', 'false')
                 .execute()
             )
 
@@ -388,25 +391,28 @@ class CommunicationPatternAnalyzer:
             if not metrics:
                 return 0.0
 
-            # Count non-auto-reply responses
-            valid_responses = sum(1 for m in metrics if not m.get('is_auto_reply', False))
+            # Count only OUR replies (outbound responses to their inbound emails)
+            our_replies = 0
+            for m in metrics:
+                email_data = m.get('emails')
+                if email_data and email_data.get('is_outbound') is True:
+                    our_replies += 1
 
             # Get total inbound emails from contact
             inbound_response = (
                 self.client.table('emails')
                 .select('id', count='exact')
                 .eq('customer_contact_id', contact_id)
-                .eq('is_outbound', 'false')  # PostgREST expects lowercase string
-                .neq('processing_status', 'failed')
+                .eq('is_outbound', 'false')
                 .execute()
             )
 
-            total_inbound = inbound_response.count
+            total_inbound = inbound_response.count or 0
 
             if total_inbound == 0:
                 return 0.0
 
-            return valid_responses / total_inbound
+            return our_replies / total_inbound
 
         except Exception as e:
             logger.error(f"Failed to calculate reply rate for contact {contact_id}: {e}")
