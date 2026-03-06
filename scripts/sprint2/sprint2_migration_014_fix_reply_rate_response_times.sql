@@ -53,9 +53,12 @@ BEGIN
         ci.customer_contact_id,
         CASE
             WHEN ci.total_inbound > 0 THEN
-                ROUND(
-                    COALESCE(r.reply_count, 0)::NUMERIC / ci.total_inbound,
-                    3
+                LEAST(
+                    ROUND(
+                        COALESCE(r.reply_count, 0)::NUMERIC / ci.total_inbound,
+                        2
+                    ),
+                    1.0
                 )
             ELSE 0
         END as reply_rate
