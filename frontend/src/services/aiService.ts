@@ -444,3 +444,20 @@ export const controlsApi = {
     }
   },
 };
+
+// ============================================================================
+// ON-DEMAND SUMMARIZE
+// ============================================================================
+
+/** POST /ai/summarize/{email_id} — Get AI summary for a single email */
+export async function summarizeEmail(emailId: string): Promise<string> {
+  try {
+    const result = await api.post<{ summary: string }>(
+      `${API_PREFIX}/summarize/${emailId}`, {}, { timeout: 30000 }
+    );
+    return result?.summary || 'No summary available.';
+  } catch (error: any) {
+    console.error('[AI] Failed to summarize email:', error?.message);
+    throw new Error('Failed to generate summary');
+  }
+}

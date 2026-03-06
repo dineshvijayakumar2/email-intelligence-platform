@@ -1,9 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Row, Col, Typography, Button, Tag, Descriptions, Skeleton } from 'antd';
+import { Row, Col, Typography, Button, Tag, Descriptions, Skeleton, Table, Drawer } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import { MetricCard } from '../../components/analytics/MetricCard';
 import { EngagementBadge } from '../../components/analytics/EngagementBadge';
+import { EmailDetailPanel } from '../../components/EmailDetailPanel';
+import { emailService } from '../../services/emailService';
+import { summarizeEmail } from '../../services/aiService';
+import type { Email } from '../../services/emailService';
 import { companiesApi, formatRelativeTime, engagementStatusConfig } from '../../services/analyticsService';
 import type { CompanyAnalytics, EngagementStatus } from '../../types/analytics';
 
@@ -14,7 +18,14 @@ export const CompanyDetail: React.FC = () => {
   const navigate = useNavigate();
   const isMountedRef = useRef(true);
   const [company, setCompany] = useState<CompanyAnalytics | null>(null);
+  const [emails, setEmails] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Email preview drawer state
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
+  const [emailLoading, setEmailLoading] = useState(false);
+  const [drawerExpanded, setDrawerExpanded] = useState(false);
 
   useEffect(() => { isMountedRef.current = true; return () => { isMountedRef.current = false; }; }, []);
 
@@ -22,11 +33,45 @@ export const CompanyDetail: React.FC = () => {
     if (!companyId) return;
     const load = async () => {
       setLoading(true);
-      const result = await companiesApi.getDetail(companyId);
-      if (isMountedRef.current) { setCompany(result); setLoading(false); }
+      const [result, emailResult] = await Promise.all([
+        companiesApi.getDetail(companyId),
+        companiesApi.getEmails(companyId),
+      ]);
+      if (isMountedRef.current) {
+        setCompany(result);
+        setEmails(emailResult.emails || []);
+        setLoading(false);
+      }
     };
     load();
   }, [companyId]);
+
+  const handleEmailClick = async (record: any) => {
+    setDrawerOpen(true);
+    setEmailLoading(true);
+    try {
+      const full = await emailService.getEmail(record.id);
+      if (isMountedRef.current) setSelectedEmail(full);
+    } catch {
+      if (isMountedRef.current) setSelectedEmail(null);
+    } finally {
+      if (isMountedRef.current) setEmailLoading(false);
+    }
+  };
+
+  const handleSummarize = async (emailId: string): Promise<string> => {
+    return summarizeEmail(emailId);
+  };
+
+  const emailColumns = [
+    { title: 'Subject', dataIndex: 'subject', key: 'subject', ellipsis: true },
+    { title: 'From', dataIndex: 'sender_name', key: 'from', width: 160, ellipsis: true,
+      render: (v: string, r: any) => v || r.sender_email },
+    { title: 'Direction', dataIndex: 'is_outbound', key: 'dir', width: 90,
+      render: (v: boolean) => <Tag color={v ? 'blue' : 'green'}>{v ? 'Sent' : 'Received'}</Tag> },
+    { title: 'Folder', dataIndex: 'folder_path', key: 'folder', width: 100 },
+    { title: 'Date', dataIndex: 'sent_date', key: 'date', width: 110, render: (v: string) => formatRelativeTime(v) },
+  ];
 
   if (loading) {
     return (
@@ -88,6 +133,45 @@ export const CompanyDetail: React.FC = () => {
           </div>
         </Col>
       </Row>
+
+      {/* Linked Emails */}
+      <Row style={{ marginTop: 16 }} className="fade-in-up stagger-3">
+        <Col span={24}>
+          <div className="glass-table-container" style={{ padding: 16 }}>
+            <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 12 }}>Linked Emails ({emails.length})</Text>
+            <Table
+              columns={emailColumns}
+              dataSource={emails}
+              rowKey="id"
+              size="small"
+              pagination={emails.length > 10 ? { pageSize: 10 } : false}
+              locale={{ emptyText: 'No emails linked yet. Run extraction to link emails to contacts.' }}
+              onRow={(record) => ({
+                onClick: () => handleEmailClick(record),
+                style: { cursor: 'pointer' },
+              })}
+            />
+          </div>
+        </Col>
+      </Row>
+
+      {/* Email Preview Drawer */}
+      <Drawer
+        open={drawerOpen}
+        onClose={() => { setDrawerOpen(false); setSelectedEmail(null); }}
+        width={drawerExpanded ? '80%' : 640}
+        destroyOnClose
+        styles={{ body: { padding: 0 } }}
+      >
+        <EmailDetailPanel
+          email={selectedEmail}
+          loading={emailLoading}
+          onClose={() => { setDrawerOpen(false); setSelectedEmail(null); }}
+          expanded={drawerExpanded}
+          onToggleExpand={() => setDrawerExpanded(e => !e)}
+          onSummarize={handleSummarize}
+        />
+      </Drawer>
     </div>
   );
 };

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Typography, Tabs, Tag, Space, Slider, Switch, Select, Alert } from 'antd';
+import { Typography, Tabs, Tag, Space, Slider, Switch, Select, Alert, Input } from 'antd';
 import type { TableProps } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { ClientSelector } from '../../components/analytics/ClientSelector';
@@ -48,6 +48,7 @@ export const ContactsAnalytics: React.FC = () => {
   const [contactType, setContactType] = useState<string>('');
   const [sortBy, setSortBy] = useState<string>('engagement_score');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [search, setSearch] = useState<string>('');
 
   // Top engaged state
   const [topEngaged, setTopEngaged] = useState<TopEngagedContact[]>([]);
@@ -75,7 +76,7 @@ export const ContactsAnalytics: React.FC = () => {
   useEffect(() => {
     if (!clientId) return;
     loadTab(activeTab);
-  }, [clientId, activeTab, contactsPage, dmsPage, minScore, dmOnly, contactType, sortBy, sortDir]);
+  }, [clientId, activeTab, contactsPage, dmsPage, minScore, dmOnly, contactType, sortBy, sortDir, search]);
 
   const loadTab = async (tab: string) => {
     if (!clientId) return;
@@ -91,6 +92,7 @@ export const ContactsAnalytics: React.FC = () => {
           contact_type: contactType ? (contactType as ContactType) : undefined,
           sort_by: sortBy,
           sort_dir: sortDir,
+          search: search || undefined,
         });
         if (isMountedRef.current) {
           setContacts(allResult.contacts);
@@ -275,6 +277,13 @@ export const ContactsAnalytics: React.FC = () => {
             children: (
               <>
                 <Space style={{ marginBottom: 16 }} wrap>
+                  <Input.Search
+                    placeholder="Search name, email, company..."
+                    allowClear
+                    onSearch={(v) => { setSearch(v); setContactsPage(1); }}
+                    style={{ width: 240 }}
+                    size="small"
+                  />
                   <Text>Type:</Text>
                   <Select
                     value={contactType}

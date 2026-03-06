@@ -180,12 +180,62 @@ class OutlookSyncService:
         except Exception as e:
             logger.error(f"Failed to fetch mailboxes for sync: {e}")
 
+    def _sync_mailbox_blocking(self, config: Dict, mailbox_id: str) -> Dict:
+        """
+        Blocking I/O for Outlook sync — runs in thread pool so it doesn't starve the event loop.
+
+        Returns dict with success_count, failed_count, delta_links, refreshed_tokens, auth_error.
+        """
+        from ..extractors.outlook_extractor import OutlookExtractor
+        from ..database.operations import EmailOperations
+
+        extractor = OutlookExtractor({
+            'access_token': config['outlook_access_token'],
+            'refresh_token': config.get('outlook_refresh_token'),
+            'delta_links': config.get('outlook_delta_links') or config.get('outlook_delta_link'),
+            'mailbox_id': mailbox_id
+        })
+
+        if not extractor.connect():
+            if extractor.auth_expired:
+                return {'auth_error': extractor.auth_error or 'Refresh token revoked or expired'}
+            return {'error': 'Failed to connect to Outlook API'}
+
+        email_ops = EmailOperations()
+        success_count = 0
+        failed_count = 0
+        emails_batch = []
+        batch_size = 100
+
+        for email in extractor.extract_emails(max_emails=self.MAX_EMAILS_PER_SYNC):
+            emails_batch.append(email)
+
+            if len(emails_batch) >= batch_size:
+                result = email_ops.batch_insert_emails(emails_batch, mailbox_id)
+                success_count += result.get('success', 0)
+                failed_count += result.get('failed', 0)
+                emails_batch = []
+
+        if emails_batch:
+            result = email_ops.batch_insert_emails(emails_batch, mailbox_id)
+            success_count += result.get('success', 0)
+            failed_count += result.get('failed', 0)
+
+        delta_links = extractor.get_current_delta_link()
+        refreshed_tokens = extractor.get_refreshed_tokens()
+        extractor.disconnect()
+
+        return {
+            'success_count': success_count,
+            'failed_count': failed_count,
+            'delta_links': delta_links,
+            'refreshed_tokens': refreshed_tokens,
+        }
+
     async def _sync_mailbox(self, mailbox: Dict):
         """
-        Sync a single mailbox using its own Outlook tokens stored in connection_config.
-
-        Args:
-            mailbox: Mailbox record with Outlook config in connection_config
+        Sync a single mailbox. Delegates blocking I/O to thread pool
+        so the event loop stays responsive for HTTP/WebSocket requests.
         """
         mailbox_id = mailbox['id']
         mailbox_name = mailbox.get('name', 'Unknown')
@@ -194,76 +244,40 @@ class OutlookSyncService:
         logger.info(f"Starting Outlook sync for mailbox: {mailbox_name} ({mailbox_id})")
 
         try:
-            # Update status to syncing
             await self._update_mailbox_sync_status(mailbox_id, 'syncing')
-
-            # Import here to avoid circular imports
-            from ..extractors.outlook_extractor import OutlookExtractor
-            from ..database.operations import EmailOperations
-
-            # Create extractor using mailbox's own tokens
-            extractor = OutlookExtractor({
-                'access_token': config['outlook_access_token'],
-                'refresh_token': config.get('outlook_refresh_token'),
-                'delta_link': config.get('outlook_delta_link'),
-                'folders': ['inbox', 'sentitems'],
-                'mailbox_id': mailbox_id
-            })
-
-            if not extractor.connect():
-                if extractor.auth_expired:
-                    raise ConnectionError(f"AUTH_EXPIRED: {extractor.auth_error or 'Refresh token revoked or expired'}")
-                raise ConnectionError("Failed to connect to Outlook API")
-
-            # Create processing job
             job_id = await self._create_sync_job(mailbox_id)
 
-            # Process emails using EmailOperations
-            email_ops = EmailOperations()
-            success_count = 0
-            failed_count = 0
+            # Run all blocking I/O (Outlook Graph API + Supabase) in thread pool
+            loop = asyncio.get_event_loop()
+            sync_result = await loop.run_in_executor(
+                self.executor,
+                self._sync_mailbox_blocking,
+                config, mailbox_id
+            )
 
-            # Extract and insert emails
-            emails_batch = []
-            batch_size = 100
+            if sync_result.get('auth_error'):
+                raise ConnectionError(f"AUTH_EXPIRED: {sync_result['auth_error']}")
+            if sync_result.get('error'):
+                raise ConnectionError(sync_result['error'])
 
-            for email in extractor.extract_emails(max_emails=self.MAX_EMAILS_PER_SYNC):
-                emails_batch.append(email)
+            success_count = sync_result['success_count']
 
-                if len(emails_batch) >= batch_size:
-                    result = email_ops.batch_insert_emails(emails_batch, mailbox_id)
-                    success_count += result.get('success', 0)
-                    failed_count += result.get('failed', 0)
-                    emails_batch = []
+            if sync_result.get('refreshed_tokens'):
+                await self._update_mailbox_tokens(mailbox_id, sync_result['refreshed_tokens'])
 
-            # Insert remaining emails
-            if emails_batch:
-                result = email_ops.batch_insert_emails(emails_batch, mailbox_id)
-                success_count += result.get('success', 0)
-                failed_count += result.get('failed', 0)
+            await self._complete_sync_job(job_id, success_count, sync_result['failed_count'])
 
-            # Update delta link for next incremental sync
-            new_delta_link = extractor.get_current_delta_link()
-
-            # Check if tokens were refreshed and update mailbox config
-            refreshed_tokens = extractor.get_refreshed_tokens()
-            if refreshed_tokens:
-                await self._update_mailbox_tokens(mailbox_id, refreshed_tokens)
-
-            # Complete the job
-            await self._complete_sync_job(job_id, success_count, failed_count)
-
-            # Update sync status in mailbox config
             await self._update_mailbox_sync_status(
                 mailbox_id,
                 'idle',
-                delta_link=new_delta_link,
+                delta_link=sync_result.get('delta_links'),
                 email_count=success_count
             )
 
-            extractor.disconnect()
-
             logger.info(f"Outlook sync completed for mailbox {mailbox_name}: {success_count} emails synced")
+
+            # Auto-trigger Sprint 2 extraction pipeline
+            await self._trigger_post_sync_extraction(mailbox_id, success_count)
 
         except Exception as e:
             error_str = str(e)
@@ -282,11 +296,46 @@ class OutlookSyncService:
                 logger.error(traceback.format_exc())
                 await self._update_mailbox_sync_status(mailbox_id, 'error', error=error_str)
 
+    async def _trigger_post_sync_extraction(self, mailbox_id: str, emails_synced: int):
+        """Auto-trigger Sprint 2 extraction pipeline after successful sync."""
+        if emails_synced == 0:
+            logger.info(f"No new emails for {mailbox_id}, skipping extraction")
+            return
+
+        try:
+            from ..services.extraction_orchestrator import ExtractionOrchestrator
+
+            orchestrator = ExtractionOrchestrator(
+                mailbox_id=mailbox_id,
+                extraction_mode='incremental',
+                lookback_days=7,
+                use_redis=True,
+            )
+
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                self.executor,
+                lambda: orchestrator.run_extraction(
+                    exclude_mailing_lists=True,
+                    exclude_noreply=True,
+                )
+            )
+
+            if result.get('success'):
+                logger.info(f"Post-sync extraction completed for {mailbox_id}: "
+                            f"{result.get('steps_completed', 0)} steps, "
+                            f"{result.get('duration_seconds', 0):.1f}s")
+            else:
+                logger.warning(f"Post-sync extraction failed for {mailbox_id}: {result.get('error')}")
+
+        except Exception as e:
+            logger.error(f"Post-sync extraction error for {mailbox_id}: {e}")
+
     async def _update_mailbox_sync_status(
         self,
         mailbox_id: str,
         status: str,
-        delta_link: str = None,
+        delta_link=None,
         email_count: int = None,
         error: str = None
     ):
@@ -307,7 +356,9 @@ class OutlookSyncService:
             config['outlook_last_sync_at'] = datetime.now(timezone.utc).isoformat()
 
             if delta_link:
-                config['outlook_delta_link'] = delta_link
+                # Store per-folder delta links dict (new format)
+                config['outlook_delta_links'] = delta_link
+                config.pop('outlook_delta_link', None)  # Remove old single-link key
 
             if email_count is not None and email_count > 0:
                 current_count = config.get('outlook_email_count') or 0
@@ -394,91 +445,57 @@ class OutlookSyncService:
 
     async def _sync_user(self, user_data: Dict):
         """
-        Sync a single user's Outlook
-
-        Args:
-            user_data: User integration data from database
+        Sync a single user's Outlook (legacy path).
+        Delegates blocking I/O to thread pool.
         """
         user_id = user_data['user_id']
         logger.info(f"Starting Outlook sync for user: {user_id}")
 
         try:
-            # Update status to syncing
             await self._update_sync_status(user_id, 'syncing')
 
-            # Get mailbox for this user
             mailbox = await self._get_outlook_mailbox(user_id)
             if not mailbox:
-                logger.info(f"Skipping user {user_id} - Outlook connected but no mailbox linked. "
-                           "User needs to link Outlook to a mailbox via the Mailboxes page.")
+                logger.info(f"Skipping user {user_id} - Outlook connected but no mailbox linked.")
                 await self._update_sync_status(user_id, 'idle',
                     error="No mailbox linked. Use 'Link Outlook' on a mailbox to enable sync.")
                 return
 
-            # Import here to avoid circular imports
-            from ..extractors.outlook_extractor import OutlookExtractor
-            from ..database.operations import EmailOperations
-
-            # Create extractor
-            extractor = OutlookExtractor({
-                'user_id': user_id,
-                'access_token': user_data['access_token'],
-                'refresh_token': user_data['refresh_token'],
-                'delta_link': user_data.get('delta_link'),
-                'folders': ['inbox', 'sentitems'],
-                'mailbox_id': mailbox['id']
-            })
-
-            if not extractor.connect():
-                raise ConnectionError("Failed to connect to Outlook API")
-
-            # Create processing job
             job_id = await self._create_sync_job(mailbox['id'])
 
-            # Process emails using EmailOperations
-            email_ops = EmailOperations()
-            success_count = 0
-            failed_count = 0
+            # Build config for the blocking call
+            extractor_config = {
+                'outlook_access_token': user_data['access_token'],
+                'outlook_refresh_token': user_data.get('refresh_token'),
+                'outlook_delta_links': user_data.get('delta_link'),
+            }
 
-            # Extract and insert emails
-            emails_batch = []
-            batch_size = 100
+            # Run blocking I/O in thread pool
+            loop = asyncio.get_event_loop()
+            sync_result = await loop.run_in_executor(
+                self.executor,
+                self._sync_mailbox_blocking,
+                extractor_config, mailbox['id']
+            )
 
-            for email in extractor.extract_emails(max_emails=self.MAX_EMAILS_PER_SYNC):
-                emails_batch.append(email)
+            if sync_result.get('auth_error'):
+                raise ConnectionError(f"AUTH_EXPIRED: {sync_result['auth_error']}")
+            if sync_result.get('error'):
+                raise ConnectionError(sync_result['error'])
 
-                if len(emails_batch) >= batch_size:
-                    result = email_ops.batch_insert_emails(emails_batch, mailbox['id'])
-                    success_count += result.get('success', 0)
-                    failed_count += result.get('failed', 0)
-                    emails_batch = []
+            success_count = sync_result['success_count']
 
-            # Insert remaining emails
-            if emails_batch:
-                result = email_ops.batch_insert_emails(emails_batch, mailbox['id'])
-                success_count += result.get('success', 0)
-                failed_count += result.get('failed', 0)
+            if sync_result.get('refreshed_tokens'):
+                await self._update_tokens(user_id, sync_result['refreshed_tokens'])
 
-            # Update delta link for next incremental sync
-            new_delta_link = extractor.get_current_delta_link()
+            await self._complete_sync_job(job_id, success_count, sync_result['failed_count'])
 
-            # Check if tokens were refreshed
-            refreshed_tokens = extractor.get_refreshed_tokens()
-            if refreshed_tokens:
-                await self._update_tokens(user_id, refreshed_tokens)
-
-            # Complete the job
-            await self._complete_sync_job(job_id, success_count, failed_count)
-
-            # Update sync status
             await self._update_sync_status(
                 user_id,
                 'idle',
-                delta_link=new_delta_link,
+                delta_link=sync_result.get('delta_links'),
                 email_count=success_count
             )
-
-            extractor.disconnect()
 
             logger.info(f"Outlook sync completed for user {user_id}: {success_count} emails synced")
 
@@ -544,11 +561,12 @@ class OutlookSyncService:
         self,
         user_id: str,
         status: str,
-        delta_link: str = None,
+        delta_link=None,
         email_count: int = None,
         error: str = None
     ):
         """Update sync status in user_integrations table"""
+        import json as _json
         update_data = {
             'sync_status': status,
             'updated_at': datetime.now(timezone.utc).isoformat()
@@ -559,7 +577,8 @@ class OutlookSyncService:
             update_data['sync_error'] = None
 
         if delta_link:
-            update_data['delta_link'] = delta_link
+            # Serialize per-folder delta links dict as JSON string
+            update_data['delta_link'] = _json.dumps(delta_link) if isinstance(delta_link, dict) else delta_link
 
         if email_count is not None and email_count > 0:
             # Increment email count

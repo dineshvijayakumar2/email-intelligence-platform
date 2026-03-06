@@ -180,12 +180,62 @@ class GmailSyncService:
         except Exception as e:
             logger.error(f"Failed to fetch mailboxes for sync: {e}")
 
+    def _sync_mailbox_blocking(self, config: Dict, mailbox_id: str) -> Dict:
+        """
+        Blocking I/O for Gmail sync — runs in thread pool so it doesn't starve the event loop.
+
+        Returns dict with success_count, failed_count, history_id, refreshed_tokens, auth_error.
+        """
+        from ..extractors.gmail_extractor import GmailExtractor
+        from ..database.operations import EmailOperations
+
+        extractor = GmailExtractor({
+            'access_token': config['gmail_access_token'],
+            'refresh_token': config.get('gmail_refresh_token'),
+            'history_id': config.get('gmail_last_history_id'),
+            'mailbox_id': mailbox_id
+        })
+
+        if not extractor.connect():
+            if extractor.auth_expired:
+                return {'auth_error': extractor.auth_error or 'Refresh token revoked or expired'}
+            return {'error': 'Failed to connect to Gmail API'}
+
+        email_ops = EmailOperations()
+        success_count = 0
+        failed_count = 0
+        emails_batch = []
+        batch_size = 100
+
+        for email in extractor.extract_emails(max_emails=self.MAX_EMAILS_PER_SYNC):
+            emails_batch.append(email)
+
+            if len(emails_batch) >= batch_size:
+                result = email_ops.batch_insert_emails(emails_batch, mailbox_id)
+                success_count += result.get('success', 0)
+                failed_count += result.get('failed', 0)
+                emails_batch = []
+
+        if emails_batch:
+            result = email_ops.batch_insert_emails(emails_batch, mailbox_id)
+            success_count += result.get('success', 0)
+            failed_count += result.get('failed', 0)
+
+        history_id = extractor.get_current_history_id()
+        refreshed_tokens = extractor.get_refreshed_tokens()
+        extractor.disconnect()
+
+        return {
+            'success_count': success_count,
+            'failed_count': failed_count,
+            'history_id': history_id,
+            'refreshed_tokens': refreshed_tokens,
+        }
+
     async def _sync_mailbox(self, mailbox: Dict):
         """
-        Sync a single mailbox using its own Gmail tokens stored in connection_config.
-
-        Args:
-            mailbox: Mailbox record with Gmail config in connection_config
+        Sync a single mailbox. Delegates blocking I/O to thread pool
+        so the event loop stays responsive for HTTP/WebSocket requests.
         """
         mailbox_id = mailbox['id']
         mailbox_name = mailbox.get('name', 'Unknown')
@@ -194,76 +244,42 @@ class GmailSyncService:
         logger.info(f"Starting Gmail sync for mailbox: {mailbox_name} ({mailbox_id})")
 
         try:
-            # Update status to syncing
             await self._update_mailbox_sync_status(mailbox_id, 'syncing')
-
-            # Import here to avoid circular imports
-            from ..extractors.gmail_extractor import GmailExtractor
-            from ..database.operations import EmailOperations
-
-            # Create extractor using mailbox's own tokens
-            extractor = GmailExtractor({
-                'access_token': config['gmail_access_token'],
-                'refresh_token': config.get('gmail_refresh_token'),
-                'history_id': config.get('gmail_last_history_id'),
-                'labels': ['INBOX', 'SENT'],
-                'mailbox_id': mailbox_id
-            })
-
-            if not extractor.connect():
-                if extractor.auth_expired:
-                    raise ConnectionError(f"AUTH_EXPIRED: {extractor.auth_error or 'Refresh token revoked or expired'}")
-                raise ConnectionError("Failed to connect to Gmail API")
-
-            # Create processing job
             job_id = await self._create_sync_job(mailbox_id)
 
-            # Process emails using EmailOperations
-            email_ops = EmailOperations()
-            success_count = 0
-            failed_count = 0
+            # Run all blocking I/O (Gmail API + Supabase) in thread pool
+            loop = asyncio.get_event_loop()
+            sync_result = await loop.run_in_executor(
+                self.executor,
+                self._sync_mailbox_blocking,
+                config, mailbox_id
+            )
 
-            # Extract and insert emails
-            emails_batch = []
-            batch_size = 100
+            # Handle connection / auth errors from the blocking call
+            if sync_result.get('auth_error'):
+                raise ConnectionError(f"AUTH_EXPIRED: {sync_result['auth_error']}")
+            if sync_result.get('error'):
+                raise ConnectionError(sync_result['error'])
 
-            for email in extractor.extract_emails(max_emails=self.MAX_EMAILS_PER_SYNC):
-                emails_batch.append(email)
+            success_count = sync_result['success_count']
+            failed_count = sync_result['failed_count']
 
-                if len(emails_batch) >= batch_size:
-                    result = email_ops.batch_insert_emails(emails_batch, mailbox_id)
-                    success_count += result.get('success', 0)
-                    failed_count += result.get('failed', 0)
-                    emails_batch = []
+            if sync_result.get('refreshed_tokens'):
+                await self._update_mailbox_tokens(mailbox_id, sync_result['refreshed_tokens'])
 
-            # Insert remaining emails
-            if emails_batch:
-                result = email_ops.batch_insert_emails(emails_batch, mailbox_id)
-                success_count += result.get('success', 0)
-                failed_count += result.get('failed', 0)
-
-            # Update history ID for next incremental sync
-            new_history_id = extractor.get_current_history_id()
-
-            # Check if tokens were refreshed and update mailbox config
-            refreshed_tokens = extractor.get_refreshed_tokens()
-            if refreshed_tokens:
-                await self._update_mailbox_tokens(mailbox_id, refreshed_tokens)
-
-            # Complete the job
             await self._complete_sync_job(job_id, success_count, failed_count)
 
-            # Update sync status in mailbox config
             await self._update_mailbox_sync_status(
                 mailbox_id,
                 'idle',
-                history_id=new_history_id,
+                history_id=sync_result.get('history_id'),
                 email_count=success_count
             )
 
-            extractor.disconnect()
-
             logger.info(f"Gmail sync completed for mailbox {mailbox_name}: {success_count} emails synced")
+
+            # Auto-trigger Sprint 2 extraction pipeline
+            await self._trigger_post_sync_extraction(mailbox_id, success_count)
 
         except Exception as e:
             error_str = str(e)
@@ -278,6 +294,41 @@ class GmailSyncService:
                 logger.error(f"Gmail sync failed for mailbox {mailbox_id}: {e}")
                 logger.error(traceback.format_exc())
                 await self._update_mailbox_sync_status(mailbox_id, 'error', error=error_str)
+
+    async def _trigger_post_sync_extraction(self, mailbox_id: str, emails_synced: int):
+        """Auto-trigger Sprint 2 extraction pipeline after successful sync."""
+        if emails_synced == 0:
+            logger.info(f"No new emails for {mailbox_id}, skipping extraction")
+            return
+
+        try:
+            from ..services.extraction_orchestrator import ExtractionOrchestrator
+
+            orchestrator = ExtractionOrchestrator(
+                mailbox_id=mailbox_id,
+                extraction_mode='incremental',
+                lookback_days=7,
+                use_redis=True,
+            )
+
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                self.executor,
+                lambda: orchestrator.run_extraction(
+                    exclude_mailing_lists=True,
+                    exclude_noreply=True,
+                )
+            )
+
+            if result.get('success'):
+                logger.info(f"Post-sync extraction completed for {mailbox_id}: "
+                            f"{result.get('steps_completed', 0)} steps, "
+                            f"{result.get('duration_seconds', 0):.1f}s")
+            else:
+                logger.warning(f"Post-sync extraction failed for {mailbox_id}: {result.get('error')}")
+
+        except Exception as e:
+            logger.error(f"Post-sync extraction error for {mailbox_id}: {e}")
 
     async def _update_mailbox_sync_status(
         self,
@@ -392,97 +443,62 @@ class GmailSyncService:
 
     async def _sync_user(self, user_data: Dict):
         """
-        Sync a single user's Gmail
-
-        Args:
-            user_data: User integration data from database
+        Sync a single user's Gmail (legacy path).
+        Delegates blocking I/O to thread pool.
         """
         user_id = user_data['user_id']
         logger.info(f"Starting Gmail sync for user: {user_id}")
 
         try:
-            # Update status to syncing
             await self._update_sync_status(user_id, 'syncing')
 
-            # Get mailbox for this user
             mailbox = await self._get_gmail_mailbox(user_id)
             if not mailbox:
-                # User has Gmail connected but no mailbox linked
-                # They need to either:
-                # 1. Use "Link Gmail" on an existing mailbox (Mailboxes page)
-                # 2. Use "Extend mailbox" to add LIVE sync to an archive mailbox
-                logger.info(f"Skipping user {user_id} - Gmail connected but no mailbox linked. "
-                           "User needs to link Gmail to a mailbox via the Mailboxes page.")
+                logger.info(f"Skipping user {user_id} - Gmail connected but no mailbox linked.")
                 await self._update_sync_status(user_id, 'idle',
                     error="No mailbox linked. Use 'Link Gmail' on a mailbox to enable sync.")
                 return
 
-            # Import here to avoid circular imports
-            from ..extractors.gmail_extractor import GmailExtractor
-            from ..database.operations import EmailOperations
+            job_id = await self._create_sync_job(mailbox['id'])
 
-            # Create extractor
-            extractor = GmailExtractor({
+            # Build config for the blocking call
+            extractor_config = {
                 'user_id': user_id,
                 'access_token': user_data['access_token'],
                 'refresh_token': user_data['refresh_token'],
                 'history_id': user_data.get('last_history_id'),
-                'labels': ['INBOX', 'SENT'],
-                'mailbox_id': mailbox['id']
-            })
+                'mailbox_id': mailbox['id'],
+                'gmail_access_token': user_data['access_token'],
+                'gmail_refresh_token': user_data.get('refresh_token'),
+                'gmail_last_history_id': user_data.get('last_history_id'),
+            }
 
-            if not extractor.connect():
-                if extractor.auth_expired:
-                    raise ConnectionError(f"AUTH_EXPIRED: {extractor.auth_error or 'Refresh token revoked or expired'}")
-                raise ConnectionError("Failed to connect to Gmail API")
+            # Run blocking I/O in thread pool
+            loop = asyncio.get_event_loop()
+            sync_result = await loop.run_in_executor(
+                self.executor,
+                self._sync_mailbox_blocking,
+                extractor_config, mailbox['id']
+            )
 
-            # Create processing job
-            job_id = await self._create_sync_job(mailbox['id'])
+            if sync_result.get('auth_error'):
+                raise ConnectionError(f"AUTH_EXPIRED: {sync_result['auth_error']}")
+            if sync_result.get('error'):
+                raise ConnectionError(sync_result['error'])
 
-            # Process emails using EmailOperations
-            email_ops = EmailOperations()
-            success_count = 0
-            failed_count = 0
+            success_count = sync_result['success_count']
 
-            # Extract and insert emails
-            emails_batch = []
-            batch_size = 100
+            if sync_result.get('refreshed_tokens'):
+                await self._update_tokens(user_id, sync_result['refreshed_tokens'])
 
-            for email in extractor.extract_emails(max_emails=self.MAX_EMAILS_PER_SYNC):
-                emails_batch.append(email)
+            await self._complete_sync_job(job_id, success_count, sync_result['failed_count'])
 
-                if len(emails_batch) >= batch_size:
-                    result = email_ops.batch_insert_emails(emails_batch, mailbox['id'])
-                    success_count += result.get('success', 0)
-                    failed_count += result.get('failed', 0)
-                    emails_batch = []
-
-            # Insert remaining emails
-            if emails_batch:
-                result = email_ops.batch_insert_emails(emails_batch, mailbox['id'])
-                success_count += result.get('success', 0)
-                failed_count += result.get('failed', 0)
-
-            # Update history ID for next incremental sync
-            new_history_id = extractor.get_current_history_id()
-
-            # Check if tokens were refreshed
-            refreshed_tokens = extractor.get_refreshed_tokens()
-            if refreshed_tokens:
-                await self._update_tokens(user_id, refreshed_tokens)
-
-            # Complete the job
-            await self._complete_sync_job(job_id, success_count, failed_count)
-
-            # Update sync status
             await self._update_sync_status(
                 user_id,
                 'idle',
-                history_id=new_history_id,
+                history_id=sync_result.get('history_id'),
                 email_count=success_count
             )
-
-            extractor.disconnect()
 
             logger.info(f"Gmail sync completed for user {user_id}: {success_count} emails synced")
 

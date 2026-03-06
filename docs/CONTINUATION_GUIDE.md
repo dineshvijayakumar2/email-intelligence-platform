@@ -1,7 +1,7 @@
 # Continuation Guide — Sprint 3: AI Semantic Intelligence
 
-**Last Updated:** 2026-03-04
-**Current Status:** Sprint 2 COMPLETE ✅ | Sprint 3 AI Week 1 COMPLETE ✅ | Sprint 3 Frontend (4 pages) COMPLETE ✅ | Performance Optimizations COMPLETE ✅ | Invite User System PLANNED | AI Priority Fixes PENDING
+**Last Updated:** 2026-03-06
+**Current Status:** Sprint 2 COMPLETE ✅ | Sprint 3 AI Week 1 COMPLETE ✅ | Sprint 3 Frontend (4 pages) COMPLETE ✅ | Performance Optimizations COMPLETE ✅ | Analytics Enhancements COMPLETE ✅ | Invite User System PLANNED | AI Priority Fixes PENDING
 
 ---
 
@@ -85,8 +85,8 @@ Analytics API (30 endpoints at /api/v1/analytics/):
 | Contacts | `/analytics/contacts` | All/Top/At-Risk/DMs/By-Type tabs, sort, filter, score slider |
 | Companies | `/analytics/companies` | All/Top/At-Risk/By-Engagement tabs, sort, filter, score slider |
 | Threads | `/analytics/threads` | All/Overdue/By-Status tabs, status chart, sort, filter |
-| Contact Detail | `/analytics/contacts/:id` | Stats, threads, communication patterns |
-| Company Detail | `/analytics/companies/:id` | Stats, top contacts, threads |
+| Contact Detail | `/analytics/contacts/:id` | Stats, threads, communication patterns, linked emails table, email preview Drawer with AI summarize |
+| Company Detail | `/analytics/companies/:id` | Stats, linked emails table, email preview Drawer with AI summarize |
 | Admin Data View | `/admin/data` | Raw table browser, search, sort, pagination, CSV export |
 
 ### Production Performance
@@ -134,6 +134,17 @@ Analytics API (30 endpoints at /api/v1/analytics/):
 - `ActionBucketTag.tsx`, `FeedbackButtons.tsx` shared components
 - `ai.ts` types (13 enums, comprehensive interfaces)
 - Email Rules page at `/analytics/email-rules`
+
+**Analytics Enhancements (Mar 6, 2026):**
+- Reusable `EmailDetailPanel` component extracted from emails.tsx (shared across all pages with email preview)
+- Contact search: `search` param on `GET /contacts` (name/email/company ilike), frontend `Input.Search`
+- Contact detail: linked emails table + email preview Drawer (fetches full email on click)
+- Contact detail: Total Emails metric now uses live count from linked emails (not stale cached)
+- Company detail: `GET /companies/{id}/emails` endpoint + linked emails table + Drawer preview
+- AI Summarise Email: `POST /ai/summarize/{email_id}` (Haiku, 2-3 sentence summary), "Summarise" button in EmailDetailPanel
+- Sync: Per-folder limits (not global), recursive Outlook folder loading, folder filter aliases (Sent↔Sent Items)
+- Post-sync extraction: Auto-triggers Sprint 2 extraction pipeline after sync completes
+- RPC fix: Removed stale `get_job_errors_summary` RPC, Python fallback aggregation
 
 **Performance Optimizations (Mar 4, 2026):**
 - Email Rules: Combined `GET /analytics/{client_id}/full` endpoint (1 API call, 3 DB queries, down from 11 calls / 66-151 queries). Read-only page load, manual "Sync Rules" button for live imports.

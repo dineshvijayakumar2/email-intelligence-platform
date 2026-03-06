@@ -37,50 +37,20 @@ import { emailService, Email, EmailFilters } from '../services/emailService';
 import { mailboxService, Mailbox } from '../services/mailboxService';
 import SyncStatusBar from '../components/SyncStatusBar';
 import { dashboardService } from '../services/dashboardService';
+import {
+  EmailDetailPanel,
+  getCategoryColor,
+  getCategoryLabel,
+  getInitials,
+  getAvatarColor,
+  filterContentTags,
+} from '../components/EmailDetailPanel';
 
 const { Text, Title } = Typography;
 const { Option } = Select;
 const { Search } = Input;
 
-// Helper functions
-const getCategoryColor = (category: string) => {
-  const colors: Record<string, string> = {
-    promotional: '#f50',
-    transactional: '#2db7f5',
-    conversation: '#87d068',
-    internal: '#722ed1',
-    system: '#fa8c16',
-  };
-  return colors[category] || '#d9d9d9';
-};
-
-const getCategoryLabel = (category: string) => {
-  const labels: Record<string, string> = {
-    promotional: 'Promotional',
-    transactional: 'Transactional',
-    conversation: 'Conversation',
-    internal: 'Internal',
-    system: 'System',
-  };
-  return labels[category] || category;
-};
-
-const getInitials = (name: string, email: string) => {
-  if (name) {
-    const parts = name.split(' ');
-    return parts.length > 1
-      ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
-      : parts[0].substring(0, 2).toUpperCase();
-  }
-  return email?.substring(0, 2).toUpperCase() || '??';
-};
-
-const getAvatarColor = (email: string) => {
-  const colors = ['#667eea', '#764ba2', '#f093fb', '#f5576c', '#4facfe', '#00f2fe', '#43e97b', '#fa709a'];
-  const index = email?.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % colors.length || 0;
-  return colors[index];
-};
-
+// formatRelativeDate is local to this page (used only in EmailListItem)
 const formatRelativeDate = (dateString: string) => {
   const date = new Date(dateString);
   const now = new Date();
@@ -95,12 +65,6 @@ const formatRelativeDate = (dateString: string) => {
   if (diffDays < 7) return `${diffDays}d`;
 
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-};
-
-const filterContentTags = (tags: string[]) => {
-  if (!tags) return [];
-  const folderTags = ['inbox', 'sent', 'spam', 'trash', 'archive', 'drafts', 'other'];
-  return tags.filter(tag => !folderTags.includes(tag.toLowerCase()));
 };
 
 // Email List Item Component
@@ -168,214 +132,6 @@ const EmailListItem: React.FC<{
     </div>
   );
 });
-
-// Email Detail Panel Component
-const EmailDetailPanel: React.FC<{
-  email: Email | null;
-  loading: boolean;
-  onClose: () => void;
-  expanded: boolean;
-  onToggleExpand: () => void;
-}> = ({ email, loading, onClose, expanded, onToggleExpand }) => {
-  const [bodyView, setBodyView] = useState<'html' | 'text'>('html');
-
-  if (loading) {
-    return (
-      <div className="email-detail-panel">
-        <div className="email-detail-loading">
-          <Spin size="large" />
-          <Text type="secondary" style={{ marginTop: 16 }}>Loading email...</Text>
-        </div>
-      </div>
-    );
-  }
-
-  if (!email) {
-    return (
-      <div className="email-detail-panel">
-        <div className="email-detail-empty">
-          <MailOutlined style={{ fontSize: 64, color: '#d9d9d9' }} />
-          <Text type="secondary" style={{ marginTop: 16, fontSize: 16 }}>
-            Select an email to view
-          </Text>
-        </div>
-      </div>
-    );
-  }
-
-  const contentTags = filterContentTags(email.tags || []);
-
-  return (
-    <div className={`email-detail-panel ${expanded ? 'expanded' : ''}`}>
-      {/* Header */}
-      <div className="email-detail-header">
-        <div className="email-detail-header-top">
-          <Button
-            type="text"
-            icon={<LeftOutlined />}
-            onClick={onClose}
-            className="mobile-back-btn"
-          />
-          <div className="email-detail-actions">
-            <Tooltip title={expanded ? 'Collapse' : 'Expand'}>
-              <Button
-                type="text"
-                icon={expanded ? <CompressOutlined /> : <ExpandOutlined />}
-                onClick={onToggleExpand}
-              />
-            </Tooltip>
-            <Tooltip title="Close">
-              <Button
-                type="text"
-                icon={<CloseOutlined />}
-                onClick={onClose}
-                className="desktop-close-btn"
-              />
-            </Tooltip>
-          </div>
-        </div>
-
-        <Title level={4} style={{ margin: '16px 0 12px', lineHeight: 1.3 }}>
-          {email.subject || '(No subject)'}
-        </Title>
-
-        <div className="email-detail-meta">
-          <Avatar
-            size={48}
-            style={{
-              backgroundColor: getAvatarColor(email.sender_email),
-              flexShrink: 0,
-            }}
-          >
-            {getInitials(email.sender_name || '', email.sender_email)}
-          </Avatar>
-
-          <div className="email-detail-meta-info">
-            <div className="email-detail-from">
-              <Text strong>{email.sender_name || email.sender_email}</Text>
-              {email.sender_name && (
-                <Text type="secondary" style={{ fontSize: 13 }}>
-                  &lt;{email.sender_email}&gt;
-                </Text>
-              )}
-            </div>
-            <div className="email-detail-to">
-              <Text type="secondary" style={{ fontSize: 13 }}>
-                To: {email.recipients?.map(r => r.name || r.email).join(', ') || 'Unknown'}
-              </Text>
-            </div>
-          </div>
-
-          <div className="email-detail-date">
-            <Text type="secondary" style={{ fontSize: 13 }}>
-              {new Date(email.sent_date).toLocaleString()}
-            </Text>
-          </div>
-        </div>
-
-        {/* Tags */}
-        {contentTags.length > 0 && (
-          <div className="email-detail-tags">
-            {contentTags.map(tag => (
-              <Tag key={tag} color={getCategoryColor(tag)}>
-                {getCategoryLabel(tag)}
-              </Tag>
-            ))}
-          </div>
-        )}
-
-        {/* Info badges */}
-        <div className="email-detail-badges">
-          <Tag icon={<FolderOutlined />} color="default">
-            {email.folder_path || 'Inbox'}
-          </Tag>
-          <Tag icon={<MailOutlined />} color="default">
-            {email.mailbox_name}
-          </Tag>
-          {email.is_outbound && (
-            <Tag color="green">Sent</Tag>
-          )}
-          {email.is_reply && (
-            <Tag color="blue">Reply</Tag>
-          )}
-        </div>
-      </div>
-
-      {/* View Toggle */}
-      {email.body_html && email.body_text && (
-        <div className="email-detail-view-toggle">
-          <Button
-            size="small"
-            type={bodyView === 'html' ? 'primary' : 'default'}
-            onClick={() => setBodyView('html')}
-          >
-            HTML
-          </Button>
-          <Button
-            size="small"
-            type={bodyView === 'text' ? 'primary' : 'default'}
-            onClick={() => setBodyView('text')}
-          >
-            Plain Text
-          </Button>
-        </div>
-      )}
-
-      {/* Body */}
-      <div className="email-detail-body">
-        {email.body_html && bodyView === 'html' ? (
-          <iframe
-            srcDoc={`
-              <!DOCTYPE html>
-              <html>
-              <head>
-                <meta charset="UTF-8">
-                <base target="_blank">
-                <style>
-                  html, body { margin: 0; padding: 0; }
-                  body {
-                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                    font-size: 14px;
-                    line-height: 1.6;
-                    color: #333;
-                    padding: 24px;
-                  }
-                  img { max-width: 100%; height: auto; }
-                  a { color: #667eea; }
-                  blockquote {
-                    border-left: 3px solid #d9d9d9;
-                    padding-left: 16px;
-                    margin-left: 0;
-                    color: #666;
-                  }
-                  pre {
-                    background: #f5f5f5;
-                    padding: 12px;
-                    border-radius: 4px;
-                    overflow-x: auto;
-                  }
-                </style>
-              </head>
-              <body>${email.body_html}</body>
-              </html>
-            `}
-            className="email-body-iframe"
-            sandbox="allow-same-origin allow-scripts allow-popups"
-            title="Email Content"
-          />
-        ) : email.body_text ? (
-          <div className="email-body-text">
-            {email.body_text}
-          </div>
-        ) : (
-          <div className="email-body-empty">
-            <Text type="secondary">No email content available</Text>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
 
 // Main Email List Component
 export const EmailList: React.FC = () => {

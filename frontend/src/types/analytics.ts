@@ -381,6 +381,7 @@ export interface ContactFilterParams extends PaginationParams {
   contact_type?: ContactType;
   is_decision_maker?: boolean;
   min_engagement_score?: number;
+  search?: string;
 }
 
 export interface CompanyFilterParams extends PaginationParams {

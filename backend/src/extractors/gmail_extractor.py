@@ -77,7 +77,8 @@ class GmailExtractor(BaseExtractor):
         self.access_token = config.get('access_token')
         self.refresh_token = config.get('refresh_token')
         self.last_history_id = config.get('history_id')
-        self.labels_to_sync = config.get('labels', ['INBOX', 'SENT'])
+        # None means "auto-detect from label_map after connect()"
+        self.labels_to_sync = config.get('labels')
         self.mailbox_id = config.get('mailbox_id')
 
         # Gmail API service
@@ -156,8 +157,13 @@ class GmailExtractor(BaseExtractor):
                 logger.error(f"Failed to connect to Gmail: {e}")
             return False
 
+    # Labels that are metadata-only (not real folders to sync)
+    SKIP_LABELS = {'UNREAD', 'IMPORTANT', 'CATEGORY_PERSONAL', 'CATEGORY_SOCIAL',
+                   'CATEGORY_PROMOTIONS', 'CATEGORY_UPDATES', 'CATEGORY_FORUMS',
+                   'CHAT'}
+
     def _load_labels(self):
-        """Load and cache Gmail label mappings"""
+        """Load and cache Gmail label mappings, then auto-detect labels_to_sync"""
         try:
             results = self.service.users().labels().list(userId='me').execute()
             labels = results.get('labels', [])
@@ -173,8 +179,20 @@ class GmailExtractor(BaseExtractor):
 
             logger.info(f"Loaded {len(self.label_map)} Gmail labels")
 
+            # Auto-detect labels to sync if not explicitly set
+            if self.labels_to_sync is None:
+                self.labels_to_sync = [
+                    lid for lid, info in self.label_map.items()
+                    if lid not in self.SKIP_LABELS
+                    and info.get('messagesTotal', 0) > 0
+                ]
+                logger.info(f"Auto-detected {len(self.labels_to_sync)} labels to sync: {self.labels_to_sync}")
+
         except Exception as e:
             logger.warning(f"Failed to load labels: {e}")
+            # Fallback to core labels if label loading fails
+            if self.labels_to_sync is None:
+                self.labels_to_sync = ['INBOX', 'SENT']
 
     def get_folders(self) -> List[Dict]:
         """
@@ -283,8 +301,11 @@ class GmailExtractor(BaseExtractor):
         uses AND logic (returns only messages with ALL labels). Querying
         per label ensures we get INBOX emails + SENT emails correctly.
 
+        max_emails is applied PER LABEL to ensure every label gets a chance
+        to sync. Without this, INBOX alone would consume the entire budget.
+
         Args:
-            max_emails: Maximum emails to extract
+            max_emails: Maximum emails per label (None = all)
 
         Yields:
             Standardized email dictionaries
@@ -293,16 +314,18 @@ class GmailExtractor(BaseExtractor):
         seen_message_ids = set()  # Deduplicate across labels
 
         for label_id in self.labels_to_sync:
-            logger.info(f"Gmail full sync: fetching label {label_id}")
+            label_name = self.label_map.get(label_id, {}).get('name', label_id)
+            logger.info(f"Gmail full sync: fetching label {label_name} (limit: {max_emails})")
             page_token = None
+            label_extracted = 0
 
             while True:
-                if max_emails and extracted >= max_emails:
-                    logger.info(f"Reached max_emails limit: {max_emails}")
-                    return
+                if max_emails and label_extracted >= max_emails:
+                    logger.info(f"Reached per-label limit ({max_emails}) for {label_name}")
+                    break
 
                 try:
-                    remaining = (max_emails - extracted) if max_emails else self.MESSAGES_PER_REQUEST
+                    remaining = (max_emails - label_extracted) if max_emails else self.MESSAGES_PER_REQUEST
                     results = self.service.users().messages().list(
                         userId='me',
                         labelIds=[label_id],
@@ -316,8 +339,8 @@ class GmailExtractor(BaseExtractor):
                         break
 
                     for msg_ref in messages:
-                        if max_emails and extracted >= max_emails:
-                            return
+                        if max_emails and label_extracted >= max_emails:
+                            break
 
                         msg_id = msg_ref['id']
                         if msg_id in seen_message_ids:
@@ -332,13 +355,14 @@ class GmailExtractor(BaseExtractor):
                                 if email_dict:
                                     self._update_stats(True)
                                     extracted += 1
+                                    label_extracted += 1
                                     yield email_dict
 
                         except Exception as e:
                             self._update_stats(False, f"Failed to fetch message {msg_id}: {e}")
                             logger.warning(f"Failed to parse message {msg_id}: {e}")
 
-                    logger.info(f"Gmail extraction progress: {extracted} emails fetched (label: {label_id})")
+                    logger.info(f"Gmail {label_name} progress: {label_extracted} emails")
 
                     page_token = results.get('nextPageToken')
                     if not page_token:
@@ -352,6 +376,8 @@ class GmailExtractor(BaseExtractor):
                         time.sleep(60)
                     else:
                         raise
+
+            logger.info(f"Gmail label {label_name}: {label_extracted} emails this cycle")
 
         logger.info(f"Gmail full sync completed: {extracted} emails extracted across {len(self.labels_to_sync)} labels")
 
@@ -564,25 +590,38 @@ class GmailExtractor(BaseExtractor):
 
     def _get_folder_from_labels(self, label_ids: List[str]) -> str:
         """
-        Convert Gmail labels to folder path
+        Convert Gmail labels to a single folder_path.
 
-        Priority: User labels > System labels (INBOX)
+        Priority (highest wins):
+          1. SENT / DRAFT / SPAM / TRASH  (directional system labels always win)
+          2. User label (more specific than generic INBOX)
+          3. INBOX
+          4. Default 'Inbox'
         """
+        PRIORITY_SYSTEM = {'SENT', 'DRAFT', 'SPAM', 'TRASH'}
         user_labels = []
-        system_label = 'INBOX'
+        has_inbox = False
+        priority_label = None
 
         for label_id in label_ids:
-            if label_id in self.label_map:
+            if label_id in PRIORITY_SYSTEM:
+                priority_label = label_id
+            elif label_id == 'INBOX':
+                has_inbox = True
+            elif label_id in self.label_map:
                 label_info = self.label_map[label_id]
                 if label_info.get('type') == 'user':
                     user_labels.append(label_info['name'])
-                elif label_id in ['INBOX', 'SENT', 'DRAFT', 'SPAM', 'TRASH']:
-                    system_label = self.SYSTEM_LABELS.get(label_id, label_id)
 
-        # Prefer user labels if available
+        # Directional labels always win
+        if priority_label:
+            return self.SYSTEM_LABELS.get(priority_label, priority_label)
+        # User labels are more specific than generic INBOX
         if user_labels:
             return user_labels[0]
-        return system_label
+        if has_inbox:
+            return self.SYSTEM_LABELS.get('INBOX', 'Inbox')
+        return 'Inbox'
 
     def _is_outbound_message(self, label_ids: List[str], headers: Dict) -> bool:
         """Determine if message is outbound (sent by user)"""

@@ -188,6 +188,18 @@ export const contactsApi = {
     }
   },
 
+  /** GET /contacts/{id}/emails — Emails linked to a contact */
+  async getEmails(contactId: string, limit = 50, offset = 0): Promise<{ emails: any[]; total: number }> {
+    try {
+      return await api.get<{ emails: any[]; total: number }>(
+        `${API_PREFIX}/contacts/${contactId}/emails?limit=${limit}&offset=${offset}`,
+        { timeout: 10000 }
+      );
+    } catch {
+      return { emails: [], total: 0 };
+    }
+  },
+
   /** GET /contacts/top-engaged — Top engaged contacts */
   async topEngaged(clientId?: string, limit: number = 10): Promise<TopEngagedContact[]> {
     const qs = buildQuery({ client_id: clientId, limit });
@@ -290,6 +302,18 @@ export const companiesApi = {
       return await api.get<CompanyAnalytics>(`${API_PREFIX}/companies/${companyId}`, { timeout: 10000 });
     } catch {
       return null;
+    }
+  },
+
+  /** GET /companies/{companyId}/emails — Emails linked to a company */
+  async getEmails(companyId: string, limit = 50, offset = 0): Promise<{ emails: any[]; total: number }> {
+    try {
+      return await api.get<{ emails: any[]; total: number }>(
+        `${API_PREFIX}/companies/${companyId}/emails?limit=${limit}&offset=${offset}`,
+        { timeout: 10000 }
+      );
+    } catch {
+      return { emails: [], total: 0 };
     }
   },
 

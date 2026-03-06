@@ -839,3 +839,58 @@ async def reset_session_spend(
     settings.session_requests = 0
     logger.info(f"Session spend reset from ${old_spend:.6f} to $0.00")
     return {"status": "reset", "previous_spend_usd": round(old_spend, 6)}
+
+
+# ============================================================================
+# ON-DEMAND SUMMARIZE ENDPOINT
+# ============================================================================
+
+@router.post("/summarize/{email_id}")
+async def summarize_email(email_id: str):
+    """Generate an on-demand AI summary for a single email using Haiku."""
+    try:
+        # Fetch the email
+        result = _supabase.table('emails').select(
+            'id, subject, sender_email, sender_name, body_text, body_html, sent_date, is_outbound'
+        ).eq('id', email_id).single().execute()
+
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Email not found")
+
+        email = result.data
+        body = email.get('body_text') or ''
+        if not body and email.get('body_html'):
+            import re
+            body = re.sub(r'<[^>]+>', ' ', email['body_html'])
+            body = re.sub(r'\s+', ' ', body).strip()
+
+        if not body or len(body.strip()) < 20:
+            return {"summary": "Email has insufficient content to summarize."}
+
+        # Truncate to 2000 chars for cost efficiency
+        body_truncated = body[:2000]
+
+        from ..services.ai_client import get_ai_client
+        ai = get_ai_client()
+
+        system_prompt = "You are an email summarizer. Provide concise, actionable summaries in 2-3 sentences."
+        user_message = f"""Summarize this email. Focus on the key message, any action items, and important details.
+
+Subject: {email.get('subject', '(No subject)')}
+From: {email.get('sender_name', '')} <{email.get('sender_email', '')}>
+Date: {email.get('sent_date', '')}
+Direction: {'Outbound' if email.get('is_outbound') else 'Inbound'}
+
+Body:
+{body_truncated}"""
+
+        response = ai.call_haiku(system_prompt, user_message, max_tokens=300)
+        if not response:
+            return {"summary": "Unable to generate summary at this time."}
+        return {"summary": response.content}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to summarize email {email_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

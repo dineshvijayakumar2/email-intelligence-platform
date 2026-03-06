@@ -508,24 +508,7 @@ async def get_job_errors_summary(job_id: str):
         JobErrorsSummary with aggregated error statistics
     """
     try:
-        # Try using the database function first
-        try:
-            result = _supabase.rpc('get_job_errors_summary', {'p_job_id': job_id}).execute()
-            if result.data:
-                data = result.data
-                return JobErrorsSummary(
-                    total_errors=data.get('total_errors', 0),
-                    unresolved_errors=data.get('unresolved_errors', 0),
-                    retryable_errors=data.get('retryable_errors', 0),
-                    by_phase=data.get('by_phase', {}),
-                    by_type=data.get('by_type', {}),
-                    by_severity=data.get('by_severity', {}),
-                    recent_errors=data.get('recent_errors', [])
-                )
-        except Exception as rpc_error:
-            logger.warning(f"RPC call failed, using fallback query: {rpc_error}")
-
-        # Fallback: manually aggregate
+        # Aggregate in Python — avoids dependency on RPC function schema
         errors_result = _supabase.table('job_errors').select('*').eq('job_id', job_id).execute()
         errors = errors_result.data or []
 

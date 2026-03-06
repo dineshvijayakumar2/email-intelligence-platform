@@ -351,6 +351,7 @@ async def list_contact_analytics(
     contact_type: Optional[ContactType] = Query(default=None),
     is_decision_maker: Optional[bool] = Query(default=None),
     min_engagement_score: Optional[float] = Query(default=None, ge=0, le=100),
+    search: Optional[str] = Query(default=None, description="Search by name, email, or company"),
     sort_by: Optional[str] = Query(default=None, description="Sort column"),
     sort_dir: str = Query(default="desc", description="asc or desc"),
     limit: int = Query(default=100, ge=1, le=500),
@@ -396,6 +397,9 @@ async def list_contact_analytics(
             query = query.eq('is_decision_maker', 'true' if is_decision_maker else 'false')
         if min_engagement_score is not None:
             query = query.gte('engagement_score', int(min_engagement_score))
+        if search and search.strip():
+            term = search.strip()
+            query = query.or_(f"full_name.ilike.%{term}%,email_address.ilike.%{term}%,company_name.ilike.%{term}%")
 
         effective_sort = sort_by if sort_by in CONTACT_SORT_COLUMNS else 'engagement_score'
         desc = sort_dir.lower() != 'asc'
@@ -424,6 +428,9 @@ async def list_contact_analytics(
             count_query = count_query.eq('is_decision_maker', 'true' if is_decision_maker else 'false')
         if min_engagement_score is not None:
             count_query = count_query.gte('engagement_score', int(min_engagement_score))
+        if search and search.strip():
+            term = search.strip()
+            count_query = count_query.or_(f"full_name.ilike.%{term}%,email_address.ilike.%{term}%,company_name.ilike.%{term}%")
 
         count_result = count_query.execute()
         total = count_result.count if count_result.count else len(count_result.data)
@@ -711,6 +718,23 @@ async def get_contact_analytics(contact_identifier: str):
         raise
     except Exception as e:
         logger.error(f"Failed to get contact analytics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/contacts/{contact_id}/emails")
+async def get_contact_emails(contact_id: str, limit: int = 50, offset: int = 0):
+    """Get emails linked to a contact via customer_contact_id."""
+    try:
+        result = _supabase.table('emails').select(
+            'id, subject, sender_email, sender_name, sent_date, folder_path, is_outbound'
+        ).eq('customer_contact_id', contact_id).order(
+            'sent_date', desc=True
+        ).range(offset, offset + limit - 1).execute()
+
+        return {'emails': result.data or [], 'total': len(result.data or [])}
+
+    except Exception as e:
+        logger.error(f"Failed to get contact emails: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1055,6 +1079,39 @@ async def get_company_analytics(company_id: str):
         raise
     except Exception as e:
         logger.error(f"Failed to get company analytics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/companies/{company_id}/emails")
+async def get_company_emails(company_id: str, limit: int = 50, offset: int = 0):
+    """Get emails linked to contacts of a company."""
+    try:
+        # Get all contact IDs for this company
+        contacts_result = _supabase.table('customer_contacts').select('id').eq(
+            'customer_company_id', company_id
+        ).execute()
+
+        contact_ids = [c['id'] for c in (contacts_result.data or [])]
+        if not contact_ids:
+            return {'emails': [], 'total': 0}
+
+        # Fetch emails for those contacts (batch IDs in groups of 500)
+        all_emails = []
+        for i in range(0, len(contact_ids), 500):
+            batch = contact_ids[i:i+500]
+            result = _supabase.table('emails').select(
+                'id, subject, sender_email, sender_name, sent_date, folder_path, is_outbound'
+            ).in_('customer_contact_id', batch).order(
+                'sent_date', desc=True
+            ).range(offset, offset + limit - 1).execute()
+            all_emails.extend(result.data or [])
+
+        # Sort and limit
+        all_emails.sort(key=lambda e: e.get('sent_date', ''), reverse=True)
+        return {'emails': all_emails[:limit], 'total': len(all_emails)}
+
+    except Exception as e:
+        logger.error(f"Failed to get company emails: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

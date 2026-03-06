@@ -86,11 +86,11 @@ Full plan: `docs/AI_MVP_PLAN.md` (3-week session-by-session plan + implementatio
 
 ### Analytics Pages — ALL COMPLETE
 - [x] Analytics dashboard page (overview metrics, client selector, extraction trigger)
-- [x] Contacts analytics (All/Top/At-Risk/DMs/By-Type tabs, sort, filter, score slider)
+- [x] Contacts analytics (All/Top/At-Risk/DMs/By-Type tabs, sort, filter, score slider, search)
 - [x] Companies analytics (All/Top/At-Risk/By-Engagement tabs, sort, filter, score slider)
 - [x] Thread analytics (All/Overdue/By-Status tabs, status chart, sort, filter)
-- [x] Contact detail drill-down (stats, threads, communication patterns)
-- [x] Company detail drill-down (stats, top contacts, threads)
+- [x] Contact detail drill-down (stats, threads, communication patterns, linked emails, email preview Drawer)
+- [x] Company detail drill-down (stats, linked emails, email preview Drawer)
 - [x] Admin Data View (raw table browser, search, sort, pagination, CSV export)
 
 ---
@@ -154,6 +154,17 @@ Full plan: `docs/AI_MVP_PLAN.md` (3-week session-by-session plan + implementatio
 - [ ] Saved searches/filters
 
 ## Completed ✅
+
+### Analytics Enhancements (Mar 6, 2026)
+- [x] **Reusable EmailDetailPanel** — Extracted from emails.tsx into `frontend/src/components/EmailDetailPanel.tsx` with all helpers
+- [x] **Contact search** — Backend `search` param on `GET /contacts` (name/email/company), frontend `Input.Search` on contacts page
+- [x] **Contact detail: linked emails** — `GET /contacts/{id}/emails` endpoint + table + email preview Drawer
+- [x] **Contact detail: Total Emails fix** — Use live count from linked emails instead of stale cached values
+- [x] **Company detail: linked emails** — `GET /companies/{id}/emails` endpoint + table + email preview Drawer
+- [x] **AI Summarise Email** — `POST /ai/summarize/{email_id}` (Haiku), "Summarise" button in EmailDetailPanel across all pages
+- [x] **Sync improvements** — Per-folder sync limits (both Gmail/Outlook), recursive Outlook folder loading, folder filter aliases
+- [x] **Post-sync extraction** — Auto-trigger Sprint 2 extraction pipeline after email sync completes
+- [x] **RPC error fix** — Removed stale `get_job_errors_summary` RPC call, kept Python fallback aggregation
 
 ### Performance Optimizations (Mar 4, 2026)
 - [x] **Email Rules page**: Combined `/analytics/{client_id}/full` endpoint (3 DB queries, down from 66-151), read-only load, manual "Sync Rules" button

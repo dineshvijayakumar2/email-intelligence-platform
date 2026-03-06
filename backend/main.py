@@ -2981,6 +2981,41 @@ async def get_dashboard_stats(
             "processingJobs": 0
         }
 
+def _normalize_folder_name(raw: str) -> str:
+    """Normalize folder_path values so 'INBOX'/'inbox' both become 'Inbox', etc."""
+    FOLDER_MAP = {
+        'inbox': 'Inbox', 'sent': 'Sent', 'sent items': 'Sent', 'sent mail': 'Sent',
+        'sentitems': 'Sent', 'drafts': 'Drafts', 'draft': 'Drafts',
+        'spam': 'Spam', 'junk': 'Spam', 'junk email': 'Spam', 'junk e-mail': 'Spam',
+        'trash': 'Trash', 'deleted items': 'Trash', 'deleted': 'Trash',
+        'starred': 'Starred', 'flagged': 'Starred', 'important': 'Important',
+    }
+    return FOLDER_MAP.get(raw.strip().lower(), raw.strip())
+
+# Reverse map: canonical name → all raw aliases that should match
+_FOLDER_ALIASES = {
+    'sent': ['Sent', 'Sent Items', 'Sent Mail'],
+    'trash': ['Trash', 'Deleted Items'],
+    'spam': ['Spam', 'Junk Email', 'Junk E-Mail'],
+    'drafts': ['Drafts', 'Draft'],
+    'starred': ['Starred', 'Flagged'],
+}
+
+def _apply_folder_filter(query, folder_name: str):
+    """Apply folder filter with alias expansion for backward compatibility.
+
+    For well-known folders (Sent, Trash, Spam, etc.), expands the filter to
+    match all aliases (e.g. 'Sent' also matches 'Sent Items' in DB).
+    For user-created folders, does a simple case-insensitive match.
+    """
+    aliases = _FOLDER_ALIASES.get(folder_name.strip().lower())
+    if aliases and len(aliases) > 1:
+        # Match any alias (case-insensitive)
+        conditions = ','.join(f'folder_path.ilike.{a}' for a in aliases)
+        return query.or_(conditions)
+    else:
+        return query.ilike('folder_path', folder_name)
+
 @app.get("/api/emails/folders")
 async def get_folder_names(mailbox_id: Optional[str] = None):
     """Get distinct folder names from emails for filter dropdown - Optimized with direct SQL"""
@@ -2989,21 +3024,29 @@ async def get_folder_names(mailbox_id: Optional[str] = None):
 
         if mailbox_id:
             logger.info(f"Fetching distinct folder names for mailbox {mailbox_id}...")
-            # Filter folders by mailbox_id
-            result = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: sb.table('emails')
-                    .select('folder_path')
-                    .eq('mailbox_id', mailbox_id)
-                    .limit(10000)
-                    .execute()
-            )
-
+            # Paginate through ALL emails (selecting only folder_path) to find every folder
+            # Without this, .limit(10000) could miss custom folders with few emails
             all_folders = set()
-            for row in result.data:
-                folder = row.get('folder_path')
-                if folder:
-                    all_folders.add(folder)
+            offset = 0
+            batch_size = 5000
+            while True:
+                result = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda off=offset: sb.table('emails')
+                        .select('folder_path')
+                        .eq('mailbox_id', mailbox_id)
+                        .range(off, off + batch_size - 1)
+                        .execute()
+                )
+                if not result.data:
+                    break
+                for row in result.data:
+                    folder = row.get('folder_path')
+                    if folder:
+                        all_folders.add(_normalize_folder_name(folder))
+                if len(result.data) < batch_size:
+                    break
+                offset += len(result.data)
 
             folders_list = sorted(list(all_folders))
             logger.info(f"✓ Found {len(folders_list)} unique folders for mailbox {mailbox_id}: {folders_list}")
@@ -3019,20 +3062,36 @@ async def get_folder_names(mailbox_id: Optional[str] = None):
         )
 
         if result.data:
-            folders_list = sorted([f['folder_path'] for f in result.data if f.get('folder_path')])
+            folders_list = sorted(set(
+                _normalize_folder_name(f['folder_path'])
+                for f in result.data if f.get('folder_path')
+            ))
             logger.info(f"✓ Found {len(folders_list)} unique folders: {folders_list}")
             return folders_list
 
         # Fallback: If RPC function doesn't exist, use regular query with limit
         # This will only work if there aren't too many unique folders
         logger.warning("RPC function not found, using fallback method")
-        result = sb.table('emails').select('folder_path').limit(10000).execute()
-
         all_folders = set()
-        for row in result.data:
-            folder = row.get('folder_path')
-            if folder:
-                all_folders.add(folder)
+        offset = 0
+        batch_size = 5000
+        while True:
+            result = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda off=offset: sb.table('emails')
+                    .select('folder_path')
+                    .range(off, off + batch_size - 1)
+                    .execute()
+            )
+            if not result.data:
+                break
+            for row in result.data:
+                folder = row.get('folder_path')
+                if folder:
+                    all_folders.add(_normalize_folder_name(folder))
+            if len(result.data) < batch_size:
+                break
+            offset += len(result.data)
 
         folders_list = sorted(list(all_folders))
         logger.info(f"✓ Found {len(folders_list)} unique folders (fallback): {folders_list}")
@@ -3169,9 +3228,9 @@ async def get_emails_with_filters(
                 logger.warning("User has no accessible mailboxes")
                 return EmailListResponse(emails=[], totalCount=0)
 
-        # Folder filter (highly selective)
+        # Folder filter with alias expansion (e.g. "Sent" also matches "Sent Items")
         if filters.folder and filters.folder.strip():
-            base_query = base_query.eq('folder_path', filters.folder)
+            base_query = _apply_folder_filter(base_query, filters.folder)
             filters_applied.append(f"folder={filters.folder}")
         
         # Date range filter (use indexes)
@@ -3226,7 +3285,7 @@ async def get_emails_with_filters(
             if accessible_mailbox_ids:
                 count_query = count_query.in_('mailbox_id', accessible_mailbox_ids)
         if filters.folder and filters.folder.strip():
-            count_query = count_query.eq('folder_path', filters.folder)
+            count_query = _apply_folder_filter(count_query, filters.folder)
         if filters.dateRange and len(filters.dateRange) == 2:
             count_query = count_query.gte('sent_date', filters.dateRange[0]).lte('sent_date', filters.dateRange[1])
         if filters.isOutbound == 'outbound':
@@ -3410,7 +3469,7 @@ async def handle_category_filter(base_query, filters: EmailFilters, page: int, p
                     continue
                     
             if filters.folder and filters.folder.strip():
-                category_query = category_query.eq('folder_path', filters.folder)
+                category_query = _apply_folder_filter(category_query, filters.folder)
             if filters.isOutbound == 'outbound':
                 category_query = category_query.eq('is_outbound', True)
             elif filters.isOutbound == 'inbound':
@@ -3565,7 +3624,7 @@ async def get_emails_in_batches(
                 query = query.eq('mailboxes.name', filters.mailbox)
             
             if filters.folder:
-                query = query.eq('folder_path', filters.folder)
+                query = _apply_folder_filter(query, filters.folder)
             
             if filters.isOutbound == 'outbound':
                 query = query.eq('is_outbound', True)

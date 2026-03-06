@@ -634,7 +634,7 @@ class EmailOperations:
                 'message_id': self._ensure_utf8(email.get('message_id', '')),
                 'mailbox_id': mailbox_id,
                 'thread_id': self._ensure_utf8(email.get('thread_id', '')),
-                'folder_path': self._ensure_utf8(email.get('folder_path', 'INBOX')),
+                'folder_path': self._ensure_utf8(email.get('folder_path', 'Inbox')),
                 'sender_email': self._ensure_utf8(email.get('sender_email', '')),
                 'sender_name': self._ensure_utf8(email.get('sender_name', '')),
                 'subject': self._ensure_utf8(email.get('subject', '')),

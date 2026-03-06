@@ -85,9 +85,27 @@ class OutlookExtractor(BaseExtractor):
         self.user_id = config.get('user_id')
         self.access_token = config.get('access_token')
         self.refresh_token = config.get('refresh_token')
-        self.delta_link = config.get('delta_link')
-        self.folders_to_sync = config.get('folders', ['inbox', 'sentitems'])
+        # None means "auto-detect from folder_map after connect()"
+        self.folders_to_sync = config.get('folders')
         self.mailbox_id = config.get('mailbox_id')
+
+        # Per-folder delta links: {folder_id: delta_link_url}
+        # Backward compat: accept old single string or new dict
+        raw_delta = config.get('delta_link') or config.get('delta_links')
+        if isinstance(raw_delta, dict):
+            self.delta_links = raw_delta
+        elif isinstance(raw_delta, str) and raw_delta.startswith('{'):
+            import json
+            try:
+                self.delta_links = json.loads(raw_delta)
+            except Exception:
+                self.delta_links = {}
+        elif isinstance(raw_delta, str):
+            # Old single delta link — discard, will do full sync once to get per-folder links
+            self.delta_links = {}
+            logger.info("Migrating from single delta link to per-folder delta links (will do full re-sync)")
+        else:
+            self.delta_links = {}
 
         # Microsoft Graph state
         self.user_email = None
@@ -215,13 +233,49 @@ class OutlookExtractor(BaseExtractor):
             return False
 
     def _load_folders(self):
-        """Load and cache Outlook folder mappings"""
+        """Load and cache Outlook folder mappings (recursive — includes child folders)"""
         try:
             headers = self._get_auth_headers()
+
+            # Recursively load all folders (top-level + children)
+            self._load_folders_recursive(headers, f"{self.GRAPH_BASE_URL}/me/mailFolders")
+
+            logger.info(f"Loaded {len(self.folder_map)} Outlook folders (including child folders)")
+
+            # Auto-detect folders to sync if not explicitly set
+            if self.folders_to_sync is None:
+                # Sync all folders that have messages (skip empty ones)
+                SKIP_FOLDERS = {'conversationhistory', 'contacts', 'calendar',
+                                'tasks', 'notes', 'journal', 'outbox'}
+                syncable = []
+                for fid, info in self.folder_map.items():
+                    name_lower = info['display_name_lower']
+                    if name_lower in SKIP_FOLDERS:
+                        continue
+                    if info.get('messagesTotal', 0) > 0:
+                        syncable.append(name_lower)
+                self.folders_to_sync = syncable if syncable else ['inbox', 'sentitems']
+                logger.info(f"Auto-detected {len(self.folders_to_sync)} folders to sync: {self.folders_to_sync}")
+
+        except Exception as e:
+            logger.warning(f"Failed to load folders: {e}")
+            if self.folders_to_sync is None:
+                self.folders_to_sync = ['inbox', 'sentitems']
+
+    def _load_folders_recursive(self, headers: Dict, url: str, depth: int = 0):
+        """Recursively load folders and their children from Microsoft Graph API.
+
+        /me/mailFolders only returns top-level folders. Custom folders are
+        usually children of Inbox, so we must recurse into childFolders.
+        """
+        if depth > 5:
+            return  # Safety limit to prevent infinite recursion
+
+        try:
             response = requests.get(
-                f"{self.GRAPH_BASE_URL}/me/mailFolders",
+                url,
                 headers=headers,
-                params={'$top': 100, '$select': 'id,displayName,totalItemCount,unreadItemCount'}
+                params={'$top': 100, '$select': 'id,displayName,totalItemCount,unreadItemCount,childFolderCount'}
             )
             response.raise_for_status()
 
@@ -239,10 +293,14 @@ class OutlookExtractor(BaseExtractor):
                     'messagesUnread': folder.get('unreadItemCount', 0),
                 }
 
-            logger.info(f"Loaded {len(self.folder_map)} Outlook folders")
+                # Recurse into child folders if any exist
+                child_count = folder.get('childFolderCount', 0)
+                if child_count > 0:
+                    child_url = f"{self.GRAPH_BASE_URL}/me/mailFolders/{folder_id}/childFolders"
+                    self._load_folders_recursive(headers, child_url, depth + 1)
 
         except Exception as e:
-            logger.warning(f"Failed to load folders: {e}")
+            logger.warning(f"Failed to load folders at depth {depth}: {e}")
 
     def get_folders(self) -> List[Dict]:
         """
@@ -319,12 +377,17 @@ class OutlookExtractor(BaseExtractor):
 
     def extract_emails(self, max_emails: Optional[int] = None) -> Iterator[Dict]:
         """
-        Extract emails from Outlook
+        Extract emails from Outlook — per-folder delta sync.
 
-        Uses incremental sync if delta_link is available, otherwise full sync.
+        For each folder: uses its delta link if available (incremental),
+        otherwise starts a full delta sync to bootstrap the link.
+
+        max_emails is applied PER FOLDER for full sync to ensure every folder
+        gets a chance to sync. Incremental sync (delta link exists) has no
+        limit since it only returns changes.
 
         Args:
-            max_emails: Maximum number of emails to extract (None = all)
+            max_emails: Maximum emails per folder for full sync (None = all)
 
         Yields:
             Standardized email dictionaries
@@ -332,14 +395,38 @@ class OutlookExtractor(BaseExtractor):
         self._mark_start()
 
         try:
-            if self.delta_link:
-                # Incremental sync - only get changes since last sync
-                logger.info(f"Starting incremental sync from delta link")
-                yield from self._extract_incremental(max_emails)
-            else:
-                # Full sync - get all emails from configured folders
-                logger.info(f"Starting full sync for folders: {self.folders_to_sync}")
-                yield from self._extract_full(max_emails)
+            extracted = 0
+            seen_message_ids = set()
+
+            for folder_key in self.folders_to_sync:
+                folder_id = self._get_folder_id_by_name(folder_key)
+                if not folder_id:
+                    logger.warning(f"Folder not found: {folder_key}")
+                    continue
+
+                folder_name = self._get_folder_name_by_id(folder_id)
+                existing_delta = self.delta_links.get(folder_id)
+
+                if existing_delta:
+                    logger.info(f"Incremental sync for folder: {folder_name}")
+                    # Incremental: no limit — only fetches changes
+                    folder_limit = None
+                else:
+                    logger.info(f"Full sync for folder: {folder_name} (limit: {max_emails})")
+                    # Full sync: apply per-folder limit
+                    folder_limit = max_emails
+
+                folder_extracted = 0
+                for email_dict in self._sync_folder(
+                    folder_id, folder_name, existing_delta, seen_message_ids, folder_limit, 0
+                ):
+                    extracted += 1
+                    folder_extracted += 1
+                    yield email_dict
+
+                logger.info(f"Folder {folder_name}: {folder_extracted} emails this cycle")
+
+            logger.info(f"Outlook sync completed: {extracted} emails extracted across {len(self.folders_to_sync)} folders")
 
         except Exception as e:
             logger.error(f"Outlook extraction failed: {e}")
@@ -348,28 +435,20 @@ class OutlookExtractor(BaseExtractor):
         finally:
             self._mark_end()
 
-    def _extract_full(self, max_emails: Optional[int] = None) -> Iterator[Dict]:
-        """
-        Full extraction - fetch all messages from configured folders
-
-        Args:
-            max_emails: Maximum emails to extract
-
-        Yields:
-            Standardized email dictionaries
-        """
-        extracted = 0
-        seen_message_ids = set()  # Avoid duplicates across folders
-
-        for folder_name in self.folders_to_sync:
-            folder_id = self._get_folder_id_by_name(folder_name)
-            if not folder_id:
-                logger.warning(f"Folder not found: {folder_name}")
-                continue
-
-            logger.info(f"Extracting from folder: {folder_name} (ID: {folder_id})")
-
-            # Use delta endpoint to enable incremental sync later
+    def _sync_folder(
+        self,
+        folder_id: str,
+        folder_name: str,
+        delta_link: Optional[str],
+        seen_message_ids: set,
+        max_emails: Optional[int],
+        extracted_so_far: int,
+    ) -> Iterator[Dict]:
+        """Sync a single folder using its delta link (incremental) or delta endpoint (full)."""
+        if delta_link:
+            url = delta_link
+            params = None
+        else:
             url = f"{self.GRAPH_BASE_URL}/me/mailFolders/{folder_id}/messages/delta"
             params = {
                 '$top': self.MESSAGES_PER_REQUEST,
@@ -379,79 +458,11 @@ class OutlookExtractor(BaseExtractor):
                           'internetMessageHeaders'
             }
 
-            while url:
-                if max_emails and extracted >= max_emails:
-                    logger.info(f"Reached max_emails limit: {max_emails}")
-                    return
-
-                try:
-                    headers = self._get_auth_headers()
-                    response = self._request_with_retry(url, headers, params)
-
-                    if response is None:
-                        break
-
-                    data = response.json()
-                    messages = data.get('value', [])
-
-                    for msg in messages:
-                        if max_emails and extracted >= max_emails:
-                            return
-
-                        msg_id = msg.get('id')
-                        if msg_id in seen_message_ids:
-                            continue
-                        seen_message_ids.add(msg_id)
-
-                        try:
-                            email_dict = self._parse_outlook_message(msg, folder_name)
-                            if email_dict:
-                                self._update_stats(True)
-                                extracted += 1
-                                yield email_dict
-
-                        except Exception as e:
-                            self._update_stats(False, f"Failed to parse message {msg_id}: {e}")
-                            logger.warning(f"Failed to parse message {msg_id}: {e}")
-
-                    # Log progress
-                    logger.info(f"Outlook extraction progress: {extracted} emails fetched")
-
-                    # Store delta link for next incremental sync
-                    if '@odata.deltaLink' in data:
-                        self.delta_link = data['@odata.deltaLink']
-
-                    # Get next page URL
-                    url = data.get('@odata.nextLink')
-                    params = None  # nextLink includes all params
-
-                except Exception as e:
-                    logger.error(f"Error fetching messages: {e}")
-                    self.stats['errors'].append(str(e))
-                    break
-
-        logger.info(f"Outlook full sync completed: {extracted} emails extracted")
-
-    def _extract_incremental(self, max_emails: Optional[int] = None) -> Iterator[Dict]:
-        """
-        Incremental sync using Microsoft Graph delta queries
-
-        Args:
-            max_emails: Maximum emails to extract
-
-        Yields:
-            Standardized email dictionaries
-        """
         extracted = 0
-        seen_message_ids = set()
 
         try:
-            url = self.delta_link
-            params = None  # Delta link includes all parameters
-
             while url:
-                if max_emails and extracted >= max_emails:
-                    logger.info(f"Reached max_emails limit: {max_emails}")
+                if max_emails and (extracted_so_far + extracted) >= max_emails:
                     return
 
                 headers = self._get_auth_headers()
@@ -464,10 +475,9 @@ class OutlookExtractor(BaseExtractor):
                 messages = data.get('value', [])
 
                 for msg in messages:
-                    if max_emails and extracted >= max_emails:
+                    if max_emails and (extracted_so_far + extracted) >= max_emails:
                         return
 
-                    # Skip deleted messages (marked with @removed)
                     if '@removed' in msg:
                         continue
 
@@ -477,37 +487,43 @@ class OutlookExtractor(BaseExtractor):
                     seen_message_ids.add(msg_id)
 
                     try:
-                        # Get folder name for the message
-                        folder_id = msg.get('parentFolderId')
-                        folder_name = self._get_folder_name_by_id(folder_id)
+                        # Use parentFolderId for actual folder (may differ from iteration folder)
+                        actual_folder_id = msg.get('parentFolderId', folder_id)
+                        actual_folder_name = self._get_folder_name_by_id(actual_folder_id)
 
-                        email_dict = self._parse_outlook_message(msg, folder_name)
+                        email_dict = self._parse_outlook_message(msg, actual_folder_name)
                         if email_dict:
                             self._update_stats(True)
                             extracted += 1
                             yield email_dict
 
                     except Exception as e:
-                        self._update_stats(False, str(e))
+                        self._update_stats(False, f"Failed to parse message {msg_id}: {e}")
                         logger.warning(f"Failed to parse message {msg_id}: {e}")
 
-                # Update delta link
+                if extracted > 0 and extracted % 100 == 0:
+                    logger.info(f"Outlook {folder_name} progress: {extracted} emails")
+
+                # Store per-folder delta link
                 if '@odata.deltaLink' in data:
-                    self.delta_link = data['@odata.deltaLink']
+                    self.delta_links[folder_id] = data['@odata.deltaLink']
 
-                # Get next page
                 url = data.get('@odata.nextLink')
-
-            logger.info(f"Outlook incremental sync completed: {extracted} new emails")
+                params = None  # nextLink includes all params
 
         except requests.exceptions.HTTPError as e:
-            # If delta link expired, fall back to full sync
             if e.response and e.response.status_code in [400, 404, 410]:
-                logger.warning(f"Delta link expired or invalid, falling back to full sync: {e}")
-                self.delta_link = None
-                yield from self._extract_full(max_emails)
+                logger.warning(f"Delta link expired for {folder_name}, doing full sync for this folder")
+                # Clear expired link and retry as full sync
+                self.delta_links.pop(folder_id, None)
+                yield from self._sync_folder(folder_id, folder_name, None, seen_message_ids, max_emails, extracted_so_far)
             else:
                 raise
+        except Exception as e:
+            logger.error(f"Error syncing folder {folder_name}: {e}")
+            self.stats['errors'].append(str(e))
+
+        logger.info(f"Outlook {folder_name}: {extracted} emails synced")
 
     def _request_with_retry(
         self,
@@ -625,7 +641,7 @@ class OutlookExtractor(BaseExtractor):
                 'received_date': received_date,
                 'body_text': body_text,
                 'body_html': body_html,
-                'folder_path': folder_name,
+                'folder_path': self._normalize_folder_name(folder_name),
                 'is_outbound': is_outbound,
                 'is_reply': self._is_reply_subject(msg.get('subject', '')),
                 'raw_headers': raw_headers,
@@ -684,6 +700,18 @@ class OutlookExtractor(BaseExtractor):
 
         return False
 
+    # Map Outlook display names to canonical folder names
+    FOLDER_NORMALIZE_MAP = {
+        'sent items': 'Sent', 'sent mail': 'Sent',
+        'deleted items': 'Trash', 'junk email': 'Spam', 'junk e-mail': 'Spam',
+        'drafts': 'Drafts', 'inbox': 'Inbox',
+    }
+
+    def _normalize_folder_name(self, folder_name: str) -> str:
+        """Normalize Outlook folder display name to canonical name."""
+        mapped = self.FOLDER_NORMALIZE_MAP.get(folder_name.lower())
+        return mapped if mapped else folder_name
+
     def _extract_attachment_metadata(self, msg: Dict) -> List[Dict]:
         """Extract attachment metadata from message"""
         if not msg.get('hasAttachments'):
@@ -695,14 +723,14 @@ class OutlookExtractor(BaseExtractor):
         return [{'filename': 'attachment', 'size': 0, 'mime_type': 'application/octet-stream'}] \
             if msg.get('hasAttachments') else []
 
-    def get_current_delta_link(self) -> Optional[str]:
+    def get_current_delta_link(self) -> Optional[Dict]:
         """
-        Get current delta link for incremental sync
+        Get per-folder delta links for incremental sync
 
         Returns:
-            Current delta link or None
+            Dict of {folder_id: delta_link_url} or None
         """
-        return self.delta_link
+        return self.delta_links if self.delta_links else None
 
     def get_refreshed_tokens(self) -> Optional[Dict]:
         """
