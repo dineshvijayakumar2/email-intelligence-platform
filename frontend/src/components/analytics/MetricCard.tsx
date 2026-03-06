@@ -9,6 +9,7 @@ interface MetricCardProps {
   precision?: number;
   loading?: boolean;
   valueStyle?: React.CSSProperties;
+  onClick?: () => void;
 }
 
 export const MetricCard: React.FC<MetricCardProps> = ({
@@ -19,6 +20,7 @@ export const MetricCard: React.FC<MetricCardProps> = ({
   precision,
   loading = false,
   valueStyle,
+  onClick,
 }) => {
   if (loading) {
     return (
@@ -29,7 +31,11 @@ export const MetricCard: React.FC<MetricCardProps> = ({
   }
 
   return (
-    <div className="glass-card" style={{ padding: 20, textAlign: 'center' }}>
+    <div
+      className="glass-card"
+      style={{ padding: 20, textAlign: 'center', ...(onClick ? { cursor: 'pointer' } : {}) }}
+      onClick={onClick}
+    >
       <Statistic
         title={title}
         value={value ?? 0}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Typography,
   Tag,
@@ -37,6 +37,7 @@ import { emailService, Email, EmailFilters } from '../services/emailService';
 import { mailboxService, Mailbox } from '../services/mailboxService';
 import SyncStatusBar from '../components/SyncStatusBar';
 import { dashboardService } from '../services/dashboardService';
+import { contactsApi, companiesApi } from '../services/analyticsService';
 import {
   EmailDetailPanel,
   getCategoryColor,
@@ -138,6 +139,13 @@ export const EmailList: React.FC = () => {
   // Router hooks for mailbox-based navigation
   const { mailboxId, emailId } = useParams<{ mailboxId?: string; emailId?: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  // Analytics mode: when navigated from contact/company detail pages
+  const analyticsContactId = searchParams.get('contact_id');
+  const analyticsCompanyId = searchParams.get('company_id');
+  const analyticsLabel = searchParams.get('name') || 'Contact';
+  const isAnalyticsMode = !!(analyticsContactId || analyticsCompanyId);
 
   // State
   const [emails, setEmails] = useState<Email[]>([]);
@@ -257,11 +265,42 @@ export const EmailList: React.FC = () => {
 
   // Navigate to first mailbox if none is selected (separate effect)
   useEffect(() => {
+    // Skip mailbox redirect in analytics mode
+    if (isAnalyticsMode) return;
     // Wait for mailboxes to be loaded
     if (accessibleMailboxes.length > 0 && !mailboxId) {
       navigate(`/emails/${accessibleMailboxes[0].id}`, { replace: true });
     }
-  }, [accessibleMailboxes, mailboxId, navigate]);
+  }, [accessibleMailboxes, mailboxId, navigate, isAnalyticsMode]);
+
+  // Analytics mode: load emails from analytics API with pagination
+  const loadAnalyticsEmails = useCallback(async (append: boolean = false) => {
+    if (!isAnalyticsMode) return;
+    setLoading(true);
+    try {
+      const offset = append ? emails.length : 0;
+      const result = analyticsContactId
+        ? await contactsApi.getEmails(analyticsContactId, pageSize, offset)
+        : await companiesApi.getEmails(analyticsCompanyId!, pageSize, offset);
+      const newEmails = (result.emails || []) as Email[];
+      if (append) {
+        setEmails(prev => [...prev, ...newEmails]);
+      } else {
+        setEmails(newEmails);
+      }
+      setTotalCount(result.total || newEmails.length);
+    } catch (error) {
+      console.error('Error loading analytics emails:', error);
+      message.error('Failed to load emails');
+    } finally {
+      setLoading(false);
+    }
+  }, [isAnalyticsMode, analyticsContactId, analyticsCompanyId, emails.length, pageSize]);
+
+  useEffect(() => {
+    if (!isAnalyticsMode) return;
+    loadAnalyticsEmails(false);
+  }, [isAnalyticsMode, analyticsContactId, analyticsCompanyId]);
 
   // Load folders for a specific mailbox (dynamic) - uses cached mailboxIdMap
   const loadFoldersForMailbox = useCallback(async (mailboxName: string) => {
@@ -323,6 +362,12 @@ export const EmailList: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    // In analytics mode, skip mailbox/filter loading
+    if (isAnalyticsMode) {
+      setMailboxesLoading(false);
+      setLoading(false);
+      return;
+    }
     // Don't call loadEmails() here - it will be called by the effect that watches filters
     loadFilterOptions();
     loadProcessingJobs();
@@ -431,15 +476,19 @@ export const EmailList: React.FC = () => {
   };
 
   const handleEmailSelect = (email: Email) => {
-    // Navigate to email detail route - this will trigger the effect to load details
-    if (mailboxId) {
+    if (isAnalyticsMode) {
+      // In analytics mode, load email detail directly (no URL navigation)
+      loadEmailDetails(email.id);
+    } else if (mailboxId) {
       navigate(`/emails/${mailboxId}/${email.id}`);
     }
   };
 
   const handleCloseDetail = () => {
-    // Navigate back to mailbox view - this will trigger the effect to clear details
-    if (mailboxId) {
+    if (isAnalyticsMode) {
+      setSelectedEmail(null);
+      setSelectedEmailId(null);
+    } else if (mailboxId) {
       navigate(`/emails/${mailboxId}`);
     }
   };
@@ -473,98 +522,137 @@ export const EmailList: React.FC = () => {
     });
   }, [folders]);
 
+  // Client-side search filter for analytics mode
+  const filteredEmails = useMemo(() => {
+    if (!isAnalyticsMode || !filters.search) return emails;
+    const q = filters.search.toLowerCase();
+    return emails.filter(e =>
+      (e.subject || '').toLowerCase().includes(q) ||
+      (e.sender_name || '').toLowerCase().includes(q) ||
+      (e.sender_email || '').toLowerCase().includes(q)
+    );
+  }, [isAnalyticsMode, emails, filters.search]);
+
+  const displayEmails = isAnalyticsMode ? filteredEmails : emails;
+
   return (
     <div className="mail-client">
-      {/* Left Sidebar */}
-      <div className={`mail-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
-        {/* Sidebar Header */}
-        <div className="mail-sidebar-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-            <Tooltip title="Back to Mailboxes">
+      {/* Left Sidebar — hidden in analytics mode */}
+      {!isAnalyticsMode && (
+        <div className={`mail-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
+          {/* Sidebar Header */}
+          <div className="mail-sidebar-header">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+              <Tooltip title="Back to Mailboxes">
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<LeftOutlined />}
+                  onClick={() => navigate('/mailboxes')}
+                  style={{ color: 'rgba(255,255,255,0.8)' }}
+                />
+              </Tooltip>
+              {!sidebarCollapsed && (
+                <Text strong style={{ fontSize: 14, color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {filters.mailbox || 'Loading...'}
+                </Text>
+              )}
+            </div>
+            <Tooltip title={sidebarCollapsed ? 'Expand' : 'Collapse'}>
               <Button
                 type="text"
                 size="small"
-                icon={<LeftOutlined />}
-                onClick={() => navigate('/mailboxes')}
+                icon={sidebarCollapsed ? <ExpandOutlined /> : <CompressOutlined />}
+                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
                 style={{ color: 'rgba(255,255,255,0.8)' }}
               />
             </Tooltip>
-            {!sidebarCollapsed && (
-              <Text strong style={{ fontSize: 14, color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {filters.mailbox || 'Loading...'}
-              </Text>
-            )}
           </div>
-          <Tooltip title={sidebarCollapsed ? 'Expand' : 'Collapse'}>
-            <Button
-              type="text"
-              size="small"
-              icon={sidebarCollapsed ? <ExpandOutlined /> : <CompressOutlined />}
-              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-              style={{ color: 'rgba(255,255,255,0.8)' }}
-            />
-          </Tooltip>
-        </div>
 
-        {/* Folders Section */}
-        <div className="mail-sidebar-section">
-          <div className="mail-sidebar-section-title">
-            {foldersLoading ? <SyncOutlined spin /> : <FolderOutlined />} {!sidebarCollapsed && 'Folders'}
-          </div>
-          <div className="mail-sidebar-items">
-            {mailboxesLoading || (foldersLoading && !filters.mailbox) ? (
-              // Skeleton loader while loading
-              !sidebarCollapsed && (
-                <div style={{ padding: '8px 12px' }}>
-                  {[1, 2, 3, 4, 5].map(i => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                      <Skeleton.Avatar active size={16} shape="square" style={{ opacity: 0.3 }} />
-                      <Skeleton.Input active size="small" style={{ width: 80, height: 14, opacity: 0.3 }} />
-                    </div>
-                  ))}
-                </div>
-              )
-            ) : !filters.mailbox ? (
-              !sidebarCollapsed && (
-                <div style={{ padding: '12px', textAlign: 'center', color: 'rgba(255,255,255,0.5)', fontSize: 12 }}>
-                  Select a mailbox
-                </div>
-              )
-            ) : (
-              <>
-                {systemFolders.map(folder => (
-                  <div
-                    key={folder.key}
-                    className={`mail-sidebar-item ${currentFolderKey === folder.key ? 'active' : ''}`}
-                    onClick={() => handleFolderSelect(folder.key)}
-                  >
-                    {folder.icon}
-                    {!sidebarCollapsed && <span>{folder.label}</span>}
-                  </div>
-                ))}
-                {additionalFolders.length > 0 && (
-                  <>
-                    <div className="mail-sidebar-divider" />
-                    {additionalFolders.map(folder => (
-                      <div
-                        key={folder}
-                        className={`mail-sidebar-item ${filters.folder === folder ? 'active' : ''}`}
-                        onClick={() => handleFilterChange('folder', folder)}
-                      >
-                        <FolderOutlined />
-                        {!sidebarCollapsed && <span>{folder}</span>}
+          {/* Folders Section */}
+          <div className="mail-sidebar-section">
+            <div className="mail-sidebar-section-title">
+              {foldersLoading ? <SyncOutlined spin /> : <FolderOutlined />} {!sidebarCollapsed && 'Folders'}
+            </div>
+            <div className="mail-sidebar-items">
+              {mailboxesLoading || (foldersLoading && !filters.mailbox) ? (
+                // Skeleton loader while loading
+                !sidebarCollapsed && (
+                  <div style={{ padding: '8px 12px' }}>
+                    {[1, 2, 3, 4, 5].map(i => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                        <Skeleton.Avatar active size={16} shape="square" style={{ opacity: 0.3 }} />
+                        <Skeleton.Input active size="small" style={{ width: 80, height: 14, opacity: 0.3 }} />
                       </div>
                     ))}
-                  </>
-                )}
-              </>
-            )}
+                  </div>
+                )
+              ) : !filters.mailbox ? (
+                !sidebarCollapsed && (
+                  <div style={{ padding: '12px', textAlign: 'center', color: 'rgba(255,255,255,0.5)', fontSize: 12 }}>
+                    Select a mailbox
+                  </div>
+                )
+              ) : (
+                <>
+                  {systemFolders.map(folder => (
+                    <div
+                      key={folder.key}
+                      className={`mail-sidebar-item ${currentFolderKey === folder.key ? 'active' : ''}`}
+                      onClick={() => handleFolderSelect(folder.key)}
+                    >
+                      {folder.icon}
+                      {!sidebarCollapsed && <span>{folder.label}</span>}
+                    </div>
+                  ))}
+                  {additionalFolders.length > 0 && (
+                    <>
+                      <div className="mail-sidebar-divider" />
+                      {additionalFolders.map(folder => (
+                        <div
+                          key={folder}
+                          className={`mail-sidebar-item ${filters.folder === folder ? 'active' : ''}`}
+                          onClick={() => handleFilterChange('folder', folder)}
+                        >
+                          <FolderOutlined />
+                          {!sidebarCollapsed && <span>{folder}</span>}
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Main Content Area */}
       <div className="mail-main">
+        {/* Analytics Mode Banner */}
+        {isAnalyticsMode && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 12,
+            padding: '10px 16px',
+            background: 'linear-gradient(135deg, rgba(102,126,234,0.12), rgba(118,75,162,0.08))',
+            borderBottom: '1px solid rgba(102,126,234,0.2)',
+          }}>
+            <Button
+              type="text"
+              icon={<LeftOutlined />}
+              onClick={() => navigate(-1)}
+              style={{ color: '#667eea' }}
+            >
+              Back
+            </Button>
+            <MailOutlined style={{ color: '#667eea', fontSize: 16 }} />
+            <Text strong style={{ fontSize: 14 }}>
+              Emails for {analyticsLabel}
+            </Text>
+            <Tag color="purple">{totalCount} email{totalCount !== 1 ? 's' : ''} across all mailboxes</Tag>
+          </div>
+        )}
+
         {/* Top Bar - Search & Filters */}
         <div className="mail-topbar">
           <div className="mail-topbar-left">
@@ -578,87 +666,89 @@ export const EmailList: React.FC = () => {
             />
           </div>
 
-          <div className="mail-topbar-right">
-            {/* Filter Button */}
-            <Dropdown
-              trigger={['click']}
-              open={showFilters}
-              onOpenChange={setShowFilters}
-              dropdownRender={() => (
-                <div className="mail-filters-dropdown">
-                  <div className="filter-header">
-                    <Text strong>Filters</Text>
-                    {hasActiveFilters && (
-                      <Button
-                        type="link"
-                        size="small"
-                        onClick={() => {
-                          setFilters({
-                            search: filters.search,
-                            category: '',
-                            mailbox: filters.mailbox,
-                            folder: '',
-                            dateRange: null,
-                            isOutbound: '',
-                          });
-                        }}
+          {!isAnalyticsMode && (
+            <div className="mail-topbar-right">
+              {/* Filter Button */}
+              <Dropdown
+                trigger={['click']}
+                open={showFilters}
+                onOpenChange={setShowFilters}
+                dropdownRender={() => (
+                  <div className="mail-filters-dropdown">
+                    <div className="filter-header">
+                      <Text strong>Filters</Text>
+                      {hasActiveFilters && (
+                        <Button
+                          type="link"
+                          size="small"
+                          onClick={() => {
+                            setFilters({
+                              search: filters.search,
+                              category: '',
+                              mailbox: filters.mailbox,
+                              folder: '',
+                              dateRange: null,
+                              isOutbound: '',
+                            });
+                          }}
+                        >
+                          Clear
+                        </Button>
+                      )}
+                    </div>
+
+                    <div className="filter-group">
+                      <Text type="secondary" style={{ fontSize: 12, fontWeight: 500 }}>Category</Text>
+                      <Select
+                        placeholder="All categories"
+                        allowClear
+                        style={{ width: '100%' }}
+                        value={filters.category || undefined}
+                        onChange={(v) => handleFilterChange('category', v)}
                       >
-                        Clear
-                      </Button>
-                    )}
-                  </div>
+                        {categories.map(cat => (
+                          <Option key={cat} value={cat}>{getCategoryLabel(cat)}</Option>
+                        ))}
+                      </Select>
+                    </div>
 
-                  <div className="filter-group">
-                    <Text type="secondary" style={{ fontSize: 12, fontWeight: 500 }}>Category</Text>
-                    <Select
-                      placeholder="All categories"
-                      allowClear
-                      style={{ width: '100%' }}
-                      value={filters.category || undefined}
-                      onChange={(v) => handleFilterChange('category', v)}
-                    >
-                      {categories.map(cat => (
-                        <Option key={cat} value={cat}>{getCategoryLabel(cat)}</Option>
-                      ))}
-                    </Select>
+                    <div className="filter-group">
+                      <Text type="secondary" style={{ fontSize: 12, fontWeight: 500 }}>Direction</Text>
+                      <Select
+                        placeholder="All"
+                        allowClear
+                        style={{ width: '100%' }}
+                        value={filters.isOutbound || undefined}
+                        onChange={(v) => handleFilterChange('isOutbound', v)}
+                      >
+                        <Option value="inbound">Received</Option>
+                        <Option value="outbound">Sent</Option>
+                      </Select>
+                    </div>
                   </div>
+                )}
+              >
+                <Badge dot={hasActiveFilters} offset={[-2, 2]}>
+                  <Button type={hasActiveFilters ? 'primary' : 'text'} icon={<FilterOutlined />}>
+                    Filters
+                  </Button>
+                </Badge>
+              </Dropdown>
 
-                  <div className="filter-group">
-                    <Text type="secondary" style={{ fontSize: 12, fontWeight: 500 }}>Direction</Text>
-                    <Select
-                      placeholder="All"
-                      allowClear
-                      style={{ width: '100%' }}
-                      value={filters.isOutbound || undefined}
-                      onChange={(v) => handleFilterChange('isOutbound', v)}
-                    >
-                      <Option value="inbound">Received</Option>
-                      <Option value="outbound">Sent</Option>
-                    </Select>
-                  </div>
-                </div>
-              )}
-            >
-              <Badge dot={hasActiveFilters} offset={[-2, 2]}>
-                <Button type={hasActiveFilters ? 'primary' : 'text'} icon={<FilterOutlined />}>
-                  Filters
-                </Button>
-              </Badge>
-            </Dropdown>
-
-            {/* Refresh */}
-            <Tooltip title="Refresh">
-              <Button
-                type="text"
-                icon={<ReloadOutlined spin={loading} />}
-                onClick={handleRefresh}
-              />
-            </Tooltip>
-          </div>
+              {/* Refresh */}
+              <Tooltip title="Refresh">
+                <Button
+                  type="text"
+                  icon={<ReloadOutlined spin={loading} />}
+                  onClick={handleRefresh}
+                />
+              </Tooltip>
+            </div>
+          )}
         </div>
 
         {/* Sync Status Bar */}
-        {filters.mailbox && mailboxIdMap[filters.mailbox] && (
+        {!isAnalyticsMode && filters.mailbox && mailboxIdMap[filters.mailbox] && (
           <SyncStatusBar
             selectedMailboxIds={[mailboxIdMap[filters.mailbox]]}
             jobs={processingJobs}
@@ -667,14 +757,19 @@ export const EmailList: React.FC = () => {
         )}
 
         {/* Content Area - Key based on mailbox to ensure fresh mount */}
-        <div className="mail-content" key={filters.mailbox || 'no-mailbox'}>
+        <div className="mail-content" key={isAnalyticsMode ? 'analytics' : (filters.mailbox || 'no-mailbox')}>
           {/* Email List */}
           <div className={`mail-list-panel ${selectedEmail ? 'has-detail' : ''}`}>
             {/* Stats bar */}
             <div className="mail-list-stats">
               <Text type="secondary" style={{ fontSize: 13 }}>
-                {loading && emails.length === 0 ? (
+                {loading && displayEmails.length === 0 ? (
                   'Loading emails...'
+                ) : isAnalyticsMode ? (
+                  <>
+                    {displayEmails.length} email{displayEmails.length !== 1 ? 's' : ''}
+                    {filters.search && ` matching "${filters.search}"`}
+                  </>
                 ) : (
                   <>
                     {totalCount.toLocaleString()} email{totalCount !== 1 ? 's' : ''}
@@ -687,7 +782,7 @@ export const EmailList: React.FC = () => {
 
             {/* Email List */}
             <div className="mail-list-content">
-              {mailboxesLoading || (loading && emails.length === 0) ? (
+              {(!isAnalyticsMode && mailboxesLoading) || (loading && displayEmails.length === 0) ? (
                 <div className="mail-list-loading">
                   {[1, 2, 3, 4, 5].map(i => (
                     <div key={i} className="email-skeleton">
@@ -699,21 +794,21 @@ export const EmailList: React.FC = () => {
                     </div>
                   ))}
                 </div>
-              ) : !filters.mailbox ? (
+              ) : !isAnalyticsMode && !filters.mailbox ? (
                 <Empty
                   image={Empty.PRESENTED_IMAGE_SIMPLE}
                   description="Select a mailbox to view emails"
                   style={{ marginTop: 60 }}
                 />
-              ) : emails.length === 0 ? (
+              ) : displayEmails.length === 0 ? (
                 <Empty
                   image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description="No emails found"
+                  description={isAnalyticsMode ? 'No emails linked yet' : 'No emails found'}
                   style={{ marginTop: 60 }}
                 />
               ) : (
                 <>
-                  {emails.map(email => (
+                  {displayEmails.map(email => (
                     <EmailListItem
                       key={email.id}
                       email={email}
@@ -726,7 +821,7 @@ export const EmailList: React.FC = () => {
                     <div className="mail-list-load-more">
                       <Button
                         type="link"
-                        onClick={handleLoadMore}
+                        onClick={isAnalyticsMode ? () => loadAnalyticsEmails(true) : handleLoadMore}
                         loading={loading}
                       >
                         Load more ({totalCount - emails.length} remaining)

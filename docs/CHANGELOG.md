@@ -2,6 +2,27 @@
 
 All notable changes to the Email Intelligence Platform will be documented in this file.
 
+## [2026-03-06] Analytics UX & Navigation Overhaul
+
+### Added
+- **Analytics mode on Emails page**: Navigate from contact/company detail → emails page with cross-mailbox filter (`?contact_id`, `?company_id` URL params), banner with back button
+- **Clickable KPIs**: Total Emails → emails page, Contacts/Decision Makers → filtered contacts page
+- **Live email counts**: Backend endpoints return `total`, `total_sent`, `total_received` for contacts and companies (replaces stale stored values)
+- **Contacts drilldown back button**: "Back to {company}" when navigated from company detail page
+
+### Changed
+- **Navigation menu reorganized**: Consolidated 11 top-level items into 5 (Dashboard, Emails, Intelligence, Analytics, Manage) following frequency-of-use UX principles
+- **Contact detail simplified**: Removed inline email table and drawer, uses clickable KPI → emails page
+- **Company detail simplified**: Removed inline email table and drawer, uses clickable KPI → emails page
+- Email Rules moved from Analytics submenu to Manage submenu (it's configuration, not analysis)
+- AI Usage moved from Intelligence submenu to Manage submenu (admin-only, monitoring)
+
+### Fixed
+- Emails Sent/Received showing stale values on contact and company detail pages (now live from DB)
+- Company emails endpoint pagination bug (incorrect per-batch range calculation)
+
+---
+
 ## [Unreleased]
 
 ### Added

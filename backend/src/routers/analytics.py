@@ -725,13 +725,26 @@ async def get_contact_analytics(contact_identifier: str):
 async def get_contact_emails(contact_id: str, limit: int = 50, offset: int = 0):
     """Get emails linked to a contact via customer_contact_id."""
     try:
+        # Get total count + sent count (outbound)
+        count_result = _supabase.table('emails').select(
+            'id', count='exact'
+        ).eq('customer_contact_id', contact_id).execute()
+        total = count_result.count or 0
+
+        sent_result = _supabase.table('emails').select(
+            'id', count='exact'
+        ).eq('customer_contact_id', contact_id).eq('is_outbound', 'true').execute()
+        total_sent = sent_result.count or 0
+        total_received = total - total_sent
+
+        # Paginated data
         result = _supabase.table('emails').select(
             'id, subject, sender_email, sender_name, sent_date, folder_path, is_outbound'
         ).eq('customer_contact_id', contact_id).order(
             'sent_date', desc=True
         ).range(offset, offset + limit - 1).execute()
 
-        return {'emails': result.data or [], 'total': len(result.data or [])}
+        return {'emails': result.data or [], 'total': total, 'total_sent': total_sent, 'total_received': total_received}
 
     except Exception as e:
         logger.error(f"Failed to get contact emails: {e}")
@@ -1095,7 +1108,22 @@ async def get_company_emails(company_id: str, limit: int = 50, offset: int = 0):
         if not contact_ids:
             return {'emails': [], 'total': 0}
 
-        # Fetch emails for those contacts (batch IDs in groups of 500)
+        # Get total count + sent/received across all contacts
+        total = 0
+        total_sent = 0
+        for i in range(0, len(contact_ids), 500):
+            batch = contact_ids[i:i+500]
+            count_result = _supabase.table('emails').select(
+                'id', count='exact'
+            ).in_('customer_contact_id', batch).execute()
+            total += count_result.count or 0
+            sent_result = _supabase.table('emails').select(
+                'id', count='exact'
+            ).in_('customer_contact_id', batch).eq('is_outbound', 'true').execute()
+            total_sent += sent_result.count or 0
+        total_received = total - total_sent
+
+        # Fetch paginated emails — collect from all batches, then sort & slice
         all_emails = []
         for i in range(0, len(contact_ids), 500):
             batch = contact_ids[i:i+500]
@@ -1103,12 +1131,14 @@ async def get_company_emails(company_id: str, limit: int = 50, offset: int = 0):
                 'id, subject, sender_email, sender_name, sent_date, folder_path, is_outbound'
             ).in_('customer_contact_id', batch).order(
                 'sent_date', desc=True
-            ).range(offset, offset + limit - 1).execute()
+            ).range(0, offset + limit - 1).execute()
             all_emails.extend(result.data or [])
 
-        # Sort and limit
+        # Sort combined results and apply pagination
         all_emails.sort(key=lambda e: e.get('sent_date', ''), reverse=True)
-        return {'emails': all_emails[:limit], 'total': len(all_emails)}
+        paginated = all_emails[offset:offset + limit]
+
+        return {'emails': paginated, 'total': total, 'total_sent': total_sent, 'total_received': total_received}
 
     except Exception as e:
         logger.error(f"Failed to get company emails: {e}")

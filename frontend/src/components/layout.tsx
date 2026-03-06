@@ -9,24 +9,16 @@ import {
   Dropdown,
   Space,
   Tag,
-  Divider,
 } from 'antd';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   DashboardOutlined,
-  InboxOutlined,
   SettingOutlined,
-  ExclamationCircleOutlined,
-  TeamOutlined,
   MenuOutlined,
   CloseOutlined,
-  UserOutlined,
   LogoutOutlined,
   DownOutlined,
-  CrownOutlined,
   BarChartOutlined,
-  RocketOutlined,
-  DatabaseOutlined,
   BulbOutlined,
   MailOutlined,
 } from '@ant-design/icons';
@@ -102,9 +94,9 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
       label: <Link to="/">Dashboard</Link>,
     },
     {
-      key: '/mailboxes',
-      icon: <InboxOutlined />,
-      label: <Link to="/mailboxes">Mailboxes</Link>,
+      key: '/emails',
+      icon: <MailOutlined />,
+      label: <Link to="/emails">Emails</Link>,
     },
     {
       key: '/intelligence',
@@ -114,63 +106,41 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
         { key: '/intelligence/inbox', label: <Link to="/intelligence/inbox">Smart Inbox</Link> },
         { key: '/intelligence/digest', label: <Link to="/intelligence/digest">Daily Digest</Link> },
         { key: '/intelligence/opportunities', label: <Link to="/intelligence/opportunities">Opportunities</Link> },
-        ...(isAdmin ? [{ key: '/intelligence/usage', label: <Link to="/intelligence/usage">AI Usage</Link> }] : []),
       ],
-    },
-    {
-      key: '/emails',
-      icon: <MailOutlined />,
-      label: <Link to="/emails">Emails</Link>,
-    },
-    {
-      key: '/processing',
-      icon: <SettingOutlined />,
-      label: <Link to="/processing">Processing</Link>,
-    },
-    {
-      key: '/errors',
-      icon: <ExclamationCircleOutlined />,
-      label: <Link to="/errors">Errors</Link>,
     },
     {
       key: '/analytics',
       icon: <BarChartOutlined />,
       label: 'Analytics',
       children: [
-        { key: '/analytics', label: <Link to="/analytics">Dashboard</Link> },
+        { key: '/analytics', label: <Link to="/analytics">Overview</Link> },
         { key: '/analytics/contacts', label: <Link to="/analytics/contacts">Contacts</Link> },
         { key: '/analytics/companies', label: <Link to="/analytics/companies">Companies</Link> },
         { key: '/analytics/threads', label: <Link to="/analytics/threads">Threads</Link> },
         { key: '/analytics/response-times', label: <Link to="/analytics/response-times">Response Times</Link> },
-        { key: '/analytics/email-rules', label: <Link to="/analytics/email-rules">Email Rules</Link> },
         { key: '/analytics/patterns', label: <Link to="/analytics/patterns">Patterns</Link> },
       ],
     },
     {
-      key: '/extraction',
-      icon: <RocketOutlined />,
-      label: <Link to="/extraction">Extraction</Link>,
+      key: '/manage',
+      icon: <SettingOutlined />,
+      label: 'Manage',
+      children: [
+        { key: '/mailboxes', label: <Link to="/mailboxes">Mailboxes</Link> },
+        { key: '/clients', label: <Link to="/clients">Clients</Link> },
+        { key: '/analytics/email-rules', label: <Link to="/analytics/email-rules">Email Rules</Link> },
+        { key: '/extraction', label: <Link to="/extraction">Extraction</Link> },
+        { type: 'divider' as const },
+        { key: '/processing', label: <Link to="/processing">Processing Jobs</Link> },
+        { key: '/errors', label: <Link to="/errors">Error Logs</Link> },
+        ...(isAdmin ? [
+          { type: 'divider' as const },
+          { key: '/intelligence/usage', label: <Link to="/intelligence/usage">AI Usage</Link> },
+          { key: '/users', label: <Link to="/users">Users</Link> },
+          { key: '/admin/data', label: <Link to="/admin/data">Data View</Link> },
+        ] : []),
+      ],
     },
-    {
-      key: '/clients',
-      icon: <TeamOutlined />,
-      label: <Link to="/clients">Clients</Link>,
-    },
-    // Admin-only menu items
-    ...(isAdmin
-      ? [
-          {
-            key: '/users',
-            icon: <CrownOutlined />,
-            label: <Link to="/users">Users</Link>,
-          },
-          {
-            key: '/admin/data',
-            icon: <DatabaseOutlined />,
-            label: <Link to="/admin/data">Data View</Link>,
-          },
-        ]
-      : []),
   ];
 
   // Get selected key from current path

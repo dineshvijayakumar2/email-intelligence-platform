@@ -89,9 +89,17 @@ Full plan: `docs/AI_MVP_PLAN.md` (3-week session-by-session plan + implementatio
 - [x] Contacts analytics (All/Top/At-Risk/DMs/By-Type tabs, sort, filter, score slider, search)
 - [x] Companies analytics (All/Top/At-Risk/By-Engagement tabs, sort, filter, score slider)
 - [x] Thread analytics (All/Overdue/By-Status tabs, status chart, sort, filter)
-- [x] Contact detail drill-down (stats, threads, communication patterns, linked emails, email preview Drawer)
-- [x] Company detail drill-down (stats, linked emails, email preview Drawer)
+- [x] Contact detail drill-down (stats, threads, patterns, clickable KPIs → emails page)
+- [x] Company detail drill-down (stats, clickable KPIs → emails page, contacts drilldown)
 - [x] Admin Data View (raw table browser, search, sort, pagination, CSV export)
+
+### Analytics UX Enhancements — ✅ COMPLETE (Mar 6, 2026)
+- [x] Analytics mode on emails page: navigate from contact/company detail → emails page with filter
+- [x] Clickable KPIs: Total Emails → emails page, Contacts/DMs → contacts page with company filter
+- [x] Live email counts: Total Emails, Emails Sent, Emails Received fetched live (not stale stored values)
+- [x] Back navigation: contacts drilldown shows "Back to {company}" button
+- [x] Menu reorganization: 11 items → 5 top-level (Dashboard, Emails, Intelligence, Analytics, Manage)
+- [x] Removed inline email tables/drawers from contact & company detail pages (uses emails page instead)
 
 ---
 

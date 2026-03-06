@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Typography, Tabs, Tag, Space, Slider, Switch, Select, Alert, Input } from 'antd';
+import { Typography, Tabs, Tag, Space, Slider, Switch, Select, Alert, Input, Button } from 'antd';
 import type { TableProps } from 'antd';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { ArrowLeftOutlined } from '@ant-design/icons';
 import { ClientSelector } from '../../components/analytics/ClientSelector';
 import { AnalyticsTable } from '../../components/analytics/AnalyticsTable';
 import { EngagementBadge } from '../../components/analytics/EngagementBadge';
@@ -33,9 +34,10 @@ const CONTACT_TYPE_OPTIONS = [
 
 export const ContactsAnalytics: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const isMountedRef = useRef(true);
   const [clientId, setClientId] = useState('');
-  const [activeTab, setActiveTab] = useState('all');
+  const [activeTab, setActiveTab] = useState(() => searchParams.get('dm') === 'true' ? 'dm' : 'all');
   const [loading, setLoading] = useState(false);
 
   // All contacts state
@@ -44,11 +46,11 @@ export const ContactsAnalytics: React.FC = () => {
   const [contactsPage, setContactsPage] = useState(1);
   const [minScore, setMinScore] = useState<number>(0);
   const [sliderScore, setSliderScore] = useState<number>(0);
-  const [dmOnly, setDmOnly] = useState(false);
+  const [dmOnly, setDmOnly] = useState(() => searchParams.get('dm') === 'true');
   const [contactType, setContactType] = useState<string>('');
   const [sortBy, setSortBy] = useState<string>('engagement_score');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
-  const [search, setSearch] = useState<string>('');
+  const [search, setSearch] = useState<string>(() => searchParams.get('company') || '');
 
   // Top engaged state
   const [topEngaged, setTopEngaged] = useState<TopEngagedContact[]>([]);
@@ -262,10 +264,21 @@ export const ContactsAnalytics: React.FC = () => {
     navigate(`/analytics/contacts/${record.id}`);
   };
 
+  const companyDrilldown = searchParams.get('company');
+
   return (
     <div className="glass-page-bg" style={{ padding: 24 }}>
+      {companyDrilldown && (
+        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)} style={{ marginBottom: 16 }}>
+          Back to {companyDrilldown}
+        </Button>
+      )}
       <div className="fade-in-up" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <Text type="secondary">Explore contacts, engagement scores, and relationship health</Text>
+        <Text type="secondary">
+          {companyDrilldown
+            ? `Contacts for ${companyDrilldown}${dmOnly ? ' (Decision Makers)' : ''}`
+            : 'Explore contacts, engagement scores, and relationship health'}
+        </Text>
         <ClientSelector value={clientId} onChange={setClientId} />
       </div>
 
@@ -280,6 +293,7 @@ export const ContactsAnalytics: React.FC = () => {
                   <Input.Search
                     placeholder="Search name, email, company..."
                     allowClear
+                    defaultValue={search}
                     onSearch={(v) => { setSearch(v); setContactsPage(1); }}
                     style={{ width: 240 }}
                     size="small"

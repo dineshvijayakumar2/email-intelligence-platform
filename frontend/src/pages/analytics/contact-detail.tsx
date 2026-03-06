@@ -1,13 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Row, Col, Typography, Button, Tag, Descriptions, Skeleton, Table, Drawer } from 'antd';
+import { Row, Col, Typography, Button, Tag, Descriptions, Skeleton, Table } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import { MetricCard } from '../../components/analytics/MetricCard';
 import { EngagementBadge } from '../../components/analytics/EngagementBadge';
-import { EmailDetailPanel } from '../../components/EmailDetailPanel';
-import { emailService } from '../../services/emailService';
-import { summarizeEmail } from '../../services/aiService';
-import type { Email } from '../../services/emailService';
 import {
   contactsApi,
   threadsApi,
@@ -28,14 +24,10 @@ export const ContactDetail: React.FC = () => {
   const [contact, setContact] = useState<ContactAnalytics | null>(null);
   const [threads, setThreads] = useState<ThreadStatusSummary[]>([]);
   const [pattern, setPattern] = useState<CommunicationPattern | null>(null);
-  const [emails, setEmails] = useState<any[]>([]);
+  const [totalEmails, setTotalEmails] = useState(0);
+  const [totalSent, setTotalSent] = useState(0);
+  const [totalReceived, setTotalReceived] = useState(0);
   const [loading, setLoading] = useState(true);
-
-  // Email preview drawer state
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
-  const [emailLoading, setEmailLoading] = useState(false);
-  const [drawerExpanded, setDrawerExpanded] = useState(false);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -53,32 +45,17 @@ export const ContactDetail: React.FC = () => {
       contactsApi.getDetail(contactId!),
       threadsApi.byContact(contactId!),
       patternsApi.byContact(contactId!),
-      contactsApi.getEmails(contactId!),
+      contactsApi.getEmails(contactId!, 1, 0),  // fetch just total count
     ]);
     if (isMountedRef.current) {
       setContact(c);
       setThreads(t.threads);
       setPattern(p);
-      setEmails(e.emails || []);
+      setTotalEmails(e.total || 0);
+      setTotalSent(e.total_sent ?? 0);
+      setTotalReceived(e.total_received ?? 0);
       setLoading(false);
     }
-  };
-
-  const handleEmailClick = async (record: any) => {
-    setDrawerOpen(true);
-    setEmailLoading(true);
-    try {
-      const full = await emailService.getEmail(record.id);
-      if (isMountedRef.current) setSelectedEmail(full);
-    } catch {
-      if (isMountedRef.current) setSelectedEmail(null);
-    } finally {
-      if (isMountedRef.current) setEmailLoading(false);
-    }
-  };
-
-  const handleSummarize = async (emailId: string): Promise<string> => {
-    return summarizeEmail(emailId);
   };
 
   const threadColumns = [
@@ -92,16 +69,6 @@ export const ContactDetail: React.FC = () => {
     },
     { title: 'Messages', dataIndex: 'total_messages', key: 'msgs', width: 90 },
     { title: 'Last Message', dataIndex: 'last_message_date', key: 'last', width: 110, render: (v: string) => formatRelativeTime(v) },
-  ];
-
-  const emailColumns = [
-    { title: 'Subject', dataIndex: 'subject', key: 'subject', ellipsis: true },
-    { title: 'From', dataIndex: 'sender_name', key: 'from', width: 160, ellipsis: true,
-      render: (v: string, r: any) => v || r.sender_email },
-    { title: 'Direction', dataIndex: 'is_outbound', key: 'dir', width: 90,
-      render: (v: boolean) => <Tag color={v ? 'blue' : 'green'}>{v ? 'Sent' : 'Received'}</Tag> },
-    { title: 'Folder', dataIndex: 'folder_path', key: 'folder', width: 100 },
-    { title: 'Date', dataIndex: 'sent_date', key: 'date', width: 110, render: (v: string) => formatRelativeTime(v) },
   ];
 
   if (loading) {
@@ -121,9 +88,6 @@ export const ContactDetail: React.FC = () => {
       </div>
     );
   }
-
-  // Use live count from linked emails instead of stale cached values
-  const totalEmails = emails.length;
 
   return (
     <div className="glass-page-bg" style={{ padding: 24 }}>
@@ -148,7 +112,13 @@ export const ContactDetail: React.FC = () => {
 
       {/* Stats */}
       <Row gutter={[16, 16]} className="fade-in-up stagger-1">
-        <Col xs={12} sm={6}><MetricCard title="Total Emails" value={totalEmails} /></Col>
+        <Col xs={12} sm={6}>
+          <MetricCard
+            title="Total Emails"
+            value={totalEmails}
+            onClick={() => navigate(`/emails?contact_id=${contactId}&name=${encodeURIComponent(contact.full_name || contact.email_address)}`)}
+          />
+        </Col>
         <Col xs={12} sm={6}><MetricCard title="Initiation Ratio" value={formatRatio(pattern?.thread_initiation_ratio)} /></Col>
         <Col xs={12} sm={6}><MetricCard title="Our Reply Rate" value={formatRatio(pattern?.reply_rate)} /></Col>
         <Col xs={12} sm={6}><MetricCard title="Our Avg Response" value={formatResponseTime(pattern?.avg_response_time_hours)} /></Col>
@@ -163,8 +133,8 @@ export const ContactDetail: React.FC = () => {
             <Descriptions column={1} size="small">
               <Descriptions.Item label="First Contact">{formatRelativeTime(contact.first_contacted_at)}</Descriptions.Item>
               <Descriptions.Item label="Last Contact">{formatRelativeTime(contact.last_contacted_at)}</Descriptions.Item>
-              <Descriptions.Item label="Emails Sent">{contact.total_emails_sent || 0}</Descriptions.Item>
-              <Descriptions.Item label="Emails Received">{contact.total_emails_received || 0}</Descriptions.Item>
+              <Descriptions.Item label="Emails Sent">{totalSent}</Descriptions.Item>
+              <Descriptions.Item label="Emails Received">{totalReceived}</Descriptions.Item>
               <Descriptions.Item label="Threads">{pattern?.total_threads ?? 'N/A'}</Descriptions.Item>
               <Descriptions.Item label="Avg Thread Depth">{contact.avg_thread_depth?.toFixed(1) ?? 'N/A'}</Descriptions.Item>
               <Descriptions.Item label="Emails/Week">{pattern?.emails_per_week?.toFixed(1) ?? 'N/A'}</Descriptions.Item>
@@ -184,45 +154,6 @@ export const ContactDetail: React.FC = () => {
           </div>
         </Col>
       </Row>
-
-      {/* Linked Emails */}
-      <Row style={{ marginTop: 16 }} className="fade-in-up stagger-3">
-        <Col span={24}>
-          <div className="glass-table-container" style={{ padding: 16 }}>
-            <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 12 }}>Linked Emails ({emails.length})</Text>
-            <Table
-              columns={emailColumns}
-              dataSource={emails}
-              rowKey="id"
-              size="small"
-              pagination={emails.length > 10 ? { pageSize: 10 } : false}
-              locale={{ emptyText: 'No emails linked yet. Run extraction to link emails to contacts.' }}
-              onRow={(record) => ({
-                onClick: () => handleEmailClick(record),
-                style: { cursor: 'pointer' },
-              })}
-            />
-          </div>
-        </Col>
-      </Row>
-
-      {/* Email Preview Drawer */}
-      <Drawer
-        open={drawerOpen}
-        onClose={() => { setDrawerOpen(false); setSelectedEmail(null); }}
-        width={drawerExpanded ? '80%' : 640}
-        destroyOnClose
-        styles={{ body: { padding: 0 } }}
-      >
-        <EmailDetailPanel
-          email={selectedEmail}
-          loading={emailLoading}
-          onClose={() => { setDrawerOpen(false); setSelectedEmail(null); }}
-          expanded={drawerExpanded}
-          onToggleExpand={() => setDrawerExpanded(e => !e)}
-          onSummarize={handleSummarize}
-        />
-      </Drawer>
     </div>
   );
 };

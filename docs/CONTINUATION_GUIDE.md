@@ -85,8 +85,8 @@ Analytics API (30 endpoints at /api/v1/analytics/):
 | Contacts | `/analytics/contacts` | All/Top/At-Risk/DMs/By-Type tabs, sort, filter, score slider |
 | Companies | `/analytics/companies` | All/Top/At-Risk/By-Engagement tabs, sort, filter, score slider |
 | Threads | `/analytics/threads` | All/Overdue/By-Status tabs, status chart, sort, filter |
-| Contact Detail | `/analytics/contacts/:id` | Stats, threads, communication patterns, linked emails table, email preview Drawer with AI summarize |
-| Company Detail | `/analytics/companies/:id` | Stats, linked emails table, email preview Drawer with AI summarize |
+| Contact Detail | `/analytics/contacts/:id` | Stats, threads, patterns, clickable KPIs → emails page, live counts |
+| Company Detail | `/analytics/companies/:id` | Stats, clickable KPIs → emails/contacts pages, live counts |
 | Admin Data View | `/admin/data` | Raw table browser, search, sort, pagination, CSV export |
 
 ### Production Performance
@@ -138,13 +138,16 @@ Analytics API (30 endpoints at /api/v1/analytics/):
 **Analytics Enhancements (Mar 6, 2026):**
 - Reusable `EmailDetailPanel` component extracted from emails.tsx (shared across all pages with email preview)
 - Contact search: `search` param on `GET /contacts` (name/email/company ilike), frontend `Input.Search`
-- Contact detail: linked emails table + email preview Drawer (fetches full email on click)
-- Contact detail: Total Emails metric now uses live count from linked emails (not stale cached)
-- Company detail: `GET /companies/{id}/emails` endpoint + linked emails table + Drawer preview
 - AI Summarise Email: `POST /ai/summarize/{email_id}` (Haiku, 2-3 sentence summary), "Summarise" button in EmailDetailPanel
 - Sync: Per-folder limits (not global), recursive Outlook folder loading, folder filter aliases (Sent↔Sent Items)
 - Post-sync extraction: Auto-triggers Sprint 2 extraction pipeline after sync completes
 - RPC fix: Removed stale `get_job_errors_summary` RPC, Python fallback aggregation
+- Analytics mode on emails page: `?contact_id` / `?company_id` URL params → cross-mailbox email view with banner + back button
+- Removed inline email tables/drawers from contact & company detail pages (navigates to emails page instead)
+- Clickable KPIs: Total Emails → emails page, Contacts/DMs → filtered contacts page
+- Live email counts: `total`, `total_sent`, `total_received` from backend endpoints (replaces stale stored values)
+- Contacts drilldown: "Back to {company}" button when navigated from company detail
+- Navigation menu reorganized: 11 items → 5 top-level (Dashboard, Emails, Intelligence, Analytics, Manage)
 
 **Performance Optimizations (Mar 4, 2026):**
 - Email Rules: Combined `GET /analytics/{client_id}/full` endpoint (1 API call, 3 DB queries, down from 11 calls / 66-151 queries). Read-only page load, manual "Sync Rules" button for live imports.
