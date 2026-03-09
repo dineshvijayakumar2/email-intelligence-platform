@@ -239,15 +239,26 @@ const UsagePage: React.FC = () => {
         </Col>
         <Col xs={24} sm={12} md={6}>
           <Card className="glass-card" size="small">
-            <Statistic
-              title="Cost / 1K Emails"
-              value={monitoring?.cost_per_1000_emails || 0}
-              prefix={<DollarOutlined />}
-              precision={4}
-            />
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              Avg latency: {(costs?.avg_latency_ms || 0).toFixed(0)}ms
-            </Text>
+            {(() => {
+              const dailyRemaining = Math.max((controls?.daily_budget_usd || 0) - (controls?.session_spend_usd || 0), 0);
+              const monthlyRemaining = Math.max((controls?.monthly_budget_usd || 0) - (costs?.total_cost_usd || 0), 0);
+              const dailyPct = controls?.daily_budget_usd ? (dailyRemaining / controls.daily_budget_usd) * 100 : 100;
+              const creditColor = dailyPct <= 10 ? '#ff4d4f' : dailyPct <= 30 ? '#faad14' : '#52c41a';
+              return (
+                <>
+                  <Statistic
+                    title="Daily Credit Remaining"
+                    value={dailyRemaining}
+                    prefix={<DollarOutlined />}
+                    precision={4}
+                    valueStyle={{ color: creditColor }}
+                  />
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    Monthly: ${monthlyRemaining.toFixed(2)} / ${controls?.monthly_budget_usd?.toFixed(2) || '0'}
+                  </Text>
+                </>
+              );
+            })()}
           </Card>
         </Col>
       </Row>
