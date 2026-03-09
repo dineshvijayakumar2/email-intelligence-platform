@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from 'react-router-dom';
+import { formatDate, formatTime, formatDateTime, formatElapsed } from '../utils/dateUtils';
 import {
   Card,
   Table,
@@ -351,9 +352,9 @@ export const ProcessingJobs: React.FC = () => {
         if (!date) return '-';
         return (
           <Space direction="vertical" size="small">
-            <Text>{new Date(date).toLocaleDateString()}</Text>
+            <Text>{formatDate(date)}</Text>
             <Text type="secondary" style={{ fontSize: 12 }}>
-              {new Date(date).toLocaleTimeString()}
+              {formatTime(date)}
             </Text>
           </Space>
         );
@@ -367,9 +368,9 @@ export const ProcessingJobs: React.FC = () => {
         if (!date) return 'Not started';
         return (
           <Space direction="vertical" size="small">
-            <Text>{new Date(date).toLocaleDateString()}</Text>
+            <Text>{formatDate(date)}</Text>
             <Text type="secondary" style={{ fontSize: 12 }}>
-              {new Date(date).toLocaleTimeString()}
+              {formatTime(date)}
             </Text>
           </Space>
         );
@@ -389,13 +390,12 @@ export const ProcessingJobs: React.FC = () => {
           return <Text type="secondary">-</Text>;
         }
 
-        const start = new Date(started_at);
         // Only use current time for running jobs; otherwise use completed_at
-        const end = completed_at ? new Date(completed_at) : (status === 'running' ? new Date() : null);
+        const end = completed_at ? completed_at : (status === 'running' ? new Date().toISOString() : null);
 
         if (!end) return <Text type="secondary">-</Text>;
 
-        const duration = Math.round((end.getTime() - start.getTime()) / 1000);
+        const duration = Math.round((new Date(end).getTime() - new Date(started_at).getTime()) / 1000);
 
         const minutes = Math.floor(duration / 60);
         const seconds = duration % 60;
@@ -686,10 +686,10 @@ export const ProcessingJobs: React.FC = () => {
                 />
               </Descriptions.Item>
               <Descriptions.Item label="Started At" span={2}>
-                {selectedJob.started_at ? new Date(selectedJob.started_at).toLocaleString() : 'Not started'}
+                {selectedJob.started_at ? formatDateTime(selectedJob.started_at) : 'Not started'}
               </Descriptions.Item>
               <Descriptions.Item label="Completed At">
-                {selectedJob.completed_at ? new Date(selectedJob.completed_at).toLocaleString() : 'Not completed'}
+                {selectedJob.completed_at ? formatDateTime(selectedJob.completed_at) : 'Not completed'}
               </Descriptions.Item>
             </Descriptions>
 

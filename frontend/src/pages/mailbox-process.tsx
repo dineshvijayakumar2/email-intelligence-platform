@@ -41,6 +41,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { mailboxService, Mailbox } from '../services/mailboxService';
 import { processingService, ProcessingJob, CachedDownload } from '../services/processingService';
 import { useConnectionStatus } from '../hooks/useConnectionStatus';
+import { formatDateTime } from '../utils/dateUtils';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -364,7 +365,7 @@ export const MailboxProcess: React.FC = () => {
             {mailbox.total_emails?.toLocaleString() || '0'}
           </Descriptions.Item>
           <Descriptions.Item label="Last Sync">
-            {mailbox.last_sync_at ? new Date(mailbox.last_sync_at).toLocaleString() : 'Never'}
+            {mailbox.last_sync_at ? formatDateTime(mailbox.last_sync_at) : 'Never'}
           </Descriptions.Item>
         </Descriptions>
 
@@ -544,11 +545,11 @@ export const MailboxProcess: React.FC = () => {
                 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Text type="secondary">
-                    Started: {currentJob.started_at ? new Date(currentJob.started_at).toLocaleString() : 'Not started'}
+                    Started: {currentJob.started_at ? formatDateTime(currentJob.started_at) : 'Not started'}
                   </Text>
                   {currentJob.completed_at && (
                     <Text type="secondary">
-                      Completed: {new Date(currentJob.completed_at).toLocaleString()}
+                      Completed: {formatDateTime(currentJob.completed_at)}
                     </Text>
                   )}
                 </div>
@@ -671,7 +672,7 @@ export const MailboxProcess: React.FC = () => {
                                 </Text>
                                 <Text type="secondary">
                                   Downloaded {cachedDownload.age_formatted} •
-                                  Last used: {cachedDownload.last_used_at ? new Date(cachedDownload.last_used_at).toLocaleString() : 'Never'}
+                                  Last used: {cachedDownload.last_used_at ? formatDateTime(cachedDownload.last_used_at) : 'Never'}
                                 </Text>
                                 <Text type="secondary" style={{ fontSize: 12 }}>
                                   Path: {cachedDownload.storage_path}
@@ -827,7 +828,7 @@ export const MailboxProcess: React.FC = () => {
                   description={
                     <Space direction="vertical" size="small">
                       <Text type="secondary">
-                        Created: {new Date(job.created_at).toLocaleString()}
+                        Created: {formatDateTime(job.created_at)}
                       </Text>
                       {job.total_records && (
                         <Text type="secondary">

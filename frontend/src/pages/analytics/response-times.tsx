@@ -67,6 +67,13 @@ export const ResponseTimesAnalytics: React.FC = () => {
         <Col xs={12} sm={6}><MetricCard title="Slowest" value={formatResponseTime(stats?.max_response_time_hours)} loading={loading} valueStyle={{ color: '#f5222d' }} /></Col>
       </Row>
 
+      {(stats?.avg_business_hours_response_time_hours != null) && (
+        <Row gutter={[16, 16]} style={{ marginTop: 16 }} className="fade-in-up stagger-1">
+          <Col xs={12} sm={6}><MetricCard title="Avg (Business Hours)" value={formatResponseTime(stats.avg_business_hours_response_time_hours)} prefix={<ClockCircleOutlined />} loading={loading} valueStyle={{ color: '#1890ff' }} /></Col>
+          <Col xs={12} sm={6}><MetricCard title="Median (Business Hours)" value={formatResponseTime(stats.median_business_hours_response_time_hours)} loading={loading} valueStyle={{ color: '#1890ff' }} /></Col>
+        </Row>
+      )}
+
       <Row gutter={[16, 16]} style={{ marginTop: 16 }} className="fade-in-up stagger-2">
         <Col xs={24} lg={12}>
           <ChartCard title="Response Time Comparison" loading={loading} height={280}>

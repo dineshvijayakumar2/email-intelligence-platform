@@ -34,47 +34,55 @@ DIGEST_PROMPT_VERSION = "v1.0"
 # ---------------------------------------------------------------------------
 # Prompts (Sonnet — higher quality for synthesis)
 # ---------------------------------------------------------------------------
-DIGEST_SYSTEM_PROMPT = """You are an executive assistant generating a concise daily email intelligence briefing.
+DIGEST_SYSTEM_PROMPT = """You are an executive intelligence analyst generating deep insights from email data.
 
-Be action-oriented, prioritized, and factual.
-Do not exaggerate.
-Do not invent missing data.
-Return STRICT JSON only.
-No markdown. No explanation. No extra keys."""
+Your job is to surface NON-OBVIOUS patterns, risks, and opportunities that are NOT visible from basic counts or bucket labels alone. The user already sees bucket counts and email lists in the UI — do NOT restate those numbers.
 
-DIGEST_USER_TEMPLATE = """Generate a daily email intelligence digest.
+Focus on:
+- Cross-email patterns (e.g. multiple contacts from same company raising issues = systemic problem)
+- Timing patterns (e.g. sudden increase in outbound with no replies = engagement drop)
+- Relationship dynamics (e.g. a key contact going silent, a new stakeholder appearing)
+- Strategic implications (e.g. competitive mentions alongside pricing inquiries)
+- Actionable connections between emails that aren't obvious individually
 
-CONTEXT:
-- Emails received: {in_count}
-- Emails sent: {out_count}
-- Open threads: {open_threads}
-- Overdue threads: {overdue_threads}
-- Bucket summary: {bucket_summary_json}
+Be factual. Never invent data. Never cite specific counts from the bucket summary — those are already displayed.
+Return STRICT JSON only. No markdown. No explanation. No extra keys."""
 
-BUSINESS SIGNAL EMAILS:
+DIGEST_USER_TEMPLATE = """Generate a {scope} email intelligence digest with DEEP INSIGHTS.
+
+TIME WINDOW: {time_window_label}
+
+STATS (already shown in UI — do NOT repeat these):
+- Emails received: {in_count} | Sent: {out_count}
+- Open threads: {open_threads} | Overdue: {overdue_threads}
+- Bucket counts: {bucket_summary_json}
+
+BUSINESS SIGNAL EMAILS (analyze for cross-cutting patterns):
 {top_signal_emails_json}
 
-RECENT HIGH PRIORITY EMAILS:
+RECENT HIGH PRIORITY EMAILS (analyze for hidden risks/opportunities):
 {priority_emails_json}
 
 Return JSON with this schema:
 
 {{
-  "summary": "2-3 concise sentences prioritizing the most critical buckets first",
+  "summary": "2-3 sentences of NON-OBVIOUS insights. Do NOT restate bucket counts or email totals. Focus on patterns, risks, relationship shifts, or strategic implications that connect multiple data points.",
   "action_items": [
     {{"email_id": "string", "priority": 1, "bucket": "string or null",
      "action": "short action sentence", "contact_name": "string or null"}}
   ],
   "highlights": [
-    {{"label": "short label", "detail": "short factual description"}}
+    {{"label": "short insight label", "detail": "non-obvious pattern or risk explanation"}}
   ]
 }}
 
 Rules:
-- Prioritize churn_risk and buying_signal first.
+- NEVER cite specific bucket counts (the user already sees "Buying Signal: 3, Churn Risk: 2" etc in the UI).
+- Focus summary on PATTERNS and CONNECTIONS across emails, not individual email descriptions.
+- Highlights should surface things the user would NOT notice from scanning subject lines alone.
+- Action items should reference specific emails with concrete next steps.
 - Do not exceed 3 sentences in summary.
 - Do not repeat raw email text.
-- Do not include markdown.
 - Return JSON only."""
 
 
@@ -140,13 +148,14 @@ class AIDigestGenerator:
     # ------------------------------------------------------------------
     # Cache-first retrieval
     # ------------------------------------------------------------------
-    def get_digest(self, mailbox_id: str, digest_date: date) -> Optional[dict]:
-        """Get a cached digest for a specific date. Returns None if not found."""
+    def get_digest(self, mailbox_id: str, digest_date: date, digest_type: str = "daily") -> Optional[dict]:
+        """Get a cached digest for a specific date + type. Returns None if not found."""
         resp = self._execute_with_retry(
             self.client.table("ai_daily_digests")
             .select("*")
             .eq("mailbox_id", mailbox_id)
             .eq("digest_date", digest_date.isoformat())
+            .eq("digest_type", digest_type)
             .range(0, 0)
         )
         data = resp.data or []
@@ -157,17 +166,21 @@ class AIDigestGenerator:
         mailbox_id: str,
         client_id: Optional[str] = None,
         digest_date: Optional[date] = None,
+        tz_offset_minutes: int = 0,
+        digest_type: str = "daily",
     ) -> Optional[dict]:
         """Get cached digest or generate a new one."""
         target_date = digest_date or date.today()
 
-        # Check cache first
-        cached = self.get_digest(mailbox_id, target_date)
+        # Check cache first (cache key includes digest_type)
+        cached = self.get_digest(mailbox_id, target_date, digest_type)
         if cached:
             return cached
 
         # Generate new
-        return self.generate_digest(mailbox_id, client_id, target_date)
+        return self.generate_digest(
+            mailbox_id, client_id, target_date, tz_offset_minutes, digest_type
+        )
 
     # ------------------------------------------------------------------
     # Digest history
@@ -196,16 +209,16 @@ class AIDigestGenerator:
         mailbox_id: str,
         client_id: Optional[str] = None,
         digest_date: Optional[date] = None,
+        tz_offset_minutes: int = 0,
+        digest_type: str = "daily",
     ) -> Optional[dict]:
         """
-        Generate a daily digest using Claude Sonnet.
+        Generate a daily or weekly digest using Claude Sonnet.
 
-        Gathers context from:
-        1. Email counts (inbound/outbound for the date)
-        2. Thread status (open/overdue counts)
-        3. Bucket summary (from bucket engine)
-        4. Top signal emails
-        5. High priority/urgent emails
+        Args:
+            digest_type: "daily" (1 day window) or "weekly" (7 day window)
+            tz_offset_minutes: user's UTC offset in minutes (JS getTimezoneOffset convention:
+                negative = east of UTC, e.g. -330 for IST).
         """
         target_date = digest_date or date.today()
 
@@ -213,11 +226,25 @@ class AIDigestGenerator:
             logger.error("AI client unavailable — cannot generate digest")
             return None
 
+        # Compute time window based on digest type
+        if digest_type == "weekly":
+            window_days = 7
+            scope = "weekly"
+            time_window_label = f"{(target_date - timedelta(days=6)).isoformat()} to {target_date.isoformat()}"
+        else:
+            window_days = 1
+            scope = "daily"
+            time_window_label = target_date.isoformat()
+
         # --- Gather context ---
-        context = self._gather_context(mailbox_id, client_id, target_date)
+        context = self._gather_context(
+            mailbox_id, client_id, target_date, tz_offset_minutes, window_days
+        )
 
         # Build user message
         user_message = DIGEST_USER_TEMPLATE.format(
+            scope=scope,
+            time_window_label=time_window_label,
             in_count=context["in_count"],
             out_count=context["out_count"],
             open_threads=context["open_threads"],
@@ -246,7 +273,7 @@ class AIDigestGenerator:
         # Save to database
         record = self._save_digest(
             mailbox_id, client_id, target_date, digest_data,
-            context, ai_response,
+            context, ai_response, digest_type,
         )
 
         # Log usage
@@ -257,20 +284,64 @@ class AIDigestGenerator:
     # ------------------------------------------------------------------
     # Context gathering (all Python-side, $0 cost)
     # ------------------------------------------------------------------
-    def _gather_context(self, mailbox_id: str, client_id: Optional[str], target_date: date) -> dict:
+    def _gather_context(self, mailbox_id: str, client_id: Optional[str], target_date: date, tz_offset_minutes: int = 0, window_days: int = 1) -> dict:
         """Gather all context needed for digest generation.
 
         Uses strict date filtering — only considers emails whose sent_date falls
-        within the target date window.  The ai_email_intelligence rows are filtered
-        by matching email_id (via sent_date on the emails table), NOT by their own
-        created_at timestamp (which reflects analysis time, not send time).
-        """
-        date_start = datetime.combine(target_date, datetime.min.time()).isoformat()
-        date_end = datetime.combine(target_date, datetime.max.time()).isoformat()
+        within the target date window **in the user's local timezone**.
 
-        # Email counts for the day
+        Args:
+            target_date: The end date of the window.
+            tz_offset_minutes: JS-style getTimezoneOffset (negative = east of UTC).
+            window_days: Number of days to include (1 = daily, 7 = weekly).
+
+        The ai_email_intelligence rows are filtered by matching email_id
+        (via sent_date on the emails table), NOT by their own created_at
+        timestamp (which reflects analysis time, not send time).
+        """
+        from datetime import timezone as tz_mod, timedelta
+
+        # Build timezone-aware day boundaries in the user's local timezone,
+        # then convert to UTC ISO strings for Supabase queries.
+        user_tz = tz_mod(timedelta(minutes=-(tz_offset_minutes or 0)))
+        window_start_date = target_date - timedelta(days=window_days - 1)
+        day_start_local = datetime.combine(window_start_date, datetime.min.time()).replace(tzinfo=user_tz)
+        day_end_local = datetime.combine(target_date, datetime.max.time()).replace(tzinfo=user_tz)
+        date_start = day_start_local.astimezone(tz_mod.utc).isoformat()
+        date_end = day_end_local.astimezone(tz_mod.utc).isoformat()
+
+        logger.info(f"Digest context: target_date={target_date}, tz_offset={tz_offset_minutes}, "
+                     f"window_days={window_days}, date_start={date_start}, date_end={date_end}")
+
+        # Email counts for the day — try direction first, fall back to is_outbound
         in_count = self._count_emails(mailbox_id, date_start, date_end, direction="inbound")
         out_count = self._count_emails(mailbox_id, date_start, date_end, direction="outbound")
+
+        # If direction column is unpopulated, fall back to is_outbound
+        if in_count == 0 and out_count == 0:
+            try:
+                total_resp = self._execute_with_retry(
+                    self.client.table("emails")
+                    .select("id", count="exact")
+                    .eq("mailbox_id", mailbox_id)
+                    .gte("sent_date", date_start)
+                    .lte("sent_date", date_end)
+                )
+                total_in_range = total_resp.count or 0
+                logger.info(f"Digest: direction cols empty, total emails in range: {total_in_range}")
+                if total_in_range > 0:
+                    out_resp = self._execute_with_retry(
+                        self.client.table("emails")
+                        .select("id", count="exact")
+                        .eq("mailbox_id", mailbox_id)
+                        .eq("is_outbound", "true")
+                        .gte("sent_date", date_start)
+                        .lte("sent_date", date_end)
+                    )
+                    out_count = out_resp.count or 0
+                    in_count = total_in_range - out_count
+            except Exception as e:
+                logger.warning(f"Fallback email count failed: {e}")
 
         # Thread counts
         open_threads, overdue_threads = self._count_threads(mailbox_id)
@@ -515,11 +586,13 @@ class AIDigestGenerator:
         digest_data: DigestResult,
         context: dict,
         ai_response: AIResponse,
+        digest_type: str = "daily",
     ) -> dict:
         """Save generated digest to ai_daily_digests table."""
         record = {
             "mailbox_id": mailbox_id,
             "digest_date": digest_date.isoformat(),
+            "digest_type": digest_type,
             "summary": digest_data.summary,
             "action_items": [item.model_dump() for item in digest_data.action_items],
             "highlights": [h.model_dump() for h in digest_data.highlights],
@@ -543,7 +616,7 @@ class AIDigestGenerator:
         try:
             resp = self._execute_with_retry(
                 self.client.table("ai_daily_digests")
-                .upsert(record, on_conflict="mailbox_id,digest_date")
+                .upsert(record, on_conflict="mailbox_id,digest_date,digest_type")
             )
             saved = resp.data[0] if resp.data else record
             logger.info(f"Digest saved for {mailbox_id} on {digest_date}")

@@ -32,6 +32,7 @@ import { ThreadAnalytics } from './pages/analytics/threads';
 import { ResponseTimesAnalytics } from './pages/analytics/response-times';
 import { CommunicationPatterns } from './pages/analytics/patterns';
 import { EmailRulesPage } from './pages/analytics/email-rules';
+import { DataHealthDashboard } from './pages/analytics/data-health';
 import { ExtractionManagement } from './pages/extraction';
 
 // Intelligence pages (Sprint 3)
@@ -39,6 +40,9 @@ import InboxPage from './pages/intelligence/inbox';
 import DigestPage from './pages/intelligence/digest';
 import OpportunitiesPage from './pages/intelligence/opportunities';
 import UsagePage from './pages/intelligence/usage';
+
+// Settings
+import SettingsPage from './pages/settings';
 
 // Theme and styles
 import { antTheme } from './theme/glassTheme';
@@ -197,6 +201,7 @@ function App() {
             <Route path="/analytics/threads" element={<ProtectedRoute><Layout><ThreadAnalytics /></Layout></ProtectedRoute>} />
             <Route path="/analytics/response-times" element={<ProtectedRoute><Layout><ResponseTimesAnalytics /></Layout></ProtectedRoute>} />
             <Route path="/analytics/email-rules" element={<ProtectedRoute><Layout><EmailRulesPage /></Layout></ProtectedRoute>} />
+            <Route path="/analytics/data-health" element={<ProtectedRoute><Layout><DataHealthDashboard /></Layout></ProtectedRoute>} />
             <Route path="/analytics/patterns" element={<ProtectedRoute><Layout><CommunicationPatterns /></Layout></ProtectedRoute>} />
             <Route path="/extraction" element={<ProtectedRoute><Layout><ExtractionManagement /></Layout></ProtectedRoute>} />
 
@@ -218,6 +223,7 @@ function App() {
               }
             />
             <Route path="/admin/data" element={<AdminRoute><Layout><AdminDataViewPage /></Layout></AdminRoute>} />
+            <Route path="/settings" element={<ProtectedRoute><Layout><SettingsPage /></Layout></ProtectedRoute>} />
 
             {/* OAuth callback routes - for popup windows */}
             <Route path="/auth/microsoft/callback" element={<OAuthCallback />} />

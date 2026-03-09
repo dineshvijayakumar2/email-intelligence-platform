@@ -44,11 +44,13 @@ const pageTitles: Record<string, string> = {
   '/analytics/threads': 'Thread Analytics',
   '/analytics/response-times': 'Response Times',
   '/analytics/email-rules': 'Email Rules',
+  '/analytics/data-health': 'Data Health',
   '/analytics/patterns': 'Communication Patterns',
   '/extraction': 'Extraction Management',
   '/clients': 'Clients',
   '/users': 'User Management',
   '/admin/data': 'Admin Data View',
+  '/settings': 'Settings',
 };
 
 // Role labels and colors
@@ -119,6 +121,7 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
         { key: '/analytics/threads', label: <Link to="/analytics/threads">Threads</Link> },
         { key: '/analytics/response-times', label: <Link to="/analytics/response-times">Response Times</Link> },
         { key: '/analytics/patterns', label: <Link to="/analytics/patterns">Patterns</Link> },
+        { key: '/analytics/data-health', label: <Link to="/analytics/data-health">Data Health</Link> },
       ],
     },
     {
@@ -133,8 +136,9 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
         { type: 'divider' as const },
         { key: '/processing', label: <Link to="/processing">Processing Jobs</Link> },
         { key: '/errors', label: <Link to="/errors">Error Logs</Link> },
+        { type: 'divider' as const },
+        { key: '/settings', label: <Link to="/settings">Settings</Link> },
         ...(isAdmin ? [
-          { type: 'divider' as const },
           { key: '/intelligence/usage', label: <Link to="/intelligence/usage">AI Usage</Link> },
           { key: '/users', label: <Link to="/users">Users</Link> },
           { key: '/admin/data', label: <Link to="/admin/data">Data View</Link> },

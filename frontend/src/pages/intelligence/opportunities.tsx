@@ -13,6 +13,7 @@ import {
 } from '@ant-design/icons';
 import { bucketApi, entityApi, intelligenceApi } from '../../services/aiService';
 import { MailboxSelector } from '../../components/MailboxSelector';
+import { formatDate } from '../../utils/dateUtils';
 import type {
   ActionItem, BusinessEntity, OpportunitySignal, IntelligenceResult,
 } from '../../types/ai';
@@ -144,11 +145,11 @@ const OpportunitiesPage: React.FC = () => {
     },
     {
       title: 'First Seen', dataIndex: 'first_seen_at', key: 'first', width: 120,
-      render: (val: string) => val ? new Date(val).toLocaleDateString() : '-',
+      render: (val: string) => val ? formatDate(val) : '-',
     },
     {
       title: 'Last Seen', dataIndex: 'last_seen_at', key: 'last', width: 120,
-      render: (val: string) => val ? new Date(val).toLocaleDateString() : '-',
+      render: (val: string) => val ? formatDate(val) : '-',
     },
     {
       title: 'Context', dataIndex: 'context_snippets', key: 'context',
@@ -175,7 +176,7 @@ const OpportunitiesPage: React.FC = () => {
     },
     {
       title: 'Last Seen', dataIndex: 'last_seen_at', key: 'last', width: 120,
-      render: (val: string) => val ? new Date(val).toLocaleDateString() : '-',
+      render: (val: string) => val ? formatDate(val) : '-',
     },
   ];
 

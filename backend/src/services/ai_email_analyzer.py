@@ -161,6 +161,17 @@ DIRECTION-AWARE RULES:
 - For INBOUND emails: analyze normally and suggest appropriate actions.
 - For financial transaction emails (payment confirmations, invoices, receipts, statements): set sentiment to "neutral", urgency to "low" or "none", business_signal to "contract_activity" or null. Do not classify routine payments as negative sentiment.
 
+CHURN RISK CLASSIFICATION — BE STRICT:
+- "churn_risk" intent and "churn_signal" business_signal are ONLY for emails that contain EXPLICIT indicators of a customer considering leaving, cancelling, or switching providers.
+- Examples of TRUE churn risk: "We're evaluating alternatives", "considering not renewing", "this isn't working for us anymore", "looking to switch", "cancel our subscription", "downgrade our plan", threats to leave.
+- These are NOT churn risk — classify them as "complaint", "question", or "feature_request" instead:
+  - A customer reporting a bug or issue they want fixed
+  - A customer asking how to do something (support request)
+  - A customer expressing mild frustration about a feature
+  - A customer asking about pricing changes (use "pricing_inquiry")
+  - General negative feedback without exit intent (use "negative_feedback" business signal)
+- Only use "churn_signal" business_signal when the email explicitly signals the customer may leave. Dissatisfaction alone is NOT churn — it's "negative_feedback".
+
 PRE-CLASSIFICATION HINTS:
 - Some emails include a "pre_classification" field with rule-based tags already applied (e.g., "urgent", "financial", "meeting", "reply").
 - Use these as strong hints. For example, if tags include "urgent", lean toward higher urgency. If sender_type is "human", treat as a real person.
@@ -671,6 +682,14 @@ class AIEmailAnalyzer:
                     self._mark_skipped(eid, mailbox_id, email.get("client_id"), "forward_only")
                     analyzed_ids.add(eid)
                     forward_skipped += 1
+                    continue
+
+                # Skip trivial emails — body too short for meaningful analysis
+                body = (email.get("body_text") or "").strip()
+                if len(body) < 50:
+                    self._mark_skipped(eid, mailbox_id, email.get("client_id"), "trivial_body")
+                    analyzed_ids.add(eid)
+                    skipped_count += 1
                     continue
 
                 all_emails.append(email)

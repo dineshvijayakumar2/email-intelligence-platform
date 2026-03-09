@@ -4,6 +4,7 @@ import { ArrowLeftOutlined } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import { MetricCard } from '../../components/analytics/MetricCard';
 import { EngagementBadge } from '../../components/analytics/EngagementBadge';
+import { EngagementTrendChart } from '../../components/analytics/EngagementTrendChart';
 import { companiesApi, formatRelativeTime, engagementStatusConfig } from '../../services/analyticsService';
 import type { CompanyAnalytics, EngagementStatus } from '../../types/analytics';
 
@@ -96,7 +97,13 @@ export const CompanyDetail: React.FC = () => {
         <Col xs={12} sm={6}><MetricCard title="Active Threads" value={company.active_threads} /></Col>
       </Row>
 
-      <Row gutter={[16, 16]} style={{ marginTop: 16 }} className="fade-in-up stagger-2">
+      {/* Engagement Trend */}
+      <div className="glass-card fade-in-up stagger-2" style={{ padding: 20, marginTop: 16 }}>
+        <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 12 }}>Engagement Score Trend</Text>
+        <EngagementTrendChart entityType="company" entityId={companyId!} />
+      </div>
+
+      <Row gutter={[16, 16]} style={{ marginTop: 16 }} className="fade-in-up stagger-3">
         <Col xs={24}>
           <div className="glass-card" style={{ padding: 20 }}>
             <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 12 }}>Details</Text>

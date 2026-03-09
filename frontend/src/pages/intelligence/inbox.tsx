@@ -20,6 +20,7 @@ import {
   ThunderboltOutlined, FilterOutlined, ReloadOutlined,
   RocketOutlined,
 } from '@ant-design/icons';
+import { formatDate, localDateToISOStart, formatDateForApi } from '../../utils/dateUtils';
 import { MailboxSelector } from '../../components/MailboxSelector';
 import { ActionBucketTag } from '../../components/ai/ActionBucketTag';
 import { FeedbackButtons } from '../../components/ai/FeedbackButtons';
@@ -68,6 +69,9 @@ export const InboxPage: React.FC = () => {
   // Filters
   const [filters, setFilters] = useState<IntelligenceFilterParams>({});
 
+  // Analysis date range (days lookback)
+  const [analysisRange, setAnalysisRange] = useState<number>(7);
+
   // Drawer
   const [drawerItem, setDrawerItem] = useState<IntelligenceResult | null>(null);
 
@@ -108,7 +112,14 @@ export const InboxPage: React.FC = () => {
   const handleAnalyze = async () => {
     if (!mailboxId) return;
     setAnalyzing(true);
-    const result = await intelligenceApi.analyze(mailboxId, { max_emails: 500 });
+    // Compute timezone-aware date_from from the selected lookback range
+    const fromDate = new Date();
+    fromDate.setDate(fromDate.getDate() - analysisRange);
+    const dateFrom = localDateToISOStart(formatDateForApi(fromDate));
+    const result = await intelligenceApi.analyze(mailboxId, {
+      max_emails: 500,
+      date_from: dateFrom,
+    });
     setAnalyzing(false);
     if (result) {
       message.success(result.message || 'Analysis started');
@@ -202,8 +213,7 @@ export const InboxPage: React.FC = () => {
       width: 100,
       render: (_: any, r: IntelligenceResult) => {
         if (!r.email_date) return null;
-        const d = new Date(r.email_date);
-        return <Text type="secondary">{d.toLocaleDateString()}</Text>;
+        return <Text type="secondary">{formatDate(r.email_date)}</Text>;
       },
     },
   ];
@@ -242,6 +252,17 @@ export const InboxPage: React.FC = () => {
             >
               Refresh
             </Button>
+            <Select
+              value={analysisRange}
+              onChange={setAnalysisRange}
+              style={{ width: 130 }}
+              options={[
+                { value: 7, label: 'Last 7 days' },
+                { value: 14, label: 'Last 14 days' },
+                { value: 30, label: 'Last 30 days' },
+                { value: 90, label: 'Last 90 days' },
+              ]}
+            />
             <Button
               type="primary"
               icon={<RocketOutlined />}

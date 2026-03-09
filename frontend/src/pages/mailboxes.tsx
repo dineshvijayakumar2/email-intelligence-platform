@@ -47,6 +47,7 @@ import clientService from '../services/clientService';
 import { userService } from '../services/userService';
 import ProcessingStatusBadge from '../components/ProcessingStatusBadge';
 import { dashboardService } from '../services/dashboardService';
+import { formatDate } from '../utils/dateUtils';
 
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -741,7 +742,7 @@ export const MailboxList: React.FC = () => {
       key: 'last_sync_at',
       render: (date: string) => {
         if (!date) return 'Never';
-        return new Date(date).toLocaleDateString();
+        return formatDate(date);
       },
     },
     {

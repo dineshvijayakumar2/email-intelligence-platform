@@ -52,6 +52,11 @@ class EngagementScore:
     # Factor weights (for transparency)
     weights: Dict[str, float]
 
+    # Input snapshot (for history)
+    emails_per_month_avg: Optional[float] = None
+    avg_response_time_seconds: Optional[int] = None
+    reply_rate_input: Optional[float] = None
+
 
 class EngagementScorer:
     """
@@ -83,6 +88,9 @@ class EngagementScorer:
         'manager': 0.05,     # +5%
         'senior': 0.03,      # +3%
     }
+
+    # Current scoring algorithm version — bump when algorithm changes
+    SCORING_VERSION = 1
 
     # Scoring thresholds
     EXCELLENT_RESPONSE_SECONDS = 4 * 3600  # 4 hours
@@ -282,7 +290,10 @@ class EngagementScorer:
             decision_maker_bonus=decision_maker_bonus * 100,
             seniority_bonus=seniority_bonus * 100,
             total_score=total_score,
-            weights=self.FACTOR_WEIGHTS
+            weights=self.FACTOR_WEIGHTS,
+            emails_per_month_avg=contact.get('emails_per_month_avg'),
+            avg_response_time_seconds=contact.get('their_avg_response_time'),
+            reply_rate_input=contact.get('reply_rate'),
         )
 
     def _score_company(self, company: Dict) -> Optional[EngagementScore]:
@@ -338,7 +349,9 @@ class EngagementScorer:
             decision_maker_bonus=decision_maker_bonus * 100,
             seniority_bonus=seniority_bonus * 100,
             total_score=total_score,
-            weights=self.FACTOR_WEIGHTS
+            weights=self.FACTOR_WEIGHTS,
+            emails_per_month_avg=company.get('avg_emails_per_month'),
+            avg_response_time_seconds=company.get('avg_response_time_seconds'),
         )
 
     def _score_response_time(self, avg_response_time_seconds: Optional[int]) -> float:
@@ -531,7 +544,7 @@ class EngagementScorer:
 
     def save_scores(self, contact_scores: List[EngagementScore], company_scores: List[EngagementScore]) -> Dict:
         """
-        Save engagement scores to database
+        Save engagement scores to database and record history.
 
         Args:
             contact_scores: List of contact EngagementScore objects
@@ -545,11 +558,16 @@ class EngagementScorer:
         contacts_updated = self._save_contact_scores(contact_scores)
         companies_updated = self._save_company_scores(company_scores)
 
-        logger.info(f"Engagement scores saved: {contacts_updated} contacts, {companies_updated} companies")
+        # Persist history for trend analysis
+        all_scores = list(contact_scores) + list(company_scores)
+        history_saved = self._save_history(all_scores)
+
+        logger.info(f"Engagement scores saved: {contacts_updated} contacts, {companies_updated} companies, {history_saved} history records")
 
         return {
             'contacts_updated': contacts_updated,
-            'companies_updated': companies_updated
+            'companies_updated': companies_updated,
+            'history_saved': history_saved,
         }
 
     def _save_contact_scores(self, scores: List[EngagementScore]) -> int:
@@ -570,16 +588,16 @@ class EngagementScorer:
             return 0
 
         try:
-            # Prepare batch update
+            # Prepare batch update — include scoring_version
             updates = []
             for score in scores:
                 updates.append({
                     'contact_id': score.entity_id,
-                    'engagement_score': str(score.total_score)
+                    'engagement_score': str(score.total_score),
                 })
 
             # Batch update via RPC
-            logger.info(f"Batch updating {len(updates)} contacts with engagement scores")
+            logger.info(f"Batch updating {len(updates)} contacts with engagement scores (v{self.SCORING_VERSION})")
 
             result = self.client.rpc(
                 'batch_update_contact_analytics',
@@ -614,16 +632,16 @@ class EngagementScorer:
             return 0
 
         try:
-            # Prepare batch update
+            # Prepare batch update — include scoring_version
             updates = []
             for score in scores:
                 updates.append({
                     'company_id': score.entity_id,
-                    'engagement_score': str(score.total_score)
+                    'engagement_score': str(score.total_score),
                 })
 
             # Batch update via RPC
-            logger.info(f"Batch updating {len(updates)} companies with engagement scores")
+            logger.info(f"Batch updating {len(updates)} companies with engagement scores (v{self.SCORING_VERSION})")
 
             result = self.client.rpc(
                 'batch_update_company_analytics',
@@ -639,6 +657,51 @@ class EngagementScorer:
         except Exception as e:
             logger.error(f"Failed to batch update company scores: {e}")
             return 0
+
+    def _save_history(self, scores: List[EngagementScore]) -> int:
+        """
+        Insert metric history records for trend analysis.
+
+        Batch inserts into metric_history table (100 per batch).
+        """
+        if not scores:
+            return 0
+
+        timestamp = datetime.utcnow().isoformat()
+        records = []
+        for s in scores:
+            records.append({
+                'entity_id': s.entity_id,
+                'entity_type': s.entity_type,
+                'client_id': self.client_id,
+                'engagement_score': s.total_score,
+                'scoring_version': self.SCORING_VERSION,
+                'response_time_score': round(s.response_time_score, 2),
+                'thread_completeness_score': round(s.thread_completeness_score, 2),
+                'initiation_balance_score': round(s.initiation_balance_score, 2),
+                'reply_rate_score': round(s.reply_rate_score, 2),
+                'frequency_score': round(s.frequency_score, 2),
+                'recency_score': round(s.recency_score, 2),
+                'decision_maker_bonus': round(s.decision_maker_bonus, 2),
+                'seniority_bonus': round(s.seniority_bonus, 2),
+                'emails_per_month_avg': float(s.emails_per_month_avg) if s.emails_per_month_avg else None,
+                'avg_response_time_seconds': int(s.avg_response_time_seconds) if s.avg_response_time_seconds else None,
+                'reply_rate': float(s.reply_rate_input) if s.reply_rate_input else None,
+                'calculated_at': timestamp,
+            })
+
+        saved = 0
+        batch_size = 100
+        for i in range(0, len(records), batch_size):
+            batch = records[i:i + batch_size]
+            try:
+                self.client.table('metric_history').insert(batch).execute()
+                saved += len(batch)
+            except Exception as e:
+                logger.error(f"Failed to save metric history batch {i // batch_size + 1}: {e}")
+
+        logger.info(f"Metric history saved: {saved}/{len(records)} records")
+        return saved
 
     def _log_score_distribution(self, scores: List[EngagementScore], entity_type: str):
         """

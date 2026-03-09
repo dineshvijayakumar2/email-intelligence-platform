@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Button, Modal, List, Space, Tag, message, Spin, Input, Empty, Breadcrumb, Typography } from 'antd';
 import { GoogleOutlined, FileOutlined, FolderOutlined, SearchOutlined, HomeOutlined } from '@ant-design/icons';
 import googleDriveService from '../services/googleDriveService';
+import { formatDate as formatDateUtil } from '../utils/dateUtils';
 // @ts-ignore
 import config from '../config.js';
 
@@ -192,7 +193,7 @@ const GoogleDrivePicker: React.FC<GoogleDrivePickerProps> = ({
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return 'Unknown date';
-    return new Date(dateString).toLocaleDateString();
+    return formatDateUtil(dateString);
   };
 
   const getFileIcon = (mimeType: string) => {

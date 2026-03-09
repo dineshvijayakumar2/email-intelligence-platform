@@ -30,6 +30,7 @@ import {
   InfoCircleOutlined,
   WarningOutlined,
 } from '@ant-design/icons';
+import { formatDateTime } from '../utils/dateUtils';
 import {
   errorService,
   ErrorSummary,
@@ -367,7 +368,7 @@ export const ErrorDisplay: React.FC<ErrorDisplayProps> = ({
               <Text strong>Last Attempt: </Text>
               <Text>
                 {selectedError.last_processing_attempt
-                  ? new Date(selectedError.last_processing_attempt).toLocaleString()
+                  ? formatDateTime(selectedError.last_processing_attempt)
                   : 'Unknown'}
               </Text>
             </div>

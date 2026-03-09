@@ -54,6 +54,7 @@ import {
   JobErrorLog,
 } from '../services/errorService';
 import { dashboardService } from '../services/dashboardService';
+import { formatDateTime, formatDate } from '../utils/dateUtils';
 
 const { Text, Paragraph } = Typography;
 const { Option } = Select;
@@ -447,7 +448,7 @@ const ErrorsPage: React.FC = () => {
       key: 'created_at',
       width: '12%',
       render: (date: string) =>
-        date ? new Date(date).toLocaleString() : 'Unknown',
+        date ? formatDateTime(date) : 'Unknown',
     },
     {
       title: '',
@@ -513,7 +514,7 @@ const ErrorsPage: React.FC = () => {
       key: 'sent_date',
       width: '12%',
       render: (date: string) =>
-        date ? new Date(date).toLocaleDateString() : 'Unknown',
+        date ? formatDate(date) : 'Unknown',
     },
     {
       title: 'Error Type',
@@ -706,7 +707,7 @@ const ErrorsPage: React.FC = () => {
                     : job.status === 'failed'
                       ? 'job failed (see error log)'
                       : `${job.failed_records} failed`
-                  }{' '}({new Date(job.created_at).toLocaleDateString()})
+                  }{' '}({formatDate(job.created_at)})
                 </Option>
               ))}
             </Select>
@@ -1043,7 +1044,7 @@ const ErrorsPage: React.FC = () => {
                 <br />
                 <Text>
                   {selectedError.sent_date
-                    ? new Date(selectedError.sent_date).toLocaleString()
+                    ? formatDateTime(selectedError.sent_date)
                     : 'Unknown'}
                 </Text>
               </Col>
@@ -1062,7 +1063,7 @@ const ErrorsPage: React.FC = () => {
                 <br />
                 <Text>
                   {selectedError.last_processing_attempt
-                    ? new Date(selectedError.last_processing_attempt).toLocaleString()
+                    ? formatDateTime(selectedError.last_processing_attempt)
                     : 'Unknown'}
                 </Text>
               </Col>
@@ -1165,7 +1166,7 @@ const ErrorsPage: React.FC = () => {
                 <br />
                 <Text>
                   {selectedJobError.created_at
-                    ? new Date(selectedJobError.created_at).toLocaleString()
+                    ? formatDateTime(selectedJobError.created_at)
                     : 'Unknown'}
                 </Text>
               </Col>
@@ -1188,7 +1189,7 @@ const ErrorsPage: React.FC = () => {
                 <Text strong>Status:</Text>
                 <br />
                 {selectedJobError.resolved_at ? (
-                  <Tag color="green">Resolved at {new Date(selectedJobError.resolved_at).toLocaleString()}</Tag>
+                  <Tag color="green">Resolved at {formatDateTime(selectedJobError.resolved_at)}</Tag>
                 ) : (
                   <Tag color="red">Unresolved</Tag>
                 )}

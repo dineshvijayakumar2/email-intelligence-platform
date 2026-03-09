@@ -239,6 +239,8 @@ export interface FeedbackResponse {
 export interface AnalyzeRequest {
   max_emails?: number;
   client_id?: string;
+  date_from?: string;
+  date_to?: string;
 }
 
 export interface AnalyzeResponse {

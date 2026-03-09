@@ -5,6 +5,7 @@ import { mailboxService, Mailbox } from '../services/mailboxService';
 import { AnalyticsTable } from '../components/analytics/AnalyticsTable';
 import { extractionApi, clearAnalyticsCache } from '../services/analyticsService';
 import type { ExtractionJobResponse, ExtractionProgressResponse, ExtractionMode } from '../types/analytics';
+import { formatDateTime } from '../utils/dateUtils';
 
 const { Text, Title } = Typography;
 const PAGE_SIZE = 20;
@@ -124,8 +125,8 @@ export const ExtractionManagement: React.FC = () => {
     },
     { title: 'Mode', dataIndex: 'extraction_mode', key: 'mode', width: 100, render: (v: string) => <Tag>{v || 'full'}</Tag> },
     { title: 'Emails', dataIndex: 'emails_in_scope', key: 'emails', width: 80 },
-    { title: 'Started', dataIndex: 'started_at', key: 'started', width: 160, render: (v: string) => v ? new Date(v).toLocaleString() : '-' },
-    { title: 'Completed', dataIndex: 'completed_at', key: 'completed', width: 160, render: (v: string) => v ? new Date(v).toLocaleString() : '-' },
+    { title: 'Started', dataIndex: 'started_at', key: 'started', width: 160, render: (v: string) => v ? formatDateTime(v) : '-' },
+    { title: 'Completed', dataIndex: 'completed_at', key: 'completed', width: 160, render: (v: string) => v ? formatDateTime(v) : '-' },
     {
       title: '', key: 'actions', width: 80,
       render: (_: any, r: ExtractionJobResponse) => (

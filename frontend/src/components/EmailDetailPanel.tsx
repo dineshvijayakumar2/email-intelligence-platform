@@ -8,6 +8,7 @@ import {
   Avatar,
   Alert,
 } from 'antd';
+import { formatDateTime } from '../utils/dateUtils';
 import {
   MailOutlined,
   FolderOutlined,
@@ -231,7 +232,7 @@ export const EmailDetailPanel: React.FC<EmailDetailPanelProps> = ({
 
           <div className="email-detail-date">
             <Text type="secondary" style={{ fontSize: 13 }}>
-              {new Date(email.sent_date).toLocaleString()}
+              {formatDateTime(email.sent_date)}
             </Text>
           </div>
         </div>

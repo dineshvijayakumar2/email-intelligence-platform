@@ -38,6 +38,7 @@ const DigestPage: React.FC = () => {
   const [mailboxIds, setMailboxIds] = useState<string[]>([]);
   const mailboxId = mailboxIds[0] || '';
   const [selectedDate, setSelectedDate] = useState<string>(dayjs().format('YYYY-MM-DD'));
+  const [digestType, setDigestType] = useState<'daily' | 'weekly'>('daily');
   const [digest, setDigest] = useState<DailyDigest | null>(null);
   const [bucketSummary, setBucketSummary] = useState<BucketSummary | null>(null);
   const [error, setError] = useState<string>('');
@@ -48,7 +49,7 @@ const DigestPage: React.FC = () => {
     setError('');
     try {
       const [digestData, summaryData] = await Promise.all([
-        digestApi.get(mailboxId, selectedDate, undefined, force),
+        digestApi.get(mailboxId, selectedDate, undefined, force, digestType),
         bucketApi.getSummary(mailboxId),
       ]);
       if (!isMountedRef.current) return;
@@ -60,7 +61,7 @@ const DigestPage: React.FC = () => {
     } finally {
       if (isMountedRef.current) setLoading(false);
     }
-  }, [mailboxId, selectedDate]);
+  }, [mailboxId, selectedDate, digestType]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -69,15 +70,26 @@ const DigestPage: React.FC = () => {
 
   useEffect(() => {
     if (mailboxId) loadDigest();
-  }, [mailboxId, selectedDate, loadDigest]);
+  }, [mailboxId, selectedDate, digestType, loadDigest]);
 
   return (
     <div style={{ padding: '24px', maxWidth: 1200, margin: '0 auto' }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <Title level={3} style={{ margin: 0 }}>Daily Intelligence Digest</Title>
+        <Title level={3} style={{ margin: 0 }}>
+          {digestType === 'weekly' ? 'Weekly' : 'Daily'} Intelligence Digest
+        </Title>
         <Space>
           <MailboxSelector value={mailboxIds} onChange={setMailboxIds} mode="single" />
+          <Select
+            value={digestType}
+            onChange={setDigestType}
+            style={{ width: 110 }}
+            options={[
+              { value: 'daily', label: 'Daily' },
+              { value: 'weekly', label: 'Weekly' },
+            ]}
+          />
           <DatePicker
             value={dayjs(selectedDate)}
             onChange={(d) => d && setSelectedDate(d.format('YYYY-MM-DD'))}

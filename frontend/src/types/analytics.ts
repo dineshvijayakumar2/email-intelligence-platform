@@ -255,6 +255,8 @@ export interface ResponseTimeStats {
   median_response_time_hours?: number | null;
   min_response_time_hours: number;
   max_response_time_hours: number;
+  avg_business_hours_response_time_hours?: number | null;
+  median_business_hours_response_time_hours?: number | null;
   our_avg_response_time?: number | null;
   their_avg_response_time?: number | null;
   auto_reply_count?: number | null;

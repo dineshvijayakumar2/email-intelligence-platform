@@ -1475,7 +1475,7 @@ async def list_response_times(
         query = _supabase.table('email_response_metrics').select(
             '''
             id, email_id, responding_to_email_id, responder_contact_id, responder_company_id,
-            response_time_seconds, is_auto_reply, created_at, updated_at
+            response_time_seconds, business_hours_response_time_seconds, is_auto_reply, created_at, updated_at
             '''
         )
 
@@ -1528,7 +1528,7 @@ async def get_response_time_stats(
     """
     try:
         query = _supabase.table('email_response_metrics').select(
-            'response_time_seconds, is_auto_reply, email_id'
+            'response_time_seconds, business_hours_response_time_seconds, is_auto_reply, email_id'
         )
 
         if contact_id:
@@ -1543,6 +1543,8 @@ async def get_response_time_stats(
                 median_response_time_hours=None,
                 min_response_time_hours=0,
                 max_response_time_hours=0,
+                avg_business_hours_response_time_hours=None,
+                median_business_hours_response_time_hours=None,
                 our_avg_response_time=None,
                 their_avg_response_time=None,
                 auto_reply_count=0,
@@ -1551,6 +1553,7 @@ async def get_response_time_stats(
 
         # Convert seconds to hours
         response_times_hours = [m['response_time_seconds'] / 3600.0 for m in result.data if m.get('response_time_seconds')]
+        bh_times_hours = [m['business_hours_response_time_seconds'] / 3600.0 for m in result.data if m.get('business_hours_response_time_seconds')]
         auto_replies = sum(1 for m in result.data if m.get('is_auto_reply') is True)
 
         import statistics
@@ -1589,6 +1592,8 @@ async def get_response_time_stats(
             median_response_time_hours=statistics.median(response_times_hours) if response_times_hours else None,
             min_response_time_hours=min(response_times_hours) if response_times_hours else 0,
             max_response_time_hours=max(response_times_hours) if response_times_hours else 0,
+            avg_business_hours_response_time_hours=statistics.mean(bh_times_hours) if bh_times_hours else None,
+            median_business_hours_response_time_hours=statistics.median(bh_times_hours) if bh_times_hours else None,
             our_avg_response_time=our_avg,
             their_avg_response_time=their_avg,
             auto_reply_count=auto_replies,
@@ -1689,7 +1694,7 @@ async def get_contact_response_history(
         result = _supabase.table('email_response_metrics').select(
             '''
             id, email_id, responding_to_email_id, responder_contact_id, responder_company_id,
-            response_time_seconds, is_auto_reply, created_at, updated_at
+            response_time_seconds, business_hours_response_time_seconds, is_auto_reply, created_at, updated_at
             '''
         ).eq('responder_contact_id', contact_id).order(
             'created_at', desc=True
@@ -2614,4 +2619,210 @@ async def get_extraction_progress(job_id: str):
         raise
     except Exception as e:
         logger.error(f"Failed to get extraction progress: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# METRIC HISTORY ENDPOINTS
+# ============================================================================
+
+@router.get("/metric-history/{entity_type}/{entity_id}")
+async def get_metric_history(
+    entity_type: str,
+    entity_id: str,
+    limit: int = Query(default=30, ge=1, le=200),
+):
+    """
+    Get engagement score history for a contact or company.
+
+    Returns chronological list of scores with factor breakdowns for trend charts.
+    """
+    if entity_type not in ('contact', 'company'):
+        raise HTTPException(status_code=400, detail="entity_type must be 'contact' or 'company'")
+
+    try:
+        result = (
+            _supabase.table('metric_history')
+            .select(
+                'engagement_score, scoring_version, '
+                'response_time_score, thread_completeness_score, '
+                'initiation_balance_score, reply_rate_score, '
+                'frequency_score, recency_score, '
+                'decision_maker_bonus, seniority_bonus, '
+                'emails_per_month_avg, avg_response_time_seconds, reply_rate, '
+                'calculated_at'
+            )
+            .eq('entity_id', entity_id)
+            .eq('entity_type', entity_type)
+            .order('calculated_at', desc=True)
+            .limit(limit)
+            .execute()
+        )
+
+        # Return in chronological order (oldest first) for charts
+        data = list(reversed(result.data or []))
+        return {'history': data, 'total': len(data)}
+
+    except Exception as e:
+        logger.error(f"Failed to get metric history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# DATA HEALTH ENDPOINTS
+# ============================================================================
+
+@router.get("/data-health")
+async def get_data_health(client_id: Optional[str] = Query(default=None)):
+    """
+    Data health dashboard — sync lag, identity resolution coverage,
+    thread confidence distribution, and missing-day detection.
+    """
+    try:
+        logger.info("data-health: starting step 1 - mailboxes")
+        # ---------- 1. Sync lag per mailbox ----------
+        mb_query = _supabase.table('mailboxes').select(
+            'id, name, email_address, mailbox_type, is_active, last_sync_at, last_extraction_at'
+        )
+        if client_id:
+            mb_query = mb_query.eq('client_id', client_id)
+        mb_result = mb_query.execute()
+        logger.info(f"data-health: step 1 done, {len(mb_result.data or [])} mailboxes")
+
+        now = datetime.utcnow()
+        mailbox_health = []
+        for mb in (mb_result.data or []):
+            sync_lag_hours = None
+            extraction_lag_hours = None
+            if mb.get('last_sync_at'):
+                try:
+                    last_sync = datetime.fromisoformat(mb['last_sync_at'].replace('Z', '+00:00')).replace(tzinfo=None)
+                    sync_lag_hours = round((now - last_sync).total_seconds() / 3600, 1)
+                except Exception:
+                    pass
+            if mb.get('last_extraction_at'):
+                try:
+                    last_ext = datetime.fromisoformat(mb['last_extraction_at'].replace('Z', '+00:00')).replace(tzinfo=None)
+                    extraction_lag_hours = round((now - last_ext).total_seconds() / 3600, 1)
+                except Exception:
+                    pass
+
+            mailbox_health.append({
+                'mailbox_id': mb['id'],
+                'email_address': mb.get('email_address') or mb.get('name', 'Unknown'),
+                'provider': mb.get('mailbox_type'),
+                'status': 'active' if mb.get('is_active') else 'inactive',
+                'last_sync_at': mb.get('last_sync_at'),
+                'last_extraction_at': mb.get('last_extraction_at'),
+                'sync_lag_hours': sync_lag_hours,
+                'extraction_lag_hours': extraction_lag_hours,
+            })
+
+        # ---------- 2. Identity resolution coverage ----------
+        logger.info("data-health: step 2 - identity resolution")
+        email_query = _supabase.table('emails').select('id', count='exact')
+        if client_id:
+            email_query = email_query.eq('client_id', client_id)
+        total_emails_result = email_query.execute()
+        total_emails = total_emails_result.count or 0
+
+        # Count unresolved (customer_contact_id IS NULL), then subtract
+        logger.info("data-health: step 2b - unresolved count")
+        unresolved_query = _supabase.table('emails').select('id', count='exact').is_('customer_contact_id', 'null')
+        if client_id:
+            unresolved_query = unresolved_query.eq('client_id', client_id)
+        unresolved_result = unresolved_query.execute()
+        unresolved_emails = unresolved_result.count or 0
+        resolved_emails = total_emails - unresolved_emails
+
+        identity_resolution = {
+            'total_emails': total_emails,
+            'resolved_emails': resolved_emails,
+            'unresolved_emails': unresolved_emails,
+            'coverage_percent': round((resolved_emails / total_emails * 100), 1) if total_emails > 0 else 0,
+        }
+
+        # ---------- 3. Thread confidence distribution ----------
+        logger.info("data-health: step 3 - thread distribution")
+        # thread_status has no client_id — filter via mailbox_ids
+        mailbox_ids = [m['mailbox_id'] for m in mailbox_health]
+        thread_data = []
+        if mailbox_ids:
+            for i in range(0, len(mailbox_ids), 500):
+                batch = mailbox_ids[i:i+500]
+                thread_batch = _supabase.table('thread_status').select('status').in_('mailbox_id', batch).execute()
+                thread_data.extend(thread_batch.data or [])
+        else:
+            thread_result = _supabase.table('thread_status').select('status').execute()
+            thread_data = thread_result.data or []
+
+        logger.info("data-health: step 3b - counting statuses")
+        from collections import Counter
+        status_counts = Counter(t.get('status', 'unknown') for t in thread_data)
+        thread_total = sum(status_counts.values())
+        thread_distribution = [
+            {
+                'status': status,
+                'count': count,
+                'percent': round(count / thread_total * 100, 1) if thread_total > 0 else 0,
+            }
+            for status, count in sorted(status_counts.items(), key=lambda x: -x[1])
+        ]
+
+        logger.info("data-health: step 4 - missing days")
+        # ---------- 4. Missing days (gaps in email data, last 30 days) ----------
+        thirty_days_ago = (now - timedelta(days=30)).isoformat()
+        recent_query = _supabase.table('emails').select('sent_date')
+        if client_id:
+            recent_query = recent_query.eq('client_id', client_id)
+        recent_query = recent_query.gte('sent_date', thirty_days_ago).order('sent_date', desc=False)
+
+        # Paginate to get all dates
+        all_dates = set()
+        offset_val = 0
+        while True:
+            batch = recent_query.range(offset_val, offset_val + 499).execute()
+            rows = batch.data or []
+            if not rows:
+                break
+            for r in rows:
+                if r.get('sent_date'):
+                    try:
+                        d = datetime.fromisoformat(r['sent_date'].replace('Z', '+00:00')).date()
+                        all_dates.add(d)
+                    except Exception:
+                        pass
+            offset_val += len(rows)
+            if len(rows) < 500:
+                break
+
+        expected_dates = set()
+        for i in range(30):
+            expected_dates.add((now - timedelta(days=i)).date())
+
+        missing_dates = sorted(expected_dates - all_dates)
+        # Only flag weekdays as truly missing
+        missing_weekdays = [d.isoformat() for d in missing_dates if d.isoweekday() <= 5]
+
+        logger.info("data-health: step 5 - extraction jobs")
+        # ---------- 5. Extraction jobs health ----------
+        jobs_query = _supabase.table('extraction_jobs').select(
+            'id, status, extraction_mode, started_at, completed_at, total_emails, processed_emails, errors'
+        )
+        if client_id:
+            jobs_query = jobs_query.eq('client_id', client_id)
+        jobs_result = jobs_query.order('started_at', desc=True).limit(10).execute()
+        recent_jobs = jobs_result.data or []
+
+        return {
+            'mailbox_health': mailbox_health,
+            'identity_resolution': identity_resolution,
+            'thread_distribution': thread_distribution,
+            'missing_weekdays': missing_weekdays,
+            'missing_weekday_count': len(missing_weekdays),
+            'recent_extraction_jobs': recent_jobs,
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to get data health: {e}")
         raise HTTPException(status_code=500, detail=str(e))

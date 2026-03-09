@@ -302,10 +302,12 @@ export const entityApi = {
 // ============================================================================
 
 export const digestApi = {
-  /** GET /ai/digest/{mailbox_id}?date=YYYY-MM-DD — Get/generate digest */
-  async get(mailboxId: string, date?: string, clientId?: string, force?: boolean): Promise<DailyDigest | null> {
-    const qs = buildQuery({ date, client_id: clientId, force: force ? 'true' : undefined });
-    const key = `digest-${mailboxId}-${date || 'today'}`;
+  /** GET /ai/digest/{mailbox_id}?date=YYYY-MM-DD&tz_offset=-330&digest_type=daily — Get/generate digest */
+  async get(mailboxId: string, date?: string, clientId?: string, force?: boolean, digestType: 'daily' | 'weekly' = 'daily'): Promise<DailyDigest | null> {
+    // Send user's UTC offset so backend computes correct day boundaries
+    const tzOffset = new Date().getTimezoneOffset(); // e.g. -330 for IST (UTC+5:30)
+    const qs = buildQuery({ date, client_id: clientId, force: force ? 'true' : undefined, tz_offset: String(tzOffset), digest_type: digestType });
+    const key = `digest-${mailboxId}-${date || 'today'}-${digestType}`;
 
     // Skip frontend cache when forcing regeneration
     if (!force) {

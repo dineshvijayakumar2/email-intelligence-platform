@@ -6,6 +6,7 @@ import {
 } from '@ant-design/icons';
 import { ClientSelector } from '../../components/analytics/ClientSelector';
 import { MetricCard } from '../../components/analytics/MetricCard';
+import { formatDateTime } from '../../utils/dateUtils';
 import {
   rulesApi, clearRulesCache, getSignalColor, getSignalLabel,
 } from '../../services/rulesService';
@@ -246,7 +247,7 @@ export const EmailRulesPage: React.FC = () => {
             {lastSyncedAt && (
               <Col>
                 <Text type="secondary" style={{ fontSize: 12 }}>
-                  Last synced: {new Date(lastSyncedAt).toLocaleString()}
+                  Last synced: {formatDateTime(lastSyncedAt)}
                 </Text>
               </Col>
             )}

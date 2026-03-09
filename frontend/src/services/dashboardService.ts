@@ -1,5 +1,6 @@
 import api from './apiClient';
 import { mailboxService, hasLiveSync } from './mailboxService';
+import { formatRelativeTime as _formatRelativeTime } from '../utils/dateUtils';
 
 export interface DashboardStats {
   totalEmails: number;
@@ -223,24 +224,9 @@ export const dashboardService = {
     processingJobsCache = { data: null, timestamp: 0 };
   },
 
-  // Format relative time
+  // Format relative time (delegates to centralized dateUtils)
   formatRelativeTime(dateString: string | null): string {
-    if (!dateString) return 'Never';
-
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
-
-    if (diffInMinutes < 1) return 'Just now';
-    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
-
-    const diffInHours = Math.floor(diffInMinutes / 60);
-    if (diffInHours < 24) return `${diffInHours}h ago`;
-
-    const diffInDays = Math.floor(diffInHours / 24);
-    if (diffInDays < 7) return `${diffInDays}d ago`;
-
-    return date.toLocaleDateString();
+    return _formatRelativeTime(dateString);
   },
 
   // Get job type label

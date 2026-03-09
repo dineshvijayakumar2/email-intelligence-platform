@@ -144,33 +144,36 @@ def derive_email_buckets(intel_row: dict) -> list[dict]:
             "justification": "Renewal intent detected - potential upsell opportunity",
         })
 
-    # --- CHURN RISK ---
+    # --- CHURN RISK (strict — only explicit exit intent) ---
     if intent == "churn_risk" or business_signal == "churn_signal":
         bucket_conf = confidence
         if sentiment in ("negative", "very_negative"):
             bucket_conf = min(bucket_conf + 0.15, 1.0)
         if urgency in ("critical", "high"):
             bucket_conf = min(bucket_conf + 0.1, 1.0)
+        # Only flag as churn if confidence is high enough (AI was confident about exit intent)
+        if bucket_conf >= 0.6:
+            buckets.append({
+                "bucket": "churn_risk",
+                "confidence": round(bucket_conf, 2),
+                "justification": _churn_justification(intel_row),
+            })
+
+    # Complaint + very negative sentiment + high urgency (strong implicit churn)
+    # Removed: plain complaints with negative sentiment — those are just support issues
+    elif intent == "complaint" and sentiment == "very_negative" and urgency in ("critical", "high"):
         buckets.append({
             "bucket": "churn_risk",
-            "confidence": round(bucket_conf, 2),
-            "justification": _churn_justification(intel_row),
+            "confidence": round(confidence * 0.5, 2),
+            "justification": "Critical complaint with very negative sentiment — potential churn risk",
         })
 
-    # Complaint + negative sentiment (implicit churn risk)
-    elif intent == "complaint" and sentiment in ("negative", "very_negative"):
+    # Escalation only counts as churn if also very negative
+    elif business_signal == "escalation" and urgency == "critical" and sentiment in ("negative", "very_negative"):
         buckets.append({
             "bucket": "churn_risk",
-            "confidence": round(confidence * 0.7, 2),
-            "justification": "Complaint with negative sentiment indicates churn risk",
-        })
-
-    # Escalation as a churn indicator
-    elif business_signal == "escalation" and urgency in ("critical", "high"):
-        buckets.append({
-            "bucket": "churn_risk",
-            "confidence": round(confidence * 0.6, 2),
-            "justification": "High-urgency escalation suggests potential churn risk",
+            "confidence": round(confidence * 0.5, 2),
+            "justification": "Critical escalation with negative sentiment suggests potential churn risk",
         })
 
     # --- COMPETITOR THREAT ---

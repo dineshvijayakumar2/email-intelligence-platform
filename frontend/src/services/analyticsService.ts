@@ -668,20 +668,8 @@ export function formatRatio(ratio: number | null | undefined): string {
   return `${Math.round(ratio * 100)}%`;
 }
 
-/** Format relative time from ISO date string */
-export function formatRelativeTime(dateStr: string | null | undefined): string {
-  if (!dateStr) return 'Never';
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / 86400000);
-  if (diffDays === 0) return 'Today';
-  if (diffDays === 1) return 'Yesterday';
-  if (diffDays < 7) return `${diffDays}d ago`;
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
-  if (diffDays < 365) return `${Math.floor(diffDays / 30)}mo ago`;
-  return `${Math.floor(diffDays / 365)}y ago`;
-}
+// Re-export from centralized dateUtils for backward compatibility
+export { formatRelativeTime } from '../utils/dateUtils';
 
 /** Thread status display config */
 export const threadStatusConfig: Record<string, { label: string; color: string }> = {
@@ -709,4 +697,87 @@ export const engagementStatusConfig: Record<string, { label: string; color: stri
   quiet: { label: 'Quiet', color: 'gold' },
   at_risk: { label: 'At Risk', color: 'red' },
   unknown: { label: 'No Activity', color: 'default' },
+};
+
+// ============================================================================
+// METRIC HISTORY
+// ============================================================================
+
+export interface MetricHistoryEntry {
+  engagement_score: number;
+  scoring_version: number;
+  response_time_score: number | null;
+  thread_completeness_score: number | null;
+  initiation_balance_score: number | null;
+  reply_rate_score: number | null;
+  frequency_score: number | null;
+  recency_score: number | null;
+  decision_maker_bonus: number | null;
+  seniority_bonus: number | null;
+  emails_per_month_avg: number | null;
+  avg_response_time_seconds: number | null;
+  reply_rate: number | null;
+  calculated_at: string;
+}
+
+// ---------- Data Health ----------
+
+export interface MailboxHealth {
+  mailbox_id: string;
+  email_address: string;
+  provider: string;
+  status: string;
+  last_sync_at: string | null;
+  last_extraction_at: string | null;
+  sync_lag_hours: number | null;
+  extraction_lag_hours: number | null;
+}
+
+export interface IdentityResolution {
+  total_emails: number;
+  resolved_emails: number;
+  unresolved_emails: number;
+  coverage_percent: number;
+}
+
+export interface ThreadDistributionEntry {
+  status: string;
+  count: number;
+  percent: number;
+}
+
+export interface ExtractionJobHealth {
+  id: string;
+  status: string;
+  extraction_mode: string;
+  started_at: string | null;
+  completed_at: string | null;
+  total_emails: number | null;
+  processed_emails: number | null;
+  errors: any[] | null;
+}
+
+export interface DataHealthResponse {
+  mailbox_health: MailboxHealth[];
+  identity_resolution: IdentityResolution;
+  thread_distribution: ThreadDistributionEntry[];
+  missing_weekdays: string[];
+  missing_weekday_count: number;
+  recent_extraction_jobs: ExtractionJobHealth[];
+}
+
+export const dataHealthApi = {
+  async get(clientId?: string): Promise<DataHealthResponse> {
+    const params = clientId ? `?client_id=${clientId}` : '';
+    return api.get<DataHealthResponse>(`${API_PREFIX}/data-health${params}`);
+  },
+};
+
+export const metricHistoryApi = {
+  async get(entityType: 'contact' | 'company', entityId: string, limit = 30): Promise<MetricHistoryEntry[]> {
+    const data = await api.get<{ history: MetricHistoryEntry[]; total: number }>(
+      `${API_PREFIX}/metric-history/${entityType}/${entityId}?limit=${limit}`
+    );
+    return data.history;
+  },
 };

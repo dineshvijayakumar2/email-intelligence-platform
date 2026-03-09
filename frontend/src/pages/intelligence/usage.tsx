@@ -18,6 +18,7 @@ import {
   ExclamationCircleOutlined,
 } from '@ant-design/icons';
 import { usageApi, controlsApi, invalidateCache } from '../../services/aiService';
+import { formatTime } from '../../utils/dateUtils';
 import type { UsageSummary, MonitoringStats, AIControlSettings, UsageLogEntry } from '../../types/ai';
 
 const { Title, Text } = Typography;
@@ -111,7 +112,7 @@ const UsagePage: React.FC = () => {
       dataIndex: 'created_at',
       key: 'time',
       width: 160,
-      render: (val: string) => val ? new Date(val).toLocaleTimeString() : '-',
+      render: (val: string) => val ? formatTime(val) : '-',
     },
     {
       title: 'Operation',

@@ -49,6 +49,22 @@ class UserProfileUpdate(BaseModel):
     avatar_url: Optional[str] = None
 
 
+class BusinessHoursSettings(BaseModel):
+    """Business hours configuration for a user"""
+    timezone: Optional[str] = None
+    business_hours_start: Optional[int] = None
+    business_hours_end: Optional[int] = None
+    business_days: Optional[List[int]] = None
+
+
+class BusinessHoursResponse(BaseModel):
+    """Business hours configuration response"""
+    timezone: str
+    business_hours_start: int
+    business_hours_end: int
+    business_days: List[int]
+
+
 class UpdateRolesRequest(BaseModel):
     """Roles update request (admin only)"""
     roles: List[str]
@@ -189,6 +205,70 @@ async def update_current_user_profile(
         raise
     except Exception as e:
         logger.error(f"Failed to update profile: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/me/settings", response_model=BusinessHoursResponse)
+async def get_business_hours_settings(current_user: dict = Depends(get_current_user)):
+    """Get the current user's business hours settings (timezone, working hours, business days)."""
+    try:
+        result = _supabase.table('user_profiles').select(
+            'timezone, business_hours_start, business_hours_end, business_days'
+        ).eq('id', current_user['user_id']).single().execute()
+
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Profile not found")
+
+        return BusinessHoursResponse(
+            timezone=result.data.get('timezone') or 'UTC',
+            business_hours_start=result.data.get('business_hours_start', 9),
+            business_hours_end=result.data.get('business_hours_end', 18),
+            business_days=result.data.get('business_days') or [1, 2, 3, 4, 5],
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get business hours settings: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/me/settings", response_model=BusinessHoursResponse)
+async def update_business_hours_settings(
+    data: BusinessHoursSettings,
+    current_user: dict = Depends(get_current_user),
+):
+    """Update the current user's business hours settings."""
+    try:
+        update_data = {}
+
+        if data.timezone is not None:
+            update_data['timezone'] = data.timezone
+        if data.business_hours_start is not None:
+            if not (0 <= data.business_hours_start <= 23):
+                raise HTTPException(status_code=400, detail="business_hours_start must be 0-23")
+            update_data['business_hours_start'] = data.business_hours_start
+        if data.business_hours_end is not None:
+            if not (0 <= data.business_hours_end <= 23):
+                raise HTTPException(status_code=400, detail="business_hours_end must be 0-23")
+            update_data['business_hours_end'] = data.business_hours_end
+        if data.business_days is not None:
+            if not all(1 <= d <= 7 for d in data.business_days):
+                raise HTTPException(status_code=400, detail="business_days must contain values 1-7")
+            update_data['business_days'] = data.business_days
+
+        if not update_data:
+            raise HTTPException(status_code=400, detail="No fields to update")
+
+        _supabase.table('user_profiles').update(update_data).eq(
+            'id', current_user['user_id']
+        ).execute()
+
+        return await get_business_hours_settings(current_user)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update business hours settings: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -360,6 +360,7 @@ class ResponseTimeMetric(BaseModel):
     contact_email: Optional[str] = None
 
     response_time_seconds: int
+    business_hours_response_time_seconds: Optional[int] = None
     is_auto_reply: Optional[bool] = None
 
     created_at: Optional[datetime] = None
@@ -387,6 +388,10 @@ class ResponseTimeStats(BaseModel):
     median_response_time_hours: Optional[float] = None
     min_response_time_hours: float
     max_response_time_hours: float
+
+    # Business hours equivalents
+    avg_business_hours_response_time_hours: Optional[float] = None
+    median_business_hours_response_time_hours: Optional[float] = None
 
     # Breakdown by responder
     our_avg_response_time: Optional[float] = None

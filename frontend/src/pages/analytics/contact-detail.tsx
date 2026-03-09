@@ -4,6 +4,7 @@ import { ArrowLeftOutlined } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import { MetricCard } from '../../components/analytics/MetricCard';
 import { EngagementBadge } from '../../components/analytics/EngagementBadge';
+import { EngagementTrendChart } from '../../components/analytics/EngagementTrendChart';
 import {
   contactsApi,
   threadsApi,
@@ -125,8 +126,14 @@ export const ContactDetail: React.FC = () => {
         <Col xs={12} sm={6}><MetricCard title="Their Avg Response" value={formatResponseTime(pattern?.their_avg_response_time_hours)} /></Col>
       </Row>
 
+      {/* Engagement Trend */}
+      <div className="glass-card fade-in-up stagger-2" style={{ padding: 20, marginTop: 16 }}>
+        <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 12 }}>Engagement Score Trend</Text>
+        <EngagementTrendChart entityType="contact" entityId={contactId!} />
+      </div>
+
       {/* Details */}
-      <Row gutter={[16, 16]} style={{ marginTop: 16 }} className="fade-in-up stagger-2">
+      <Row gutter={[16, 16]} style={{ marginTop: 16 }} className="fade-in-up stagger-3">
         <Col xs={24} lg={10}>
           <div className="glass-card" style={{ padding: 20 }}>
             <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 12 }}>Details</Text>

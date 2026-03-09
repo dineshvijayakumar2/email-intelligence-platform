@@ -15,14 +15,24 @@ Author: Sprint 2 Implementation
 """
 
 from typing import List, Dict, Optional, Tuple
-from dataclasses import dataclass
-from datetime import datetime, timedelta
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 import logging
 import re
 
 from ..database.supabase_client import SupabaseClient
+from ..utils.business_hours import calculate_business_seconds
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class BusinessHoursConfig:
+    """Business hours configuration for a user"""
+    timezone: str = "UTC"
+    business_hours_start: int = 9
+    business_hours_end: int = 18
+    business_days: list = field(default_factory=lambda: [1, 2, 3, 4, 5])
 
 
 @dataclass
@@ -34,6 +44,7 @@ class ResponseMetric:
     is_auto_reply: bool
     responder_contact_id: Optional[str]
     responder_company_id: Optional[str]
+    business_hours_response_time_seconds: Optional[int] = None
 
 
 class ResponseTimeTracker:
@@ -88,8 +99,53 @@ class ResponseTimeTracker:
         self.mailbox_id = mailbox_id
         self.client_id = client_id
         self.client = SupabaseClient.get_client(use_service_key=True)
+        self._bh_config: Optional[BusinessHoursConfig] = None
 
         logger.info(f"ResponseTimeTracker initialized for mailbox {mailbox_id}")
+
+    def _get_business_hours_config(self) -> BusinessHoursConfig:
+        """
+        Fetch business hours config for the mailbox owner from user_profiles.
+        Cached after first call per tracker instance.
+        """
+        if self._bh_config is not None:
+            return self._bh_config
+
+        try:
+            # mailbox → user_id → user_profiles
+            mb = (
+                self.client.table('mailboxes')
+                .select('user_id')
+                .eq('id', self.mailbox_id)
+                .limit(1)
+                .execute()
+            )
+            user_id = (mb.data[0]['user_id'] if mb.data else None)
+
+            if user_id:
+                up = (
+                    self.client.table('user_profiles')
+                    .select('timezone, business_hours_start, business_hours_end, business_days')
+                    .eq('id', user_id)
+                    .limit(1)
+                    .execute()
+                )
+                if up.data:
+                    row = up.data[0]
+                    self._bh_config = BusinessHoursConfig(
+                        timezone=row.get('timezone') or 'UTC',
+                        business_hours_start=row.get('business_hours_start', 9),
+                        business_hours_end=row.get('business_hours_end', 18),
+                        business_days=row.get('business_days') or [1, 2, 3, 4, 5],
+                    )
+                    logger.info(f"Business hours config: {self._bh_config.timezone} "
+                                f"{self._bh_config.business_hours_start}-{self._bh_config.business_hours_end}")
+                    return self._bh_config
+        except Exception as e:
+            logger.warning(f"Could not fetch business hours config: {e}")
+
+        self._bh_config = BusinessHoursConfig()
+        return self._bh_config
 
     def calculate_response_times(self, limit: Optional[int] = None) -> List[ResponseMetric]:
         """
@@ -228,6 +284,17 @@ class ResponseTimeTracker:
                 # Check if response is auto-reply
                 is_auto_reply = self._is_auto_reply(next_email)
 
+                # Calculate business hours response time
+                bh_config = self._get_business_hours_config()
+                bh_seconds = calculate_business_seconds(
+                    start_utc=current_time,
+                    end_utc=next_time,
+                    tz_name=bh_config.timezone,
+                    bh_start=bh_config.business_hours_start,
+                    bh_end=bh_config.business_hours_end,
+                    business_days=bh_config.business_days,
+                )
+
                 # Create metric
                 metric = ResponseMetric(
                     email_id=next_email['id'],
@@ -235,7 +302,8 @@ class ResponseTimeTracker:
                     response_time_seconds=response_time_seconds,
                     is_auto_reply=is_auto_reply,
                     responder_contact_id=next_email.get('customer_contact_id'),
-                    responder_company_id=next_email.get('customer_company_id')
+                    responder_company_id=next_email.get('customer_company_id'),
+                    business_hours_response_time_seconds=bh_seconds,
                 )
 
                 metrics.append(metric)
@@ -309,6 +377,7 @@ class ResponseTimeTracker:
                 'is_auto_reply': metric.is_auto_reply,
                 'responder_contact_id': metric.responder_contact_id,
                 'responder_company_id': metric.responder_company_id,
+                'business_hours_response_time_seconds': metric.business_hours_response_time_seconds,
                 'created_at': timestamp,
                 'updated_at': timestamp
             }

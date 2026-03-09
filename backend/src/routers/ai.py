@@ -581,38 +581,57 @@ async def get_digest(
     date: Optional[str] = Query(default=None, description="Date in YYYY-MM-DD format"),
     client_id: Optional[str] = Query(default=None),
     force: bool = Query(default=False, description="Force regeneration, bypassing cache"),
+    tz_offset: Optional[int] = Query(default=None, description="Client UTC offset in minutes (JS getTimezoneOffset). E.g. -330 for IST"),
+    digest_type: str = Query(default="daily", description="Digest type: 'daily' (1 day) or 'weekly' (7 days)"),
     accessible_ids: list = Depends(get_accessible_mailbox_ids),
 ):
     """
-    Get daily digest for a mailbox. Returns cached digest or generates new one.
+    Get daily or weekly digest for a mailbox. Returns cached digest or generates new one.
 
-    If no date provided, uses today. Uses cache-first strategy.
+    If no date provided, uses today in the user's timezone.
+    digest_type: 'daily' = 1 day window, 'weekly' = 7 day window ending on target date.
+    tz_offset is the browser's getTimezoneOffset() value (negative = east of UTC).
     Pass force=true to bypass cache and regenerate.
     """
+    if digest_type not in ("daily", "weekly"):
+        raise HTTPException(status_code=400, detail="digest_type must be 'daily' or 'weekly'")
+
     _validate_mailbox_access(mailbox_id, accessible_ids)
-    from datetime import date as date_type
+    from datetime import date as date_type, timezone as tz_mod, timedelta
 
     generator = get_digest_generator()
     if not generator:
         raise HTTPException(status_code=503, detail="Digest generator not initialized")
 
+    # Determine user's timezone from offset (JS getTimezoneOffset returns negative for east)
+    user_tz = tz_mod(timedelta(minutes=-(tz_offset or 0)))
+
     try:
-        target_date = date_type.fromisoformat(date) if date else date_type.today()
+        if date:
+            target_date = date_type.fromisoformat(date)
+        else:
+            # Use "today" in the user's timezone, not the server's
+            target_date = datetime.now(user_tz).date()
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
 
+    tz_minutes = tz_offset or 0
     try:
         if force:
             result = generator.generate_digest(
                 mailbox_id=mailbox_id,
                 client_id=client_id,
                 digest_date=target_date,
+                tz_offset_minutes=tz_minutes,
+                digest_type=digest_type,
             )
         else:
             result = generator.get_digest_or_generate(
                 mailbox_id=mailbox_id,
                 client_id=client_id,
                 digest_date=target_date,
+                tz_offset_minutes=tz_minutes,
+                digest_type=digest_type,
             )
         if result is None:
             raise HTTPException(
