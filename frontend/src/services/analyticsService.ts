@@ -189,9 +189,9 @@ export const contactsApi = {
   },
 
   /** GET /contacts/{id}/emails — Emails linked to a contact */
-  async getEmails(contactId: string, limit = 50, offset = 0): Promise<{ emails: any[]; total: number }> {
+  async getEmails(contactId: string, limit = 50, offset = 0): Promise<{ emails: any[]; total: number; total_sent?: number; total_received?: number }> {
     try {
-      return await api.get<{ emails: any[]; total: number }>(
+      return await api.get<{ emails: any[]; total: number; total_sent?: number; total_received?: number }>(
         `${API_PREFIX}/contacts/${contactId}/emails?limit=${limit}&offset=${offset}`,
         { timeout: 10000 }
       );
@@ -306,9 +306,9 @@ export const companiesApi = {
   },
 
   /** GET /companies/{companyId}/emails — Emails linked to a company */
-  async getEmails(companyId: string, limit = 50, offset = 0): Promise<{ emails: any[]; total: number }> {
+  async getEmails(companyId: string, limit = 50, offset = 0): Promise<{ emails: any[]; total: number; total_sent?: number; total_received?: number }> {
     try {
-      return await api.get<{ emails: any[]; total: number }>(
+      return await api.get<{ emails: any[]; total: number; total_sent?: number; total_received?: number }>(
         `${API_PREFIX}/companies/${companyId}/emails?limit=${limit}&offset=${offset}`,
         { timeout: 10000 }
       );
