@@ -18,39 +18,13 @@ Design: `docs/INVITE_USER_SMTPLESS.md`
 
 ---
 
-## PRIORITY FIXES: Sprint 3 AI Issues
+## PRIORITY FIXES: Sprint 3 AI Issues — ALL RESOLVED ✅
 
-### Fix 1: "Analyse New Emails" processes age-old emails
-**Problem:** `ai_email_analyzer.py` fetches ALL unanalyzed emails with no date filter — processes years-old emails instead of recent ones.
-**Solution:**
-- [ ] Add `date_from`/`date_to` params to `POST /ai/analyze/{mailbox_id}` endpoint
-- [ ] Default to **last 7 days** when no date range specified
-- [ ] Add `.gte("sent_date", date_from).lte("sent_date", date_to)` filter to email selection query
-- [ ] Frontend: Add date range picker to analysis trigger (default: last 7 days)
-- **Files:** `backend/src/services/ai_email_analyzer.py`, `backend/src/routers/ai.py`, frontend analysis trigger
-
-### Fix 2: Daily Digest processes old emails — add Weekly Digest
-**Problem:** `ai_digest_generator.py` generates a daily digest but considers old analyzed emails, not just that day's mail.
-**Solution:**
-- [ ] **Daily Digest:** Only process emails from last 1 calendar day (24h window of the selected mailbox)
-- [ ] **Weekly Digest:** New mode — process last 7 complete days of the selected mailbox
-- [ ] Add `digest_type` param (`daily` | `weekly`) to `GET /ai/digest/{mailbox_id}`
-- [ ] Filter `ai_email_intelligence` by `sent_date` within the digest time window (not just `created_at`)
-- [ ] Adjust prompt to reflect time scope ("Here are today's emails" vs "Here is this week's summary")
-- [ ] Frontend: Toggle between Daily/Weekly digest view
-- **Files:** `backend/src/services/ai_digest_generator.py`, `backend/src/routers/ai.py`, frontend digest page
-
-### Fix 3: Reduce AI processing cost by 50%+
-**Problem:** Current cost ~$0.001/email with Haiku (batch of 10). Target: halve it.
-**Solution — multiple levers:**
-- [ ] **Increase batch size:** 10 → 20 emails per Claude call (halves per-call overhead, ~40% cost reduction)
-- [ ] **Reduce body truncation:** 500 → 300 chars (reduces input tokens by ~40%)
-- [ ] **Smarter pre-filtering:** Skip emails with body < 50 chars (trivial one-liners have no business signal)
-- [ ] **Skip forwards-only:** Detect "FW:" with no added body — skip these as zero-signal
-- [ ] **Cache aggressively:** Skip re-analysis of emails already in `ai_email_intelligence` even if prompt version matches
-- [ ] Update `MAX_BODY_LENGTH` and `BATCH_SIZE` constants in `ai_email_analyzer.py` and `ai_privacy_filter.py`
-- [ ] Validate cost reduction via `GET /ai/usage/costs` before and after
-- **Files:** `backend/src/services/ai_email_analyzer.py`, `backend/src/services/ai_privacy_filter.py`, `backend/src/services/ai_client.py`
+- [x] **Fix 1:** Date filtering — `date_from`/`date_to` params with 7-day default + frontend date range selector
+- [x] **Fix 2:** Daily/Weekly digest — `digest_type` param, TZ-aware boundaries, migration 015
+- [x] **Fix 3:** Cost reduction — batch 10→20, body 500→300, trivial skip (<50 chars), forward-only skip
+- [x] **Fix 4:** Churn risk too sensitive — strict exit-intent-only classification, 0.6 confidence threshold (Mar 9)
+- [x] **Fix 5:** Digest restates visible stats — prompt rewritten for non-obvious insights only (Mar 9)
 
 ---
 
@@ -162,6 +136,14 @@ Full plan: `docs/AI_MVP_PLAN.md` (3-week session-by-session plan + implementatio
 - [ ] Saved searches/filters
 
 ## Completed ✅
+
+### Phase B: Operational Intelligence (Mar 9, 2026)
+- [x] **B1: Business Hours Metrics** — timezone/BH config on user_profiles, BH response time calc (dateutil.tz), settings API + page, migration 016
+- [x] **B2: Metric Versioning** — metric_history table, scoring_version tracking, EngagementTrendChart on contact/company detail, migration 017
+- [x] **B3: Data Health Dashboard** — sync lag per mailbox, identity resolution coverage, thread distribution, missing weekday detection, extraction job health
+- [x] **AI Churn Risk Tightened** — strict exit-intent-only, 0.6 confidence threshold, complaints no longer auto-churn
+- [x] **AI Digest Rewritten** — insight-focused prompt (no stat regurgitation), fallback to is_outbound
+- [x] **AI Credits Card** — daily/monthly remaining on Usage page
 
 ### Analytics Enhancements (Mar 6, 2026)
 - [x] **Reusable EmailDetailPanel** — Extracted from emails.tsx into `frontend/src/components/EmailDetailPanel.tsx` with all helpers
