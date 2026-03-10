@@ -1,5 +1,5 @@
-from datetime import datetime
-from typing import Dict, Optional, List
+from datetime import datetime, timedelta
+from typing import Dict, Optional, List, Tuple
 import logging
 import re
 
@@ -7,20 +7,34 @@ from ..utils.domain_parser import is_noreply_address
 
 logger = logging.getLogger(__name__)
 
+# Regex to strip Re:/Fwd:/FW:/AW:/WG:/SV:/VS:/TR: prefixes (multilingual)
+SUBJECT_PREFIX_RE = re.compile(
+    r'^(?:\s*(?:RE|FW|FWD|AW|WG|SV|VS|TR|Aw|Wg|Re|Fw|Fwd)\s*:\s*)+',
+    re.IGNORECASE
+)
+
+
 class EmailNormalizer:
     """Normalize and clean email data"""
-    
+
     def __init__(self, user_domains: List[str] = None, user_emails: List[str] = None):
         """
         Initialize normalizer
-        
+
         Args:
             user_domains: List of user's domains for outbound detection
             user_emails: List of user's email addresses for outbound detection
         """
         self.user_domains = user_domains or []
         self.user_emails = [email.lower() for email in (user_emails or [])]
-    
+        # Thread index for subject heuristic within a batch
+        # Maps (subject_normalized, frozenset(participants)) → thread_id
+        self._thread_index: Dict[str, str] = {}
+
+    def reset_thread_index(self):
+        """Reset thread index between batches"""
+        self._thread_index = {}
+
     def normalize(self, raw_email: Dict) -> Dict:
         """Normalize raw email data"""
 
@@ -43,9 +57,32 @@ class EmailNormalizer:
             body_text=body_text
         )
 
+        # Compute subject_normalized
+        subject_normalized = self._normalize_subject(subject)
+
+        # Determine thread ID with confidence (multi-priority fallback)
+        thread_id, thread_confidence = self._determine_thread_id_with_confidence(
+            raw_email, subject_normalized, sender_email, recipients
+        )
+
+        # Extract first-class threading fields
+        headers = raw_email.get('raw_headers', {})
+        in_reply_to = (
+            raw_email.get('in_reply_to')
+            or headers.get('In-Reply-To', '')
+            or headers.get('in-reply-to', '')
+        ).strip()
+        references_header = (
+            raw_email.get('references')
+            or headers.get('References', '')
+            or headers.get('references', '')
+        ).strip()
+        provider_thread_id = raw_email.get('provider_thread_id', '') or ''
+        internet_message_id = self._clean_message_id(raw_email.get('message_id'))
+
         normalized = {
-            'message_id': self._clean_message_id(raw_email.get('message_id')),
-            'thread_id': self._determine_thread_id(raw_email),
+            'message_id': internet_message_id,
+            'thread_id': thread_id,
             'folder_path': folder_path,
             'sender_email': sender_email,
             'sender_name': self._clean_text(raw_email.get('sender_name', '')),
@@ -60,7 +97,14 @@ class EmailNormalizer:
             'is_outbound': is_outbound,
             'is_reply': self._determine_reply(raw_email),
             'message_size': self._calculate_size(raw_email),
-            'raw_headers': raw_email.get('raw_headers', {})
+            'raw_headers': headers,
+            # New threading fields
+            'internet_message_id': internet_message_id,
+            'in_reply_to': in_reply_to or None,
+            'references_header': references_header or None,
+            'provider_thread_id': provider_thread_id or None,
+            'subject_normalized': subject_normalized or None,
+            'thread_confidence': thread_confidence,
         }
 
         return normalized
@@ -69,37 +113,97 @@ class EmailNormalizer:
         """Clean and validate message ID"""
         if not message_id:
             return ''
-        
+
         # Remove angle brackets and whitespace
         clean_id = message_id.strip('<>').strip()
-        
+
         # Ensure UTF-8 compatibility
         try:
             clean_id.encode('utf-8')
             return clean_id
         except UnicodeEncodeError:
-            # Replace problematic characters
             return clean_id.encode('utf-8', errors='replace').decode('utf-8')
-    
-    def _determine_thread_id(self, email: Dict) -> str:
-        """Determine thread ID from message headers"""
-        # Check References header first (most reliable)
+
+    @staticmethod
+    def _normalize_subject(subject: str) -> str:
+        """Strip Re:/Fwd:/etc. prefixes, lowercase, strip whitespace"""
+        if not subject:
+            return ''
+        cleaned = SUBJECT_PREFIX_RE.sub('', subject)
+        return cleaned.strip().lower()
+
+    def _determine_thread_id_with_confidence(
+        self,
+        email: Dict,
+        subject_normalized: str,
+        sender_email: str,
+        recipients: List[Dict],
+    ) -> Tuple[str, float]:
+        """
+        Multi-priority thread ID assignment with confidence scoring.
+
+        Priority cascade:
+          1. Provider thread ID (Gmail threadId / Outlook conversationId) → 1.0
+          2. References header root message ID → 0.95
+          3. In-Reply-To header → 0.9
+          4. Subject + participants + time-window heuristic → 0.6-0.8
+          5. Own message_id (new thread) → 1.0
+
+        Returns:
+            (thread_id, confidence)
+        """
         headers = email.get('raw_headers', {})
-        references = headers.get('References', '')
-        
+        provider_tid = email.get('provider_thread_id', '') or ''
+        message_id = self._clean_message_id(email.get('message_id', ''))
+
+        # --- Priority 1: Provider thread ID ---
+        if provider_tid:
+            return provider_tid, 1.0
+
+        # --- Priority 2: References header (root message) ---
+        references = (
+            email.get('references')
+            or headers.get('References', '')
+            or headers.get('references', '')
+        )
         if references:
-            # Get the first (root) message ID from references
             root_match = re.search(r'<([^>]+)>', references)
             if root_match:
-                return root_match.group(1)
-        
-        # Fall back to In-Reply-To
-        in_reply_to = headers.get('In-Reply-To', '')
+                return root_match.group(1), 0.95
+
+        # --- Priority 3: In-Reply-To ---
+        in_reply_to = (
+            email.get('in_reply_to')
+            or headers.get('In-Reply-To', '')
+            or headers.get('in-reply-to', '')
+        )
         if in_reply_to:
-            return in_reply_to.strip('<>')
-        
-        # This email starts a new thread
-        return self._clean_message_id(email.get('message_id', ''))
+            return in_reply_to.strip('<>'), 0.9
+
+        # --- Priority 4: Subject + participants heuristic ---
+        if subject_normalized and len(subject_normalized) >= 5:
+            # Collect all participants for this email
+            participants = {sender_email} if sender_email else set()
+            for r in recipients:
+                if r.get('email'):
+                    participants.add(r['email'])
+
+            # Check thread index for matching subject
+            for idx_key, idx_thread_id in self._thread_index.items():
+                idx_subj, idx_participants_str = idx_key.rsplit('|', 1)
+                if idx_subj == subject_normalized:
+                    idx_participants = set(idx_participants_str.split(',')) if idx_participants_str else set()
+                    # Require at least one participant overlap
+                    if participants & idx_participants:
+                        return idx_thread_id, 0.7
+
+            # No match found — this starts a new thread; register in index
+            participants_str = ','.join(sorted(participants))
+            idx_key = f"{subject_normalized}|{participants_str}"
+            self._thread_index[idx_key] = message_id
+
+        # --- Priority 5: Own message_id (new thread) ---
+        return message_id, 1.0
     
     def _normalize_folder_path(self, folder_path: str) -> str:
         """

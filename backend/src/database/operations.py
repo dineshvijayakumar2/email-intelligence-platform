@@ -629,11 +629,29 @@ class EmailOperations:
                 logger.warning("Email missing required fields: message_id or sender_email")
                 return None
             
+            # Derive thread_id if not set by normalizer (live sync path)
+            thread_id = email.get('thread_id', '')
+            if not thread_id:
+                # Fallback: provider_thread_id > References root > In-Reply-To > message_id
+                thread_id = email.get('provider_thread_id', '')
+                if not thread_id:
+                    refs = email.get('references') or email.get('references_header') or ''
+                    if refs:
+                        import re as _re
+                        root = _re.search(r'<([^>]+)>', refs)
+                        thread_id = root.group(1) if root else ''
+                if not thread_id:
+                    irt = email.get('in_reply_to', '')
+                    if irt:
+                        thread_id = irt.strip('<>')
+                if not thread_id:
+                    thread_id = email.get('message_id', '')
+
             # Ensure UTF-8 encoding for text fields
             prepared = {
                 'message_id': self._ensure_utf8(email.get('message_id', '')),
                 'mailbox_id': mailbox_id,
-                'thread_id': self._ensure_utf8(email.get('thread_id', '')),
+                'thread_id': self._ensure_utf8(thread_id),
                 'folder_path': self._ensure_utf8(email.get('folder_path', 'Inbox')),
                 'sender_email': self._ensure_utf8(email.get('sender_email', '')),
                 'sender_name': self._ensure_utf8(email.get('sender_name', '')),
@@ -649,7 +667,14 @@ class EmailOperations:
                 'cc_list': email.get('cc_list', []),
                 'bcc_list': email.get('bcc_list', []),
                 'raw_headers': email.get('raw_headers', {}),
-                'processing_status': email.get('processing_status', 'success')
+                'processing_status': email.get('processing_status', 'success'),
+                # Threading metadata
+                'internet_message_id': self._ensure_utf8(email.get('internet_message_id', '')) or None,
+                'in_reply_to': self._ensure_utf8(email.get('in_reply_to', '')) or None,
+                'references_header': self._ensure_utf8(email.get('references_header', '')) or None,
+                'provider_thread_id': self._ensure_utf8(email.get('provider_thread_id', '')) or None,
+                'subject_normalized': self._ensure_utf8(email.get('subject_normalized', '')) or self._compute_subject_normalized(email.get('subject', '')),
+                'thread_confidence': float(email.get('thread_confidence', 1.0)),
             }
             
             # Validate JSON fields
@@ -663,6 +688,18 @@ class EmailOperations:
             logger.error(f"Failed to prepare email for insert: {e}")
             return None
     
+    @staticmethod
+    def _compute_subject_normalized(subject: str) -> str:
+        """Strip Re:/Fwd: prefixes, lowercase, strip whitespace — fallback for live sync path"""
+        if not subject:
+            return None
+        import re as _re
+        cleaned = _re.sub(
+            r'^(?:\s*(?:RE|FW|FWD|AW|WG|SV|VS|TR)\s*:\s*)+', '', subject, flags=_re.IGNORECASE
+        )
+        result = cleaned.strip().lower()
+        return result or None
+
     def _insert_email_tags(self, original_emails: List[Dict], inserted_emails: List[Dict]):
         """
         Insert email tags into email_categories table

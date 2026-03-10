@@ -171,7 +171,7 @@ class OutlookLiveExtractor(BaseExtractor):
             # Build Graph API URL with filters
             url = f"{self.graph_endpoint}/me/mailFolders/{folder_id}/messages"
             params = {
-                '$select': 'id,subject,sender,toRecipients,ccRecipients,bccRecipients,receivedDateTime,sentDateTime,body,isRead,hasAttachments,internetMessageHeaders',
+                '$select': 'id,conversationId,internetMessageId,subject,sender,toRecipients,ccRecipients,bccRecipients,receivedDateTime,sentDateTime,body,isRead,hasAttachments,internetMessageHeaders',
                 '$orderby': 'receivedDateTime desc'
             }
             
@@ -292,7 +292,11 @@ class OutlookLiveExtractor(BaseExtractor):
             'is_outbound': is_outbound,
             'is_reply': is_reply,
             'raw_headers': headers,
-            'message_size': len(body_content)
+            'message_size': len(body_content),
+            # Threading fields
+            'in_reply_to': headers.get('In-Reply-To', ''),
+            'references': headers.get('References', ''),
+            'outlook_conversation_id': email_data.get('conversationId', ''),
         }
         
         return self._standardize_email(standardized)

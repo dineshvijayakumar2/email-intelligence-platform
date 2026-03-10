@@ -367,7 +367,17 @@ class BaseExtractor(ABC):
             'attachments': raw_email.get('attachments', []),
             'source': self.source_type,
             'source_path': source_path or raw_email.get('source_path', ''),
-            'thread_key': thread_key
+            'thread_key': thread_key,
+
+            # Threading fields (first-class for robust thread grouping)
+            'in_reply_to': raw_email.get('in_reply_to', ''),
+            'references': raw_email.get('references', ''),
+            'provider_thread_id': (
+                raw_email.get('gmail_thread_id')
+                or raw_email.get('outlook_conversation_id')
+                or raw_email.get('provider_thread_id')
+                or ''
+            ),
         }
 
     # =========================================================================
