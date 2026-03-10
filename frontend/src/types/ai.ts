@@ -58,6 +58,9 @@ export interface IntelligenceResult {
   email_sender_name: string;
   email_date?: string;
   email_direction: string;
+  email_body?: string;
+  email_body_html?: string;
+  email_recipients?: any[];
 
   // Classification
   intent?: IntentType;

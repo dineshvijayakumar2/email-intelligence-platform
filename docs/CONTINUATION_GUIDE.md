@@ -1,7 +1,7 @@
 # Continuation Guide — Sprint 3: AI Semantic Intelligence
 
-**Last Updated:** 2026-03-06
-**Current Status:** Sprint 2 COMPLETE ✅ | Sprint 3 AI Week 1 COMPLETE ✅ | Sprint 3 Frontend (4 pages) COMPLETE ✅ | Performance Optimizations COMPLETE ✅ | Analytics Enhancements COMPLETE ✅ | Invite User System PLANNED | AI Priority Fixes PENDING
+**Last Updated:** 2026-03-10
+**Current Status:** Sprint 2 COMPLETE ✅ | Sprint 3 AI Week 1 COMPLETE ✅ | Sprint 3 Frontend COMPLETE ✅ | Analytics UX Overhaul COMPLETE ✅ | Threading Overhaul COMPLETE ✅ | Invite User System PLANNED
 
 ---
 
@@ -9,24 +9,19 @@
 
 **Copy/paste this:**
 
-> "Sprint 2 COMPLETE. Sprint 3 AI Layer partially built. Check `docs/CONTINUATION_GUIDE.md` and `MEMORY.md` for full context.
+> "Sprint 2 + Sprint 3 AI Week 1 COMPLETE. Analytics UX overhauled. Threading overhauled. Check `docs/CONTINUATION_GUIDE.md` and `MEMORY.md` for full context.
 >
 > **What's complete:**
-> - Sprint 2: 13-step extraction pipeline, 30 analytics endpoints, 12 migrations, 6 analytics pages + Admin Data View
-> - Sprint 3 Week 1: 7 AI backend services, 19 API endpoints, action bucket engine, digest service
-> - Sprint 3 Frontend: 4 intelligence pages (Smart Inbox, Digest, Opportunities, Usage), 2 shared components, aiService.ts, types
->
-> **What's planned (not yet implemented):**
-> - **Invite User System** — Restrict open sign-up, admin-controlled onboarding. Design: `docs/INVITE_USER_SMTPLESS.md`
-> - **AI Priority Fixes** — Date-range filtering, daily/weekly digest, 50% cost reduction
-> - **Sprint 3 Sessions 7-13** — Relationship summaries, company AI cards, AM comparison, gap alerts, testing, deploy
+> - Sprint 2: 13-step extraction pipeline, 30+ analytics endpoints, 20 migrations
+> - Sprint 3 AI: 7 backend services, 19+ API endpoints, 4 intelligence pages, action buckets, digest
+> - Analytics UX: Cross-page drilldown (threads→emails, contacts→emails/threads, companies→all), period selector, search, column filters
+> - Threading: Multi-priority thread ID (provider→headers→heuristic), confidence scoring, thread detail endpoint
+> - Smart Inbox: Column filters/sorting, iframe HTML email preview, bucket summary chips
 >
 > **What to build next:**
-> 1. **AI Priority Fixes** — Fix 3 issues before continuing (see TODO.md)
-> 2. **Sprint 3 Sessions 7-13** — See `docs/AI_MVP_PLAN.md` for plan + implementation status
-> 3. **Invite User System** — See `docs/INVITE_USER_SMTPLESS.md` for full design
->
-> Start with AI Priority Fixes, then continue Sprint 3 Sessions 7-13."
+> 1. **Invite User System** — See `docs/INVITE_USER_SMTPLESS.md` for full design
+> 2. **Sprint 3 Sessions 7-13** — Relationship summaries, company AI cards, AM comparison, gap alerts
+> 3. Run migration 020 on Supabase (thread_status CHECK constraint + mailbox_id backfill)"
 
 ---
 
@@ -78,15 +73,16 @@ Analytics API (30 endpoints at /api/v1/analytics/):
 | thread_status | Thread evaluation | status (6 states), thread_depth, is_overdue |
 | unified_email_rules | Email rules | source_type, conditions, actions, engagement_signal |
 
-### Analytics Frontend (Complete)
+### Analytics Frontend (Complete — overhauled Mar 10)
 | Page | Route | Features |
 |------|-------|----------|
-| Dashboard | `/analytics` | Client selector, overview metrics, extraction trigger |
-| Contacts | `/analytics/contacts` | All/Top/At-Risk/DMs/By-Type tabs, sort, filter, score slider |
-| Companies | `/analytics/companies` | All/Top/At-Risk/By-Engagement tabs, sort, filter, score slider |
-| Threads | `/analytics/threads` | All/Overdue/By-Status tabs, status chart, sort, filter |
-| Contact Detail | `/analytics/contacts/:id` | Stats, threads, patterns, clickable KPIs → emails page, live counts |
-| Company Detail | `/analytics/companies/:id` | Stats, clickable KPIs → emails/contacts pages, live counts |
+| Dashboard | `/analytics` | Client selector, **period selector** (7d/30d/90d/6m/1y), 6 metric cards (all clickable), engagement pie + thread bar chart |
+| Contacts | `/analytics/contacts` | All/Top/At-Risk/DMs/By-Type tabs, sort, filter, search, **clickable Sent/Received → emails page** |
+| Companies | `/analytics/companies` | All/Top/At-Risk/By-Engagement tabs, sort, filter, **search**, **clickable Emails/Contacts/DMs → drilldown** |
+| Threads | `/analytics/threads` | Single table (no tabs), status filter (incl. "Active" virtual), search, **URL params: status/contact_id/company_id** |
+| Contact Detail | `/analytics/contacts/:id` | Stats, **clickable threads table → emails page**, thread header → threads page |
+| Company Detail | `/analytics/companies/:id` | Stats, **threads table**, clickable KPIs → emails/contacts/threads pages |
+| Smart Inbox | `/intelligence/inbox` | **Column filters + sorting**, bucket chips, iframe HTML email preview in drawer |
 | Admin Data View | `/admin/data` | Raw table browser, search, sort, pagination, CSV export |
 
 ### Production Performance
@@ -141,13 +137,21 @@ Analytics API (30 endpoints at /api/v1/analytics/):
 - AI Summarise Email: `POST /ai/summarize/{email_id}` (Haiku, 2-3 sentence summary), "Summarise" button in EmailDetailPanel
 - Sync: Per-folder limits (not global), recursive Outlook folder loading, folder filter aliases (Sent↔Sent Items)
 - Post-sync extraction: Auto-triggers Sprint 2 extraction pipeline after sync completes
-- RPC fix: Removed stale `get_job_errors_summary` RPC, Python fallback aggregation
-- Analytics mode on emails page: `?contact_id` / `?company_id` URL params → cross-mailbox email view with banner + back button
-- Removed inline email tables/drawers from contact & company detail pages (navigates to emails page instead)
-- Clickable KPIs: Total Emails → emails page, Contacts/DMs → filtered contacts page
-- Live email counts: `total`, `total_sent`, `total_received` from backend endpoints (replaces stale stored values)
-- Contacts drilldown: "Back to {company}" button when navigated from company detail
-- Navigation menu reorganized: 11 items → 5 top-level (Dashboard, Emails, Intelligence, Analytics, Manage)
+
+**Analytics UX Overhaul (Mar 10, 2026):**
+- Cross-page drilldown: thread subject → emails page (`?thread_id=`), contact/company → threads page (`?contact_id=`/`?company_id=`)
+- Emails page: added `thread_id` param support alongside existing `contact_id`/`company_id`
+- Threads page: simplified to single table (removed tabs), added status/search URL params, virtual "active" status filter
+- Dashboard: period selector (7d/30d/90d/6m/1y), 6 clickable metric cards, client-scoped thread + response time queries
+- Company detail: added threads table with clickable subjects, "Active Threads" metric card → threads drilldown
+- Contact detail: threads table clickable → emails page, "Threads (N)" header → threads page drilldown
+- Clickable counts: Sent/Received on contacts page, Emails/Contacts/DMs on companies page → drilldown
+- Search: added to companies page (company name/industry) + threads page (subject) — server-side ilike
+- Smart Inbox: column filters (bucket/urgency/intent/sentiment) + sorting on all columns, removed separate filter bar
+- Smart Inbox drawer: iframe HTML email body rendering (same as emails page), HTML/text toggle, email_body_html from backend
+- ClientSelector: module-level cache (fetched once across all pages) + optimistic localStorage ID (instant page load)
+- Backend: thread status filter maps frontend enum → all DB value variants (awaiting_response → awaiting_reply etc.)
+- Removed engagement trend chart from contact/company detail (micro-level noise)
 
 **Performance Optimizations (Mar 4, 2026):**
 - Email Rules: Combined `GET /analytics/{client_id}/full` endpoint (1 API call, 3 DB queries, down from 11 calls / 66-151 queries). Read-only page load, manual "Sync Rules" button for live imports.

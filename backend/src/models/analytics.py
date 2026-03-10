@@ -346,6 +346,43 @@ class ThreadStatusCount(BaseModel):
     count: int
 
 
+class ThreadEmail(BaseModel):
+    """Email within a thread"""
+    id: str
+    subject: Optional[str] = None
+    sender_email: Optional[str] = None
+    sender_name: Optional[str] = None
+    recipients: Optional[list] = None
+    sent_date: Optional[datetime] = None
+    is_outbound: Optional[bool] = None
+    body_text: Optional[str] = None
+    folder_path: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class ThreadDetail(BaseModel):
+    """Full thread detail with emails"""
+    thread_id: str
+    subject: Optional[str] = None
+    status: ThreadStatus
+    total_messages: int = 0
+    last_message_date: Optional[datetime] = None
+    days_since_last_message: Optional[int] = None
+    contact_id: Optional[str] = None
+    contact_email: Optional[str] = None
+    contact_name: Optional[str] = None
+    company_id: Optional[str] = None
+    company_name: Optional[str] = None
+    thread_depth: Optional[int] = None
+    created_at: Optional[datetime] = None
+    emails: List[ThreadEmail] = []
+
+    class Config:
+        from_attributes = True
+
+
 # ============================================================================
 # RESPONSE TIME MODELS
 # ============================================================================

@@ -179,6 +179,9 @@ class IntelligenceResult(BaseModel):
     email_sender_name: str = ""
     email_date: Optional[str] = None
     email_direction: str = ""
+    email_body: str = ""
+    email_body_html: str = ""
+    email_recipients: List[Any] = []
 
     # Classification
     intent: Optional[str] = None

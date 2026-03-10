@@ -59,21 +59,28 @@ Full plan: `docs/AI_MVP_PLAN.md` (3-week session-by-session plan + implementatio
 **Tech Stack:** React + Vite + Ant Design + Recharts
 
 ### Analytics Pages — ALL COMPLETE
-- [x] Analytics dashboard page (overview metrics, client selector, extraction trigger)
+- [x] Analytics dashboard page (overview metrics, client selector, period selector, extraction trigger)
 - [x] Contacts analytics (All/Top/At-Risk/DMs/By-Type tabs, sort, filter, score slider, search)
-- [x] Companies analytics (All/Top/At-Risk/By-Engagement tabs, sort, filter, score slider)
-- [x] Thread analytics (All/Overdue/By-Status tabs, status chart, sort, filter)
-- [x] Contact detail drill-down (stats, threads, patterns, clickable KPIs → emails page)
-- [x] Company detail drill-down (stats, clickable KPIs → emails page, contacts drilldown)
+- [x] Companies analytics (All/Top/At-Risk/By-Engagement tabs, sort, filter, score slider, search)
+- [x] Thread analytics (single table, status/search filters, URL param drilldown)
+- [x] Contact detail drill-down (stats, threads table, patterns, clickable KPIs → emails/threads page)
+- [x] Company detail drill-down (stats, threads table, clickable KPIs → emails/contacts/threads page)
 - [x] Admin Data View (raw table browser, search, sort, pagination, CSV export)
 
-### Analytics UX Enhancements — ✅ COMPLETE (Mar 6, 2026)
-- [x] Analytics mode on emails page: navigate from contact/company detail → emails page with filter
-- [x] Clickable KPIs: Total Emails → emails page, Contacts/DMs → contacts page with company filter
-- [x] Live email counts: Total Emails, Emails Sent, Emails Received fetched live (not stale stored values)
-- [x] Back navigation: contacts drilldown shows "Back to {company}" button
-- [x] Menu reorganization: 11 items → 5 top-level (Dashboard, Emails, Intelligence, Analytics, Manage)
-- [x] Removed inline email tables/drawers from contact & company detail pages (uses emails page instead)
+### Analytics UX Overhaul — ✅ COMPLETE (Mar 10, 2026)
+- [x] Cross-page drilldown: threads → emails, contacts → emails/threads, companies → emails/contacts/threads
+- [x] Thread drilldown: click thread subject → emails page filtered by thread_id (iframe HTML rendering)
+- [x] Emails page: supports thread_id, contact_id, company_id URL params for analytics mode
+- [x] Threads page: supports contact_id, company_id, status URL params for drilldown
+- [x] Clickable counts: Sent/Received on contacts, Emails/Contacts/DMs on companies → drilldown pages
+- [x] Dashboard period selector (7d/30d/90d/6m/1y) — filters engagement, threads, response times
+- [x] Dashboard client-scoped threads + response times (was fetching all clients)
+- [x] ClientSelector: module-level cache + optimistic localStorage ID (instant page load)
+- [x] Search on companies + threads pages (server-side ilike)
+- [x] Smart Inbox: column filters (bucket/urgency/intent/sentiment) + sorting on all columns
+- [x] Smart Inbox: email body preview in drawer (iframe HTML + plain text toggle)
+- [x] Removed engagement trend chart from detail pages (micro-level noise)
+- [x] Removed threads page tabs (single table with filters instead)
 
 ---
 
@@ -129,7 +136,7 @@ Full plan: `docs/AI_MVP_PLAN.md` (3-week session-by-session plan + implementatio
 
 ### Nice to Have
 - [ ] Add dark mode support
-- [ ] Implement email threading
+- [x] ~~Implement email threading~~ (Threading overhaul: multi-priority thread ID, provider IDs, confidence scoring)
 - [ ] Add email labels/tags
 - [ ] Export email data (CSV, JSON)
 - [ ] Advanced search with boolean operators

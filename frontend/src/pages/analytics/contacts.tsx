@@ -192,7 +192,11 @@ export const ContactsAnalytics: React.FC = () => {
       width: 70,
       sorter: true,
       sortOrder: getSortOrder('total_emails_sent'),
-      render: (v: number) => v || 0,
+      render: (v: number, r: ContactAnalytics) => (
+        <a onClick={(e) => { e.stopPropagation(); navigate(`/emails?contact_id=${r.id}&name=${encodeURIComponent(r.full_name || r.email_address)}`); }} style={{ color: '#667eea' }}>
+          {v || 0}
+        </a>
+      ),
     },
     {
       title: 'Received',
@@ -201,7 +205,11 @@ export const ContactsAnalytics: React.FC = () => {
       width: 80,
       sorter: true,
       sortOrder: getSortOrder('total_emails_received'),
-      render: (v: number) => v || 0,
+      render: (v: number, r: ContactAnalytics) => (
+        <a onClick={(e) => { e.stopPropagation(); navigate(`/emails?contact_id=${r.id}&name=${encodeURIComponent(r.full_name || r.email_address)}`); }} style={{ color: '#667eea' }}>
+          {v || 0}
+        </a>
+      ),
     },
     {
       title: 'Last Contact',

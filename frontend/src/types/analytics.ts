@@ -227,6 +227,35 @@ export interface ThreadStatusCount {
   count: number;
 }
 
+export interface ThreadEmail {
+  id: string;
+  subject?: string | null;
+  sender_email?: string | null;
+  sender_name?: string | null;
+  recipients?: any[] | null;
+  sent_date?: string | null;
+  is_outbound?: boolean | null;
+  body_text?: string | null;
+  folder_path?: string | null;
+}
+
+export interface ThreadDetail {
+  thread_id: string;
+  subject?: string | null;
+  status: ThreadStatus;
+  total_messages: number;
+  last_message_date?: string | null;
+  days_since_last_message?: number | null;
+  contact_id?: string | null;
+  contact_email?: string | null;
+  contact_name?: string | null;
+  company_id?: string | null;
+  company_name?: string | null;
+  thread_depth?: number | null;
+  created_at?: string | null;
+  emails: ThreadEmail[];
+}
+
 // ============================================================================
 // RESPONSE TIME MODELS
 // ============================================================================
@@ -391,12 +420,14 @@ export interface CompanyFilterParams extends PaginationParams {
   client_id?: string;
   engagement_status?: EngagementStatus;
   min_engagement_score?: number;
+  search?: string;
 }
 
 export interface ThreadFilterParams extends PaginationParams {
   client_id?: string;
   mailbox_id?: string;
-  status?: ThreadStatus;
+  status?: ThreadStatus | 'active' | string;
+  search?: string;
 }
 
 export interface ExtractionJobFilterParams extends PaginationParams {

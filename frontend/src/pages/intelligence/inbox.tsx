@@ -12,12 +12,12 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Row, Col, Typography, Button, Table, Tag, Space, Select, Slider,
-  Drawer, Descriptions, Alert, Spin, message, Statistic, Empty,
+  Row, Col, Typography, Button, Table, Tag, Space, Select,
+  Drawer, Descriptions, message, Empty,
 } from 'antd';
 import type { TableProps } from 'antd';
 import {
-  ThunderboltOutlined, FilterOutlined, ReloadOutlined,
+  ReloadOutlined,
   RocketOutlined,
 } from '@ant-design/icons';
 import { formatDate, localDateToISOStart, formatDateForApi } from '../../utils/dateUtils';
@@ -141,11 +141,52 @@ export const InboxPage: React.FC = () => {
     }
   };
 
+  const handleTableFilters = (_pagination: any, tableFilters: any) => {
+    // Sync column filters with our filter state
+    const newFilters = { ...filters };
+    if (tableFilters.urgency) {
+      newFilters.urgency = tableFilters.urgency[0] as UrgencyLevel;
+    } else {
+      newFilters.urgency = undefined;
+    }
+    if (tableFilters.intent) {
+      newFilters.intent = tableFilters.intent[0] as IntentType;
+    } else {
+      newFilters.intent = undefined;
+    }
+    if (tableFilters.sentiment) {
+      newFilters.sentiment = tableFilters.sentiment[0] as SentimentType;
+    } else {
+      newFilters.sentiment = undefined;
+    }
+    if (tableFilters.bucket) {
+      newFilters.primary_bucket = tableFilters.bucket[0] as BucketType;
+    } else {
+      newFilters.primary_bucket = undefined;
+    }
+    setFilters(newFilters);
+    setPage(1);
+  };
+
+  const BUCKET_FILTER_OPTIONS = [
+    { text: 'Buying Signal', value: 'buying_signal' },
+    { text: 'Expansion', value: 'expansion_signal' },
+    { text: 'Churn Risk', value: 'churn_risk' },
+    { text: 'Competitor', value: 'competitor_threat' },
+    { text: 'Missed Opp.', value: 'missed_opportunity' },
+    { text: 'Stakeholder', value: 'stakeholder_entry' },
+    { text: 'Silent Champion', value: 'silent_champion' },
+    { text: 'Blocked', value: 'unresolved_block' },
+  ];
+
   const columns: TableProps<IntelligenceResult>['columns'] = [
     {
       title: 'Bucket',
       key: 'bucket',
       width: 160,
+      filters: BUCKET_FILTER_OPTIONS,
+      filteredValue: filters.primary_bucket ? [filters.primary_bucket] : null,
+      filterMultiple: false,
       render: (_: any, r: IntelligenceResult) => {
         if (!r.action_buckets?.length) return <Tag>None</Tag>;
         return (
@@ -167,12 +208,21 @@ export const InboxPage: React.FC = () => {
       dataIndex: 'urgency',
       key: 'urgency',
       width: 90,
+      filters: ['critical', 'high', 'medium', 'low', 'none'].map(v => ({ text: v, value: v })),
+      filteredValue: filters.urgency ? [filters.urgency] : null,
+      filterMultiple: false,
+      sorter: (a: IntelligenceResult, b: IntelligenceResult) => {
+        const order = ['critical', 'high', 'medium', 'low', 'none'];
+        return order.indexOf(a.urgency || 'none') - order.indexOf(b.urgency || 'none');
+      },
       render: (v: string) => v ? <Tag color={URGENCY_COLORS[v] || 'default'}>{v}</Tag> : null,
     },
     {
       title: 'Subject',
       key: 'subject',
       ellipsis: true,
+      sorter: (a: IntelligenceResult, b: IntelligenceResult) =>
+        (a.email_subject || '').localeCompare(b.email_subject || ''),
       render: (_: any, r: IntelligenceResult) => (
         <a onClick={() => setDrawerItem(r)}>{r.email_subject || '(no subject)'}</a>
       ),
@@ -182,6 +232,8 @@ export const InboxPage: React.FC = () => {
       key: 'sender',
       width: 180,
       ellipsis: true,
+      sorter: (a: IntelligenceResult, b: IntelligenceResult) =>
+        (a.email_sender_name || a.email_sender || '').localeCompare(b.email_sender_name || b.email_sender || ''),
       render: (_: any, r: IntelligenceResult) => r.email_sender_name || r.email_sender || '',
     },
     {
@@ -189,6 +241,11 @@ export const InboxPage: React.FC = () => {
       dataIndex: 'intent',
       key: 'intent',
       width: 120,
+      filters: Object.entries(INTENT_LABELS).map(([k, v]) => ({ text: v, value: k })),
+      filteredValue: filters.intent ? [filters.intent] : null,
+      filterMultiple: false,
+      sorter: (a: IntelligenceResult, b: IntelligenceResult) =>
+        (a.intent || '').localeCompare(b.intent || ''),
       render: (v: string) => v ? <Tag>{INTENT_LABELS[v] || v}</Tag> : null,
     },
     {
@@ -196,21 +253,21 @@ export const InboxPage: React.FC = () => {
       dataIndex: 'sentiment',
       key: 'sentiment',
       width: 110,
+      filters: ['very_positive', 'positive', 'neutral', 'negative', 'very_negative'].map(v => ({ text: v.replace('_', ' '), value: v })),
+      filteredValue: filters.sentiment ? [filters.sentiment] : null,
+      filterMultiple: false,
+      sorter: (a: IntelligenceResult, b: IntelligenceResult) => {
+        const order = ['very_positive', 'positive', 'neutral', 'negative', 'very_negative'];
+        return order.indexOf(a.sentiment || 'neutral') - order.indexOf(b.sentiment || 'neutral');
+      },
       render: (v: string) => v ? <Tag color={SENTIMENT_COLORS[v] || 'default'}>{v?.replace('_', ' ')}</Tag> : null,
-    },
-    {
-      title: 'Score',
-      dataIndex: 'business_signal_score',
-      key: 'score',
-      width: 70,
-      sorter: (a: IntelligenceResult, b: IntelligenceResult) =>
-        (a.business_signal_score || 0) - (b.business_signal_score || 0),
-      render: (v: number) => v > 0 ? <Text strong>{v}</Text> : <Text type="secondary">0</Text>,
     },
     {
       title: 'Date',
       key: 'date',
       width: 100,
+      sorter: (a: IntelligenceResult, b: IntelligenceResult) =>
+        (a.email_date || '').localeCompare(b.email_date || ''),
       render: (_: any, r: IntelligenceResult) => {
         if (!r.email_date) return null;
         return <Text type="secondary">{formatDate(r.email_date)}</Text>;
@@ -299,65 +356,6 @@ export const InboxPage: React.FC = () => {
         </div>
       )}
 
-      {/* Filter bar */}
-      <div className="glass-card fade-in-up" style={{ padding: '12px 16px', marginBottom: 16 }}>
-        <Row gutter={12} align="middle">
-          <Col>
-            <FilterOutlined style={{ marginRight: 8 }} />
-          </Col>
-          <Col>
-            <Select
-              placeholder="Intent"
-              allowClear
-              style={{ width: 140 }}
-              size="small"
-              value={filters.intent}
-              onChange={(v) => handleFilterChange('intent', v)}
-              options={Object.entries(INTENT_LABELS).map(([k, v]) => ({ value: k, label: v }))}
-            />
-          </Col>
-          <Col>
-            <Select
-              placeholder="Urgency"
-              allowClear
-              style={{ width: 120 }}
-              size="small"
-              value={filters.urgency}
-              onChange={(v) => handleFilterChange('urgency', v)}
-              options={['critical', 'high', 'medium', 'low', 'none'].map(v => ({ value: v, label: v }))}
-            />
-          </Col>
-          <Col>
-            <Select
-              placeholder="Sentiment"
-              allowClear
-              style={{ width: 140 }}
-              size="small"
-              value={filters.sentiment}
-              onChange={(v) => handleFilterChange('sentiment', v)}
-              options={['very_positive', 'positive', 'neutral', 'negative', 'very_negative'].map(v => ({ value: v, label: v.replace('_', ' ') }))}
-            />
-          </Col>
-          <Col flex="auto" />
-          <Col>
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              Min confidence:
-            </Text>
-          </Col>
-          <Col>
-            <Slider
-              min={0}
-              max={100}
-              step={5}
-              defaultValue={0}
-              style={{ width: 120 }}
-              tooltip={{ formatter: (v) => `${v}%` }}
-              onChangeComplete={(v: number) => handleFilterChange('min_confidence', v > 0 ? v / 100 : undefined)}
-            />
-          </Col>
-        </Row>
-      </div>
-
       {/* Main table */}
       {!mailboxId ? (
         <div className="glass-card" style={{ padding: 60, textAlign: 'center' }}>
@@ -379,6 +377,7 @@ export const InboxPage: React.FC = () => {
             }}
             size="small"
             scroll={{ x: 1100 }}
+            onChange={handleTableFilters}
             onRow={(record) => ({
               onClick: () => setDrawerItem(record),
               style: { cursor: 'pointer' },
@@ -405,49 +404,82 @@ export const InboxPage: React.FC = () => {
 // ============================================================================
 
 const IntelligenceDetail: React.FC<{ item: IntelligenceResult }> = ({ item }) => {
+  const [bodyView, setBodyView] = useState<'html' | 'text'>(item.email_body_html ? 'html' : 'text');
+  const recipients = (item.email_recipients || [])
+    .map((r: any) => typeof r === 'string' ? r : r?.email || r?.name || '')
+    .filter(Boolean);
+
+  const hasHtml = !!item.email_body_html;
+  const hasText = !!item.email_body;
+
   return (
     <div>
-      {/* Classification */}
-      <Descriptions title="Classification" column={2} size="small" bordered style={{ marginBottom: 16 }}>
-        <Descriptions.Item label="Intent">
-          <Tag>{INTENT_LABELS[item.intent || ''] || item.intent}</Tag>
+      {/* Email Header */}
+      <Descriptions column={1} size="small" style={{ marginBottom: 12 }}>
+        <Descriptions.Item label="From">
+          <Text strong>{item.email_sender_name || item.email_sender}</Text>
+          {item.email_sender_name && <Text type="secondary"> &lt;{item.email_sender}&gt;</Text>}
         </Descriptions.Item>
-        <Descriptions.Item label="Urgency">
-          <Tag color={URGENCY_COLORS[item.urgency || ''] || 'default'}>{item.urgency}</Tag>
-        </Descriptions.Item>
-        <Descriptions.Item label="Sentiment">
-          <Tag color={SENTIMENT_COLORS[item.sentiment || ''] || 'default'}>{item.sentiment?.replace('_', ' ')}</Tag>
-        </Descriptions.Item>
-        <Descriptions.Item label="Confidence">
-          {item.confidence != null ? `${Math.round(item.confidence * 100)}%` : 'N/A'}
-        </Descriptions.Item>
-        <Descriptions.Item label="Action Type" span={2}>
-          {item.action_type?.replace(/_/g, ' ')}
-        </Descriptions.Item>
-        <Descriptions.Item label="Business Signal" span={2}>
-          {item.business_signal?.replace(/_/g, ' ') || 'None'}
+        {recipients.length > 0 && (
+          <Descriptions.Item label="To">
+            <Text type="secondary">{recipients.join(', ')}</Text>
+          </Descriptions.Item>
+        )}
+        <Descriptions.Item label="Date">
+          {item.email_date ? formatDate(item.email_date) : 'N/A'}
         </Descriptions.Item>
       </Descriptions>
 
-      {/* Summary */}
-      <div style={{ marginBottom: 16 }}>
-        <Text strong>Summary:</Text>
-        <p style={{ margin: '4px 0' }}>{item.summary}</p>
-      </div>
+      {/* View toggle */}
+      {hasHtml && hasText && (
+        <Space size={4} style={{ marginBottom: 8 }}>
+          <Button size="small" type={bodyView === 'html' ? 'primary' : 'default'} onClick={() => setBodyView('html')}>HTML</Button>
+          <Button size="small" type={bodyView === 'text' ? 'primary' : 'default'} onClick={() => setBodyView('text')}>Plain Text</Button>
+        </Space>
+      )}
 
-      <div style={{ marginBottom: 16 }}>
-        <Text strong>Suggested Action:</Text>
-        <p style={{ margin: '4px 0' }}>{item.suggested_action}</p>
-      </div>
+      {/* Email Body */}
+      {hasHtml && bodyView === 'html' ? (
+        <iframe
+          srcDoc={`<!DOCTYPE html><html><head><meta charset="UTF-8"><base target="_blank"><style>
+            html, body { margin: 0; padding: 0; }
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; line-height: 1.6; color: #333; padding: 16px; }
+            img { max-width: 100%; height: auto; }
+            a { color: #667eea; }
+            blockquote { border-left: 3px solid #d9d9d9; padding-left: 16px; margin-left: 0; color: #666; }
+            pre { background: #f5f5f5; padding: 12px; border-radius: 4px; overflow-x: auto; }
+          </style></head><body>${item.email_body_html}</body></html>`}
+          style={{ width: '100%', minHeight: 300, border: '1px solid #f0f0f0', borderRadius: 6, marginBottom: 16 }}
+          sandbox="allow-same-origin"
+        />
+      ) : hasText ? (
+        <div style={{
+          marginBottom: 16, padding: 12, background: '#fafafa', borderRadius: 6,
+          border: '1px solid #f0f0f0', maxHeight: 400, overflowY: 'auto',
+          whiteSpace: 'pre-wrap', fontSize: 13, lineHeight: 1.6,
+        }}>
+          {item.email_body}
+        </div>
+      ) : (
+        <div style={{ marginBottom: 16, padding: 12, background: '#fafafa', borderRadius: 6, border: '1px solid #f0f0f0' }}>
+          <Text type="secondary">No email content available</Text>
+        </div>
+      )}
 
-      <div style={{ marginBottom: 16 }}>
-        <Text strong>Justification:</Text>
-        <p style={{ margin: '4px 0', color: '#999', fontSize: 12 }}>{item.justification}</p>
+      {/* AI Classification */}
+      <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 12, marginBottom: 12 }}>
+        <Text strong style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>AI Classification</Text>
+        <Space wrap size={6}>
+          <Tag>{INTENT_LABELS[item.intent || ''] || item.intent}</Tag>
+          <Tag color={URGENCY_COLORS[item.urgency || ''] || 'default'}>{item.urgency}</Tag>
+          <Tag color={SENTIMENT_COLORS[item.sentiment || ''] || 'default'}>{item.sentiment?.replace('_', ' ')}</Tag>
+          {item.confidence != null && <Tag>Confidence: {Math.round(item.confidence * 100)}%</Tag>}
+        </Space>
       </div>
 
       {/* Buckets */}
       {item.action_buckets?.length > 0 && (
-        <div style={{ marginBottom: 16 }}>
+        <div style={{ marginBottom: 12 }}>
           <Text strong>Action Buckets:</Text>
           <div style={{ marginTop: 4 }}>
             <Space wrap>
@@ -459,9 +491,17 @@ const IntelligenceDetail: React.FC<{ item: IntelligenceResult }> = ({ item }) =>
         </div>
       )}
 
+      {/* Suggested Action */}
+      {item.suggested_action && (
+        <div style={{ marginBottom: 12 }}>
+          <Text strong>Suggested Action:</Text>
+          <p style={{ margin: '4px 0' }}>{item.suggested_action}</p>
+        </div>
+      )}
+
       {/* Key Topics */}
       {item.key_topics?.length > 0 && (
-        <div style={{ marginBottom: 16 }}>
+        <div style={{ marginBottom: 12 }}>
           <Text strong>Key Topics:</Text>
           <div style={{ marginTop: 4 }}>
             <Space wrap>
@@ -473,7 +513,7 @@ const IntelligenceDetail: React.FC<{ item: IntelligenceResult }> = ({ item }) =>
 
       {/* Entities */}
       {(item.competitors_mentioned?.length > 0 || item.products_mentioned?.length > 0 || item.buying_signals?.length > 0) && (
-        <Descriptions title="Entities" column={1} size="small" bordered style={{ marginBottom: 16 }}>
+        <Descriptions column={1} size="small" bordered style={{ marginBottom: 12 }}>
           {item.competitors_mentioned?.length > 0 && (
             <Descriptions.Item label="Competitors">
               <Space wrap>{item.competitors_mentioned.map((c, i) => <Tag key={i} color="volcano">{c}</Tag>)}</Space>
@@ -489,29 +529,11 @@ const IntelligenceDetail: React.FC<{ item: IntelligenceResult }> = ({ item }) =>
               <Space wrap>{item.buying_signals.map((s, i) => <Tag key={i} color="green">{s}</Tag>)}</Space>
             </Descriptions.Item>
           )}
-          {item.budget_signals && (
-            <Descriptions.Item label="Budget">
-              {item.budget_signals.amount || 'N/A'} — {item.budget_signals.timeframe || ''} — {item.budget_signals.context || ''}
-            </Descriptions.Item>
-          )}
         </Descriptions>
       )}
 
-      {/* Signal Score */}
-      <Row gutter={16} style={{ marginBottom: 16 }}>
-        <Col span={8}>
-          <Statistic title="Signal Score" value={item.business_signal_score || 0} suffix="/100" />
-        </Col>
-        <Col span={8}>
-          <Statistic title="Confidence" value={item.confidence != null ? Math.round(item.confidence * 100) : 0} suffix="%" />
-        </Col>
-        <Col span={8}>
-          <Statistic title="Model" value={item.model_used || 'N/A'} valueStyle={{ fontSize: 14 }} />
-        </Col>
-      </Row>
-
       {/* Feedback */}
-      <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 16 }}>
+      <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 12 }}>
         <Text strong style={{ marginBottom: 8, display: 'block' }}>Was this classification correct?</Text>
         <FeedbackButtons
           emailId={item.email_id || ''}

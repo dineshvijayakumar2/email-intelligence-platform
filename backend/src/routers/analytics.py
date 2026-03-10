@@ -36,6 +36,7 @@ from ..models.analytics import (
     AtRiskCompany, EngagementStatusGrouping,
     # Thread models
     ThreadStatusSummary, ThreadStatusListResponse, OverdueThread, ThreadStatusCount,
+    ThreadDetail, ThreadEmail,
     # Response time models
     ResponseTimeMetric, ResponseTimeListResponse, ResponseTimeStats, SlowestResponder,
     # Communication pattern models
@@ -763,6 +764,7 @@ async def list_company_analytics(
     client_id: Optional[str] = Query(default=None),
     engagement_status: Optional[EngagementStatus] = Query(default=None),
     min_engagement_score: Optional[float] = Query(default=None, ge=0, le=100),
+    search: Optional[str] = Query(default=None, description="Search by company name or industry"),
     sort_by: Optional[str] = Query(default=None, description="Sort column"),
     sort_dir: str = Query(default="desc", description="asc or desc"),
     limit: int = Query(default=100, ge=1, le=500),
@@ -775,6 +777,7 @@ async def list_company_analytics(
         client_id: Filter by client
         engagement_status: Filter by engagement status
         min_engagement_score: Minimum engagement score
+        search: Search by company name or industry
         limit: Maximum number of results
         offset: Offset for pagination
 
@@ -797,6 +800,9 @@ async def list_company_analytics(
             query = query.eq('client_id', client_id)
         if min_engagement_score is not None:
             query = query.gte('engagement_score', int(min_engagement_score))
+        if search and search.strip():
+            term = search.strip()
+            query = query.or_(f"company_name.ilike.%{term}%,industry.ilike.%{term}%")
 
         effective_sort = sort_by if sort_by in COMPANY_SORT_COLUMNS else 'engagement_score'
         desc = sort_dir.lower() != 'asc'
@@ -844,6 +850,9 @@ async def list_company_analytics(
             count_query = count_query.eq('client_id', client_id)
         if min_engagement_score is not None:
             count_query = count_query.gte('engagement_score', int(min_engagement_score))
+        if search and search.strip():
+            term = search.strip()
+            count_query = count_query.or_(f"company_name.ilike.%{term}%,industry.ilike.%{term}%")
         count_result = count_query.execute()
         total = count_result.count if count_result.count else len(count_result.data)
 
@@ -1175,7 +1184,8 @@ def _map_thread_status(db_status: str) -> ThreadStatus:
 async def list_thread_statuses(
     client_id: Optional[str] = Query(default=None),
     mailbox_id: Optional[str] = Query(default=None),
-    status: Optional[ThreadStatus] = Query(default=None),
+    status: Optional[str] = Query(default=None, description="Thread status filter (or 'active' for ongoing+awaiting_our_response)"),
+    search: Optional[str] = Query(default=None, description="Search by thread subject"),
     sort_by: Optional[str] = Query(default=None, description="Sort column"),
     sort_dir: str = Query(default="desc", description="asc or desc"),
     limit: int = Query(default=100, ge=1, le=500),
@@ -1216,8 +1226,28 @@ async def list_thread_statuses(
         elif mailbox_id:
             query = query.eq('mailbox_id', mailbox_id)
 
+        # Status filter: map frontend enum values to all possible DB values
+        # DB stores: complete, awaiting_reply, overdue, dropped, outbound_pending, stale, ongoing, awaiting_response, awaiting_our_response
+        _STATUS_DB_VALUES = {
+            'active': ['ongoing', 'awaiting_our_response', 'stale', 'outbound_pending'],
+            'ongoing': ['ongoing', 'stale'],
+            'awaiting_response': ['awaiting_response', 'awaiting_reply'],
+            'awaiting_our_response': ['awaiting_our_response', 'outbound_pending'],
+            'overdue': ['overdue'],
+            'complete': ['complete'],
+            'dropped': ['dropped'],
+        }
+        status_db_values = None
         if status:
-            query = query.eq('status', status.value)
+            status_key = status.value if hasattr(status, 'value') else status
+            status_db_values = _STATUS_DB_VALUES.get(status_key, [status_key])
+            if len(status_db_values) == 1:
+                query = query.eq('status', status_db_values[0])
+            else:
+                query = query.in_('status', status_db_values)
+        if search and search.strip():
+            term = search.strip()
+            query = query.ilike('subject', f'%{term}%')
 
         effective_sort = sort_by if sort_by in THREAD_SORT_COLUMNS else 'last_message_at'
         desc = sort_dir.lower() != 'asc'
@@ -1267,8 +1297,14 @@ async def list_thread_statuses(
             count_query = count_query.in_('mailbox_id', mailbox_ids[:500])
         elif mailbox_id:
             count_query = count_query.eq('mailbox_id', mailbox_id)
-        if status:
-            count_query = count_query.eq('status', status.value)
+        if status and status_db_values:
+            if len(status_db_values) == 1:
+                count_query = count_query.eq('status', status_db_values[0])
+            else:
+                count_query = count_query.in_('status', status_db_values)
+        if search and search.strip():
+            term = search.strip()
+            count_query = count_query.ilike('subject', f'%{term}%')
         count_result = count_query.execute()
         total = count_result.count if count_result.count else len(count_result.data)
 
@@ -1295,9 +1331,20 @@ async def get_overdue_threads(
         List of overdue threads
     """
     try:
-        result = _supabase.table('thread_status').select(
+        query = _supabase.table('thread_status').select(
             'thread_id, subject, customer_contact_id, customer_company_id, last_message_at, days_since_last_email'
-        ).eq('status', ThreadStatus.OVERDUE.value).order(
+        ).eq('status', ThreadStatus.OVERDUE.value)
+
+        # Filter by client via mailbox_ids
+        if client_id:
+            mailbox_result = _supabase.table('mailboxes').select('id').eq('client_id', client_id).execute()
+            mailbox_ids = [m['id'] for m in (mailbox_result.data or [])]
+            if mailbox_ids:
+                query = query.in_('mailbox_id', mailbox_ids[:500])
+            else:
+                return []
+
+        result = query.order(
             'days_since_last_email', desc=True
         ).limit(limit).execute()
 
@@ -1448,6 +1495,155 @@ async def get_contact_threads(
 
     except Exception as e:
         logger.error(f"Failed to get contact threads: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/threads/by-company/{company_id}", response_model=ThreadStatusListResponse)
+async def get_company_threads(
+    company_id: str,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0)
+):
+    """Get all threads for a specific company."""
+    try:
+        result = _supabase.table('thread_status').select(
+            '''
+            thread_id, subject, customer_contact_id, customer_company_id,
+            status, message_count, last_message_at, last_sender_is_outbound, days_since_last_email,
+            created_at
+            '''
+        ).eq('customer_company_id', company_id).order(
+            'last_message_at', desc=True
+        ).range(offset, offset + limit - 1).execute()
+
+        # Fetch company name once
+        company_name = None
+        company_result = _supabase.table('customer_companies').select('company_name').eq('id', company_id).execute()
+        if company_result.data:
+            company_name = company_result.data[0].get('company_name')
+
+        threads = []
+        for t in result.data:
+            thread_data = {
+                'thread_id': t.get('thread_id'),
+                'subject': t.get('subject'),
+                'contact_id': t.get('customer_contact_id'),
+                'company_id': t.get('customer_company_id'),
+                'status': _map_thread_status(t.get('status', 'complete')),
+                'total_messages': t.get('message_count', 0),
+                'last_message_date': t.get('last_message_at'),
+                'last_sender_type': 'outbound' if t.get('last_sender_is_outbound') else 'inbound',
+                'days_since_last_message': t.get('days_since_last_email', 0),
+                'created_at': t.get('created_at'),
+                'company_name': company_name
+            }
+            # Enrich with contact info
+            if t.get('customer_contact_id'):
+                contact_result = _supabase.table('customer_contacts').select(
+                    'email_address, full_name'
+                ).eq('id', t['customer_contact_id']).execute()
+                if contact_result.data:
+                    thread_data['contact_email'] = contact_result.data[0].get('email_address')
+                    thread_data['contact_name'] = contact_result.data[0].get('full_name')
+            threads.append(ThreadStatusSummary(**thread_data))
+
+        count_result = _supabase.table('thread_status').select(
+            'thread_id', count='exact'
+        ).eq('customer_company_id', company_id).execute()
+        total = count_result.count if count_result.count else len(count_result.data)
+
+        return ThreadStatusListResponse(threads=threads, total=total)
+
+    except Exception as e:
+        logger.error(f"Failed to get company threads: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/threads/{thread_id}/emails", response_model=ThreadDetail)
+async def get_thread_detail(
+    thread_id: str,
+    limit: int = Query(default=100, ge=1, le=500),
+):
+    """Get thread detail with all emails in the thread."""
+    try:
+        # Get thread_status record
+        ts_result = _supabase.table('thread_status').select(
+            '''
+            thread_id, subject, customer_contact_id, customer_company_id,
+            status, message_count, last_message_at, days_since_last_email,
+            thread_depth, created_at
+            '''
+        ).eq('thread_id', thread_id).execute()
+
+        if not ts_result.data:
+            raise HTTPException(status_code=404, detail="Thread not found")
+
+        ts = ts_result.data[0]
+
+        # Fetch emails in this thread
+        emails_result = _supabase.table('emails').select(
+            'id, subject, sender_email, sender_name, recipients, sent_date, is_outbound, body_text, folder_path'
+        ).eq('thread_id', thread_id).order('sent_date', desc=False).limit(limit).execute()
+
+        thread_emails = []
+        for e in (emails_result.data or []):
+            # Truncate body_text for preview
+            body = e.get('body_text', '') or ''
+            if len(body) > 500:
+                body = body[:500] + '...'
+            thread_emails.append(ThreadEmail(
+                id=e['id'],
+                subject=e.get('subject'),
+                sender_email=e.get('sender_email'),
+                sender_name=e.get('sender_name'),
+                recipients=e.get('recipients'),
+                sent_date=e.get('sent_date'),
+                is_outbound=e.get('is_outbound'),
+                body_text=body,
+                folder_path=e.get('folder_path'),
+            ))
+
+        # Enrich with contact/company names
+        contact_email = None
+        contact_name = None
+        company_name = None
+
+        if ts.get('customer_contact_id'):
+            contact_result = _supabase.table('customer_contacts').select(
+                'email_address, full_name'
+            ).eq('id', ts['customer_contact_id']).execute()
+            if contact_result.data:
+                contact_email = contact_result.data[0].get('email_address')
+                contact_name = contact_result.data[0].get('full_name')
+
+        if ts.get('customer_company_id'):
+            company_result = _supabase.table('customer_companies').select(
+                'company_name'
+            ).eq('id', ts['customer_company_id']).execute()
+            if company_result.data:
+                company_name = company_result.data[0].get('company_name')
+
+        return ThreadDetail(
+            thread_id=thread_id,
+            subject=ts.get('subject'),
+            status=_map_thread_status(ts.get('status', 'complete')),
+            total_messages=ts.get('message_count', 0),
+            last_message_date=ts.get('last_message_at'),
+            days_since_last_message=ts.get('days_since_last_email', 0),
+            contact_id=ts.get('customer_contact_id'),
+            contact_email=contact_email,
+            contact_name=contact_name,
+            company_id=ts.get('customer_company_id'),
+            company_name=company_name,
+            thread_depth=ts.get('thread_depth'),
+            created_at=ts.get('created_at'),
+            emails=thread_emails,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get thread detail: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -2034,17 +2230,26 @@ async def get_contact_pattern(contact_id: str):
 # ============================================================================
 
 @router.get("/dashboard", response_model=DashboardSummary)
-async def get_dashboard(client_id: str = Query(...)):
+async def get_dashboard(
+    client_id: str = Query(...),
+    period_days: Optional[int] = Query(default=None, description="Filter engagement data to last N days (7, 30, 90, 180, 365)")
+):
     """
     Get complete dashboard summary for a client.
 
     Args:
         client_id: Client UUID (required)
+        period_days: Optional time period filter in days
 
     Returns:
         Complete dashboard with all metrics
     """
     try:
+        now = datetime.utcnow()
+        period_cutoff = None
+        if period_days:
+            period_cutoff = (now - timedelta(days=period_days)).isoformat()
+
         # Count totals
         contacts_result = _supabase.table('customer_contacts').select(
             'id, last_contacted_at, engagement_score', count='exact'
@@ -2054,23 +2259,31 @@ async def get_dashboard(client_id: str = Query(...)):
             'id', count='exact'
         ).eq('client_id', client_id).execute()
 
-        emails_result = _supabase.table('emails').select(
-            'id', count='exact'
-        ).eq('client_id', client_id).execute()
+        # Email count — scoped to period if set
+        emails_query = _supabase.table('emails').select('id', count='exact').eq('client_id', client_id)
+        if period_cutoff:
+            emails_query = emails_query.gte('sent_date', period_cutoff)
+        emails_result = emails_query.execute()
 
-        # Calculate engagement distribution
+        # Calculate engagement distribution — filter contacts by period if set
         active = 0
         quiet = 0
         at_risk = 0
         engagement_scores = []
 
-        now = datetime.utcnow()
         for c in contacts_result.data:
+            last_at = c.get('last_contacted_at')
+            # If period set, skip contacts with no activity in the period
+            if period_cutoff and last_at and last_at < period_cutoff:
+                continue
+            if not period_cutoff and not last_at:
+                continue
+
             if c.get('engagement_score'):
                 engagement_scores.append(c['engagement_score'])
 
-            if c.get('last_contacted_at'):
-                last = datetime.fromisoformat(c['last_contacted_at'].replace('Z', '+00:00'))
+            if last_at:
+                last = datetime.fromisoformat(last_at.replace('Z', '+00:00'))
                 days_since = (now - last.replace(tzinfo=None)).days
 
                 if days_since <= 30:
@@ -2082,33 +2295,56 @@ async def get_dashboard(client_id: str = Query(...)):
 
         avg_score = sum(engagement_scores) / len(engagement_scores) if engagement_scores else None
 
-        # Thread counts
-        threads_result = _supabase.table('thread_status').select('status').execute()
-        thread_counts = {'active': 0, 'overdue': 0, 'awaiting_response': 0}
-        for t in threads_result.data:
-            status = t.get('status', '')
-            if 'ongoing' in status or 'awaiting_our_response' in status:
-                thread_counts['active'] += 1
-            if status == 'overdue':
-                thread_counts['overdue'] += 1
-            if status == 'awaiting_response':
-                thread_counts['awaiting_response'] += 1
+        # Thread counts — filtered by client via mailbox_ids
+        mailbox_result = _supabase.table('mailboxes').select('id').eq('client_id', client_id).execute()
+        mailbox_ids = [m['id'] for m in (mailbox_result.data or [])]
 
-        # Response time average
-        response_result = _supabase.table('email_response_metrics').select(
-            'response_time_seconds'
-        ).execute()
+        thread_counts = {'active': 0, 'overdue': 0, 'awaiting_response': 0, 'total': 0}
+        if mailbox_ids:
+            threads_query = _supabase.table('thread_status').select('status, last_message_at').in_('mailbox_id', mailbox_ids[:500])
+            threads_result = threads_query.execute()
+
+            for t in threads_result.data:
+                # Filter by period if set
+                if period_cutoff and t.get('last_message_at') and t['last_message_at'] < period_cutoff:
+                    continue
+
+                thread_counts['total'] += 1
+                status = t.get('status', '')
+                mapped = _map_thread_status(status)
+                if mapped in (ThreadStatus.ONGOING, ThreadStatus.AWAITING_OUR_RESPONSE):
+                    thread_counts['active'] += 1
+                elif mapped == ThreadStatus.OVERDUE:
+                    thread_counts['overdue'] += 1
+                elif mapped == ThreadStatus.AWAITING_RESPONSE:
+                    thread_counts['awaiting_response'] += 1
+
+        # Response time average — filtered by client's contacts
         avg_response = None
-        if response_result.data:
-            # Convert seconds to hours
-            times = [r['response_time_seconds'] / 3600.0 for r in response_result.data if r.get('response_time_seconds')]
-            if times:
-                avg_response = sum(times) / len(times)
+        contact_ids = [c['id'] for c in contacts_result.data] if contacts_result.data else []
+        if contact_ids:
+            # Process in batches of 500 for .in_() limit
+            all_times = []
+            for i in range(0, len(contact_ids), 500):
+                batch_ids = contact_ids[i:i + 500]
+                resp_query = _supabase.table('email_response_metrics').select(
+                    'response_time_seconds, created_at'
+                ).in_('responder_contact_id', batch_ids)
+                if period_cutoff:
+                    resp_query = resp_query.gte('created_at', period_cutoff)
+                resp_result = resp_query.execute()
+                if resp_result.data:
+                    all_times.extend([r['response_time_seconds'] / 3600.0 for r in resp_result.data if r.get('response_time_seconds')])
+            if all_times:
+                avg_response = sum(all_times) / len(all_times)
 
-        # Get top engaged contacts/companies
-        top_contacts_result = _supabase.table('customer_contacts').select(
+        # Get top engaged contacts — within period if set
+        top_contacts_query = _supabase.table('customer_contacts').select(
             'id, email_address, full_name, company_name, engagement_score, total_emails_sent, total_emails_received, last_contacted_at'
-        ).eq('client_id', client_id).not_.is_('engagement_score', 'null').order(
+        ).eq('client_id', client_id).not_.is_('engagement_score', 'null')
+        if period_cutoff:
+            top_contacts_query = top_contacts_query.gte('last_contacted_at', period_cutoff)
+        top_contacts_result = top_contacts_query.order(
             'engagement_score', desc=True
         ).limit(5).execute()
 
@@ -2125,9 +2361,12 @@ async def get_dashboard(client_id: str = Query(...)):
             for c in top_contacts_result.data
         ]
 
-        top_companies_result = _supabase.table('customer_companies').select(
+        top_companies_query = _supabase.table('customer_companies').select(
             'id, company_name, engagement_score, total_emails, contact_count, last_contact_date'
-        ).eq('client_id', client_id).not_.is_('engagement_score', 'null').order(
+        ).eq('client_id', client_id).not_.is_('engagement_score', 'null')
+        if period_cutoff:
+            top_companies_query = top_companies_query.gte('last_contact_date', period_cutoff)
+        top_companies_result = top_companies_query.order(
             'engagement_score', desc=True
         ).limit(5).execute()
 
@@ -2144,7 +2383,7 @@ async def get_dashboard(client_id: str = Query(...)):
         ]
 
         # Get at-risk contacts/companies
-        cutoff_date_contacts = (datetime.utcnow() - timedelta(days=60)).isoformat()
+        cutoff_date_contacts = (now - timedelta(days=60)).isoformat()
         at_risk_contacts_result = _supabase.table('customer_contacts').select(
             'id, email_address, full_name, company_name, last_contacted_at, engagement_score'
         ).eq('client_id', client_id).not_.is_('last_contacted_at', 'null').lte(
@@ -2165,7 +2404,7 @@ async def get_dashboard(client_id: str = Query(...)):
                 engagement_score=c.get('engagement_score')
             ))
 
-        cutoff_date_companies = (datetime.utcnow() - timedelta(days=90)).isoformat()
+        cutoff_date_companies = (now - timedelta(days=90)).isoformat()
         at_risk_companies_result = _supabase.table('customer_companies').select(
             'id, company_name, last_contact_date, contact_count, engagement_score'
         ).eq('client_id', client_id).not_.is_('last_contact_date', 'null').lte(
@@ -2212,7 +2451,7 @@ async def get_dashboard(client_id: str = Query(...)):
             quiet_contacts=quiet,
             at_risk_contacts=at_risk,
             avg_engagement_score=avg_score,
-            total_threads=len(threads_result.data),
+            total_threads=thread_counts['total'],
             active_threads=thread_counts['active'],
             overdue_threads=thread_counts['overdue'],
             awaiting_response_threads=thread_counts['awaiting_response'],

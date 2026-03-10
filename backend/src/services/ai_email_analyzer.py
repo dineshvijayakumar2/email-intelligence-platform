@@ -1394,7 +1394,7 @@ class AIEmailAnalyzer:
                 chunk = email_ids[i:i + 500]
                 email_resp = self._execute_with_retry(
                     self.client.table("emails")
-                    .select("id,subject,sender_email,sender_name,sent_date,direction")
+                    .select("id,subject,sender_email,sender_name,sent_date,direction,body_text,body_html,recipients")
                     .in_("id", chunk)
                 )
                 for e in (email_resp.data or []):
@@ -1419,6 +1419,11 @@ class AIEmailAnalyzer:
             item["email_sender_name"] = email_data.get("sender_name") or ""
             item["email_date"] = email_data.get("sent_date") or ""
             item["email_direction"] = email_data.get("direction") or ""
+            # Include body content for drawer preview
+            body = email_data.get("body_text") or ""
+            item["email_body"] = body[:2000] if body else ""
+            item["email_body_html"] = email_data.get("body_html") or ""
+            item["email_recipients"] = email_data.get("recipients") or []
 
             # Coerce None → "" for str fields, None → [] for list fields
             for key in _STR_DEFAULTS:

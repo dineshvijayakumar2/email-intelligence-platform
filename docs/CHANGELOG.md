@@ -2,24 +2,42 @@
 
 All notable changes to the Email Intelligence Platform will be documented in this file.
 
-## [2026-03-06] Analytics UX & Navigation Overhaul
+## [2026-03-10] Analytics UX Overhaul & Cross-Page Drilldown
 
 ### Added
-- **Analytics mode on Emails page**: Navigate from contact/company detail → emails page with cross-mailbox filter (`?contact_id`, `?company_id` URL params), banner with back button
-- **Clickable KPIs**: Total Emails → emails page, Contacts/Decision Makers → filtered contacts page
-- **Live email counts**: Backend endpoints return `total`, `total_sent`, `total_received` for contacts and companies (replaces stale stored values)
-- **Contacts drilldown back button**: "Back to {company}" when navigated from company detail page
+- **Thread drilldown**: Click thread subject on contact/company detail → emails page filtered by `thread_id` with HTML email rendering
+- **Threads page drilldown**: URL params `contact_id`, `company_id`, `status` for filtered views from detail pages
+- **Dashboard period selector**: Filter all metrics by time period (7d / 30d / 90d / 6m / 1y)
+- **Company threads table**: Company detail page now shows thread list with clickable subjects
+- **Contact threads clickable**: Thread subjects → emails page, thread header → threads page
+- **Company search**: Server-side search by company name or industry on companies page
+- **Thread search**: Server-side search by thread subject on threads page
+- **Smart Inbox column filters**: Filter by bucket, urgency, intent, sentiment directly from column headers
+- **Smart Inbox sorting**: All columns sortable (urgency, subject, sender, date, sentiment, intent)
+- **Smart Inbox email preview**: Iframe HTML email body rendering in drawer with HTML/text toggle
+- **Thread detail endpoint**: `GET /threads/{thread_id}/emails` returns full thread with all emails
+- **Company threads endpoint**: `GET /threads/by-company/{company_id}` returns threads for a company
+- **Live email counts**: Backend returns `total_sent`, `total_received` for contacts and companies
+- **Clickable counts everywhere**: Sent/Received on contacts, Emails/Contacts/DMs on companies → drilldown pages
+- **Analytics mode on Emails page**: `?contact_id`, `?company_id`, `?thread_id` URL params for cross-mailbox view
 
 ### Changed
-- **Navigation menu reorganized**: Consolidated 11 top-level items into 5 (Dashboard, Emails, Intelligence, Analytics, Manage) following frequency-of-use UX principles
-- **Contact detail simplified**: Removed inline email table and drawer, uses clickable KPI → emails page
-- **Company detail simplified**: Removed inline email table and drawer, uses clickable KPI → emails page
-- Email Rules moved from Analytics submenu to Manage submenu (it's configuration, not analysis)
-- AI Usage moved from Intelligence submenu to Manage submenu (admin-only, monitoring)
+- **Navigation menu reorganized**: 11 items → 5 top-level (Dashboard, Emails, Intelligence, Analytics, Manage)
+- **Threads page simplified**: Removed tabs (All/Overdue/By-Status), single table with status + search filters
+- **Dashboard scoped to client**: Thread counts and response times now filtered by client's mailboxes (was global)
+- **ClientSelector optimized**: Module-level cache (single fetch across all pages) + optimistic localStorage ID
+- **Thread status filter**: Maps frontend enum values to all possible DB values (e.g., "active" → ongoing + awaiting_our_response)
+- **Contact/Company detail simplified**: Removed inline email tables/drawers, uses clickable KPIs → emails page
+- Email Rules moved from Analytics to Manage submenu; AI Usage moved from Intelligence to Manage
+- Removed engagement trend chart from detail pages (micro-level noise)
 
 ### Fixed
-- Emails Sent/Received showing stale values on contact and company detail pages (now live from DB)
-- Company emails endpoint pagination bug (incorrect per-batch range calculation)
+- Dashboard thread counts not filtered by client (was fetching all clients' threads)
+- Dashboard response times not filtered by client
+- Emails Sent/Received showing stale stored values (now live from DB)
+- Thread status filter not matching DB enum variants (awaiting_reply vs awaiting_response)
+- Overdue threads endpoint not filtered by client
+- Company emails endpoint pagination bug
 
 ---
 

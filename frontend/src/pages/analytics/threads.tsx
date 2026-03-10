@@ -1,23 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Row, Col, Typography, Tabs, Tag, Space, Select } from 'antd';
+import { Typography, Tag, Space, Select, Button, Input } from 'antd';
 import type { TableProps } from 'antd';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { LeftOutlined } from '@ant-design/icons';
 import { ClientSelector } from '../../components/analytics/ClientSelector';
 import { AnalyticsTable } from '../../components/analytics/AnalyticsTable';
-import { ChartCard } from '../../components/analytics/ChartCard';
 import { threadsApi, formatRelativeTime, threadStatusConfig } from '../../services/analyticsService';
-import type { ThreadStatusSummary, OverdueThread, ThreadStatusCount, ThreadStatus } from '../../types/analytics';
+import type { ThreadStatusSummary, ThreadStatus } from '../../types/analytics';
 
 const { Text } = Typography;
 const PAGE_SIZE = 20;
 
-const STATUS_COLORS: Record<string, string> = {
-  complete: '#52c41a', awaiting_response: '#1890ff', awaiting_our_response: '#fa8c16',
-  overdue: '#f5222d', dropped: '#999', ongoing: '#13c2c2',
-};
-
 const THREAD_STATUS_OPTIONS = [
   { value: '', label: 'All Statuses' },
+  { value: 'active', label: 'Active (Ongoing + Awaiting)' },
   { value: 'complete', label: 'Complete' },
   { value: 'awaiting_response', label: 'Awaiting Response' },
   { value: 'awaiting_our_response', label: 'Awaiting Our Response' },
@@ -27,56 +23,83 @@ const THREAD_STATUS_OPTIONS = [
 ];
 
 export const ThreadAnalytics: React.FC = () => {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const isMountedRef = useRef(true);
-  const [clientId, setClientId] = useState('');
-  const [activeTab, setActiveTab] = useState('all');
 
+  // Drilldown mode: when navigated from contact/company detail pages
+  const drilldownContactId = searchParams.get('contact_id');
+  const drilldownCompanyId = searchParams.get('company_id');
+  const drilldownLabel = searchParams.get('name') || '';
+  const isDrilldownMode = !!(drilldownContactId || drilldownCompanyId);
+
+  const [clientId, setClientId] = useState('');
   const [threads, setThreads] = useState<ThreadStatusSummary[]>([]);
   const [threadsTotal, setThreadsTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<string>(() => searchParams.get('status') || '');
+  const [search, setSearch] = useState<string>('');
   const [sortBy, setSortBy] = useState<string>('last_message_at');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
-  const [overdue, setOverdue] = useState<OverdueThread[]>([]);
-  const [overdueLoading, setOverdueLoading] = useState(false);
-
-  const [statusCounts, setStatusCounts] = useState<ThreadStatusCount[]>([]);
-  const [statusLoading, setStatusLoading] = useState(false);
-
   useEffect(() => { isMountedRef.current = true; return () => { isMountedRef.current = false; }; }, []);
 
+  // Drilldown mode: load threads for contact/company
   useEffect(() => {
-    if (!clientId) return;
-    loadTab(activeTab);
-  }, [clientId, activeTab, page, statusFilter, sortBy, sortDir]);
+    if (!isDrilldownMode) return;
+    const loadDrilldown = async () => {
+      setLoading(true);
+      try {
+        const result = drilldownContactId
+          ? await threadsApi.byContact(drilldownContactId, 200)
+          : await threadsApi.byCompany(drilldownCompanyId!, 200);
+        if (isMountedRef.current) {
+          setThreads(result.threads);
+          setThreadsTotal(result.total);
+        }
+      } catch (error) {
+        console.error('Error loading drilldown threads:', error);
+      } finally {
+        if (isMountedRef.current) setLoading(false);
+      }
+    };
+    loadDrilldown();
+  }, [isDrilldownMode, drilldownContactId, drilldownCompanyId]);
 
-  const loadTab = async (tab: string) => {
-    switch (tab) {
-      case 'all':
-        setLoading(true);
-        const allResult = await threadsApi.list({
-          client_id: clientId,
-          limit: PAGE_SIZE,
-          offset: (page - 1) * PAGE_SIZE,
-          status: statusFilter ? (statusFilter as ThreadStatus) : undefined,
-          sort_by: sortBy,
-          sort_dir: sortDir,
-        });
-        if (isMountedRef.current) { setThreads(allResult.threads); setThreadsTotal(allResult.total); setLoading(false); }
-        break;
-      case 'overdue':
-        setOverdueLoading(true);
-        const odResult = await threadsApi.overdue(clientId);
-        if (isMountedRef.current) { setOverdue(odResult); setOverdueLoading(false); }
-        break;
-      case 'status':
-        setStatusLoading(true);
-        const scResult = await threadsApi.byStatus(clientId);
-        if (isMountedRef.current) { setStatusCounts(scResult); setStatusLoading(false); }
-        break;
+  // Normal mode: load threads with filters
+  useEffect(() => {
+    if (isDrilldownMode) return;
+    if (!clientId) return;
+    loadThreads();
+  }, [clientId, page, statusFilter, search, sortBy, sortDir]);
+
+  const loadThreads = async () => {
+    setLoading(true);
+    try {
+      const result = await threadsApi.list({
+        client_id: clientId,
+        limit: PAGE_SIZE,
+        offset: (page - 1) * PAGE_SIZE,
+        status: statusFilter || undefined,
+        search: search || undefined,
+        sort_by: sortBy,
+        sort_dir: sortDir,
+      });
+      if (isMountedRef.current) {
+        setThreads(result.threads);
+        setThreadsTotal(result.total);
+      }
+    } catch (error) {
+      console.error('Error loading threads:', error);
+    } finally {
+      if (isMountedRef.current) setLoading(false);
     }
+  };
+
+  const handleThreadClick = (record: ThreadStatusSummary) => {
+    const name = encodeURIComponent(record.subject || record.thread_id?.slice(0, 20) || 'Thread');
+    navigate(`/emails?thread_id=${encodeURIComponent(record.thread_id)}&name=${name}`);
   };
 
   const getSortOrder = (field: string): 'ascend' | 'descend' | null => {
@@ -98,22 +121,26 @@ export const ThreadAnalytics: React.FC = () => {
     }
   };
 
-  const allColumns = [
+  const columns = [
     {
       title: 'Subject',
       dataIndex: 'subject',
       key: 'subject',
       ellipsis: true,
-      sorter: true,
-      sortOrder: getSortOrder('subject'),
-      render: (v: string, r: ThreadStatusSummary) => v || <Text type="secondary" style={{ fontSize: 12 }}>{r.thread_id?.slice(0, 16)}...</Text>,
+      sorter: !isDrilldownMode,
+      sortOrder: isDrilldownMode ? undefined : getSortOrder('subject'),
+      render: (v: string, r: ThreadStatusSummary) => (
+        <a onClick={(e) => { e.stopPropagation(); handleThreadClick(r); }} style={{ color: '#667eea' }}>
+          {v || <Text type="secondary" style={{ fontSize: 12 }}>{r.thread_id?.slice(0, 16)}...</Text>}
+        </a>
+      ),
     },
     { title: 'Contact', key: 'contact', render: (_: any, r: ThreadStatusSummary) => r.contact_name || r.contact_email || '-' },
     { title: 'Company', dataIndex: 'company_name', key: 'company', render: (v: string) => v || '-' },
     {
       title: 'Status', dataIndex: 'status', key: 'status', width: 150,
-      sorter: true,
-      sortOrder: getSortOrder('status'),
+      sorter: !isDrilldownMode,
+      sortOrder: isDrilldownMode ? undefined : getSortOrder('status'),
       render: (v: ThreadStatus) => { const cfg = threadStatusConfig[v] || { label: v, color: 'default' }; return <Tag color={cfg.color}>{cfg.label}</Tag>; },
     },
     {
@@ -121,16 +148,16 @@ export const ThreadAnalytics: React.FC = () => {
       dataIndex: 'total_messages',
       key: 'message_count',
       width: 90,
-      sorter: true,
-      sortOrder: getSortOrder('message_count'),
+      sorter: !isDrilldownMode,
+      sortOrder: isDrilldownMode ? undefined : getSortOrder('message_count'),
     },
     {
       title: 'Last Message',
       dataIndex: 'last_message_date',
       key: 'last_message_at',
       width: 110,
-      sorter: true,
-      sortOrder: getSortOrder('last_message_at'),
+      sorter: !isDrilldownMode,
+      sortOrder: isDrilldownMode ? undefined : getSortOrder('last_message_at'),
       render: (v: string) => formatRelativeTime(v),
     },
     {
@@ -138,93 +165,79 @@ export const ThreadAnalytics: React.FC = () => {
       dataIndex: 'days_since_last_message',
       key: 'days_since_last_email',
       width: 70,
-      sorter: true,
-      sortOrder: getSortOrder('days_since_last_email'),
+      sorter: !isDrilldownMode,
+      sortOrder: isDrilldownMode ? undefined : getSortOrder('days_since_last_email'),
     },
   ];
 
-  const overdueColumns = [
-    {
-      title: 'Subject',
-      dataIndex: 'subject',
-      key: 'subject',
-      ellipsis: true,
-      render: (v: string, r: OverdueThread) => v || <Text type="secondary" style={{ fontSize: 12 }}>{r.thread_id?.slice(0, 16)}...</Text>,
-    },
-    { title: 'Contact', key: 'contact', render: (_: any, r: OverdueThread) => r.contact_name || r.contact_email || '-' },
-    { title: 'Company', dataIndex: 'company_name', key: 'company', render: (v: string) => v || '-' },
-    { title: 'Days Overdue', dataIndex: 'days_overdue', key: 'days', width: 110, render: (v: number) => <Tag color="red">{v}d overdue</Tag> },
-    { title: 'Last Message', dataIndex: 'last_message_date', key: 'last', width: 110, render: (v: string) => formatRelativeTime(v) },
-  ];
+  // Drilldown mode: simplified view with back button
+  if (isDrilldownMode) {
+    return (
+      <div className="glass-page-bg" style={{ padding: 24 }}>
+        <div className="fade-in-up" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
+          <Button type="text" icon={<LeftOutlined />} onClick={() => navigate(-1)} style={{ color: '#667eea' }}>Back</Button>
+          <Text strong style={{ fontSize: 16 }}>Threads for {drilldownLabel}</Text>
+          <Tag color="purple">{threadsTotal} thread{threadsTotal !== 1 ? 's' : ''}</Tag>
+        </div>
+        <div className="fade-in-up stagger-1">
+          <AnalyticsTable<ThreadStatusSummary>
+            columns={columns}
+            data={threads}
+            total={threadsTotal}
+            loading={loading}
+            pageSize={PAGE_SIZE}
+            currentPage={page}
+            onPageChange={setPage}
+            rowKey="thread_id"
+            onRowClick={handleThreadClick}
+          />
+        </div>
+      </div>
+    );
+  }
 
-  const chartData = statusCounts.map(sc => ({
-    status: threadStatusConfig[sc.status]?.label || sc.status,
-    count: sc.count,
-    fill: STATUS_COLORS[sc.status] || '#999',
-  }));
+  const statusLabel = THREAD_STATUS_OPTIONS.find(o => o.value === statusFilter)?.label;
 
   return (
     <div className="glass-page-bg" style={{ padding: 24 }}>
       <div className="fade-in-up" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <Text type="secondary">Email thread status tracking — active, overdue, and dropped conversations</Text>
+        <Text type="secondary">
+          {statusFilter
+            ? `${statusLabel} — ${threadsTotal} thread${threadsTotal !== 1 ? 's' : ''}`
+            : `All Threads (${threadsTotal})`}
+        </Text>
         <ClientSelector value={clientId} onChange={setClientId} />
       </div>
       <div className="fade-in-up stagger-1">
-        <Tabs activeKey={activeTab} onChange={setActiveTab} items={[
-          {
-            key: 'all', label: `All Threads (${threadsTotal})`,
-            children: (
-              <>
-                <Space style={{ marginBottom: 16 }} wrap>
-                  <Text>Status:</Text>
-                  <Select
-                    value={statusFilter}
-                    onChange={v => { setStatusFilter(v); setPage(1); }}
-                    options={THREAD_STATUS_OPTIONS}
-                    style={{ width: 200 }}
-                    size="small"
-                  />
-                </Space>
-                <AnalyticsTable<ThreadStatusSummary>
-                  columns={allColumns}
-                  data={threads}
-                  total={threadsTotal}
-                  loading={loading}
-                  pageSize={PAGE_SIZE}
-                  currentPage={page}
-                  onPageChange={setPage}
-                  onChange={handleTableChange}
-                  rowKey="thread_id"
-                />
-              </>
-            ),
-          },
-          {
-            key: 'overdue', label: `Overdue (${overdue.length})`,
-            children: <AnalyticsTable columns={overdueColumns} data={overdue} total={overdue.length} loading={overdueLoading} rowKey="thread_id" />,
-          },
-          {
-            key: 'status', label: 'By Status',
-            children: (
-              <Row gutter={[16, 16]}>
-                <Col xs={24}>
-                  <ChartCard title="Thread Status Distribution" loading={statusLoading} height={300}>
-                    <ResponsiveContainer>
-                      <BarChart data={chartData}>
-                        <XAxis dataKey="status" />
-                        <YAxis />
-                        <Tooltip />
-                        <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                          {chartData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </ChartCard>
-                </Col>
-              </Row>
-            ),
-          },
-        ]} />
+        <Space style={{ marginBottom: 16 }} wrap>
+          <Input.Search
+            placeholder="Search thread subject..."
+            allowClear
+            onSearch={(v) => { setSearch(v); setPage(1); }}
+            style={{ width: 240 }}
+            size="small"
+          />
+          <Text>Status:</Text>
+          <Select
+            value={statusFilter}
+            onChange={v => { setStatusFilter(v); setPage(1); }}
+            options={THREAD_STATUS_OPTIONS}
+            style={{ width: 240 }}
+            size="small"
+          />
+        </Space>
+        <AnalyticsTable<ThreadStatusSummary>
+          columns={columns}
+          data={threads}
+          total={threadsTotal}
+          loading={loading}
+          pageSize={PAGE_SIZE}
+          currentPage={page}
+          onPageChange={setPage}
+          onChange={handleTableChange}
+          rowKey="thread_id"
+          onRowClick={handleThreadClick}
+        />
       </div>
     </div>
   );

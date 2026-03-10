@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Row, Col, Typography, Skeleton, Tag, Table, Alert } from 'antd';
+import { Row, Col, Typography, Skeleton, Tag, Table, Alert, Select, Space } from 'antd';
 import {
   TeamOutlined,
   BankOutlined,
   MessageOutlined,
   ClockCircleOutlined,
   WarningOutlined,
+  MailOutlined,
 } from '@ant-design/icons';
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
@@ -19,7 +20,6 @@ import {
   dashboardAnalyticsApi,
   formatRelativeTime,
   formatResponseTime,
-  threadStatusConfig,
 } from '../../services/analyticsService';
 import type { DashboardSummary } from '../../types/analytics';
 
@@ -27,18 +27,25 @@ const { Text } = Typography;
 
 const ENGAGEMENT_COLORS = ['#52c41a', '#faad14', '#f5222d'];
 const THREAD_COLORS: Record<string, string> = {
-  complete: '#52c41a',
-  awaiting_response: '#1890ff',
-  awaiting_our_response: '#fa8c16',
-  overdue: '#f5222d',
-  dropped: '#999',
-  ongoing: '#13c2c2',
+  Active: '#13c2c2',
+  Awaiting: '#1890ff',
+  Overdue: '#f5222d',
 };
+
+const PERIOD_OPTIONS = [
+  { value: 0, label: 'All Time' },
+  { value: 7, label: 'Last 7 Days' },
+  { value: 30, label: 'Last 30 Days' },
+  { value: 90, label: 'Last 90 Days' },
+  { value: 180, label: 'Last 6 Months' },
+  { value: 365, label: 'Last 1 Year' },
+];
 
 export const AnalyticsDashboard: React.FC = () => {
   const navigate = useNavigate();
   const isMountedRef = useRef(true);
   const [clientId, setClientId] = useState<string>('');
+  const [periodDays, setPeriodDays] = useState<number>(0);
   const [data, setData] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -52,12 +59,12 @@ export const AnalyticsDashboard: React.FC = () => {
     loadData();
     const interval = setInterval(loadData, 60000);
     return () => clearInterval(interval);
-  }, [clientId]);
+  }, [clientId, periodDays]);
 
   const loadData = async () => {
     if (!clientId) return;
     setLoading(true);
-    const result = await dashboardAnalyticsApi.getSummary(clientId);
+    const result = await dashboardAnalyticsApi.getSummary(clientId, periodDays || undefined);
     if (isMountedRef.current) {
       setData(result);
       setLoading(false);
@@ -72,9 +79,9 @@ export const AnalyticsDashboard: React.FC = () => {
   ].filter(d => d.value > 0) : [];
 
   const threadBarData = data ? [
-    { status: 'Active', count: data.active_threads, fill: THREAD_COLORS.ongoing },
-    { status: 'Awaiting', count: data.awaiting_response_threads, fill: THREAD_COLORS.awaiting_response },
-    { status: 'Overdue', count: data.overdue_threads, fill: THREAD_COLORS.overdue },
+    { status: 'Active', count: data.active_threads, fill: THREAD_COLORS.Active },
+    { status: 'Awaiting', count: data.awaiting_response_threads, fill: THREAD_COLORS.Awaiting },
+    { status: 'Overdue', count: data.overdue_threads, fill: THREAD_COLORS.Overdue },
   ] : [];
 
   const topContactColumns = [
@@ -100,6 +107,11 @@ export const AnalyticsDashboard: React.FC = () => {
       dataIndex: 'total_emails',
       key: 'emails',
       width: 70,
+      render: (v: number, r: any) => (
+        <a onClick={(e) => { e.stopPropagation(); navigate(`/emails?contact_id=${r.id}&name=${encodeURIComponent(r.full_name || r.email_address)}`); }} style={{ color: '#667eea' }}>
+          {v || 0}
+        </a>
+      ),
     },
   ];
 
@@ -121,6 +133,11 @@ export const AnalyticsDashboard: React.FC = () => {
       dataIndex: 'contact_count',
       key: 'contacts',
       width: 80,
+      render: (v: number, r: any) => (
+        <a onClick={(e) => { e.stopPropagation(); navigate(`/analytics/contacts?company=${encodeURIComponent(r.company_name)}`); }} style={{ color: '#667eea' }}>
+          {v ?? 0}
+        </a>
+      ),
     },
   ];
 
@@ -144,11 +161,22 @@ export const AnalyticsDashboard: React.FC = () => {
     },
   ];
 
+  const periodLabel = PERIOD_OPTIONS.find(p => p.value === periodDays)?.label || 'All Time';
+
   return (
     <div className="glass-page-bg" style={{ padding: 24 }}>
       {/* Header */}
       <div className="fade-in-up" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <Text type="secondary">Engagement analytics overview — contacts, companies, threads, and response times</Text>
+        <Space>
+          <Text type="secondary">Engagement analytics overview</Text>
+          <Select
+            value={periodDays}
+            onChange={setPeriodDays}
+            options={PERIOD_OPTIONS}
+            style={{ width: 160 }}
+            size="small"
+          />
+        </Space>
         <ClientSelector value={clientId} onChange={setClientId} />
       </div>
 
@@ -158,36 +186,57 @@ export const AnalyticsDashboard: React.FC = () => {
         <>
           {/* Metric Cards */}
           <Row gutter={[16, 16]} className="fade-in-up stagger-1">
-            <Col xs={12} sm={12} lg={6}>
+            <Col xs={12} sm={8} lg={4}>
               <MetricCard
-                title="Total Contacts"
+                title="Contacts"
                 value={data?.total_contacts}
                 prefix={<TeamOutlined />}
                 loading={loading}
+                onClick={() => navigate('/analytics/contacts')}
               />
             </Col>
-            <Col xs={12} sm={12} lg={6}>
+            <Col xs={12} sm={8} lg={4}>
               <MetricCard
-                title="Total Companies"
+                title="Companies"
                 value={data?.total_companies}
                 prefix={<BankOutlined />}
                 loading={loading}
+                onClick={() => navigate('/analytics/companies')}
               />
             </Col>
-            <Col xs={12} sm={12} lg={6}>
+            <Col xs={12} sm={8} lg={4}>
+              <MetricCard
+                title={periodDays ? `Emails (${periodLabel})` : 'Total Emails'}
+                value={data?.total_emails}
+                prefix={<MailOutlined />}
+                loading={loading}
+              />
+            </Col>
+            <Col xs={12} sm={8} lg={4}>
               <MetricCard
                 title="Active Threads"
                 value={data?.active_threads}
                 prefix={<MessageOutlined />}
                 loading={loading}
+                onClick={() => navigate('/analytics/threads?status=active')}
               />
             </Col>
-            <Col xs={12} sm={12} lg={6}>
+            <Col xs={12} sm={8} lg={4}>
               <MetricCard
-                title="Avg Response Time"
+                title="Overdue Threads"
+                value={data?.overdue_threads}
+                prefix={<WarningOutlined />}
+                loading={loading}
+                onClick={() => navigate('/analytics/threads?status=overdue')}
+              />
+            </Col>
+            <Col xs={12} sm={8} lg={4}>
+              <MetricCard
+                title="Avg Response"
                 value={formatResponseTime(data?.avg_response_time_hours)}
                 prefix={<ClockCircleOutlined />}
                 loading={loading}
+                onClick={() => navigate('/analytics/response-times')}
               />
             </Col>
           </Row>
@@ -195,7 +244,7 @@ export const AnalyticsDashboard: React.FC = () => {
           {/* Charts Row */}
           <Row gutter={[16, 16]} style={{ marginTop: 16 }} className="fade-in-up stagger-2">
             <Col xs={24} lg={12}>
-              <ChartCard title="Contact Engagement" loading={loading} height={280}>
+              <ChartCard title={`Contact Engagement${periodDays ? ` (${periodLabel})` : ''}`} loading={loading} height={280}>
                 {engagementPieData.length > 0 ? (
                   <ResponsiveContainer>
                     <PieChart>
@@ -225,7 +274,7 @@ export const AnalyticsDashboard: React.FC = () => {
               </ChartCard>
             </Col>
             <Col xs={24} lg={12}>
-              <ChartCard title="Thread Status" loading={loading} height={280}>
+              <ChartCard title={`Thread Status${periodDays ? ` (${periodLabel})` : ''}`} loading={loading} height={280}>
                 {threadBarData.some(d => d.count > 0) ? (
                   <ResponsiveContainer>
                     <BarChart data={threadBarData}>
@@ -252,7 +301,12 @@ export const AnalyticsDashboard: React.FC = () => {
           <Row gutter={[16, 16]} style={{ marginTop: 16 }} className="fade-in-up stagger-3">
             <Col xs={24} lg={8}>
               <div className="glass-table-container" style={{ padding: 16 }}>
-                <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 12 }}>Top Engaged Contacts</Text>
+                <a
+                  onClick={() => navigate('/analytics/contacts')}
+                  style={{ fontSize: 16, fontWeight: 600, display: 'block', marginBottom: 12, color: '#667eea', cursor: 'pointer' }}
+                >
+                  Top Engaged Contacts
+                </a>
                 {loading ? <Skeleton active /> : (
                   <Table
                     columns={topContactColumns}
@@ -270,7 +324,12 @@ export const AnalyticsDashboard: React.FC = () => {
             </Col>
             <Col xs={24} lg={8}>
               <div className="glass-table-container" style={{ padding: 16 }}>
-                <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 12 }}>Top Engaged Companies</Text>
+                <a
+                  onClick={() => navigate('/analytics/companies')}
+                  style={{ fontSize: 16, fontWeight: 600, display: 'block', marginBottom: 12, color: '#667eea', cursor: 'pointer' }}
+                >
+                  Top Engaged Companies
+                </a>
                 {loading ? <Skeleton active /> : (
                   <Table
                     columns={topCompanyColumns}
@@ -290,7 +349,12 @@ export const AnalyticsDashboard: React.FC = () => {
               <div className="glass-table-container" style={{ padding: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                   <WarningOutlined style={{ color: '#f5222d' }} />
-                  <Text strong style={{ fontSize: 16 }}>At-Risk Contacts</Text>
+                  <a
+                    onClick={() => navigate('/analytics/contacts')}
+                    style={{ fontSize: 16, fontWeight: 600, color: '#667eea', cursor: 'pointer' }}
+                  >
+                    At-Risk Contacts
+                  </a>
                 </div>
                 {loading ? <Skeleton active /> : (
                   <Table

@@ -40,10 +40,12 @@ A comprehensive email intelligence platform for processing, analyzing, and extra
 - Incremental extraction mode (full + incremental with configurable lookback)
 - Production-grade pagination, retry logic, and batch processing
 - Analytics Frontend: 6 pages (Dashboard, Contacts, Companies, Threads, Response Times, Email Rules)
-- Analytics UX: Clickable KPIs with cross-page drill-down, live email counts, reorganized navigation
+- Analytics UX: Cross-page drilldown (threads→emails, contacts→emails/threads, companies→all), period selector, search, column filters
+- Threading overhaul: Multi-priority thread ID (provider→headers→heuristic), confidence scoring
+- Navigation: 5 top-level items (Dashboard, Emails, Intelligence, Analytics, Manage)
 
 ### Stage 3: In Progress - AI Semantic Intelligence
-**Status**: Sprint 3 Week 1 + Frontend COMPLETE (March 3, 2026)
+**Status**: Sprint 3 Week 1 + Frontend + Analytics UX COMPLETE (March 10, 2026)
 
 **Sprint 3 - AI Layer (Week 1 COMPLETE)**:
 - Three-layer AI architecture: Per-Email AI → Action Bucket Engine → Aggregation
@@ -58,10 +60,17 @@ A comprehensive email intelligence platform for processing, analyzing, and extra
 - AI Usage & Cost monitoring dashboard
 
 **Sprint 3 - Frontend (COMPLETE)**:
-- Smart Inbox with AI annotations and confidence-gated bucket tags
+- Smart Inbox with AI annotations, column filters/sorting, iframe HTML email preview
 - Daily Digest page with AI-generated summaries
 - Opportunities page (4 tabs: Buying Signals, Expansion, Churn Risk, Competitor)
 - Usage & Monitoring dashboard (cost tracking, model usage, processing stats)
+
+**Analytics UX Overhaul (COMPLETE)**:
+- Cross-page drilldown: thread→emails, contact→emails/threads, company→all pages
+- Dashboard period selector (7d/30d/90d/6m/1y) with client-scoped queries
+- Search on companies and threads pages (server-side)
+- Clickable counts everywhere (emails, contacts, decision makers, threads)
+- ClientSelector: module-level cache for instant page loads
 
 **Sprint 3 - Remaining (Sessions 7-13)**:
 - Relationship Intelligence (influence mapping, gap analysis, AI summaries)

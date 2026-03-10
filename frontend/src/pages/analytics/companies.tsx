@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Typography, Tabs, Tag, Space, Select, Slider } from 'antd';
+import { Typography, Tabs, Tag, Space, Select, Slider, Input } from 'antd';
 import type { TableProps } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { ClientSelector } from '../../components/analytics/ClientSelector';
@@ -42,6 +42,7 @@ export const CompaniesAnalytics: React.FC = () => {
   const [engagementStatus, setEngagementStatus] = useState<string>('');
   const [minScore, setMinScore] = useState<number>(0);
   const [sliderScore, setSliderScore] = useState<number>(0);
+  const [search, setSearch] = useState<string>('');
   const [sortBy, setSortBy] = useState<string>('engagement_score');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
@@ -59,7 +60,7 @@ export const CompaniesAnalytics: React.FC = () => {
   useEffect(() => {
     if (!clientId) return;
     loadTab(activeTab);
-  }, [clientId, activeTab, page, engagementStatus, minScore, sortBy, sortDir]);
+  }, [clientId, activeTab, page, engagementStatus, minScore, search, sortBy, sortDir]);
 
   const loadTab = async (tab: string) => {
     if (!clientId) return;
@@ -72,6 +73,7 @@ export const CompaniesAnalytics: React.FC = () => {
           offset: (page - 1) * PAGE_SIZE,
           engagement_status: engagementStatus ? (engagementStatus as EngagementStatus) : undefined,
           min_engagement_score: minScore > 0 ? minScore : undefined,
+          search: search || undefined,
           sort_by: sortBy,
           sort_dir: sortDir,
         });
@@ -142,7 +144,11 @@ export const CompaniesAnalytics: React.FC = () => {
       width: 80,
       sorter: true,
       sortOrder: getSortOrder('total_emails'),
-      render: (v: number) => v || 0,
+      render: (v: number, r: CompanyAnalytics) => (
+        <a onClick={(e) => { e.stopPropagation(); navigate(`/emails?company_id=${r.id}&name=${encodeURIComponent(r.company_name)}`); }} style={{ color: '#667eea' }}>
+          {v || 0}
+        </a>
+      ),
     },
     {
       title: 'Contacts',
@@ -151,6 +157,11 @@ export const CompaniesAnalytics: React.FC = () => {
       width: 80,
       sorter: true,
       sortOrder: getSortOrder('contact_count'),
+      render: (v: number, r: CompanyAnalytics) => (
+        <a onClick={(e) => { e.stopPropagation(); navigate(`/analytics/contacts?company=${encodeURIComponent(r.company_name)}`); }} style={{ color: '#667eea' }}>
+          {v ?? 0}
+        </a>
+      ),
     },
     {
       title: 'DMs',
@@ -159,6 +170,11 @@ export const CompaniesAnalytics: React.FC = () => {
       width: 60,
       sorter: true,
       sortOrder: getSortOrder('decision_maker_count'),
+      render: (v: number, r: CompanyAnalytics) => (
+        <a onClick={(e) => { e.stopPropagation(); navigate(`/analytics/contacts?company=${encodeURIComponent(r.company_name)}&dm=true`); }} style={{ color: '#667eea' }}>
+          {v ?? 0}
+        </a>
+      ),
     },
     {
       title: 'Last Contact',
@@ -209,6 +225,13 @@ export const CompaniesAnalytics: React.FC = () => {
             children: (
               <>
                 <Space style={{ marginBottom: 16 }} wrap>
+                  <Input.Search
+                    placeholder="Search company name..."
+                    allowClear
+                    onSearch={(v) => { setSearch(v); setPage(1); }}
+                    style={{ width: 240 }}
+                    size="small"
+                  />
                   <Text>Status:</Text>
                   <Select
                     value={engagementStatus}

@@ -37,7 +37,7 @@ import { emailService, Email, EmailFilters } from '../services/emailService';
 import { mailboxService, Mailbox } from '../services/mailboxService';
 import SyncStatusBar from '../components/SyncStatusBar';
 import { dashboardService } from '../services/dashboardService';
-import { contactsApi, companiesApi } from '../services/analyticsService';
+import { contactsApi, companiesApi, threadsApi } from '../services/analyticsService';
 import {
   EmailDetailPanel,
   getCategoryColor,
@@ -125,11 +125,12 @@ export const EmailList: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  // Analytics mode: when navigated from contact/company detail pages
+  // Analytics mode: when navigated from contact/company/thread detail pages
   const analyticsContactId = searchParams.get('contact_id');
   const analyticsCompanyId = searchParams.get('company_id');
+  const analyticsThreadId = searchParams.get('thread_id');
   const analyticsLabel = searchParams.get('name') || 'Contact';
-  const isAnalyticsMode = !!(analyticsContactId || analyticsCompanyId);
+  const isAnalyticsMode = !!(analyticsContactId || analyticsCompanyId || analyticsThreadId);
 
   // State
   const [emails, setEmails] = useState<Email[]>([]);
@@ -262,29 +263,52 @@ export const EmailList: React.FC = () => {
     if (!isAnalyticsMode) return;
     setLoading(true);
     try {
-      const offset = append ? emails.length : 0;
-      const result = analyticsContactId
-        ? await contactsApi.getEmails(analyticsContactId, pageSize, offset)
-        : await companiesApi.getEmails(analyticsCompanyId!, pageSize, offset);
-      const newEmails = (result.emails || []) as Email[];
-      if (append) {
-        setEmails(prev => [...prev, ...newEmails]);
+      if (analyticsThreadId) {
+        // Thread drilldown: load all emails in the thread
+        const detail = await threadsApi.getDetail(analyticsThreadId);
+        if (detail?.emails) {
+          const threadEmails = detail.emails.map(e => ({
+            id: e.id,
+            subject: e.subject || '',
+            sender_email: e.sender_email || '',
+            sender_name: e.sender_name || '',
+            recipients: e.recipients || [],
+            sent_date: e.sent_date || '',
+            is_outbound: e.is_outbound ?? false,
+            body_text: e.body_text || '',
+            folder_path: e.folder_path || '',
+          })) as Email[];
+          setEmails(threadEmails);
+          setTotalCount(threadEmails.length);
+        } else {
+          setEmails([]);
+          setTotalCount(0);
+        }
       } else {
-        setEmails(newEmails);
+        const offset = append ? emails.length : 0;
+        const result = analyticsContactId
+          ? await contactsApi.getEmails(analyticsContactId, pageSize, offset)
+          : await companiesApi.getEmails(analyticsCompanyId!, pageSize, offset);
+        const newEmails = (result.emails || []) as Email[];
+        if (append) {
+          setEmails(prev => [...prev, ...newEmails]);
+        } else {
+          setEmails(newEmails);
+        }
+        setTotalCount(result.total || newEmails.length);
       }
-      setTotalCount(result.total || newEmails.length);
     } catch (error) {
       console.error('Error loading analytics emails:', error);
       message.error('Failed to load emails');
     } finally {
       setLoading(false);
     }
-  }, [isAnalyticsMode, analyticsContactId, analyticsCompanyId, emails.length, pageSize]);
+  }, [isAnalyticsMode, analyticsContactId, analyticsCompanyId, analyticsThreadId, emails.length, pageSize]);
 
   useEffect(() => {
     if (!isAnalyticsMode) return;
     loadAnalyticsEmails(false);
-  }, [isAnalyticsMode, analyticsContactId, analyticsCompanyId]);
+  }, [isAnalyticsMode, analyticsContactId, analyticsCompanyId, analyticsThreadId]);
 
   // Load folders for a specific mailbox (dynamic) - uses cached mailboxIdMap
   const loadFoldersForMailbox = useCallback(async (mailboxName: string) => {

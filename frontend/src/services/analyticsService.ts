@@ -33,6 +33,7 @@ import type {
   OverdueThread,
   ThreadStatusCount,
   ThreadFilterParams,
+  ThreadDetail,
   // Response Times
   ResponseTimeListResponse,
   ResponseTimeStats,
@@ -443,6 +444,30 @@ export const threadsApi = {
       return { threads: [], total: 0 };
     }
   },
+
+  /** GET /threads/by-company/{companyId} — Threads for a company */
+  async byCompany(companyId: string, limit: number = 100, offset: number = 0): Promise<ThreadStatusListResponse> {
+    const qs = buildQuery({ limit, offset });
+    try {
+      const result = await api.get<ThreadStatusListResponse>(
+        `${API_PREFIX}/threads/by-company/${companyId}${qs}`, { timeout: 10000 }
+      );
+      return result || { threads: [], total: 0 };
+    } catch {
+      return { threads: [], total: 0 };
+    }
+  },
+
+  /** GET /threads/{threadId}/emails — Thread detail with emails */
+  async getDetail(threadId: string): Promise<ThreadDetail | null> {
+    try {
+      return await api.get<ThreadDetail>(
+        `${API_PREFIX}/threads/${encodeURIComponent(threadId)}/emails`, { timeout: 10000 }
+      );
+    } catch {
+      return null;
+    }
+  },
 };
 
 // ============================================================================
@@ -592,8 +617,8 @@ export const patternsApi = {
 
 export const dashboardAnalyticsApi = {
   /** GET /dashboard — Complete dashboard summary (requires client_id) */
-  async getSummary(clientId: string): Promise<DashboardSummary | null> {
-    const qs = buildQuery({ client_id: clientId });
+  async getSummary(clientId: string, periodDays?: number): Promise<DashboardSummary | null> {
+    const qs = buildQuery({ client_id: clientId, period_days: periodDays });
     const key = `dashboard${qs}`;
     const cached = getCached<DashboardSummary>(key, CACHE_TTL_SHORT);
     if (cached) return cached;
