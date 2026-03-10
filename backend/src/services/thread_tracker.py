@@ -145,6 +145,7 @@ class ThreadTracker:
                     .select(COLUMNS)
                     .eq('mailbox_id', self.mailbox_id)
                     .not_.is_('thread_id', 'null')
+                    .neq('thread_id', '')
                     .order('sent_date', desc=False)
                 )
 
