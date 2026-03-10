@@ -50,6 +50,7 @@ const pageTitles: Record<string, string> = {
   '/clients': 'Clients',
   '/users': 'User Management',
   '/admin/data': 'Admin Data View',
+  '/admin/audit-logs': 'Audit Logs',
   '/settings': 'Settings',
 };
 
@@ -142,6 +143,7 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
           { key: '/intelligence/usage', label: <Link to="/intelligence/usage">AI Usage</Link> },
           { key: '/users', label: <Link to="/users">Users</Link> },
           { key: '/admin/data', label: <Link to="/admin/data">Data View</Link> },
+          { key: '/admin/audit-logs', label: <Link to="/admin/audit-logs">Audit Logs</Link> },
         ] : []),
       ],
     },

@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 import logging
 
 from ..dependencies.auth import get_current_user, require_role, get_accessible_mailbox_ids
+from ..utils.audit import log_audit, audit_from_user
 
 from ..models.ai import (
     # Request models
@@ -106,6 +107,7 @@ async def trigger_analysis(
     mailbox_id: str,
     data: AnalyzeRequest,
     background_tasks: BackgroundTasks,
+    current_user: dict = Depends(get_current_user),
     accessible_ids: list = Depends(get_accessible_mailbox_ids),
 ):
     """
@@ -156,6 +158,7 @@ async def trigger_analysis(
             logger.error(f"Background analysis failed for {mailbox_id}: {e}")
 
     background_tasks.add_task(run_analysis)
+    audit_from_user(current_user, "analyze", "mailbox", resource_id=mailbox_id, details={"max_emails": data.max_emails})
 
     return AnalyzeResponse(
         status="accepted",

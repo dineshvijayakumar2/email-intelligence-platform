@@ -26,6 +26,7 @@ from datetime import datetime, timezone
 import logging
 import os
 from ..dependencies.auth import get_current_user
+from ..utils.audit import log_audit, audit_from_user
 
 logger = logging.getLogger(__name__)
 
@@ -1144,7 +1145,7 @@ async def get_mailbox_gmail_status(mailbox_id: str) -> MailboxGmailStatusRespons
 
 
 @router.post("/mailbox/{mailbox_id}/sync")
-async def trigger_mailbox_gmail_sync(mailbox_id: str, background_tasks: BackgroundTasks):
+async def trigger_mailbox_gmail_sync(mailbox_id: str, background_tasks: BackgroundTasks, current_user: dict = Depends(get_current_user)):
     """
     Manually trigger Gmail sync for a specific mailbox.
 
@@ -1174,6 +1175,7 @@ async def trigger_mailbox_gmail_sync(mailbox_id: str, background_tasks: Backgrou
 
         # Run sync in background
         background_tasks.add_task(_run_mailbox_sync, mailbox_id)
+        audit_from_user(current_user, "sync", "mailbox", resource_id=mailbox_id, details={"provider": "gmail"})
 
         return {
             "status": "started",

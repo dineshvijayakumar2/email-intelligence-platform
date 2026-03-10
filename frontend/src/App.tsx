@@ -44,6 +44,9 @@ import UsagePage from './pages/intelligence/usage';
 // Settings
 import SettingsPage from './pages/settings';
 
+// Audit
+import AuditLogsPage from './pages/audit-logs';
+
 // Theme and styles
 import { antTheme } from './theme/glassTheme';
 import './styles/glass.css';
@@ -223,6 +226,7 @@ function App() {
               }
             />
             <Route path="/admin/data" element={<AdminRoute><Layout><AdminDataViewPage /></Layout></AdminRoute>} />
+            <Route path="/admin/audit-logs" element={<AdminRoute><Layout><AuditLogsPage /></Layout></AdminRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Layout><SettingsPage /></Layout></ProtectedRoute>} />
 
             {/* OAuth callback routes - for popup windows */}

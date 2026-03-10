@@ -754,7 +754,30 @@ class ActionBucketEngine:
             )
         )
 
-        return action_items[:limit]
+        trimmed = action_items[:limit]
+
+        # Enrich with email metadata (subject, sender, date)
+        email_ids = list({item["email_id"] for item in trimmed if item.get("email_id")})
+        if email_ids:
+            email_map = {}
+            for i in range(0, len(email_ids), 50):
+                batch_ids = email_ids[i:i + 50]
+                try:
+                    resp = self.client.table("emails").select(
+                        "id,subject,sender_email,sender_name,sent_date"
+                    ).in_("id", batch_ids).execute()
+                    for e in (resp.data or []):
+                        email_map[e["id"]] = e
+                except Exception:
+                    pass
+            for item in trimmed:
+                email = email_map.get(item.get("email_id"), {})
+                item["email_subject"] = email.get("subject", "")
+                item["email_sender"] = email.get("sender_email", "")
+                item["email_sender_name"] = email.get("sender_name", "")
+                item["email_date"] = email.get("sent_date", "")
+
+        return trimmed
 
     # ------------------------------------------------------------------
     # Bucket summary — counts per bucket type

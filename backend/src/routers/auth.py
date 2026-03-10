@@ -9,10 +9,11 @@ Stage 2 - Role-Based Access Control Implementation
 
 from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel, EmailStr
-from typing import List, Optional
+from typing import List, Optional, Any
 import logging
 
 from ..dependencies.auth import get_current_user, require_role, get_accessible_mailbox_ids
+from ..utils.audit import audit_from_user
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +118,18 @@ class UserWithClients(BaseModel):
 # =============================================================================
 # Current User Endpoints
 # =============================================================================
+
+@router.post("/login-event")
+async def record_login_event(current_user: dict = Depends(get_current_user)):
+    """
+    Record a successful login event in the audit log.
+
+    Called by the frontend once after OAuth or email/password sign-in.
+    Idempotent — safe to call multiple times (each call creates a log entry).
+    """
+    audit_from_user(current_user, "login", "auth", details={"method": "session"})
+    return {"ok": True}
+
 
 @router.get("/me", response_model=UserProfile)
 async def get_current_user_profile(current_user: dict = Depends(get_current_user)):
@@ -262,6 +275,8 @@ async def update_business_hours_settings(
         _supabase.table('user_profiles').update(update_data).eq(
             'id', current_user['user_id']
         ).execute()
+
+        audit_from_user(current_user, "settings_change", "settings", details={"changed_fields": list(update_data.keys())})
 
         return await get_business_hours_settings(current_user)
 
@@ -515,6 +530,7 @@ async def update_user_roles(
             raise HTTPException(status_code=404, detail="User not found")
 
         logger.info(f"User {user_id} roles updated to {request.roles} by {current_user['user_id']}")
+        audit_from_user(current_user, "role_change", "user", resource_id=user_id, details={"new_roles": request.roles})
 
         return {
             "success": True,
@@ -562,6 +578,7 @@ async def deactivate_user(
             raise HTTPException(status_code=404, detail="User not found")
 
         logger.info(f"User {user_id} deactivated by {current_user['user_id']}")
+        audit_from_user(current_user, "user_deactivate", "user", resource_id=user_id)
 
         return {
             "success": True,
@@ -599,6 +616,7 @@ async def activate_user(
             raise HTTPException(status_code=404, detail="User not found")
 
         logger.info(f"User {user_id} activated by {current_user['user_id']}")
+        audit_from_user(current_user, "user_activate", "user", resource_id=user_id)
 
         return {
             "success": True,
@@ -735,6 +753,7 @@ async def update_user_client_assignments(
                 _supabase.table(assignment_table).insert(assignments).execute()
 
         logger.info(f"User {user_id} {assignment_type} client assignments updated by {current_user['user_id']}")
+        audit_from_user(current_user, "client_assign", "user", resource_id=user_id, details={"client_ids": request.client_ids, "assignment_type": assignment_type})
 
         return {
             "success": True,
@@ -1109,4 +1128,204 @@ async def get_manager_clients(
 
     except Exception as e:
         logger.error(f"Failed to get manager clients: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# Audit Log Endpoints (Admin Only)
+# =============================================================================
+
+class AuditLogEntry(BaseModel):
+    """Single audit log entry"""
+    id: str
+    user_id: Optional[str] = None
+    user_email: Optional[str] = None
+    action: str
+    resource_type: str
+    resource_id: Optional[str] = None
+    details: Optional[Any] = None
+    ip_address: Optional[str] = None
+    created_at: str
+
+
+class AuditLogResponse(BaseModel):
+    """Paginated audit log response"""
+    data: List[AuditLogEntry]
+    total: int
+    page: int
+    page_size: int
+
+
+class AuditLogStats(BaseModel):
+    """Audit log summary statistics"""
+    total_entries: int
+    actions: List[dict]
+    resource_types: List[dict]
+    active_users: List[dict]
+
+
+@router.get("/audit-logs", response_model=AuditLogResponse)
+async def list_audit_logs(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
+    action: Optional[str] = Query(default=None, description="Filter by action type"),
+    resource_type: Optional[str] = Query(default=None, description="Filter by resource type"),
+    user_email: Optional[str] = Query(default=None, description="Filter by user email (partial match)"),
+    date_from: Optional[str] = Query(default=None, description="Start date (YYYY-MM-DD)"),
+    date_to: Optional[str] = Query(default=None, description="End date (YYYY-MM-DD)"),
+    search: Optional[str] = Query(default=None, description="Search action, resource_type, resource_id, user_email"),
+    current_user: dict = Depends(require_role('admin')),
+):
+    """
+    List audit log entries with pagination, filtering, and search (admin only).
+
+    Supports filtering by action, resource_type, user_email, date range.
+    Search performs partial match across action, resource_type, resource_id, user_email.
+    """
+    try:
+        # Count query
+        count_query = _supabase.table('audit_log').select('id', count='exact')
+        # Data query
+        data_query = _supabase.table('audit_log').select(
+            'id, user_id, user_email, action, resource_type, resource_id, details, ip_address, created_at'
+        )
+
+        # Apply filters to both queries
+        for q_ref in [count_query, data_query]:
+            if action:
+                q_ref = q_ref if q_ref is count_query else data_query
+                # We need to apply filters inline
+                pass
+
+        # Rebuild with filters applied properly
+        if action:
+            count_query = count_query.eq('action', action)
+            data_query = data_query.eq('action', action)
+        if resource_type:
+            count_query = count_query.eq('resource_type', resource_type)
+            data_query = data_query.eq('resource_type', resource_type)
+        if user_email:
+            count_query = count_query.ilike('user_email', f'%{user_email}%')
+            data_query = data_query.ilike('user_email', f'%{user_email}%')
+        if date_from:
+            count_query = count_query.gte('created_at', f'{date_from}T00:00:00Z')
+            data_query = data_query.gte('created_at', f'{date_from}T00:00:00Z')
+        if date_to:
+            count_query = count_query.lte('created_at', f'{date_to}T23:59:59Z')
+            data_query = data_query.lte('created_at', f'{date_to}T23:59:59Z')
+
+        # Search across multiple fields — use Python-side filtering
+        # (Supabase .or_() can be unreliable)
+        search_filter = None
+        if search:
+            search_filter = search.lower()
+
+        # Execute count
+        count_result = count_query.execute()
+        total = count_result.count if count_result.count is not None else 0
+
+        # Execute data with pagination and ordering
+        offset = (page - 1) * page_size
+        data_query = data_query.order('created_at', desc=True).range(offset, offset + page_size - 1)
+        data_result = data_query.execute()
+
+        rows = data_result.data or []
+
+        # Apply search filter in Python if needed
+        if search_filter:
+            rows = [
+                r for r in rows
+                if search_filter in (r.get('action', '') or '').lower()
+                or search_filter in (r.get('resource_type', '') or '').lower()
+                or search_filter in (r.get('resource_id', '') or '').lower()
+                or search_filter in (r.get('user_email', '') or '').lower()
+            ]
+            total = len(rows)  # Approximate — search reduces count
+
+        entries = [
+            AuditLogEntry(
+                id=str(r['id']),
+                user_id=str(r['user_id']) if r.get('user_id') else None,
+                user_email=r.get('user_email'),
+                action=r['action'],
+                resource_type=r['resource_type'],
+                resource_id=r.get('resource_id'),
+                details=r.get('details'),
+                ip_address=r.get('ip_address'),
+                created_at=r['created_at'],
+            )
+            for r in rows
+        ]
+
+        return AuditLogResponse(data=entries, total=total, page=page, page_size=page_size)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to list audit logs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/audit-logs/stats", response_model=AuditLogStats)
+async def get_audit_log_stats(
+    days: int = Query(default=30, ge=1, le=365, description="Number of days to aggregate"),
+    current_user: dict = Depends(require_role('admin')),
+):
+    """
+    Get audit log summary statistics for the last N days (admin only).
+
+    Returns action counts, resource type counts, and top active users.
+    """
+    try:
+        from datetime import datetime, timedelta, timezone
+
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+
+        # Fetch all entries in range (up to 1000 for aggregation)
+        result = _supabase.table('audit_log').select(
+            'action, resource_type, user_email'
+        ).gte('created_at', cutoff).order('created_at', desc=True).limit(1000).execute()
+
+        rows = result.data or []
+        total_entries = len(rows)
+
+        # Aggregate action counts
+        action_counts: dict = {}
+        resource_counts: dict = {}
+        user_counts: dict = {}
+
+        for r in rows:
+            a = r.get('action', 'unknown')
+            action_counts[a] = action_counts.get(a, 0) + 1
+
+            rt = r.get('resource_type', 'unknown')
+            resource_counts[rt] = resource_counts.get(rt, 0) + 1
+
+            ue = r.get('user_email') or 'system'
+            user_counts[ue] = user_counts.get(ue, 0) + 1
+
+        actions = sorted(
+            [{'name': k, 'count': v} for k, v in action_counts.items()],
+            key=lambda x: x['count'], reverse=True
+        )
+        resource_types = sorted(
+            [{'name': k, 'count': v} for k, v in resource_counts.items()],
+            key=lambda x: x['count'], reverse=True
+        )
+        active_users = sorted(
+            [{'email': k, 'count': v} for k, v in user_counts.items()],
+            key=lambda x: x['count'], reverse=True
+        )[:10]
+
+        return AuditLogStats(
+            total_entries=total_entries,
+            actions=actions,
+            resource_types=resource_types,
+            active_users=active_users,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get audit log stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))

@@ -144,6 +144,7 @@ Full plan: `docs/AI_MVP_PLAN.md` (3-week session-by-session plan + implementatio
 - [x] **AI Churn Risk Tightened** — strict exit-intent-only, 0.6 confidence threshold, complaints no longer auto-churn
 - [x] **AI Digest Rewritten** — insight-focused prompt (no stat regurgitation), fallback to is_outbound
 - [x] **AI Credits Card** — daily/monthly remaining on Usage page
+- [x] **B4: Audit Logging** — audit_log table (migration 018), `audit.py` utility, hooked into auth (settings, roles, user activate/deactivate, client assignments), gmail/outlook sync, AI analyze, extraction, mailbox create/delete
 
 ### Analytics Enhancements (Mar 6, 2026)
 - [x] **Reusable EmailDetailPanel** — Extracted from emails.tsx into `frontend/src/components/EmailDetailPanel.tsx` with all helpers

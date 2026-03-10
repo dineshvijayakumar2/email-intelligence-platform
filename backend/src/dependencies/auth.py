@@ -13,6 +13,7 @@ import jwt
 from jwt import PyJWKClient
 import os
 import logging
+from ..utils.audit import log_audit
 
 logger = logging.getLogger(__name__)
 
@@ -143,6 +144,7 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> Dict:
             result_data = result.data
 
         if not result_data.get('is_active'):
+            log_audit(action="login_blocked", resource_type="user", user_id=user_id, user_email=result_data.get('email'), details={"reason": "account_deactivated"})
             raise HTTPException(status_code=403, detail="Account is deactivated")
 
         return {
@@ -153,12 +155,14 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> Dict:
         }
 
     except jwt.ExpiredSignatureError:
+        log_audit(action="login_failure", resource_type="auth", details={"reason": "token_expired"})
         raise HTTPException(
             status_code=401,
             detail="Token has expired",
             headers={"WWW-Authenticate": "Bearer"}
         )
     except jwt.InvalidAudienceError:
+        log_audit(action="login_failure", resource_type="auth", details={"reason": "invalid_audience"})
         raise HTTPException(
             status_code=401,
             detail="Invalid token audience",
@@ -166,6 +170,7 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> Dict:
         )
     except jwt.InvalidTokenError as e:
         logger.warning(f"Invalid token: {e}")
+        log_audit(action="login_failure", resource_type="auth", details={"reason": "invalid_token", "error": str(e)[:200]})
         raise HTTPException(
             status_code=401,
             detail="Invalid token",

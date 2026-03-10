@@ -97,24 +97,40 @@ const OpportunitiesPage: React.FC = () => {
   // Action Items columns
   const actionColumns = [
     {
-      title: 'Bucket', dataIndex: 'bucket', key: 'bucket', width: 140,
+      title: 'Bucket', dataIndex: 'bucket', key: 'bucket', width: 130,
       render: (val: string) => <Tag color={BUCKET_COLORS[val] || 'default'}>{val?.replace(/_/g, ' ')}</Tag>,
     },
     {
-      title: 'Severity', dataIndex: 'severity', key: 'severity', width: 90,
+      title: 'Severity', dataIndex: 'severity', key: 'severity', width: 85,
       render: (val: string) => {
         const colors: Record<string, string> = { critical: 'red', high: 'orange', medium: 'blue' };
         return <Tag color={colors[val] || 'default'}>{val}</Tag>;
       },
     },
-    { title: 'Action', dataIndex: 'recommended_action', key: 'action' },
+    {
+      title: 'Email', key: 'email_context', width: 260, ellipsis: true,
+      render: (_: unknown, record: ActionItem) => (
+        <Tooltip title={record.email_subject || record.email_summary}>
+          <div>
+            <Text style={{ fontSize: 13, display: 'block' }} ellipsis>
+              {record.email_subject || record.email_summary || '—'}
+            </Text>
+            <Text type="secondary" style={{ fontSize: 11 }}>
+              {record.email_sender_name || record.email_sender || ''}
+              {record.email_date ? ` · ${formatDate(record.email_date)}` : ''}
+            </Text>
+          </div>
+        </Tooltip>
+      ),
+    },
+    { title: 'Action', dataIndex: 'recommended_action', key: 'action', ellipsis: true },
     { title: 'Summary', dataIndex: 'email_summary', key: 'summary', ellipsis: true },
     {
-      title: 'Confidence', dataIndex: 'confidence', key: 'confidence', width: 100,
+      title: 'Confidence', dataIndex: 'confidence', key: 'confidence', width: 95,
       render: (val: number) => `${((val || 0) * 100).toFixed(0)}%`,
     },
     {
-      title: 'Score', dataIndex: 'business_signal_score', key: 'score', width: 80,
+      title: 'Score', dataIndex: 'business_signal_score', key: 'score', width: 70,
       sorter: (a: ActionItem, b: ActionItem) => (b.business_signal_score || 0) - (a.business_signal_score || 0),
     },
   ];

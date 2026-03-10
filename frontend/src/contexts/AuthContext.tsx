@@ -107,6 +107,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (session?.access_token) {
         await loadProfile(session.access_token);
+
+        // Log login event for audit trail (fire-and-forget, only on actual sign-in)
+        if (event === 'SIGNED_IN') {
+          fetch(`${config.apiBaseUrl}/auth/login-event`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${session.access_token}` },
+          }).catch(() => { /* silent */ });
+        }
       } else {
         setProfile(null);
       }

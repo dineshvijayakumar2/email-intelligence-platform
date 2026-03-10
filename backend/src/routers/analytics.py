@@ -15,11 +15,13 @@ Total: ~30 endpoints
 Author: Sprint 2 Phase 5A Implementation
 """
 
-from fastapi import APIRouter, HTTPException, Query, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Query, BackgroundTasks, Depends
 from typing import List, Optional
 from datetime import datetime, timedelta
 import logging
 
+from ..dependencies.auth import get_current_user
+from ..utils.audit import log_audit, audit_from_user
 from ..models.analytics import (
     # Enums
     ExtractionStatus, ExtractionMode, ThreadStatus, ContactType, EngagementStatus,
@@ -62,7 +64,7 @@ def init_analytics_router(supabase_client):
 # ============================================================================
 
 @router.post("/extraction/run", response_model=ExtractionJobResponse)
-async def trigger_extraction_job(data: ExtractionJobCreate, background_tasks: BackgroundTasks):
+async def trigger_extraction_job(data: ExtractionJobCreate, background_tasks: BackgroundTasks, current_user: dict = Depends(get_current_user)):
     """
     Trigger a new extraction job.
 
@@ -110,6 +112,7 @@ async def trigger_extraction_job(data: ExtractionJobCreate, background_tasks: Ba
                 logger.error(f"Background extraction failed: {e}")
 
         background_tasks.add_task(run_extraction)
+        audit_from_user(current_user, "extract", "mailbox", resource_id=data.mailbox_id, details={"mode": data.mode.value, "lookback_days": data.lookback_days})
 
         # Return initial job status (will be created by orchestrator)
         return {

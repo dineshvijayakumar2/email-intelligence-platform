@@ -149,6 +149,10 @@ export interface ActionItem {
   intent?: IntentType;
   urgency?: UrgencyLevel;
   business_signal_score: number;
+  email_subject?: string;
+  email_sender?: string;
+  email_sender_name?: string;
+  email_date?: string;
 }
 
 export interface ActionItemsResponse {

@@ -69,6 +69,9 @@ from src.services.outlook_sync_service import get_outlook_sync_service, OutlookS
 from src.routers.auth import router as auth_router, init_auth_router
 from src.dependencies.auth import init_auth_dependencies, require_role, get_current_user, get_accessible_mailbox_ids
 
+# Audit logging
+from src.utils.audit import init_audit
+
 # WebSocket for real-time updates
 from src.websocket.routes import router as websocket_router
 from src.websocket.manager import init_connection_manager, get_connection_manager
@@ -498,7 +501,8 @@ def initialize_business_hierarchy_routers():
     # Initialize auth router and dependencies (Stage 2 RBAC)
     init_auth_dependencies(sb)
     init_auth_router(sb)
-    logger.info("Business hierarchy routers initialized (including auth)")
+    init_audit(sb)  # Audit logging
+    logger.info("Business hierarchy routers initialized (including auth, audit)")
 
 # Register routers with API prefix
 app.include_router(auth_router, prefix="/api")  # Auth router first for login/me endpoints
@@ -1005,7 +1009,7 @@ async def get_mailbox(mailbox_id: str):
         raise HTTPException(status_code=500, detail=f"Failed to fetch mailbox: {str(e)}")
 
 @app.post("/api/mailboxes")
-async def create_mailbox(mailbox_data: MailboxConfig):
+async def create_mailbox(mailbox_data: MailboxConfig, current_user: dict = Depends(get_current_user)):
     """Create a new mailbox"""
     try:
         sb = get_supabase()
@@ -1033,6 +1037,8 @@ async def create_mailbox(mailbox_data: MailboxConfig):
         if result.data and len(result.data) > 0:
             mailbox_id = result.data[0]['id']
             created_result = sb.table('mailboxes').select('*').eq('id', mailbox_id).single().execute()
+            from src.utils.audit import audit_from_user
+            audit_from_user(current_user, "mailbox_create", "mailbox", resource_id=mailbox_id, details={"name": mailbox_data.name, "type": mailbox_data.mailbox_type})
             return created_result.data
         else:
             raise HTTPException(status_code=500, detail="Failed to create mailbox")
@@ -1104,7 +1110,7 @@ async def update_mailbox(mailbox_id: str, mailbox_data: MailboxConfig):
         raise HTTPException(status_code=500, detail=f"Failed to update mailbox: {str(e)}")
 
 @app.delete("/api/mailboxes/{mailbox_id}")
-async def delete_mailbox(mailbox_id: str):
+async def delete_mailbox(mailbox_id: str, current_user: dict = Depends(get_current_user)):
     """Delete a mailbox and all related data.
 
     Explicitly deletes related records first to avoid Supabase statement
@@ -1157,6 +1163,8 @@ async def delete_mailbox(mailbox_id: str):
         sb.table('mailboxes').delete().eq('id', mailbox_id).execute()
 
         logger.info(f"Mailbox {mailbox_id} deleted with {deleted_total} emails")
+        from src.utils.audit import audit_from_user
+        audit_from_user(current_user, "mailbox_delete", "mailbox", resource_id=mailbox_id, details={"emails_deleted": deleted_total})
         return {"message": "Mailbox deleted successfully", "emails_deleted": deleted_total}
 
     except HTTPException:
