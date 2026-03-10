@@ -367,12 +367,24 @@ class ThreadTracker:
         records = []
         timestamp = datetime.utcnow().isoformat()
 
+        # Map tracker statuses to DB CHECK constraint values
+        STATUS_TO_DB = {
+            'ongoing': 'stale',           # active → stale (closest match)
+            'awaiting_response': 'awaiting_reply',
+            'awaiting_our_response': 'outbound_pending',
+            'complete': 'complete',
+            'overdue': 'overdue',
+            'dropped': 'dropped',
+        }
+
         for status in thread_statuses:
+            db_status = STATUS_TO_DB.get(status.status, status.status)
             record = {
                 'thread_id': status.thread_id,
+                'mailbox_id': self.mailbox_id,
                 'subject': status.subject,
                 'message_count': status.message_count,
-                'status': status.status,
+                'status': db_status,
                 'last_email_id': status.last_email_id,
                 'last_email_date': status.last_email_date.isoformat(),
                 'last_sender_is_outbound': status.last_sender_is_outbound,
