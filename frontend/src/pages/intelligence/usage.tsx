@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  Card, Row, Col, Statistic, Switch, InputNumber, Button, Table,
+  Card, Row, Col, Statistic, Switch, InputNumber, Button, Table, Select,
   Tag, Space, Progress, Alert, Divider, Tooltip, Badge, Typography,
   Spin, message,
 } from 'antd';
@@ -17,7 +17,6 @@ import {
   ClockCircleOutlined, CheckCircleOutlined, CloseCircleOutlined,
   ExclamationCircleOutlined,
 } from '@ant-design/icons';
-import { Select } from 'antd';
 import { usageApi, controlsApi, invalidateCache } from '../../services/aiService';
 import { modelsApi } from '../../services/strategicDigestService';
 import { formatTime } from '../../utils/dateUtils';
