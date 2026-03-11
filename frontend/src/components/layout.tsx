@@ -143,6 +143,8 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
         { key: '/settings', label: <Link to="/settings">Settings</Link> },
         ...(isAdmin ? [
           { key: '/intelligence/usage', label: <Link to="/intelligence/usage">AI Usage</Link> },
+          { key: '/intelligence/quickbase', label: <Link to="/intelligence/quickbase">QB Config</Link> },
+          { key: '/intelligence/quickbase-data', label: <Link to="/intelligence/quickbase-data">QB Data</Link> },
           { key: '/users', label: <Link to="/users">Users</Link> },
           { key: '/admin/data', label: <Link to="/admin/data">Data View</Link> },
           { key: '/admin/audit-logs', label: <Link to="/admin/audit-logs">Audit Logs</Link> },

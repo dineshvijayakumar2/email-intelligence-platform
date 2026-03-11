@@ -62,6 +62,9 @@ class AIControlSettings:
     # Session spend tracking (resets on server restart)
     session_spend_usd: float = 0.0
     session_requests: int = 0
+    # Model preferences (persisted in-process across controls updates)
+    cheap_model: str = "haiku"
+    strategic_model: str = "sonnet"
 
 
 # Global settings singleton

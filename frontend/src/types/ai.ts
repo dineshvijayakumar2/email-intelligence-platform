@@ -328,6 +328,8 @@ export interface AIControlSettings {
   max_requests_per_second: number;
   session_spend_usd: number;
   session_requests: number;
+  cheap_model?: string;
+  strategic_model?: string;
 }
 
 export interface UsageLogEntry {

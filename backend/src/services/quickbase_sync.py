@@ -61,16 +61,51 @@ class QuickbaseSync:
             user_token=qb_config['user_token_encrypted'],  # TODO: decrypt in production
         )
 
+    # Maps logical table name → qb_sync_config field holding the QB table ID
+    _TABLE_ID_CONFIG_FIELD = {
+        'customers':       'customers_table_id',
+        'contacts':        'contacts_table_id',
+        'quotes':          'quotes_table_id',
+        'jobs':            'jobs_table_id',
+        'sales_line_items': 'sales_line_items_table_id',
+    }
+
+    def _write_sync_log(self, table_name: str, record_count: int, status: str = 'success', error_message: str = None):
+        """Write a sync log entry including the QB table ID for cross-referencing qb_field_definitions."""
+        config_field = self._TABLE_ID_CONFIG_FIELD.get(table_name, '')
+        table_id = self._config.get(config_field)  # e.g. 'buzhzbv39'
+        try:
+            _execute_with_retry(lambda: self._supabase.table('qb_sync_log').insert({
+                'client_id': self._client_id,
+                'table_name': table_name,
+                'table_id': table_id,
+                'record_count': record_count,
+                'synced_at': datetime.now(timezone.utc).isoformat(),
+                'status': status,
+                'error_message': error_message,
+            }).execute())
+        except Exception as e:
+            logger.warning(f"Failed to write sync log for {table_name}: {e}")
+
     async def sync_all(self) -> dict[str, int]:
         """Sync all QB tables. Returns record counts per table."""
         logger.info(f"Starting full QB sync for client {self._client_id}")
         counts = {}
 
-        counts['customers'] = await self.sync_customers()
-        counts['contacts'] = await self.sync_contacts()
-        counts['quotes'] = await self.sync_quotes()
-        counts['jobs'] = await self.sync_jobs()
-        counts['sales_line_items'] = await self.sync_sales_line_items()
+        for table_key, sync_fn in [
+            ('customers', self.sync_customers),
+            ('contacts', self.sync_contacts),
+            ('quotes', self.sync_quotes),
+            ('jobs', self.sync_jobs),
+            ('sales_line_items', self.sync_sales_line_items),
+        ]:
+            try:
+                counts[table_key] = await sync_fn()
+                self._write_sync_log(table_key, counts[table_key])
+            except Exception as e:
+                logger.error(f"QB sync failed for table {table_key}: {e}")
+                self._write_sync_log(table_key, 0, status='error', error_message=str(e))
+                counts[table_key] = 0
 
         # After sync, match to existing companies/contacts
         matched_companies = await self.match_to_companies()
@@ -151,6 +186,13 @@ class QuickbaseSync:
 
         for record in records:
             mapped = QuickbaseClient.map_record(record, mapping)
+            # QB returns integers as floats (e.g. 9999.0) — coerce whole floats to int
+            # QB returns empty strings for unset date/numeric fields — coerce to None
+            for k, v in list(mapped.items()):
+                if isinstance(v, float) and v == int(v):
+                    mapped[k] = int(v)
+                elif v == '':
+                    mapped[k] = None
             mapped['client_id'] = self._client_id
             mapped['synced_at'] = now
             rows.append(mapped)

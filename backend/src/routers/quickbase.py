@@ -13,6 +13,7 @@ from ..models.quickbase import (
     QBSyncConfigResponse,
     QBSyncResult,
     QBSyncStatus,
+    QBTableSyncLog,
 )
 from ..services.quickbase_sync import QuickbaseSync
 
@@ -43,7 +44,7 @@ def _get_client_id_from_user(user_id: str) -> Optional[str]:
 
 @router.get("/config", response_model=QBSyncConfigResponse)
 async def get_config(client_id: str = Query(...)):
-    """Get Quickbase sync configuration for a client (token masked)."""
+    """Get Quickbase sync configuration for a client (admin-only, token returned as-is)."""
     try:
         result = _supabase.table('qb_sync_config').select('*').eq(
             'client_id', client_id
@@ -53,15 +54,12 @@ async def get_config(client_id: str = Query(...)):
             raise HTTPException(status_code=404, detail="No QB config found for this client")
 
         cfg = result.data
-        # Mask token
-        token = cfg.get('user_token_encrypted', '')
-        masked = token[:4] + '****' + token[-4:] if len(token) > 8 else '****'
 
         return QBSyncConfigResponse(
             client_id=cfg['client_id'],
             realm_hostname=cfg['realm_hostname'],
             app_id=cfg['app_id'],
-            user_token_masked=masked,
+            user_token=cfg.get('user_token_encrypted', ''),
             customers_table_id=cfg['customers_table_id'],
             contacts_table_id=cfg['contacts_table_id'],
             quotes_table_id=cfg['quotes_table_id'],
@@ -88,7 +86,6 @@ async def upsert_config(client_id: str = Query(...), config: QBSyncConfigCreate 
             'client_id': client_id,
             'realm_hostname': config.realm_hostname,
             'app_id': config.app_id,
-            'user_token_encrypted': config.user_token,
             'customers_table_id': config.customers_table_id,
             'contacts_table_id': config.contacts_table_id,
             'quotes_table_id': config.quotes_table_id,
@@ -99,6 +96,20 @@ async def upsert_config(client_id: str = Query(...), config: QBSyncConfigCreate 
             'is_active': True,
             'updated_at': datetime.now(timezone.utc).isoformat(),
         }
+
+        if config.user_token:
+            # New token provided — store it and activate sync
+            row['user_token_encrypted'] = config.user_token
+            row['is_active'] = True
+        else:
+            # Token explicitly cleared — disable sync and wipe token
+            existing = _supabase.table('qb_sync_config').select(
+                'user_token_encrypted'
+            ).eq('client_id', client_id).limit(1).execute()
+            if not existing.data:
+                raise HTTPException(status_code=400, detail="user_token is required for new config")
+            row['user_token_encrypted'] = ''
+            row['is_active'] = False
 
         _supabase.table('qb_sync_config').upsert(
             row, on_conflict='client_id'
@@ -172,18 +183,126 @@ async def get_sync_status(client_id: str = Query(...)):
             ).eq('client_id', client_id).limit(0).execute()
             counts[table.replace('qb_', '')] = result.count or 0
 
+        # Fetch latest sync log entry per table — gracefully skips if table not yet created
+        table_logs: list[QBTableSyncLog] = []
+        try:
+            log_result = _supabase.table('qb_sync_log').select(
+                'table_name, table_id, record_count, synced_at, status, error_message'
+            ).eq('client_id', client_id).order('synced_at', desc=True).limit(50).execute()
+
+            seen: set[str] = set()
+            for row in (log_result.data or []):
+                tn = row['table_name']
+                if tn not in seen:
+                    seen.add(tn)
+                    table_logs.append(QBTableSyncLog(
+                        table_name=tn,
+                        table_id=row.get('table_id'),
+                        record_count=row.get('record_count', 0),
+                        synced_at=row.get('synced_at'),
+                        status=row.get('status', 'success'),
+                        error_message=row.get('error_message'),
+                    ))
+        except Exception as log_err:
+            logger.warning(f"qb_sync_log not available (run migration 023): {log_err}")
+
         cfg = cfg_result.data
         return QBSyncStatus(
             client_id=cfg['client_id'],
             last_sync_at=cfg.get('last_sync_at'),
             is_active=cfg.get('is_active', True),
             record_counts=counts,
+            table_logs=table_logs,
         )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Failed to get sync status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/fields")
+async def get_table_fields(
+    client_id: str = Query(...),
+    table: str = Query(...),
+    force: bool = Query(False, description="Force re-fetch from QB, bypassing cache"),
+):
+    """
+    Get field definitions for a QB table.
+    Returns cached data from qb_field_definitions unless force=true.
+    On force or cache miss, fetches from QB and writes through to the cache.
+    """
+    table_map = {
+        'customers': 'customers_table_id',
+        'contacts': 'contacts_table_id',
+        'quotes': 'quotes_table_id',
+        'jobs': 'jobs_table_id',
+        'sales_line_items': 'sales_line_items_table_id',
+    }
+    if table not in table_map:
+        raise HTTPException(status_code=400, detail=f"Unknown table: {table}")
+
+    try:
+        # --- Resolve QB table ID from config (needed for both cache key and QB call) ---
+        cfg_result = _supabase.table('qb_sync_config').select('*').eq(
+            'client_id', client_id
+        ).single().execute()
+        if not cfg_result.data:
+            raise HTTPException(status_code=404, detail="No QB config found")
+        cfg = cfg_result.data
+        qb_table_id = cfg[table_map[table]]
+
+        # --- Try cache first (unless force refresh) ---
+        if not force:
+            cached = _supabase.table('qb_field_definitions').select('*').eq(
+                'client_id', client_id
+            ).eq('table_id', qb_table_id).order('field_id').execute()
+
+            if cached.data:
+                synced_at = cached.data[0].get('synced_at')
+                fields = [{"id": r['field_id'], "label": r['field_label'], "type": r.get('field_type')} for r in cached.data]
+                return {"fields": fields, "synced_at": synced_at, "from_cache": True}
+
+        # --- Cache miss or force: fetch from QB ---
+        from ..services.quickbase_client import QuickbaseClient
+        qb = QuickbaseClient(
+            realm_hostname=cfg['realm_hostname'],
+            user_token=cfg['user_token_encrypted'],
+        )
+        fields = await qb.get_fields(qb_table_id)
+
+        # --- Write through to cache ---
+        now = datetime.now(timezone.utc).isoformat()
+        rows = [
+            {
+                "client_id": client_id,
+                "table_id": qb_table_id,
+                "table_name": table,          # logical name e.g. "customers"
+                "field_id": f["id"],
+                "field_label": f["label"],
+                "field_type": f.get("type"),
+                "synced_at": now,
+            }
+            for f in fields
+        ]
+        if rows:
+            _supabase.table('qb_field_definitions').upsert(
+                rows, on_conflict='client_id,table_id,field_id'
+            ).execute()
+            # Prune stale fields no longer in QB
+            live_ids = [f["id"] for f in fields]
+            _supabase.table('qb_field_definitions').delete().eq(
+                'client_id', client_id
+            ).eq('table_id', qb_table_id).not_.in_('field_id', live_ids).execute()
+
+        logger.info(f"QB fields synced: client={client_id} table_id={qb_table_id} count={len(fields)}")
+        return {"fields": fields, "synced_at": now, "from_cache": False}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get QB fields: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -223,6 +342,82 @@ async def list_qb_customers(
 
     except Exception as e:
         logger.error(f"Failed to list QB customers: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/contacts")
+async def list_qb_contacts(
+    client_id: str = Query(...),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    search: Optional[str] = Query(default=None),
+):
+    """List cached QB contacts."""
+    try:
+        query = _supabase.table('qb_contacts').select('*', count='exact').eq('client_id', client_id)
+        if search:
+            query = query.or_(f"first_name.ilike.%{search}%,surname.ilike.%{search}%,email.ilike.%{search}%")
+        result = query.order('surname').range(offset, offset + limit - 1).execute()
+        return {"contacts": result.data or [], "total": result.count or 0}
+    except Exception as e:
+        logger.error(f"Failed to list QB contacts: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/quotes")
+async def list_qb_quotes(
+    client_id: str = Query(...),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    search: Optional[str] = Query(default=None),
+):
+    """List cached QB quotes."""
+    try:
+        query = _supabase.table('qb_quotes').select('*', count='exact').eq('client_id', client_id)
+        if search:
+            query = query.or_(f"quote_no.ilike.%{search}%,contact_name.ilike.%{search}%")
+        result = query.order('date_created', desc=True).range(offset, offset + limit - 1).execute()
+        return {"quotes": result.data or [], "total": result.count or 0}
+    except Exception as e:
+        logger.error(f"Failed to list QB quotes: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/jobs")
+async def list_qb_jobs(
+    client_id: str = Query(...),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    search: Optional[str] = Query(default=None),
+):
+    """List cached QB jobs."""
+    try:
+        query = _supabase.table('qb_jobs').select('*', count='exact').eq('client_id', client_id)
+        if search:
+            query = query.or_(f"job_no.ilike.%{search}%,job_status.ilike.%{search}%")
+        result = query.order('accepted_date', desc=True).range(offset, offset + limit - 1).execute()
+        return {"jobs": result.data or [], "total": result.count or 0}
+    except Exception as e:
+        logger.error(f"Failed to list QB jobs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/sales-line-items")
+async def list_qb_sales_line_items(
+    client_id: str = Query(...),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    search: Optional[str] = Query(default=None),
+):
+    """List cached QB sales line items."""
+    try:
+        query = _supabase.table('qb_sales_line_items').select('*', count='exact').eq('client_id', client_id)
+        if search:
+            query = query.or_(f"customer_name.ilike.%{search}%,job_no.ilike.%{search}%,invoice_no.ilike.%{search}%")
+        result = query.order('inv_date', desc=True).range(offset, offset + limit - 1).execute()
+        return {"sales_line_items": result.data or [], "total": result.count or 0}
+    except Exception as e:
+        logger.error(f"Failed to list QB sales line items: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -9,7 +9,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Card, Row, Col, Statistic, Switch, InputNumber, Button, Table, Select,
   Tag, Space, Progress, Alert, Divider, Tooltip, Badge, Typography,
-  Spin, message,
+  Spin, message, Form, Input,
 } from 'antd';
 import {
   DollarOutlined, ThunderboltOutlined, WarningOutlined,
@@ -19,6 +19,7 @@ import {
 } from '@ant-design/icons';
 import { usageApi, controlsApi, invalidateCache } from '../../services/aiService';
 import { modelsApi } from '../../services/strategicDigestService';
+import api from '../../services/apiClient';
 import { formatTime } from '../../utils/dateUtils';
 import type { UsageSummary, MonitoringStats, AIControlSettings, UsageLogEntry } from '../../types/ai';
 import type { AIModel } from '../../types/strategic-digest';
@@ -34,18 +35,22 @@ const UsagePage: React.FC = () => {
   const [models, setModels] = useState<AIModel[]>([]);
   const [cheapModel, setCheapModel] = useState('haiku');
   const [strategicModel, setStrategicModel] = useState('sonnet');
+  const [apiKeys, setApiKeys] = useState<any>(null);
+  const [apiKeysForm] = Form.useForm();
+  const [apiKeysSaving, setApiKeysSaving] = useState(false);
   const [recentLogs, setRecentLogs] = useState<UsageLogEntry[]>([]);
   const [autoRefresh, setAutoRefresh] = useState(true);
 
   // Load all data
   const loadData = useCallback(async () => {
     try {
-      const [costsData, monData, ctrlData, logsData, modelsData] = await Promise.all([
+      const [costsData, monData, ctrlData, logsData, modelsData, keysData] = await Promise.all([
         usageApi.getCosts(undefined, 30),
         usageApi.getMonitoring(),
         controlsApi.get(),
         usageApi.getRecent(30),
         modelsApi.getAvailable().catch(() => ({ models: [] })),
+        api.get<any>('/v1/ai/api-keys').catch(() => null),
       ]);
       if (!isMountedRef.current) return;
       setCosts(costsData);
@@ -53,6 +58,9 @@ const UsagePage: React.FC = () => {
       setControls(ctrlData);
       setRecentLogs(logsData.items);
       if (modelsData.models?.length) setModels(modelsData.models);
+      if (ctrlData?.cheap_model) setCheapModel(ctrlData.cheap_model);
+      if (ctrlData?.strategic_model) setStrategicModel(ctrlData.strategic_model);
+      if (keysData) setApiKeys(keysData);
     } catch (err) {
       console.error('Failed to load usage data:', err);
     } finally {
@@ -95,6 +103,27 @@ const UsagePage: React.FC = () => {
       message.success(`Session spend reset (was $${result.previous_spend_usd})`);
       invalidateCache('usage');
       loadData();
+    }
+  };
+
+  const handleApiKeysSave = async () => {
+    const values = apiKeysForm.getFieldsValue();
+    if (!values.anthropic_api_key && !values.google_api_key) {
+      message.warning('Enter at least one key to update');
+      return;
+    }
+    setApiKeysSaving(true);
+    try {
+      const result = await api.put<any>('/v1/ai/api-keys', values);
+      message.success(`Keys updated: ${result.updated?.join(', ')} — ${result.warning}`);
+      apiKeysForm.resetFields();
+      // Refresh key status
+      const keysData = await api.get<any>('/v1/ai/api-keys').catch(() => null);
+      if (keysData) setApiKeys(keysData);
+    } catch (err: any) {
+      message.error(err?.message || 'Failed to update keys');
+    } finally {
+      setApiKeysSaving(false);
     }
   };
 
@@ -474,6 +503,45 @@ const UsagePage: React.FC = () => {
                 />
               </Col>
             </Row>
+
+            <Divider style={{ margin: '12px 0' }} />
+
+            {/* API Keys */}
+            <Title level={5} style={{ marginBottom: 12, marginTop: 0 }}>API Keys</Title>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <Text>Anthropic (Claude)</Text>
+                <Text type={apiKeys?.anthropic_set ? 'success' : 'danger'}>
+                  {apiKeys?.anthropic_set ? apiKeys.anthropic_masked : 'Not set'}
+                </Text>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <Text>Google (Gemini)</Text>
+                <Text type={apiKeys?.google_set ? 'success' : 'secondary'}>
+                  {apiKeys?.google_set ? apiKeys.google_masked : 'Not set'}
+                </Text>
+              </div>
+            </div>
+            <Form form={apiKeysForm} layout="vertical">
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item label="Anthropic API Key" name="anthropic_api_key" style={{ marginBottom: 8 }}>
+                    <Input.Password placeholder="sk-ant-..." size="small" />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item label="Google API Key" name="google_api_key" style={{ marginBottom: 8 }}>
+                    <Input.Password placeholder="AIza..." size="small" />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </Form>
+            <Button size="small" loading={apiKeysSaving} onClick={handleApiKeysSave}>
+              Update Keys
+            </Button>
+            <Text type="secondary" style={{ fontSize: 11, marginLeft: 8 }}>
+              Runtime only — add to .env for persistence
+            </Text>
           </Card>
         </Col>
 

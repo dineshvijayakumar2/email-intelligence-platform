@@ -796,6 +796,9 @@ async def get_ai_controls(
         # Session tracking (live)
         "session_spend_usd": round(settings.session_spend_usd, 6),
         "session_requests": settings.session_requests,
+        # Model preferences
+        "cheap_model": settings.cheap_model,
+        "strategic_model": settings.strategic_model,
     }
 
 
@@ -823,6 +826,7 @@ async def update_ai_controls(
         "ai_enabled", "email_analysis_enabled", "digest_enabled",
         "relationship_summary_enabled", "daily_budget_usd", "monthly_budget_usd",
         "batch_size", "max_emails_per_run", "max_requests_per_second",
+        "cheap_model", "strategic_model",
     }
     updates = {k: v for k, v in data.items() if k in allowed}
 
@@ -1072,8 +1076,45 @@ async def get_thread_insight(thread_id: str, force: bool = Query(default=False))
 @router.get("/models")
 async def get_available_models():
     """Get list of available AI models with their costs."""
-    from ..services.langchain_core import get_available_models as _get_models
-    return {"models": _get_models()}
+    try:
+        from ..services.langchain_core import get_available_models as _get_models
+        return {"models": _get_models()}
+    except Exception as e:
+        logger.error(f"Failed to get models: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/api-keys")
+async def get_api_keys(current_user: dict = Depends(require_role('admin'))):
+    """Get API key status (admin only). Returns masked values, never plaintext."""
+    import os
+    anthropic = os.environ.get("ANTHROPIC_API_KEY", "")
+    google = os.environ.get("GOOGLE_GENAI_API_KEY") or os.environ.get("GEMINI_API_KEY") or ""
+    def mask(k: str) -> str:
+        return k[:4] + "****" + k[-4:] if len(k) > 8 else ("****" if k else "")
+    return {
+        "anthropic_set": bool(anthropic),
+        "anthropic_masked": mask(anthropic),
+        "google_set": bool(google),
+        "google_masked": mask(google),
+    }
+
+
+@router.put("/api-keys")
+async def update_api_keys(
+    data: dict,
+    current_user: dict = Depends(require_role('admin')),
+):
+    """Update API keys at runtime (admin only). Persists until server restart."""
+    import os
+    updated = []
+    if data.get("anthropic_api_key"):
+        os.environ["ANTHROPIC_API_KEY"] = data["anthropic_api_key"]
+        updated.append("anthropic")
+    if data.get("google_api_key"):
+        os.environ["GOOGLE_GENAI_API_KEY"] = data["google_api_key"]
+        updated.append("google")
+    return {"status": "ok", "updated": updated, "warning": "Keys reset on server restart — set them in your .env file for persistence"}
 
 
 @router.put("/models/defaults")
@@ -1085,6 +1126,8 @@ async def update_default_models(
     from ..services.langchain_core import set_default_models
     try:
         set_default_models(cheap=cheap_model, strategic=strategic_model)
+        # Also persist in ai_settings so controls endpoint reflects the change
+        update_ai_settings(cheap_model=cheap_model, strategic_model=strategic_model)
         return {"status": "ok", "cheap": cheap_model, "strategic": strategic_model}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
