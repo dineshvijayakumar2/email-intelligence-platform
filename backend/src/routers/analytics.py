@@ -386,6 +386,7 @@ async def list_contact_analytics(
             first_contacted_at, last_contacted_at,
             initiation_ratio, reply_rate, avg_response_time_seconds, avg_thread_depth,
             created_at, updated_at,
+            qb_customer_type, qb_tier, qb_quotes_count, qb_last_quote_date,
             customer_companies!customer_contacts_customer_company_id_fkey(company_name)
             '''
         )
@@ -463,7 +464,7 @@ async def get_top_engaged_contacts(
     """
     try:
         query = _supabase.table('customer_contacts').select(
-            'id, email_address, full_name, company_name, engagement_score, total_emails_sent, total_emails_received, last_contacted_at'
+            'id, email_address, full_name, company_name, engagement_score, total_emails_sent, total_emails_received, last_contacted_at, qb_customer_type, qb_tier'
         ).not_.is_('engagement_score', 'null')
 
         if client_id:
@@ -512,7 +513,7 @@ async def get_at_risk_contacts(
 
         # Get contacts with old last_contacted_at
         query = _supabase.table('customer_contacts').select(
-            'id, email_address, full_name, company_name, last_contacted_at, engagement_score'
+            'id, email_address, full_name, company_name, last_contacted_at, engagement_score, qb_total_revenue, qb_tier'
         ).not_.is_('last_contacted_at', 'null').lte('last_contacted_at', cutoff_date)
 
         if client_id:
@@ -522,7 +523,7 @@ async def get_at_risk_contacts(
 
         # Also get contacts with NULL last_contacted_at (never contacted = at risk)
         null_query = _supabase.table('customer_contacts').select(
-            'id, email_address, full_name, company_name, last_contacted_at, engagement_score'
+            'id, email_address, full_name, company_name, last_contacted_at, engagement_score, qb_total_revenue, qb_tier'
         ).is_('last_contacted_at', 'null')
 
         if client_id:
@@ -704,6 +705,7 @@ async def get_contact_analytics(contact_identifier: str):
             first_contacted_at, last_contacted_at,
             initiation_ratio, reply_rate, avg_response_time_seconds, avg_thread_depth,
             created_at, updated_at,
+            qb_customer_type, qb_tier, qb_quotes_count, qb_last_quote_date,
             customer_companies!customer_contacts_customer_company_id_fkey(company_name)
             '''
         ).eq(filter_field, filter_value).single().execute()
@@ -792,6 +794,7 @@ async def list_company_analytics(
             first_contact_date, last_contact_date,
             contact_count, decision_maker_count,
             created_at, updated_at,
+            qb_customer_type, qb_tier, qb_total_revenue, qb_invoiced_ty, qb_growth_90d, qb_days_since_last_invoice, qb_account_manager,
             clients(client_name)
             '''
         )
@@ -880,7 +883,7 @@ async def get_top_engaged_companies(
     """
     try:
         query = _supabase.table('customer_companies').select(
-            'id, company_name, engagement_score, total_emails, contact_count, last_contact_date'
+            'id, company_name, engagement_score, total_emails, contact_count, last_contact_date, qb_tier, qb_total_revenue'
         ).not_.is_('engagement_score', 'null')
 
         if client_id:
@@ -928,7 +931,7 @@ async def get_at_risk_companies(
 
         # Companies with old last_contact_date
         query = _supabase.table('customer_companies').select(
-            'id, company_name, last_contact_date, contact_count, engagement_score'
+            'id, company_name, last_contact_date, contact_count, engagement_score, qb_total_revenue, qb_days_since_last_invoice, qb_tier'
         ).not_.is_('last_contact_date', 'null').lte('last_contact_date', cutoff_date)
 
         if client_id:
@@ -938,7 +941,7 @@ async def get_at_risk_companies(
 
         # Also get companies with NULL last_contact_date (never contacted = at risk)
         null_query = _supabase.table('customer_companies').select(
-            'id, company_name, last_contact_date, contact_count, engagement_score'
+            'id, company_name, last_contact_date, contact_count, engagement_score, qb_total_revenue, qb_days_since_last_invoice, qb_tier'
         ).is_('last_contact_date', 'null')
 
         if client_id:
@@ -1065,6 +1068,7 @@ async def get_company_analytics(company_id: str):
             first_contact_date, last_contact_date,
             contact_count, decision_maker_count,
             created_at, updated_at,
+            qb_customer_type, qb_tier, qb_total_revenue, qb_invoiced_ty, qb_growth_90d, qb_days_since_last_invoice, qb_account_manager,
             clients(client_name)
             '''
         ).eq('id', company_id).single().execute()
@@ -1209,7 +1213,7 @@ async def list_thread_statuses(
             '''
             thread_id, subject, customer_contact_id, customer_company_id,
             status, message_count, last_message_at, last_sender_is_outbound, days_since_last_email,
-            mailbox_id, created_at
+            mailbox_id, qb_customer_type, qb_customer_tier, created_at
             '''
         )
 
@@ -1332,7 +1336,7 @@ async def get_overdue_threads(
     """
     try:
         query = _supabase.table('thread_status').select(
-            'thread_id, subject, customer_contact_id, customer_company_id, last_message_at, days_since_last_email'
+            'thread_id, subject, customer_contact_id, customer_company_id, last_message_at, days_since_last_email, qb_customer_type, qb_customer_tier'
         ).eq('status', ThreadStatus.OVERDUE.value)
 
         # Filter by client via mailbox_ids
@@ -2340,7 +2344,7 @@ async def get_dashboard(
 
         # Get top engaged contacts — within period if set
         top_contacts_query = _supabase.table('customer_contacts').select(
-            'id, email_address, full_name, company_name, engagement_score, total_emails_sent, total_emails_received, last_contacted_at'
+            'id, email_address, full_name, company_name, engagement_score, total_emails_sent, total_emails_received, last_contacted_at, qb_customer_type, qb_tier'
         ).eq('client_id', client_id).not_.is_('engagement_score', 'null')
         if period_cutoff:
             top_contacts_query = top_contacts_query.gte('last_contacted_at', period_cutoff)
@@ -2362,7 +2366,7 @@ async def get_dashboard(
         ]
 
         top_companies_query = _supabase.table('customer_companies').select(
-            'id, company_name, engagement_score, total_emails, contact_count, last_contact_date'
+            'id, company_name, engagement_score, total_emails, contact_count, last_contact_date, qb_tier, qb_total_revenue'
         ).eq('client_id', client_id).not_.is_('engagement_score', 'null')
         if period_cutoff:
             top_companies_query = top_companies_query.gte('last_contact_date', period_cutoff)
@@ -2385,7 +2389,7 @@ async def get_dashboard(
         # Get at-risk contacts/companies
         cutoff_date_contacts = (now - timedelta(days=60)).isoformat()
         at_risk_contacts_result = _supabase.table('customer_contacts').select(
-            'id, email_address, full_name, company_name, last_contacted_at, engagement_score'
+            'id, email_address, full_name, company_name, last_contacted_at, engagement_score, qb_total_revenue, qb_tier'
         ).eq('client_id', client_id).not_.is_('last_contacted_at', 'null').lte(
             'last_contacted_at', cutoff_date_contacts
         ).order('last_contacted_at').limit(10).execute()
@@ -2406,7 +2410,7 @@ async def get_dashboard(
 
         cutoff_date_companies = (now - timedelta(days=90)).isoformat()
         at_risk_companies_result = _supabase.table('customer_companies').select(
-            'id, company_name, last_contact_date, contact_count, engagement_score'
+            'id, company_name, last_contact_date, contact_count, engagement_score, qb_total_revenue, qb_days_since_last_invoice, qb_tier'
         ).eq('client_id', client_id).not_.is_('last_contact_date', 'null').lte(
             'last_contact_date', cutoff_date_companies
         ).order('last_contact_date').limit(10).execute()
@@ -2557,311 +2561,8 @@ async def get_client_summary(client_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ============================================================================
-# EXTRACTION CONTROL ENDPOINTS (5 endpoints)
-# ============================================================================
-
-@router.post("/extraction/run", response_model=ExtractionJobResponse)
-async def run_extraction(
-    request: ExtractionJobCreate,
-    background_tasks: BackgroundTasks
-):
-    """
-    Trigger an extraction job (runs in background).
-
-    Args:
-        request: Extraction job configuration
-        background_tasks: FastAPI background task handler
-
-    Returns:
-        Job info with job_id for tracking
-    """
-    try:
-        # Validate mailbox exists
-        mailbox_result = _supabase.table('mailboxes').select(
-            'id, client_id, email_address'
-        ).eq('id', request.mailbox_id).single().execute()
-
-        if not mailbox_result.data:
-            raise HTTPException(status_code=404, detail="Mailbox not found")
-
-        mailbox = mailbox_result.data
-
-        # Create orchestrator
-        orchestrator = ExtractionOrchestrator(
-            mailbox_id=request.mailbox_id,
-            client_id=mailbox['client_id'],
-            use_redis=True,
-            extraction_mode=request.mode.value,
-            lookback_days=request.lookback_days
-        )
-
-        # Run extraction in background
-        def run_pipeline():
-            try:
-                orchestrator.run_extraction(
-                    exclude_mailing_lists=request.exclude_mailing_lists,
-                    exclude_noreply=request.exclude_noreply,
-                    exclude_shared=request.exclude_shared,
-                    exclude_internal=request.exclude_internal,
-                    force_relink=request.force_relink,
-                    skip_role_classification=request.skip_role_classification
-                )
-            except Exception as e:
-                logger.error(f"Background extraction failed: {e}")
-
-        background_tasks.add_task(run_pipeline)
-
-        # Return job info immediately
-        # The orchestrator creates the job in _create_job() when run_extraction() is called
-        # For now, return pending status - the background task will update it
-        return ExtractionJobResponse(
-            id="pending",  # Will be created when background task starts
-            client_id=mailbox['client_id'],
-            mailbox_id=request.mailbox_id,
-            status=ExtractionStatus.PENDING,
-            extraction_mode=request.mode.value,
-            current_step="Queued for processing",
-            current_step_number=0,
-            total_steps=13,
-            started_at=None,
-            completed_at=None,
-            updated_at=datetime.utcnow(),
-            errors=None
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to trigger extraction: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/extraction/jobs/{job_id}", response_model=ExtractionJobDetail)
-async def get_extraction_job(job_id: str):
-    """
-    Get extraction job status and results.
-
-    Args:
-        job_id: Extraction job UUID
-
-    Returns:
-        Detailed job information with results
-    """
-    try:
-        result = _supabase.table('extraction_jobs').select(
-            '''
-            id, client_id, mailbox_id, status, extraction_mode, emails_in_scope,
-            date_range_start, date_range_end,
-            current_step, current_step_number, total_steps,
-            started_at, completed_at, updated_at, errors, results
-            '''
-        ).eq('id', job_id).single().execute()
-
-        if not result.data:
-            raise HTTPException(status_code=404, detail="Job not found")
-
-        job = result.data
-
-        # Calculate duration if completed
-        duration_seconds = None
-        if job.get('started_at') and job.get('completed_at'):
-            started = datetime.fromisoformat(job['started_at'].replace('Z', '+00:00'))
-            completed = datetime.fromisoformat(job['completed_at'].replace('Z', '+00:00'))
-            duration_seconds = (completed - started).total_seconds()
-
-        return ExtractionJobDetail(
-            id=job['id'],
-            client_id=job['client_id'],
-            mailbox_id=job['mailbox_id'],
-            status=job['status'],
-            extraction_mode=job.get('extraction_mode'),
-            emails_in_scope=job.get('emails_in_scope'),
-            date_range_start=job.get('date_range_start'),
-            date_range_end=job.get('date_range_end'),
-            current_step=job.get('current_step'),
-            current_step_number=job.get('current_step_number'),
-            total_steps=job.get('total_steps'),
-            started_at=job.get('started_at'),
-            completed_at=job.get('completed_at'),
-            updated_at=job.get('updated_at'),
-            errors=job.get('errors'),
-            results=job.get('results'),
-            duration_seconds=duration_seconds
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to get extraction job: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/extraction/jobs", response_model=ExtractionJobListResponse)
-async def list_extraction_jobs(
-    client_id: Optional[str] = Query(default=None),
-    mailbox_id: Optional[str] = Query(default=None),
-    status: Optional[ExtractionStatus] = Query(default=None),
-    limit: int = Query(default=50, ge=1, le=200),
-    offset: int = Query(default=0, ge=0)
-):
-    """
-    List extraction jobs with filters.
-
-    Args:
-        client_id: Filter by client
-        mailbox_id: Filter by mailbox
-        status: Filter by status
-        limit: Maximum number of results
-        offset: Offset for pagination
-
-    Returns:
-        List of extraction jobs
-    """
-    try:
-        query = _supabase.table('extraction_jobs').select(
-            '''
-            id, client_id, mailbox_id, status, extraction_mode, emails_in_scope,
-            date_range_start, date_range_end,
-            current_step, current_step_number, total_steps,
-            started_at, completed_at, updated_at, errors
-            ''',
-            count='exact'
-        )
-
-        if client_id:
-            query = query.eq('client_id', client_id)
-        if mailbox_id:
-            query = query.eq('mailbox_id', mailbox_id)
-        if status:
-            query = query.eq('status', status.value)
-
-        result = query.order('started_at', desc=True).range(offset, offset + limit - 1).execute()
-
-        jobs = [
-            ExtractionJobResponse(
-                id=job['id'],
-                client_id=job['client_id'],
-                mailbox_id=job['mailbox_id'],
-                status=job['status'],
-                extraction_mode=job.get('extraction_mode'),
-                emails_in_scope=job.get('emails_in_scope'),
-                date_range_start=job.get('date_range_start'),
-                date_range_end=job.get('date_range_end'),
-                current_step=job.get('current_step'),
-                current_step_number=job.get('current_step_number'),
-                total_steps=job.get('total_steps'),
-                started_at=job.get('started_at'),
-                completed_at=job.get('completed_at'),
-                updated_at=job.get('updated_at'),
-                errors=job.get('errors')
-            )
-            for job in result.data
-        ]
-
-        total = result.count if result.count else len(result.data)
-
-        return ExtractionJobListResponse(jobs=jobs, total=total)
-
-    except Exception as e:
-        logger.error(f"Failed to list extraction jobs: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/extraction/jobs/{job_id}/cancel")
-async def cancel_extraction_job(job_id: str):
-    """
-    Cancel a running extraction job.
-
-    Args:
-        job_id: Extraction job UUID
-
-    Returns:
-        Success message
-    """
-    try:
-        # Check if job exists and is running
-        job_result = _supabase.table('extraction_jobs').select(
-            'id, status'
-        ).eq('id', job_id).single().execute()
-
-        if not job_result.data:
-            raise HTTPException(status_code=404, detail="Job not found")
-
-        job = job_result.data
-
-        if job['status'] not in ['pending', 'processing']:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot cancel job with status '{job['status']}'"
-            )
-
-        # Update job status to failed with cancellation message
-        _supabase.table('extraction_jobs').update({
-            'status': 'failed',
-            'current_step': 'Cancelled by user',
-            'errors': ['Job cancelled by user request'],
-            'updated_at': datetime.utcnow().isoformat()
-        }).eq('id', job_id).execute()
-
-        return {"message": "Job cancelled successfully", "job_id": job_id}
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to cancel extraction job: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/extraction/progress/{job_id}", response_model=ExtractionProgressResponse)
-async def get_extraction_progress(job_id: str):
-    """
-    Get real-time extraction progress from Redis.
-
-    Args:
-        job_id: Extraction job UUID
-
-    Returns:
-        Real-time progress information
-    """
-    try:
-        # For now, just query the database (Redis integration can be added later)
-        # In production, this would check Redis first for real-time updates
-        result = _supabase.table('extraction_jobs').select(
-            '''
-            id, status, current_step, current_step_number, total_steps,
-            mailbox_id, client_id, errors
-            '''
-        ).eq('id', job_id).single().execute()
-
-        if not result.data:
-            raise HTTPException(status_code=404, detail="Job not found")
-
-        job = result.data
-
-        # Calculate processed/failed counts from results if available
-        # This is a simplified version - full implementation would track these in Redis
-        processed = None
-        failed = None
-
-        return ExtractionProgressResponse(
-            job_id=job['id'],
-            status=job['status'],
-            current_step=job.get('current_step'),
-            current_step_number=job.get('current_step_number'),
-            total_steps=job.get('total_steps'),
-            processed=processed,
-            failed=failed,
-            mailbox_id=job.get('mailbox_id'),
-            client_id=job.get('client_id'),
-            error=job.get('errors', [None])[0] if job.get('errors') else None
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to get extraction progress: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+# NOTE: Duplicate extraction endpoints removed (S3.1 cleanup).
+# Original extraction endpoints are at the top of this file (lines ~67-274).
 
 
 # ============================================================================

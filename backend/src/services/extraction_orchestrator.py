@@ -1,5 +1,5 @@
 """
-Extraction Orchestrator Service - Sprint 2
+Extraction Orchestrator Service - Sprint 2 + Sprint 3 Surgery
 
 Purpose: Coordinate the complete 13-step customer data extraction pipeline
 Main entry point for extraction jobs
@@ -10,7 +10,7 @@ Main entry point for extraction jobs
 3.  Deduplicate and filter contacts
 4.  Resolve companies by domain (company_resolver)
 5.  Upsert customer_contacts records
-6.  Upsert customer_companies records
+6.  Upsert customer_companies records + QB enrichment (Sprint 3)
 7.  Classify roles from signatures (role_classifier)
 8.  Update role information in customer_contacts
 9.  Link emails to contacts/companies (email_linker)
@@ -925,6 +925,101 @@ class ExtractionOrchestrator:
         result = resolver.upsert_companies(companies)
 
         logger.info(f"Company upsert complete: {result['created']} created, {result['updated']} updated")
+
+        # Sprint 3: QB enrichment sub-step — propagate Quickbase data to companies/contacts
+        qb_enriched = self._enrich_from_quickbase()
+        result['qb_companies_enriched'] = qb_enriched.get('companies', 0)
+        result['qb_contacts_enriched'] = qb_enriched.get('contacts', 0)
+
+        return result
+
+    def _enrich_from_quickbase(self) -> Dict:
+        """
+        Sprint 3 sub-step: Enrich companies and contacts with Quickbase data.
+
+        Checks if QB sync config exists for this client. If so, copies QB fields
+        (customer_type, tier, revenue, quotes) to customer_companies/customer_contacts
+        enrichment columns. This makes QB context available to downstream steps
+        (engagement scoring, AI analysis, etc.)
+
+        Returns:
+            Dict with counts of enriched companies and contacts
+        """
+        result = {'companies': 0, 'contacts': 0}
+
+        try:
+            # Check if QB is configured for this client
+            qb_config = self._supabase.table('qb_sync_config').select(
+                'is_active'
+            ).eq('client_id', self.client_id).execute()
+
+            if not qb_config.data or not qb_config.data[0].get('is_active'):
+                logger.info("Step 6 QB enrichment: No active QB config — skipping")
+                return result
+
+            # Enrich companies from qb_customers (matched records)
+            qb_customers = self._supabase.table('qb_customers').select(
+                'matched_company_id, customer_status, customer_tier, account_manager, '
+                'total_invoiced, invoiced_ty, invoiced_ly, growth_90d, days_since_last_invoice'
+            ).eq('client_id', self.client_id).not_.is_(
+                'matched_company_id', 'null'
+            ).execute()
+
+            for qb in (qb_customers.data or []):
+                update = {}
+                if qb.get('customer_status'):
+                    update['qb_customer_type'] = qb['customer_status']
+                if qb.get('customer_tier'):
+                    update['qb_tier'] = qb['customer_tier']
+                if qb.get('account_manager'):
+                    update['qb_account_manager'] = qb['account_manager']
+                if qb.get('total_invoiced') is not None:
+                    update['qb_total_revenue'] = qb['total_invoiced']
+                if qb.get('invoiced_ty') is not None:
+                    update['qb_invoiced_ty'] = qb['invoiced_ty']
+                if qb.get('invoiced_ly') is not None:
+                    update['qb_invoiced_ly'] = qb['invoiced_ly']
+                if qb.get('growth_90d') is not None:
+                    update['qb_growth_90d'] = qb['growth_90d']
+                if qb.get('days_since_last_invoice') is not None:
+                    update['qb_days_since_last_invoice'] = qb['days_since_last_invoice']
+
+                if update:
+                    self._supabase.table('customer_companies').update(
+                        update
+                    ).eq('id', qb['matched_company_id']).execute()
+                    result['companies'] += 1
+
+            # Enrich contacts from qb_contacts (matched records)
+            qb_contacts = self._supabase.table('qb_contacts').select(
+                'matched_contact_id, quotes_accepted_count, most_recent_quote_date, contact_recency_days'
+            ).eq('client_id', self.client_id).not_.is_(
+                'matched_contact_id', 'null'
+            ).execute()
+
+            for qb in (qb_contacts.data or []):
+                update = {}
+                if qb.get('quotes_accepted_count') is not None:
+                    update['qb_quotes_count'] = qb['quotes_accepted_count']
+                if qb.get('most_recent_quote_date'):
+                    update['qb_last_quote_date'] = qb['most_recent_quote_date']
+                if qb.get('contact_recency_days') is not None:
+                    update['qb_contact_recency_days'] = qb['contact_recency_days']
+
+                if update:
+                    self._supabase.table('customer_contacts').update(
+                        update
+                    ).eq('id', qb['matched_contact_id']).execute()
+                    result['contacts'] += 1
+
+            logger.info(
+                f"Step 6 QB enrichment: {result['companies']} companies, "
+                f"{result['contacts']} contacts enriched from Quickbase"
+            )
+
+        except Exception as e:
+            # QB enrichment is non-critical — don't fail the pipeline
+            logger.warning(f"Step 6 QB enrichment failed (non-critical): {e}")
 
         return result
 

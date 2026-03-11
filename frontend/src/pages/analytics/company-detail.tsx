@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Row, Col, Typography, Button, Tag, Descriptions, Skeleton, Table } from 'antd';
-import { ArrowLeftOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import { MetricCard } from '../../components/analytics/MetricCard';
+import AIInsightsCard from '../../components/AIInsightsCard';
 import { EngagementBadge } from '../../components/analytics/EngagementBadge';
 import {
   companiesApi,
@@ -151,6 +152,53 @@ export const CompanyDetail: React.FC = () => {
             </Descriptions>
           </div>
         </Col>
+        {company.qb_total_revenue != null && (
+          <Col xs={24} lg={10}>
+            <div className="glass-card" style={{ padding: 20 }}>
+              <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 12 }}>Business Data</Text>
+              <Descriptions column={1} size="small">
+                {company.qb_customer_type && (
+                  <Descriptions.Item label="Customer Type"><Tag color="blue">{company.qb_customer_type}</Tag></Descriptions.Item>
+                )}
+                {company.qb_tier && (
+                  <Descriptions.Item label="Tier"><Tag color="purple">{company.qb_tier}</Tag></Descriptions.Item>
+                )}
+                <Descriptions.Item label="Revenue">
+                  ${(company.qb_total_revenue ?? 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                </Descriptions.Item>
+                {company.qb_invoiced_ty != null && (
+                  <Descriptions.Item label="This Year">
+                    ${company.qb_invoiced_ty.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                  </Descriptions.Item>
+                )}
+                {company.qb_invoiced_ly != null && (
+                  <Descriptions.Item label="Last Year">
+                    ${company.qb_invoiced_ly.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                    {company.qb_invoiced_ty != null && company.qb_invoiced_ty > company.qb_invoiced_ly && (
+                      <ArrowUpOutlined style={{ color: '#52c41a', marginLeft: 6 }} />
+                    )}
+                    {company.qb_invoiced_ty != null && company.qb_invoiced_ty < company.qb_invoiced_ly && (
+                      <ArrowDownOutlined style={{ color: '#ff4d4f', marginLeft: 6 }} />
+                    )}
+                  </Descriptions.Item>
+                )}
+                {company.qb_growth_90d != null && (
+                  <Descriptions.Item label="Growth 90d">
+                    <span style={{ color: company.qb_growth_90d >= 0 ? '#52c41a' : '#ff4d4f' }}>
+                      {company.qb_growth_90d >= 0 ? '+' : ''}{(company.qb_growth_90d * 100).toFixed(1)}%
+                    </span>
+                  </Descriptions.Item>
+                )}
+                {company.qb_days_since_last_invoice != null && (
+                  <Descriptions.Item label="Days Since Order">{company.qb_days_since_last_invoice}</Descriptions.Item>
+                )}
+                {company.qb_account_manager && (
+                  <Descriptions.Item label="Account Manager">{company.qb_account_manager}</Descriptions.Item>
+                )}
+              </Descriptions>
+            </div>
+          </Col>
+        )}
         <Col xs={24} lg={14}>
           <div className="glass-table-container" style={{ padding: 16 }}>
             <a
@@ -173,6 +221,8 @@ export const CompanyDetail: React.FC = () => {
           </div>
         </Col>
       </Row>
+
+      {companyId && <AIInsightsCard entityType="company" entityId={companyId} />}
     </div>
   );
 };

@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Versioning
 # ---------------------------------------------------------------------------
-DIGEST_PROMPT_VERSION = "v1.0"
+DIGEST_PROMPT_VERSION = "v2.0"  # v2: QB business context in digest
 
 # ---------------------------------------------------------------------------
 # Prompts (Sonnet — higher quality for synthesis)
@@ -56,6 +56,9 @@ STATS (already shown in UI — do NOT repeat these):
 - Emails received: {in_count} | Sent: {out_count}
 - Open threads: {open_threads} | Overdue: {overdue_threads}
 - Bucket counts: {bucket_summary_json}
+
+BUSINESS CONTEXT (from CRM — use to calibrate importance):
+{business_context_json}
 
 BUSINESS SIGNAL EMAILS (analyze for cross-cutting patterns):
 {top_signal_emails_json}
@@ -241,6 +244,9 @@ class AIDigestGenerator:
             mailbox_id, client_id, target_date, tz_offset_minutes, window_days
         )
 
+        # Sprint 3: Gather QB business context for richer insights
+        business_context = self._gather_business_context(client_id)
+
         # Build user message
         user_message = DIGEST_USER_TEMPLATE.format(
             scope=scope,
@@ -250,6 +256,7 @@ class AIDigestGenerator:
             open_threads=context["open_threads"],
             overdue_threads=context["overdue_threads"],
             bucket_summary_json=json.dumps(context["bucket_summary"]),
+            business_context_json=json.dumps(business_context, indent=2) if business_context else "Not available",
             top_signal_emails_json=json.dumps(context["top_signal_emails"], indent=2),
             priority_emails_json=json.dumps(context["priority_emails"], indent=2),
         )
@@ -558,6 +565,49 @@ class AIDigestGenerator:
             except Exception as e:
                 logger.warning(f"Failed to fetch email senders: {e}")
         return lookup
+
+    # ------------------------------------------------------------------
+    # Sprint 3: Gather QB business context for digest
+    # ------------------------------------------------------------------
+    def _gather_business_context(self, client_id: Optional[str]) -> Optional[list]:
+        """
+        Fetch top companies with QB data to give the digest business context.
+        Returns a compact list of company summaries for the LLM prompt.
+        """
+        if not client_id:
+            return None
+        try:
+            resp = self._execute_with_retry(
+                self.client.table("customer_companies")
+                .select("company_name,qb_customer_type,qb_tier,qb_total_revenue,"
+                        "qb_invoiced_ty,qb_invoiced_ly,qb_days_since_last_invoice,"
+                        "engagement_score")
+                .eq("client_id", client_id)
+                .not_.is_("qb_total_revenue", "null")
+                .order("qb_total_revenue", desc=True)
+                .range(0, 9)  # Top 10 by revenue
+            )
+            if not resp.data:
+                return None
+
+            summaries = []
+            for c in resp.data:
+                rev_ty = c.get("qb_invoiced_ty") or 0
+                rev_ly = c.get("qb_invoiced_ly") or 0
+                trend = "growing" if rev_ty > rev_ly else ("declining" if rev_ty < rev_ly * 0.9 else "stable")
+                summaries.append({
+                    "company": c["company_name"],
+                    "type": c.get("qb_customer_type") or "unknown",
+                    "tier": c.get("qb_tier") or "?",
+                    "revenue": f"${c.get('qb_total_revenue', 0):,.0f}",
+                    "trend": trend,
+                    "days_since_order": c.get("qb_days_since_last_invoice"),
+                    "engagement": c.get("engagement_score"),
+                })
+            return summaries
+        except Exception as e:
+            logger.warning(f"Failed to gather business context: {e}")
+            return None
 
     # ------------------------------------------------------------------
     # Parse + validate AI response

@@ -177,6 +177,28 @@ export const ContactsAnalytics: React.FC = () => {
       },
     },
     {
+      title: 'QB Type',
+      dataIndex: 'qb_customer_type',
+      key: 'qb_customer_type',
+      width: 110,
+      render: (v: string | null) => {
+        if (!v) return null;
+        const colorMap: Record<string, string> = { existing: 'blue', prospective: 'green', new: 'cyan' };
+        return <Tag color={colorMap[v] || 'default'}>{v}</Tag>;
+      },
+    },
+    {
+      title: 'Tier',
+      dataIndex: 'qb_tier',
+      key: 'qb_tier',
+      width: 70,
+      render: (v: string | null) => {
+        if (!v) return null;
+        const colorMap: Record<string, string> = { A: 'green', B: 'blue', C: 'orange' };
+        return <Tag color={colorMap[v] || 'default'}>{v}</Tag>;
+      },
+    },
+    {
       title: 'Score',
       dataIndex: 'engagement_score',
       key: 'engagement_score',
@@ -250,6 +272,24 @@ export const ContactsAnalytics: React.FC = () => {
       ),
     },
     { title: 'Days Silent', dataIndex: 'days_since_contact', key: 'days', width: 100, render: (v: number) => <Tag color={v > 90 ? 'red' : 'orange'}>{v}d</Tag> },
+    {
+      title: 'Tier',
+      dataIndex: 'qb_tier',
+      key: 'qb_tier',
+      width: 70,
+      render: (v: string | null) => {
+        if (!v) return null;
+        const colorMap: Record<string, string> = { A: 'green', B: 'blue', C: 'orange' };
+        return <Tag color={colorMap[v] || 'default'}>{v}</Tag>;
+      },
+    },
+    {
+      title: 'Revenue',
+      dataIndex: 'qb_total_revenue',
+      key: 'qb_total_revenue',
+      width: 110,
+      render: (v: number | null) => v != null ? `$${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : null,
+    },
     { title: 'Score', dataIndex: 'engagement_score', key: 'score', width: 120, render: (v: number) => <EngagementBadge score={v} /> },
     { title: 'Last Contact', dataIndex: 'last_contacted_at', key: 'last', width: 110, render: (v: string) => formatRelativeTime(v) },
   ];

@@ -47,7 +47,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const loadProfile = useCallback(async (accessToken: string) => {
+  const loadProfile = useCallback(async (accessToken: string, forceRefresh = false) => {
+    // Cache profile in sessionStorage to avoid redundant /auth/me calls
+    const CACHE_KEY = 'auth_profile_cache';
+    const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+    if (!forceRefresh) {
+      try {
+        const cached = sessionStorage.getItem(CACHE_KEY);
+        if (cached) {
+          const { data, timestamp } = JSON.parse(cached);
+          if (Date.now() - timestamp < CACHE_TTL_MS) {
+            setProfile(data);
+            return;
+          }
+        }
+      } catch { /* ignore parse errors */ }
+    }
+
     try {
       const response = await fetch(`${config.apiBaseUrl}/auth/me`, {
         headers: {
@@ -58,7 +75,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (response.ok) {
         const data = await response.json();
-        setProfile({
+        const profileData = {
           id: data.id,
           email: data.email,
           name: data.name,
@@ -66,10 +83,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           isActive: data.is_active,
           avatarUrl: data.avatar_url,
           accessibleMailboxIds: data.accessible_mailbox_ids || [],
-        });
+        };
+        setProfile(profileData);
+        // Cache the profile
+        try {
+          sessionStorage.setItem(CACHE_KEY, JSON.stringify({ data: profileData, timestamp: Date.now() }));
+        } catch { /* storage full — ignore */ }
       } else {
         console.error('Failed to load profile:', response.status);
         setProfile(null);
+        sessionStorage.removeItem(CACHE_KEY);
       }
     } catch (error) {
       console.error('Failed to load profile:', error);
@@ -80,7 +103,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const refreshProfile = useCallback(async () => {
     const token = await getAccessToken();
     if (token) {
-      await loadProfile(token);
+      await loadProfile(token, true); // force refresh, bypass cache
     }
   }, [loadProfile]);
 
@@ -121,6 +144,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (event === 'SIGNED_OUT') {
         setProfile(null);
+        sessionStorage.removeItem('auth_profile_cache');
       }
 
       setLoading(false);

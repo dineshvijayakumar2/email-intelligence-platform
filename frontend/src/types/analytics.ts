@@ -97,6 +97,11 @@ export interface ContactAnalytics {
   reply_rate?: number | null;
   avg_response_time_seconds?: number | null;
   avg_thread_depth?: number | null;
+  // QB business context (Sprint 3)
+  qb_customer_type?: string | null;
+  qb_tier?: string | null;
+  qb_quotes_count?: number | null;
+  qb_last_quote_date?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 }
@@ -114,6 +119,8 @@ export interface TopEngagedContact {
   engagement_score: number;
   total_emails: number;
   last_contacted_at?: string | null;
+  qb_customer_type?: string | null;
+  qb_tier?: string | null;
 }
 
 export interface AtRiskContact {
@@ -124,6 +131,8 @@ export interface AtRiskContact {
   last_contacted_at?: string | null;
   days_since_contact: number;
   engagement_score?: number | null;
+  qb_total_revenue?: number | null;
+  qb_tier?: string | null;
 }
 
 export interface ContactTypeGrouping {
@@ -154,6 +163,15 @@ export interface CompanyAnalytics {
   decision_maker_count?: number | null;
   active_threads?: number | null;
   overdue_threads?: number | null;
+  // QB business context (Sprint 3)
+  qb_customer_type?: string | null;
+  qb_tier?: string | null;
+  qb_total_revenue?: number | null;
+  qb_invoiced_ty?: number | null;
+  qb_invoiced_ly?: number | null;
+  qb_growth_90d?: number | null;
+  qb_days_since_last_invoice?: number | null;
+  qb_account_manager?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 }
@@ -170,6 +188,8 @@ export interface TopEngagedCompany {
   total_emails: number;
   contact_count: number;
   last_contact_date?: string | null;
+  qb_tier?: string | null;
+  qb_total_revenue?: number | null;
 }
 
 export interface AtRiskCompany {
@@ -179,6 +199,9 @@ export interface AtRiskCompany {
   days_since_contact: number;
   contact_count: number;
   engagement_score?: number | null;
+  qb_total_revenue?: number | null;
+  qb_days_since_last_invoice?: number | null;
+  qb_tier?: string | null;
 }
 
 export interface EngagementStatusGrouping {
@@ -204,6 +227,9 @@ export interface ThreadStatusSummary {
   last_message_date?: string | null;
   last_sender_type?: string | null;
   days_since_last_message?: number | null;
+  // QB context (Sprint 3)
+  qb_customer_type?: string | null;
+  qb_customer_tier?: string | null;
   created_at?: string | null;
 }
 
@@ -220,6 +246,8 @@ export interface OverdueThread {
   company_name?: string | null;
   last_message_date?: string | null;
   days_overdue: number;
+  qb_customer_type?: string | null;
+  qb_customer_tier?: string | null;
 }
 
 export interface ThreadStatusCount {

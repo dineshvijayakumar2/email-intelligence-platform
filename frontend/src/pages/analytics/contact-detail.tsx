@@ -3,6 +3,7 @@ import { Row, Col, Typography, Button, Tag, Descriptions, Skeleton, Table } from
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import { MetricCard } from '../../components/analytics/MetricCard';
+import AIInsightsCard from '../../components/AIInsightsCard';
 import { EngagementBadge } from '../../components/analytics/EngagementBadge';
 import {
   contactsApi,
@@ -120,6 +121,13 @@ export const ContactDetail: React.FC = () => {
             {contact.seniority_level && contact.seniority_level !== 'unknown' && <Tag>{contact.seniority_level}</Tag>}
           </Col>
         </Row>
+        {(contact.qb_customer_type || contact.qb_tier || contact.qb_quotes_count != null) && (
+          <div style={{ marginTop: 12, borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 10 }}>
+            {contact.qb_customer_type && <Tag color="blue">{contact.qb_customer_type}</Tag>}
+            {contact.qb_tier && <Tag color="purple">{contact.qb_tier}</Tag>}
+            {contact.qb_quotes_count != null && <Tag>{contact.qb_quotes_count} quote{contact.qb_quotes_count !== 1 ? 's' : ''}</Tag>}
+          </div>
+        )}
       </div>
 
       {/* Stats */}
@@ -175,6 +183,8 @@ export const ContactDetail: React.FC = () => {
           </div>
         </Col>
       </Row>
+
+      {contactId && <AIInsightsCard entityType="contact" entityId={contactId} />}
     </div>
   );
 };

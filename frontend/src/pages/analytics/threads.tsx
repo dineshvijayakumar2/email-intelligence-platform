@@ -138,6 +138,14 @@ export const ThreadAnalytics: React.FC = () => {
     { title: 'Contact', key: 'contact', render: (_: any, r: ThreadStatusSummary) => r.contact_name || r.contact_email || '-' },
     { title: 'Company', dataIndex: 'company_name', key: 'company', render: (v: string) => v || '-' },
     {
+      title: 'Type', dataIndex: 'qb_customer_type', key: 'qb_type', width: 90,
+      render: (v: string) => v ? <Tag color={v === 'existing' ? 'blue' : v === 'prospective' ? 'green' : 'cyan'}>{v}</Tag> : null,
+    },
+    {
+      title: 'Tier', dataIndex: 'qb_customer_tier', key: 'qb_tier', width: 60,
+      render: (v: string) => v ? <Tag color={v === 'A' || v === '1' ? 'green' : v === 'B' || v === '2' ? 'blue' : 'orange'}>{v}</Tag> : null,
+    },
+    {
       title: 'Status', dataIndex: 'status', key: 'status', width: 150,
       sorter: !isDrilldownMode,
       sortOrder: isDrilldownMode ? undefined : getSortOrder('status'),

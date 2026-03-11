@@ -1,11 +1,11 @@
 """
-Engagement Scorer Service - Sprint 2 Phase 4
+Engagement Scorer Service - Sprint 2 Phase 4 + Sprint 3 QB Enhancement
 
 Purpose: Calculate comprehensive engagement scores for contacts and companies
 Part of 13-step extraction pipeline (used in Step 10)
 
 Features:
-- 8-factor engagement scoring algorithm
+- 10-factor engagement scoring algorithm (8 email + 2 QB)
 - Calculates scores for both contacts (0-100) and companies (0-100)
 - Factors:
   1. Response time (faster = higher score)
@@ -52,6 +52,10 @@ class EngagementScore:
     # Factor weights (for transparency)
     weights: Dict[str, float]
 
+    # Sprint 3: QB business factors (0-100, default 0 when no QB data)
+    revenue_weight_score: float = 0.0
+    order_recency_score: float = 0.0
+
     # Input snapshot (for history)
     emails_per_month_avg: Optional[float] = None
     avg_response_time_seconds: Optional[int] = None
@@ -69,14 +73,26 @@ class EngagementScorer:
         scorer.save_scores(contact_scores, company_scores)
     """
 
-    # Factor weights (must sum to 1.0)
+    # Factor weights — email-based (70%) + QB business (30%)
+    # When QB data unavailable, email weights auto-scale to 100%
     FACTOR_WEIGHTS = {
-        'response_time': 0.20,      # 20% - How quickly they respond
-        'thread_completeness': 0.15,  # 15% - How many threads are completed
-        'initiation_balance': 0.10,   # 10% - Balance in who starts conversations
-        'reply_rate': 0.15,           # 15% - How consistently they reply
-        'frequency': 0.15,            # 15% - How often they communicate
-        'recency': 0.25,              # 25% - How recently they communicated
+        'response_time': 0.14,        # 14% - How quickly they respond
+        'thread_completeness': 0.10,   # 10% - How many threads are completed
+        'initiation_balance': 0.07,    # 7%  - Balance in who starts conversations
+        'reply_rate': 0.11,            # 11% - How consistently they reply
+        'frequency': 0.11,             # 11% - How often they communicate
+        'recency': 0.17,               # 17% - How recently they communicated
+        'revenue_weight': 0.15,        # 15% - QB: Customer revenue (higher = more engaged)
+        'order_recency': 0.15,         # 15% - QB: How recently they ordered
+    }
+    # Original email-only weights (used when no QB data)
+    FACTOR_WEIGHTS_EMAIL_ONLY = {
+        'response_time': 0.20,
+        'thread_completeness': 0.15,
+        'initiation_balance': 0.10,
+        'reply_rate': 0.15,
+        'frequency': 0.15,
+        'recency': 0.25,
     }
 
     # Bonus multipliers
@@ -90,7 +106,7 @@ class EngagementScorer:
     }
 
     # Current scoring algorithm version — bump when algorithm changes
-    SCORING_VERSION = 1
+    SCORING_VERSION = 2  # v2: Added QB revenue_weight + order_recency factors
 
     # Scoring thresholds
     EXCELLENT_RESPONSE_SECONDS = 4 * 3600  # 4 hours
@@ -264,15 +280,28 @@ class EngagementScorer:
         decision_maker_bonus = self.DECISION_MAKER_BONUS if contact.get('is_decision_maker') else 0.0
         seniority_bonus = self.SENIORITY_BONUSES.get(contact.get('seniority_level', ''), 0.0)
 
+        # Sprint 3: QB business factors
+        revenue_weight_score = self._score_revenue(contact.get('qb_total_revenue'))
+        order_recency_score = self._score_order_recency(contact.get('qb_days_since_last_invoice'))
+        has_qb_data = contact.get('qb_total_revenue') is not None
+
+        # Use QB-enhanced weights if QB data available, else email-only
+        weights = self.FACTOR_WEIGHTS if has_qb_data else self.FACTOR_WEIGHTS_EMAIL_ONLY
+
         # Calculate weighted total
         base_score = (
-            response_time_score * self.FACTOR_WEIGHTS['response_time'] +
-            thread_completeness_score * self.FACTOR_WEIGHTS['thread_completeness'] +
-            initiation_balance_score * self.FACTOR_WEIGHTS['initiation_balance'] +
-            reply_rate_score * self.FACTOR_WEIGHTS['reply_rate'] +
-            frequency_score * self.FACTOR_WEIGHTS['frequency'] +
-            recency_score * self.FACTOR_WEIGHTS['recency']
+            response_time_score * weights['response_time'] +
+            thread_completeness_score * weights['thread_completeness'] +
+            initiation_balance_score * weights['initiation_balance'] +
+            reply_rate_score * weights['reply_rate'] +
+            frequency_score * weights['frequency'] +
+            recency_score * weights['recency']
         )
+        if has_qb_data:
+            base_score += (
+                revenue_weight_score * weights['revenue_weight'] +
+                order_recency_score * weights['order_recency']
+            )
 
         # Apply bonuses (multiplicative)
         total_bonus = decision_maker_bonus + seniority_bonus
@@ -289,8 +318,10 @@ class EngagementScorer:
             recency_score=recency_score,
             decision_maker_bonus=decision_maker_bonus * 100,
             seniority_bonus=seniority_bonus * 100,
+            revenue_weight_score=revenue_weight_score,
+            order_recency_score=order_recency_score,
             total_score=total_score,
-            weights=self.FACTOR_WEIGHTS,
+            weights=weights,
             emails_per_month_avg=contact.get('emails_per_month_avg'),
             avg_response_time_seconds=contact.get('their_avg_response_time'),
             reply_rate_input=contact.get('reply_rate'),
@@ -323,15 +354,27 @@ class EngagementScorer:
         decision_maker_bonus = 0.10 if company.get('decision_maker_count', 0) > 0 else 0.0
         seniority_bonus = self.SENIORITY_BONUSES.get(company.get('highest_seniority', ''), 0.0)
 
+        # Sprint 3: QB business factors for companies
+        revenue_weight_score = self._score_revenue(company.get('qb_total_revenue'))
+        order_recency_score = self._score_order_recency(company.get('qb_days_since_last_invoice'))
+        has_qb_data = company.get('qb_total_revenue') is not None
+
+        weights = self.FACTOR_WEIGHTS if has_qb_data else self.FACTOR_WEIGHTS_EMAIL_ONLY
+
         # Calculate weighted total
         base_score = (
-            response_time_score * self.FACTOR_WEIGHTS['response_time'] +
-            thread_completeness_score * self.FACTOR_WEIGHTS['thread_completeness'] +
-            initiation_balance_score * self.FACTOR_WEIGHTS['initiation_balance'] +
-            reply_rate_score * self.FACTOR_WEIGHTS['reply_rate'] +
-            frequency_score * self.FACTOR_WEIGHTS['frequency'] +
-            recency_score * self.FACTOR_WEIGHTS['recency']
+            response_time_score * weights['response_time'] +
+            thread_completeness_score * weights['thread_completeness'] +
+            initiation_balance_score * weights['initiation_balance'] +
+            reply_rate_score * weights['reply_rate'] +
+            frequency_score * weights['frequency'] +
+            recency_score * weights['recency']
         )
+        if has_qb_data:
+            base_score += (
+                revenue_weight_score * weights['revenue_weight'] +
+                order_recency_score * weights['order_recency']
+            )
 
         # Apply bonuses
         total_bonus = decision_maker_bonus + seniority_bonus
@@ -348,8 +391,10 @@ class EngagementScorer:
             recency_score=recency_score,
             decision_maker_bonus=decision_maker_bonus * 100,
             seniority_bonus=seniority_bonus * 100,
+            revenue_weight_score=revenue_weight_score,
+            order_recency_score=order_recency_score,
             total_score=total_score,
-            weights=self.FACTOR_WEIGHTS,
+            weights=weights,
             emails_per_month_avg=company.get('avg_emails_per_month'),
             avg_response_time_seconds=company.get('avg_response_time_seconds'),
         )
@@ -541,6 +586,44 @@ class EngagementScorer:
             return 40.0
         else:
             return 10.0
+
+    def _score_revenue(self, total_revenue: Optional[float]) -> float:
+        """
+        Sprint 3: Score based on QB total revenue (0-100).
+        Higher-revenue customers get higher engagement scores.
+        """
+        if total_revenue is None:
+            return 0.0
+        if total_revenue >= 100000:
+            return 100.0
+        elif total_revenue >= 50000:
+            return 85.0
+        elif total_revenue >= 20000:
+            return 70.0
+        elif total_revenue >= 5000:
+            return 50.0
+        elif total_revenue > 0:
+            return 30.0
+        return 10.0
+
+    def _score_order_recency(self, days_since_last_invoice: Optional[int]) -> float:
+        """
+        Sprint 3: Score based on QB days since last invoice (0-100).
+        Recent orders = active customer relationship.
+        """
+        if days_since_last_invoice is None:
+            return 0.0
+        if days_since_last_invoice <= 30:
+            return 100.0
+        elif days_since_last_invoice <= 60:
+            return 80.0
+        elif days_since_last_invoice <= 90:
+            return 60.0
+        elif days_since_last_invoice <= 180:
+            return 40.0
+        elif days_since_last_invoice <= 365:
+            return 20.0
+        return 5.0
 
     def save_scores(self, contact_scores: List[EngagementScore], company_scores: List[EngagementScore]) -> Dict:
         """

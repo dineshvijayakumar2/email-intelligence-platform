@@ -122,6 +122,20 @@ export const AnalyticsDashboard: React.FC = () => {
       key: 'name',
     },
     {
+      title: 'Tier',
+      dataIndex: 'qb_tier',
+      key: 'tier',
+      width: 55,
+      render: (v: string) => v ? <Tag color={v === 'A' || v === '1' ? 'green' : v === 'B' || v === '2' ? 'blue' : 'orange'}>{v}</Tag> : null,
+    },
+    {
+      title: 'Revenue',
+      dataIndex: 'qb_total_revenue',
+      key: 'revenue',
+      width: 90,
+      render: (v: number) => v != null ? `$${Math.round(v).toLocaleString()}` : '-',
+    },
+    {
       title: 'Score',
       dataIndex: 'engagement_score',
       key: 'score',

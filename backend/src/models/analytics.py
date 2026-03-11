@@ -163,6 +163,12 @@ class ContactAnalytics(BaseModel):
     avg_response_time_seconds: Optional[int] = None
     avg_thread_depth: Optional[float] = None
 
+    # QB business context (Sprint 3)
+    qb_customer_type: Optional[str] = None
+    qb_tier: Optional[str] = None
+    qb_quotes_count: Optional[int] = None
+    qb_last_quote_date: Optional[str] = None
+
     # Computed field for convenience
     @property
     def avg_response_time_hours(self) -> Optional[float]:
@@ -192,6 +198,8 @@ class TopEngagedContact(BaseModel):
     engagement_score: float
     total_emails: int
     last_contacted_at: Optional[datetime] = None
+    qb_customer_type: Optional[str] = None
+    qb_tier: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -206,6 +214,8 @@ class AtRiskContact(BaseModel):
     last_contacted_at: Optional[datetime] = None
     days_since_contact: int
     engagement_score: Optional[float] = None
+    qb_total_revenue: Optional[float] = None
+    qb_tier: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -248,6 +258,15 @@ class CompanyAnalytics(BaseModel):
     active_threads: Optional[int] = None
     overdue_threads: Optional[int] = None
 
+    # QB business context (Sprint 3)
+    qb_customer_type: Optional[str] = None
+    qb_tier: Optional[str] = None
+    qb_total_revenue: Optional[float] = None
+    qb_invoiced_ty: Optional[float] = None
+    qb_growth_90d: Optional[float] = None
+    qb_days_since_last_invoice: Optional[int] = None
+    qb_account_manager: Optional[str] = None
+
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -269,6 +288,8 @@ class TopEngagedCompany(BaseModel):
     total_emails: int
     contact_count: int
     last_contact_date: Optional[datetime] = None
+    qb_tier: Optional[str] = None
+    qb_total_revenue: Optional[float] = None
 
     class Config:
         from_attributes = True
@@ -282,6 +303,9 @@ class AtRiskCompany(BaseModel):
     days_since_contact: int
     contact_count: int
     engagement_score: Optional[float] = None
+    qb_total_revenue: Optional[float] = None
+    qb_days_since_last_invoice: Optional[int] = None
+    qb_tier: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -314,6 +338,10 @@ class ThreadStatusSummary(BaseModel):
     last_sender_type: Optional[str] = None  # 'us' or 'them'
     days_since_last_message: Optional[int] = None
 
+    # QB context (Sprint 3)
+    qb_customer_type: Optional[str] = None
+    qb_customer_tier: Optional[str] = None
+
     created_at: Optional[datetime] = None
 
     class Config:
@@ -335,6 +363,8 @@ class OverdueThread(BaseModel):
     company_name: Optional[str] = None
     last_message_date: Optional[datetime] = None
     days_overdue: int
+    qb_customer_type: Optional[str] = None
+    qb_customer_tier: Optional[str] = None
 
     class Config:
         from_attributes = True

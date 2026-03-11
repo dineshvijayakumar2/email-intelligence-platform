@@ -916,3 +916,175 @@ Body:
     except Exception as e:
         logger.error(f"Failed to summarize email {email_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# STRATEGIC DIGEST ENDPOINTS (Sprint 3)
+# ============================================================================
+
+@router.get("/strategic-digest/{client_id}")
+async def get_strategic_digest(
+    client_id: str,
+    period_type: str = Query(default="monthly"),
+    date: Optional[str] = Query(default=None),
+):
+    """Get cached strategic digest or return null if not generated yet."""
+    try:
+        query = _supabase.table('ai_strategic_digests').select('*').eq(
+            'client_id', client_id
+        ).eq('period_type', period_type).order('digest_date', desc=True).limit(1)
+
+        if date:
+            query = query.eq('digest_date', date)
+
+        result = query.execute()
+        if not result.data:
+            return {"digest": None, "message": "No digest found. Generate one first."}
+
+        return {"digest": result.data[0]}
+    except Exception as e:
+        logger.error(f"Failed to get strategic digest: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/strategic-digest/{client_id}/generate")
+async def generate_strategic_digest(
+    client_id: str,
+    background_tasks: BackgroundTasks,
+    period_type: str = Query(default="monthly"),
+    period_start: Optional[str] = Query(default=None),
+    period_end: Optional[str] = Query(default=None),
+):
+    """Generate a new strategic digest (runs in background)."""
+    try:
+        from ..services.strategic_digest_pipeline import StrategicDigestPipeline
+
+        pipeline = StrategicDigestPipeline(_supabase, client_id)
+
+        async def _run():
+            try:
+                await pipeline.generate(
+                    period_type=period_type,
+                    period_start=period_start,
+                    period_end=period_end,
+                )
+                logger.info(f"Strategic digest generated for client {client_id}")
+            except Exception as e:
+                logger.error(f"Strategic digest generation failed: {e}")
+
+        background_tasks.add_task(_run)
+
+        return {"status": "generating", "message": "Strategic digest generation started"}
+    except Exception as e:
+        logger.error(f"Failed to start strategic digest: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/strategic-digest/{client_id}/history")
+async def get_strategic_digest_history(
+    client_id: str,
+    limit: int = Query(default=10, ge=1, le=50),
+):
+    """Get past strategic digests for a client."""
+    try:
+        result = _supabase.table('ai_strategic_digests').select(
+            'id, digest_date, period_type, period_start, period_end, '
+            'companies_analyzed, emails_analyzed, total_cost_usd, created_at'
+        ).eq('client_id', client_id).order('digest_date', desc=True).limit(limit).execute()
+
+        return {"digests": result.data or []}
+    except Exception as e:
+        logger.error(f"Failed to get digest history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/am-performance/{client_id}")
+async def get_am_performance(
+    client_id: str,
+    period_start: Optional[str] = Query(default=None),
+    period_end: Optional[str] = Query(default=None),
+):
+    """Get AM performance snapshots for a client."""
+    try:
+        query = _supabase.table('am_performance_snapshots').select('*').eq(
+            'client_id', client_id
+        ).order('total_revenue', desc=True)
+
+        if period_start:
+            query = query.gte('period_start', period_start)
+        if period_end:
+            query = query.lte('period_end', period_end)
+
+        result = query.execute()
+        return {"snapshots": result.data or []}
+    except Exception as e:
+        logger.error(f"Failed to get AM performance: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# AI INSIGHTS ENDPOINTS (Sprint 3 — per-page "Analyze" button)
+# ============================================================================
+
+@router.get("/insights/company/{company_id}")
+async def get_company_insight(company_id: str, force: bool = Query(default=False)):
+    """Generate AI insight for a company (cached 24h)."""
+    try:
+        from ..services.ai_insights_engine import AIInsightsEngine
+        engine = AIInsightsEngine(_supabase)
+        result = await engine.get_company_insight(company_id, force=force)
+        return {"insight": result}
+    except Exception as e:
+        logger.error(f"Failed to get company insight: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/insights/contact/{contact_id}")
+async def get_contact_insight(contact_id: str, force: bool = Query(default=False)):
+    """Generate AI insight for a contact (cached 24h)."""
+    try:
+        from ..services.ai_insights_engine import AIInsightsEngine
+        engine = AIInsightsEngine(_supabase)
+        result = await engine.get_contact_insight(contact_id, force=force)
+        return {"insight": result}
+    except Exception as e:
+        logger.error(f"Failed to get contact insight: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/insights/thread/{thread_id}")
+async def get_thread_insight(thread_id: str, force: bool = Query(default=False)):
+    """Generate AI insight for a thread (cached 24h)."""
+    try:
+        from ..services.ai_insights_engine import AIInsightsEngine
+        engine = AIInsightsEngine(_supabase)
+        result = await engine.get_thread_insight(thread_id, force=force)
+        return {"insight": result}
+    except Exception as e:
+        logger.error(f"Failed to get thread insight: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# MODEL MANAGEMENT ENDPOINTS (Sprint 3 — multi-model support)
+# ============================================================================
+
+@router.get("/models")
+async def get_available_models():
+    """Get list of available AI models with their costs."""
+    from ..services.langchain_core import get_available_models as _get_models
+    return {"models": _get_models()}
+
+
+@router.put("/models/defaults")
+async def update_default_models(
+    cheap_model: str = Query(default="haiku"),
+    strategic_model: str = Query(default="sonnet"),
+):
+    """Update default model preferences."""
+    from ..services.langchain_core import set_default_models
+    try:
+        set_default_models(cheap=cheap_model, strategic=strategic_model)
+        return {"status": "ok", "cheap": cheap_model, "strategic": strategic_model}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))

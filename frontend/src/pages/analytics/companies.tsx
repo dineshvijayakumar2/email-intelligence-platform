@@ -125,6 +125,34 @@ export const CompaniesAnalytics: React.FC = () => {
       sortOrder: getSortOrder('company_name'),
     },
     {
+      title: 'Tier', dataIndex: 'qb_tier', key: 'qb_tier', width: 60,
+      render: (v: string | null) => {
+        if (!v) return null;
+        const colors: Record<string, string> = { A: 'green', B: 'blue', C: 'orange' };
+        return <Tag color={colors[v] || 'default'}>{v}</Tag>;
+      },
+    },
+    {
+      title: 'Revenue TY', dataIndex: 'qb_total_revenue', key: 'qb_total_revenue', width: 110,
+      render: (v: number | null) => v != null ? `$${v.toLocaleString()}` : '-',
+    },
+    {
+      title: 'Growth', dataIndex: 'qb_growth_90d', key: 'qb_growth_90d', width: 90,
+      render: (v: number | null) => {
+        if (v == null) return '-';
+        const color = v >= 0 ? 'green' : 'red';
+        return <Text style={{ color }}>{v >= 0 ? '+' : ''}{v.toFixed(1)}%</Text>;
+      },
+    },
+    {
+      title: 'Type', dataIndex: 'qb_customer_type', key: 'qb_customer_type', width: 100,
+      render: (v: string | null) => {
+        if (!v) return null;
+        const colors: Record<string, string> = { existing: 'blue', prospective: 'green', new: 'cyan' };
+        return <Tag color={colors[v] || 'default'}>{v}</Tag>;
+      },
+    },
+    {
       title: 'Status', dataIndex: 'engagement_status', key: 'status', width: 100,
       render: (v: EngagementStatus) => { const cfg = engagementStatusConfig[v] || engagementStatusConfig.unknown; return <Tag color={cfg.color}>{cfg.label}</Tag>; },
     },
@@ -197,6 +225,18 @@ export const CompaniesAnalytics: React.FC = () => {
 
   const atRiskColumns = [
     { title: 'Company', dataIndex: 'company_name', key: 'name' },
+    {
+      title: 'Tier', dataIndex: 'qb_tier', key: 'qb_tier', width: 60,
+      render: (v: string | null) => {
+        if (!v) return null;
+        const colors: Record<string, string> = { A: 'green', B: 'blue', C: 'orange' };
+        return <Tag color={colors[v] || 'default'}>{v}</Tag>;
+      },
+    },
+    {
+      title: 'Revenue TY', dataIndex: 'qb_total_revenue', key: 'qb_total_revenue', width: 110,
+      render: (v: number | null) => v != null ? `$${v.toLocaleString()}` : '-',
+    },
     { title: 'Days Silent', dataIndex: 'days_since_contact', key: 'days', width: 100, render: (v: number) => <Tag color={v > 90 ? 'red' : 'orange'}>{v}d</Tag> },
     { title: 'Contacts', dataIndex: 'contact_count', key: 'contacts', width: 80 },
     { title: 'Score', dataIndex: 'engagement_score', key: 'score', width: 120, render: (v: number) => <EngagementBadge score={v} /> },

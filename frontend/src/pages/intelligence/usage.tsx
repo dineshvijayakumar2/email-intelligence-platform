@@ -184,6 +184,17 @@ const UsagePage: React.FC = () => {
         </Space>
       </div>
 
+      {/* Credit Balance / API Error Alert */}
+      {monitoring && monitoring.total_failures_24h > 0 && monitoring.api_failure_rate > 50 && (
+        <Alert
+          message="API Errors Detected"
+          description="High API failure rate in the last 24 hours. This may indicate insufficient Anthropic credits or an API key issue. Check your Anthropic account balance and update the API key if needed."
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+      )}
+
       {/* Budget Alert */}
       {controls && controls.session_spend_usd >= controls.daily_budget_usd * 0.8 && (
         <Alert

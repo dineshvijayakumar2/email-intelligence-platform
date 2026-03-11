@@ -1,15 +1,16 @@
 """
-Action Bucket Engine — Zero-cost Python rule engine (Session 3)
+Action Bucket Engine — Zero-cost Python rule engine (Session 3 + Sprint 3 QB)
 
-Layer 2 of the intelligence system. Derives 8 action buckets from:
+Layer 2 of the intelligence system. Derives 10 action buckets from:
 - Layer 1 AI classification (intent, business_signal, entities)
 - Sprint 2 data (engagement, threads, seniority, frequency)
+- Sprint 3 QB data (revenue, customer type, order recency, quotes)
 
 $0 cost — pure Python, no API calls. All rules are deterministic and
 version-tracked for traceability.
 
-8 Buckets (4 email-level + 4 relationship-level):
-  Email-level:   buying_signal, expansion_signal, churn_risk, competitor_threat
+10 Buckets (6 email-level + 4 relationship-level):
+  Email-level:   buying_signal, expansion_signal, churn_risk, competitor_threat, revenue_at_risk, hot_prospect
   Relationship:  missed_opportunity, stakeholder_entry, silent_champion, unresolved_block
 """
 
@@ -23,7 +24,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Version — stored per row for traceability
 # ---------------------------------------------------------------------------
-BUCKET_ENGINE_VERSION = "v1.0"
+BUCKET_ENGINE_VERSION = "v2.0"  # v2: QB-aware + 2 new buckets (revenue_at_risk, hot_prospect)
 
 # ---------------------------------------------------------------------------
 # Bucket configuration (used by frontend for display)
@@ -76,6 +77,18 @@ BUCKET_CONFIG = {
         "color": "yellow",
         "severity": "medium",
         "action": "Bump thread to resolve blocker",
+    },
+    "revenue_at_risk": {
+        "label": "Revenue at Risk",
+        "color": "red",
+        "severity": "critical",
+        "action": "Proactive retention outreach — declining revenue + engagement",
+    },
+    "hot_prospect": {
+        "label": "Hot Prospect",
+        "color": "green",
+        "severity": "critical",
+        "action": "Fast-track proposal — prospective customer showing buying intent",
     },
 }
 
@@ -189,6 +202,55 @@ def derive_email_buckets(intel_row: dict) -> list[dict]:
             "confidence": round(confidence * 0.7, 2),
             "justification": "Competitor mentioned in context of " + (intent or "inquiry"),
         })
+
+    # --- Sprint 3: QB-AWARE BUCKETS ---
+    # These use QB enrichment columns (qb_customer_type, qb_total_revenue, etc.)
+    # that were added to the email during AI analyzer enrichment
+
+    qb_type = intel_row.get("qb_customer_type") or ""
+    qb_revenue = intel_row.get("qb_total_revenue")
+    qb_days_since = intel_row.get("qb_days_since_last_invoice")
+    qb_tier = intel_row.get("qb_tier") or ""
+
+    # --- REVENUE AT RISK ---
+    # Existing customer + declining engagement + negative signals + no recent orders
+    if qb_type == "existing" and qb_revenue and qb_revenue > 5000:
+        is_negative = sentiment in ("negative", "very_negative")
+        is_declining = qb_days_since is not None and qb_days_since > 90
+        has_risk_signal = intent in ("complaint", "churn_risk") or business_signal in ("churn_signal", "negative_feedback")
+
+        if (is_negative and is_declining) or (has_risk_signal and qb_revenue > 20000):
+            rev_str = f"${qb_revenue:,.0f}"
+            days_str = f"{qb_days_since}d since last order" if qb_days_since else "unknown order recency"
+            buckets.append({
+                "bucket": "revenue_at_risk",
+                "confidence": round(min(confidence + 0.1, 1.0), 2),
+                "justification": f"Existing {rev_str} customer ({days_str}) showing negative signals",
+            })
+
+    # --- HOT PROSPECT ---
+    # Prospective/new customer + buying signals + positive sentiment
+    if qb_type in ("prospective", "new", ""):
+        is_buying = intent == "pricing_inquiry" or business_signal == "buying_intent" or has_buying or has_budget
+        is_positive = sentiment in ("positive", "very_positive", "neutral")
+
+        if is_buying and is_positive:
+            justification = "Prospective customer showing buying intent"
+            if has_budget:
+                justification += " with budget signal"
+            buckets.append({
+                "bucket": "hot_prospect",
+                "confidence": round(confidence, 2),
+                "justification": justification,
+            })
+
+    # --- QB WEIGHTING on existing buckets ---
+    # Boost confidence for high-revenue/high-tier customers
+    if qb_tier in ("A", "1") or (qb_revenue and qb_revenue > 50000):
+        for b in buckets:
+            if b["bucket"] in ("missed_opportunity", "churn_risk", "unresolved_block"):
+                b["confidence"] = round(min(b["confidence"] + 0.1, 1.0), 2)
+                b["justification"] += f" [Tier {qb_tier or 'high-value'} customer]"
 
     return buckets
 

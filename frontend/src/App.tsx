@@ -40,6 +40,7 @@ import InboxPage from './pages/intelligence/inbox';
 import DigestPage from './pages/intelligence/digest';
 import OpportunitiesPage from './pages/intelligence/opportunities';
 import UsagePage from './pages/intelligence/usage';
+import StrategicDigestPage from './pages/intelligence/strategic-digest';
 
 // Settings
 import SettingsPage from './pages/settings';
@@ -213,6 +214,7 @@ function App() {
             <Route path="/intelligence/digest" element={<ProtectedRoute><Layout><DigestPage /></Layout></ProtectedRoute>} />
             <Route path="/intelligence/opportunities" element={<ProtectedRoute><Layout><OpportunitiesPage /></Layout></ProtectedRoute>} />
             <Route path="/intelligence/usage" element={<AdminRoute><Layout><UsagePage /></Layout></AdminRoute>} />
+            <Route path="/intelligence/strategic-digest" element={<ProtectedRoute><Layout><StrategicDigestPage /></Layout></ProtectedRoute>} />
 
             {/* Admin-only routes */}
             <Route

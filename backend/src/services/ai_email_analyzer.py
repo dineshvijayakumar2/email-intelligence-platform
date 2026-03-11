@@ -172,6 +172,15 @@ CHURN RISK CLASSIFICATION — BE STRICT:
   - General negative feedback without exit intent (use "negative_feedback" business signal)
 - Only use "churn_signal" business_signal when the email explicitly signals the customer may leave. Dissatisfaction alone is NOT churn — it's "negative_feedback".
 
+BUSINESS CONTEXT (Sprint 3):
+- Some emails include a "business_context" field with data from the company's CRM (Quickbase):
+  - "customer_type": "existing", "prospective", or "new" — weight signals accordingly (churn risk on existing $100K customer >> vague complaint from unknown sender)
+  - "tier": Customer importance tier (e.g., "A", "B", "C")
+  - "revenue": Total invoiced amount + this year vs last year — if declining, any negative signal is amplified
+  - "days_since_last_order": How recently they ordered — 90+ days with negative email = higher churn risk
+  - "open_quotes": Active quotes pending — pricing inquiries from customers with open quotes = high-intent buying signal
+- Use this context to calibrate urgency and business_signal. A complaint from a $200K Tier A customer with declining revenue deserves "high" urgency. The same complaint from a $1K customer is "medium".
+
 PRE-CLASSIFICATION HINTS:
 - Some emails include a "pre_classification" field with rule-based tags already applied (e.g., "urgent", "financial", "meeting", "reply").
 - Use these as strong hints. For example, if tags include "urgent", lean toward higher urgency. If sender_type is "human", treat as a real person.
@@ -757,7 +766,7 @@ class AIEmailAnalyzer:
             try:
                 resp = self._execute_with_retry(
                     self.client.table("customer_contacts")
-                    .select("id,job_title,seniority_level,functional_role")
+                    .select("id,job_title,seniority_level,functional_role,qb_quotes_count,qb_last_quote_date,qb_contact_recency_days")
                     .in_("id", chunk)
                 )
                 for c in (resp.data or []):
@@ -771,7 +780,7 @@ class AIEmailAnalyzer:
             try:
                 resp = self._execute_with_retry(
                     self.client.table("customer_companies")
-                    .select("id,company_name")
+                    .select("id,company_name,qb_customer_type,qb_tier,qb_total_revenue,qb_invoiced_ty,qb_invoiced_ly,qb_days_since_last_invoice,qb_account_manager")
                     .in_("id", chunk)
                 )
                 for c in (resp.data or []):
@@ -787,6 +796,15 @@ class AIEmailAnalyzer:
             email["_contact_seniority"] = contact.get("seniority_level") or ""
             email["_contact_functional_role"] = contact.get("functional_role") or ""
             email["_company_name"] = company.get("company_name") or ""
+            # Sprint 3: QB business context
+            email["_qb_customer_type"] = company.get("qb_customer_type") or ""
+            email["_qb_tier"] = company.get("qb_tier") or ""
+            email["_qb_total_revenue"] = company.get("qb_total_revenue")
+            email["_qb_invoiced_ty"] = company.get("qb_invoiced_ty")
+            email["_qb_invoiced_ly"] = company.get("qb_invoiced_ly")
+            email["_qb_days_since_last_invoice"] = company.get("qb_days_since_last_invoice")
+            email["_qb_quotes_count"] = contact.get("qb_quotes_count")
+            email["_qb_account_manager"] = company.get("qb_account_manager") or ""
 
     # ------------------------------------------------------------------
     # Enrich emails with rule-based tags (from EmailTagger)
@@ -868,6 +886,34 @@ class AIEmailAnalyzer:
                 if func_role:
                     context_parts.append(f"role: {func_role}")
                 entry["sender_context"] = ", ".join(context_parts)
+
+            # Sprint 3: Add QB business context to help AI make business-aware decisions
+            qb_type = email.get("_qb_customer_type", "")
+            qb_tier = email.get("_qb_tier", "")
+            qb_revenue = email.get("_qb_total_revenue")
+            qb_invoiced_ty = email.get("_qb_invoiced_ty")
+            qb_invoiced_ly = email.get("_qb_invoiced_ly")
+            qb_days_since = email.get("_qb_days_since_last_invoice")
+            qb_quotes = email.get("_qb_quotes_count")
+
+            if qb_type or qb_revenue is not None:
+                biz = {}
+                if qb_type:
+                    biz["customer_type"] = qb_type
+                if qb_tier:
+                    biz["tier"] = qb_tier
+                if qb_revenue is not None:
+                    rev_parts = [f"total: ${qb_revenue:,.0f}"]
+                    if qb_invoiced_ty is not None:
+                        rev_parts.append(f"this year: ${qb_invoiced_ty:,.0f}")
+                    if qb_invoiced_ly is not None:
+                        rev_parts.append(f"last year: ${qb_invoiced_ly:,.0f}")
+                    biz["revenue"] = ", ".join(rev_parts)
+                if qb_days_since is not None:
+                    biz["days_since_last_order"] = qb_days_since
+                if qb_quotes is not None and qb_quotes > 0:
+                    biz["open_quotes"] = qb_quotes
+                entry["business_context"] = biz
 
             # Add rule-based pre-classification hints (from EmailTagger)
             rule_tags = email.get("_rule_tags", [])

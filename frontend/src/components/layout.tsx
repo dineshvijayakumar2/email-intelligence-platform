@@ -35,6 +35,7 @@ const pageTitles: Record<string, string> = {
   '/intelligence/digest': 'Daily Digest',
   '/intelligence/opportunities': 'Opportunities',
   '/intelligence/usage': 'AI Usage',
+  '/intelligence/strategic-digest': 'Strategic Digest',
   '/emails': 'All Emails',
   '/processing': 'Processing Jobs',
   '/errors': 'Error Logs',
@@ -109,6 +110,7 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
         { key: '/intelligence/inbox', label: <Link to="/intelligence/inbox">Smart Inbox</Link> },
         { key: '/intelligence/digest', label: <Link to="/intelligence/digest">Daily Digest</Link> },
         { key: '/intelligence/opportunities', label: <Link to="/intelligence/opportunities">Opportunities</Link> },
+        { key: '/intelligence/strategic-digest', label: <Link to="/intelligence/strategic-digest">Strategic Digest</Link> },
       ],
     },
     {
