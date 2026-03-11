@@ -17,9 +17,12 @@ import {
   ClockCircleOutlined, CheckCircleOutlined, CloseCircleOutlined,
   ExclamationCircleOutlined,
 } from '@ant-design/icons';
+import { Select } from 'antd';
 import { usageApi, controlsApi, invalidateCache } from '../../services/aiService';
+import { modelsApi } from '../../services/strategicDigestService';
 import { formatTime } from '../../utils/dateUtils';
 import type { UsageSummary, MonitoringStats, AIControlSettings, UsageLogEntry } from '../../types/ai';
+import type { AIModel } from '../../types/strategic-digest';
 
 const { Title, Text } = Typography;
 
@@ -29,23 +32,28 @@ const UsagePage: React.FC = () => {
   const [costs, setCosts] = useState<UsageSummary | null>(null);
   const [monitoring, setMonitoring] = useState<MonitoringStats | null>(null);
   const [controls, setControls] = useState<AIControlSettings | null>(null);
+  const [models, setModels] = useState<AIModel[]>([]);
+  const [cheapModel, setCheapModel] = useState('haiku');
+  const [strategicModel, setStrategicModel] = useState('sonnet');
   const [recentLogs, setRecentLogs] = useState<UsageLogEntry[]>([]);
   const [autoRefresh, setAutoRefresh] = useState(true);
 
   // Load all data
   const loadData = useCallback(async () => {
     try {
-      const [costsData, monData, ctrlData, logsData] = await Promise.all([
+      const [costsData, monData, ctrlData, logsData, modelsData] = await Promise.all([
         usageApi.getCosts(undefined, 30),
         usageApi.getMonitoring(),
         controlsApi.get(),
         usageApi.getRecent(30),
+        modelsApi.getAvailable().catch(() => ({ models: [] })),
       ]);
       if (!isMountedRef.current) return;
       setCosts(costsData);
       setMonitoring(monData);
       setControls(ctrlData);
       setRecentLogs(logsData.items);
+      if (modelsData.models?.length) setModels(modelsData.models);
     } catch (err) {
       console.error('Failed to load usage data:', err);
     } finally {
@@ -88,6 +96,19 @@ const UsagePage: React.FC = () => {
       message.success(`Session spend reset (was $${result.previous_spend_usd})`);
       invalidateCache('usage');
       loadData();
+    }
+  };
+
+  const handleModelChange = async (type: 'cheap' | 'strategic', value: string) => {
+    const newCheap = type === 'cheap' ? value : cheapModel;
+    const newStrategic = type === 'strategic' ? value : strategicModel;
+    try {
+      await modelsApi.updateDefaults(newCheap, newStrategic);
+      if (type === 'cheap') setCheapModel(value);
+      else setStrategicModel(value);
+      message.success(`${type === 'cheap' ? 'Fast' : 'Strategic'} model set to ${value}`);
+    } catch (err) {
+      message.error('Failed to update model');
     }
   };
 
@@ -344,6 +365,46 @@ const UsagePage: React.FC = () => {
             </div>
 
             <Divider style={{ margin: '12px 0' }} />
+
+            {/* Model Selection */}
+            {models.length > 0 && (
+              <>
+                <Title level={5} style={{ marginBottom: 12, marginTop: 0 }}>AI Model Selection</Title>
+                <Row gutter={16}>
+                  <Col span={12}>
+                    <Text type="secondary" style={{ fontSize: 12 }}>Fast tasks (email analysis, insights)</Text>
+                    <Select
+                      value={cheapModel}
+                      onChange={(v) => handleModelChange('cheap', v)}
+                      style={{ width: '100%', marginTop: 4 }}
+                      disabled={!controls?.ai_enabled}
+                    >
+                      {models.map(m => (
+                        <Select.Option key={m.name} value={m.name} disabled={!m.available}>
+                          {m.label} {m.cost_input_per_mtok === 0 ? '(free)' : `($${m.cost_input_per_mtok}/MTok)`}
+                        </Select.Option>
+                      ))}
+                    </Select>
+                  </Col>
+                  <Col span={12}>
+                    <Text type="secondary" style={{ fontSize: 12 }}>Strategic tasks (digest, reports)</Text>
+                    <Select
+                      value={strategicModel}
+                      onChange={(v) => handleModelChange('strategic', v)}
+                      style={{ width: '100%', marginTop: 4 }}
+                      disabled={!controls?.ai_enabled}
+                    >
+                      {models.map(m => (
+                        <Select.Option key={m.name} value={m.name} disabled={!m.available}>
+                          {m.label} {m.cost_input_per_mtok === 0 ? '(free)' : `($${m.cost_input_per_mtok}/MTok)`}
+                        </Select.Option>
+                      ))}
+                    </Select>
+                  </Col>
+                </Row>
+                <Divider style={{ margin: '12px 0' }} />
+              </>
+            )}
 
             {/* Budget Controls */}
             <Title level={5} style={{ marginBottom: 12, marginTop: 0 }}>Budget Limits</Title>
