@@ -341,6 +341,7 @@ export interface UsageLogEntry {
   batch_size: number;
   success: boolean;
   error_type: string;
+  error_detail?: string | null;
   retry_count: number;
   prompt_version: string;
   created_at?: string;

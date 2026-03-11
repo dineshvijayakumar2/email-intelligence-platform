@@ -101,6 +101,7 @@ class AIUsageTracker:
         batch_size: int = 1,
         success: bool = True,
         error_type: Optional[str] = None,
+        error_detail: Optional[str] = None,
         retry_count: int = 0,
         prompt_version: Optional[str] = None,
     ) -> None:
@@ -142,6 +143,8 @@ class AIUsageTracker:
             row["client_id"] = client_id
         if error_type:
             row["error_type"] = error_type
+        if error_detail:
+            row["error_detail"] = error_detail
         if prompt_version:
             row["prompt_version"] = prompt_version
 

@@ -106,6 +106,7 @@ class AIClient:
         else:
             self._client = anthropic.Anthropic(api_key=api_key)
         self._last_request_time = 0.0
+        self.last_error: Optional[str] = None  # Sprint 3: capture error detail for UI
 
     @property
     def is_available(self) -> bool:
@@ -228,7 +229,12 @@ class AIClient:
                     time.sleep(delay)
                     continue
                 # Non-retryable API errors (4xx except rate limit)
-                logger.error(f"Claude API error (non-retryable): {e}")
+                error_msg = str(e)
+                # Extract human-readable message from API error
+                if hasattr(e, 'body') and isinstance(e.body, dict):
+                    error_msg = e.body.get('error', {}).get('message', str(e))
+                self.last_error = error_msg
+                logger.error(f"Claude API error (non-retryable): {error_msg}")
                 return None
 
             except anthropic.APIConnectionError as e:
@@ -247,6 +253,7 @@ class AIClient:
                 logger.error(f"Unexpected error calling Claude API: {e}")
                 return None
 
+        self.last_error = str(last_error) if last_error else "All retries failed"
         logger.error(f"All {MAX_RETRIES + 1} attempts failed for Claude API: {last_error}")
         return None
 

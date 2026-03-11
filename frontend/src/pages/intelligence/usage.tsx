@@ -160,7 +160,7 @@ const UsagePage: React.FC = () => {
       width: 80,
       render: (val: boolean, r: UsageLogEntry) => val
         ? <CheckCircleOutlined style={{ color: '#52c41a' }} />
-        : <Tooltip title={r.error_type || 'Failed'}><CloseCircleOutlined style={{ color: '#ff4d4f' }} /></Tooltip>,
+        : <Tooltip title={r.error_detail || r.error_type || 'Failed'}><CloseCircleOutlined style={{ color: '#ff4d4f' }} /></Tooltip>,
     },
   ];
 

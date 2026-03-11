@@ -1152,6 +1152,10 @@ class AIEmailAnalyzer:
             # API failure — mark all as failed
             for eid in email_ids:
                 self._save_failed(eid, mailbox_id, client_id, "api_call_failed")
+            # Capture the actual error from the AI client
+            error_detail = getattr(self.ai_client, 'last_error', None) or "api_timeout"
+            error_type = "credit_balance" if "credit balance" in (error_detail or "").lower() else "api_timeout"
+
             usage_tracker = get_usage_tracker()
             if usage_tracker:
                 usage_tracker.log_usage(
@@ -1163,7 +1167,8 @@ class AIEmailAnalyzer:
                     client_id=client_id,
                     batch_size=len(emails),
                     success=False,
-                    error_type="api_timeout",
+                    error_type=error_type,
+                    error_detail=error_detail[:500] if error_detail else None,
                     prompt_version=PROMPT_VERSION,
                 )
             return {"analyzed": 0, "failed": len(emails), "skipped": 0}
