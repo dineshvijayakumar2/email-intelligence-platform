@@ -11,37 +11,34 @@ from typing import Any, Optional
 logger = logging.getLogger(__name__)
 
 # Default field mappings for Carbon8 schema (QB field IDs → column names)
+# Verified against live qb_sync_config row — March 2026
 DEFAULT_FIELD_MAPPINGS = {
     "customers": {
         "3": "qb_record_id",
+        "6": "customer_code",
         "7": "customer_name",
+        "9": "active",
         "16": "account_manager",
-        "748": "customer_code",
-        "894": "customer_tier",
-        "1717": "customer_status",  # MKTG: Customer Status?
-        "1775": "industry",
-        "570": "active",
+        "17": "customer_tier",
+        "36": "recency_days",
+        "59": "industry",
+        "67": "customer_status",
+        "68": "days_since_last_invoice",
         "101": "total_invoiced",
         "103": "invoiced_ty",
         "104": "invoiced_ly",
-        "1125": "invoiced_l90d",
-        "1163": "invoiced_l12m",
-        "36": "recency_days",  # Recency (numeric)
-        "280": "cadence_score",
-        "540": "growth_90d",  # 90 day Growth
-        "1043": "days_since_last_invoice",
     },
     "contacts": {
         "3": "qb_record_id",
-        "7": "qb_customer_id",       # Customer ID (parent FK)
-        "11": "first_name",           # First Name*:
-        "12": "surname",              # Surname*:
-        "15": "email",                # Email*:
-        "13": "phone",                # Phone:
-        "16": "active",               # Active:
-        "53": "contact_recency_days", # Contact Recency
-        "25": "quotes_accepted_count",# # of Quotes Accepted
-        "27": "most_recent_quote_date",# Most Recent Accepted Quote Date
+        "7": "qb_customer_id",
+        "11": "first_name",
+        "12": "surname",
+        "13": "phone",
+        "15": "email",
+        "16": "active",
+        "25": "quotes_accepted_count",
+        "27": "most_recent_quote_date",
+        "53": "contact_recency_days",
     },
     "quotes": {
         "3": "qb_record_id",
@@ -50,46 +47,46 @@ DEFAULT_FIELD_MAPPINGS = {
         "9": "quote_am_name",
         "12": "sell_ex_tax",
         "13": "date_created",
-        "219": "date_accepted",
-        "805": "category",
+        "14": "date_accepted",
+        "36": "category",
+        "40": "contact_name",
         "892": "contact_email",
-        "863": "contact_name",
         "1062": "job_no",
-        "1238": "has_job",  # Job # Exists?
+        "1238": "has_job",
         "1447": "quantity",
         "1476": "kinds",
         "1505": "total_quantity",
     },
     "jobs": {
         "3": "qb_record_id",
-        "41": "job_no",
-        "71": "quote_no",
-        "129": "qb_customer_id",
-        "371": "job_status",
-        "158": "retail_sale",
-        "219": "invoiced_margin",
-        "251": "margin_pct",
-        "341": "accepted_date",
-        "311": "due_date",
-        "282": "factory_rush_level",
-        "1069": "pieces_ordered",
-        "1102": "kinds_ordered",
-        "1135": "total_qty_ordered",
+        "7": "job_no",
+        "9": "qb_customer_id",
+        "10": "quote_no",
+        "11": "retail_sale",
+        "17": "invoiced_margin",
+        "18": "margin_pct",
+        "21": "factory_rush_level",
+        "22": "due_date",
+        "23": "accepted_date",
+        "24": "job_status",
+        "62": "pieces_ordered",
+        "63": "kinds_ordered",
+        "65": "total_qty_ordered",
     },
     "sales_line_items": {
         "3": "qb_record_id",
         "7": "invoice_id",
-        "12": "job_no",
         "9": "job_am_name",
-        "16": "customer_name",
-        "225": "qb_customer_id",
-        "286": "inv_date",
-        "345": "subtotal",
-        "378": "total",
-        "1292": "product_group",
-        "1420": "industry",
-        "439": "job_title",
         "11": "invoice_no",
+        "12": "job_no",
+        "16": "customer_name",
+        "17": "qb_customer_id",
+        "19": "inv_date",
+        "21": "subtotal",
+        "22": "total",
+        "24": "job_title",
+        "56": "product_group",
+        "60": "industry",
     },
 }
 
