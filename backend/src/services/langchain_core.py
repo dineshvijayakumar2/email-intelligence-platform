@@ -60,10 +60,10 @@ MODEL_CONFIGS = {
 ModelName = Literal["haiku", "sonnet", "gemini"]
 
 # ---------------------------------------------------------------------------
-# Default model preferences (configurable via AI controls)
+# Default model preferences — read from env so Railway config persists across restarts
 # ---------------------------------------------------------------------------
-_default_cheap_model: ModelName = "haiku"
-_default_strategic_model: ModelName = "sonnet"
+_default_cheap_model: ModelName = os.environ.get("AI_CHEAP_MODEL", "haiku")  # type: ignore[assignment]
+_default_strategic_model: ModelName = os.environ.get("AI_STRATEGIC_MODEL", "sonnet")  # type: ignore[assignment]
 
 
 def set_default_models(cheap: ModelName = "haiku", strategic: ModelName = "sonnet"):

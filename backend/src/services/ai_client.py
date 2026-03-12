@@ -62,9 +62,9 @@ class AIControlSettings:
     # Session spend tracking (resets on server restart)
     session_spend_usd: float = 0.0
     session_requests: int = 0
-    # Model preferences (persisted in-process across controls updates)
-    cheap_model: str = "haiku"
-    strategic_model: str = "sonnet"
+    # Model preferences — default from env so Railway config persists across restarts
+    cheap_model: str = field(default_factory=lambda: os.getenv("AI_CHEAP_MODEL", "haiku"))
+    strategic_model: str = field(default_factory=lambda: os.getenv("AI_STRATEGIC_MODEL", "sonnet"))
 
 
 # Global settings singleton
@@ -260,6 +260,62 @@ class AIClient:
         logger.error(f"All {MAX_RETRIES + 1} attempts failed for Claude API: {last_error}")
         return None
 
+    def _call_via_langchain(
+        self,
+        model_name: str,
+        system_prompt: str,
+        user_message: str,
+        max_tokens: int = 4096,
+        temperature: float = 0.0,
+    ) -> Optional[AIResponse]:
+        """
+        Call a non-Anthropic model (e.g. Gemini) via LangChain and wrap the
+        result in an AIResponse so existing callers need no changes.
+        """
+        try:
+            from .langchain_core import get_llm, MODEL_CONFIGS
+            from langchain_core.messages import HumanMessage, SystemMessage
+
+            start_ms = int(time.time() * 1000)
+            llm = get_llm(model_name, temperature)  # type: ignore[arg-type]
+            messages = [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=user_message),
+            ]
+            response = llm.invoke(messages)
+            end_ms = int(time.time() * 1000)
+
+            content = response.content if isinstance(response.content, str) else str(response.content)
+            usage = getattr(response, "usage_metadata", None) or {}
+            input_tokens = usage.get("input_tokens", 0)
+            output_tokens = usage.get("output_tokens", 0)
+
+            cfg = MODEL_CONFIGS.get(model_name, {})
+            cost = round(
+                (input_tokens / 1_000_000) * cfg.get("cost_input_per_mtok", 0.0)
+                + (output_tokens / 1_000_000) * cfg.get("cost_output_per_mtok", 0.0),
+                6,
+            )
+
+            # Track session spend
+            settings = get_ai_settings()
+            settings.session_spend_usd += cost
+            settings.session_requests += 1
+
+            return AIResponse(
+                content=content,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                model=cfg.get("model", model_name),
+                raw_response={"content": content, "usage": usage},
+                estimated_cost_usd=cost,
+                processing_time_ms=end_ms - start_ms,
+            )
+        except Exception as e:
+            self.last_error = str(e)
+            logger.error(f"LangChain call failed for model '{model_name}': {e}")
+            return None
+
     def call_haiku(
         self,
         system_prompt: str,
@@ -267,7 +323,10 @@ class AIClient:
         max_tokens: int = 4096,
         temperature: float = 0.0,
     ) -> Optional[AIResponse]:
-        """Call Claude Haiku — fast, cheap. Used for per-email classification."""
+        """Call cheap/fast model. Respects configured cheap_model preference."""
+        cheap = get_ai_settings().cheap_model  # "haiku" or "gemini"
+        if cheap != "haiku":
+            return self._call_via_langchain(cheap, system_prompt, user_message, max_tokens, temperature)
         return self._call_model(
             model=HAIKU_MODEL,
             system_prompt=system_prompt,
@@ -283,7 +342,10 @@ class AIClient:
         max_tokens: int = 4096,
         temperature: float = 0.0,
     ) -> Optional[AIResponse]:
-        """Call Claude Sonnet — higher quality. Used for digests and summaries."""
+        """Call strategic/quality model. Respects configured strategic_model preference."""
+        strategic = get_ai_settings().strategic_model  # "sonnet" or "gemini"
+        if strategic != "sonnet":
+            return self._call_via_langchain(strategic, system_prompt, user_message, max_tokens, temperature)
         return self._call_model(
             model=SONNET_MODEL,
             system_prompt=system_prompt,
