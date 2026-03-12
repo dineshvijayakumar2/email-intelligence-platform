@@ -26,6 +26,7 @@ from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass, asdict
 import logging
 import re
+import time
 from datetime import datetime
 
 from ..database.supabase_client import SupabaseClient
@@ -223,39 +224,39 @@ class RoleClassifier:
             return {}
 
         try:
-            # Fetch in smaller batches to avoid Supabase JSON serialization issues
-            # Signatures are at the end, so we only need last 1000 chars
-            batch_size = 50  # Reduced from 1000 to avoid large response errors
+            # Fetch in small batches — body_text can be large; HTTP/2 stream
+            # cancellations (ConnectionTerminated error_code:9) happen with big payloads
+            batch_size = 20
             all_signatures = {}
 
             for i in range(0, len(email_ids), batch_size):
                 batch = email_ids[i:i + batch_size]
 
-                try:
-                    # Use PostgreSQL substring to get only last 1000 chars (signatures at end)
-                    # Note: Supabase doesn't support substring in select, so we fetch full body_text
-                    # but limit batch size to avoid timeouts
-                    response = (
-                        self.client.table('emails')
-                        .select('id, body_text')
-                        .in_('id', batch)
-                        .execute()
-                    )
-
-                    for row in response.data:
-                        body_text = row.get('body_text', '')
-                        # Only keep last 1000 characters (signatures are at end)
-                        if body_text:
-                            all_signatures[row['id']] = body_text[-1000:] if len(body_text) > 1000 else body_text
+                fetched = False
+                for attempt in range(3):
+                    try:
+                        response = (
+                            self.client.table('emails')
+                            .select('id, body_text')
+                            .in_('id', batch)
+                            .execute()
+                        )
+                        for row in response.data:
+                            body_text = row.get('body_text', '')
+                            # Only keep last 1000 characters — signatures are at end
+                            if body_text:
+                                all_signatures[row['id']] = body_text[-1000:] if len(body_text) > 1000 else body_text
+                            else:
+                                all_signatures[row['id']] = ''
+                        fetched = True
+                        break
+                    except Exception as batch_error:
+                        if attempt < 2:
+                            time.sleep(2 ** attempt)  # 1s, 2s
                         else:
-                            all_signatures[row['id']] = ''
-
-                except Exception as batch_error:
-                    # Log error but continue with other batches
-                    logger.warning(f"Failed to fetch batch of {len(batch)} email signatures: {batch_error}")
-                    # Mark these emails as having empty signatures
-                    for email_id in batch:
-                        all_signatures[email_id] = ''
+                            logger.warning(f"Failed to fetch batch of {len(batch)} email signatures: {batch_error}")
+                            for email_id in batch:
+                                all_signatures[email_id] = ''
 
             logger.debug(f"Fetched signatures for {len(all_signatures)} emails")
             return all_signatures
