@@ -175,11 +175,19 @@ const QuickbaseDataPage: React.FC = () => {
     })();
   }, []);
 
-  // Load last sync time
+  // Load last sync time + pre-populate totals from sync-status record_counts
   useEffect(() => {
     if (!clientId) return;
     api.get<any>(`/v1/quickbase/sync-status?client_id=${clientId}`)
-      .then(s => setLastSyncAt(s?.last_sync_at || null))
+      .then(s => {
+        setLastSyncAt(s?.last_sync_at || null);
+        const rc: Record<string, number> = s?.record_counts || {};
+        if (rc.customers)      setCustomers(prev => ({ ...prev, total: rc.customers }));
+        if (rc.contacts)       setContacts(prev => ({ ...prev, total: rc.contacts }));
+        if (rc.quotes)         setQuotes(prev => ({ ...prev, total: rc.quotes }));
+        if (rc.jobs)           setJobs(prev => ({ ...prev, total: rc.jobs }));
+        if (rc.sales_line_items) setSli(prev => ({ ...prev, total: rc.sales_line_items }));
+      })
       .catch(() => {});
   }, [clientId]);
 

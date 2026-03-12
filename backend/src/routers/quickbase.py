@@ -124,9 +124,22 @@ async def upsert_config(client_id: str = Query(...), config: QBSyncConfigCreate 
 
 # --- Sync endpoints ---
 
+VALID_TABLES = {'customers', 'contacts', 'quotes', 'jobs', 'sales_line_items'}
+
+
 @router.post("/sync", response_model=QBSyncResult)
-async def trigger_sync(client_id: str = Query(...), background_tasks: BackgroundTasks = None):
-    """Trigger a full Quickbase sync (runs in background)."""
+async def trigger_sync(
+    client_id: str = Query(...),
+    tables: Optional[str] = Query(None, description="Comma-separated table names to sync (omit for full sync)"),
+    background_tasks: BackgroundTasks = None,
+):
+    """Trigger a Quickbase sync (full or per-table). Runs in background."""
+    tables_list: Optional[list[str]] = None
+    if tables:
+        tables_list = [t.strip() for t in tables.split(',') if t.strip() in VALID_TABLES]
+        if not tables_list:
+            raise HTTPException(status_code=400, detail=f"Invalid table names. Valid: {', '.join(sorted(VALID_TABLES))}")
+
     try:
         # Load config
         cfg_result = _supabase.table('qb_sync_config').select('*').eq(
@@ -143,7 +156,7 @@ async def trigger_sync(client_id: str = Query(...), background_tasks: Background
         async def _run_sync():
             try:
                 syncer = QuickbaseSync(_supabase, config)
-                counts = await syncer.sync_all()
+                counts = await syncer.sync_all(tables=tables_list)
                 # Propagate QB data to existing company columns
                 await syncer.propagate_qb_data_to_companies()
                 logger.info(f"Background QB sync complete: {counts}")
@@ -152,9 +165,10 @@ async def trigger_sync(client_id: str = Query(...), background_tasks: Background
 
         background_tasks.add_task(_run_sync)
 
+        label = ', '.join(tables_list) if tables_list else 'all tables'
         return QBSyncResult(
             status="started",
-            message="Quickbase sync started in background",
+            message=f"Quickbase sync started in background ({label})",
         )
 
     except HTTPException:

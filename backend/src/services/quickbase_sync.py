@@ -87,18 +87,21 @@ class QuickbaseSync:
         except Exception as e:
             logger.warning(f"Failed to write sync log for {table_name}: {e}")
 
-    async def sync_all(self) -> dict[str, int]:
-        """Sync all QB tables. Returns record counts per table."""
-        logger.info(f"Starting full QB sync for client {self._client_id}")
-        counts = {}
-
-        for table_key, sync_fn in [
+    async def sync_all(self, tables: list[str] | None = None) -> dict[str, int]:
+        """Sync QB tables. Pass `tables` to sync a subset; omit for full sync."""
+        all_fns = [
             ('customers', self.sync_customers),
             ('contacts', self.sync_contacts),
             ('quotes', self.sync_quotes),
             ('jobs', self.sync_jobs),
             ('sales_line_items', self.sync_sales_line_items),
-        ]:
+        ]
+        to_sync = [(k, fn) for k, fn in all_fns if tables is None or k in tables]
+        label = ', '.join(k for k, _ in to_sync)
+        logger.info(f"Starting QB sync for client {self._client_id}: [{label}]")
+        counts = {}
+
+        for table_key, sync_fn in to_sync:
             try:
                 counts[table_key] = await sync_fn()
                 self._write_sync_log(table_key, counts[table_key])
@@ -131,7 +134,7 @@ class QuickbaseSync:
         records = await self._qb_client.query_all_records(table_id, select_fields)
         logger.info(f"Fetched {len(records)} customers from QB")
 
-        return self._upsert_records('qb_customers', records, mapping)
+        return self._upsert_records('qb_customers', records, mapping, required_fields=['customer_name'])
 
     async def sync_contacts(self) -> int:
         """Sync QB Contacts table → qb_contacts."""
@@ -178,11 +181,13 @@ class QuickbaseSync:
         return self._upsert_records('qb_sales_line_items', records, mapping)
 
     def _upsert_records(
-        self, table_name: str, records: list[dict], mapping: dict[str, str]
+        self, table_name: str, records: list[dict], mapping: dict[str, str],
+        required_fields: list[str] | None = None,
     ) -> int:
         """Map and upsert QB records into a Supabase cache table."""
         now = datetime.now(timezone.utc).isoformat()
         rows = []
+        skipped = 0
 
         for record in records:
             mapped = QuickbaseClient.map_record(record, mapping)
@@ -193,9 +198,19 @@ class QuickbaseSync:
                     mapped[k] = int(v)
                 elif v == '':
                     mapped[k] = None
+                elif isinstance(v, str):
+                    # Strip null bytes — Postgres text columns reject \u0000
+                    mapped[k] = v.replace('\x00', '')
+            # Skip rows missing any required (NOT NULL) field
+            if required_fields and any(mapped.get(f) is None for f in required_fields):
+                skipped += 1
+                continue
             mapped['client_id'] = self._client_id
             mapped['synced_at'] = now
             rows.append(mapped)
+
+        if skipped:
+            logger.warning(f"Skipped {skipped} {table_name} records with missing required fields")
 
         # Batch upsert
         total = 0

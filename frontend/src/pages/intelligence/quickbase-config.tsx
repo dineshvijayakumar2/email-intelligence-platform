@@ -15,6 +15,7 @@ import {
   HolderOutlined, CheckCircleFilled,
 } from '@ant-design/icons';
 import api from '../../services/apiClient';
+import { ClientSelector } from '../../components/analytics/ClientSelector';
 
 const { Title, Text } = Typography;
 
@@ -178,102 +179,84 @@ const QuickbaseConfigPage: React.FC = () => {
   const [fieldSearch, setFieldSearch] = useState<Record<string, string>>({});
   const [qbStatus, setQbStatus] = useState<QBSyncStatus | null>(null);
   const [qbSyncing, setQbSyncing] = useState(false);
+  const [tableSyncing, setTableSyncing] = useState<Record<string, boolean>>({});
 
   // -------------------------------------------------------------------------
   // Data loading
   // -------------------------------------------------------------------------
 
-  const resolveClientId = useCallback(async (): Promise<string | null> => {
-    // 1. Check localStorage (set by ClientSelector on analytics pages — most reliable)
-    const stored = localStorage.getItem('analytics_client_id');
-    if (stored) return stored;
-
-    // 2. Try assigned clients (client_manager role)
-    try {
-      const assigned = await api.get<any>('/auth/me/clients');
-      const fromAssigned = Array.isArray(assigned) ? assigned[0]?.client_id : null;
-      if (fromAssigned) return fromAssigned;
-    } catch { /* ignore */ }
-
-    // 3. Admin fallback — list all clients
-    try {
-      const all = await api.get<any>('/clients/');
-      return all?.clients?.[0]?.id || all?.[0]?.id || null;
-    } catch {
-      return null;
-    }
-  }, []);
-
-  const loadConfig = useCallback(async () => {
+  const loadConfig = useCallback(async (id: string) => {
     setLoading(true);
     try {
-      const id = await resolveClientId();
-      if (!id) {
-        message.warning('No client found — using defaults');
-        setLoading(false);
-        return;
-      }
-      try {
-        const cfg = await api.get<any>(`/v1/quickbase/config?client_id=${id}`);
+      const cfg = await api.get<any>(`/v1/quickbase/config?client_id=${id}`);
 
-        const hasAutoSync = cfg.sync_interval_hours != null;
-        setSyncAuto(hasAutoSync);
-        form.setFieldsValue({
-          realm_hostname: cfg.realm_hostname,
-          app_id: cfg.app_id,
-          user_token: cfg.user_token || '',
-          customers_table_id: cfg.customers_table_id,
-          contacts_table_id: cfg.contacts_table_id,
-          quotes_table_id: cfg.quotes_table_id,
-          jobs_table_id: cfg.jobs_table_id,
-          sales_line_items_table_id: cfg.sales_line_items_table_id,
-          sync_interval_hours: cfg.sync_interval_hours ?? 6,
-        });
+      const hasAutoSync = cfg.sync_interval_hours != null;
+      setSyncAuto(hasAutoSync);
+      form.setFieldsValue({
+        realm_hostname: cfg.realm_hostname,
+        app_id: cfg.app_id,
+        user_token: cfg.user_token || '',
+        customers_table_id: cfg.customers_table_id,
+        contacts_table_id: cfg.contacts_table_id,
+        quotes_table_id: cfg.quotes_table_id,
+        jobs_table_id: cfg.jobs_table_id,
+        sales_line_items_table_id: cfg.sales_line_items_table_id,
+        sync_interval_hours: cfg.sync_interval_hours ?? 6,
+      });
 
-        // Load field mappings from config, falling back to defaults per table
-        const saved: Record<string, Record<string, string>> = cfg.field_mappings || {};
-        const loaded: FieldMappings = {};
-        TABLES.forEach(t => {
-          const tableMapping = saved[t.key] && Object.keys(saved[t.key]).length > 0
-            ? saved[t.key]
-            : DEFAULT_MAPPINGS[t.key] || {};
-          loaded[t.key] = mappingToRows(tableMapping);
-        });
-        setFieldMappings(loaded);
-      } catch (err: any) {
-        if (err?.status === 404 || err?.response?.status === 404) {
-          // No config yet — pre-fill Carbon8 defaults
-          setSyncAuto(false);
-          form.setFieldsValue({
-            realm_hostname: 'dc.quickbase.com',
-            app_id: 'buzfemk4f',
-            user_token: '',
-            customers_table_id: 'buzhzbv39',
-            contacts_table_id: 'bu4ctqehy',
-            quotes_table_id: 'buz9p6tzu',
-            jobs_table_id: 'buziry2ri',
-            sales_line_items_table_id: 'bu4cwdinf',
-            sync_interval_hours: 6,
-          });
-          setFieldMappings(initDefaultMappings());
-        } else {
-          throw err;
-        }
-      }
-
-      // Set clientId AFTER fieldMappings — prevents [clientId] effect from firing
-      // before fieldMappings is populated (race condition fix)
-      setClientId(id);
+      // Load field mappings from config, falling back to defaults per table
+      const saved: Record<string, Record<string, string>> = cfg.field_mappings || {};
+      const loaded: FieldMappings = {};
+      TABLES.forEach(t => {
+        const tableMapping = saved[t.key] && Object.keys(saved[t.key]).length > 0
+          ? saved[t.key]
+          : DEFAULT_MAPPINGS[t.key] || {};
+        loaded[t.key] = mappingToRows(tableMapping);
+      });
+      setFieldMappings(loaded);
     } catch (err: any) {
-      message.error(err?.message || 'Failed to load Quickbase config');
+      if (err?.status === 404 || err?.response?.status === 404) {
+        // No config yet — pre-fill Carbon8 defaults
+        setSyncAuto(false);
+        form.setFieldsValue({
+          realm_hostname: 'dc.quickbase.com',
+          app_id: 'buzfemk4f',
+          user_token: '',
+          customers_table_id: 'buzhzbv39',
+          contacts_table_id: 'bu4ctqehy',
+          quotes_table_id: 'buz9p6tzu',
+          jobs_table_id: 'buziry2ri',
+          sales_line_items_table_id: 'bu4cwdinf',
+          sync_interval_hours: 6,
+        });
+        setFieldMappings(initDefaultMappings());
+      } else {
+        message.error(err?.message || 'Failed to load Quickbase config');
+      }
     } finally {
       setLoading(false);
     }
-  }, [form, resolveClientId]);
+  }, [form]);
 
+  // Resolve initial client ID on mount (localStorage → assigned → admin list)
   useEffect(() => {
-    loadConfig();
-  }, [loadConfig]);
+    const stored = localStorage.getItem('analytics_client_id');
+    if (stored) { setClientId(stored); return; }
+    (async () => {
+      try {
+        const assigned = await api.get<any>('/auth/me/clients');
+        const id = Array.isArray(assigned) ? assigned[0]?.client_id : null;
+        if (id) { setClientId(id); return; }
+      } catch { /* ignore */ }
+      try {
+        const all = await api.get<any>('/clients/');
+        const id = all?.clients?.[0]?.id || all?.[0]?.id || null;
+        if (id) setClientId(id);
+        else { message.warning('No client found — using defaults'); setLoading(false); }
+      } catch { setLoading(false); }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const loadQBStatus = useCallback(async (id: string) => {
     try {
@@ -289,8 +272,7 @@ const QuickbaseConfigPage: React.FC = () => {
     setQbSyncing(true);
     try {
       await api.post<any>(`/v1/quickbase/sync?client_id=${clientId}`);
-      message.success('Quickbase sync started — data will update shortly');
-      // Refresh status after a short delay
+      message.success('Full sync started — data will update shortly');
       setTimeout(() => loadQBStatus(clientId), 3000);
     } catch (err: any) {
       message.error(err?.message || 'Sync failed');
@@ -299,9 +281,27 @@ const QuickbaseConfigPage: React.FC = () => {
     }
   };
 
-  // After clientId resolves, silently load cached field definitions for all tables
+  const handleTableSync = async (tableKey: string) => {
+    if (!clientId) return;
+    setTableSyncing(prev => ({ ...prev, [tableKey]: true }));
+    try {
+      await api.post<any>(`/v1/quickbase/sync?client_id=${clientId}&tables=${tableKey}`);
+      message.success(`Syncing ${tableKey} — will update shortly`);
+      setTimeout(() => loadQBStatus(clientId), 3000);
+    } catch (err: any) {
+      message.error(err?.message || 'Sync failed');
+    } finally {
+      setTableSyncing(prev => ({ ...prev, [tableKey]: false }));
+    }
+  };
+
+  // When clientId resolves or changes: reset stale state, load config + fields + status
   useEffect(() => {
     if (!clientId) return;
+    setQbFields({});
+    setQbFieldsSyncedAt({});
+    setQbStatus(null);
+    loadConfig(clientId);
     TABLES.forEach(t => handleFetchFields(t.key, false));
     loadQBStatus(clientId);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -761,7 +761,10 @@ const QuickbaseConfigPage: React.FC = () => {
     <div style={{ padding: '24px', maxWidth: 1200, margin: '0 auto' }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <Title level={3} style={{ margin: 0 }}>Quickbase Configuration</Title>
+        <Space align="center" size={16}>
+          <Title level={3} style={{ margin: 0 }}>Quickbase Configuration</Title>
+          <ClientSelector value={clientId || ''} onChange={id => setClientId(id)} />
+        </Space>
         <Button
           type="primary"
           icon={<SaveOutlined />}
@@ -837,6 +840,15 @@ const QuickbaseConfigPage: React.FC = () => {
                         Not synced yet
                       </div>
                     )}
+                    <Button
+                      size="small"
+                      icon={<SyncOutlined spin={tableSyncing[key]} />}
+                      loading={tableSyncing[key]}
+                      onClick={() => handleTableSync(key)}
+                      style={{ marginTop: 8, width: '100%', fontSize: 11 }}
+                    >
+                      Sync
+                    </Button>
                   </div>
                 </Col>
               );
