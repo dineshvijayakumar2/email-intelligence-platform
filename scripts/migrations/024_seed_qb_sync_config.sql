@@ -20,7 +20,7 @@ INSERT INTO qb_sync_config (
     updated_at
 )
 SELECT
-    id,                          -- first client in the clients table
+    id,                          -- Carbon8 client ID
     'dc.quickbase.com',
     'buzfemk4f',
     '',                          -- blank token — enter via QB Config page to activate
@@ -69,5 +69,5 @@ SELECT
     NOW(),
     NOW()
 FROM clients
-LIMIT 1
+WHERE client_label = 'Carbon8'
 ON CONFLICT (client_id) DO NOTHING;
