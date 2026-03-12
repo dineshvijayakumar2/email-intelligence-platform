@@ -41,15 +41,15 @@ const DEFAULT_MAPPINGS: Record<string, Record<string, string>> = {
     "3": "qb_record_id", "7": "quote_no", "8": "qb_customer_id",
     "9": "quote_am_name", "12": "sell_ex_tax", "13": "date_created",
     "14": "date_accepted", "36": "category", "40": "contact_name",
-    "892": "contact_email", "1062": "job_no", "1238": "has_job",
-    "1447": "quantity", "1476": "kinds", "1505": "total_quantity",
+    "41": "contact_email", "51": "job_no", "57": "has_job",
+    "65": "quantity", "67": "kinds", "68": "total_quantity",
   },
   jobs: {
     "3": "qb_record_id", "7": "job_no", "9": "qb_customer_id",
     "10": "quote_no", "11": "retail_sale", "17": "invoiced_margin",
     "18": "margin_pct", "21": "factory_rush_level", "22": "due_date",
     "23": "accepted_date", "24": "job_status", "62": "pieces_ordered",
-    "63": "kinds_ordered", "65": "total_qty_ordered",
+    "63": "kinds_ordered", "64": "total_qty_ordered",
   },
   sales_line_items: {
     "3": "qb_record_id", "7": "invoice_id", "9": "job_am_name",
@@ -432,10 +432,14 @@ const QuickbaseConfigPage: React.FC = () => {
           value={record.fieldId}
           size="small"
           style={{ width: 100 }}
-          onChange={e => updateRow(tableKey, record.key, {
-            fieldId: e.target.value,
-            fieldName: '', // clear name since ID changed
-          })}
+          onChange={e => {
+            const newId = e.target.value;
+            const match = (qbFields[tableKey] || []).find(f => String(f.id) === newId);
+            updateRow(tableKey, record.key, {
+              fieldId: newId,
+              fieldName: match ? match.label : '',
+            });
+          }}
         />
       ),
     },
@@ -445,7 +449,7 @@ const QuickbaseConfigPage: React.FC = () => {
       key: 'fieldName',
       render: (val: string) => (
         <Text type={val ? undefined : 'secondary'} style={{ fontSize: 13 }}>
-          {val || <span style={{ fontStyle: 'italic' }}>— fetch to populate —</span>}
+          {val || <span style={{ fontStyle: 'italic' }}>— unknown field ID —</span>}
         </Text>
       ),
     },
