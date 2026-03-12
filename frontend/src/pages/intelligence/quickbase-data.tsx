@@ -159,12 +159,18 @@ const QuickbaseDataPage: React.FC = () => {
   useEffect(() => {
     (async () => {
       try {
+        // 1. localStorage (set by ClientSelector on analytics pages)
+        const stored = localStorage.getItem('analytics_client_id');
+        if (stored) { setClientId(stored); return; }
+
+        // 2. Assigned clients (client_manager role)
         const assigned = await api.get<any>('/auth/me/clients');
         const fromAssigned = Array.isArray(assigned) ? assigned[0]?.client_id : null;
         if (fromAssigned) { setClientId(fromAssigned); return; }
+
+        // 3. Admin fallback
         const all = await api.get<any>('/clients/');
-        const id = all?.clients?.[0]?.id || null;
-        setClientId(id);
+        setClientId(all?.clients?.[0]?.id || null);
       } catch { /* ignore */ }
     })();
   }, []);

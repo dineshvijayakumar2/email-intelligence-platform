@@ -185,14 +185,18 @@ const QuickbaseConfigPage: React.FC = () => {
   // -------------------------------------------------------------------------
 
   const resolveClientId = useCallback(async (): Promise<string | null> => {
-    // Try assigned clients (client_manager role first), then admin fallback
+    // 1. Check localStorage (set by ClientSelector on analytics pages — most reliable)
+    const stored = localStorage.getItem('analytics_client_id');
+    if (stored) return stored;
+
+    // 2. Try assigned clients (client_manager role)
     try {
       const assigned = await api.get<any>('/auth/me/clients');
       const fromAssigned = Array.isArray(assigned) ? assigned[0]?.client_id : null;
       if (fromAssigned) return fromAssigned;
-    } catch {
-      // ignore
-    }
+    } catch { /* ignore */ }
+
+    // 3. Admin fallback — list all clients
     try {
       const all = await api.get<any>('/clients/');
       return all?.clients?.[0]?.id || all?.[0]?.id || null;
