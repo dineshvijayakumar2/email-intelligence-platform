@@ -171,7 +171,9 @@ const UsersPage: React.FC = () => {
       await api.patch(`/auth/users/${selectedUser.id}/roles`, { roles: values.roles });
       message.success('User roles updated successfully');
       setEditModalVisible(false);
-      loadUsers();
+      setUsers(prev => prev.map(u =>
+        u.id === selectedUser.id ? { ...u, roles: values.roles as User['roles'] } : u
+      ));
     } catch (error: any) {
       message.error(error.message || 'Failed to update user roles');
     }
@@ -181,9 +183,6 @@ const UsersPage: React.FC = () => {
     if (!selectedUser) return;
 
     try {
-      // Use different endpoint based on role
-      // account_manager: /client-assignments (operational)
-      // client_manager: /client-assignments (will be updated to use managed-clients in backend)
       await api.put(`/auth/users/${selectedUser.id}/client-assignments`, {
         client_ids: values.client_ids,
       });
@@ -191,7 +190,10 @@ const UsersPage: React.FC = () => {
       const roleType = selectedUser.roles?.includes('client_manager') ? 'oversight' : 'operational';
       message.success(`Client ${roleType} assignments updated successfully`);
       setAssignModalVisible(false);
-      loadUsers();
+      const newAssignedClients = clients.filter(c => values.client_ids.includes(c.id));
+      setUsers(prev => prev.map(u =>
+        u.id === selectedUser.id ? { ...u, assigned_clients: newAssignedClients } : u
+      ));
     } catch (error: any) {
       message.error(error.message || 'Failed to update client assignments');
     }
@@ -215,7 +217,12 @@ const UsersPage: React.FC = () => {
 
       message.success('Mailbox assignments updated successfully');
       setMailboxModalVisible(false);
-      loadUsers();
+      const newAssignedMailboxes: MailboxSummary[] = mailboxes
+        .filter(m => values.mailbox_ids.includes(m.id))
+        .map(m => ({ id: m.id, name: m.name, email_address: m.email_address, mailbox_type: m.mailbox_type }));
+      setUsers(prev => prev.map(u =>
+        u.id === selectedUser.id ? { ...u, assigned_mailboxes: newAssignedMailboxes } : u
+      ));
     } catch (error: any) {
       message.error(error.message || 'Failed to update mailbox assignments');
     }
@@ -225,7 +232,9 @@ const UsersPage: React.FC = () => {
     try {
       await api.patch(`/auth/users/${user.id}/status`, { is_active: !user.is_active });
       message.success(`User ${user.is_active ? 'deactivated' : 'activated'} successfully`);
-      loadUsers();
+      setUsers(prev => prev.map(u =>
+        u.id === user.id ? { ...u, is_active: !user.is_active } : u
+      ));
     } catch (error: any) {
       message.error(error.message || 'Failed to update user status');
     }

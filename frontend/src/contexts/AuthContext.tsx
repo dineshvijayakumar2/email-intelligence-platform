@@ -131,12 +131,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (session?.access_token) {
         await loadProfile(session.access_token);
 
-        // Log login event for audit trail (fire-and-forget, only on actual sign-in)
+        // Log login event for audit trail — fire-and-forget.
+        // SIGNED_IN fires on every page load (session restore), not just actual
+        // logins. Guard with a sessionStorage flag so we only POST once per
+        // browser session (cleared on sign-out so next real login records).
         if (event === 'SIGNED_IN') {
-          fetch(`${config.apiBaseUrl}/auth/login-event`, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${session.access_token}` },
-          }).catch(() => { /* silent */ });
+          const LOGIN_EVENT_KEY = 'login_event_sent';
+          if (!sessionStorage.getItem(LOGIN_EVENT_KEY)) {
+            sessionStorage.setItem(LOGIN_EVENT_KEY, '1');
+            fetch(`${config.apiBaseUrl}/auth/login-event`, {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${session.access_token}` },
+            }).catch(() => { /* silent */ });
+          }
         }
       } else {
         setProfile(null);
@@ -145,6 +152,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (event === 'SIGNED_OUT') {
         setProfile(null);
         sessionStorage.removeItem('auth_profile_cache');
+        sessionStorage.removeItem('login_event_sent');
       }
 
       setLoading(false);
