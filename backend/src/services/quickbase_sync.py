@@ -5,6 +5,7 @@ Handles: Customers, Contacts, Quotes, Jobs, Sales Line Items.
 After sync, matches QB records to existing customer_companies/customer_contacts.
 """
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -134,7 +135,7 @@ class QuickbaseSync:
         records = await self._qb_client.query_all_records(table_id, select_fields)
         logger.info(f"Fetched {len(records)} customers from QB")
 
-        return self._upsert_records('qb_customers', records, mapping, required_fields=['customer_name'])
+        return await self._upsert_records('qb_customers', records, mapping, required_fields=['customer_name'])
 
     async def sync_contacts(self) -> int:
         """Sync QB Contacts table → qb_contacts."""
@@ -145,7 +146,7 @@ class QuickbaseSync:
         records = await self._qb_client.query_all_records(table_id, select_fields)
         logger.info(f"Fetched {len(records)} contacts from QB")
 
-        return self._upsert_records('qb_contacts', records, mapping)
+        return await self._upsert_records('qb_contacts', records, mapping)
 
     async def sync_quotes(self) -> int:
         """Sync QB Quotes table → qb_quotes."""
@@ -156,7 +157,7 @@ class QuickbaseSync:
         records = await self._qb_client.query_all_records(table_id, select_fields)
         logger.info(f"Fetched {len(records)} quotes from QB")
 
-        return self._upsert_records('qb_quotes', records, mapping)
+        return await self._upsert_records('qb_quotes', records, mapping)
 
     async def sync_jobs(self) -> int:
         """Sync QB Jobs table → qb_jobs."""
@@ -167,7 +168,7 @@ class QuickbaseSync:
         records = await self._qb_client.query_all_records(table_id, select_fields)
         logger.info(f"Fetched {len(records)} jobs from QB")
 
-        return self._upsert_records('qb_jobs', records, mapping)
+        return await self._upsert_records('qb_jobs', records, mapping)
 
     async def sync_sales_line_items(self) -> int:
         """Sync QB Sales Line Items table → qb_sales_line_items."""
@@ -178,13 +179,18 @@ class QuickbaseSync:
         records = await self._qb_client.query_all_records(table_id, select_fields)
         logger.info(f"Fetched {len(records)} sales line items from QB")
 
-        return self._upsert_records('qb_sales_line_items', records, mapping)
+        return await self._upsert_records('qb_sales_line_items', records, mapping)
 
-    def _upsert_records(
+    async def _upsert_records(
         self, table_name: str, records: list[dict], mapping: dict[str, str],
         required_fields: list[str] | None = None,
     ) -> int:
-        """Map and upsert QB records into a Supabase cache table."""
+        """Map QB records and upsert into Supabase.
+
+        The mapping/coercion step runs synchronously (CPU-bound), then the
+        batch-upsert loop is offloaded to a thread so the event loop stays
+        free for other requests during the potentially long write phase.
+        """
         now = datetime.now(timezone.utc).isoformat()
         rows = []
         skipped = 0
@@ -212,15 +218,19 @@ class QuickbaseSync:
         if skipped:
             logger.warning(f"Skipped {skipped} {table_name} records with missing required fields")
 
-        # Batch upsert
-        total = 0
-        for i in range(0, len(rows), UPSERT_BATCH_SIZE):
-            batch = rows[i:i + UPSERT_BATCH_SIZE]
-            _execute_with_retry(lambda b=batch: self._supabase.table(table_name).upsert(
-                b, on_conflict='client_id,qb_record_id'
-            ).execute())
-            total += len(batch)
+        # Offload blocking Supabase batch-upsert loop to thread pool so the
+        # async event loop is not blocked during large syncs (e.g. 80K SLIs)
+        def _do_upsert():
+            total = 0
+            for i in range(0, len(rows), UPSERT_BATCH_SIZE):
+                batch = rows[i:i + UPSERT_BATCH_SIZE]
+                _execute_with_retry(lambda b=batch: self._supabase.table(table_name).upsert(
+                    b, on_conflict='client_id,qb_record_id'
+                ).execute())
+                total += len(batch)
+            return total
 
+        total = await asyncio.to_thread(_do_upsert)
         logger.info(f"Upserted {total} records into {table_name}")
         return total
 
