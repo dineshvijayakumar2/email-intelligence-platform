@@ -148,9 +148,9 @@ You must:
 - Return null if uncertain.
 - Never invent entities.
 - Never guess missing data.
-- Never include markdown.
-- Never include explanations.
-- Return only a valid JSON array.
+- Never include markdown, code fences, or backticks.
+- Never include explanations or comments.
+- Return only a valid JSON array. No trailing commas.
 
 If the email does not contain enough information for a field, return null or an empty array.
 Do not add fields not defined in the schema.
@@ -287,17 +287,28 @@ class EmailClassificationResult(BaseModel):
 # JSON guard layer
 # ---------------------------------------------------------------------------
 def clean_llm_output(text: str) -> str:
-    """Strip markdown fences and whitespace before JSON parsing."""
+    """Strip markdown fences, comments, trailing commas — handle Gemini quirks."""
+    import re
     text = text.strip()
-    if text.startswith("```"):
+
+    # Strip markdown code fences (```json ... ``` or ``` ... ```)
+    if "```" in text:
+        # Extract content between first and last fence
         parts = text.split("```")
         if len(parts) >= 3:
             text = parts[1]
         elif len(parts) >= 2:
             text = parts[1]
-        # Remove optional language tag (e.g., "json")
         if text.startswith("json"):
             text = text[4:]
+        text = text.strip()
+
+    # Remove JS-style line comments (// ...) — Gemini occasionally adds these
+    text = re.sub(r'//[^\n"]*\n', '\n', text)
+
+    # Remove trailing commas before } or ] (Gemini quirk: last item in object/array)
+    text = re.sub(r',\s*([}\]])', r'\1', text)
+
     return text.strip()
 
 
