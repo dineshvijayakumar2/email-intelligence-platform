@@ -27,6 +27,10 @@ export const strategicDigestApi = {
     return api.get<{ digests: StrategicDigestHistory[] }>(`${API_PREFIX}/strategic-digest/${clientId}/history?limit=${limit}`);
   },
 
+  cancel: async (clientId: string) => {
+    return api.post<{ status: string; message: string }>(`${API_PREFIX}/strategic-digest/${clientId}/cancel`);
+  },
+
   getProgress: async (clientId: string) => {
     return api.get<{
       phase: string;

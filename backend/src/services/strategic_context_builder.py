@@ -143,7 +143,7 @@ class StrategicContextBuilder:
     # ------------------------------------------------------------------
     # 2. Build contexts for all companies in client
     # ------------------------------------------------------------------
-    def build_all_contexts(self, lookback_months: int = 6, on_progress=None) -> Dict[str, Any]:
+    def build_all_contexts(self, lookback_months: int = 6, on_progress=None, cancel_check=None) -> Dict[str, Any]:
         """
         Iterate all companies for this client and build context for each.
 
@@ -182,6 +182,10 @@ class StrategicContextBuilder:
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {executor.submit(_process, cid): cid for cid in company_ids}
             for future in as_completed(futures):
+                if cancel_check and cancel_check():
+                    executor.shutdown(wait=False, cancel_futures=True)
+                    logger.info("Context build cancelled by user request")
+                    break
                 try:
                     result = future.result()
                 except Exception as exc:

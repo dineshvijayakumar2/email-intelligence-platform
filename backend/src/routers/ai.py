@@ -14,9 +14,10 @@ from datetime import datetime, timedelta
 import logging
 import time as _time
 
-# ── In-memory progress store (per client_id) ──────────────────────────────────
-# Cleared on completion/failure; safe for single-instance deployments.
+# ── In-memory progress / cancel stores (per client_id) ───────────────────────
+# Safe for single-instance deployments (Railway / single Uvicorn worker).
 _digest_progress: Dict[str, Dict[str, Any]] = {}
+_digest_cancel: Dict[str, bool] = {}  # True = cancellation requested
 
 from ..dependencies.auth import get_current_user, require_role, get_accessible_mailbox_ids
 from ..utils.audit import log_audit, audit_from_user
@@ -1006,6 +1007,10 @@ async def generate_strategic_digest(
             }
 
         _digest_progress[client_id]["_t0"] = _time.time()
+        _digest_cancel[client_id] = False  # reset any previous cancel flag
+
+        def _cancel_check() -> bool:
+            return _digest_cancel.get(client_id, False)
 
         async def _run():
             try:
@@ -1014,22 +1019,24 @@ async def generate_strategic_digest(
                     period_start=start_date,
                     period_end=end_date,
                     on_progress=_on_progress,
+                    cancel_check=_cancel_check,
                 )
-                _digest_progress[client_id] = {
-                    "phase": "completed",
-                    "current": 0,
-                    "total": 0,
-                    "pct": 100,
-                    "message": "Digest generated successfully",
-                }
-                logger.info(f"Strategic digest generated for client {client_id}")
+                if _cancel_check():
+                    _digest_progress[client_id] = {
+                        "phase": "cancelled", "current": 0, "total": 0,
+                        "pct": 0, "message": "Generation cancelled by user",
+                    }
+                    logger.info(f"Strategic digest cancelled for client {client_id}")
+                else:
+                    _digest_progress[client_id] = {
+                        "phase": "completed", "current": 0, "total": 0,
+                        "pct": 100, "message": "Digest generated successfully",
+                    }
+                    logger.info(f"Strategic digest generated for client {client_id}")
             except Exception as e:
                 _digest_progress[client_id] = {
-                    "phase": "failed",
-                    "current": 0,
-                    "total": 0,
-                    "pct": 0,
-                    "message": f"Generation failed: {str(e)[:200]}",
+                    "phase": "failed", "current": 0, "total": 0,
+                    "pct": 0, "message": f"Generation failed: {str(e)[:200]}",
                 }
                 logger.error(f"Strategic digest generation failed: {e}")
 
@@ -1054,8 +1061,23 @@ async def get_digest_progress(client_id: str):
     entry = _digest_progress.get(client_id)
     if not entry:
         return {"phase": "idle", "pct": 0, "message": "No generation in progress"}
-    # Strip internal timing key before returning
     return {k: v for k, v in entry.items() if k != "_t0"}
+
+
+@router.post("/strategic-digest/{client_id}/cancel")
+async def cancel_digest_generation(client_id: str):
+    """Signal an in-progress generation to stop gracefully."""
+    if _digest_progress.get(client_id, {}).get("phase") not in (
+        "starting", "building_context", "am_performance", "ai_analysis"
+    ):
+        return {"status": "no_op", "message": "No active generation to cancel"}
+    _digest_cancel[client_id] = True
+    _digest_progress[client_id] = {
+        **_digest_progress.get(client_id, {}),
+        "phase": "cancelling",
+        "message": "Cancelling — waiting for current batch to finish…",
+    }
+    return {"status": "ok", "message": "Cancellation requested"}
 
 
 @router.get("/strategic-digest/{client_id}/history")

@@ -17,6 +17,7 @@ Usage:
     )
 """
 
+import asyncio
 import json
 import time
 import logging
@@ -151,6 +152,7 @@ class StrategicDigestPipeline:
         comparison_start: Optional[date] = None,
         comparison_end: Optional[date] = None,
         on_progress=None,
+        cancel_check=None,
     ) -> dict:
         """
         Generate a strategic digest for the given period.
@@ -178,7 +180,16 @@ class StrategicDigestPipeline:
             context_builder = StrategicContextBuilder(
                 self.supabase, self.client_id
             )
-            all_contexts = context_builder.build_all_contexts(lookback_months=6, on_progress=on_progress)
+            loop = asyncio.get_event_loop()
+            all_contexts = await loop.run_in_executor(
+                None,
+                lambda: context_builder.build_all_contexts(
+                    lookback_months=6, on_progress=on_progress, cancel_check=cancel_check
+                ),
+            )
+
+            if cancel_check and cancel_check():
+                return {"status": "cancelled"}
 
             if on_progress:
                 on_progress("am_performance", 1, 1, "Building AM performance snapshots…")
@@ -189,18 +200,22 @@ class StrategicDigestPipeline:
             # Convert date objects to ISO strings; handle optional comparison dates
             comp_start_iso = comparison_start.isoformat() if comparison_start else period_start.isoformat()
             comp_end_iso = comparison_end.isoformat() if comparison_end else period_end.isoformat()
-            am_performance_data = context_builder.build_am_performance(
-                period_start=period_start.isoformat(),
-                period_end=period_end.isoformat(),
-                comparison_start=comp_start_iso,
-                comparison_end=comp_end_iso,
+            am_performance_data = await loop.run_in_executor(
+                None,
+                lambda: context_builder.build_am_performance(
+                    period_start=period_start.isoformat(),
+                    period_end=period_end.isoformat(),
+                    comparison_start=comp_start_iso,
+                    comparison_end=comp_end_iso,
+                ),
             )
 
             # -----------------------------------------------------------------
             # Step 3: Get top company contexts from cache
             # -----------------------------------------------------------------
-            company_contexts = context_builder.get_contexts_for_digest(
-                top_n=MAX_COMPANY_CONTEXTS
+            company_contexts = await loop.run_in_executor(
+                None,
+                lambda: context_builder.get_contexts_for_digest(top_n=MAX_COMPANY_CONTEXTS),
             )
 
             # -----------------------------------------------------------------

@@ -70,6 +70,7 @@ export default function StrategicDigestPage() {
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState('');
   const [progress, setProgress] = useState<{ pct: number; message: string; phase: string } | null>(null);
+  const [cancelling, setCancelling] = useState(false);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadDigest = useCallback(async () => {
@@ -104,6 +105,7 @@ export default function StrategicDigestPage() {
     if (!clientId) return;
     setGenerating(true);
     setError('');
+    setCancelling(false);
     setProgress({ pct: 0, phase: 'starting', message: 'Initialising…' });
     stopPolling();
 
@@ -142,6 +144,14 @@ export default function StrategicDigestPage() {
           if (isMountedRef.current) setError(prog.message || 'Generation failed');
           setGenerating(false);
           setProgress(null);
+          setCancelling(false);
+          return;
+        }
+
+        if (prog.phase === 'cancelled') {
+          setGenerating(false);
+          setProgress(null);
+          setCancelling(false);
           return;
         }
       } catch { /* keep polling */ }
@@ -150,6 +160,14 @@ export default function StrategicDigestPage() {
     };
 
     pollRef.current = setTimeout(poll, 3000);
+  };
+
+  const handleCancel = async () => {
+    if (!clientId || cancelling) return;
+    setCancelling(true);
+    try {
+      await strategicDigestApi.cancel(clientId);
+    } catch { /* ignore — poll will detect cancelled phase */ }
   };
 
   // Clean up poll on unmount
@@ -283,13 +301,22 @@ export default function StrategicDigestPage() {
               {progress?.message || 'Please wait — this may take several minutes for large accounts…'}
             </Text>
           </div>
-          {(progress?.pct ?? 0) < 90 && progress?.phase === 'building_context' && (
-            <div style={{ textAlign: 'center', marginTop: 8 }}>
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                Tip: You can navigate away — generation continues in the background.
-              </Text>
+          <div style={{ textAlign: 'center', marginTop: 20 }}>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              You can navigate away — generation continues in the background.
+            </Text>
+            <div style={{ marginTop: 12 }}>
+              <Button
+                danger
+                size="small"
+                loading={cancelling || progress?.phase === 'cancelling'}
+                onClick={handleCancel}
+                disabled={progress?.phase === 'cancelling'}
+              >
+                {progress?.phase === 'cancelling' ? 'Cancelling…' : 'Cancel'}
+              </Button>
             </div>
-          )}
+          </div>
         </Card>
       )}
 
