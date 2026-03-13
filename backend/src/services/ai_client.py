@@ -267,6 +267,7 @@ class AIClient:
         user_message: str,
         max_tokens: int = 4096,
         temperature: float = 0.0,
+        json_mode: bool = False,
     ) -> Optional[AIResponse]:
         """
         Call a non-Anthropic model (e.g. Gemini) via LangChain and wrap the
@@ -277,7 +278,7 @@ class AIClient:
             from langchain_core.messages import HumanMessage, SystemMessage
 
             start_ms = int(time.time() * 1000)
-            llm = get_llm(model_name, temperature)  # type: ignore[arg-type]
+            llm = get_llm(model_name, temperature, json_mode=json_mode)  # type: ignore[arg-type]
             messages = [
                 SystemMessage(content=system_prompt),
                 HumanMessage(content=user_message),
@@ -322,11 +323,12 @@ class AIClient:
         user_message: str,
         max_tokens: int = 4096,
         temperature: float = 0.0,
+        json_mode: bool = False,
     ) -> Optional[AIResponse]:
         """Call cheap/fast model. Respects configured cheap_model preference."""
         cheap = get_ai_settings().cheap_model  # "haiku" or "gemini"
         if cheap != "haiku":
-            return self._call_via_langchain(cheap, system_prompt, user_message, max_tokens, temperature)
+            return self._call_via_langchain(cheap, system_prompt, user_message, max_tokens, temperature, json_mode=json_mode)
         return self._call_model(
             model=HAIKU_MODEL,
             system_prompt=system_prompt,

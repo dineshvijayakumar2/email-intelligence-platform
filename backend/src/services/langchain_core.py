@@ -74,13 +74,16 @@ def set_default_models(cheap: ModelName = "haiku", strategic: ModelName = "sonne
     logger.info(f"LangChain defaults updated: cheap={cheap}, strategic={strategic}")
 
 
-def get_llm(model_name: Optional[ModelName] = None, temperature: float = 0.0) -> BaseChatModel:
+def get_llm(model_name: Optional[ModelName] = None, temperature: float = 0.0, json_mode: bool = False) -> BaseChatModel:
     """
     Get a LangChain LLM instance for the specified model.
 
     Args:
         model_name: "haiku", "sonnet", or "gemini". Defaults to cheap model.
         temperature: LLM temperature (0.0 = deterministic)
+        json_mode: For Gemini — forces response_mime_type="application/json" so the
+                   model always emits valid JSON. Has no effect on Anthropic models
+                   (Claude reliably follows JSON instructions without it).
 
     Returns:
         LangChain ChatModel instance
@@ -103,12 +106,15 @@ def get_llm(model_name: Optional[ModelName] = None, temperature: float = 0.0) ->
         if not api_key:
             logger.warning("GOOGLE_GENAI_API_KEY not set — falling back to Haiku")
             return get_llm("haiku", temperature)
-        return ChatGoogleGenerativeAI(
+        kwargs = dict(
             model=config["model"],
             google_api_key=api_key,
             temperature=temperature,
             max_output_tokens=config["max_tokens"],
         )
+        if json_mode:
+            kwargs["response_mime_type"] = "application/json"
+        return ChatGoogleGenerativeAI(**kwargs)
     else:
         raise ValueError(f"Unknown provider: {config['provider']}")
 

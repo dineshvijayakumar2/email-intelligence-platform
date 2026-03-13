@@ -1036,7 +1036,7 @@ class AIEmailAnalyzer:
         emails_json = self._format_emails_for_prompt([email])
         user_message = USER_PROMPT_TEMPLATE.format(emails_json=emails_json)
 
-        ai_resp = self.ai_client.call_haiku(SYSTEM_PROMPT, user_message, max_tokens=2048)
+        ai_resp = self.ai_client.call_haiku(SYSTEM_PROMPT, user_message, max_tokens=2048, json_mode=True)
         if ai_resp is None:
             return None
 
@@ -1184,7 +1184,7 @@ class AIEmailAnalyzer:
 
         # Call Claude Haiku — scale max_tokens with batch size (~500 tokens per email)
         max_tokens = max(4096, len(emails) * 500)
-        ai_response = self.ai_client.call_haiku(SYSTEM_PROMPT, user_message, max_tokens=max_tokens)
+        ai_response = self.ai_client.call_haiku(SYSTEM_PROMPT, user_message, max_tokens=max_tokens, json_mode=True)
 
         if ai_response is None:
             # API failure — mark all as failed
