@@ -395,9 +395,9 @@ class StrategicContextBuilder:
                 chunk = contact_ids[i:i + 500]
                 resp = self._execute_with_retry(
                     self.client.table("email_response_metrics")
-                    .select("response_time_seconds,business_hours_response_time_seconds,inbound_at")
-                    .in_("customer_contact_id", chunk)
-                    .gte("inbound_at", cutoff_iso)
+                    .select("response_time_seconds,business_hours_response_time_seconds,created_at")
+                    .in_("responder_contact_id", chunk)
+                    .gte("created_at", cutoff_iso)
                     .range(0, 999)
                 )
                 all_metrics.extend(resp.data or [])
@@ -759,10 +759,10 @@ class StrategicContextBuilder:
                 chunk = contact_ids[i:i + 500]
                 resp = self._execute_with_retry(
                     self.client.table("email_response_metrics")
-                    .select("customer_contact_id,response_time_seconds")
-                    .in_("customer_contact_id", chunk)
-                    .gte("inbound_at", period_start)
-                    .lte("inbound_at", period_end)
+                    .select("responder_contact_id,response_time_seconds")
+                    .in_("responder_contact_id", chunk)
+                    .gte("created_at", period_start)
+                    .lte("created_at", period_end)
                     .range(0, 999)
                 )
                 all_metrics.extend(resp.data or [])
@@ -770,7 +770,7 @@ class StrategicContextBuilder:
             # Group by AM
             times_by_am: Dict[str, List[float]] = {}
             for m in all_metrics:
-                cid = m.get("customer_contact_id")
+                cid = m.get("responder_contact_id")
                 rt = m.get("response_time_seconds")
                 if cid and rt is not None and cid in contact_to_am:
                     am = contact_to_am[cid]
