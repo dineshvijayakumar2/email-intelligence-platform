@@ -203,7 +203,7 @@ class ExtractionOrchestrator:
                 )
                 total_in_db = count_resp.count or 0
                 estimated_pages = (total_in_db + PAGE_SIZE - 1) // PAGE_SIZE
-                logger.info(f"Full mode: {total_in_db} total emails in mailbox, ~{estimated_pages} pages of {PAGE_SIZE}")
+                logger.debug(f"Full mode: {total_in_db} emails, ~{estimated_pages} pages of {PAGE_SIZE}")
 
                 all_rows = []
                 offset = 0
@@ -221,7 +221,7 @@ class ExtractionOrchestrator:
                     raw_batch = response.data or []
                     filtered = [e for e in raw_batch if e.get('processing_status') != 'failed']
                     all_rows.extend(filtered)
-                    logger.info(f"Full mode page {page}/{estimated_pages}: raw={len(raw_batch)}, kept={len(filtered)}, total so far={len(all_rows)}")
+                    logger.debug(f"Full mode page {page}/{estimated_pages}: raw={len(raw_batch)}, kept={len(filtered)}")
 
                     if len(raw_batch) == 0:
                         break
@@ -235,8 +235,7 @@ class ExtractionOrchestrator:
                 date_range_end = datetime.utcnow()
                 date_range_start = date_range_end - timedelta(days=self.lookback_days)
 
-                logger.info(f"Incremental extraction mode: Looking back {self.lookback_days} days")
-                logger.info(f"Date range: {date_range_start.isoformat()} to {date_range_end.isoformat()}")
+                logger.debug(f"Incremental mode: {self.lookback_days}d lookback, {date_range_start.date()} → {date_range_end.date()}")
 
                 # Get total count for date range
                 count_resp = self._execute_with_retry(
@@ -248,7 +247,7 @@ class ExtractionOrchestrator:
                 )
                 total_in_range = count_resp.count or 0
                 estimated_pages = (total_in_range + PAGE_SIZE - 1) // PAGE_SIZE
-                logger.info(f"Incremental mode: {total_in_range} emails in date range, ~{estimated_pages} pages")
+                logger.debug(f"Incremental mode: {total_in_range} emails in range, ~{estimated_pages} pages")
 
                 all_rows = []
                 offset = 0
@@ -268,7 +267,7 @@ class ExtractionOrchestrator:
                     raw_batch = response.data or []
                     filtered = [e for e in raw_batch if e.get('processing_status') != 'failed']
                     all_rows.extend(filtered)
-                    logger.info(f"Incremental page {page}/{estimated_pages}: raw={len(raw_batch)}, kept={len(filtered)}, total so far={len(all_rows)}")
+                    logger.debug(f"Incremental page {page}/{estimated_pages}: raw={len(raw_batch)}, kept={len(filtered)}")
 
                     if len(raw_batch) == 0:
                         break
@@ -308,9 +307,7 @@ class ExtractionOrchestrator:
         Returns:
             Dictionary with extraction results and statistics
         """
-        logger.info("=" * 80)
-        logger.info(f"Starting customer data extraction pipeline for mailbox {self.mailbox_id}")
-        logger.info("=" * 80)
+        logger.info(f"Pipeline start: mailbox={self.mailbox_id}, mode={self.extraction_mode}")
 
         start_time = datetime.utcnow()
 
@@ -417,9 +414,7 @@ class ExtractionOrchestrator:
             # Calculate duration
             duration = (datetime.utcnow() - start_time).total_seconds()
 
-            logger.info("=" * 80)
-            logger.info(f"Extraction pipeline completed successfully in {duration:.2f}s")
-            logger.info("=" * 80)
+            logger.info(f"Pipeline complete: {duration:.1f}s, {self.current_step} steps")
 
             return {
                 'success': True,
@@ -456,10 +451,7 @@ class ExtractionOrchestrator:
         """
         self.current_step = step_num
 
-        logger.info("")
-        logger.info("=" * 80)
-        logger.info(f"STEP {step_num}/{self.TOTAL_STEPS}: {description}")
-        logger.info("=" * 80)
+        logger.info(f"── Step {step_num}/{self.TOTAL_STEPS}: {description}")
 
         step_start = datetime.utcnow()
 
@@ -476,14 +468,12 @@ class ExtractionOrchestrator:
             # Calculate step duration
             step_duration = (datetime.utcnow() - step_start).total_seconds()
 
-            logger.info(f"Step {step_num} completed in {step_duration:.2f}s")
-
-            # Log step summary if result is dict
+            summary_str = ""
             if isinstance(result, dict):
-                logger.info(f"Step {step_num} summary:")
-                for key, value in result.items():
-                    if key != 'errors':  # Skip error details in summary
-                        logger.info(f"  {key}: {value}")
+                summary_str = " | " + ", ".join(
+                    f"{k}={v}" for k, v in result.items() if k != 'errors'
+                )
+            logger.info(f"Step {step_num} done in {step_duration:.1f}s{summary_str}")
 
         except Exception as e:
             logger.error(f"Step {step_num} failed: {e}")
@@ -1219,22 +1209,25 @@ class ExtractionOrchestrator:
                 count_to_companies[count].append(company_id)
 
             # Batch update companies with the same count
+            # Skip count=0 — default value, no update needed for unmatched companies
+            # Chunk to ≤200 IDs to avoid PostgREST payload size limit
             updated_count = 0
             timestamp = datetime.utcnow().isoformat()
+            CHUNK_SIZE = 200
 
             for contact_count, company_ids_list in count_to_companies.items():
-                try:
-                    # Update all companies with this count in one request
-                    self.client.table('customer_companies').update({
-                        'contact_count': contact_count,
-                        'updated_at': timestamp
-                    }).in_('id', company_ids_list).execute()
-
-                    updated_count += len(company_ids_list)
-                    logger.debug(f"Updated {len(company_ids_list)} companies with {contact_count} contacts")
-
-                except Exception as e:
-                    logger.error(f"Failed to update batch with count={contact_count}: {e}")
+                if contact_count == 0:
+                    continue
+                for chunk_start in range(0, len(company_ids_list), CHUNK_SIZE):
+                    chunk = company_ids_list[chunk_start:chunk_start + CHUNK_SIZE]
+                    try:
+                        self.client.table('customer_companies').update({
+                            'contact_count': contact_count,
+                            'updated_at': timestamp
+                        }).in_('id', chunk).execute()
+                        updated_count += len(chunk)
+                    except Exception as e:
+                        logger.error(f"Failed to update batch with count={contact_count}: {e}")
 
             logger.info(f"Updated statistics for {updated_count} companies in {len(count_to_companies)} batch requests")
 

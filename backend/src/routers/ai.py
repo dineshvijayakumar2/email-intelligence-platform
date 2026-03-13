@@ -56,6 +56,9 @@ def init_ai_router(supabase_client):
     init_usage_tracker(supabase_client)
     init_digest_generator(supabase_client)
 
+    # Load persisted model preferences from DB (survives restarts)
+    _load_persisted_model_settings()
+
     logger.info("AI router and services initialized")
 
 
@@ -1122,12 +1125,46 @@ async def update_default_models(
     cheap_model: str = Query(default="haiku"),
     strategic_model: str = Query(default="sonnet"),
 ):
-    """Update default model preferences."""
+    """Update default model preferences and persist to DB."""
     from ..services.langchain_core import set_default_models
     try:
         set_default_models(cheap=cheap_model, strategic=strategic_model)
-        # Also persist in ai_settings so controls endpoint reflects the change
         update_ai_settings(cheap_model=cheap_model, strategic_model=strategic_model)
+        # Persist to system_settings so it survives server restarts
+        if _supabase:
+            try:
+                _supabase.table('system_settings').upsert([
+                    {'key': 'ai_cheap_model',     'value': cheap_model,     'updated_at': 'now()'},
+                    {'key': 'ai_strategic_model', 'value': strategic_model, 'updated_at': 'now()'},
+                ], on_conflict='key').execute()
+            except Exception as db_err:
+                logger.warning(f"Failed to persist model settings to DB: {db_err}")
         return {"status": "ok", "cheap": cheap_model, "strategic": strategic_model}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+def _load_persisted_model_settings():
+    """Load AI model preferences from system_settings on startup."""
+    if not _supabase:
+        return
+    try:
+        from ..services.langchain_core import set_default_models
+        resp = _supabase.table('system_settings').select('key,value').in_(
+            'key', ['ai_cheap_model', 'ai_strategic_model']
+        ).execute()
+        settings = {row['key']: row['value'] for row in (resp.data or [])}
+        cheap = settings.get('ai_cheap_model')
+        strategic = settings.get('ai_strategic_model')
+        if cheap or strategic:
+            set_default_models(
+                cheap=cheap or 'haiku',
+                strategic=strategic or 'sonnet',
+            )
+            update_ai_settings(
+                cheap_model=cheap or 'haiku',
+                strategic_model=strategic or 'sonnet',
+            )
+            logger.info(f"Loaded AI model settings from DB: cheap={cheap}, strategic={strategic}")
+    except Exception as e:
+        logger.warning(f"Could not load AI model settings from DB: {e}")

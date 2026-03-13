@@ -27,6 +27,28 @@ from ..database.supabase_client import SupabaseClient
 logger = logging.getLogger(__name__)
 
 
+def _to_iso(value) -> Optional[str]:
+    """Return ISO string from a datetime or already-ISO string, or None."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    return value.isoformat()
+
+
+def _max_date(a, b):
+    """Return the later of two date values (datetime or ISO string), or None."""
+    if not a and not b:
+        return None
+    def _as_dt(v):
+        if v is None:
+            return datetime.min
+        if isinstance(v, str):
+            return datetime.fromisoformat(v.replace('Z', '+00:00')).replace(tzinfo=None)
+        return v
+    return max(_as_dt(a), _as_dt(b))
+
+
 @dataclass
 class CommunicationPattern:
     """Communication pattern metrics for a contact"""
@@ -600,12 +622,9 @@ class CommunicationPatternAnalyzer:
                     'avg_thread_depth': str(pattern.avg_thread_depth),
                     'emails_per_month_avg': str(pattern.emails_per_month_avg),
                     'frequency_trend': pattern.frequency_trend,
-                    'last_inbound_at': pattern.last_inbound_at.isoformat() if pattern.last_inbound_at else None,
-                    'last_outbound_at': pattern.last_outbound_at.isoformat() if pattern.last_outbound_at else None,
-                    'last_contacted_at': max(
-                        pattern.last_inbound_at or datetime.min,
-                        pattern.last_outbound_at or datetime.min,
-                    ).isoformat() if (pattern.last_inbound_at or pattern.last_outbound_at) else None,
+                    'last_inbound_at': _to_iso(pattern.last_inbound_at),
+                    'last_outbound_at': _to_iso(pattern.last_outbound_at),
+                    'last_contacted_at': _to_iso(_max_date(pattern.last_inbound_at, pattern.last_outbound_at)),
                 })
 
             # Batch update via RPC

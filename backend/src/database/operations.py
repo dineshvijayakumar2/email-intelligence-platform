@@ -147,7 +147,7 @@ class EmailOperations:
                         seen_keys[key] = len(deduped)
                         deduped.append(row)
                 if len(deduped) < len(prepared_batch):
-                    logger.info(f"Batch {batch_num}: Removed {len(prepared_batch) - len(deduped)} duplicates within batch")
+                    logger.debug(f"Batch {batch_num}: Removed {len(prepared_batch) - len(deduped)} duplicates within batch")
                 prepared_batch = deduped
 
                 # Use upsert to handle duplicates gracefully
@@ -158,7 +158,7 @@ class EmailOperations:
 
                 if result.data:
                     success += len(prepared_batch)
-                    logger.info(f"Batch {batch_num}: Upserted {len(prepared_batch)} emails")
+                    logger.debug(f"Batch {batch_num}: Upserted {len(prepared_batch)} emails")
                 else:
                     failed += len(batch)
                     errors.append(f"Batch {batch_num}: No data returned from upsert")
@@ -221,7 +221,7 @@ class EmailOperations:
         last_message_id = None
         was_stopped = False
 
-        logger.info(f"Starting streaming insert with batch_size={batch_size} (using database upsert for deduplication)")
+        logger.debug(f"Starting streaming insert with batch_size={batch_size} (using database upsert for deduplication)")
         
         # Performance tracking for time estimation
         start_time = time.time()
@@ -308,9 +308,9 @@ class EmailOperations:
                             # Only log to terminal every 100 emails (or first 10)
                             if total <= 10 or total % 100 == 0:
                                 if eta_str:
-                                    logger.info(f"[STATS] Processed {total}/{total_expected} emails - {emails_per_second:.1f} emails/sec - ETA: {eta_str}")
+                                    logger.debug(f"[STATS] Processed {total}/{total_expected} emails - {emails_per_second:.1f} emails/sec - ETA: {eta_str}")
                                 else:
-                                    logger.info(f"[STATS] Processed {total} emails - {emails_per_second:.1f} emails/sec")
+                                    logger.debug(f"[STATS] Processed {total} emails - {emails_per_second:.1f} emails/sec")
 
                         except Exception as e:
                             logger.debug(f"Failed to calculate ETA: {e}")
@@ -366,14 +366,14 @@ class EmailOperations:
                         gc.collect()
                         logger.debug(f"Garbage collected after {total} emails")
 
-                    logger.info(f"Progress: {total} emails processed ({success} inserted, {failed} failed)")
+                    logger.debug(f"Progress: {total} emails processed ({success} inserted, {failed} failed)")
 
             # Insert remaining emails in final batch
-            logger.info(f"[DB-INSERT] Final batch check: {len(current_batch)} emails in batch, {total} total processed")
+            logger.debug(f"[DB-INSERT] Final batch check: {len(current_batch)} emails in batch, {total} total processed")
             if current_batch:
-                logger.info(f"[DB-INSERT] Inserting final batch of {len(current_batch)} emails to mailbox {mailbox_id}")
+                logger.debug(f"[DB-INSERT] Inserting final batch of {len(current_batch)} emails to mailbox {mailbox_id}")
                 result = self._insert_batch(current_batch, mailbox_id, (total // batch_size) + 1)
-                logger.info(f"[DB-INSERT] Final batch result: success={result['success']}, failed={result['failed']}")
+                logger.debug(f"[DB-INSERT] Final batch result: success={result['success']}, failed={result['failed']}")
                 success += result['success']
                 failed += result['failed']
                 errors.extend(result['errors'])
@@ -468,7 +468,7 @@ class EmailOperations:
                 deduplicated_originals.append(original_emails_prepared[i])
 
         if duplicates_in_batch > 0:
-            logger.info(f"Batch {batch_num}: Removed {duplicates_in_batch} duplicates within batch ({len(prepared_batch)} -> {len(deduplicated_batch)})")
+            logger.debug(f"Batch {batch_num}: Removed {duplicates_in_batch} duplicates within batch ({len(prepared_batch)} -> {len(deduplicated_batch)})")
 
         prepared_batch = deduplicated_batch
         original_emails_prepared = deduplicated_originals
@@ -539,7 +539,7 @@ class EmailOperations:
                         self._ensure_folders_exist(original_emails, mailbox_id)
 
                     if depth == 0:
-                        logger.info(f"Batch {batch_num}: Inserted {success_count} emails")
+                        logger.debug(f"Batch {batch_num}: Inserted {success_count} emails")
 
                     return {'success': success_count, 'failed': 0, 'errors': [], 'failed_message_ids': []}
 
@@ -578,7 +578,7 @@ class EmailOperations:
         if batch_size > min_batch_size:
             mid = batch_size // 2
 
-            logger.info(f"{indent}Splitting batch {batch_num}: {batch_size} -> {mid} + {batch_size - mid}")
+            logger.debug(f"{indent}Splitting batch {batch_num}: {batch_size} -> {mid} + {batch_size - mid}")
 
             # Process first half
             result1 = self._adaptive_upsert(
