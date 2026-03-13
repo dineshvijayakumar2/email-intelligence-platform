@@ -141,7 +141,7 @@ class StrategicContextBuilder:
     # ------------------------------------------------------------------
     # 2. Build contexts for all companies in client
     # ------------------------------------------------------------------
-    def build_all_contexts(self, lookback_months: int = 6) -> Dict[str, Any]:
+    def build_all_contexts(self, lookback_months: int = 6, on_progress=None) -> Dict[str, Any]:
         """
         Iterate all companies for this client and build context for each.
 
@@ -167,6 +167,7 @@ class StrategicContextBuilder:
 
         logger.info(f"Building strategic context for {len(company_ids)} companies (client={self.client_id})")
 
+        total = len(company_ids)
         succeeded = 0
         failed = 0
         for i, cid in enumerate(company_ids):
@@ -176,8 +177,16 @@ class StrategicContextBuilder:
             else:
                 failed += 1
 
-            if (i + 1) % 25 == 0:
-                logger.info(f"  Progress: {i + 1}/{len(company_ids)} companies processed")
+            current = i + 1
+            if current % 25 == 0 or current == total:
+                logger.info(f"  Progress: {current}/{total} companies processed")
+                if on_progress:
+                    on_progress(
+                        "building_context",
+                        current,
+                        total,
+                        f"Building relationship context ({current}/{total} companies)…",
+                    )
 
         elapsed = round(time.time() - start_time, 2)
         logger.info(

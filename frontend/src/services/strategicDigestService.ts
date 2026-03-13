@@ -26,6 +26,17 @@ export const strategicDigestApi = {
   getHistory: async (clientId: string, limit = 10) => {
     return api.get<{ digests: StrategicDigestHistory[] }>(`${API_PREFIX}/strategic-digest/${clientId}/history?limit=${limit}`);
   },
+
+  getProgress: async (clientId: string) => {
+    return api.get<{
+      phase: string;
+      current: number;
+      total: number;
+      pct: number;
+      message: string;
+      elapsed_s?: number;
+    }>(`${API_PREFIX}/strategic-digest/${clientId}/progress`);
+  },
 };
 
 // --- AM Performance ---

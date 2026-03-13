@@ -150,6 +150,7 @@ class StrategicDigestPipeline:
         period_end: date,
         comparison_start: Optional[date] = None,
         comparison_end: Optional[date] = None,
+        on_progress=None,
     ) -> dict:
         """
         Generate a strategic digest for the given period.
@@ -177,7 +178,10 @@ class StrategicDigestPipeline:
             context_builder = StrategicContextBuilder(
                 self.supabase, self.client_id
             )
-            all_contexts = context_builder.build_all_contexts(lookback_months=6)
+            all_contexts = context_builder.build_all_contexts(lookback_months=6, on_progress=on_progress)
+
+            if on_progress:
+                on_progress("am_performance", 1, 1, "Building AM performance snapshots…")
 
             # -----------------------------------------------------------------
             # Step 2: Build AM performance data
@@ -228,6 +232,9 @@ class StrategicDigestPipeline:
                 tools=tools,
                 prompt=STRATEGIC_DIGEST_SYSTEM_PROMPT,
             )
+
+            if on_progress:
+                on_progress("ai_analysis", 1, 1, "Running AI strategic analysis…")
 
             # -----------------------------------------------------------------
             # Step 6: Run agent to generate strategic analysis

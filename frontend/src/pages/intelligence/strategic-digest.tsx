@@ -6,17 +6,17 @@
  * competitive landscape, and action items.
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Card, Typography, Tag, Select, Button, Row, Col, Spin, Alert,
-  Table, Space, Descriptions, Empty,
+  Table, Space, Descriptions, Empty, Progress,
 } from 'antd';
 import {
   ThunderboltOutlined, ArrowUpOutlined, ArrowDownOutlined, MinusOutlined,
   ReloadOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { strategicDigestApi, amPerformanceApi } from '../../services/strategicDigestService';
+import { strategicDigestApi } from '../../services/strategicDigestService';
 import type { StrategicDigest, PeriodType } from '../../types/strategic-digest';
 import { ClientSelector } from '../../components/analytics/ClientSelector';
 import { formatRelativeTime } from '../../utils/dateUtils';
@@ -69,6 +69,8 @@ export default function StrategicDigestPage() {
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState('');
+  const [progress, setProgress] = useState<{ pct: number; message: string; phase: string } | null>(null);
+  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadDigest = useCallback(async () => {
     if (!clientId) return;
@@ -94,38 +96,64 @@ export default function StrategicDigestPage() {
     if (clientId) loadDigest();
   }, [clientId, periodType, loadDigest]);
 
+  const stopPolling = () => {
+    if (pollRef.current) { clearTimeout(pollRef.current); pollRef.current = null; }
+  };
+
   const handleGenerate = async () => {
     if (!clientId) return;
     setGenerating(true);
     setError('');
+    setProgress({ pct: 0, phase: 'starting', message: 'Initialising…' });
+    stopPolling();
+
     try {
       await strategicDigestApi.generate(clientId, periodType);
-      // Poll for result — wait a bit then reload
-      let attempts = 0;
-      const poll = async () => {
-        attempts++;
-        if (attempts > 20 || !isMountedRef.current) {
-          setGenerating(false);
-          return;
-        }
-        try {
-          const resp = await strategicDigestApi.get(clientId, periodType);
-          if (resp?.digest) {
-            setDigest(resp.digest);
-            setGenerating(false);
-            return;
-          }
-        } catch { /* keep polling */ }
-        setTimeout(poll, 3000);
-      };
-      setTimeout(poll, 5000);
     } catch (err: any) {
       if (isMountedRef.current) {
-        setError(err?.message || 'Failed to generate digest');
+        setError(err?.message || 'Failed to start generation');
         setGenerating(false);
+        setProgress(null);
       }
+      return;
     }
+
+    // Poll progress + completion
+    const poll = async () => {
+      if (!isMountedRef.current) return;
+      try {
+        const prog = await strategicDigestApi.getProgress(clientId);
+        if (isMountedRef.current) {
+          setProgress({ pct: prog.pct, phase: prog.phase, message: prog.message });
+        }
+
+        if (prog.phase === 'completed') {
+          // Load the finished digest
+          try {
+            const resp = await strategicDigestApi.get(clientId, periodType);
+            if (isMountedRef.current) setDigest(resp?.digest ?? null);
+          } catch { /* ignore */ }
+          setGenerating(false);
+          setProgress(null);
+          return;
+        }
+
+        if (prog.phase === 'failed') {
+          if (isMountedRef.current) setError(prog.message || 'Generation failed');
+          setGenerating(false);
+          setProgress(null);
+          return;
+        }
+      } catch { /* keep polling */ }
+
+      pollRef.current = setTimeout(poll, 4000);
+    };
+
+    pollRef.current = setTimeout(poll, 3000);
   };
+
+  // Clean up poll on unmount
+  useEffect(() => () => stopPolling(), []);
 
   // AM Performance columns
   const amColumns = [
@@ -224,16 +252,48 @@ export default function StrategicDigestPage() {
         </Card>
       )}
 
-      {(loading || generating) && clientId && (
+      {loading && clientId && !generating && (
         <div style={{ textAlign: 'center', padding: 80 }}>
           <Spin size="large" />
-          <div style={{ marginTop: 16 }}>
-            <Text type="secondary">{generating ? 'Generating strategic digest...' : 'Loading digest...'}</Text>
-          </div>
+          <div style={{ marginTop: 16 }}><Text type="secondary">Loading digest…</Text></div>
         </div>
       )}
 
-      {!loading && !generating && clientId && !digest && (
+      {generating && clientId && (
+        <Card className="glass-card" style={{ padding: '32px 48px' }}>
+          <div style={{ textAlign: 'center', marginBottom: 24 }}>
+            <Text strong style={{ fontSize: 16 }}>
+              {progress?.phase === 'ai_analysis' ? 'Running AI Analysis' :
+               progress?.phase === 'am_performance' ? 'Building AM Performance' :
+               progress?.phase === 'building_context' ? 'Building Relationship Context' :
+               'Generating Strategic Digest'}
+            </Text>
+          </div>
+          <Progress
+            percent={progress?.pct ?? 0}
+            status={progress?.phase === 'failed' ? 'exception' : 'active'}
+            strokeColor={
+              progress?.phase === 'ai_analysis' ? '#667eea' :
+              progress?.phase === 'am_performance' ? '#52c41a' : '#1890ff'
+            }
+            style={{ marginBottom: 12 }}
+          />
+          <div style={{ textAlign: 'center' }}>
+            <Text type="secondary" style={{ fontSize: 13 }}>
+              {progress?.message || 'Please wait — this may take several minutes for large accounts…'}
+            </Text>
+          </div>
+          {(progress?.pct ?? 0) < 90 && progress?.phase === 'building_context' && (
+            <div style={{ textAlign: 'center', marginTop: 8 }}>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                Tip: You can navigate away — generation continues in the background.
+              </Text>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {!loading && !generating && clientId && !digest && !error && (
         <Card className="glass-card" style={{ textAlign: 'center', padding: 40 }}>
           <Empty description="No strategic digest available for this period.">
             <Button type="primary" onClick={handleGenerate} loading={generating}>
@@ -243,7 +303,7 @@ export default function StrategicDigestPage() {
         </Card>
       )}
 
-      {!loading && !generating && digest && (
+      {!loading && !generating && digest && !error && (
         <>
           {/* Meta info */}
           <Card className="glass-card" size="small" style={{ marginBottom: 16 }}>

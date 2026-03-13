@@ -9,9 +9,14 @@ Router prefix: /ai, tags: ["ai-intelligence"]
 """
 
 from fastapi import APIRouter, HTTPException, Query, BackgroundTasks, Depends
-from typing import Optional
+from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
 import logging
+import time as _time
+
+# ── In-memory progress store (per client_id) ──────────────────────────────────
+# Cleared on completion/failure; safe for single-instance deployments.
+_digest_progress: Dict[str, Dict[str, Any]] = {}
 
 from ..dependencies.auth import get_current_user, require_role, get_accessible_mailbox_ids
 from ..utils.audit import log_audit, audit_from_user
@@ -978,15 +983,54 @@ async def generate_strategic_digest(
 
         pipeline = StrategicDigestPipeline(_supabase, client_id)
 
+        # Initialise progress entry
+        _digest_progress[client_id] = {
+            "phase": "starting",
+            "current": 0,
+            "total": 0,
+            "pct": 0,
+            "message": "Initialising…",
+            "started_at": datetime.utcnow().isoformat(),
+        }
+
+        def _on_progress(phase: str, current: int, total: int, message: str = ""):
+            pct = round(current / total * 100) if total else 0
+            _digest_progress[client_id] = {
+                "phase": phase,
+                "current": current,
+                "total": total,
+                "pct": pct,
+                "message": message or f"{phase.replace('_', ' ').title()} ({current}/{total})",
+                "started_at": _digest_progress.get(client_id, {}).get("started_at"),
+                "elapsed_s": round(_time.time() - _digest_progress.get(client_id, {}).get("_t0", _time.time()), 1),
+            }
+
+        _digest_progress[client_id]["_t0"] = _time.time()
+
         async def _run():
             try:
                 await pipeline.generate(
                     period_type=period_type,
                     period_start=start_date,
                     period_end=end_date,
+                    on_progress=_on_progress,
                 )
+                _digest_progress[client_id] = {
+                    "phase": "completed",
+                    "current": 0,
+                    "total": 0,
+                    "pct": 100,
+                    "message": "Digest generated successfully",
+                }
                 logger.info(f"Strategic digest generated for client {client_id}")
             except Exception as e:
+                _digest_progress[client_id] = {
+                    "phase": "failed",
+                    "current": 0,
+                    "total": 0,
+                    "pct": 0,
+                    "message": f"Generation failed: {str(e)[:200]}",
+                }
                 logger.error(f"Strategic digest generation failed: {e}")
 
         background_tasks.add_task(_run)
@@ -1002,6 +1046,16 @@ async def generate_strategic_digest(
     except Exception as e:
         logger.error(f"Failed to start strategic digest: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/strategic-digest/{client_id}/progress")
+async def get_digest_progress(client_id: str):
+    """Return current generation progress for the given client."""
+    entry = _digest_progress.get(client_id)
+    if not entry:
+        return {"phase": "idle", "pct": 0, "message": "No generation in progress"}
+    # Strip internal timing key before returning
+    return {k: v for k, v in entry.items() if k != "_t0"}
 
 
 @router.get("/strategic-digest/{client_id}/history")
