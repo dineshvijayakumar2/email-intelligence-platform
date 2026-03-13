@@ -982,10 +982,21 @@ class AIEmailAnalyzer:
             pos = e.pos if hasattr(e, 'pos') else 0
             snippet = cleaned[max(0, pos - 60):pos + 60].replace('\n', '↵')
             logger.warning(f"Failed to parse AI response as JSON: {e} | near: ...{snippet}...")
-            # Try to repair truncated JSON (common when max_tokens cuts off response)
-            parsed = repair_truncated_json(cleaned)
+            # Try json-repair library (handles Gemini quirks: trailing commas, comments, etc.)
+            parsed = None
+            try:
+                from json_repair import repair_json
+                repaired = repair_json(cleaned, return_objects=True)
+                if isinstance(repaired, list) and len(repaired) > 0:
+                    logger.info(f"json-repair recovered {len(repaired)} items from malformed JSON")
+                    parsed = repaired
+            except Exception as repair_err:
+                logger.debug(f"json-repair failed: {repair_err}")
+            # Fall back to truncation repair (common when max_tokens cuts off response)
             if parsed is None:
-                logger.error(f"JSON repair also failed, entire batch lost")
+                parsed = repair_truncated_json(cleaned)
+            if parsed is None:
+                logger.error(f"All JSON repair attempts failed, entire batch lost")
                 for eid in expected_email_ids:
                     failed.append({"email_id": eid, "error": f"json_parse: {str(e)[:200]}"})
                 return valid, failed
