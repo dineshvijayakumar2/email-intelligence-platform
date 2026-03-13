@@ -470,9 +470,13 @@ class ExtractionOrchestrator:
 
             summary_str = ""
             if isinstance(result, dict):
-                summary_str = " | " + ", ".join(
-                    f"{k}={v}" for k, v in result.items() if k != 'errors'
-                )
+                # Only log scalar values — skip lists/dicts (they contain full data payloads)
+                parts = [
+                    f"{k}={v}" for k, v in result.items()
+                    if k != 'errors' and not isinstance(v, (list, dict))
+                ]
+                if parts:
+                    summary_str = " | " + ", ".join(parts)
             logger.info(f"Step {step_num} done in {step_duration:.1f}s{summary_str}")
 
         except Exception as e:
@@ -846,7 +850,7 @@ class ExtractionOrchestrator:
             try:
                 self.client.table('customer_contacts').insert(batch).execute()
                 created_count += len(batch)
-                logger.info(f"Inserted batch {i//batch_size + 1}: {len(batch)} contacts")
+                logger.debug(f"Inserted batch {i//batch_size + 1}: {len(batch)} contacts")
             except Exception as e:
                 logger.error(f"Failed to insert batch {i//batch_size + 1}: {e}")
                 errors.append({'batch': i//batch_size + 1, 'error': str(e)})

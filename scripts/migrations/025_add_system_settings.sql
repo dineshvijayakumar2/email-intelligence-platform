@@ -1,6 +1,7 @@
 -- Migration: 025_add_system_settings.sql
 -- Purpose: Global admin settings that persist across server restarts.
---          Currently used to store AI model preferences (cheap/strategic).
+--          Stores: AI model preferences (ai_cheap_model, ai_strategic_model)
+--                  API keys (api_key_anthropic, api_key_google) — base64-encoded
 -- Date: March 2026
 
 CREATE TABLE IF NOT EXISTS system_settings (

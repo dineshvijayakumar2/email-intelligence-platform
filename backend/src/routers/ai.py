@@ -56,7 +56,8 @@ def init_ai_router(supabase_client):
     init_usage_tracker(supabase_client)
     init_digest_generator(supabase_client)
 
-    # Load persisted model preferences from DB (survives restarts)
+    # Load persisted settings from DB (survives restarts)
+    _load_persisted_api_keys()
     _load_persisted_model_settings()
 
     logger.info("AI router and services initialized")
@@ -1095,11 +1096,35 @@ async def get_api_keys(current_user: dict = Depends(require_role('admin'))):
     google = os.environ.get("GOOGLE_GENAI_API_KEY") or os.environ.get("GEMINI_API_KEY") or ""
     def mask(k: str) -> str:
         return k[:4] + "****" + k[-4:] if len(k) > 8 else ("****" if k else "")
+    # Indicate whether key came from DB (persisted) or just env
+    anthropic_source = "env"
+    google_source = "env"
+    if _supabase:
+        try:
+            import base64
+            resp = _supabase.table('system_settings').select('key,value').in_(
+                'key', ['api_key_anthropic', 'api_key_google']
+            ).execute()
+            db = {row['key']: row['value'] for row in (resp.data or [])}
+            if not anthropic and db.get('api_key_anthropic'):
+                anthropic = base64.b64decode(db['api_key_anthropic']).decode()
+                anthropic_source = "db"
+            elif anthropic and db.get('api_key_anthropic'):
+                anthropic_source = "db"
+            if not google and db.get('api_key_google'):
+                google = base64.b64decode(db['api_key_google']).decode()
+                google_source = "db"
+            elif google and db.get('api_key_google'):
+                google_source = "db"
+        except Exception:
+            pass
     return {
         "anthropic_set": bool(anthropic),
         "anthropic_masked": mask(anthropic),
+        "anthropic_source": anthropic_source,
         "google_set": bool(google),
         "google_masked": mask(google),
+        "google_source": google_source,
     }
 
 
@@ -1108,16 +1133,34 @@ async def update_api_keys(
     data: dict,
     current_user: dict = Depends(require_role('admin')),
 ):
-    """Update API keys at runtime (admin only). Persists until server restart."""
+    """Update API keys at runtime and persist to DB (survives server restarts)."""
     import os
+    import base64
     updated = []
+    db_rows = []
     if data.get("anthropic_api_key"):
         os.environ["ANTHROPIC_API_KEY"] = data["anthropic_api_key"]
+        db_rows.append({
+            'key': 'api_key_anthropic',
+            'value': base64.b64encode(data["anthropic_api_key"].encode()).decode(),
+            'updated_at': 'now()',
+        })
         updated.append("anthropic")
     if data.get("google_api_key"):
         os.environ["GOOGLE_GENAI_API_KEY"] = data["google_api_key"]
+        db_rows.append({
+            'key': 'api_key_google',
+            'value': base64.b64encode(data["google_api_key"].encode()).decode(),
+            'updated_at': 'now()',
+        })
         updated.append("google")
-    return {"status": "ok", "updated": updated, "warning": "Keys reset on server restart — set them in your .env file for persistence"}
+    if db_rows and _supabase:
+        try:
+            _supabase.table('system_settings').upsert(db_rows, on_conflict='key').execute()
+            logger.info(f"API keys persisted to DB: {updated}")
+        except Exception as db_err:
+            logger.warning(f"Failed to persist API keys to DB: {db_err}")
+    return {"status": "ok", "updated": updated, "persisted": bool(db_rows and _supabase)}
 
 
 @router.put("/models/defaults")
@@ -1142,6 +1185,29 @@ async def update_default_models(
         return {"status": "ok", "cheap": cheap_model, "strategic": strategic_model}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+def _load_persisted_api_keys():
+    """Load API keys from system_settings on startup and inject into os.environ."""
+    if not _supabase:
+        return
+    try:
+        import os
+        import base64
+        resp = _supabase.table('system_settings').select('key,value').in_(
+            'key', ['api_key_anthropic', 'api_key_google']
+        ).execute()
+        db = {row['key']: row['value'] for row in (resp.data or [])}
+
+        if db.get('api_key_anthropic') and not os.environ.get('ANTHROPIC_API_KEY'):
+            os.environ['ANTHROPIC_API_KEY'] = base64.b64decode(db['api_key_anthropic']).decode()
+            logger.info("ANTHROPIC_API_KEY loaded from DB")
+
+        if db.get('api_key_google') and not os.environ.get('GOOGLE_GENAI_API_KEY'):
+            os.environ['GOOGLE_GENAI_API_KEY'] = base64.b64decode(db['api_key_google']).decode()
+            logger.info("GOOGLE_GENAI_API_KEY loaded from DB")
+    except Exception as e:
+        logger.warning(f"Could not load API keys from DB: {e}")
 
 
 def _load_persisted_model_settings():
