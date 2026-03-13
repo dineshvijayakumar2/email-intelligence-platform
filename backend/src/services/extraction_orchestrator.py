@@ -949,7 +949,7 @@ class ExtractionOrchestrator:
 
         try:
             # Check if QB is configured for this client
-            qb_config = self._supabase.table('qb_sync_config').select(
+            qb_config = self.client.table('qb_sync_config').select(
                 'is_active'
             ).eq('client_id', self.client_id).execute()
 
@@ -958,7 +958,7 @@ class ExtractionOrchestrator:
                 return result
 
             # Enrich companies from qb_customers (matched records)
-            qb_customers = self._supabase.table('qb_customers').select(
+            qb_customers = self.client.table('qb_customers').select(
                 'matched_company_id, customer_status, customer_tier, account_manager, '
                 'total_invoiced, invoiced_ty, invoiced_ly, growth_90d, days_since_last_invoice'
             ).eq('client_id', self.client_id).not_.is_(
@@ -985,13 +985,13 @@ class ExtractionOrchestrator:
                     update['qb_days_since_last_invoice'] = qb['days_since_last_invoice']
 
                 if update:
-                    self._supabase.table('customer_companies').update(
+                    self.client.table('customer_companies').update(
                         update
                     ).eq('id', qb['matched_company_id']).execute()
                     result['companies'] += 1
 
             # Enrich contacts from qb_contacts (matched records)
-            qb_contacts = self._supabase.table('qb_contacts').select(
+            qb_contacts = self.client.table('qb_contacts').select(
                 'matched_contact_id, quotes_accepted_count, most_recent_quote_date, contact_recency_days'
             ).eq('client_id', self.client_id).not_.is_(
                 'matched_contact_id', 'null'
@@ -1007,7 +1007,7 @@ class ExtractionOrchestrator:
                     update['qb_contact_recency_days'] = qb['contact_recency_days']
 
                 if update:
-                    self._supabase.table('customer_contacts').update(
+                    self.client.table('customer_contacts').update(
                         update
                     ).eq('id', qb['matched_contact_id']).execute()
                     result['contacts'] += 1
