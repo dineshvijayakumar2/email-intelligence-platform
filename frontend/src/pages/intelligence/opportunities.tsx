@@ -6,17 +6,20 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  Card, Tabs, Table, Tag, Typography, Space, Spin, Empty, Tooltip,
+  Card, Tabs, Table, Tag, Typography, Space, Spin, Empty, Tooltip, Modal,
 } from 'antd';
 import {
   ThunderboltOutlined, DollarOutlined, TrophyOutlined, TeamOutlined,
 } from '@ant-design/icons';
 import { bucketApi, entityApi, intelligenceApi } from '../../services/aiService';
+import { emailService } from '../../services/emailService';
 import { MailboxSelector } from '../../components/MailboxSelector';
+import { EmailDetailPanel } from '../../components/EmailDetailPanel';
 import { formatDate } from '../../utils/dateUtils';
 import type {
   ActionItem, BusinessEntity, OpportunitySignal, IntelligenceResult,
 } from '../../types/ai';
+import type { Email } from '../../services/emailService';
 
 const { Title, Text } = Typography;
 
@@ -39,6 +42,10 @@ const OpportunitiesPage: React.FC = () => {
   const [opportunities, setOpportunities] = useState<IntelligenceResult[]>([]);
   const [competitors, setCompetitors] = useState<BusinessEntity[]>([]);
   const [entities, setEntities] = useState<BusinessEntity[]>([]);
+
+  // Email preview modal
+  const [previewEmail, setPreviewEmail] = useState<Email | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   // Resolve client_id from mailbox
   useEffect(() => {
@@ -94,6 +101,27 @@ const OpportunitiesPage: React.FC = () => {
     setClientId('');
   };
 
+  const openEmailPreview = async (emailId: string | undefined) => {
+    if (!emailId) return;
+    setPreviewLoading(true);
+    setPreviewEmail(null);
+    const email = await emailService.getEmail(emailId);
+    if (isMountedRef.current) {
+      setPreviewEmail(email);
+      setPreviewLoading(false);
+    }
+  };
+
+  const closePreview = () => {
+    setPreviewEmail(null);
+    setPreviewLoading(false);
+  };
+
+  const rowClickProps = (emailId: string | undefined) => ({
+    onClick: () => openEmailPreview(emailId),
+    style: { cursor: emailId ? 'pointer' : 'default' },
+  });
+
   // Action Items columns
   const actionColumns = [
     {
@@ -137,17 +165,33 @@ const OpportunitiesPage: React.FC = () => {
 
   // Opportunities columns
   const oppColumns = [
-    { title: 'Subject', dataIndex: 'email_subject', key: 'subject', ellipsis: true },
-    { title: 'Sender', dataIndex: 'email_sender', key: 'sender', width: 180, ellipsis: true },
     {
-      title: 'Signal', dataIndex: 'business_signal', key: 'signal', width: 140,
+      title: 'Date', dataIndex: 'email_date', key: 'date', width: 110,
+      render: (val: string) => val ? (
+        <Text style={{ fontSize: 12 }} type="secondary">{formatDate(val)}</Text>
+      ) : '—',
+      sorter: (a: IntelligenceResult, b: IntelligenceResult) =>
+        new Date(b.email_date || 0).getTime() - new Date(a.email_date || 0).getTime(),
+      defaultSortOrder: 'ascend' as const,
+    },
+    {
+      title: 'Subject', dataIndex: 'email_subject', key: 'subject', ellipsis: true,
+      render: (val: string, record: IntelligenceResult) => (
+        <Tooltip title={record.email_sender}>
+          <Text ellipsis style={{ fontSize: 13 }}>{val || '—'}</Text>
+          <br />
+          <Text type="secondary" style={{ fontSize: 11 }}>{record.email_sender_name || record.email_sender || ''}</Text>
+        </Tooltip>
+      ),
+    },
+    {
+      title: 'Signal', dataIndex: 'business_signal', key: 'signal', width: 150,
       render: (val: string) => val ? <Tag color="green">{val.replace(/_/g, ' ')}</Tag> : '-',
     },
     { title: 'Summary', dataIndex: 'summary', key: 'summary', ellipsis: true },
     {
-      title: 'Score', dataIndex: 'business_signal_score', key: 'score', width: 80,
+      title: 'Score', dataIndex: 'business_signal_score', key: 'score', width: 70,
       sorter: (a: any, b: any) => (b.business_signal_score || 0) - (a.business_signal_score || 0),
-      defaultSortOrder: 'ascend' as const,
     },
   ];
 
@@ -209,6 +253,7 @@ const OpportunitiesPage: React.FC = () => {
           pagination={{ pageSize: 20 }}
           scroll={{ x: 800 }}
           loading={loading}
+          onRow={(r) => rowClickProps(r.email_id)}
         />
       ),
     },
@@ -222,8 +267,9 @@ const OpportunitiesPage: React.FC = () => {
           rowKey={(r) => r.email_id || `${Math.random()}`}
           size="small"
           pagination={{ pageSize: 20 }}
-          scroll={{ x: 800 }}
+          scroll={{ x: 900 }}
           loading={loading}
+          onRow={(r) => rowClickProps(r.email_id)}
         />
       ),
     },
@@ -273,6 +319,30 @@ const OpportunitiesPage: React.FC = () => {
           <Tabs activeKey={activeTab} onChange={setActiveTab} items={tabItems} />
         </Card>
       )}
+
+      {/* Email preview modal */}
+      <Modal
+        open={previewLoading || previewEmail !== null}
+        onCancel={closePreview}
+        footer={null}
+        width={860}
+        styles={{ body: { padding: 0, maxHeight: '80vh', overflowY: 'auto' } }}
+        destroyOnClose
+      >
+        {previewLoading ? (
+          <div style={{ padding: 48, textAlign: 'center' }}>
+            <Spin tip="Loading email…" />
+          </div>
+        ) : (
+          <EmailDetailPanel
+            email={previewEmail}
+            loading={false}
+            onClose={closePreview}
+            expanded={false}
+            onToggleExpand={() => {}}
+          />
+        )}
+      </Modal>
     </div>
   );
 };
