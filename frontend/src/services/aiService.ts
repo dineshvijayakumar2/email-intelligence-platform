@@ -106,6 +106,26 @@ export const intelligenceApi = {
     }
   },
 
+  /** POST /ai/reanalyze/{mailbox_id} — Re-analyze emails with an older prompt version */
+  async reanalyze(
+    mailboxId: string,
+    targetPromptVersion: string,
+    maxEmails = 500,
+    includeFailed = false,
+  ): Promise<{ status: string; message: string; emails_queued: number; old_prompt_version: string; new_prompt_version: string } | null> {
+    try {
+      invalidateCache('intel');
+      return await api.post(
+        `${API_PREFIX}/reanalyze/${mailboxId}`,
+        { target_prompt_version: targetPromptVersion, max_emails: maxEmails, include_failed: includeFailed },
+        { timeout: 30000 },
+      );
+    } catch (error: any) {
+      console.error('[AI] Failed to trigger re-analysis:', error?.message);
+      throw error;
+    }
+  },
+
   /** GET /ai/intelligence/{mailbox_id} — List results (paginated, filterable) */
   async list(mailboxId: string, filters: IntelligenceFilterParams = {}): Promise<IntelligenceListResponse> {
     const qs = buildQuery(filters);

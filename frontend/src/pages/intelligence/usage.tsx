@@ -9,15 +9,16 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Card, Row, Col, Statistic, Switch, InputNumber, Button, Table, Select,
   Tag, Space, Progress, Alert, Divider, Tooltip, Badge, Typography,
-  Spin, message, Form, Input,
+  Spin, message, Form, Input, Checkbox,
 } from 'antd';
 import {
   DollarOutlined, ThunderboltOutlined, WarningOutlined,
   ReloadOutlined, PauseCircleOutlined, PlayCircleOutlined,
   ClockCircleOutlined, CheckCircleOutlined, CloseCircleOutlined,
-  ExclamationCircleOutlined,
+  ExclamationCircleOutlined, SyncOutlined,
 } from '@ant-design/icons';
-import { usageApi, controlsApi, invalidateCache } from '../../services/aiService';
+import { usageApi, controlsApi, invalidateCache, intelligenceApi } from '../../services/aiService';
+import { MailboxSelector } from '../../components/MailboxSelector';
 import { modelsApi } from '../../services/strategicDigestService';
 import api from '../../services/apiClient';
 import { formatTime } from '../../utils/dateUtils';
@@ -40,6 +41,13 @@ const UsagePage: React.FC = () => {
   const [apiKeysSaving, setApiKeysSaving] = useState(false);
   const [recentLogs, setRecentLogs] = useState<UsageLogEntry[]>([]);
   const [autoRefresh, setAutoRefresh] = useState(true);
+
+  // Re-analyze state
+  const [reanalyzeMailbox, setReanalyzeMailbox] = useState<string[]>([]);
+  const [reanalyzeVersion, setReanalyzeVersion] = useState('v1.2');
+  const [reanalyzeMax, setReanalyzeMax] = useState(500);
+  const [reanalyzeIncludeFailed, setReanalyzeIncludeFailed] = useState(false);
+  const [reanalyzeLoading, setReanalyzeLoading] = useState(false);
 
   // Load all data
   const loadData = useCallback(async () => {
@@ -124,6 +132,25 @@ const UsagePage: React.FC = () => {
       message.error(err?.message || 'Failed to update keys');
     } finally {
       setApiKeysSaving(false);
+    }
+  };
+
+  const handleReanalyze = async () => {
+    const mailboxId = reanalyzeMailbox[0];
+    if (!mailboxId) { message.warning('Select a mailbox'); return; }
+    if (!reanalyzeVersion.trim()) { message.warning('Enter a prompt version to target'); return; }
+    setReanalyzeLoading(true);
+    try {
+      const result = await intelligenceApi.reanalyze(mailboxId, reanalyzeVersion, reanalyzeMax, reanalyzeIncludeFailed);
+      if (result?.status === 'no_candidates') {
+        message.info(result.message);
+      } else if (result) {
+        message.success(`${result.message} — ${result.emails_queued} emails queued`);
+      }
+    } catch (err: any) {
+      message.error(err?.message || 'Re-analysis failed');
+    } finally {
+      setReanalyzeLoading(false);
     }
   };
 
@@ -643,7 +670,70 @@ const UsagePage: React.FC = () => {
         </Col>
       </Row>
 
-      {/* Row 3: Recent API Calls */}
+      {/* Row 3: Re-analyze */}
+      <Card
+        title={<Space><SyncOutlined />Re-analyze Emails</Space>}
+        className="glass-card"
+        style={{ marginBottom: 24 }}
+      >
+        <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
+          Reset emails analyzed with an older prompt version so they are re-processed with the current prompt.
+          Runs in the background — check Recent API Calls below for progress.
+        </Text>
+        <Row gutter={16} align="bottom">
+          <Col xs={24} sm={8} md={6}>
+            <Text type="secondary" style={{ fontSize: 12 }}>Mailbox</Text>
+            <div style={{ marginTop: 4 }}>
+              <MailboxSelector value={reanalyzeMailbox} onChange={setReanalyzeMailbox} mode="single" />
+            </div>
+          </Col>
+          <Col xs={24} sm={6} md={4}>
+            <Text type="secondary" style={{ fontSize: 12 }}>Old prompt version</Text>
+            <Select
+              value={reanalyzeVersion}
+              onChange={setReanalyzeVersion}
+              style={{ width: '100%', marginTop: 4 }}
+              options={[
+                { value: 'v1.2', label: 'v1.2' },
+                { value: 'v1.1', label: 'v1.1' },
+                { value: 'v1.0', label: 'v1.0' },
+              ]}
+            />
+          </Col>
+          <Col xs={24} sm={6} md={4}>
+            <Text type="secondary" style={{ fontSize: 12 }}>Max emails</Text>
+            <InputNumber
+              value={reanalyzeMax}
+              min={10}
+              max={5000}
+              step={100}
+              style={{ width: '100%', marginTop: 4 }}
+              onChange={(v) => setReanalyzeMax(v || 500)}
+            />
+          </Col>
+          <Col xs={24} sm={4} md={3} style={{ paddingTop: 20 }}>
+            <Checkbox
+              checked={reanalyzeIncludeFailed}
+              onChange={(e) => setReanalyzeIncludeFailed(e.target.checked)}
+            >
+              Include failed
+            </Checkbox>
+          </Col>
+          <Col xs={24} sm={24} md={4} style={{ paddingTop: 20 }}>
+            <Button
+              type="primary"
+              icon={<SyncOutlined />}
+              loading={reanalyzeLoading}
+              onClick={handleReanalyze}
+              disabled={!reanalyzeMailbox[0]}
+            >
+              Start Re-analysis
+            </Button>
+          </Col>
+        </Row>
+      </Card>
+
+      {/* Row 4: Recent API Calls */}
       <Card title="Recent API Calls" className="glass-card">
         <Table
           dataSource={recentLogs}
