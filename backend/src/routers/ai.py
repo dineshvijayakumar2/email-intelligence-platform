@@ -1199,13 +1199,13 @@ def _load_persisted_api_keys():
         ).execute()
         db = {row['key']: row['value'] for row in (resp.data or [])}
 
-        if db.get('api_key_anthropic') and not os.environ.get('ANTHROPIC_API_KEY'):
+        if db.get('api_key_anthropic'):
             os.environ['ANTHROPIC_API_KEY'] = base64.b64decode(db['api_key_anthropic']).decode()
-            logger.info("ANTHROPIC_API_KEY loaded from DB")
+            logger.info("ANTHROPIC_API_KEY loaded from DB (overrides env)")
 
-        if db.get('api_key_google') and not os.environ.get('GOOGLE_GENAI_API_KEY'):
+        if db.get('api_key_google'):
             os.environ['GOOGLE_GENAI_API_KEY'] = base64.b64decode(db['api_key_google']).decode()
-            logger.info("GOOGLE_GENAI_API_KEY loaded from DB")
+            logger.info("GOOGLE_GENAI_API_KEY loaded from DB (overrides env)")
     except Exception as e:
         logger.warning(f"Could not load API keys from DB: {e}")
 

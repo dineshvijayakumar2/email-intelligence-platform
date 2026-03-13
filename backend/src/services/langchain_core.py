@@ -49,11 +49,11 @@ MODEL_CONFIGS = {
     },
     "gemini": {
         "provider": "google",
-        "model": "gemini-2.0-flash",
-        "cost_input_per_mtok": 0.10,
-        "cost_output_per_mtok": 0.40,
+        "model": "gemini-2.5-flash",
+        "cost_input_per_mtok": 0.15,
+        "cost_output_per_mtok": 0.60,
         "max_tokens": 8192,
-        "label": "Gemini 2.0 Flash",
+        "label": "Gemini 2.5 Flash",
     },
 }
 
