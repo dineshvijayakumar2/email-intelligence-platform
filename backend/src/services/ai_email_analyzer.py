@@ -293,7 +293,6 @@ def clean_llm_output(text: str) -> str:
 
     # Strip markdown code fences (```json ... ``` or ``` ... ```)
     if "```" in text:
-        # Extract content between first and last fence
         parts = text.split("```")
         if len(parts) >= 3:
             text = parts[1]
@@ -303,11 +302,25 @@ def clean_llm_output(text: str) -> str:
             text = text[4:]
         text = text.strip()
 
-    # Remove JS-style line comments (// ...) — Gemini occasionally adds these
-    text = re.sub(r'//[^\n"]*\n', '\n', text)
+    # Remove JS-style block comments (/* ... */)
+    text = re.sub(r'/\*.*?\*/', '', text, flags=re.DOTALL)
 
-    # Remove trailing commas before } or ] (Gemini quirk: last item in object/array)
+    # Remove JS-style line comments (// ...) — must not touch URLs (http://)
+    # Only strip if // is preceded by whitespace, comma, [ or { (not part of a URL)
+    text = re.sub(r'(?<=[,\[{\s])//[^\n]*', '', text)
+    # Also strip comment-only lines (line starts with optional whitespace then //)
+    text = re.sub(r'^\s*//[^\n]*\n?', '', text, flags=re.MULTILINE)
+
+    # Remove trailing commas before } or ] (last item in object/array)
+    # Run twice to handle nested cases
     text = re.sub(r',\s*([}\]])', r'\1', text)
+    text = re.sub(r',\s*([}\]])', r'\1', text)
+
+    # Replace Python/JS literals that aren't valid JSON
+    text = re.sub(r'\bNone\b', 'null', text)
+    text = re.sub(r'\bTrue\b', 'true', text)
+    text = re.sub(r'\bFalse\b', 'false', text)
+    text = re.sub(r'\bundefined\b', 'null', text)
 
     return text.strip()
 
@@ -965,7 +978,10 @@ class AIEmailAnalyzer:
             cleaned = clean_llm_output(ai_response.content)
             parsed = json.loads(cleaned)
         except json.JSONDecodeError as e:
-            logger.warning(f"Failed to parse AI response as JSON: {e}")
+            # Log snippet around error position to diagnose Gemini output quirks
+            pos = e.pos if hasattr(e, 'pos') else 0
+            snippet = cleaned[max(0, pos - 60):pos + 60].replace('\n', '↵')
+            logger.warning(f"Failed to parse AI response as JSON: {e} | near: ...{snippet}...")
             # Try to repair truncated JSON (common when max_tokens cuts off response)
             parsed = repair_truncated_json(cleaned)
             if parsed is None:
