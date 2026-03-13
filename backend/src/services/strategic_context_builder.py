@@ -10,8 +10,10 @@ without needing to re-query dozens of tables at generation time.
 """
 
 import time
+import threading
 import logging
-from typing import Optional, List, Dict, Any
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Optional, List, Dict, Any, Callable
 from datetime import datetime, timezone, timedelta
 
 logger = logging.getLogger(__name__)
@@ -165,28 +167,44 @@ class StrategicContextBuilder:
             company_ids.extend([row["id"] for row in batch])
             offset += len(batch)
 
-        logger.info(f"Building strategic context for {len(company_ids)} companies (client={self.client_id})")
-
         total = len(company_ids)
+        logger.info(f"Building strategic context for {total} companies (client={self.client_id})")
+
         succeeded = 0
         failed = 0
-        for i, cid in enumerate(company_ids):
-            result = self.build_company_context(cid, lookback_months=lookback_months)
-            if result is not None:
-                succeeded += 1
-            else:
-                failed += 1
+        completed = 0
+        lock = threading.Lock()
 
-            current = i + 1
-            if current % 25 == 0 or current == total:
-                logger.info(f"  Progress: {current}/{total} companies processed")
-                if on_progress:
-                    on_progress(
-                        "building_context",
-                        current,
-                        total,
-                        f"Building relationship context ({current}/{total} companies)…",
-                    )
+        def _process(cid: str):
+            return self.build_company_context(cid, lookback_months=lookback_months)
+
+        max_workers = min(15, max(1, total))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(_process, cid): cid for cid in company_ids}
+            for future in as_completed(futures):
+                try:
+                    result = future.result()
+                except Exception as exc:
+                    logger.error(f"Company context worker raised: {exc}")
+                    result = None
+
+                with lock:
+                    completed += 1
+                    if result is not None:
+                        succeeded += 1
+                    else:
+                        failed += 1
+                    current = completed
+
+                if current % 25 == 0 or current == total:
+                    logger.info(f"  Progress: {current}/{total} companies processed")
+                    if on_progress:
+                        on_progress(
+                            "building_context",
+                            current,
+                            total,
+                            f"Building relationship context ({current}/{total} companies)…",
+                        )
 
         elapsed = round(time.time() - start_time, 2)
         logger.info(
@@ -452,16 +470,14 @@ class StrategicContextBuilder:
                 "awaiting_response", "awaiting_our_response",
             ]
 
-            all_threads = []
-            for status in active_statuses:
-                resp = self._execute_with_retry(
-                    self.client.table("thread_status")
-                    .select("thread_id,subject,status,last_message_at")
-                    .eq("customer_company_id", company_id)
-                    .eq("status", status)
-                    .range(0, 99)
-                )
-                all_threads.extend(resp.data or [])
+            resp = self._execute_with_retry(
+                self.client.table("thread_status")
+                .select("thread_id,subject,status,last_message_at")
+                .eq("customer_company_id", company_id)
+                .in_("status", active_statuses)
+                .range(0, 99)
+            )
+            all_threads = resp.data or []
 
             company_threads = []
             for t in all_threads:
