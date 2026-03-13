@@ -395,9 +395,9 @@ class StrategicContextBuilder:
                 chunk = contact_ids[i:i + 500]
                 resp = self._execute_with_retry(
                     self.client.table("email_response_metrics")
-                    .select("response_time_seconds,business_hours_response_time_seconds,responded_at")
+                    .select("response_time_seconds,business_hours_response_time_seconds,inbound_at")
                     .in_("customer_contact_id", chunk)
-                    .gte("responded_at", cutoff_iso)
+                    .gte("inbound_at", cutoff_iso)
                     .range(0, 999)
                 )
                 all_metrics.extend(resp.data or [])
@@ -761,8 +761,8 @@ class StrategicContextBuilder:
                     self.client.table("email_response_metrics")
                     .select("customer_contact_id,response_time_seconds")
                     .in_("customer_contact_id", chunk)
-                    .gte("responded_at", period_start)
-                    .lte("responded_at", period_end)
+                    .gte("inbound_at", period_start)
+                    .lte("inbound_at", period_end)
                     .range(0, 999)
                 )
                 all_metrics.extend(resp.data or [])
