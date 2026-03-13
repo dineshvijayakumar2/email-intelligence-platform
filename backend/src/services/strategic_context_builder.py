@@ -552,7 +552,7 @@ class StrategicContextBuilder:
         try:
             resp = self._execute_with_retry(
                 self.client.table("customer_contacts")
-                .select("id,first_name,last_name,email_address,role_classification,engagement_score,email_count")
+                .select("id,first_name,last_name,email_address,functional_role,engagement_score,total_emails_sent,total_emails_received")
                 .eq("customer_company_id", company_id)
                 .order("engagement_score", desc=True)
                 .range(0, 9)
@@ -563,9 +563,9 @@ class StrategicContextBuilder:
                     "id": c.get("id"),
                     "name": f"{c.get('first_name', '')} {c.get('last_name', '')}".strip() or None,
                     "email": c.get("email_address"),
-                    "role": c.get("role_classification"),
+                    "role": c.get("functional_role"),
                     "engagement_score": c.get("engagement_score"),
-                    "email_count": c.get("email_count"),
+                    "email_count": (c.get("total_emails_sent") or 0) + (c.get("total_emails_received") or 0),
                 }
                 for c in contacts
             ]
