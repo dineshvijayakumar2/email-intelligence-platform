@@ -16,6 +16,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional, List, Dict, Any, Callable
 from datetime import datetime, timezone, timedelta
 
+from .ai_action_bucket_engine import compute_lifecycle_tier
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -98,14 +100,36 @@ class StrategicContextBuilder:
             # --- QB financial data from customer_companies + qb_quotes ---
             qb_summary = self._get_qb_financial_summary(company_id)
 
-            # --- Read company row for QB metadata ---
+            # --- Read company row for QB metadata + engagement ---
             company_resp = self._execute_with_retry(
                 self.client.table("customer_companies")
-                .select("company_name,qb_customer_type,qb_tier,qb_account_manager")
+                .select("company_name,qb_customer_type,qb_tier,qb_account_manager,"
+                        "qb_days_since_last_invoice,qb_total_revenue,engagement_score,"
+                        "frequency_trend")
                 .eq("id", company_id)
                 .range(0, 0)
             )
             company_data = (company_resp.data or [{}])[0] if company_resp.data else {}
+
+            # --- Compute lifecycle tier ---
+            # Derive first-invoice recency from qb_summary (open_quotes not a proxy, use days_since)
+            days_since = company_data.get("qb_days_since_last_invoice")
+            # Rough proxy for "new customer": days_since is small but revenue is also small
+            qb_revenue = float(company_data.get("qb_total_revenue") or 0)
+            days_first = days_since if (qb_revenue < 5000 and days_since is not None and days_since < 90) else None
+            lifecycle_tier = compute_lifecycle_tier(
+                qb_customer_type=company_data.get("qb_customer_type") or "",
+                qb_tier=company_data.get("qb_tier") or "",
+                qb_total_revenue=company_data.get("qb_total_revenue"),
+                qb_days_since_last_invoice=days_since,
+                qb_days_since_first_invoice=days_first,
+                engagement_score=int(company_data.get("engagement_score") or 0),
+                engagement_trend=company_data.get("frequency_trend") or "stable",
+            )
+
+            # --- Resolve AM from mailbox → user ---
+            # primary_mailbox_id lives on relationship_context_cache, not customer_companies
+            am_info = self._get_primary_am(company_id)
 
             # Compute trend label
             trend = self._compute_trend(engagement_trajectory)
@@ -116,7 +140,11 @@ class StrategicContextBuilder:
                 "company_id": company_id,
                 "customer_type": company_data.get("qb_customer_type"),
                 "customer_tier": company_data.get("qb_tier"),
-                "account_manager": company_data.get("qb_account_manager"),
+                "account_manager": am_info.get("am_name") or company_data.get("qb_account_manager"),
+                "lifecycle_tier": lifecycle_tier,
+                "am_user_id": am_info.get("user_id"),
+                "am_name": am_info.get("am_name"),
+                "primary_mailbox_id": am_info.get("mailbox_id"),
                 "engagement_trajectory": trend,
                 "engagement_scores_history": engagement_trajectory,
                 "communication_health": communication_health,
@@ -345,8 +373,21 @@ class StrategicContextBuilder:
                 return []
 
             # Score each context for ranking
+            LIFECYCLE_URGENCY = {
+                "at_risk": 150,
+                "dormant": 100,
+                "champion": 80,
+                "active_customer": 20,
+                "new_customer": 40,
+                "prospect": 10,
+            }
+
             def rank_score(ctx: dict) -> float:
                 score = 0.0
+
+                # Lifecycle urgency boost (at-risk/dormant always surface)
+                tier = ctx.get("lifecycle_tier") or ""
+                score += LIFECYCLE_URGENCY.get(tier, 0)
 
                 # Latest engagement score (from history)
                 history = ctx.get("engagement_scores_history") or []
@@ -359,10 +400,9 @@ class StrategicContextBuilder:
                 qb = ctx.get("qb_financial_summary") or {}
                 revenue = qb.get("total_revenue") or 0
                 if revenue > 0:
-                    # Normalize large revenue values to a 0-100 scale
                     score += min(revenue / 10000, 100)
 
-                # Boost declining relationships (they need attention)
+                # Boost declining relationships
                 if ctx.get("engagement_trajectory") == "declining":
                     score += 50
 
@@ -671,6 +711,65 @@ class StrategicContextBuilder:
             return "declining"
         else:
             return "stable"
+
+    # ------------------------------------------------------------------
+    # AM identity resolution: mailbox → user
+    # ------------------------------------------------------------------
+
+    def _get_primary_am(self, company_id: str, existing_mailbox_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Resolve the AM for a company via the mailbox that has the most email activity.
+        Falls back to existing_mailbox_id if provided.
+        Returns {mailbox_id, user_id, am_name} (all may be None if not found).
+        """
+        try:
+            mailbox_id = existing_mailbox_id
+
+            if not mailbox_id:
+                # Find the mailbox with the most emails to/from this company
+                resp = self._execute_with_retry(
+                    self.client.table("emails")
+                    .select("mailbox_id")
+                    .eq("customer_company_id", company_id)
+                    .range(0, 499)
+                )
+                emails = resp.data or []
+                if not emails:
+                    return {}
+                # Count by mailbox
+                counts: Dict[str, int] = {}
+                for e in emails:
+                    mid = e.get("mailbox_id")
+                    if mid:
+                        counts[mid] = counts.get(mid, 0) + 1
+                if not counts:
+                    return {}
+                mailbox_id = max(counts, key=lambda k: counts[k])
+
+            # Resolve mailbox → user
+            mb_resp = self._execute_with_retry(
+                self.client.table("mailboxes")
+                .select("id,user_id,user_profiles(name)")
+                .eq("id", mailbox_id)
+                .range(0, 0)
+            )
+            mb_rows = mb_resp.data or []
+            if not mb_rows:
+                return {"mailbox_id": mailbox_id}
+
+            mb = mb_rows[0]
+            user_profile = mb.get("user_profiles") or {}
+            am_name = user_profile.get("name") if isinstance(user_profile, dict) else None
+
+            return {
+                "mailbox_id": mailbox_id,
+                "user_id": mb.get("user_id"),
+                "am_name": am_name,
+            }
+
+        except Exception as e:
+            logger.warning(f"Failed to resolve AM for company {company_id}: {e}")
+            return {}
 
     # ------------------------------------------------------------------
     # AM performance helpers

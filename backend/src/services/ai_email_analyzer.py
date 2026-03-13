@@ -817,7 +817,9 @@ class AIEmailAnalyzer:
             try:
                 resp = self._execute_with_retry(
                     self.client.table("customer_companies")
-                    .select("id,company_name,qb_customer_type,qb_tier,qb_total_revenue,qb_invoiced_ty,qb_invoiced_ly,qb_days_since_last_invoice,qb_account_manager")
+                    .select("id,company_name,qb_customer_type,qb_tier,qb_total_revenue,"
+                            "qb_invoiced_ty,qb_invoiced_ly,qb_days_since_last_invoice,"
+                            "qb_account_manager,engagement_score,frequency_trend")
                     .in_("id", chunk)
                 )
                 for c in (resp.data or []):
@@ -842,6 +844,24 @@ class AIEmailAnalyzer:
             email["_qb_days_since_last_invoice"] = company.get("qb_days_since_last_invoice")
             email["_qb_quotes_count"] = contact.get("qb_quotes_count")
             email["_qb_account_manager"] = company.get("qb_account_manager") or ""
+
+            # Compute lifecycle tier (deterministic, no AI cost)
+            try:
+                from .ai_action_bucket_engine import compute_lifecycle_tier
+                days_since = company.get("qb_days_since_last_invoice")
+                qb_rev = float(company.get("qb_total_revenue") or 0)
+                days_first = days_since if (qb_rev < 5000 and days_since is not None and days_since < 90) else None
+                email["_lifecycle_tier"] = compute_lifecycle_tier(
+                    qb_customer_type=company.get("qb_customer_type") or "",
+                    qb_tier=company.get("qb_tier") or "",
+                    qb_total_revenue=company.get("qb_total_revenue"),
+                    qb_days_since_last_invoice=days_since,
+                    qb_days_since_first_invoice=days_first,
+                    engagement_score=int(company.get("engagement_score") or 0),
+                    engagement_trend=company.get("frequency_trend") or "stable",
+                )
+            except Exception:
+                email["_lifecycle_tier"] = None
 
     # ------------------------------------------------------------------
     # Enrich emails with rule-based tags (from EmailTagger)
@@ -935,8 +955,11 @@ class AIEmailAnalyzer:
             qb_days_since = email.get("_qb_days_since_last_invoice")
             qb_quotes = email.get("_qb_quotes_count")
 
-            if qb_type or qb_revenue is not None:
+            lifecycle_tier = email.get("_lifecycle_tier")
+            if qb_type or qb_revenue is not None or lifecycle_tier:
                 biz = {}
+                if lifecycle_tier:
+                    biz["lifecycle_tier"] = lifecycle_tier
                 if qb_type:
                     biz["customer_type"] = qb_type
                 if qb_tier:
@@ -1187,7 +1210,7 @@ class AIEmailAnalyzer:
         # Mark as processing
         self._mark_processing(email_ids, mailbox_id, client_id)
 
-        # Enrich with Sprint 2 data (company name, contact role) for better AI context
+        # Enrich with Sprint 2 + lifecycle tier data for better AI context
         self._enrich_with_sprint2_data(emails)
 
         # Enrich with rule-based tags (from EmailTagger) for pre-classification hints
@@ -1246,11 +1269,16 @@ class AIEmailAnalyzer:
                     continue
             final_failures.append(fail)
 
+        # Build lifecycle tier lookup from enriched emails
+        lifecycle_lookup = {e["id"]: e.get("_lifecycle_tier") for e in emails}
+
         # Save valid results
         analyzed_count = 0
         all_valid = valid_results + retry_successes
         for result in all_valid:
             row_data = post_process_classification(result)
+            # Inject lifecycle tier computed during enrichment
+            row_data["customer_lifecycle_tier"] = lifecycle_lookup.get(result.email_id)
             self._save_completed(result.email_id, mailbox_id, client_id, row_data, ai_response)
             analyzed_count += 1
 

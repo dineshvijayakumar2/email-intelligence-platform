@@ -17,17 +17,24 @@ import {
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { strategicDigestApi } from '../../services/strategicDigestService';
-import type { StrategicDigest, PeriodType } from '../../types/strategic-digest';
+import type { StrategicDigest, PeriodType, LifecycleTier } from '../../types/strategic-digest';
+import { LIFECYCLE_CONFIG, SIGNAL_CONFIG } from '../../types/strategic-digest';
 import { ClientSelector } from '../../components/analytics/ClientSelector';
 import { formatRelativeTime } from '../../utils/dateUtils';
 
 const { Title, Text, Paragraph } = Typography;
 
-const BUCKET_COLORS: Record<string, string> = {
-  buying_signal: 'green', expansion_signal: 'blue', churn_risk: 'red',
-  competitor_threat: 'volcano', missed_opportunity: 'orange',
-  stakeholder_entry: 'purple', silent_champion: 'gold', unresolved_block: 'yellow',
-};
+function lifecycleBadge(tier?: LifecycleTier | string) {
+  if (!tier) return null;
+  const cfg = LIFECYCLE_CONFIG[tier as LifecycleTier];
+  return <Tag color={cfg?.color || 'default'}>{cfg?.label || tier.replace(/_/g, ' ')}</Tag>;
+}
+
+function signalTag(type?: string) {
+  if (!type) return null;
+  const cfg = SIGNAL_CONFIG[type as keyof typeof SIGNAL_CONFIG];
+  return <Tag color={cfg?.color || 'default'}>{cfg?.label || type.replace(/_/g, ' ')}</Tag>;
+}
 
 const PERIOD_OPTIONS = [
   { value: 'weekly', label: 'Weekly' },
@@ -55,10 +62,6 @@ function fmtCurrency(val?: number) {
   return `$${val.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
-function fmtPct(val?: number) {
-  if (val == null) return '-';
-  return `${val >= 0 ? '+' : ''}${val.toFixed(1)}%`;
-}
 
 export default function StrategicDigestPage() {
   const navigate = useNavigate();
@@ -173,61 +176,83 @@ export default function StrategicDigestPage() {
   // Clean up poll on unmount
   useEffect(() => () => stopPolling(), []);
 
-  // AM Performance columns
+  // AM Efficiency columns (v2 — mailbox-based)
   const amColumns = [
-    { title: 'Account Manager', dataIndex: 'account_manager', key: 'account_manager' },
+    { title: 'Account Manager', dataIndex: 'am_name', key: 'am_name',
+      render: (v: string) => <Text strong>{v || '-'}</Text> },
     {
-      title: 'Revenue', dataIndex: 'total_revenue', key: 'total_revenue',
-      render: (v: number) => fmtCurrency(v),
-    },
-    {
-      title: 'Change', dataIndex: 'revenue_change_pct', key: 'revenue_change_pct',
+      title: 'BH Response', dataIndex: 'avg_bh_response_hours', key: 'avg_bh_response_hours',
       render: (v: number) => {
         if (v == null) return '-';
-        const color = v >= 0 ? '#52c41a' : '#f5222d';
-        return <Text style={{ color }}>{fmtPct(v)}</Text>;
+        const color = v <= 4 ? '#52c41a' : v <= 8 ? '#fa8c16' : '#f5222d';
+        return <Text style={{ color }}>{v.toFixed(1)}h</Text>;
       },
     },
     {
-      title: 'Conversion Rate', dataIndex: 'quote_conversion_rate', key: 'quote_conversion_rate',
-      render: (v: number) => v != null ? `${(v * 100).toFixed(1)}%` : '-',
+      title: 'Response Rate', dataIndex: 'response_rate_pct', key: 'response_rate_pct',
+      render: (v: number) => {
+        if (v == null) return '-';
+        const color = v >= 80 ? '#52c41a' : v >= 60 ? '#fa8c16' : '#f5222d';
+        return <Text style={{ color }}>{v.toFixed(0)}%</Text>;
+      },
     },
     {
-      title: 'Avg Response (hrs)', dataIndex: 'avg_response_time_hours', key: 'avg_response_time_hours',
-      render: (v: number) => v != null ? v.toFixed(1) : '-',
+      title: 'After Hours', dataIndex: 'after_hours_pct', key: 'after_hours_pct',
+      render: (v: number) => {
+        if (v == null) return '-';
+        const color = v > 30 ? '#fa8c16' : '#52c41a';
+        return <Text style={{ color }}>{v.toFixed(0)}%</Text>;
+      },
     },
     {
-      title: 'Retention', dataIndex: 'retention_rate', key: 'retention_rate',
-      render: (v: number) => v != null ? `${(v * 100).toFixed(1)}%` : '-',
+      title: 'Revenue', dataIndex: 'revenue_attributed', key: 'revenue_attributed',
+      render: (v: number) => fmtCurrency(v),
     },
-  ];
-
-  // Pipeline quote columns
-  const quoteColumns = [
-    { title: 'Quote #', dataIndex: 'quote_no', key: 'quote_no' },
-    { title: 'Company', dataIndex: 'company', key: 'company' },
-    { title: 'Amount', dataIndex: 'amount', key: 'amount', render: (v: number) => fmtCurrency(v) },
-    { title: 'Date', dataIndex: 'date_created', key: 'date_created' },
-    { title: 'Status', dataIndex: 'status', key: 'status', render: (v: string) => <Tag>{v || '-'}</Tag> },
+    {
+      title: 'Quote Conv.', dataIndex: 'quote_conversion_rate', key: 'quote_conversion_rate',
+      render: (v: number) => v != null ? `${v.toFixed(0)}%` : '-',
+    },
+    {
+      title: 'At Risk', dataIndex: 'accounts_at_risk', key: 'accounts_at_risk',
+      render: (v: number) => v > 0 ? <Tag color="red">{v}</Tag> : <Tag color="green">0</Tag>,
+    },
+    {
+      title: 'Note', dataIndex: 'performance_note', key: 'performance_note',
+      render: (v: string) => <Text type="secondary" style={{ fontSize: 12 }}>{v || '-'}</Text>,
+    },
   ];
 
   // Action items columns
   const actionColumns = [
     {
-      title: 'Priority', dataIndex: 'priority', key: 'priority', width: 80,
-      render: (v: number) => (
-        <Tag color={v <= 2 ? 'red' : v <= 3 ? 'orange' : 'blue'}>P{v}</Tag>
-      ),
+      title: 'Priority', dataIndex: 'priority', key: 'priority', width: 85,
+      render: (v: string) => {
+        const color = v === 'urgent' ? 'red' : v === 'high' ? 'orange' : 'blue';
+        return <Tag color={color}>{typeof v === 'string' ? v.toUpperCase() : `P${v}`}</Tag>;
+      },
+    },
+    {
+      title: 'Signal', dataIndex: 'signal_type', key: 'signal_type', width: 160,
+      render: (v: string) => signalTag(v),
     },
     { title: 'Action', dataIndex: 'action', key: 'action' },
-    { title: 'Company', dataIndex: 'company', key: 'company', render: (v: string) => v || '-' },
+    { title: 'Owner', dataIndex: 'owner', key: 'owner', width: 120, render: (v: string) => v || '-' },
+    { title: 'Company', dataIndex: 'company', key: 'company', width: 140, render: (v: string) => v || '-' },
     {
-      title: 'Bucket', dataIndex: 'bucket', key: 'bucket',
-      render: (v: string) => v ? <Tag color={BUCKET_COLORS[v] || 'default'}>{v.replace(/_/g, ' ')}</Tag> : '-',
+      title: 'Due', dataIndex: 'deadline_suggestion', key: 'deadline_suggestion', width: 110,
+      render: (v: string) => v ? <Tag>{v}</Tag> : '-',
+    },
+    {
+      title: 'Context', dataIndex: 'context', key: 'context',
+      render: (v: string) => <Text type="secondary" style={{ fontSize: 12 }}>{v || '-'}</Text>,
     },
   ];
 
-  const amData = Array.isArray(digest?.am_performance) ? digest.am_performance : [];
+  // AM performance: v2 stores as {summary: [...], ...}; v1 was an array
+  const amRaw = digest?.am_performance;
+  const amData: any[] = Array.isArray(amRaw)
+    ? amRaw
+    : (amRaw as any)?.summary || [];
   const pipeline = digest?.pipeline_intelligence;
   const risks = digest?.risk_alerts || [];
   const opportunities = digest?.opportunities || [];
@@ -386,32 +411,36 @@ export default function StrategicDigestPage() {
                       size="small"
                       hoverable
                       onClick={() => r.company_id ? navigate(`/analytics/company/${r.company_id}`) : undefined}
-                      style={{ height: '100%' }}
+                      style={{
+                        height: '100%',
+                        borderLeft: r.lifecycle_tier === 'at_risk' ? '3px solid #fa8c16' :
+                                    r.lifecycle_tier === 'dormant' ? '3px solid #999' :
+                                    r.lifecycle_tier === 'champion' ? '3px solid #fadb14' : undefined,
+                      }}
                     >
                       <Text strong style={{ display: 'block', marginBottom: 4 }}>{r.company_name}</Text>
-                      <Space wrap size={4} style={{ marginBottom: 8 }}>
-                        {r.tier && <Tag color="blue">{r.tier}</Tag>}
-                        {r.engagement_score != null && (
-                          <Tag color={r.engagement_score >= 70 ? 'green' : r.engagement_score >= 40 ? 'orange' : 'red'}>
-                            Score: {r.engagement_score}
-                          </Tag>
-                        )}
+                      <Space wrap size={4} style={{ marginBottom: 6 }}>
+                        {lifecycleBadge(r.lifecycle_tier)}
+                        {r.tier && <Tag color="blue" style={{ fontSize: 11 }}>{r.tier}</Tag>}
                       </Space>
-                      <div>
-                        <Text type="secondary" style={{ fontSize: 12 }}>
-                          Revenue: {fmtCurrency(r.revenue)} {trendIcon(r.revenue_trend)}
-                        </Text>
-                      </div>
-                      {r.engagement_trend && (
-                        <div>
-                          <Text type="secondary" style={{ fontSize: 12 }}>
-                            Engagement: {trendIcon(r.engagement_trend)}
-                          </Text>
+                      {r.am_owner && (
+                        <div style={{ marginBottom: 4 }}>
+                          <Text type="secondary" style={{ fontSize: 12 }}>AM: {r.am_owner}</Text>
                         </div>
                       )}
-                      {r.key_signal && (
+                      {r.signal && (
+                        <div style={{ marginBottom: 4 }}>
+                          <Text type="secondary" style={{ fontSize: 12, fontStyle: 'italic' }}>{r.signal}</Text>
+                        </div>
+                      )}
+                      {r.recommended_action && (
                         <div style={{ marginTop: 4 }}>
-                          <Text type="secondary" style={{ fontSize: 11, fontStyle: 'italic' }}>{r.key_signal}</Text>
+                          <Text style={{ fontSize: 11, color: '#1890ff' }}>→ {r.recommended_action}</Text>
+                        </div>
+                      )}
+                      {r.revenue_impact_estimate && (
+                        <div style={{ marginTop: 4 }}>
+                          <Tag color="gold" style={{ fontSize: 11 }}>{r.revenue_impact_estimate}</Tag>
                         </div>
                       )}
                     </Card>
@@ -421,29 +450,52 @@ export default function StrategicDigestPage() {
             </Card>
           )}
 
-          {/* Section 4: Pipeline Intelligence */}
+          {/* Section 4: Pipeline Intelligence + Lifecycle Breakdown */}
           {pipeline && (
-            <Card className="glass-card" title="Pipeline Intelligence" style={{ marginBottom: 16 }}>
-              <Row gutter={24} style={{ marginBottom: 16 }}>
-                <Col>
-                  <Descriptions size="small" column={4}>
-                    <Descriptions.Item label="Total Pipeline">{fmtCurrency(pipeline.total_pipeline_value)}</Descriptions.Item>
-                    <Descriptions.Item label="Open Quotes">{pipeline.open_quotes ?? '-'}</Descriptions.Item>
-                    <Descriptions.Item label="Active Jobs">{pipeline.active_jobs ?? '-'}</Descriptions.Item>
-                    <Descriptions.Item label="Conversion Rate">
-                      {pipeline.quote_conversion_rate != null ? `${(pipeline.quote_conversion_rate * 100).toFixed(1)}%` : '-'}
-                    </Descriptions.Item>
-                  </Descriptions>
-                </Col>
-              </Row>
-              {pipeline.quotes && pipeline.quotes.length > 0 && (
-                <Table
-                  dataSource={pipeline.quotes}
-                  columns={quoteColumns}
-                  rowKey="quote_no"
-                  pagination={false}
-                  size="small"
-                />
+            <Card className="glass-card" title="Pipeline & Customer Lifecycle" style={{ marginBottom: 16 }}>
+              {pipeline.lifecycle_breakdown && Object.keys(pipeline.lifecycle_breakdown).length > 0 && (
+                <div style={{ marginBottom: 16 }}>
+                  <Text strong style={{ display: 'block', marginBottom: 8 }}>Customer Lifecycle Distribution</Text>
+                  <Space wrap>
+                    {(Object.entries(pipeline.lifecycle_breakdown) as [LifecycleTier, number][])
+                      .filter(([, count]) => count > 0)
+                      .map(([tier, count]) => (
+                        <Tag key={tier} color={LIFECYCLE_CONFIG[tier]?.color || 'default'} style={{ fontSize: 13, padding: '2px 10px' }}>
+                          {LIFECYCLE_CONFIG[tier]?.label || tier}: {count}
+                        </Tag>
+                      ))}
+                  </Space>
+                </div>
+              )}
+              <Descriptions size="small" column={3} style={{ marginBottom: 12 }}>
+                {pipeline.active_quotes_value != null && (
+                  <Descriptions.Item label="Active Quotes Value">{fmtCurrency(pipeline.active_quotes_value)}</Descriptions.Item>
+                )}
+                {pipeline.conversion_trend && (
+                  <Descriptions.Item label="Conversion Trend">
+                    {trendIcon(pipeline.conversion_trend)} {pipeline.conversion_trend}
+                  </Descriptions.Item>
+                )}
+              </Descriptions>
+              {pipeline.stalled_quotes && pipeline.stalled_quotes.length > 0 && (
+                <div style={{ marginBottom: 12 }}>
+                  <Text strong style={{ display: 'block', marginBottom: 6 }}>Stalled Quotes</Text>
+                  <Space direction="vertical" style={{ width: '100%' }}>
+                    {pipeline.stalled_quotes.map((q, i) => (
+                      <Alert key={i} type="warning" message={q} showIcon style={{ padding: '4px 12px' }} />
+                    ))}
+                  </Space>
+                </div>
+              )}
+              {pipeline.new_relationships_this_period && pipeline.new_relationships_this_period.length > 0 && (
+                <div>
+                  <Text strong style={{ display: 'block', marginBottom: 6 }}>New Relationships</Text>
+                  <Space wrap>
+                    {pipeline.new_relationships_this_period.map((r, i) => (
+                      <Tag key={i} color="blue">{r}</Tag>
+                    ))}
+                  </Space>
+                </div>
               )}
             </Card>
           )}
@@ -458,17 +510,26 @@ export default function StrategicDigestPage() {
                     type={SEVERITY_TYPE[risk.severity] || 'info'}
                     showIcon
                     message={
-                      <Space>
-                        <Text strong>{risk.company_name}</Text>
+                      <Space wrap>
+                        <Text strong>{risk.affected_company || risk.company_name}</Text>
                         <Tag color={risk.severity === 'critical' ? 'red' : risk.severity === 'high' ? 'orange' : 'blue'}>
                           {risk.severity}
                         </Tag>
-                        <Text type="secondary">{risk.risk_type.replace(/_/g, ' ')}</Text>
+                        {signalTag(risk.type) || <Tag>{(risk.risk_type || risk.type || '').replace(/_/g, ' ')}</Tag>}
+                        {risk.am_owner && <Text type="secondary">AM: {risk.am_owner}</Text>}
+                        {risk.days_overdue != null && risk.days_overdue > 0 && (
+                          <Tag color="red">{risk.days_overdue}d overdue</Tag>
+                        )}
                       </Space>
                     }
                     description={
                       <span>
                         {risk.description}
+                        {risk.recommended_action && (
+                          <div style={{ marginTop: 4 }}>
+                            <Text style={{ color: '#1890ff', fontSize: 12 }}>→ {risk.recommended_action}</Text>
+                          </div>
+                        )}
                         {risk.revenue_at_risk != null && (
                           <Text type="danger" style={{ marginLeft: 8 }}>
                             Revenue at risk: {fmtCurrency(risk.revenue_at_risk)}
@@ -488,23 +549,17 @@ export default function StrategicDigestPage() {
               <Row gutter={[12, 12]}>
                 {opportunities.map((opp, idx) => (
                   <Col xs={24} md={12} key={idx}>
-                    <Card
-                      size="small"
-                      style={{ borderLeft: '3px solid #52c41a' }}
-                    >
+                    <Card size="small" style={{ borderLeft: '3px solid #52c41a' }}>
                       <Space wrap style={{ marginBottom: 8 }}>
-                        <Tag color="green">{opp.opportunity_type.replace(/_/g, ' ')}</Tag>
+                        <Tag color="green">{(opp.type || opp.opportunity_type || '').replace(/_/g, ' ')}</Tag>
                         <Text strong>{opp.company_name}</Text>
-                        {opp.estimated_value != null && (
-                          <Tag color="gold">{fmtCurrency(opp.estimated_value)}</Tag>
-                        )}
-                        {opp.confidence != null && (
-                          <Text type="secondary" style={{ fontSize: 12 }}>
-                            {(opp.confidence * 100).toFixed(0)}% confidence
-                          </Text>
-                        )}
+                        {lifecycleBadge(opp.lifecycle_tier)}
+                        {opp.estimated_value && <Tag color="gold">{opp.estimated_value}</Tag>}
                       </Space>
-                      <Paragraph style={{ marginBottom: 0, fontSize: 13 }}>{opp.description}</Paragraph>
+                      <Paragraph style={{ marginBottom: 4, fontSize: 13 }}>{opp.description}</Paragraph>
+                      {opp.next_step && (
+                        <Text style={{ fontSize: 12, color: '#1890ff' }}>→ {opp.next_step}</Text>
+                      )}
                     </Card>
                   </Col>
                 ))}
@@ -513,44 +568,36 @@ export default function StrategicDigestPage() {
           )}
 
           {/* Section 7: Competitive Landscape */}
-          {competitive && (
+          {competitive && (competitive.competitor_mentions?.length || competitive.price_sensitivity_signals?.length) ? (
             <Card className="glass-card" title="Competitive Landscape" style={{ marginBottom: 16 }}>
-              <Space style={{ marginBottom: 12 }}>
-                <Text>Threat Level:</Text>
-                <Tag color={
-                  competitive.threat_level === 'high' ? 'red' :
-                  competitive.threat_level === 'medium' ? 'orange' : 'green'
-                }>
-                  {competitive.threat_level || 'Unknown'}
-                </Tag>
-                {competitive.active_battles != null && (
-                  <Text type="secondary">Active battles: {competitive.active_battles}</Text>
-                )}
-              </Space>
-              {competitive.competitors && competitive.competitors.length > 0 ? (
-                <Table
-                  dataSource={competitive.competitors}
-                  rowKey="name"
-                  pagination={false}
-                  size="small"
-                  columns={[
-                    { title: 'Competitor', dataIndex: 'name', key: 'name' },
-                    { title: 'Mentions', dataIndex: 'mention_count', key: 'mention_count' },
-                    {
-                      title: 'Trend', dataIndex: 'trend', key: 'trend',
-                      render: (v: string) => <span>{trendIcon(v)} {v || '-'}</span>,
-                    },
-                    {
-                      title: 'Companies Mentioning', dataIndex: 'companies_mentioning', key: 'companies_mentioning',
-                      render: (v: string[]) => v?.length ? v.join(', ') : '-',
-                    },
-                  ]}
-                />
-              ) : (
-                <Empty description="No competitor data available" />
-              )}
+              {competitive.competitor_mentions?.length ? (
+                <div style={{ marginBottom: 12 }}>
+                  <Text strong style={{ display: 'block', marginBottom: 6 }}>Competitor Mentions</Text>
+                  <Space wrap>{competitive.competitor_mentions.map((c, i) => <Tag key={i} color="volcano">{c}</Tag>)}</Space>
+                </div>
+              ) : null}
+              {competitive.price_sensitivity_signals?.length ? (
+                <div style={{ marginBottom: 12 }}>
+                  <Text strong style={{ display: 'block', marginBottom: 6 }}>Price Sensitivity</Text>
+                  <Space direction="vertical" style={{ width: '100%' }}>
+                    {competitive.price_sensitivity_signals.map((s, i) => (
+                      <Text key={i} type="secondary" style={{ fontSize: 13 }}>• {s}</Text>
+                    ))}
+                  </Space>
+                </div>
+              ) : null}
+              {competitive.win_loss_insights?.length ? (
+                <div>
+                  <Text strong style={{ display: 'block', marginBottom: 6 }}>Win/Loss Insights</Text>
+                  <Space direction="vertical" style={{ width: '100%' }}>
+                    {competitive.win_loss_insights.map((s, i) => (
+                      <Text key={i} type="secondary" style={{ fontSize: 13 }}>• {s}</Text>
+                    ))}
+                  </Space>
+                </div>
+              ) : null}
             </Card>
-          )}
+          ) : null}
 
           {/* Section 8: Action Items */}
           {actionItems.length > 0 && (

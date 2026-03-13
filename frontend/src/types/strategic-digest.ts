@@ -1,82 +1,128 @@
 /**
- * Strategic Digest TypeScript Interfaces — Sprint 3
+ * Strategic Digest TypeScript Interfaces — Sprint 3 v2 (AM-centric rehaul)
  */
 
 export type PeriodType = 'weekly' | 'monthly' | 'quarterly' | 'ytd' | 'custom';
 
+export type LifecycleTier =
+  | 'prospect'
+  | 'new_customer'
+  | 'active_customer'
+  | 'at_risk'
+  | 'dormant'
+  | 'champion';
+
+export type SignalType =
+  | 'response_urgency'
+  | 'deal_at_risk'
+  | 'retention_risk'
+  | 'revenue_opportunity'
+  | 'new_relationship'
+  | 'account_neglect';
+
 export interface RelationshipHealthCard {
   company_name: string;
   company_id?: string;
+  lifecycle_tier?: LifecycleTier;
+  status?: 'healthy' | 'at_risk' | 'declining' | 'growing' | 'new';
+  signal?: string;
+  am_owner?: string;
+  recommended_action?: string;
+  revenue_impact_estimate?: string;
+  // Legacy fields kept for backward compat
   customer_type?: string;
   tier?: string;
   engagement_score?: number;
   engagement_trend?: string;
   revenue?: number;
-  revenue_trend?: string;
-  days_since_order?: number;
-  active_threads?: number;
-  key_signal?: string;
+}
+
+export interface LifecycleBreakdown {
+  prospect?: number;
+  new_customer?: number;
+  active_customer?: number;
+  at_risk?: number;
+  dormant?: number;
+  champion?: number;
 }
 
 export interface PipelineIntelligence {
+  lifecycle_breakdown?: LifecycleBreakdown;
+  active_quotes_value?: number;
+  stalled_quotes?: string[];
+  conversion_trend?: 'improving' | 'stable' | 'declining';
+  new_relationships_this_period?: string[];
+  // Legacy fields
   total_pipeline_value?: number;
   open_quotes?: number;
-  active_jobs?: number;
-  quote_conversion_rate?: number;
-  quotes?: Array<{
-    quote_no: string;
-    company: string;
-    amount: number;
-    date_created: string;
-    status: string;
-  }>;
 }
 
 export interface RiskAlert {
-  company_name: string;
-  company_id?: string;
-  risk_type: string;
   severity: 'critical' | 'high' | 'medium';
+  type: SignalType | string;
   description: string;
+  affected_company?: string;
+  am_owner?: string;
+  days_overdue?: number;
+  recommended_action?: string;
+  // Legacy fields
+  company_name?: string;
+  risk_type?: string;
   revenue_at_risk?: number;
 }
 
 export interface Opportunity {
+  type: 'revenue_opportunity' | 'reactivation' | 'new_relationship' | 'deal_acceleration' | string;
   company_name: string;
-  company_id?: string;
-  opportunity_type: string;
+  lifecycle_tier?: LifecycleTier;
   description: string;
-  estimated_value?: number;
+  estimated_value?: string;
+  next_step?: string;
+  // Legacy fields
+  company_id?: string;
+  opportunity_type?: string;
   confidence?: number;
 }
 
 export interface CompetitiveLandscape {
-  competitors?: Array<{
-    name: string;
-    mention_count: number;
-    trend: string;
-    companies_mentioning: string[];
-  }>;
-  threat_level?: string;
-  active_battles?: number;
+  competitor_mentions?: string[];
+  price_sensitivity_signals?: string[];
+  win_loss_insights?: string[];
+}
+
+export interface AMEfficiencyRecord {
+  am_name: string;
+  avg_bh_response_hours?: number;
+  after_hours_pct?: number;
+  response_rate_pct?: number;
+  revenue_attributed?: number;
+  quote_conversion_rate?: number;
+  accounts_at_risk?: number;
+  performance_note?: string;
 }
 
 export interface AMPerformance {
-  account_manager: string;
+  summary?: AMEfficiencyRecord[];
+  top_performers?: string[];
+  needs_attention?: string[];
+  workload_imbalance?: string | null;
+  // Legacy fields
+  account_manager?: string;
   total_revenue?: number;
-  revenue_change_pct?: number;
-  customer_count?: number;
-  quote_conversion_rate?: number;
   avg_response_time_hours?: number;
   retention_rate?: number;
 }
 
 export interface StrategicActionItem {
-  priority: number;
+  priority: 'urgent' | 'high' | 'medium' | number;
+  signal_type?: SignalType;
   action: string;
+  owner?: string;
   company?: string;
-  contact?: string;
+  deadline_suggestion?: string;
   context?: string;
+  // Legacy fields
+  contact?: string;
   bucket?: string;
 }
 
@@ -95,7 +141,7 @@ export interface StrategicDigest {
   risk_alerts?: RiskAlert[];
   opportunities?: Opportunity[];
   competitive_landscape?: CompetitiveLandscape;
-  am_performance?: AMPerformance[] | Record<string, any>;
+  am_performance?: AMPerformance | AMPerformance[] | Record<string, any>;
   action_items?: StrategicActionItem[];
   companies_analyzed?: number;
   contacts_analyzed?: number;
@@ -143,3 +189,22 @@ export interface AIModel {
   cost_output_per_mtok: number;
   available: boolean;
 }
+
+// Signal display config (mirrors backend BUCKET_CONFIG)
+export const SIGNAL_CONFIG: Record<SignalType, { label: string; color: string; severity: string }> = {
+  response_urgency: { label: 'Response Urgency', color: 'red', severity: 'critical' },
+  deal_at_risk: { label: 'Deal at Risk', color: 'orange', severity: 'critical' },
+  retention_risk: { label: 'Retention Risk', color: 'red', severity: 'critical' },
+  revenue_opportunity: { label: 'Revenue Opportunity', color: 'green', severity: 'high' },
+  new_relationship: { label: 'New Relationship', color: 'blue', severity: 'high' },
+  account_neglect: { label: 'Account Neglect', color: 'gold', severity: 'high' },
+};
+
+export const LIFECYCLE_CONFIG: Record<LifecycleTier, { label: string; color: string }> = {
+  prospect: { label: 'Prospect', color: 'purple' },
+  new_customer: { label: 'New Customer', color: 'blue' },
+  active_customer: { label: 'Active Customer', color: 'green' },
+  at_risk: { label: 'At Risk', color: 'orange' },
+  dormant: { label: 'Dormant', color: 'default' },
+  champion: { label: 'Champion', color: 'gold' },
+};
