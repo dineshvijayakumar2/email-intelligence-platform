@@ -99,7 +99,7 @@ class StrategicContextBuilder:
             # --- Read company row for QB metadata ---
             company_resp = self._execute_with_retry(
                 self.client.table("customer_companies")
-                .select("name,qb_customer_type,qb_tier,qb_account_manager")
+                .select("company_name,qb_customer_type,qb_tier,qb_account_manager")
                 .eq("id", company_id)
                 .range(0, 0)
             )
@@ -131,7 +131,7 @@ class StrategicContextBuilder:
                 .upsert(context, on_conflict="client_id,company_id")
             )
 
-            logger.debug(f"Built context for company {company_id} ({company_data.get('name', '?')})")
+            logger.debug(f"Built context for company {company_id} ({company_data.get('company_name', '?')})")
             return context
 
         except Exception as e:
@@ -396,7 +396,7 @@ class StrategicContextBuilder:
                 resp = self._execute_with_retry(
                     self.client.table("email_response_metrics")
                     .select("response_time_seconds,business_hours_response_time_seconds,responded_at")
-                    .in_("contact_id", chunk)
+                    .in_("customer_contact_id", chunk)
                     .gte("responded_at", cutoff_iso)
                     .range(0, 999)
                 )
@@ -434,59 +434,38 @@ class StrategicContextBuilder:
     def _get_active_threads(self, company_id: str) -> Dict[str, Any]:
         """Get active and overdue thread counts + subject lines."""
         try:
-            # Get mailbox IDs for this client to filter threads
-            mailbox_resp = self._execute_with_retry(
-                self.client.table("mailboxes")
-                .select("id")
-                .eq("client_id", self.client_id)
-                .range(0, 49)
-            )
-            mailbox_ids = [m["id"] for m in (mailbox_resp.data or [])]
-
-            if not mailbox_ids:
-                return {"active_count": 0, "overdue_count": 0, "threads": []}
-
-            # Fetch active threads linked to this company's contacts
-            contact_resp = self._execute_with_retry(
-                self.client.table("customer_contacts")
-                .select("email")
-                .eq("customer_company_id", company_id)
-                .range(0, 499)
-            )
-            contact_emails = [c["email"] for c in (contact_resp.data or []) if c.get("email")]
-
-            if not contact_emails:
-                return {"active_count": 0, "overdue_count": 0, "threads": []}
-
-            # Query thread_status for active threads in client's mailboxes
-            all_threads = []
-            for i in range(0, len(mailbox_ids), 500):
-                chunk = mailbox_ids[i:i + 500]
-                resp = self._execute_with_retry(
-                    self.client.table("thread_status")
-                    .select("thread_id,subject,status,last_message_at,awaiting_reply_from")
-                    .in_("mailbox_id", chunk)
-                    .eq("status", "active")
-                    .range(0, 499)
-                )
-                all_threads.extend(resp.data or [])
-
-            # Filter to threads involving company contacts
-            company_threads = []
             overdue_cutoff = datetime.now(timezone.utc) - timedelta(days=OVERDUE_THREAD_DAYS)
             overdue_cutoff_iso = overdue_cutoff.isoformat()
 
+            # Active statuses — threads awaiting a reply or ongoing
+            active_statuses = [
+                "awaiting_reply", "overdue", "ongoing",
+                "awaiting_response", "awaiting_our_response",
+            ]
+
+            all_threads = []
+            for status in active_statuses:
+                resp = self._execute_with_retry(
+                    self.client.table("thread_status")
+                    .select("thread_id,subject,status,last_message_at")
+                    .eq("customer_company_id", company_id)
+                    .eq("status", status)
+                    .range(0, 99)
+                )
+                all_threads.extend(resp.data or [])
+
+            company_threads = []
             for t in all_threads:
-                awaiting = t.get("awaiting_reply_from") or ""
-                # Check if any company contact is involved
-                if any(email.lower() in awaiting.lower() for email in contact_emails):
-                    is_overdue = (t.get("last_message_at") or "") < overdue_cutoff_iso
-                    company_threads.append({
-                        "thread_id": t.get("thread_id"),
-                        "subject": t.get("subject", "")[:100],
-                        "last_message_at": t.get("last_message_at"),
-                        "is_overdue": is_overdue,
-                    })
+                is_overdue = (
+                    t.get("status") == "overdue" or
+                    (t.get("last_message_at") or "") < overdue_cutoff_iso
+                )
+                company_threads.append({
+                    "thread_id": t.get("thread_id"),
+                    "subject": t.get("subject", "")[:100],
+                    "last_message_at": t.get("last_message_at"),
+                    "is_overdue": is_overdue,
+                })
 
             overdue_count = sum(1 for t in company_threads if t.get("is_overdue"))
 
@@ -508,7 +487,7 @@ class StrategicContextBuilder:
                 self.client.table("emails")
                 .select("id")
                 .eq("customer_company_id", company_id)
-                .gte("received_at", cutoff_iso)
+                .gte("sent_date", cutoff_iso)
                 .range(0, 999)
             )
             email_ids = [e["id"] for e in (email_resp.data or [])]
@@ -522,7 +501,7 @@ class StrategicContextBuilder:
                 chunk = email_ids[i:i + 500]
                 resp = self._execute_with_retry(
                     self.client.table("ai_email_intelligence")
-                    .select("primary_bucket,sentiment,business_signal_score,is_escalation,is_churn_risk")
+                    .select("primary_bucket,sentiment,business_signal_score,business_signal")
                     .in_("email_id", chunk)
                     .range(0, 999)
                 )
@@ -537,9 +516,9 @@ class StrategicContextBuilder:
             for row in all_intel:
                 bucket = row.get("primary_bucket") or "unknown"
                 bucket_counts[bucket] = bucket_counts.get(bucket, 0) + 1
-                if row.get("is_escalation"):
+                if row.get("business_signal") == "escalation":
                     escalation_count += 1
-                if row.get("is_churn_risk"):
+                if row.get("business_signal") == "churn_signal":
                     churn_count += 1
                 if row.get("sentiment"):
                     sentiments.append(row["sentiment"])
@@ -573,7 +552,7 @@ class StrategicContextBuilder:
         try:
             resp = self._execute_with_retry(
                 self.client.table("customer_contacts")
-                .select("id,name,email,role_classification,engagement_score,email_count")
+                .select("id,first_name,last_name,email_address,role_classification,engagement_score,email_count")
                 .eq("customer_company_id", company_id)
                 .order("engagement_score", desc=True)
                 .range(0, 9)
@@ -582,8 +561,8 @@ class StrategicContextBuilder:
             return [
                 {
                     "id": c.get("id"),
-                    "name": c.get("name"),
-                    "email": c.get("email"),
+                    "name": f"{c.get('first_name', '')} {c.get('last_name', '')}".strip() or None,
+                    "email": c.get("email_address"),
                     "role": c.get("role_classification"),
                     "engagement_score": c.get("engagement_score"),
                     "email_count": c.get("email_count"),
@@ -612,14 +591,15 @@ class StrategicContextBuilder:
             # Open quotes for this company
             quotes_resp = self._execute_with_retry(
                 self.client.table("qb_quotes")
-                .select("id,quote_number,amount,status,created_at")
+                .select("id,quote_no,sell_ex_tax,date_accepted")
                 .eq("matched_company_id", company_id)
                 .range(0, 99)
             )
             quotes = quotes_resp.data or []
 
-            open_quotes = [q for q in quotes if (q.get("status") or "").lower() in ("open", "pending", "sent")]
-            open_quotes_total = sum(q.get("amount") or 0 for q in open_quotes)
+            # Not accepted = still open/pending
+            open_quotes = [q for q in quotes if q.get("date_accepted") is None]
+            open_quotes_total = sum(q.get("sell_ex_tax") or 0 for q in open_quotes)
 
             return {
                 "total_revenue": company.get("qb_total_revenue"),
@@ -675,10 +655,10 @@ class StrategicContextBuilder:
             while True:
                 resp = self._execute_with_retry(
                     self.client.table("qb_sales_line_items")
-                    .select("job_am_name,amount")
+                    .select("job_am_name,total")
                     .eq("client_id", self.client_id)
-                    .gte("invoice_date", period_start)
-                    .lte("invoice_date", period_end)
+                    .gte("inv_date", period_start)
+                    .lte("inv_date", period_end)
                     .range(offset, offset + 499)
                 )
                 batch = resp.data or []
@@ -690,7 +670,7 @@ class StrategicContextBuilder:
             revenue_by_am: Dict[str, float] = {}
             for row in all_rows:
                 am = row.get("job_am_name") or ""
-                amt = row.get("amount") or 0
+                amt = row.get("total") or 0
                 revenue_by_am[am] = revenue_by_am.get(am, 0) + amt
 
             return revenue_by_am
@@ -707,10 +687,10 @@ class StrategicContextBuilder:
             while True:
                 resp = self._execute_with_retry(
                     self.client.table("qb_quotes")
-                    .select("account_manager,status")
+                    .select("account_manager,date_accepted")
                     .eq("client_id", self.client_id)
-                    .gte("created_at", period_start)
-                    .lte("created_at", period_end)
+                    .gte("date_created", period_start)
+                    .lte("date_created", period_end)
                     .range(offset, offset + 499)
                 )
                 batch = resp.data or []
@@ -725,7 +705,7 @@ class StrategicContextBuilder:
                 if am not in stats:
                     stats[am] = {"total": 0, "won": 0}
                 stats[am]["total"] += 1
-                if (row.get("status") or "").lower() in ("won", "accepted", "closed_won"):
+                if row.get("date_accepted") is not None:
                     stats[am]["won"] += 1
 
             return stats
@@ -779,8 +759,8 @@ class StrategicContextBuilder:
                 chunk = contact_ids[i:i + 500]
                 resp = self._execute_with_retry(
                     self.client.table("email_response_metrics")
-                    .select("contact_id,response_time_seconds")
-                    .in_("contact_id", chunk)
+                    .select("customer_contact_id,response_time_seconds")
+                    .in_("customer_contact_id", chunk)
                     .gte("responded_at", period_start)
                     .lte("responded_at", period_end)
                     .range(0, 999)
@@ -790,7 +770,7 @@ class StrategicContextBuilder:
             # Group by AM
             times_by_am: Dict[str, List[float]] = {}
             for m in all_metrics:
-                cid = m.get("contact_id")
+                cid = m.get("customer_contact_id")
                 rt = m.get("response_time_seconds")
                 if cid and rt is not None and cid in contact_to_am:
                     am = contact_to_am[cid]

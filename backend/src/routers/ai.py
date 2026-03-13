@@ -966,6 +966,15 @@ async def generate_strategic_digest(
     """Generate a new strategic digest (runs in background)."""
     try:
         from ..services.strategic_digest_pipeline import StrategicDigestPipeline
+        from datetime import date as date_type, timedelta
+
+        # Parse dates or default to last 30 days
+        today = date_type.today()
+        try:
+            end_date = date_type.fromisoformat(period_end) if period_end else today
+            start_date = date_type.fromisoformat(period_start) if period_start else (today - timedelta(days=30))
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid date format: {e}")
 
         pipeline = StrategicDigestPipeline(_supabase, client_id)
 
@@ -973,8 +982,8 @@ async def generate_strategic_digest(
             try:
                 await pipeline.generate(
                     period_type=period_type,
-                    period_start=period_start,
-                    period_end=period_end,
+                    period_start=start_date,
+                    period_end=end_date,
                 )
                 logger.info(f"Strategic digest generated for client {client_id}")
             except Exception as e:
@@ -982,7 +991,14 @@ async def generate_strategic_digest(
 
         background_tasks.add_task(_run)
 
-        return {"status": "generating", "message": "Strategic digest generation started"}
+        return {
+            "status": "generating",
+            "message": "Strategic digest generation started",
+            "period_start": start_date.isoformat(),
+            "period_end": end_date.isoformat(),
+        }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to start strategic digest: {e}")
         raise HTTPException(status_code=500, detail=str(e))
