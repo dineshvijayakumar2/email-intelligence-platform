@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Versioning constants
 # ---------------------------------------------------------------------------
-PROMPT_VERSION = "v1.2"
+PROMPT_VERSION = "v1.3"
 SCORING_VERSION = "v1.0"
 BATCH_SIZE = 20  # emails per Claude Haiku call (doubled from 10 for cost reduction)
 DEFAULT_LOOKBACK_DAYS = 7  # Default: only analyze emails from last 7 days
@@ -155,10 +155,15 @@ You must:
 If the email does not contain enough information for a field, return null or an empty array.
 Do not add fields not defined in the schema.
 
-DIRECTION-AWARE RULES:
-- Each email has a "direction" field: "outbound" means OUR team sent it, "inbound" means we received it.
-- For OUTBOUND emails (direction="outbound"): set action_type to "no_action". Do NOT suggest follow-up actions in suggested_action — instead describe what was communicated. Focus on extracting entities, topics, and business signals from what was sent.
-- For INBOUND emails: analyze normally and suggest appropriate actions.
+DIRECTION AND FOLDER RULES:
+- Each email has a "direction" field and a "folder" field.
+- direction="outbound" or folder="Sent" means the ACCOUNT MANAGER wrote and sent this email to a contact. They are the author. Do NOT tell them to respond to themselves.
+  * action_type must be "no_action" unless explicit follow-up is needed.
+  * suggested_action must look forward: e.g., "Await reply from [contact]", "Follow up in 3 days if no response received", "Monitor whether the customer accepts the proposal." NEVER say "Respond to [sender name]" — the sender IS the account manager.
+  * summary should describe what the account manager communicated, e.g., "Account manager sent documents to Luis regarding the HDFC home loan."
+- direction="inbound" or folder="Inbox" means the account manager RECEIVED this email from a contact. Analyze normally and suggest appropriate response actions.
+- folder="Starred" means the account manager flagged this as important — weight urgency slightly higher.
+- Treat folder as additional context that can reinforce or clarify the direction field.
 - For financial transaction emails (payment confirmations, invoices, receipts, statements): set sentiment to "neutral", urgency to "low" or "none", business_signal to "contract_activity" or null. Do not classify routine payments as negative sentiment.
 
 CHURN RISK CLASSIFICATION — BE STRICT:
@@ -673,7 +678,7 @@ class AIEmailAnalyzer:
             fetch_size = min(PAGE_SIZE, limit - len(all_emails) + 200)  # overfetch to account for filtering
             query = (
                 self.client.table("emails")
-                .select("id,mailbox_id,subject,body_text,sender_email,sender_name,sent_date,direction,thread_id,is_reply,client_id,customer_contact_id,customer_company_id")
+                .select("id,mailbox_id,subject,body_text,sender_email,sender_name,sent_date,direction,folder_path,thread_id,is_reply,client_id,customer_contact_id,customer_company_id")
                 .eq("mailbox_id", mailbox_id)
                 .order("sent_date", desc=True)
             )
@@ -700,6 +705,14 @@ class AIEmailAnalyzer:
                 if eid in skip_ids:
                     self._mark_skipped(eid, mailbox_id, email.get("client_id"), "rule_based_or_auto_reply")
                     analyzed_ids.add(eid)  # Don't re-process
+                    skipped_count += 1
+                    continue
+
+                # Skip Drafts, Trash, Spam — these are not actionable emails
+                folder = (email.get("folder_path") or "").strip()
+                if folder.lower() in ("drafts", "draft", "trash", "deleted", "spam", "junk"):
+                    self._mark_skipped(eid, mailbox_id, email.get("client_id"), f"folder_{folder.lower()}")
+                    analyzed_ids.add(eid)
                     skipped_count += 1
                     continue
 
@@ -885,12 +898,14 @@ class AIEmailAnalyzer:
         formatted = []
         for email in emails:
             body = sanitize_email_body(email.get("body_text") or "")
+            folder = (email.get("folder_path") or "").strip()
             entry = {
                 "email_id": email["id"],
                 "subject": email.get("subject") or "(no subject)",
                 "sender": email.get("sender_email") or "unknown",
                 "sender_name": email.get("sender_name") or "",
                 "direction": email.get("direction") or "unknown",
+                "folder": folder or "Inbox",
                 "is_reply": email.get("is_reply", False),
                 "body": body,
             }
