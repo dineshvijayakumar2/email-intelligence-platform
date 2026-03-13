@@ -177,26 +177,26 @@ class StrategicDigestPipeline:
             context_builder = StrategicContextBuilder(
                 self.supabase, self.client_id
             )
-            all_contexts = await context_builder.build_all_contexts(
-                period_start=period_start,
-                period_end=period_end,
-            )
+            all_contexts = context_builder.build_all_contexts(lookback_months=6)
 
             # -----------------------------------------------------------------
             # Step 2: Build AM performance data
             # -----------------------------------------------------------------
-            am_performance_data = await context_builder.build_am_performance(
-                period_start=period_start,
-                period_end=period_end,
-                comparison_start=comparison_start,
-                comparison_end=comparison_end,
+            # Convert date objects to ISO strings; handle optional comparison dates
+            comp_start_iso = comparison_start.isoformat() if comparison_start else period_start.isoformat()
+            comp_end_iso = comparison_end.isoformat() if comparison_end else period_end.isoformat()
+            am_performance_data = context_builder.build_am_performance(
+                period_start=period_start.isoformat(),
+                period_end=period_end.isoformat(),
+                comparison_start=comp_start_iso,
+                comparison_end=comp_end_iso,
             )
 
             # -----------------------------------------------------------------
             # Step 3: Get top company contexts from cache
             # -----------------------------------------------------------------
-            company_contexts = await context_builder.get_top_company_contexts(
-                limit=MAX_COMPANY_CONTEXTS
+            company_contexts = context_builder.get_contexts_for_digest(
+                top_n=MAX_COMPANY_CONTEXTS
             )
 
             # -----------------------------------------------------------------
