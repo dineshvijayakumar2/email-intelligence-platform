@@ -204,9 +204,16 @@ class StrategicContextBuilder:
         lock = threading.Lock()
 
         def _process(cid: str):
-            return self.build_company_context(cid, lookback_months=lookback_months)
+            for attempt in range(3):
+                try:
+                    return self.build_company_context(cid, lookback_months=lookback_months)
+                except OSError as e:
+                    if attempt < 2:
+                        time.sleep(0.5 * (attempt + 1))
+                        continue
+                    raise
 
-        max_workers = min(15, max(1, total))
+        max_workers = min(5, max(1, total))
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {executor.submit(_process, cid): cid for cid in company_ids}
             for future in as_completed(futures):
