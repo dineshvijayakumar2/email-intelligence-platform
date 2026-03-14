@@ -21,6 +21,7 @@ import asyncio
 import json
 import time
 import logging
+from json_repair import repair_json
 from datetime import date, datetime, timezone
 from typing import Optional, Any
 
@@ -611,18 +612,26 @@ class StrategicDigestPipeline:
 
         try:
             parsed = json.loads(content)
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse digest JSON: {e}")
-            logger.debug(f"Raw content (first 500 chars): {raw_content[:500]}")
-            # Return a degraded response rather than failing entirely
-            parsed = {
-                "executive_summary": (
-                    "Digest generation completed but response parsing failed. "
-                    "Raw analysis is available in metadata."
-                ),
-                "_parse_error": str(e),
-                "_raw_content": raw_content[:2000],
-            }
+        except json.JSONDecodeError:
+            # LLM sometimes returns single-quoted keys or trailing commas — try repair
+            try:
+                repaired = repair_json(content, return_objects=True)
+                if isinstance(repaired, dict):
+                    parsed = repaired
+                else:
+                    parsed = json.loads(str(repaired))
+                logger.info("Digest JSON repaired successfully")
+            except Exception as e2:
+                logger.error(f"Failed to parse digest JSON even after repair: {e2}")
+                logger.debug(f"Raw content (first 500 chars): {raw_content[:500]}")
+                parsed = {
+                    "executive_summary": (
+                        "Digest generation completed but response parsing failed. "
+                        "Raw analysis is available in metadata."
+                    ),
+                    "_parse_error": str(e2),
+                    "_raw_content": raw_content[:2000],
+                }
 
         # Ensure all 8 required keys exist with defaults
         defaults = {
