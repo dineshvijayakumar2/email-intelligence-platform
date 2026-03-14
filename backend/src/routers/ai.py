@@ -349,8 +349,32 @@ async def get_intelligence_stats(
 
 
 # ============================================================================
-# ACTION BUCKET ENDPOINTS (2)
+# ACTION BUCKET ENDPOINTS (3)
 # ============================================================================
+
+@router.post("/rebucket/{mailbox_id}")
+async def rebucket_mailbox(
+    mailbox_id: str,
+    background_tasks: BackgroundTasks,
+    accessible_ids: list = Depends(get_accessible_mailbox_ids),
+    current_user: dict = Depends(get_current_user),
+):
+    """Force re-derive all action buckets using the latest bucket engine (v3). No LLM cost."""
+    _validate_mailbox_access(mailbox_id, accessible_ids)
+    engine = get_bucket_engine()
+    if not engine:
+        raise HTTPException(status_code=503, detail="Bucket engine not initialized")
+
+    def _run():
+        try:
+            result = engine.process_email_buckets(mailbox_id, force=True)
+            logger.info(f"Rebucket complete for {mailbox_id}: {result}")
+        except Exception as e:
+            logger.error(f"Rebucket failed for {mailbox_id}: {e}")
+
+    background_tasks.add_task(_run)
+    return {"status": "accepted", "message": "Re-bucketing started (force=True, $0 cost)"}
+
 
 @router.get("/action-items/{mailbox_id}")
 async def get_action_items(

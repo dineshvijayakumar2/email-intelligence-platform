@@ -422,10 +422,13 @@ class ActionBucketEngine:
     # ------------------------------------------------------------------
     # Process email-level signals for all completed intel rows
     # ------------------------------------------------------------------
-    def process_email_buckets(self, mailbox_id: str) -> dict:
+    def process_email_buckets(self, mailbox_id: str, force: bool = False) -> dict:
         """
-        Derive email-level signals for all completed intel rows
-        without signals assigned yet.
+        Derive email-level signals for all completed intel rows.
+
+        Args:
+            force: If True, re-derive buckets for ALL rows (even those with existing buckets).
+                   Use this after bucket engine version upgrades.
         """
         all_rows = []
         offset = 0
@@ -452,9 +455,10 @@ class ActionBucketEngine:
         update_batch = []
 
         for row in all_rows:
-            existing_buckets = row.get("action_buckets")
-            if existing_buckets and existing_buckets != "[]" and existing_buckets != []:
-                continue
+            if not force:
+                existing_buckets = row.get("action_buckets")
+                if existing_buckets and existing_buckets != "[]" and existing_buckets != []:
+                    continue
 
             buckets = derive_email_buckets(row)
             primary = buckets[0]["bucket"] if buckets else None
@@ -657,15 +661,18 @@ class ActionBucketEngine:
         offset = 0
         PAGE_SIZE = 500
         while True:
-            resp = self._execute_with_retry(
+            query = (
                 self.client.table("ai_email_intelligence")
                 .select("id,email_id,intent,urgency,sentiment,summary,"
                         "suggested_action,confidence,action_buckets,primary_bucket,"
                         "business_signal,business_signal_score,customer_lifecycle_tier")
-                .eq("client_id", client_id)
                 .eq("mailbox_id", mailbox_id)
                 .eq("processing_status", "completed")
-                .range(offset, offset + PAGE_SIZE - 1)
+            )
+            if client_id:
+                query = query.eq("client_id", client_id)
+            resp = self._execute_with_retry(
+                query.range(offset, offset + PAGE_SIZE - 1)
             )
             batch = resp.data or []
             all_rows.extend(batch)
