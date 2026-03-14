@@ -6,6 +6,7 @@ import { ArrowLeftOutlined } from '@ant-design/icons';
 import { ClientSelector } from '../../components/analytics/ClientSelector';
 import { AnalyticsTable } from '../../components/analytics/AnalyticsTable';
 import { EngagementBadge } from '../../components/analytics/EngagementBadge';
+import { LifecycleBadge } from '../../components/analytics/LifecycleBadge';
 import {
   contactsApi,
   formatRelativeTime,
@@ -180,12 +181,8 @@ export const ContactsAnalytics: React.FC = () => {
       title: 'QB Type',
       dataIndex: 'qb_customer_type',
       key: 'qb_customer_type',
-      width: 110,
-      render: (v: string | null) => {
-        if (!v) return null;
-        const colorMap: Record<string, string> = { existing: 'blue', prospective: 'green', new: 'cyan' };
-        return <Tag color={colorMap[v] || 'default'}>{v}</Tag>;
-      },
+      width: 120,
+      render: (v: string | null) => <LifecycleBadge tier={v} />,
     },
     {
       title: 'Tier',

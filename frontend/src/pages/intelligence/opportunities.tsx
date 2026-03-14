@@ -24,9 +24,8 @@ import type { Email } from '../../services/emailService';
 const { Title, Text } = Typography;
 
 const BUCKET_COLORS: Record<string, string> = {
-  buying_signal: 'green', expansion_signal: 'blue', churn_risk: 'red',
-  competitor_threat: 'red', missed_opportunity: 'orange', stakeholder_entry: 'purple',
-  silent_champion: 'gold', unresolved_block: 'yellow',
+  response_urgency: 'red', deal_at_risk: 'orange', retention_risk: 'red',
+  revenue_opportunity: 'green', new_relationship: 'blue', account_neglect: 'gold',
 };
 
 const OpportunitiesPage: React.FC = () => {
@@ -60,7 +59,7 @@ const OpportunitiesPage: React.FC = () => {
       // Fire mailbox-scoped calls in parallel
       const [actionsData, intelData] = await Promise.all([
         bucketApi.getActionItems(mailboxId, clientId, 0.3, 100),
-        intelligenceApi.list(mailboxId, { page_size: 50, has_buying_signal: true }),
+        intelligenceApi.list(mailboxId, { page_size: 50, primary_bucket: 'revenue_opportunity' }),
       ]);
       if (!isMountedRef.current) return;
       setActionItems(actionsData.items || []);

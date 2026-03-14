@@ -5,6 +5,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { MetricCard } from '../../components/analytics/MetricCard';
 import AIInsightsCard from '../../components/AIInsightsCard';
 import { EngagementBadge } from '../../components/analytics/EngagementBadge';
+import { LifecycleBadge } from '../../components/analytics/LifecycleBadge';
 import {
   companiesApi,
   threadsApi,
@@ -106,6 +107,7 @@ export const CompanyDetail: React.FC = () => {
           <Col flex="auto">
             <Title level={4} style={{ margin: 0 }}>{company.company_name}</Title>
             {company.industry && <Tag>{company.industry}</Tag>}
+            <LifecycleBadge tier={company.qb_customer_type} />
             {company.email_domains?.length && <Text type="secondary"> ({company.email_domains.join(', ')})</Text>}
           </Col>
           <Col>

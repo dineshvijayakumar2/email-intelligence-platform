@@ -29,8 +29,12 @@ export type BusinessSignalType =
   | 'contract_activity' | 'neutral';
 
 export type BucketType =
-  | 'buying_signal' | 'expansion_signal' | 'churn_risk' | 'competitor_threat'
-  | 'missed_opportunity' | 'stakeholder_entry' | 'silent_champion' | 'unresolved_block';
+  | 'response_urgency' | 'deal_at_risk' | 'retention_risk'
+  | 'revenue_opportunity' | 'new_relationship' | 'account_neglect';
+
+export type LifecycleTier =
+  | 'prospect' | 'new_customer' | 'active_customer'
+  | 'at_risk' | 'dormant' | 'champion';
 
 export type ProcessingStatus = 'pending' | 'processing' | 'completed' | 'failed';
 
@@ -89,10 +93,13 @@ export interface IntelligenceResult {
 
   // Business signal flags
   has_budget_signal: boolean;
-  has_buying_signal: boolean;
+  has_response_urgency: boolean;
   has_competitor_mention: boolean;
   has_deadline: boolean;
   business_signal_score: number;
+
+  // Lifecycle
+  customer_lifecycle_tier?: LifecycleTier;
 
   // Buckets
   action_buckets: BucketEntry[];
@@ -164,14 +171,12 @@ export interface ActionItemsResponse {
 }
 
 export interface BucketSummary {
-  buying_signal: number;
-  expansion_signal: number;
-  churn_risk: number;
-  competitor_threat: number;
-  missed_opportunity: number;
-  stakeholder_entry: number;
-  silent_champion: number;
-  unresolved_block: number;
+  response_urgency: number;
+  deal_at_risk: number;
+  retention_risk: number;
+  revenue_opportunity: number;
+  new_relationship: number;
+  account_neglect: number;
   total: number;
 }
 
@@ -363,7 +368,7 @@ export interface IntelligenceFilterParams {
   action_type?: ActionType;
   business_signal?: BusinessSignalType;
   has_budget_signal?: boolean;
-  has_buying_signal?: boolean;
+  has_response_urgency?: boolean;
   has_competitor_mention?: boolean;
   min_confidence?: number;
   processing_status?: ProcessingStatus;

@@ -83,14 +83,12 @@ class BusinessSignalType(str, Enum):
 
 
 class BucketType(str, Enum):
-    BUYING_SIGNAL = "buying_signal"
-    EXPANSION_SIGNAL = "expansion_signal"
-    CHURN_RISK = "churn_risk"
-    COMPETITOR_THREAT = "competitor_threat"
-    MISSED_OPPORTUNITY = "missed_opportunity"
-    STAKEHOLDER_ENTRY = "stakeholder_entry"
-    SILENT_CHAMPION = "silent_champion"
-    UNRESOLVED_BLOCK = "unresolved_block"
+    RESPONSE_URGENCY = "response_urgency"
+    DEAL_AT_RISK = "deal_at_risk"
+    RETENTION_RISK = "retention_risk"
+    REVENUE_OPPORTUNITY = "revenue_opportunity"
+    NEW_RELATIONSHIP = "new_relationship"
+    ACCOUNT_NEGLECT = "account_neglect"
 
 
 class ProcessingStatus(str, Enum):
@@ -210,7 +208,7 @@ class IntelligenceResult(BaseModel):
 
     # Business signal flags
     has_budget_signal: bool = False
-    has_buying_signal: bool = False
+    has_response_urgency: bool = False
     has_competitor_mention: bool = False
     has_deadline: bool = False
     business_signal_score: int = 0
@@ -278,15 +276,13 @@ class ActionItemsResponse(BaseModel):
 
 
 class BucketSummary(BaseModel):
-    """Bucket counts summary."""
-    buying_signal: int = 0
-    expansion_signal: int = 0
-    churn_risk: int = 0
-    competitor_threat: int = 0
-    missed_opportunity: int = 0
-    stakeholder_entry: int = 0
-    silent_champion: int = 0
-    unresolved_block: int = 0
+    """AM-centric signal counts summary (v3)."""
+    response_urgency: int = 0
+    deal_at_risk: int = 0
+    retention_risk: int = 0
+    revenue_opportunity: int = 0
+    new_relationship: int = 0
+    account_neglect: int = 0
     total: int = 0
 
 

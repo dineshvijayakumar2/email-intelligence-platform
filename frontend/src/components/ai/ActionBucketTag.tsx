@@ -11,14 +11,12 @@ import React from 'react';
 import { Tag, Tooltip } from 'antd';
 
 const BUCKET_DISPLAY: Record<string, { label: string; color: string }> = {
-  buying_signal:      { label: 'Buying Signal',      color: 'green' },
-  expansion_signal:   { label: 'Expansion Signal',   color: 'blue' },
-  churn_risk:         { label: 'Churn Risk',         color: 'red' },
-  competitor_threat:  { label: 'Competitor Threat',   color: 'volcano' },
-  missed_opportunity: { label: 'Missed Opportunity',  color: 'magenta' },
-  stakeholder_entry:  { label: 'Stakeholder Entry',   color: 'purple' },
-  silent_champion:    { label: 'Silent Champion',     color: 'orange' },
-  unresolved_block:   { label: 'Unresolved Block',    color: 'gold' },
+  response_urgency:   { label: 'Response Urgency',    color: 'red' },
+  deal_at_risk:       { label: 'Deal at Risk',        color: 'orange' },
+  retention_risk:     { label: 'Retention Risk',      color: 'red' },
+  revenue_opportunity:{ label: 'Revenue Opportunity',  color: 'green' },
+  new_relationship:   { label: 'New Relationship',    color: 'blue' },
+  account_neglect:    { label: 'Account Neglect',     color: 'gold' },
 };
 
 interface ActionBucketTagProps {

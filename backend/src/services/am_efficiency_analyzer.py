@@ -17,7 +17,7 @@ Business hours: 09:00–17:00 Mon–Fri in the client's configured timezone (def
 """
 
 import logging
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from typing import Optional
 from zoneinfo import ZoneInfo
 
@@ -98,8 +98,12 @@ class AMEfficiencyAnalyzer:
         Returns a list of AM efficiency records, one per AM (user) found
         via mailboxes belonging to this client.
         """
-        timezone = self._get_client_timezone()
-        tz = ZoneInfo(timezone)
+        tz_name = self._get_client_timezone()
+        try:
+            tz = ZoneInfo(tz_name)
+        except Exception:
+            logger.warning(f"ZoneInfo('{tz_name}') failed, falling back to fixed UTC+10")
+            tz = timezone(timedelta(hours=10))
 
         mailboxes = self._get_client_mailboxes()
         if not mailboxes:

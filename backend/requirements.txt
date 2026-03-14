@@ -34,6 +34,9 @@ langchain>=1.2.0
 langchain-anthropic>=1.3.0
 langchain-google-genai>=4.2.0
 
+# Timezone data (required for zoneinfo on minimal containers)
+tzdata>=2024.1
+
 # Utilities
 tqdm>=4.66.1
 pyyaml>=6.0.1

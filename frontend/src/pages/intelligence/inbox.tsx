@@ -30,7 +30,7 @@ import type {
   BucketSummary, IntentType, UrgencyLevel, SentimentType, BucketType,
 } from '../../types/ai';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 // Urgency color map
 const URGENCY_COLORS: Record<string, string> = {
@@ -169,14 +169,12 @@ export const InboxPage: React.FC = () => {
   };
 
   const BUCKET_FILTER_OPTIONS = [
-    { text: 'Buying Signal', value: 'buying_signal' },
-    { text: 'Expansion', value: 'expansion_signal' },
-    { text: 'Churn Risk', value: 'churn_risk' },
-    { text: 'Competitor', value: 'competitor_threat' },
-    { text: 'Missed Opp.', value: 'missed_opportunity' },
-    { text: 'Stakeholder', value: 'stakeholder_entry' },
-    { text: 'Silent Champion', value: 'silent_champion' },
-    { text: 'Blocked', value: 'unresolved_block' },
+    { text: 'Response Urgency', value: 'response_urgency' },
+    { text: 'Deal at Risk', value: 'deal_at_risk' },
+    { text: 'Retention Risk', value: 'retention_risk' },
+    { text: 'Revenue Opportunity', value: 'revenue_opportunity' },
+    { text: 'New Relationship', value: 'new_relationship' },
+    { text: 'Account Neglect', value: 'account_neglect' },
   ];
 
   const columns: TableProps<IntelligenceResult>['columns'] = [
@@ -275,16 +273,14 @@ export const InboxPage: React.FC = () => {
     },
   ];
 
-  // Bucket summary bar
+  // Signal summary bar (AM-centric v3)
   const bucketChips = bucketSummary ? [
-    { key: 'buying_signal', label: 'Buying Signal', count: bucketSummary.buying_signal, color: 'green' },
-    { key: 'expansion_signal', label: 'Expansion', count: bucketSummary.expansion_signal, color: 'blue' },
-    { key: 'churn_risk', label: 'Churn Risk', count: bucketSummary.churn_risk, color: 'red' },
-    { key: 'competitor_threat', label: 'Competitor', count: bucketSummary.competitor_threat, color: 'volcano' },
-    { key: 'missed_opportunity', label: 'Missed Opp.', count: bucketSummary.missed_opportunity, color: 'magenta' },
-    { key: 'stakeholder_entry', label: 'Stakeholder', count: bucketSummary.stakeholder_entry, color: 'purple' },
-    { key: 'silent_champion', label: 'Silent', count: bucketSummary.silent_champion, color: 'orange' },
-    { key: 'unresolved_block', label: 'Blocked', count: bucketSummary.unresolved_block, color: 'gold' },
+    { key: 'response_urgency', label: 'Response Urgency', count: bucketSummary.response_urgency, color: 'red' },
+    { key: 'deal_at_risk', label: 'Deal at Risk', count: bucketSummary.deal_at_risk, color: 'orange' },
+    { key: 'retention_risk', label: 'Retention Risk', count: bucketSummary.retention_risk, color: 'red' },
+    { key: 'revenue_opportunity', label: 'Revenue Opp.', count: bucketSummary.revenue_opportunity, color: 'green' },
+    { key: 'new_relationship', label: 'New Relationship', count: bucketSummary.new_relationship, color: 'blue' },
+    { key: 'account_neglect', label: 'Account Neglect', count: bucketSummary.account_neglect, color: 'gold' },
   ] : [];
 
   return (

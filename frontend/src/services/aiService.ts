@@ -206,9 +206,9 @@ export const bucketApi = {
         )
       );
       if (result) setCache(key, result);
-      return result || { buying_signal: 0, expansion_signal: 0, churn_risk: 0, competitor_threat: 0, missed_opportunity: 0, stakeholder_entry: 0, silent_champion: 0, unresolved_block: 0, total: 0 };
+      return result || { response_urgency: 0, deal_at_risk: 0, retention_risk: 0, revenue_opportunity: 0, new_relationship: 0, account_neglect: 0, total: 0 };
     } catch {
-      return { buying_signal: 0, expansion_signal: 0, churn_risk: 0, competitor_threat: 0, missed_opportunity: 0, stakeholder_entry: 0, silent_champion: 0, unresolved_block: 0, total: 0 };
+      return { response_urgency: 0, deal_at_risk: 0, retention_risk: 0, revenue_opportunity: 0, new_relationship: 0, account_neglect: 0, total: 0 };
     }
   },
 

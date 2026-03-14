@@ -254,11 +254,15 @@ export default function StrategicDigestPage() {
     ? amRaw
     : (amRaw as any)?.summary || [];
   const pipeline = digest?.pipeline_intelligence;
-  const risks = digest?.risk_alerts || [];
-  const opportunities = digest?.opportunities || [];
+  const risksRaw = digest?.risk_alerts;
+  const risks: any[] = Array.isArray(risksRaw) ? risksRaw : [];
+  const oppsRaw = digest?.opportunities;
+  const opportunities: any[] = Array.isArray(oppsRaw) ? oppsRaw : [];
   const competitive = digest?.competitive_landscape;
-  const actionItems = digest?.action_items || [];
-  const relationships = digest?.relationship_health || [];
+  const actionsRaw = digest?.action_items;
+  const actionItems: any[] = Array.isArray(actionsRaw) ? actionsRaw : [];
+  const relationshipsRaw = digest?.relationship_health;
+  const relationships: any[] = Array.isArray(relationshipsRaw) ? relationshipsRaw : [];
 
   return (
     <div style={{ padding: '24px', maxWidth: 1400, margin: '0 auto' }}>

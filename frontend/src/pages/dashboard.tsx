@@ -28,16 +28,14 @@ import { useAuth } from '../contexts/AuthContext';
 
 const { Text } = Typography;
 
-// Bucket display config
+// Signal display config (AM-centric v3)
 const BUCKET_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
-  churn_risk: { label: 'Churn Risk', color: '#f5222d', icon: <AlertOutlined /> },
-  unresolved_block: { label: 'Unresolved', color: '#fa541c', icon: <ExclamationCircleOutlined /> },
-  buying_signal: { label: 'Buying Signal', color: '#52c41a', icon: <FireOutlined /> },
-  expansion_signal: { label: 'Expansion', color: '#1890ff', icon: <ArrowRightOutlined /> },
-  competitor_threat: { label: 'Competitor', color: '#722ed1', icon: <WarningOutlined /> },
-  missed_opportunity: { label: 'Missed Opp.', color: '#fa8c16', icon: <BulbOutlined /> },
-  stakeholder_entry: { label: 'New Stakeholder', color: '#13c2c2', icon: <TeamOutlined /> },
-  silent_champion: { label: 'Silent Champion', color: '#eb2f96', icon: <BulbOutlined /> },
+  response_urgency:   { label: 'Response Urgency',  color: '#f5222d', icon: <AlertOutlined /> },
+  deal_at_risk:       { label: 'Deal at Risk',      color: '#fa8c16', icon: <WarningOutlined /> },
+  retention_risk:     { label: 'Retention Risk',     color: '#f5222d', icon: <ExclamationCircleOutlined /> },
+  revenue_opportunity:{ label: 'Revenue Opp.',       color: '#52c41a', icon: <FireOutlined /> },
+  new_relationship:   { label: 'New Relationship',   color: '#1890ff', icon: <TeamOutlined /> },
+  account_neglect:    { label: 'Account Neglect',    color: '#fa8c16', icon: <BulbOutlined /> },
 };
 
 export const Dashboard: React.FC = () => {
@@ -114,9 +112,9 @@ export const Dashboard: React.FC = () => {
     return () => { isMountedRef.current = false; clearInterval(interval); };
   }, [firstMailboxId]);
 
-  // Count urgent action items (churn + unresolved)
-  const urgentCount = (bucketSummary?.churn_risk || 0) + (bucketSummary?.unresolved_block || 0);
-  const opportunityCount = (bucketSummary?.buying_signal || 0) + (bucketSummary?.expansion_signal || 0);
+  // Count urgent action items (urgency + retention + deal risk + neglect)
+  const urgentCount = (bucketSummary?.response_urgency || 0) + (bucketSummary?.retention_risk || 0) + (bucketSummary?.deal_at_risk || 0) + (bucketSummary?.account_neglect || 0);
+  const opportunityCount = (bucketSummary?.revenue_opportunity || 0) + (bucketSummary?.new_relationship || 0);
 
   const getTypeTag = (type: string, hasLive: boolean) => {
     const color = type === 'gmail' ? 'red' : type === 'outlook_live' ? 'blue' : type === 'mbox' ? 'green' : type === 'pst' ? 'geekblue' : 'purple';

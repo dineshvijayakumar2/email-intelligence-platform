@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { ClientSelector } from '../../components/analytics/ClientSelector';
 import { AnalyticsTable } from '../../components/analytics/AnalyticsTable';
 import { EngagementBadge } from '../../components/analytics/EngagementBadge';
+import { LifecycleBadge } from '../../components/analytics/LifecycleBadge';
 import {
   companiesApi,
   formatRelativeTime,
@@ -145,12 +146,8 @@ export const CompaniesAnalytics: React.FC = () => {
       },
     },
     {
-      title: 'Type', dataIndex: 'qb_customer_type', key: 'qb_customer_type', width: 100,
-      render: (v: string | null) => {
-        if (!v) return null;
-        const colors: Record<string, string> = { existing: 'blue', prospective: 'green', new: 'cyan' };
-        return <Tag color={colors[v] || 'default'}>{v}</Tag>;
-      },
+      title: 'Type', dataIndex: 'qb_customer_type', key: 'qb_customer_type', width: 120,
+      render: (v: string | null) => <LifecycleBadge tier={v} />,
     },
     {
       title: 'Status', dataIndex: 'engagement_status', key: 'status', width: 100,

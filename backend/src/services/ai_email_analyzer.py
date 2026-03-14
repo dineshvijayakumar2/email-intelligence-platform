@@ -1450,7 +1450,7 @@ class AIEmailAnalyzer:
         action_type: Optional[str] = None,
         business_signal: Optional[str] = None,
         has_budget_signal: Optional[bool] = None,
-        has_buying_signal: Optional[bool] = None,
+        has_response_urgency: Optional[bool] = None,
         has_competitor_mention: Optional[bool] = None,
         min_confidence: Optional[float] = None,
         processing_status: Optional[str] = None,
@@ -1500,8 +1500,8 @@ class AIEmailAnalyzer:
         # Boolean filters — use lowercase string 'true' for Supabase
         if has_budget_signal is True:
             query = query.eq("has_budget_signal", 'true')
-        if has_buying_signal is True:
-            query = query.eq("has_buying_signal", 'true')
+        if has_response_urgency is True:
+            query = query.eq("has_response_urgency", 'true')
         if has_competitor_mention is True:
             query = query.eq("has_competitor_mention", 'true')
 

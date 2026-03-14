@@ -5,6 +5,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { MetricCard } from '../../components/analytics/MetricCard';
 import AIInsightsCard from '../../components/AIInsightsCard';
 import { EngagementBadge } from '../../components/analytics/EngagementBadge';
+import { LifecycleBadge } from '../../components/analytics/LifecycleBadge';
 import {
   contactsApi,
   threadsApi,
@@ -123,7 +124,7 @@ export const ContactDetail: React.FC = () => {
         </Row>
         {(contact.qb_customer_type || contact.qb_tier || contact.qb_quotes_count != null) && (
           <div style={{ marginTop: 12, borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 10 }}>
-            {contact.qb_customer_type && <Tag color="blue">{contact.qb_customer_type}</Tag>}
+            {contact.qb_customer_type && <LifecycleBadge tier={contact.qb_customer_type} />}
             {contact.qb_tier && <Tag color="purple">{contact.qb_tier}</Tag>}
             {contact.qb_quotes_count != null && <Tag>{contact.qb_quotes_count} quote{contact.qb_quotes_count !== 1 ? 's' : ''}</Tag>}
           </div>

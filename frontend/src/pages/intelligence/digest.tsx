@@ -21,15 +21,13 @@ import type { DailyDigest, BucketSummary } from '../../types/ai';
 const { Title, Text, Paragraph } = Typography;
 
 const BUCKET_COLORS: Record<string, string> = {
-  buying_signal: 'green', expansion_signal: 'blue', churn_risk: 'red',
-  competitor_threat: 'red', missed_opportunity: 'orange', stakeholder_entry: 'purple',
-  silent_champion: 'gold', unresolved_block: 'yellow',
+  response_urgency: 'red', deal_at_risk: 'orange', retention_risk: 'red',
+  revenue_opportunity: 'green', new_relationship: 'blue', account_neglect: 'gold',
 };
 
 const BUCKET_LABELS: Record<string, string> = {
-  buying_signal: 'Buying Signal', expansion_signal: 'Expansion', churn_risk: 'Churn Risk',
-  competitor_threat: 'Competitor', missed_opportunity: 'Missed Opp', stakeholder_entry: 'Stakeholder',
-  silent_champion: 'Silent Champ', unresolved_block: 'Unresolved',
+  response_urgency: 'Response Urgency', deal_at_risk: 'Deal at Risk', retention_risk: 'Retention Risk',
+  revenue_opportunity: 'Revenue Opp.', new_relationship: 'New Relationship', account_neglect: 'Account Neglect',
 };
 
 const DigestPage: React.FC = () => {
