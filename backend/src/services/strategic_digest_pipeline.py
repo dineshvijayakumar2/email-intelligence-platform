@@ -364,7 +364,10 @@ class StrategicDigestPipeline:
                 digest_row["comparison_period_end"] = comparison_end.isoformat()
 
             try:
-                self.supabase.table("ai_strategic_digests").insert(digest_row).execute()
+                self.supabase.table("ai_strategic_digests").upsert(
+                    digest_row,
+                    on_conflict="client_id,digest_date,period_type",
+                ).execute()
                 logger.info(f"Strategic digest saved for {period_type} {period_start}")
             except Exception as e:
                 logger.error(f"Failed to save strategic digest: {e}")
