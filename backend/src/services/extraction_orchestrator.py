@@ -797,15 +797,24 @@ class ExtractionOrchestrator:
 
         logger.info(f"Upserting {len(contacts)} contacts to customer_contacts table (batch mode)")
 
-        # First, fetch all existing contacts for this client (single query)
-        existing_response = (
-            self.client.table('customer_contacts')
-            .select('id, email_address')
-            .eq('client_id', self.client_id)
-            .execute()
-        )
-
-        existing_emails = {row['email_address'].lower(): row['id'] for row in existing_response.data}
+        # First, fetch ALL existing contacts for this client (paginated)
+        existing_emails = {}
+        offset = 0
+        PAGE_SIZE = 1000
+        while True:
+            batch_resp = (
+                self.client.table('customer_contacts')
+                .select('id, email_address')
+                .eq('client_id', self.client_id)
+                .range(offset, offset + PAGE_SIZE - 1)
+                .execute()
+            )
+            rows = batch_resp.data or []
+            for row in rows:
+                existing_emails[row['email_address'].lower()] = row['id']
+            if len(rows) == 0:
+                break
+            offset += len(rows)
         logger.info(f"Found {len(existing_emails)} existing contacts for this client")
 
         # Separate contacts into INSERT and UPDATE lists
@@ -848,7 +857,9 @@ class ExtractionOrchestrator:
         for i in range(0, len(to_insert), batch_size):
             batch = to_insert[i:i + batch_size]
             try:
-                self.client.table('customer_contacts').insert(batch).execute()
+                self.client.table('customer_contacts').upsert(
+                    batch, on_conflict="client_id,email_address"
+                ).execute()
                 created_count += len(batch)
                 logger.debug(f"Inserted batch {i//batch_size + 1}: {len(batch)} contacts")
             except Exception as e:
