@@ -118,7 +118,7 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
       icon: <BarChartOutlined />,
       label: 'Analytics',
       children: [
-        { key: '/analytics', label: <Link to="/analytics">Overview</Link> },
+        { key: '/analytics/overview', label: <Link to="/analytics">Overview</Link> },
         { key: '/analytics/contacts', label: <Link to="/analytics/contacts">Contacts</Link> },
         { key: '/analytics/companies', label: <Link to="/analytics/companies">Companies</Link> },
         { key: '/analytics/threads', label: <Link to="/analytics/threads">Threads</Link> },
