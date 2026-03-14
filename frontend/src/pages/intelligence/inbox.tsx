@@ -19,6 +19,7 @@ import type { TableProps } from 'antd';
 import {
   ReloadOutlined,
   RocketOutlined,
+  SyncOutlined,
 } from '@ant-design/icons';
 import { formatDate, localDateToISOStart, formatDateForApi } from '../../utils/dateUtils';
 import { MailboxSelector } from '../../components/MailboxSelector';
@@ -63,6 +64,7 @@ export const InboxPage: React.FC = () => {
   const [bucketSummary, setBucketSummary] = useState<BucketSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+  const [rebucketing, setRebucketing] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize] = useState(25);
 
@@ -125,6 +127,21 @@ export const InboxPage: React.FC = () => {
       message.success(result.message || 'Analysis started');
     } else {
       message.error('Failed to start analysis');
+    }
+  };
+
+  const handleRebucket = async () => {
+    if (!mailboxId) return;
+    setRebucketing(true);
+    try {
+      await bucketApi.rebucket(mailboxId);
+      message.success('Re-bucketing started — signals will refresh shortly');
+      // Reload after a short delay to pick up new buckets
+      setTimeout(() => { loadData(); bucketApi.getSummary(mailboxId).then(setBucketSummary); }, 3000);
+    } catch {
+      message.error('Failed to start re-bucketing');
+    } finally {
+      setRebucketing(false);
     }
   };
 
@@ -316,6 +333,14 @@ export const InboxPage: React.FC = () => {
                 { value: 90, label: 'Last 90 days' },
               ]}
             />
+            <Button
+              icon={<SyncOutlined />}
+              onClick={handleRebucket}
+              loading={rebucketing}
+              disabled={!mailboxId}
+            >
+              Re-bucket
+            </Button>
             <Button
               type="primary"
               icon={<RocketOutlined />}

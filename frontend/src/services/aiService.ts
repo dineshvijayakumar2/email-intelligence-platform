@@ -192,6 +192,17 @@ export const bucketApi = {
     }
   },
 
+  /** POST /ai/rebucket/{mailbox_id} — Force re-derive all buckets with latest engine ($0 cost) */
+  async rebucket(mailboxId: string): Promise<{ status: string; message: string } | null> {
+    try {
+      invalidateCache('bucket');
+      return await api.post(`${API_PREFIX}/rebucket/${mailboxId}`, {}, { timeout: 10000 });
+    } catch (error: any) {
+      console.error('[AI] Failed to trigger rebucket:', error?.message);
+      throw error;
+    }
+  },
+
   /** GET /ai/action-items/{mailbox_id}/summary — Bucket counts */
   async getSummary(mailboxId: string, clientId?: string): Promise<BucketSummary> {
     const qs = buildQuery({ client_id: clientId });
