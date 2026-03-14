@@ -39,7 +39,7 @@ class StrategicContextBuilder:
     # Retry helper (matches codebase pattern)
     # ------------------------------------------------------------------
     @staticmethod
-    def _execute_with_retry(query_builder, max_retries: int = 3, base_delay: float = 2.0):
+    def _execute_with_retry(query_builder, max_retries: int = 3, base_delay: float = 0.5):
         """Execute a Supabase query with retry for transient errors."""
         last_error = None
         for attempt in range(max_retries + 1):
@@ -48,12 +48,16 @@ class StrategicContextBuilder:
             except Exception as e:
                 last_error = e
                 error_str = str(e)
-                is_transient = any(keyword in error_str for keyword in [
-                    'SSL handshake failed', '525', '502', '503', '504',
-                    'Connection reset', 'Connection refused', 'timed out',
-                    'JSON could not be generated', 'ECONNRESET', 'ETIMEDOUT',
-                    'ConnectionTerminated', 'PROTOCOL_ERROR',
-                ])
+                is_transient = (
+                    isinstance(e, OSError) or
+                    any(keyword in error_str for keyword in [
+                        'SSL handshake failed', '525', '502', '503', '504',
+                        'Connection reset', 'Connection refused', 'timed out',
+                        'JSON could not be generated', 'ECONNRESET', 'ETIMEDOUT',
+                        'ConnectionTerminated', 'PROTOCOL_ERROR',
+                        'Resource temporarily unavailable',
+                    ])
+                )
                 if is_transient and attempt < max_retries:
                     delay = base_delay * (2 ** attempt)
                     logger.warning(
@@ -204,16 +208,9 @@ class StrategicContextBuilder:
         lock = threading.Lock()
 
         def _process(cid: str):
-            for attempt in range(3):
-                try:
-                    return self.build_company_context(cid, lookback_months=lookback_months)
-                except OSError as e:
-                    if attempt < 2:
-                        time.sleep(0.5 * (attempt + 1))
-                        continue
-                    raise
+            return self.build_company_context(cid, lookback_months=lookback_months)
 
-        max_workers = min(5, max(1, total))
+        max_workers = min(3, max(1, total))
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {executor.submit(_process, cid): cid for cid in company_ids}
             for future in as_completed(futures):
