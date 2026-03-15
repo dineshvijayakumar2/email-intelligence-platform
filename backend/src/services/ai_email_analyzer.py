@@ -1012,32 +1012,36 @@ class AIEmailAnalyzer:
         valid = []
         failed = []
 
+        cleaned = clean_llm_output(ai_response.content)
+
+        # Primary: use json_repair which handles truncation, trailing commas, single quotes, etc.
+        parsed = None
         try:
-            cleaned = clean_llm_output(ai_response.content)
-            parsed = json.loads(cleaned)
-        except json.JSONDecodeError as e:
-            # Log snippet around error position to diagnose Gemini output quirks
-            pos = e.pos if hasattr(e, 'pos') else 0
-            snippet = cleaned[max(0, pos - 60):pos + 60].replace('\n', '↵')
-            logger.warning(f"Failed to parse AI response as JSON: {e} | near: ...{snippet}...")
-            # Try json-repair library (handles Gemini quirks: trailing commas, comments, etc.)
-            parsed = None
+            from json_repair import repair_json
+            repaired = repair_json(cleaned, return_objects=True)
+            if isinstance(repaired, (list, dict)):
+                parsed = repaired
+        except Exception:
+            pass
+
+        # Fallback 1: standard json.loads
+        if parsed is None:
             try:
-                from json_repair import repair_json
-                repaired = repair_json(cleaned, return_objects=True)
-                if isinstance(repaired, list) and len(repaired) > 0:
-                    logger.info(f"json-repair recovered {len(repaired)} items from malformed JSON")
-                    parsed = repaired
-            except Exception as repair_err:
-                logger.debug(f"json-repair failed: {repair_err}")
-            # Fall back to truncation repair (common when max_tokens cuts off response)
-            if parsed is None:
-                parsed = repair_truncated_json(cleaned)
-            if parsed is None:
-                logger.error(f"All JSON repair attempts failed, entire batch lost")
-                for eid in expected_email_ids:
-                    failed.append({"email_id": eid, "error": f"json_parse: {str(e)[:200]}"})
-                return valid, failed
+                parsed = json.loads(cleaned)
+            except json.JSONDecodeError:
+                pass
+
+        # Fallback 2: truncation repair (LLM hit max_tokens mid-JSON)
+        if parsed is None:
+            parsed = repair_truncated_json(cleaned)
+            if parsed is not None:
+                logger.info(f"Truncation repair recovered {len(parsed)} items from cut-off response")
+
+        if parsed is None:
+            logger.error(f"All JSON repair attempts failed, entire batch lost (content length: {len(cleaned)})")
+            for eid in expected_email_ids:
+                failed.append({"email_id": eid, "error": "json_parse: all repair attempts failed"})
+            return valid, failed
 
         if not isinstance(parsed, list):
             parsed = [parsed]
@@ -1061,25 +1065,6 @@ class AIEmailAnalyzer:
                 failed.append({"email_id": eid, "error": f"validation: {str(e)[:300]}"})
 
         return valid, failed
-
-    # ------------------------------------------------------------------
-    # Retry single failed item
-    # ------------------------------------------------------------------
-    def _retry_single_email(
-        self,
-        email: dict,
-        mailbox_id: str,
-    ) -> Optional[EmailClassificationResult]:
-        """Retry a single email that failed validation. One retry only."""
-        emails_json = self._format_emails_for_prompt([email])
-        user_message = USER_PROMPT_TEMPLATE.format(emails_json=emails_json)
-
-        ai_resp = self.ai_client.call_haiku(SYSTEM_PROMPT, user_message, max_tokens=2048, json_mode=True)
-        if ai_resp is None:
-            return None
-
-        valid, _ = self._parse_and_validate(ai_resp, [email["id"]])
-        return valid[0] if valid else None
 
     # ------------------------------------------------------------------
     # Mark items as processing/failed/completed in DB
@@ -1220,8 +1205,8 @@ class AIEmailAnalyzer:
         emails_json = self._format_emails_for_prompt(emails)
         user_message = USER_PROMPT_TEMPLATE.format(emails_json=emails_json)
 
-        # Call Claude Haiku — scale max_tokens with batch size (~500 tokens per email)
-        max_tokens = max(4096, len(emails) * 500)
+        # Call Claude Haiku — scale max_tokens with batch size (~700 tokens per email)
+        max_tokens = max(4096, len(emails) * 700)
         ai_response = self.ai_client.call_haiku(SYSTEM_PROMPT, user_message, max_tokens=max_tokens, json_mode=True)
 
         if ai_response is None:
@@ -1252,29 +1237,15 @@ class AIEmailAnalyzer:
         # Parse + validate
         valid_results, failed_items = self._parse_and_validate(ai_response, email_ids)
 
-        # Retry failed items (one retry per item)
-        email_lookup = {e["id"]: e for e in emails}
-        retry_successes = []
-        final_failures = []
-
-        for fail in failed_items:
-            eid = fail["email_id"]
-            email = email_lookup.get(eid)
-            if email and "json_parse" not in fail["error"]:
-                # Retry single item
-                logger.info(f"Retrying single email {eid}: {fail['error'][:100]}")
-                retried = self._retry_single_email(email, mailbox_id)
-                if retried:
-                    retry_successes.append(retried)
-                    continue
-            final_failures.append(fail)
+        # Failed items go straight to final failures (no single-email retry — saves cost)
+        final_failures = failed_items
 
         # Build lifecycle tier lookup from enriched emails
         lifecycle_lookup = {e["id"]: e.get("_lifecycle_tier") for e in emails}
 
         # Save valid results
         analyzed_count = 0
-        all_valid = valid_results + retry_successes
+        all_valid = valid_results
         for result in all_valid:
             row_data = post_process_classification(result)
             # Inject lifecycle tier computed during enrichment
