@@ -750,10 +750,10 @@ class StrategicContextBuilder:
                     return {}
                 mailbox_id = max(counts, key=lambda k: counts[k])
 
-            # Resolve mailbox → user
+            # Resolve mailbox → user_id
             mb_resp = self._execute_with_retry(
                 self.client.table("mailboxes")
-                .select("id,user_id,user_profiles(name)")
+                .select("id,user_id,name")
                 .eq("id", mailbox_id)
                 .range(0, 0)
             )
@@ -762,12 +762,24 @@ class StrategicContextBuilder:
                 return {"mailbox_id": mailbox_id}
 
             mb = mb_rows[0]
-            user_profile = mb.get("user_profiles") or {}
-            am_name = user_profile.get("name") if isinstance(user_profile, dict) else None
+            user_id = mb.get("user_id")
+            am_name = None
+
+            # Resolve user_id → name from user_profiles
+            if user_id:
+                up_resp = self._execute_with_retry(
+                    self.client.table("user_profiles")
+                    .select("name")
+                    .eq("id", user_id)
+                    .range(0, 0)
+                )
+                up_rows = up_resp.data or []
+                if up_rows:
+                    am_name = up_rows[0].get("name")
 
             return {
                 "mailbox_id": mailbox_id,
-                "user_id": mb.get("user_id"),
+                "user_id": user_id,
                 "am_name": am_name,
             }
 

@@ -133,8 +133,11 @@ def compute_lifecycle_tier(
     ):
         return "champion"
 
-    # Prospect: no QB customer record or explicitly marked prospective
-    if ctype in ("prospective", "prospect", "") and (days_since is None):
+    # Prospect: explicitly marked prospective, OR no QB record AND low engagement
+    # (Companies with significant email engagement are likely active, not prospects)
+    if ctype in ("prospective", "prospect"):
+        return "prospect"
+    if ctype == "" and days_since is None and engagement_score < 20:
         return "prospect"
 
     # New customer: first invoice within NEW_CUSTOMER_DAYS
