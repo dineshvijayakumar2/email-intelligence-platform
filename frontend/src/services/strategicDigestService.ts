@@ -78,7 +78,8 @@ export const modelsApi = {
     return api.get<{ models: AIModel[] }>(`${API_PREFIX}/models`);
   },
 
-  updateDefaults: async (cheapModel: string, strategicModel: string) => {
-    return api.put<{ status: string }>(`${API_PREFIX}/models/defaults?cheap_model=${cheapModel}&strategic_model=${strategicModel}`);
+  updateDefaults: async (cheapModel: string, strategicModel: string, clientId?: string) => {
+    const qs = `cheap_model=${cheapModel}&strategic_model=${strategicModel}${clientId ? `&client_id=${clientId}` : ''}`;
+    return api.put<{ status: string }>(`${API_PREFIX}/models/defaults?${qs}`);
   },
 };

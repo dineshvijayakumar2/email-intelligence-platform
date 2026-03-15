@@ -1204,36 +1204,87 @@ async def get_available_models():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _get_client_setting(key: str, client_id: Optional[str] = None) -> Optional[str]:
+    """Load a setting: client-specific → global → None."""
+    if not _supabase:
+        return None
+    try:
+        # Try client-specific first
+        if client_id:
+            resp = _supabase.table('system_settings').select('value').eq(
+                'key', key
+            ).eq('client_id', client_id).limit(1).execute()
+            if resp.data:
+                return resp.data[0]['value']
+        # Fall back to global
+        resp = _supabase.table('system_settings').select('value').eq(
+            'key', key
+        ).is_('client_id', 'null').limit(1).execute()
+        if resp.data:
+            return resp.data[0]['value']
+    except Exception:
+        pass
+    return None
+
+
+def _upsert_client_setting(key: str, value: str, client_id: Optional[str] = None):
+    """Save a setting for a specific client (or global if client_id is None)."""
+    if not _supabase:
+        return
+    try:
+        # Check if exists
+        query = _supabase.table('system_settings').select('id').eq('key', key)
+        if client_id:
+            query = query.eq('client_id', client_id)
+        else:
+            query = query.is_('client_id', 'null')
+        existing = query.limit(1).execute()
+
+        row = {'key': key, 'value': value, 'updated_at': datetime.utcnow().isoformat()}
+        if client_id:
+            row['client_id'] = client_id
+
+        if existing.data:
+            _supabase.table('system_settings').update(row).eq('id', existing.data[0]['id']).execute()
+        else:
+            _supabase.table('system_settings').insert(row).execute()
+    except Exception as e:
+        logger.warning(f"Failed to save setting {key}: {e}")
+
+
 @router.get("/api-keys")
-async def get_api_keys(current_user: dict = Depends(require_role('admin'))):
-    """Get API key status (admin only). Returns masked values, never plaintext."""
-    import os
-    anthropic = os.environ.get("ANTHROPIC_API_KEY", "")
-    google = os.environ.get("GOOGLE_GENAI_API_KEY") or os.environ.get("GEMINI_API_KEY") or ""
+async def get_api_keys(
+    client_id: Optional[str] = Query(default=None),
+    current_user: dict = Depends(require_role('admin')),
+):
+    """Get API key status. Client-specific → global → env fallback."""
+    import os, base64
+
     def mask(k: str) -> str:
         return k[:4] + "****" + k[-4:] if len(k) > 8 else ("****" if k else "")
-    # Indicate whether key came from DB (persisted) or just env
-    anthropic_source = "env"
-    google_source = "env"
-    if _supabase:
-        try:
-            import base64
-            resp = _supabase.table('system_settings').select('key,value').in_(
-                'key', ['api_key_anthropic', 'api_key_google']
-            ).execute()
-            db = {row['key']: row['value'] for row in (resp.data or [])}
-            if not anthropic and db.get('api_key_anthropic'):
-                anthropic = base64.b64decode(db['api_key_anthropic']).decode()
-                anthropic_source = "db"
-            elif anthropic and db.get('api_key_anthropic'):
-                anthropic_source = "db"
-            if not google and db.get('api_key_google'):
-                google = base64.b64decode(db['api_key_google']).decode()
-                google_source = "db"
-            elif google and db.get('api_key_google'):
-                google_source = "db"
-        except Exception:
-            pass
+
+    # Load from DB (client → global) then env
+    db_anthropic = _get_client_setting('api_key_anthropic', client_id)
+    db_google = _get_client_setting('api_key_google', client_id)
+
+    anthropic = ""
+    anthropic_source = "none"
+    if db_anthropic:
+        anthropic = base64.b64decode(db_anthropic).decode()
+        anthropic_source = "db"
+    elif os.environ.get("ANTHROPIC_API_KEY"):
+        anthropic = os.environ["ANTHROPIC_API_KEY"]
+        anthropic_source = "env"
+
+    google = ""
+    google_source = "none"
+    if db_google:
+        google = base64.b64decode(db_google).decode()
+        google_source = "db"
+    elif os.environ.get("GOOGLE_GENAI_API_KEY") or os.environ.get("GEMINI_API_KEY"):
+        google = os.environ.get("GOOGLE_GENAI_API_KEY") or os.environ.get("GEMINI_API_KEY") or ""
+        google_source = "env"
+
     return {
         "anthropic_set": bool(anthropic),
         "anthropic_masked": mask(anthropic),
@@ -1249,95 +1300,74 @@ async def update_api_keys(
     data: dict,
     current_user: dict = Depends(require_role('admin')),
 ):
-    """Update API keys at runtime and persist to DB (survives server restarts)."""
-    import os
-    import base64
+    """Update API keys. Saves per-client if client_id provided, otherwise global."""
+    import os, base64
+    client_id = data.get("client_id")
     updated = []
-    db_rows = []
+
     if data.get("anthropic_api_key"):
+        encoded = base64.b64encode(data["anthropic_api_key"].encode()).decode()
+        _upsert_client_setting('api_key_anthropic', encoded, client_id)
+        # Also set in env for immediate use
         os.environ["ANTHROPIC_API_KEY"] = data["anthropic_api_key"]
-        db_rows.append({
-            'key': 'api_key_anthropic',
-            'value': base64.b64encode(data["anthropic_api_key"].encode()).decode(),
-            'updated_at': 'now()',
-        })
         updated.append("anthropic")
+
     if data.get("google_api_key"):
+        encoded = base64.b64encode(data["google_api_key"].encode()).decode()
+        _upsert_client_setting('api_key_google', encoded, client_id)
         os.environ["GOOGLE_GENAI_API_KEY"] = data["google_api_key"]
-        db_rows.append({
-            'key': 'api_key_google',
-            'value': base64.b64encode(data["google_api_key"].encode()).decode(),
-            'updated_at': 'now()',
-        })
         updated.append("google")
-    if db_rows and _supabase:
-        try:
-            _supabase.table('system_settings').upsert(db_rows, on_conflict='key').execute()
-            logger.info(f"API keys persisted to DB: {updated}")
-        except Exception as db_err:
-            logger.warning(f"Failed to persist API keys to DB: {db_err}")
-    return {"status": "ok", "updated": updated, "persisted": bool(db_rows and _supabase)}
+
+    return {"status": "ok", "updated": updated, "client_id": client_id}
 
 
 @router.put("/models/defaults")
 async def update_default_models(
     cheap_model: str = Query(default="haiku"),
     strategic_model: str = Query(default="sonnet"),
+    client_id: Optional[str] = Query(default=None),
 ):
-    """Update default model preferences and persist to DB."""
+    """Update default model preferences. Per-client if client_id provided."""
     from ..services.langchain_core import set_default_models
     try:
         set_default_models(cheap=cheap_model, strategic=strategic_model)
         update_ai_settings(cheap_model=cheap_model, strategic_model=strategic_model)
-        # Persist to system_settings so it survives server restarts
-        if _supabase:
-            try:
-                _supabase.table('system_settings').upsert([
-                    {'key': 'ai_cheap_model',     'value': cheap_model,     'updated_at': 'now()'},
-                    {'key': 'ai_strategic_model', 'value': strategic_model, 'updated_at': 'now()'},
-                ], on_conflict='key').execute()
-            except Exception as db_err:
-                logger.warning(f"Failed to persist model settings to DB: {db_err}")
-        return {"status": "ok", "cheap": cheap_model, "strategic": strategic_model}
+        _upsert_client_setting('ai_cheap_model', cheap_model, client_id)
+        _upsert_client_setting('ai_strategic_model', strategic_model, client_id)
+        return {"status": "ok", "cheap": cheap_model, "strategic": strategic_model, "client_id": client_id}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
 def _load_persisted_api_keys():
-    """Load API keys from system_settings on startup and inject into os.environ."""
+    """Load global API keys from system_settings on startup and inject into os.environ."""
     if not _supabase:
         return
     try:
-        import os
-        import base64
-        resp = _supabase.table('system_settings').select('key,value').in_(
-            'key', ['api_key_anthropic', 'api_key_google']
-        ).execute()
-        db = {row['key']: row['value'] for row in (resp.data or [])}
+        import os, base64
+        # Load global defaults (client_id IS NULL)
+        anthropic_val = _get_client_setting('api_key_anthropic')
+        google_val = _get_client_setting('api_key_google')
 
-        if db.get('api_key_anthropic'):
-            os.environ['ANTHROPIC_API_KEY'] = base64.b64decode(db['api_key_anthropic']).decode()
+        if anthropic_val:
+            os.environ['ANTHROPIC_API_KEY'] = base64.b64decode(anthropic_val).decode()
             logger.info("ANTHROPIC_API_KEY loaded from DB (overrides env)")
 
-        if db.get('api_key_google'):
-            os.environ['GOOGLE_GENAI_API_KEY'] = base64.b64decode(db['api_key_google']).decode()
+        if google_val:
+            os.environ['GOOGLE_GENAI_API_KEY'] = base64.b64decode(google_val).decode()
             logger.info("GOOGLE_GENAI_API_KEY loaded from DB (overrides env)")
     except Exception as e:
         logger.warning(f"Could not load API keys from DB: {e}")
 
 
 def _load_persisted_model_settings():
-    """Load AI model preferences from system_settings on startup."""
+    """Load global AI model preferences from system_settings on startup."""
     if not _supabase:
         return
     try:
         from ..services.langchain_core import set_default_models
-        resp = _supabase.table('system_settings').select('key,value').in_(
-            'key', ['ai_cheap_model', 'ai_strategic_model']
-        ).execute()
-        settings = {row['key']: row['value'] for row in (resp.data or [])}
-        cheap = settings.get('ai_cheap_model')
-        strategic = settings.get('ai_strategic_model')
+        cheap = _get_client_setting('ai_cheap_model')
+        strategic = _get_client_setting('ai_strategic_model')
         if cheap or strategic:
             set_default_models(
                 cheap=cheap or 'haiku',

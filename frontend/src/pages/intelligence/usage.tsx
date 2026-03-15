@@ -64,7 +64,7 @@ const UsagePage: React.FC = () => {
         controlsApi.get(),
         usageApi.getRecent(30),
         modelsApi.getAvailable().catch(() => ({ models: [] })),
-        api.get<any>('/v1/ai/api-keys').catch(() => null),
+        api.get<any>(`/v1/ai/api-keys${cid ? `?client_id=${cid}` : ''}`).catch(() => null),
       ]);
       if (!isMountedRef.current) return;
       setCosts(costsData);
@@ -129,11 +129,12 @@ const UsagePage: React.FC = () => {
     }
     setApiKeysSaving(true);
     try {
-      const result = await api.put<any>('/v1/ai/api-keys', values);
-      message.success(`Keys updated: ${result.updated?.join(', ')} — ${result.warning}`);
+      const result = await api.put<any>('/v1/ai/api-keys', { ...values, client_id: clientId || undefined });
+      message.success(`Keys updated: ${result.updated?.join(', ')}`);
       apiKeysForm.resetFields();
       // Refresh key status
-      const keysData = await api.get<any>('/v1/ai/api-keys').catch(() => null);
+      const cid = clientId || undefined;
+      const keysData = await api.get<any>(`/v1/ai/api-keys${cid ? `?client_id=${cid}` : ''}`).catch(() => null);
       if (keysData) setApiKeys(keysData);
     } catch (err: any) {
       message.error(err?.message || 'Failed to update keys');
@@ -165,7 +166,7 @@ const UsagePage: React.FC = () => {
     const newCheap = type === 'cheap' ? value : cheapModel;
     const newStrategic = type === 'strategic' ? value : strategicModel;
     try {
-      await modelsApi.updateDefaults(newCheap, newStrategic);
+      await modelsApi.updateDefaults(newCheap, newStrategic, clientId || undefined);
       if (type === 'cheap') setCheapModel(value);
       else setStrategicModel(value);
       message.success(`${type === 'cheap' ? 'Fast' : 'Strategic'} model set to ${value}`);
