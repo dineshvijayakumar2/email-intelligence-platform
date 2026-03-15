@@ -9,7 +9,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Card, Row, Col, Statistic, Switch, InputNumber, Button, Table, Select,
   Tag, Space, Progress, Alert, Divider, Tooltip, Badge, Typography,
-  Spin, message, Form, Input, Checkbox, Empty,
+  Spin, message, Form, Input, Checkbox, Empty, Skeleton,
 } from 'antd';
 import {
   DollarOutlined, ThunderboltOutlined, WarningOutlined,
@@ -88,9 +88,15 @@ const UsagePage: React.FC = () => {
     return () => { isMountedRef.current = false; };
   }, []);
 
-  // Load when clientId changes (ClientSelector fires onChange on mount with saved value)
+  // Load when clientId changes — clear old data immediately for skeleton feedback
   useEffect(() => {
-    if (clientId) loadData();
+    if (!clientId) return;
+    setCosts(null);
+    setMonitoring(null);
+    setControls(null);
+    setRecentLogs([]);
+    setApiKeys(null);
+    loadData();
   }, [clientId]);
 
   // Auto-refresh every 60s (silent — no loading spinner)
@@ -179,23 +185,7 @@ const UsagePage: React.FC = () => {
     }
   };
 
-  if (loading && !costs) {
-    return (
-      <div style={{ padding: '24px', maxWidth: 1400, margin: '0 auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-          <Title level={3} style={{ margin: 0 }}>AI Usage & Monitoring</Title>
-          <ClientSelector value={clientId} onChange={setClientId} />
-        </div>
-        {!clientId ? (
-          <Card className="glass-card"><Empty description="Select a client to view AI usage" /></Card>
-        ) : (
-          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 300 }}>
-            <Spin size="large" />
-          </div>
-        )}
-      </div>
-    );
-  }
+  const showSkeleton = loading || !costs;
 
   const budgetUsedPct = controls
     ? Math.min((controls.session_spend_usd / controls.daily_budget_usd) * 100, 100)
@@ -305,51 +295,65 @@ const UsagePage: React.FC = () => {
         />
       )}
 
+      {!clientId && (
+        <Card className="glass-card" style={{ marginBottom: 24 }}><Empty description="Select a client to view AI usage" /></Card>
+      )}
+
       {/* Row 1: Key Metrics */}
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         <Col xs={24} sm={12} md={6}>
           <Card className="glass-card" size="small">
-            <Statistic
-              title="Total Spend (30d)"
-              value={costs?.total_cost_usd || 0}
-              prefix={<DollarOutlined />}
-              precision={4}
-              valueStyle={{ color: '#667eea' }}
-            />
+            {showSkeleton ? <Skeleton active paragraph={{ rows: 1 }} /> : (
+              <Statistic
+                title="Total Spend (30d)"
+                value={costs?.total_cost_usd || 0}
+                prefix={<DollarOutlined />}
+                precision={4}
+                valueStyle={{ color: '#667eea' }}
+              />
+            )}
           </Card>
         </Col>
         <Col xs={24} sm={12} md={6}>
           <Card className="glass-card" size="small">
-            <Statistic
-              title="Session Spend"
-              value={controls?.session_spend_usd || 0}
-              prefix={<DollarOutlined />}
-              precision={4}
-              valueStyle={{ color: budgetColor }}
-            />
-            <Progress
-              percent={Math.round(budgetUsedPct)}
-              strokeColor={budgetColor}
-              size="small"
-              format={(pct) => `${pct}% of $${controls?.daily_budget_usd || 0}`}
-            />
+            {showSkeleton ? <Skeleton active paragraph={{ rows: 2 }} /> : (
+              <>
+                <Statistic
+                  title="Session Spend"
+                  value={controls?.session_spend_usd || 0}
+                  prefix={<DollarOutlined />}
+                  precision={4}
+                  valueStyle={{ color: budgetColor }}
+                />
+                <Progress
+                  percent={Math.round(budgetUsedPct)}
+                  strokeColor={budgetColor}
+                  size="small"
+                  format={(pct) => `${pct}% of $${controls?.daily_budget_usd || 0}`}
+                />
+              </>
+            )}
           </Card>
         </Col>
         <Col xs={24} sm={12} md={6}>
           <Card className="glass-card" size="small">
-            <Statistic
-              title="Requests (24h)"
-              value={monitoring?.total_requests_24h || 0}
-              prefix={<ThunderboltOutlined />}
-            />
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              {monitoring?.total_failures_24h || 0} failures
-            </Text>
+            {showSkeleton ? <Skeleton active paragraph={{ rows: 1 }} /> : (
+              <>
+                <Statistic
+                  title="Requests (24h)"
+                  value={monitoring?.total_requests_24h || 0}
+                  prefix={<ThunderboltOutlined />}
+                />
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {monitoring?.total_failures_24h || 0} failures
+                </Text>
+              </>
+            )}
           </Card>
         </Col>
         <Col xs={24} sm={12} md={6}>
           <Card className="glass-card" size="small">
-            {(() => {
+            {showSkeleton ? <Skeleton active paragraph={{ rows: 1 }} /> : (() => {
               const dailyRemaining = Math.max((controls?.daily_budget_usd || 0) - (controls?.session_spend_usd || 0), 0);
               const monthlyRemaining = Math.max((controls?.monthly_budget_usd || 0) - (costs?.total_cost_usd || 0), 0);
               const dailyPct = controls?.daily_budget_usd ? (dailyRemaining / controls.daily_budget_usd) * 100 : 100;
@@ -758,14 +762,16 @@ const UsagePage: React.FC = () => {
 
       {/* Row 4: Recent API Calls */}
       <Card title="Recent API Calls" className="glass-card">
-        <Table
-          dataSource={recentLogs}
-          columns={logColumns}
-          rowKey={(r) => r.id || `${r.created_at}-${Math.random()}`}
-          size="small"
-          pagination={{ pageSize: 15, size: 'small' }}
-          scroll={{ x: 900 }}
-        />
+        {showSkeleton ? <Skeleton active paragraph={{ rows: 5 }} /> : (
+          <Table
+            dataSource={recentLogs}
+            columns={logColumns}
+            rowKey={(r) => r.id || `${r.created_at}-${Math.random()}`}
+            size="small"
+            pagination={{ pageSize: 15, size: 'small' }}
+            scroll={{ x: 900 }}
+          />
+        )}
       </Card>
 
       {/* Row 5: Prompt Editor */}
