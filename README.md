@@ -44,26 +44,30 @@ A comprehensive email intelligence platform for processing, analyzing, and extra
 - Threading overhaul: Multi-priority thread ID (provider→headers→heuristic), confidence scoring
 - Navigation: 5 top-level items (Dashboard, Emails, Intelligence, Analytics, Manage)
 
-### Stage 3: In Progress - AI Semantic Intelligence
-**Status**: Sprint 3 Week 1 + Frontend + Analytics UX COMPLETE (March 10, 2026)
+### Stage 3: Complete - AI Semantic Intelligence
+**Status**: Sprint 3 COMPLETE including AM-centric rehaul (March 15, 2026)
 
-**Sprint 3 - AI Layer (Week 1 COMPLETE)**:
-- Three-layer AI architecture: Per-Email AI → Action Bucket Engine → Aggregation
-- Claude API integration (Haiku for per-email, Sonnet for digests) with cost tracking
-- PII privacy filter (strips credit cards, SSN, API keys, passwords before AI)
+**Sprint 3 - AI Layer + QB Integration + AM Rehaul (COMPLETE)**:
+- Three-layer AI architecture: Per-Email AI → AM Signal Engine → Strategic Digest
+- Claude API (Haiku/Sonnet) + LangChain/LangGraph + Gemini 2.0 Flash (free tier)
+- 6 AM-centric action signals: response_urgency, deal_at_risk, retention_risk, revenue_opportunity, new_relationship, account_neglect
+- Customer lifecycle tiers: prospect, new_customer, active_customer, at_risk, dormant, champion
+- QuickBase CRM integration (5-table sync, 4-tier company matching, data propagation)
+- AM efficiency analyzer (business-hours response times, quote conversion, revenue attribution)
+- Strategic digest: LangGraph ReAct agent with 8-section executive output
 - Multi-axis email classification (intent, action_type, business_signal, sentiment, urgency)
-- 8 Action Buckets (Buying Signal, Expansion, Churn Risk, Competitor Threat + 4 relationship-level)
 - Entity extraction (competitors, products, amounts, dates)
-- Daily AI digest generator with executive summaries
 - Email rules engine (auto-tag, auto-forward, priority escalation)
-- 19 AI API endpoints + 4 rules endpoints
+- 25+ AI API endpoints + 6 QB endpoints + 5 rules endpoints
 - AI Usage & Cost monitoring dashboard
 
 **Sprint 3 - Frontend (COMPLETE)**:
-- Smart Inbox with AI annotations, column filters/sorting, iframe HTML email preview
+- Smart Inbox with AI annotations, column filters/sorting, Re-bucket button
+- Strategic Digest page with 8-section AM-centric analysis
 - Daily Digest page with AI-generated summaries
-- Opportunities page (4 tabs: Buying Signals, Expansion, Churn Risk, Competitor)
+- Opportunities page (4 tabs: Action Items, Opportunities, Competitors, Entities)
 - Usage & Monitoring dashboard (cost tracking, model usage, processing stats)
+- Lifecycle badges on company/contact list and detail pages
 
 **Analytics UX Overhaul (COMPLETE)**:
 - Cross-page drilldown: thread→emails, contact→emails/threads, company→all pages
@@ -71,11 +75,6 @@ A comprehensive email intelligence platform for processing, analyzing, and extra
 - Search on companies and threads pages (server-side)
 - Clickable counts everywhere (emails, contacts, decision makers, threads)
 - ClientSelector: module-level cache for instant page loads
-
-**Sprint 3 - Remaining (Sessions 7-13)**:
-- Relationship Intelligence (influence mapping, gap analysis, AI summaries)
-- Advanced Actions (suggested responses, churn alerts, marketing exports)
-- Integration & Polish (end-to-end testing, performance optimization)
 
 ---
 
@@ -234,13 +233,11 @@ The 13-step extraction pipeline automatically processes all emails in a mailbox 
 |---------|-------------|--------|
 | 1-2 | AI Client + Privacy Filter + Usage Tracker + DB Schema | **Complete** |
 | 3 | Per-Email AI Analyzer (multi-axis classification, entity extraction) | **Complete** |
-| 4 | Action Bucket Engine (8 buckets, confidence-gated) | **Complete** |
+| 4 | Action Signal Engine (6 AM-centric signals, v3) | **Complete** |
 | 5 | Entity Aggregator + Daily Digest Generator | **Complete** |
 | 6 | Email Rules Engine (auto-tag, auto-forward, priority escalation) | **Complete** |
 | 6b | Frontend: Smart Inbox, Digest, Opportunities, Usage pages | **Complete** |
-| 7-8 | Relationship Intelligence (influence mapping, gap analysis, AI summaries) | Pending |
-| 9-10 | Advanced Actions (suggested responses, churn alerts, marketing exports) | Pending |
-| 11-13 | Integration, testing, optimization, production deployment | Pending |
+| 7-19 | QB Integration + LangChain Strategic Digest + AM Rehaul | **Complete** |
 
 **AI Architecture**: Three-layer design — Per-Email AI (Claude Haiku ~$0.001/email) → Action Bucket Engine (pure Python) → Aggregation Layer (pure Python). Admin usage tracking with cost control.
 
@@ -325,9 +322,12 @@ Run in Supabase SQL Editor:
 15. `scripts/sprint2/sprint2_migration_009_comm_pattern_calcs.sql`
 16. `scripts/sprint2/sprint2_migration_010_incremental_mode.sql`
 
-**Sprint 3 Migrations (AI Layer):**
+**Sprint 3 Migrations (AI + QB + AM):**
 17. `scripts/sprint3/sprint3_migration_013_ai_layer.sql` (AI tables + enums + indexes)
 18. `scripts/sprint3/sprint3_migration_014_add_skipped_status.sql` (skipped status for pre-filtered emails)
+19. `scripts/sprint3/sprint3_migration_021_strategic_digest.sql` (9 QB + strategic tables)
+20. `scripts/migrations/021a_add_qb_enrichment_columns.sql` (QB enrichment on companies/contacts)
+21. `scripts/migrations/026_am_lifecycle_rehaul.sql` (timezone, lifecycle tiers, has_response_urgency)
 
 See `scripts/sprint2/README_MIGRATIONS.md` for detailed migration guide.
 
@@ -388,10 +388,11 @@ npm run dev
 
 ### Backend
 - **Framework**: FastAPI 0.104+
-- **Database**: Supabase (PostgreSQL) with 10 Sprint 2 + 2 Sprint 3 migrations
+- **Database**: Supabase (PostgreSQL) with 10 Sprint 2 + 5 Sprint 3 migrations
 - **Authentication**: Supabase Auth + PyJWT
 - **Cache**: Redis 7.0+
-- **AI**: Claude API (Haiku for per-email analysis, Sonnet for digests) with PII filter + cost tracking
+- **AI**: Claude API (Haiku/Sonnet) + LangChain/LangGraph + Gemini 2.0 Flash with PII filter + cost tracking
+- **Business Data**: QuickBase API integration
 - **Cloud Storage**: Google Drive API
 - **Processing**: ThreadPoolExecutor (20 workers)
 - **Extraction Pipeline**: 13-step orchestrator with 8 specialized services
@@ -467,8 +468,8 @@ MIT License - see LICENSE file for details
 
 ---
 
-**Stage 1 Complete | Stage 2 Complete | Stage 3 (AI) In Progress — Week 1 + Frontend Complete**
+**Stage 1 Complete | Stage 2 Complete | Stage 3 (AI + QB + AM Rehaul) Complete**
 
-*Last Updated: March 3, 2026*
+*Last Updated: March 15, 2026*
 
 *Built with Python, TypeScript, React, Supabase Auth, Claude AI, Google Cloud APIs, and Microsoft Graph API*

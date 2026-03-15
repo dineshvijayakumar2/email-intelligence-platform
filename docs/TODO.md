@@ -28,28 +28,29 @@ Design: `docs/INVITE_USER_SMTPLESS.md`
 
 ---
 
-## CURRENT FOCUS: Sprint 3 AI Layer
+## CURRENT FOCUS: Sprint 4 Power Mode (PLANNED)
 
-Full plan: `docs/AI_MVP_PLAN.md` (3-week session-by-session plan + implementation status)
+Full plan: `docs/SPRINT3_4_IMPLEMENTATION_PLAN.md`
 
-### Week 1: Intelligence Engine + Buckets + Digest — ✅ COMPLETE
-- [x] Session 1: DB migration + AI client + privacy filter + usage tracker
-- [x] Session 2: Email analyzer (classify + extract entities + justify)
-- [x] Session 3: Action bucket engine (zero AI cost)
-- [x] Session 4: Entity aggregator + all API endpoints (19 endpoints in `ai.py`)
-- [x] Session 5: Digest service (bucket-aware)
+### Sprint 3: AI Layer + QB Integration + AM Rehaul — ✅ COMPLETE (March 15, 2026)
+- [x] Sessions 1-6: Intelligence Engine + Buckets + Digest + Frontend
+- [x] S3.1-S3.19: Platform surgery + QB integration + LangChain + Strategic Digest
+- [x] AM-centric rehaul: 6 new signals replacing old 8 buckets
+- [x] Customer lifecycle tiers (prospect, new_customer, active_customer, at_risk, dormant, champion)
+- [x] AM efficiency analyzer (business-hours response times, per-mailbox KPIs)
+- [x] QB data linkage: 4-tier company matching + email-based contact matching
+- [x] Strategic digest: LangGraph ReAct agent with 8-section output
+- [x] Frontend: Strategic Digest page, lifecycle badges, Re-bucket button
+- [x] Migration 026: AM lifecycle rehaul (timezone, lifecycle tiers, has_response_urgency)
 
-### Week 2: Dashboard Integration + Opportunities — PARTIAL (Frontend pages done, backend integration pending)
-- [x] Session 6: Digest + Smart Inbox frontend (4 pages: inbox, digest, opportunities, usage)
-- [ ] Session 7: Relationship summary service (`ai_relationship_summarizer.py`)
-- [ ] Session 8: Company detail page AI cards
-- [ ] Session 9: Opportunities page Tab 5 (Budget Discussions) — 4 of 5 tabs done
-- [ ] Session 10: AM Comparison + Gap Alerts
-
-### Week 3: Polish + Deploy — NOT STARTED
-- [ ] Session 11: Navigation + usage page + cross-linking (sidebar done, Quick Insights not built)
-- [ ] Session 12: Integration testing
-- [ ] Session 13: Production deploy + docs
+### Sprint 4: Power Mode — NOT STARTED
+- [ ] Deal Radar (proactive deal monitoring)
+- [ ] Ghost Writer (AI-suggested email responses)
+- [ ] Communication Heatmap (activity visualization)
+- [ ] War Room (at-risk customer dashboard)
+- [ ] Smart Alerts (proactive notifications)
+- [ ] AM Scoreboard (performance leaderboard)
+- [ ] Executive Report (automated periodic reports)
 
 ---
 

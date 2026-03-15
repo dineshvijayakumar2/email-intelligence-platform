@@ -27,7 +27,8 @@ This consolidated document contains the complete technical reference for the Ema
 - **Database**: Supabase (PostgreSQL)
 - **Cache**: Redis 7.0+ (required)
 - **Cloud Storage**: Google Drive API
-- **AI**: Claude 3.5 Sonnet API (Stage 2 Sprint 3)
+- **AI**: Claude API (Haiku + Sonnet) + LangChain/LangGraph + Gemini 2.0 Flash
+- **Business Data**: QuickBase API integration (Carbon8 CRM)
 
 ### Core Capabilities
 - Multi-format email extraction (MBOX, PST, OLM)
@@ -36,6 +37,10 @@ This consolidated document contains the complete technical reference for the Ema
 - Real-time processing with Redis progress tracking
 - Gmail LIVE synchronization with incremental sync
 - Per-mailbox Gmail connections (multiple accounts)
+- QuickBase CRM integration (customers, contacts, quotes, jobs, line items)
+- AM-centric intelligence with 6 action signals and customer lifecycle tiers
+- Strategic digest generation with LangGraph ReAct agent
+- AM efficiency analysis (business-hours response times, quote conversion)
 
 ---
 

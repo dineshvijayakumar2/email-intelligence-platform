@@ -65,7 +65,7 @@ const UsagePage: React.FC = () => {
       setMonitoring(monData);
       setControls(ctrlData);
       setRecentLogs(logsData.items);
-      if (modelsData.models?.length) setModels(modelsData.models);
+      if (modelsData?.models?.length) setModels(modelsData.models);
       if (ctrlData?.cheap_model) setCheapModel(ctrlData.cheap_model);
       if (ctrlData?.strategic_model) setStrategicModel(ctrlData.strategic_model);
       if (keysData) setApiKeys(keysData);

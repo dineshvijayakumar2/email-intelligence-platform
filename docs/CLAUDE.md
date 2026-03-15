@@ -89,7 +89,8 @@ Frontend → FastAPI → ThreadPool (20 workers) → Email Processing Pipeline
 - **Redis (REQUIRED)**: Progress cache and job queue management
 - **Core Tables**: emails, processing_jobs, mailboxes, folders, user_profiles, user_client_assignments, clients
 - **Sprint 2 Tables**: customer_companies, customer_contacts, extraction_jobs, email_response_metrics, thread_status, unified_email_rules, internal_domains, free_email_providers
-- **Database Schema**: v1.8+ (12 Sprint 2 migrations)
+- **Sprint 3 Tables**: ai_email_intelligence, ai_usage_log, ai_daily_digests, business_entities, qb_sync_config, qb_customers, qb_contacts, qb_quotes, qb_jobs, qb_sales_line_items, relationship_context_cache, ai_strategic_digests, am_performance_snapshots
+- **Database Schema**: v1.8+ (12 Sprint 2 + 5 Sprint 3 migrations)
 
 ---
 
@@ -356,6 +357,10 @@ Validate → Extract Contacts → Deduplicate → Resolve Companies
 6. Cast float params to `int()` before Supabase `.gte()` on INTEGER columns
 7. Ant Design v5 Slider: use `onChangeComplete` for API triggers, `onChange` only for visual state
 8. `nullsfirst=False` in Supabase `.order()` to push NULLs to end in DESC sort
+9. Column `has_response_urgency` replaces `has_buying_signal` for AM-centric signals
+10. `json_repair` library for fixing malformed LLM JSON responses
+11. ThreadPoolExecutor limited to 3 workers for Supabase connection safety
+12. ZoneInfo requires `tzdata` package on containers without system timezone data
 
 ### Upcoming: Invite User System (Planned)
 
@@ -365,42 +370,31 @@ Restrict open sign-up — admin-controlled user onboarding via invite system.
 - **Backend:** `invites.py` router (6 endpoints), `pending_invites` table, migration 014
 - **Frontend:** InviteUserModal, InviteAcceptPage, Users page integration, login page sign-up removal
 
-### Sprint 3: AI Semantic Intelligence — IN PROGRESS (Week 1 Complete, Week 2 Partial)
+### Sprint 3: AI Semantic Intelligence — ✅ COMPLETE (March 15, 2026)
 
-**Three-Layer Architecture** (see [AI_MVP_PLAN.md](AI_MVP_PLAN.md) for full plan + implementation status):
+**Three-Layer Architecture:**
 1. **Per-Email AI** (Claude Haiku, ~$0.001/email) — classify + extract entities + justify in ONE API call
-2. **Action Bucket Engine** (pure Python, $0) — translates AI scores into 8 business action buckets
-3. **Aggregation Layer** (pure Python, $0) — entity rollup, daily digest, relationship summaries
+2. **Action Signal Engine** (pure Python, $0) — 6 AM-centric signals: response_urgency, deal_at_risk, retention_risk, revenue_opportunity, new_relationship, account_neglect
+3. **Strategic Digest** (LangChain/LangGraph) — ReAct agent with company/contact/thread/quote lookup tools
 
-**What's Built (Sessions 1-6):**
-- 7 backend AI services: `ai_client.py`, `ai_privacy_filter.py`, `ai_usage_tracker.py`, `ai_email_analyzer.py`, `ai_action_bucket_engine.py`, `ai_entity_aggregator.py`, `ai_digest_generator.py`
-- 19 API endpoints in `backend/src/routers/ai.py` + 5 in `rules.py` (incl. combined `/analytics/{client_id}/full`)
-- Backend models: `backend/src/models/ai.py`, `backend/src/models/rules.py`
-- 4 frontend pages: Smart Inbox (`/intelligence/inbox`), Daily Digest (`/intelligence/digest`), Opportunities (`/intelligence/opportunities`), Usage (`/intelligence/usage`)
-- 2 shared components: `ActionBucketTag`, `FeedbackButtons`
-- Frontend service: `aiService.ts` (16 endpoints, TTL cache, dedup), `rulesService.ts` (with combined fullAnalytics)
-- Types: `ai.ts` (13 enums, comprehensive interfaces)
-- Email Rules page: `/analytics/email-rules` (optimized: 1 API call, 3 DB queries, manual sync)
+**What's Built (Sprint 3 Complete):**
+- 15 backend services: `ai_client.py`, `ai_privacy_filter.py`, `ai_usage_tracker.py`, `ai_email_analyzer.py`, `ai_action_bucket_engine.py` (v3), `ai_entity_aggregator.py`, `ai_digest_generator.py`, `ai_insights_engine.py`, `quickbase_client.py`, `quickbase_sync.py`, `langchain_core.py`, `langchain_tools.py`, `strategic_context_builder.py`, `strategic_digest_pipeline.py`, `am_efficiency_analyzer.py`
+- 25+ API endpoints in `ai.py` + 6 in `quickbase.py` + 5 in `rules.py`
+- 5 frontend pages: Smart Inbox, Daily Digest, Opportunities, Usage, Strategic Digest
+- 4 shared components: `ActionBucketTag`, `FeedbackButtons`, `LifecycleBadge`, `AIInsightsCard`
+- Frontend services: `aiService.ts`, `strategicDigestService.ts`, `rulesService.ts`
+- Types: `ai.ts` (6 AM signals + lifecycle tiers), `strategic-digest.ts`
+- Multi-model AI: Claude Haiku/Sonnet + Gemini 2.0 Flash (free tier)
+- QuickBase integration: 5-table sync, 4-tier company matching, data propagation
+- Customer lifecycle tiers: prospect, new_customer, active_customer, at_risk, dormant, champion
+- AM efficiency: business-hours response times, quote conversion, revenue attribution
+- Migrations: 021 (9 QB tables), 021a (enrichment columns), 026 (AM lifecycle rehaul)
 
-**Performance Optimizations (Mar 4, 2026):**
-- Email Rules: Combined endpoint (3 DB queries, down from 66-151), read-only load, manual sync button
-- Inbox: `Promise.all()` for parallel data + bucket summary fetch
-- Opportunities: `Promise.all()` for parallel action items + intelligence fetch, removed wasteful client_id resolution
-- AuthContext: Deduplicated `/api/auth/me` calls (was 4-5x per page load)
-- apiClient: Default timeout increased 5s → 15s
+**Sprint 4: Power Mode — PLANNED**
+- Deal Radar, Ghost Writer, Heatmap, War Room, Alerts, Scoreboard, Executive Report
+- Plan doc: `docs/SPRINT3_4_IMPLEMENTATION_PLAN.md`
 
-**What's Remaining (Sessions 7-13):**
-- Relationship summary service + company detail AI cards
-- AM comparison + gap alerts (bucket-enriched)
-- Main dashboard Quick Insights card + cross-linking
-- Integration testing + production deployment
-
-**Known Issues to Fix:**
-1. Email analysis has no date filter — processes all unanalyzed emails (fix: add date_from/date_to, default 7 days)
-2. Digest considers old emails, no weekly mode (fix: add digest_type daily/weekly, filter by sent_date)
-3. AI cost too high (fix: batch 10→20, body 500→300 chars, skip trivial/forwards)
-
-See [TODO.md](TODO.md) for task list, [CONTINUATION_GUIDE.md](CONTINUATION_GUIDE.md) for handoff, [AI_MVP_PLAN.md](AI_MVP_PLAN.md) for session-by-session plan.
+See [TODO.md](TODO.md) for task list, [CONTINUATION_GUIDE.md](CONTINUATION_GUIDE.md) for handoff.
 
 ---
 
