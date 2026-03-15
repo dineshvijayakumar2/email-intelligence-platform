@@ -235,7 +235,7 @@ class QuickbaseSync:
         return total
 
     async def match_to_companies(self) -> int:
-        """Match qb_customers to customer_companies by normalized name."""
+        """Match qb_customers to customer_companies by normalized name + domain."""
         # Get all QB customers for this client
         qb_result = _execute_with_retry(lambda: self._supabase.table('qb_customers').select(
             'id, customer_name'
@@ -245,16 +245,39 @@ class QuickbaseSync:
         if not unmatched:
             return 0
 
-        # Get all companies for this client
-        company_result = _execute_with_retry(lambda: self._supabase.table('customer_companies').select(
-            'id, company_name'
-        ).eq('client_id', self._client_id).execute())
+        # Get all companies for this client (include email_domains for domain matching)
+        all_companies = []
+        offset = 0
+        while True:
+            company_batch = _execute_with_retry(lambda o=offset: self._supabase.table('customer_companies').select(
+                'id, company_name, email_domains'
+            ).eq('client_id', self._client_id).range(o, o + 999).execute())
+            rows = company_batch.data or []
+            all_companies.extend(rows)
+            if len(rows) == 0:
+                break
+            offset += len(rows)
 
-        companies = {
-            c['company_name'].strip().lower(): c['id']
-            for c in (company_result.data or [])
-            if c.get('company_name')
-        }
+        # Build lookup maps: name → id and domain-keyword → id
+        companies_by_name = {}
+        companies_by_keyword = {}
+        for c in all_companies:
+            if not c.get('company_name'):
+                continue
+            cname = c['company_name'].strip().lower()
+            companies_by_name[cname] = c['id']
+            # Also index by stripped name (no suffixes)
+            for suffix in [' pty ltd', ' pty. ltd.', ' pty', ' ltd', ' inc', ' llc', ' corp',
+                           ' corporation', ' company', ' group', ' holdings', ' services',
+                           ' australia', ' international']:
+                clean = cname.removesuffix(suffix).strip()
+                if clean != cname and clean:
+                    companies_by_name[clean] = c['id']
+            # Index by domain keywords (e.g., "carbon8.com.au" → "carbon8")
+            for domain in (c.get('email_domains') or []):
+                keyword = domain.split('.')[0].lower()
+                if keyword and len(keyword) > 2:
+                    companies_by_keyword[keyword] = c['id']
 
         matched = 0
         for qb_cust in unmatched:
@@ -262,15 +285,33 @@ class QuickbaseSync:
             if not name:
                 continue
 
-            # Exact match first
-            company_id = companies.get(name)
+            # 1. Exact match
+            company_id = companies_by_name.get(name)
 
-            # Try without common suffixes
+            # 2. Try stripped QB name (remove suffixes from QB side too)
             if not company_id:
-                for suffix in [' pty ltd', ' pty. ltd.', ' ltd', ' inc', ' llc', ' corp']:
+                for suffix in [' pty ltd', ' pty. ltd.', ' pty', ' ltd', ' inc', ' llc', ' corp',
+                               ' corporation', ' company', ' group', ' holdings', ' services',
+                               ' australia', ' international']:
                     clean = name.rstrip('.').removesuffix(suffix).strip()
-                    company_id = companies.get(clean)
-                    if company_id:
+                    if clean != name:
+                        company_id = companies_by_name.get(clean)
+                        if company_id:
+                            break
+
+            # 3. Contains match: QB name contains a company name or vice versa
+            if not company_id:
+                for cname, cid in companies_by_name.items():
+                    if len(cname) >= 3 and (cname in name or name in cname):
+                        company_id = cid
+                        break
+
+            # 4. Domain keyword match: QB "Carbon8 Pty Ltd" → keyword "carbon8" → domain match
+            if not company_id:
+                qb_words = name.replace('.', ' ').split()
+                for word in qb_words:
+                    if word in companies_by_keyword:
+                        company_id = companies_by_keyword[word]
                         break
 
             if company_id:
@@ -296,14 +337,22 @@ class QuickbaseSync:
             return 0
 
         # Get all contacts for this client
-        contact_result = _execute_with_retry(lambda: self._supabase.table('customer_contacts').select(
-            'id, email'
-        ).eq('client_id', self._client_id).execute())
+        all_contacts = []
+        offset = 0
+        while True:
+            contact_batch = _execute_with_retry(lambda o=offset: self._supabase.table('customer_contacts').select(
+                'id, email_address'
+            ).eq('client_id', self._client_id).range(o, o + 999).execute())
+            rows = contact_batch.data or []
+            all_contacts.extend(rows)
+            if len(rows) == 0:
+                break
+            offset += len(rows)
 
         contacts_by_email = {
-            c['email'].strip().lower(): c['id']
-            for c in (contact_result.data or [])
-            if c.get('email')
+            c['email_address'].strip().lower(): c['id']
+            for c in all_contacts
+            if c.get('email_address')
         }
 
         matched = 0
