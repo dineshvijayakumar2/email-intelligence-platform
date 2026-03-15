@@ -1201,13 +1201,17 @@ class AIEmailAnalyzer:
         # Enrich with rule-based tags (from EmailTagger) for pre-classification hints
         self._enrich_with_rule_based_tags(emails)
 
-        # Build prompt
+        # Build prompt (configurable via ai_prompt_config table)
+        from .ai_prompt_loader import get_prompt, PROMPT_KEY_EMAIL_ANALYSIS_SYSTEM, PROMPT_KEY_EMAIL_ANALYSIS_USER
+        system_prompt = get_prompt(self.client, PROMPT_KEY_EMAIL_ANALYSIS_SYSTEM, SYSTEM_PROMPT, client_id)
+        user_template = get_prompt(self.client, PROMPT_KEY_EMAIL_ANALYSIS_USER, USER_PROMPT_TEMPLATE, client_id)
+
         emails_json = self._format_emails_for_prompt(emails)
-        user_message = USER_PROMPT_TEMPLATE.format(emails_json=emails_json)
+        user_message = user_template.format(emails_json=emails_json)
 
         # Call Claude Haiku — scale max_tokens with batch size (~700 tokens per email)
         max_tokens = max(4096, len(emails) * 700)
-        ai_response = self.ai_client.call_haiku(SYSTEM_PROMPT, user_message, max_tokens=max_tokens, json_mode=True)
+        ai_response = self.ai_client.call_haiku(system_prompt, user_message, max_tokens=max_tokens, json_mode=True)
 
         if ai_response is None:
             # API failure — mark all as failed

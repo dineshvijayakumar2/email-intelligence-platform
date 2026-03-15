@@ -1350,3 +1350,99 @@ def _load_persisted_model_settings():
             logger.info(f"Loaded AI model settings from DB: cheap={cheap}, strategic={strategic}")
     except Exception as e:
         logger.warning(f"Could not load AI model settings from DB: {e}")
+
+
+# ============================================================================
+# PROMPT CONFIGURATION ENDPOINTS
+# ============================================================================
+
+@router.get("/prompts")
+async def list_prompts(
+    client_id: Optional[str] = Query(default=None),
+    current_user: dict = Depends(get_current_user),
+):
+    """List all configurable prompts (global + client-specific)."""
+    try:
+        query = _supabase.table("ai_prompt_config").select("*").order("prompt_key")
+        if client_id:
+            # Return client-specific + global defaults
+            resp = query.or_(f"client_id.eq.{client_id},client_id.is.null").execute()
+        else:
+            resp = query.execute()
+        return {"prompts": resp.data or []}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)[:200])
+
+
+@router.get("/prompts/defaults")
+async def get_prompt_defaults(
+    current_user: dict = Depends(get_current_user),
+):
+    """Return all hardcoded default prompts (for reference when editing)."""
+    from ..services.ai_email_analyzer import SYSTEM_PROMPT as EMAIL_SYSTEM, USER_PROMPT_TEMPLATE as EMAIL_USER
+    from ..services.strategic_digest_pipeline import STRATEGIC_DIGEST_SYSTEM_PROMPT
+    from ..services.ai_digest_generator import DIGEST_SYSTEM_PROMPT
+    from ..services.ai_insights_engine import COMPANY_INSIGHT_PROMPT, CONTACT_INSIGHT_PROMPT, THREAD_INSIGHT_PROMPT
+
+    return {
+        "defaults": [
+            {"prompt_key": "email_analysis_system", "description": "System prompt for per-email AI classification", "prompt_text": EMAIL_SYSTEM},
+            {"prompt_key": "email_analysis_user", "description": "User prompt template for email batch (use {emails_json})", "prompt_text": EMAIL_USER},
+            {"prompt_key": "strategic_digest", "description": "System prompt for strategic digest LangGraph agent", "prompt_text": STRATEGIC_DIGEST_SYSTEM_PROMPT},
+            {"prompt_key": "daily_digest", "description": "System prompt for daily/weekly digest generation", "prompt_text": DIGEST_SYSTEM_PROMPT},
+            {"prompt_key": "insight_company", "description": "System prompt for company AI insights", "prompt_text": COMPANY_INSIGHT_PROMPT},
+            {"prompt_key": "insight_contact", "description": "System prompt for contact AI insights", "prompt_text": CONTACT_INSIGHT_PROMPT},
+            {"prompt_key": "insight_thread", "description": "System prompt for thread AI insights", "prompt_text": THREAD_INSIGHT_PROMPT},
+        ]
+    }
+
+
+@router.put("/prompts")
+async def upsert_prompt(
+    data: dict,
+    current_user: dict = Depends(get_current_user),
+):
+    """Create or update a prompt. Body: {client_id?, prompt_key, prompt_text, description?, version?}"""
+    prompt_key = data.get("prompt_key")
+    prompt_text = data.get("prompt_text")
+    if not prompt_key or not prompt_text:
+        raise HTTPException(status_code=400, detail="prompt_key and prompt_text are required")
+
+    row = {
+        "prompt_key": prompt_key,
+        "prompt_text": prompt_text,
+        "is_active": True,
+        "description": data.get("description", ""),
+        "version": data.get("version", "v1.0"),
+        "updated_at": datetime.utcnow().isoformat(),
+    }
+    client_id = data.get("client_id")
+    if client_id:
+        row["client_id"] = client_id
+        conflict = "client_id,prompt_key"
+    else:
+        conflict = "prompt_key"
+
+    try:
+        resp = _supabase.table("ai_prompt_config").upsert(row, on_conflict=conflict).execute()
+        # Invalidate cache
+        from ..services.ai_prompt_loader import invalidate_cache
+        invalidate_cache(client_id, prompt_key)
+        return {"status": "saved", "prompt": (resp.data or [None])[0]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)[:200])
+
+
+@router.delete("/prompts/{prompt_id}")
+async def delete_prompt(
+    prompt_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Delete a prompt override (reverts to hardcoded default)."""
+    try:
+        _supabase.table("ai_prompt_config").delete().eq("id", prompt_id).execute()
+        from ..services.ai_prompt_loader import invalidate_cache
+        invalidate_cache()
+        return {"status": "deleted"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)[:200])

@@ -272,10 +272,15 @@ class StrategicDigestPipeline:
                 lookup_thread_messages,
                 lookup_quote_detail,
             ]
+            # Load configurable prompt (DB override → hardcoded default)
+            from .ai_prompt_loader import get_prompt, PROMPT_KEY_STRATEGIC_DIGEST
+            digest_prompt = get_prompt(self.supabase, PROMPT_KEY_STRATEGIC_DIGEST,
+                                       STRATEGIC_DIGEST_SYSTEM_PROMPT, self.client_id)
+
             agent = create_react_agent(
                 model=llm,
                 tools=tools,
-                prompt=STRATEGIC_DIGEST_SYSTEM_PROMPT,
+                prompt=digest_prompt,
             )
 
             if on_progress:

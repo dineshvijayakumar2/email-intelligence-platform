@@ -261,9 +261,14 @@ class AIDigestGenerator:
             priority_emails_json=json.dumps(context["priority_emails"], indent=2),
         )
 
+        # Load configurable prompt (DB override → hardcoded default)
+        from .ai_prompt_loader import get_prompt, PROMPT_KEY_DAILY_DIGEST
+        digest_system_prompt = get_prompt(self.client, PROMPT_KEY_DAILY_DIGEST,
+                                          DIGEST_SYSTEM_PROMPT, client_id)
+
         # Call Claude Sonnet
         ai_response = self.ai_client.call_sonnet(
-            DIGEST_SYSTEM_PROMPT, user_message, max_tokens=2048
+            digest_system_prompt, user_message, max_tokens=2048
         )
 
         if ai_response is None:

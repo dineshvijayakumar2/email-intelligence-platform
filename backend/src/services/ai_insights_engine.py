@@ -86,7 +86,9 @@ class AIInsightsEngine:
             return None
 
         # Generate insight
-        result = self._generate_insight(COMPANY_INSIGHT_PROMPT, context, "company", company_id)
+        from .ai_prompt_loader import get_prompt, PROMPT_KEY_INSIGHT_COMPANY
+        prompt = get_prompt(self._supabase, PROMPT_KEY_INSIGHT_COMPANY, COMPANY_INSIGHT_PROMPT)
+        result = self._generate_insight(prompt, context, "company", company_id)
         return result
 
     async def get_contact_insight(self, contact_id: str, force: bool = False) -> Optional[dict]:
@@ -100,7 +102,9 @@ class AIInsightsEngine:
         if not context:
             return None
 
-        return self._generate_insight(CONTACT_INSIGHT_PROMPT, context, "contact", contact_id)
+        from .ai_prompt_loader import get_prompt, PROMPT_KEY_INSIGHT_CONTACT
+        prompt = get_prompt(self._supabase, PROMPT_KEY_INSIGHT_CONTACT, CONTACT_INSIGHT_PROMPT)
+        return self._generate_insight(prompt, context, "contact", contact_id)
 
     async def get_thread_insight(self, thread_id: str, force: bool = False) -> Optional[dict]:
         """Generate or return cached AI insight for a thread."""
@@ -113,7 +117,9 @@ class AIInsightsEngine:
         if not context:
             return None
 
-        return self._generate_insight(THREAD_INSIGHT_PROMPT, context, "thread", thread_id)
+        from .ai_prompt_loader import get_prompt, PROMPT_KEY_INSIGHT_THREAD
+        prompt = get_prompt(self._supabase, PROMPT_KEY_INSIGHT_THREAD, THREAD_INSIGHT_PROMPT)
+        return self._generate_insight(prompt, context, "thread", thread_id)
 
     def _get_cached_insight(self, entity_type: str, entity_id: str) -> Optional[dict]:
         """Check for a recent cached insight."""
