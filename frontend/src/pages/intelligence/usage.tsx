@@ -82,12 +82,19 @@ const UsagePage: React.FC = () => {
     }
   }, [clientId]);
 
+  const prevClientRef = useRef('');
   useEffect(() => {
     isMountedRef.current = true;
+    return () => { isMountedRef.current = false; };
+  }, []);
+
+  useEffect(() => {
+    // Skip if clientId hasn't actually changed (prevents loops from ClientSelector re-firing)
+    if (clientId === prevClientRef.current) return;
+    prevClientRef.current = clientId;
     invalidateCache('usage');
     loadData();
-    return () => { isMountedRef.current = false; };
-  }, [loadData]);
+  }, [clientId, loadData]);
 
   // Auto-refresh every 60s (silent — no loading spinner)
   useEffect(() => {
