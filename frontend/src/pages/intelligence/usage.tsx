@@ -53,12 +53,14 @@ const UsagePage: React.FC = () => {
   const [reanalyzeIncludeFailed, setReanalyzeIncludeFailed] = useState(false);
   const [reanalyzeLoading, setReanalyzeLoading] = useState(false);
 
-  // Load all data
+  // Load all data (re-runs when clientId changes)
   const loadData = useCallback(async () => {
+    setLoading(true);
     try {
+      const cid = clientId || undefined;
       const [costsData, monData, ctrlData, logsData, modelsData, keysData] = await Promise.all([
-        usageApi.getCosts(undefined, 30),
-        usageApi.getMonitoring(),
+        usageApi.getCosts(cid, 30),
+        usageApi.getMonitoring(cid),
         controlsApi.get(),
         usageApi.getRecent(30),
         modelsApi.getAvailable().catch(() => ({ models: [] })),
@@ -78,10 +80,11 @@ const UsagePage: React.FC = () => {
     } finally {
       if (isMountedRef.current) setLoading(false);
     }
-  }, []);
+  }, [clientId]);
 
   useEffect(() => {
     isMountedRef.current = true;
+    invalidateCache('usage');
     loadData();
     return () => { isMountedRef.current = false; };
   }, [loadData]);
