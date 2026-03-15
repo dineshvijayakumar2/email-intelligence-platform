@@ -89,15 +89,26 @@ const UsagePage: React.FC = () => {
     return () => { isMountedRef.current = false; };
   }, [loadData]);
 
-  // Auto-refresh every 10s
+  // Auto-refresh every 60s (silent — no loading spinner)
   useEffect(() => {
     if (!autoRefresh) return;
     const interval = setInterval(() => {
       invalidateCache('usage');
-      loadData();
-    }, 10000);
+      // Silent refresh: don't set loading=true
+      const cid = clientId || undefined;
+      Promise.all([
+        usageApi.getCosts(cid, 30),
+        usageApi.getMonitoring(cid),
+        usageApi.getRecent(30),
+      ]).then(([costsData, monData, logsData]) => {
+        if (!isMountedRef.current) return;
+        setCosts(costsData);
+        setMonitoring(monData);
+        setRecentLogs(logsData.items);
+      }).catch(() => {});
+    }, 60000);
     return () => clearInterval(interval);
-  }, [autoRefresh, loadData]);
+  }, [autoRefresh, clientId]);
 
   // Control update handler
   const handleControlChange = async (key: string, value: any) => {
