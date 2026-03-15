@@ -1205,21 +1205,13 @@ async def get_available_models():
 
 
 def _get_client_setting(key: str, client_id: Optional[str] = None) -> Optional[str]:
-    """Load a setting: client-specific → global → None."""
-    if not _supabase:
+    """Load a setting for a specific client. No global fallback."""
+    if not _supabase or not client_id:
         return None
     try:
-        # Try client-specific first
-        if client_id:
-            resp = _supabase.table('system_settings').select('value').eq(
-                'key', key
-            ).eq('client_id', client_id).limit(1).execute()
-            if resp.data:
-                return resp.data[0]['value']
-        # Fall back to global
         resp = _supabase.table('system_settings').select('value').eq(
             'key', key
-        ).is_('client_id', 'null').limit(1).execute()
+        ).eq('client_id', client_id).limit(1).execute()
         if resp.data:
             return resp.data[0]['value']
     except Exception:
@@ -1227,29 +1219,23 @@ def _get_client_setting(key: str, client_id: Optional[str] = None) -> Optional[s
     return None
 
 
-def _upsert_client_setting(key: str, value: str, client_id: Optional[str] = None):
-    """Save a setting for a specific client (or global if client_id is None)."""
-    if not _supabase:
+def _upsert_client_setting(key: str, value: str, client_id: str):
+    """Save a setting for a specific client."""
+    if not _supabase or not client_id:
         return
     try:
-        # Check if exists
-        query = _supabase.table('system_settings').select('id').eq('key', key)
-        if client_id:
-            query = query.eq('client_id', client_id)
-        else:
-            query = query.is_('client_id', 'null')
-        existing = query.limit(1).execute()
+        existing = _supabase.table('system_settings').select('id').eq(
+            'key', key
+        ).eq('client_id', client_id).limit(1).execute()
 
-        row = {'key': key, 'value': value, 'updated_at': datetime.utcnow().isoformat()}
-        if client_id:
-            row['client_id'] = client_id
+        row = {'key': key, 'value': value, 'client_id': client_id, 'updated_at': datetime.utcnow().isoformat()}
 
         if existing.data:
             _supabase.table('system_settings').update(row).eq('id', existing.data[0]['id']).execute()
         else:
             _supabase.table('system_settings').insert(row).execute()
     except Exception as e:
-        logger.warning(f"Failed to save setting {key}: {e}")
+        logger.warning(f"Failed to save setting {key} for client {client_id}: {e}")
 
 
 @router.get("/api-keys")
@@ -1340,46 +1326,13 @@ async def update_default_models(
 
 
 def _load_persisted_api_keys():
-    """Load global API keys from system_settings on startup and inject into os.environ."""
-    if not _supabase:
-        return
-    try:
-        import os, base64
-        # Load global defaults (client_id IS NULL)
-        anthropic_val = _get_client_setting('api_key_anthropic')
-        google_val = _get_client_setting('api_key_google')
-
-        if anthropic_val:
-            os.environ['ANTHROPIC_API_KEY'] = base64.b64decode(anthropic_val).decode()
-            logger.info("ANTHROPIC_API_KEY loaded from DB (overrides env)")
-
-        if google_val:
-            os.environ['GOOGLE_GENAI_API_KEY'] = base64.b64decode(google_val).decode()
-            logger.info("GOOGLE_GENAI_API_KEY loaded from DB (overrides env)")
-    except Exception as e:
-        logger.warning(f"Could not load API keys from DB: {e}")
+    """No-op: API keys are per-client now. Env vars serve as baseline."""
+    logger.info("API keys are per-client (system_settings). Env vars used as baseline.")
 
 
 def _load_persisted_model_settings():
-    """Load global AI model preferences from system_settings on startup."""
-    if not _supabase:
-        return
-    try:
-        from ..services.langchain_core import set_default_models
-        cheap = _get_client_setting('ai_cheap_model')
-        strategic = _get_client_setting('ai_strategic_model')
-        if cheap or strategic:
-            set_default_models(
-                cheap=cheap or 'haiku',
-                strategic=strategic or 'sonnet',
-            )
-            update_ai_settings(
-                cheap_model=cheap or 'haiku',
-                strategic_model=strategic or 'sonnet',
-            )
-            logger.info(f"Loaded AI model settings from DB: cheap={cheap}, strategic={strategic}")
-    except Exception as e:
-        logger.warning(f"Could not load AI model settings from DB: {e}")
+    """No-op: Model settings are per-client now. Env vars serve as baseline."""
+    logger.info("Model settings are per-client (system_settings). Env defaults used as baseline.")
 
 
 # ============================================================================

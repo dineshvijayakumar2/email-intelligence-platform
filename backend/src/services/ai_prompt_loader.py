@@ -38,58 +38,46 @@ def get_prompt(
     Returns:
         The prompt text to use
     """
-    # Check cache first (client-specific)
+    if not client_id:
+        return hardcoded_default
+
+    # Check cache
     cache_key = (client_id, prompt_key)
     cached = _cache.get(cache_key)
     if cached and (time.time() - cached[2]) < CACHE_TTL:
         return cached[0]
 
-    # Try client-specific prompt
-    if client_id:
-        result = _load_from_db(supabase_client, prompt_key, client_id)
-        if result:
-            _cache[cache_key] = (result[0], result[1], time.time())
-            return result[0]
-
-    # Try global default
-    global_key = (None, prompt_key)
-    cached_global = _cache.get(global_key)
-    if cached_global and (time.time() - cached_global[2]) < CACHE_TTL:
-        return cached_global[0]
-
-    result = _load_from_db(supabase_client, prompt_key, client_id=None)
+    # Try client-specific prompt from DB
+    result = _load_from_db(supabase_client, prompt_key, client_id)
     if result:
-        _cache[global_key] = (result[0], result[1], time.time())
+        _cache[cache_key] = (result[0], result[1], time.time())
         return result[0]
 
-    # Final fallback: hardcoded default
+    # Fallback: hardcoded default
     return hardcoded_default
 
 
 def _load_from_db(
     supabase_client,
     prompt_key: str,
-    client_id: Optional[str],
+    client_id: str,
 ) -> Optional[Tuple[str, str]]:
-    """Load prompt from ai_prompt_config. Returns (prompt_text, version) or None."""
+    """Load prompt from ai_prompt_config for a specific client. Returns (prompt_text, version) or None."""
     try:
-        query = (
+        resp = (
             supabase_client.table("ai_prompt_config")
             .select("prompt_text, version")
             .eq("prompt_key", prompt_key)
+            .eq("client_id", client_id)
             .eq("is_active", True)
+            .limit(1)
+            .execute()
         )
-        if client_id:
-            query = query.eq("client_id", client_id)
-        else:
-            query = query.is_("client_id", "null")
-
-        resp = query.limit(1).execute()
         rows = resp.data or []
         if rows:
             return (rows[0]["prompt_text"], rows[0].get("version", "v1.0"))
     except Exception as e:
-        logger.debug(f"Failed to load prompt '{prompt_key}' from DB: {e}")
+        logger.debug(f"Failed to load prompt '{prompt_key}' for client {client_id}: {e}")
     return None
 
 
