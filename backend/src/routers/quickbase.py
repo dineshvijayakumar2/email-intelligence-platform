@@ -48,12 +48,12 @@ async def get_config(client_id: str = Query(...)):
     try:
         result = _supabase.table('qb_sync_config').select('*').eq(
             'client_id', client_id
-        ).single().execute()
+        ).limit(1).execute()
 
         if not result.data:
             raise HTTPException(status_code=404, detail="No QB config found for this client")
 
-        cfg = result.data
+        cfg = result.data[0]
 
         return QBSyncConfigResponse(
             client_id=cfg['client_id'],
@@ -144,12 +144,12 @@ async def trigger_sync(
         # Load config
         cfg_result = _supabase.table('qb_sync_config').select('*').eq(
             'client_id', client_id
-        ).single().execute()
+        ).limit(1).execute()
 
         if not cfg_result.data:
             raise HTTPException(status_code=404, detail="No QB config found. Set up config first.")
 
-        config = cfg_result.data
+        config = cfg_result.data[0]
         if not config.get('is_active'):
             raise HTTPException(status_code=400, detail="QB sync is disabled for this client")
 
@@ -184,7 +184,7 @@ async def get_sync_status(client_id: str = Query(...)):
     try:
         cfg_result = _supabase.table('qb_sync_config').select(
             'client_id, last_sync_at, is_active'
-        ).eq('client_id', client_id).single().execute()
+        ).eq('client_id', client_id).limit(1).execute()
 
         if not cfg_result.data:
             raise HTTPException(status_code=404, detail="No QB config found")
@@ -220,7 +220,7 @@ async def get_sync_status(client_id: str = Query(...)):
         except Exception as log_err:
             logger.warning(f"qb_sync_log not available (run migration 023): {log_err}")
 
-        cfg = cfg_result.data
+        cfg = cfg_result.data[0]
         return QBSyncStatus(
             client_id=cfg['client_id'],
             last_sync_at=cfg.get('last_sync_at'),
@@ -261,10 +261,10 @@ async def get_table_fields(
         # --- Resolve QB table ID from config (needed for both cache key and QB call) ---
         cfg_result = _supabase.table('qb_sync_config').select('*').eq(
             'client_id', client_id
-        ).single().execute()
+        ).limit(1).execute()
         if not cfg_result.data:
-            raise HTTPException(status_code=404, detail="No QB config found")
-        cfg = cfg_result.data
+            raise HTTPException(status_code=404, detail="No QB config found for this client")
+        cfg = cfg_result.data[0]
         qb_table_id = cfg[table_map[table]]
 
         # --- Try cache first (unless force refresh) ---

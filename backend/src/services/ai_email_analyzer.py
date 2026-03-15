@@ -1279,14 +1279,13 @@ class AIEmailAnalyzer:
                 batch_size=len(emails),
                 success=len(final_failures) == 0,
                 error_type="validation" if final_failures else None,
-                retry_count=len(retry_successes),
+                retry_count=0,
                 prompt_version=PROMPT_VERSION,
             )
 
         logger.info(
             f"Batch complete: {analyzed_count} analyzed, "
-            f"{len(final_failures)} failed, "
-            f"{len(retry_successes)} recovered via retry"
+            f"{len(final_failures)} failed"
         )
 
         return {
