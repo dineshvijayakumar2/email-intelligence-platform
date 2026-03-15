@@ -19,6 +19,7 @@ import {
 } from '@ant-design/icons';
 import { usageApi, controlsApi, invalidateCache, intelligenceApi } from '../../services/aiService';
 import { MailboxSelector } from '../../components/MailboxSelector';
+import { ClientSelector } from '../../components/analytics/ClientSelector';
 import { modelsApi } from '../../services/strategicDigestService';
 import api from '../../services/apiClient';
 import { formatTime } from '../../utils/dateUtils';
@@ -41,6 +42,9 @@ const UsagePage: React.FC = () => {
   const [apiKeysSaving, setApiKeysSaving] = useState(false);
   const [recentLogs, setRecentLogs] = useState<UsageLogEntry[]>([]);
   const [autoRefresh, setAutoRefresh] = useState(true);
+
+  // Client selector for prompt config
+  const [clientId, setClientId] = useState('');
 
   // Re-analyze state
   const [reanalyzeMailbox, setReanalyzeMailbox] = useState<string[]>([]);
@@ -246,6 +250,7 @@ const UsagePage: React.FC = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <Title level={3} style={{ margin: 0 }}>AI Usage & Monitoring</Title>
         <Space>
+          <ClientSelector value={clientId} onChange={setClientId} />
           <Text type="secondary">Auto-refresh</Text>
           <Switch
             checked={autoRefresh}
@@ -746,7 +751,7 @@ const UsagePage: React.FC = () => {
       </Card>
 
       {/* Row 5: Prompt Editor */}
-      <PromptEditor />
+      <PromptEditor clientId={clientId} />
     </div>
   );
 };
@@ -766,7 +771,7 @@ interface PromptConfig {
   is_active?: boolean;
 }
 
-const PromptEditor: React.FC = () => {
+const PromptEditor: React.FC<{ clientId: string }> = ({ clientId }) => {
   const [defaults, setDefaults] = useState<PromptConfig[]>([]);
   const [overrides, setOverrides] = useState<PromptConfig[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
@@ -775,17 +780,19 @@ const PromptEditor: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   const loadPrompts = useCallback(async () => {
+    if (!clientId) return;
     setLoading(true);
     try {
+      const qs = clientId ? `?client_id=${clientId}` : '';
       const [defaultsResp, overridesResp] = await Promise.all([
         api.get<{ defaults: PromptConfig[] }>('/v1/ai/prompts/defaults'),
-        api.get<{ prompts: PromptConfig[] }>('/v1/ai/prompts'),
+        api.get<{ prompts: PromptConfig[] }>(`/v1/ai/prompts${qs}`),
       ]);
       setDefaults(defaultsResp?.defaults || []);
       setOverrides(overridesResp?.prompts || []);
     } catch { /* silent */ }
     setLoading(false);
-  }, []);
+  }, [clientId]);
 
   useEffect(() => { loadPrompts(); }, [loadPrompts]);
 
@@ -802,6 +809,7 @@ const PromptEditor: React.FC = () => {
     try {
       const def = defaults.find(p => p.prompt_key === editing);
       await api.put('/v1/ai/prompts', {
+        client_id: clientId,
         prompt_key: editing,
         prompt_text: editText,
         description: def?.description || '',
@@ -830,6 +838,12 @@ const PromptEditor: React.FC = () => {
     const override = overrides.find(p => p.prompt_key === key);
     return override ? 'customized' : 'default';
   };
+
+  if (!clientId) return (
+    <Card className="glass-card" title={<Space><ThunderboltOutlined /> AI Prompt Configuration</Space>}>
+      <Text type="secondary">Select a client above to manage AI prompts</Text>
+    </Card>
+  );
 
   if (loading) return <Card className="glass-card" title="AI Prompts"><Spin /></Card>;
 

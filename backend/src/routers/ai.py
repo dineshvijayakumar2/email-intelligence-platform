@@ -1402,30 +1402,40 @@ async def upsert_prompt(
     data: dict,
     current_user: dict = Depends(get_current_user),
 ):
-    """Create or update a prompt. Body: {client_id?, prompt_key, prompt_text, description?, version?}"""
+    """Create or update a prompt. Body: {client_id, prompt_key, prompt_text, description?, version?}"""
     prompt_key = data.get("prompt_key")
     prompt_text = data.get("prompt_text")
+    client_id = data.get("client_id")
     if not prompt_key or not prompt_text:
         raise HTTPException(status_code=400, detail="prompt_key and prompt_text are required")
-
-    row = {
-        "prompt_key": prompt_key,
-        "prompt_text": prompt_text,
-        "is_active": True,
-        "description": data.get("description", ""),
-        "version": data.get("version", "v1.0"),
-        "updated_at": datetime.utcnow().isoformat(),
-    }
-    client_id = data.get("client_id")
-    if client_id:
-        row["client_id"] = client_id
-        conflict = "client_id,prompt_key"
-    else:
-        conflict = "prompt_key"
+    if not client_id:
+        raise HTTPException(status_code=400, detail="client_id is required")
 
     try:
-        resp = _supabase.table("ai_prompt_config").upsert(row, on_conflict=conflict).execute()
-        # Invalidate cache
+        # Check if row already exists for this client + key
+        existing = _supabase.table("ai_prompt_config").select("id").eq(
+            "client_id", client_id
+        ).eq("prompt_key", prompt_key).execute()
+
+        row = {
+            "client_id": client_id,
+            "prompt_key": prompt_key,
+            "prompt_text": prompt_text,
+            "is_active": True,
+            "description": data.get("description", ""),
+            "version": data.get("version", "v1.0"),
+            "updated_at": datetime.utcnow().isoformat(),
+        }
+
+        if existing.data:
+            # Update existing
+            resp = _supabase.table("ai_prompt_config").update(row).eq(
+                "id", existing.data[0]["id"]
+            ).execute()
+        else:
+            # Insert new
+            resp = _supabase.table("ai_prompt_config").insert(row).execute()
+
         from ..services.ai_prompt_loader import invalidate_cache
         invalidate_cache(client_id, prompt_key)
         return {"status": "saved", "prompt": (resp.data or [None])[0]}
