@@ -9,7 +9,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Card, Row, Col, Statistic, Switch, InputNumber, Button, Table, Select,
   Tag, Space, Progress, Alert, Divider, Tooltip, Badge, Typography,
-  Spin, message, Form, Input, Checkbox,
+  Spin, message, Form, Input, Checkbox, Empty,
 } from 'antd';
 import {
   DollarOutlined, ThunderboltOutlined, WarningOutlined,
@@ -53,9 +53,9 @@ const UsagePage: React.FC = () => {
   const [reanalyzeIncludeFailed, setReanalyzeIncludeFailed] = useState(false);
   const [reanalyzeLoading, setReanalyzeLoading] = useState(false);
 
-  // Load all data (re-runs when clientId changes)
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  // Load data — called explicitly, not via useCallback dependency chain
+  const loadData = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const cid = clientId || undefined;
       const [costsData, monData, ctrlData, logsData, modelsData, keysData] = await Promise.all([
@@ -78,41 +78,27 @@ const UsagePage: React.FC = () => {
     } catch (err) {
       console.error('Failed to load usage data:', err);
     } finally {
-      if (isMountedRef.current) setLoading(false);
+      if (!silent && isMountedRef.current) setLoading(false);
     }
-  }, [clientId]);
+  };
 
-  const prevClientRef = useRef('');
+  // Mount / unmount
   useEffect(() => {
     isMountedRef.current = true;
     return () => { isMountedRef.current = false; };
   }, []);
 
+  // Load when clientId changes (ClientSelector fires onChange on mount with saved value)
   useEffect(() => {
-    // Skip if clientId hasn't actually changed (prevents loops from ClientSelector re-firing)
-    if (clientId === prevClientRef.current) return;
-    prevClientRef.current = clientId;
-    invalidateCache('usage');
-    loadData();
-  }, [clientId, loadData]);
+    if (clientId) loadData();
+  }, [clientId]);
 
   // Auto-refresh every 60s (silent — no loading spinner)
   useEffect(() => {
-    if (!autoRefresh) return;
+    if (!autoRefresh || !clientId) return;
     const interval = setInterval(() => {
       invalidateCache('usage');
-      // Silent refresh: don't set loading=true
-      const cid = clientId || undefined;
-      Promise.all([
-        usageApi.getCosts(cid, 30),
-        usageApi.getMonitoring(cid),
-        usageApi.getRecent(30),
-      ]).then(([costsData, monData, logsData]) => {
-        if (!isMountedRef.current) return;
-        setCosts(costsData);
-        setMonitoring(monData);
-        setRecentLogs(logsData.items);
-      }).catch(() => {});
+      loadData(true);
     }, 60000);
     return () => clearInterval(interval);
   }, [autoRefresh, clientId]);
@@ -193,10 +179,20 @@ const UsagePage: React.FC = () => {
     }
   };
 
-  if (loading) {
+  if (loading && !costs) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}>
-        <Spin size="large" />
+      <div style={{ padding: '24px', maxWidth: 1400, margin: '0 auto' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+          <Title level={3} style={{ margin: 0 }}>AI Usage & Monitoring</Title>
+          <ClientSelector value={clientId} onChange={setClientId} />
+        </div>
+        {!clientId ? (
+          <Card className="glass-card"><Empty description="Select a client to view AI usage" /></Card>
+        ) : (
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 300 }}>
+            <Spin size="large" />
+          </div>
+        )}
       </div>
     );
   }
