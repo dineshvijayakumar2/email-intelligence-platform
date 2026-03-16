@@ -378,25 +378,6 @@ class AIDigestGenerator:
             user_template = DIGEST_USER_TEMPLATE
             prompt_key = "daily_digest"
 
-        # Build user message using replace (not .format()) — DB-loaded prompts
-        # have literal braces that .format() would misinterpret
-        user_message = user_template
-        replacements = {
-            "{scope}": scope,
-            "{time_window_label}": time_window_label,
-            "{in_count}": str(context["in_count"]),
-            "{out_count}": str(context["out_count"]),
-            "{open_threads}": str(context["open_threads"]),
-            "{overdue_threads}": str(context["overdue_threads"]),
-            "{bucket_summary_json}": json.dumps(context["bucket_summary"]),
-            "{business_context_json}": json.dumps(business_context, indent=2) if business_context else "Not available",
-            "{relationship_context_json}": json.dumps(relationship_context, indent=2) if relationship_context else "Not available",
-            "{top_signal_emails_json}": json.dumps(context["top_signal_emails"], indent=2),
-            "{priority_emails_json}": json.dumps(context["priority_emails"], indent=2),
-        }
-        for key, val in replacements.items():
-            user_message = user_message.replace(key, val)
-
         # Apply client's model preferences from DB
         from .ai_email_analyzer import _apply_client_model_settings
         _apply_client_model_settings(self.client, client_id)
@@ -406,9 +387,31 @@ class AIDigestGenerator:
         digest_system_prompt = get_prompt(self.client, prompt_key,
                                           default_system, client_id)
 
+        # Build user message with context data only (no schema — that's in the system prompt)
+        # This keeps the user message clean and lets the custom prompt define the output schema.
+        data_context = f"""TIME WINDOW: {time_window_label}
+
+STATS:
+- Emails received: {context["in_count"]} | Sent: {context["out_count"]}
+- Open threads: {context["open_threads"]} | Overdue: {context["overdue_threads"]}
+
+BUSINESS CONTEXT (from CRM):
+{json.dumps(business_context, indent=2) if business_context else "Not available"}
+
+RELATIONSHIP CONTEXT (90-day lookback):
+{json.dumps(relationship_context, indent=2) if relationship_context else "Not available"}
+
+BUSINESS SIGNAL EMAILS:
+{json.dumps(context["top_signal_emails"], indent=2)}
+
+HIGH PRIORITY EMAILS:
+{json.dumps(context["priority_emails"], indent=2)}
+
+Generate the {scope} digest now. Return ONLY valid JSON."""
+
         # Call strategic model (respects client's model preference)
         ai_response = self.ai_client.call_sonnet(
-            digest_system_prompt, user_message, max_tokens=8192
+            digest_system_prompt, data_context, max_tokens=8192
         )
 
         if ai_response is None:
