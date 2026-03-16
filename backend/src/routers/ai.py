@@ -1364,7 +1364,7 @@ async def get_prompt_defaults(
     """Return all hardcoded default prompts (for reference when editing)."""
     from ..services.ai_email_analyzer import SYSTEM_PROMPT as EMAIL_SYSTEM, USER_PROMPT_TEMPLATE as EMAIL_USER
     from ..services.strategic_digest_pipeline import STRATEGIC_DIGEST_SYSTEM_PROMPT
-    from ..services.ai_digest_generator import DIGEST_SYSTEM_PROMPT
+    from ..services.ai_digest_generator import DIGEST_SYSTEM_PROMPT, WEEKLY_DIGEST_SYSTEM_PROMPT
     from ..services.ai_insights_engine import COMPANY_INSIGHT_PROMPT, CONTACT_INSIGHT_PROMPT, THREAD_INSIGHT_PROMPT
 
     return {
@@ -1372,7 +1372,8 @@ async def get_prompt_defaults(
             {"prompt_key": "email_analysis_system", "description": "System prompt for per-email AI classification", "prompt_text": EMAIL_SYSTEM},
             {"prompt_key": "email_analysis_user", "description": "User prompt template for email batch (use {emails_json})", "prompt_text": EMAIL_USER},
             {"prompt_key": "strategic_digest", "description": "System prompt for strategic digest LangGraph agent", "prompt_text": STRATEGIC_DIGEST_SYSTEM_PROMPT},
-            {"prompt_key": "daily_digest", "description": "System prompt for daily/weekly digest generation", "prompt_text": DIGEST_SYSTEM_PROMPT},
+            {"prompt_key": "daily_digest", "description": "System prompt for daily digest generation", "prompt_text": DIGEST_SYSTEM_PROMPT},
+            {"prompt_key": "weekly_digest", "description": "System prompt for weekly strategic review (trends, patterns, pipeline)", "prompt_text": WEEKLY_DIGEST_SYSTEM_PROMPT},
             {"prompt_key": "insight_company", "description": "System prompt for company AI insights", "prompt_text": COMPANY_INSIGHT_PROMPT},
             {"prompt_key": "insight_contact", "description": "System prompt for contact AI insights", "prompt_text": CONTACT_INSIGHT_PROMPT},
             {"prompt_key": "insight_thread", "description": "System prompt for thread AI insights", "prompt_text": THREAD_INSIGHT_PROMPT},

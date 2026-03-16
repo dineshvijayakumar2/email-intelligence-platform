@@ -60,6 +60,9 @@ STATS (already shown in UI — do NOT repeat these):
 BUSINESS CONTEXT (from CRM — use to calibrate importance):
 {business_context_json}
 
+RELATIONSHIP CONTEXT (90-day lookback — use for trend awareness):
+{relationship_context_json}
+
 BUSINESS SIGNAL EMAILS (analyze for cross-cutting patterns):
 {top_signal_emails_json}
 
@@ -86,6 +89,63 @@ Rules:
 - Action items should reference specific emails with concrete next steps.
 - Do not exceed 3 sentences in summary.
 - Do not repeat raw email text.
+- Return JSON only."""
+
+WEEKLY_DIGEST_SYSTEM_PROMPT = """You are an executive intelligence analyst generating a WEEKLY strategic review from email data for a B2B commercial printing company.
+
+Unlike the daily digest, your job is to identify WEEK-LEVEL TRENDS and STRATEGIC PATTERNS:
+
+Focus on:
+- Week-over-week shifts: Is engagement increasing or dropping? Are new industries/verticals appearing?
+- Pipeline momentum: Are quotes progressing to jobs? Are there stalled deals that need intervention?
+- AM workload distribution: Who handled the most volume? Who has overdue threads piling up?
+- Customer behavior patterns: Which companies increased/decreased communication? Any re-engagement or churn signals?
+- Opportunity clusters: Multiple inquiries for similar products/services = market trend worth pursuing
+- Competitive pressure: Any competitor mentions, price sensitivity, or lost-deal signals this week?
+
+Be specific with company names, AM names, and dollar amounts where available.
+Do NOT restate email counts or bucket numbers — the user sees those in the UI.
+Return STRICT JSON only. No markdown. No explanation."""
+
+WEEKLY_DIGEST_USER_TEMPLATE = """Generate a WEEKLY strategic intelligence review with trend analysis.
+
+TIME WINDOW: {time_window_label}
+
+STATS (already shown in UI — do NOT repeat these):
+- Emails received: {in_count} | Sent: {out_count}
+- Open threads: {open_threads} | Overdue: {overdue_threads}
+- Bucket counts: {bucket_summary_json}
+
+BUSINESS CONTEXT (from CRM):
+{business_context_json}
+
+RELATIONSHIP CONTEXT (90-day lookback — use this to identify trends and compare this week vs recent history):
+{relationship_context_json}
+
+BUSINESS SIGNAL EMAILS (this week — analyze for trends, not individual emails):
+{top_signal_emails_json}
+
+HIGH PRIORITY EMAILS (this week — look for patterns across the week):
+{priority_emails_json}
+
+Return JSON with this schema:
+
+{{
+  "summary": "3-5 sentences covering: (1) the dominant theme of the week, (2) pipeline health trend, (3) any emerging risks or opportunities that need action next week. Be specific — name companies and AMs.",
+  "action_items": [
+    {{"email_id": "string or null", "priority": 1, "bucket": "string or null",
+     "action": "specific action for next week", "contact_name": "string or null"}}
+  ],
+  "highlights": [
+    {{"label": "short trend label", "detail": "week-level pattern: what changed, what it means, what to do"}}
+  ]
+}}
+
+Rules:
+- Summary must cover the WHOLE WEEK trend, not describe individual emails.
+- Highlights should be week-level patterns (e.g., "3 inquiries for specialty materials" not "Email from X about Y").
+- Action items should be prioritized for NEXT WEEK, not retroactive.
+- Name specific companies and AMs where relevant.
 - Return JSON only."""
 
 
@@ -247,8 +307,21 @@ class AIDigestGenerator:
         # Sprint 3: Gather QB business context for richer insights
         business_context = self._gather_business_context(client_id)
 
+        # Gather relationship context (lookback 90 days) for trend awareness
+        relationship_context = self._gather_relationship_context(client_id)
+
+        # Select prompt based on digest type
+        if digest_type == "weekly":
+            default_system = WEEKLY_DIGEST_SYSTEM_PROMPT
+            user_template = WEEKLY_DIGEST_USER_TEMPLATE
+            prompt_key = "weekly_digest"
+        else:
+            default_system = DIGEST_SYSTEM_PROMPT
+            user_template = DIGEST_USER_TEMPLATE
+            prompt_key = "daily_digest"
+
         # Build user message
-        user_message = DIGEST_USER_TEMPLATE.format(
+        user_message = user_template.format(
             scope=scope,
             time_window_label=time_window_label,
             in_count=context["in_count"],
@@ -257,14 +330,15 @@ class AIDigestGenerator:
             overdue_threads=context["overdue_threads"],
             bucket_summary_json=json.dumps(context["bucket_summary"]),
             business_context_json=json.dumps(business_context, indent=2) if business_context else "Not available",
+            relationship_context_json=json.dumps(relationship_context, indent=2) if relationship_context else "Not available",
             top_signal_emails_json=json.dumps(context["top_signal_emails"], indent=2),
             priority_emails_json=json.dumps(context["priority_emails"], indent=2),
         )
 
         # Load configurable prompt (DB override → hardcoded default)
-        from .ai_prompt_loader import get_prompt, PROMPT_KEY_DAILY_DIGEST
-        digest_system_prompt = get_prompt(self.client, PROMPT_KEY_DAILY_DIGEST,
-                                          DIGEST_SYSTEM_PROMPT, client_id)
+        from .ai_prompt_loader import get_prompt
+        digest_system_prompt = get_prompt(self.client, prompt_key,
+                                          default_system, client_id)
 
         # Call Claude Sonnet
         ai_response = self.ai_client.call_sonnet(
@@ -612,6 +686,73 @@ class AIDigestGenerator:
             return summaries
         except Exception as e:
             logger.warning(f"Failed to gather business context: {e}")
+            return None
+
+    def _gather_relationship_context(self, client_id: Optional[str]) -> Optional[list]:
+        """
+        Fetch pre-computed relationship context from cache (built by strategic context builder).
+        Provides 90-day lookback: engagement trends, lifecycle tiers, overdue threads, response times.
+        Gives the digest awareness of broader relationship health beyond just today's/this week's emails.
+        """
+        if not client_id:
+            return None
+        try:
+            resp = self._execute_with_retry(
+                self.client.table("relationship_context_cache")
+                .select("company_name,lifecycle_tier,am_name,"
+                        "engagement_trajectory,active_threads_summary,"
+                        "communication_health,ai_signals_summary,"
+                        "qb_financial_summary")
+                .eq("client_id", client_id)
+                .order("computed_at", desc=True)
+                .range(0, 19)  # Top 20 most recently computed
+            )
+            if not resp.data:
+                return None
+
+            summaries = []
+            for r in resp.data:
+                threads = r.get("active_threads_summary") or {}
+                if isinstance(threads, str):
+                    try:
+                        threads = json.loads(threads)
+                    except Exception:
+                        threads = {}
+                health = r.get("communication_health") or {}
+                if isinstance(health, str):
+                    try:
+                        health = json.loads(health)
+                    except Exception:
+                        health = {}
+                signals = r.get("ai_signals_summary") or {}
+                if isinstance(signals, str):
+                    try:
+                        signals = json.loads(signals)
+                    except Exception:
+                        signals = {}
+                financial = r.get("qb_financial_summary") or {}
+                if isinstance(financial, str):
+                    try:
+                        financial = json.loads(financial)
+                    except Exception:
+                        financial = {}
+
+                summaries.append({
+                    "company": r.get("company_name"),
+                    "lifecycle_tier": r.get("lifecycle_tier") or "unknown",
+                    "am": r.get("am_name") or "unassigned",
+                    "engagement_trend": r.get("engagement_trajectory") or "unknown",
+                    "overdue_threads": threads.get("overdue_count", 0),
+                    "active_threads": threads.get("active_count", 0),
+                    "avg_response_hours": health.get("avg_response_hours"),
+                    "urgency_signals": signals.get("bucket_distribution", {}).get("response_urgency", 0),
+                    "retention_risk_signals": signals.get("bucket_distribution", {}).get("retention_risk", 0),
+                    "revenue": financial.get("total_revenue"),
+                    "days_since_invoice": financial.get("days_since_last_invoice"),
+                })
+            return summaries
+        except Exception as e:
+            logger.warning(f"Failed to gather relationship context: {e}")
             return None
 
     # ------------------------------------------------------------------
