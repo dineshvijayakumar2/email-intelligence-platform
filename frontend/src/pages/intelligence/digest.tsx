@@ -20,16 +20,6 @@ import type { DailyDigest, BucketSummary } from '../../types/ai';
 
 const { Title, Text, Paragraph } = Typography;
 
-const BUCKET_COLORS: Record<string, string> = {
-  response_urgency: 'red', deal_at_risk: 'orange', retention_risk: 'red',
-  revenue_opportunity: 'green', new_relationship: 'blue', account_neglect: 'gold',
-};
-
-const BUCKET_LABELS: Record<string, string> = {
-  response_urgency: 'Response Urgency', deal_at_risk: 'Deal at Risk', retention_risk: 'Retention Risk',
-  revenue_opportunity: 'Revenue Opp.', new_relationship: 'New Relationship', account_neglect: 'Account Neglect',
-};
-
 const DigestPage: React.FC = () => {
   const isMountedRef = useRef(true);
   const [loading, setLoading] = useState(false);
@@ -38,7 +28,7 @@ const DigestPage: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<string>(dayjs().format('YYYY-MM-DD'));
   const [digestType, setDigestType] = useState<'daily' | 'weekly'>('daily');
   const [digest, setDigest] = useState<DailyDigest | null>(null);
-  const [bucketSummary, setBucketSummary] = useState<BucketSummary | null>(null);
+  const [_bucketSummary, setBucketSummary] = useState<BucketSummary | null>(null);
   const [error, setError] = useState<string>('');
 
   const loadDigest = useCallback(async (force = false) => {
@@ -116,22 +106,26 @@ const DigestPage: React.FC = () => {
 
       {!loading && mailboxId && digest && (
         <>
-          {/* Bucket Summary Bar */}
-          {bucketSummary && (
+          {/* Digest Context Stats */}
+          {digest.stats && (
             <Card className="glass-card" size="small" style={{ marginBottom: 16 }}>
-              <Space wrap>
-                {Object.entries(BUCKET_LABELS).map(([key, label]) => {
-                  const count = (bucketSummary as any)[key] || 0;
-                  if (count === 0) return null;
-                  return (
-                    <Tag key={key} color={BUCKET_COLORS[key]} style={{ fontSize: 13, padding: '4px 10px' }}>
-                      {label}: {count}
+              <Space wrap size="large">
+                <span><Text strong>Inbound:</Text> {digest.stats.in_count ?? 0}</span>
+                <span><Text strong>Outbound:</Text> {digest.stats.out_count ?? 0}</span>
+                <span><Text strong>Open Threads:</Text> {digest.stats.open_threads ?? 0}</span>
+                {digest.stats.overdue_threads > 0 && (
+                  <Tag color="red">Overdue: {digest.stats.overdue_threads}</Tag>
+                )}
+                {/* Show custom summary_stats from LLM if available */}
+                {(() => {
+                  const custom = (digest as any).summary_stats || (digest as any).raw_ai_response?.summary_stats;
+                  if (!custom) return null;
+                  return Object.entries(custom).filter(([, v]) => v && v !== 0).map(([k, v]) => (
+                    <Tag key={k} color="blue" style={{ fontSize: 12 }}>
+                      {k.replace(/_/g, ' ')}: {String(v)}
                     </Tag>
-                  );
-                })}
-                <Tag style={{ fontSize: 13, padding: '4px 10px' }}>
-                  Total: {bucketSummary.total || 0}
-                </Tag>
+                  ));
+                })()}
               </Space>
             </Card>
           )}
@@ -170,9 +164,7 @@ const DigestPage: React.FC = () => {
                               P{item.priority}
                             </Tag>
                             {item.bucket && (
-                              <Tag color={BUCKET_COLORS[item.bucket] || 'default'}>
-                                {BUCKET_LABELS[item.bucket] || item.bucket}
-                              </Tag>
+                              <Tag>{item.bucket.replace(/_/g, ' ')}</Tag>
                             )}
                             {item.contact_name && <Text type="secondary">{item.contact_name}</Text>}
                           </Space>
