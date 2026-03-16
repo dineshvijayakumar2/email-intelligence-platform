@@ -196,23 +196,30 @@ class DigestResult(BaseModel):
                 if parts:
                     data["summary"] = " ".join(parts[:3])
 
-        # Action items: might be "actions", "next_steps", "recommendations", "tasks"
+        # Action items: map from many possible keys
         if not data.get("action_items"):
-            for alt_key in ["actions", "next_steps", "recommendations", "tasks",
+            for alt_key in ["urgent_today", "this_weeks_actions", "urgent_actions",
+                            "actions", "next_steps", "recommendations", "tasks",
                             "priority_actions", "suggested_actions"]:
                 if data.get(alt_key) and isinstance(data[alt_key], list):
                     items = []
                     for item in data[alt_key]:
                         if isinstance(item, dict):
-                            items.append(item)
+                            items.append({
+                                "priority": item.get("priority", 1),
+                                "action": item.get("action") or item.get("next_action") or item.get("win") or str(item),
+                                "contact_name": item.get("customer") or item.get("am"),
+                                "bucket": item.get("quote_no") or item.get("signal"),
+                            })
                         elif isinstance(item, str):
                             items.append({"action": item, "priority": 3})
                     data["action_items"] = items
                     break
 
-        # Highlights: might be "key_observations", "insights", "findings", "patterns"
+        # Highlights: map from many possible keys
         if not data.get("highlights"):
-            for alt_key in ["key_observations", "insights", "findings", "patterns",
+            for alt_key in ["positive_signals", "wins_this_week", "trends_forming",
+                            "key_observations", "insights", "findings", "patterns",
                             "key_insights", "observations"]:
                 if data.get(alt_key) and isinstance(data[alt_key], list):
                     items = []
@@ -892,44 +899,60 @@ Generate the {scope} digest now. Return ONLY valid JSON."""
             # Normalize: ensure legacy keys exist for frontend compatibility
             # (frontend reads summary, action_items, highlights)
             if "summary" not in parsed:
-                # Build summary from headline or first string field
-                headline = parsed.get("headline")
-                if isinstance(headline, dict):
-                    parts = [v for v in headline.values() if isinstance(v, str) and v]
-                    parsed["summary"] = " | ".join(parts[:3])
-                elif isinstance(headline, str):
-                    parsed["summary"] = headline
-                else:
-                    # Use first long string value
+                # Build summary from headline, executive_summary, or first string field
+                for alt in ["executive_summary", "headline"]:
+                    val = parsed.get(alt)
+                    if isinstance(val, str) and val:
+                        parsed["summary"] = val
+                        break
+                    elif isinstance(val, dict):
+                        parts = [v for v in val.values() if isinstance(v, str) and v]
+                        if parts:
+                            parsed["summary"] = " | ".join(parts[:3])
+                            break
+                # Still no summary — grab any long string
+                if not parsed.get("summary"):
                     for v in parsed.values():
                         if isinstance(v, str) and len(v) > 20:
                             parsed["summary"] = v
                             break
 
             if "action_items" not in parsed:
-                # Map urgent_today to action_items for frontend
-                urgent = parsed.get("urgent_today") or parsed.get("actions") or []
-                if isinstance(urgent, list):
-                    parsed["action_items"] = [
-                        {
-                            "priority": 1,
-                            "action": item.get("action") or item.get("next_action") or str(item),
-                            "contact_name": item.get("customer") or item.get("am"),
-                            "bucket": item.get("quote_no"),
-                        }
-                        for item in urgent if isinstance(item, dict)
-                    ]
+                # Map from many possible keys (daily + weekly custom prompts)
+                for alt in ["urgent_today", "this_weeks_actions", "urgent_actions",
+                            "actions", "next_steps", "recommendations"]:
+                    items = parsed.get(alt)
+                    if isinstance(items, list) and items:
+                        parsed["action_items"] = [
+                            {
+                                "priority": item.get("priority", 1),
+                                "action": item.get("action") or item.get("next_action") or item.get("win") or str(item),
+                                "contact_name": item.get("customer") or item.get("am"),
+                                "bucket": item.get("quote_no") or item.get("signal"),
+                            }
+                            for item in items if isinstance(item, dict)
+                        ]
+                        break
 
             if "highlights" not in parsed:
-                # Map positive_signals or pipeline_watch to highlights
-                signals = parsed.get("positive_signals") or parsed.get("pipeline_watch") or []
-                if isinstance(signals, list):
+                # Map from many possible keys
+                for alt in ["positive_signals", "wins_this_week", "trends_forming",
+                            "pipeline_watch", "key_observations", "insights"]:
+                    items = parsed.get(alt)
+                    if isinstance(items, list) and items:
+                        parsed["highlights"] = [
+                            {
+                                "label": item.get("customer") or item.get("trend") or item.get("signal") or alt.replace("_", " "),
+                                "detail": item.get("signal") or item.get("implication") or item.get("status") or item.get("detail") or str(item),
+                            }
+                            for item in items if isinstance(item, dict)
+                        ]
+                        break
+                # Also map next_week_focus as highlights
+                focus = parsed.get("next_week_focus")
+                if not parsed.get("highlights") and isinstance(focus, list) and focus:
                     parsed["highlights"] = [
-                        {
-                            "label": item.get("customer") or item.get("signal") or "Signal",
-                            "detail": item.get("signal") or item.get("status") or str(item),
-                        }
-                        for item in signals if isinstance(item, dict)
+                        {"label": "Next Week", "detail": item} for item in focus if isinstance(item, str)
                     ]
 
             logger.info(f"Digest parsed successfully with keys: {list(parsed.keys())}")
