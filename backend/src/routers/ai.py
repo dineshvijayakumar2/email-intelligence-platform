@@ -151,21 +151,21 @@ async def trigger_analysis(
                 "mailbox_id": mailbox_id,
                 "job_type": "ai_analysis",
                 "status": "running",
-                "progress_pct": 0,
-                "progress_message": "Starting AI email analysis...",
-                "metadata": {"max_emails": data.max_emails, "date_from": data.date_from, "date_to": data.date_to},
+                "started_at": datetime.utcnow().isoformat(),
+                "error_summary": {"progress_pct": 0, "progress_message": "Starting AI email analysis..."},
             }).execute()
         except Exception as job_err:
             logger.warning(f"Could not create processing job: {job_err}")
             job_id = None
 
-        def _update_job(status: str, pct: int, msg: str, error_log: str = None):
+        def _update_job(status: str, pct: int, msg: str, error_log_text: str = None):
             if not job_id:
                 return
             try:
-                update = {"status": status, "progress_pct": pct, "progress_message": msg}
-                if error_log:
-                    update["error_log"] = error_log
+                summary = {"progress_pct": pct, "progress_message": msg}
+                update: dict = {"status": status, "error_summary": summary}
+                if error_log_text:
+                    update["error_log"] = [{"message": line} for line in error_log_text.split("\n") if line.strip()]
                 if status in ("completed", "failed"):
                     update["completed_at"] = datetime.utcnow().isoformat()
                 _supabase.table("processing_jobs").update(update).eq("id", job_id).execute()
@@ -1074,13 +1074,11 @@ async def generate_strategic_digest(
         try:
             _supabase.table("processing_jobs").insert({
                 "id": job_id,
-                "mailbox_id": None,
                 "job_type": "strategic_digest",
                 "status": "running",
-                "progress_pct": 0,
-                "progress_message": "Starting strategic digest generation...",
-                "metadata": {"client_id": client_id, "period_type": period_type,
-                             "period_start": start_date.isoformat(), "period_end": end_date.isoformat()},
+                "started_at": datetime.utcnow().isoformat(),
+                "error_summary": {"progress_pct": 0, "progress_message": "Starting strategic digest generation...",
+                                  "client_id": client_id, "period_type": period_type},
             }).execute()
         except Exception as job_err:
             logger.warning(f"Could not create processing job: {job_err}")
@@ -1096,7 +1094,10 @@ async def generate_strategic_digest(
             if not job_id:
                 return
             try:
-                update = {"progress_pct": pct, "progress_message": msg, "status": status}
+                update: dict = {
+                    "status": status,
+                    "error_summary": {"progress_pct": pct, "progress_message": msg, "client_id": client_id},
+                }
                 if status in ("completed", "failed", "cancelled"):
                     update["completed_at"] = datetime.utcnow().isoformat()
                 _supabase.table("processing_jobs").update(update).eq("id", job_id).execute()
@@ -1171,23 +1172,23 @@ async def get_digest_progress(client_id: str):
     # Check DB for a running job (survives page navigation and server restarts)
     try:
         resp = _supabase.table("processing_jobs").select(
-            "id,status,progress_pct,progress_message,created_at"
+            "id,status,error_summary,created_at"
         ).eq("job_type", "strategic_digest").eq(
             "status", "running"
         ).order("created_at", desc=True).limit(1).execute()
 
         if resp.data:
             job = resp.data[0]
-            meta = job.get("metadata") or {}
-            if isinstance(meta, str):
+            summary = job.get("error_summary") or {}
+            if isinstance(summary, str):
                 import json as _json
-                meta = _json.loads(meta)
+                summary = _json.loads(summary)
             # Only return if this job belongs to the requested client
-            if meta.get("client_id") == client_id or not meta.get("client_id"):
+            if summary.get("client_id") == client_id or not summary.get("client_id"):
                 return {
                     "phase": "running",
-                    "pct": job.get("progress_pct", 0),
-                    "message": job.get("progress_message", "Generating..."),
+                    "pct": summary.get("progress_pct", 0),
+                    "message": summary.get("progress_message", "Generating..."),
                     "job_id": job["id"],
                     "started_at": job.get("created_at"),
                 }
@@ -1260,42 +1261,64 @@ async def get_am_performance(
 # ============================================================================
 
 @router.get("/insights/company/{company_id}")
-async def get_company_insight(company_id: str, force: bool = Query(default=False)):
+async def get_company_insight(
+    company_id: str,
+    force: bool = Query(default=False),
+    client_id: Optional[str] = Query(default=None),
+):
     """Generate AI insight for a company (cached 24h)."""
     try:
+        # Apply client's model preferences so insights use the right model
+        if client_id:
+            from ..services.ai_email_analyzer import _apply_client_model_settings
+            _apply_client_model_settings(_supabase, client_id)
         from ..services.ai_insights_engine import AIInsightsEngine
         engine = AIInsightsEngine(_supabase)
         result = await engine.get_company_insight(company_id, force=force)
         return {"insight": result}
     except Exception as e:
         logger.error(f"Failed to get company insight: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)[:300])
 
 
 @router.get("/insights/contact/{contact_id}")
-async def get_contact_insight(contact_id: str, force: bool = Query(default=False)):
+async def get_contact_insight(
+    contact_id: str,
+    force: bool = Query(default=False),
+    client_id: Optional[str] = Query(default=None),
+):
     """Generate AI insight for a contact (cached 24h)."""
     try:
+        if client_id:
+            from ..services.ai_email_analyzer import _apply_client_model_settings
+            _apply_client_model_settings(_supabase, client_id)
         from ..services.ai_insights_engine import AIInsightsEngine
         engine = AIInsightsEngine(_supabase)
         result = await engine.get_contact_insight(contact_id, force=force)
         return {"insight": result}
     except Exception as e:
         logger.error(f"Failed to get contact insight: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)[:300])
 
 
 @router.get("/insights/thread/{thread_id}")
-async def get_thread_insight(thread_id: str, force: bool = Query(default=False)):
+async def get_thread_insight(
+    thread_id: str,
+    force: bool = Query(default=False),
+    client_id: Optional[str] = Query(default=None),
+):
     """Generate AI insight for a thread (cached 24h)."""
     try:
+        if client_id:
+            from ..services.ai_email_analyzer import _apply_client_model_settings
+            _apply_client_model_settings(_supabase, client_id)
         from ..services.ai_insights_engine import AIInsightsEngine
         engine = AIInsightsEngine(_supabase)
         result = await engine.get_thread_insight(thread_id, force=force)
         return {"insight": result}
     except Exception as e:
         logger.error(f"Failed to get thread insight: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)[:300])
 
 
 # ============================================================================

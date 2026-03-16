@@ -123,27 +123,39 @@ export const InboxPage: React.FC = () => {
     const poll = async () => {
       if (!isMountedRef.current) return;
       try {
-        // Find the latest ai_analysis job for this mailbox
-        const resp = await api.get<any[]>(`/processing-jobs?mailbox_id=${mbId}&limit=1`);
+        const resp = await api.get<any[]>(`/processing-jobs?mailbox_id=${mbId}&limit=5`);
         const jobs = Array.isArray(resp) ? resp : (resp as any)?.jobs || [];
-        const job = jobs.find((j: any) => j.job_type === 'ai_analysis' && ['running', 'pending'].includes(j.status));
-        if (job) {
-          setAnalysisStatus({ status: job.status, message: job.progress_message || 'Analyzing...', pct: job.progress_pct });
+
+        // Helper to extract progress from error_summary JSONB
+        const getProgress = (job: any) => {
+          const summary = job.error_summary || {};
+          return {
+            pct: summary.progress_pct ?? 0,
+            message: summary.progress_message || '',
+          };
+        };
+
+        // Find active ai_analysis job
+        const activeJob = jobs.find((j: any) => j.job_type === 'ai_analysis' && ['running', 'pending'].includes(j.status));
+        if (activeJob) {
+          const prog = getProgress(activeJob);
+          setAnalysisStatus({ status: activeJob.status, message: prog.message || 'Analyzing...', pct: prog.pct });
           setAnalyzing(true);
           analysisPollRef.current = setTimeout(poll, 5000);
           return;
         }
-        // Check if the most recent ai_analysis job completed/failed
+
+        // Check most recent completed/failed ai_analysis job
         const lastJob = jobs.find((j: any) => j.job_type === 'ai_analysis');
         if (lastJob && ['completed', 'failed'].includes(lastJob.status)) {
-          const isError = lastJob.status === 'failed' || (lastJob.progress_message || '').includes('failed');
+          const prog = getProgress(lastJob);
+          const isError = lastJob.status === 'failed' || prog.message.toLowerCase().includes('failed');
           setAnalysisStatus({
             status: lastJob.status,
-            message: lastJob.progress_message || (isError ? 'Analysis failed' : 'Analysis complete'),
-            pct: lastJob.progress_pct,
+            message: prog.message || (isError ? 'Analysis failed' : 'Analysis complete'),
+            pct: prog.pct,
           });
           setAnalyzing(false);
-          // Refresh data after completion
           if (!isError) {
             loadData();
             if (mbId) bucketApi.getSummary(mbId).then(setBucketSummary).catch(() => {});
@@ -151,7 +163,6 @@ export const InboxPage: React.FC = () => {
           return;
         }
       } catch { /* keep polling */ }
-      // No job found — stop
       setAnalyzing(false);
     };
     analysisPollRef.current = setTimeout(poll, 2000);

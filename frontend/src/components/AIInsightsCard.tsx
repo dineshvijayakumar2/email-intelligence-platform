@@ -9,6 +9,7 @@ const { Text, Paragraph } = Typography;
 interface AIInsightsCardProps {
   entityType: 'company' | 'contact' | 'thread';
   entityId: string;
+  clientId?: string;
 }
 
 const riskColor = (level?: string): string => {
@@ -103,7 +104,7 @@ const ThreadInsight: React.FC<{ insight: AIInsight }> = ({ insight }) => (
   </Space>
 );
 
-const AIInsightsCard: React.FC<AIInsightsCardProps> = ({ entityType, entityId }) => {
+const AIInsightsCard: React.FC<AIInsightsCardProps> = ({ entityType, entityId, clientId }) => {
   const [insight, setInsight] = useState<AIInsight | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -112,7 +113,7 @@ const AIInsightsCard: React.FC<AIInsightsCardProps> = ({ entityType, entityId })
     setLoading(true);
     setError(null);
     try {
-      const result = await insightsApi[entityType](entityId) as any;
+      const result = await insightsApi[entityType](entityId, false, clientId) as any;
       const data: AIInsight = result?.insight ?? result?.data?.insight ?? result;
       if (data?.error) {
         setError(data.error);
@@ -161,7 +162,7 @@ const AIInsightsCard: React.FC<AIInsightsCardProps> = ({ entityType, entityId })
           {entityType === 'contact' && <ContactInsight insight={insight} />}
           {entityType === 'thread' && <ThreadInsight insight={insight} />}
           <div style={{ marginTop: 12, textAlign: 'right' }}>
-            <Button size="small" onClick={handleAnalyze}>Refresh</Button>
+            <Button size="small" onClick={handleAnalyze} loading={loading}>Refresh</Button>
           </div>
         </>
       )}

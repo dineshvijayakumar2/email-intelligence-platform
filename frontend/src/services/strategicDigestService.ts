@@ -58,16 +58,19 @@ export const amPerformanceApi = {
 // --- AI Insights (per-page) ---
 
 export const insightsApi = {
-  company: async (companyId: string, force = false) => {
-    return api.get<{ insight: AIInsight }>(`${API_PREFIX}/insights/company/${companyId}?force=${force}`);
+  company: async (companyId: string, force = false, clientId?: string) => {
+    const qs = `force=${force}${clientId ? `&client_id=${clientId}` : ''}`;
+    return api.get<{ insight: AIInsight }>(`${API_PREFIX}/insights/company/${companyId}?${qs}`);
   },
 
-  contact: async (contactId: string, force = false) => {
-    return api.get<{ insight: AIInsight }>(`${API_PREFIX}/insights/contact/${contactId}?force=${force}`);
+  contact: async (contactId: string, force = false, clientId?: string) => {
+    const qs = `force=${force}${clientId ? `&client_id=${clientId}` : ''}`;
+    return api.get<{ insight: AIInsight }>(`${API_PREFIX}/insights/contact/${contactId}?${qs}`);
   },
 
-  thread: async (threadId: string, force = false) => {
-    return api.get<{ insight: AIInsight }>(`${API_PREFIX}/insights/thread/${threadId}?force=${force}`);
+  thread: async (threadId: string, force = false, clientId?: string) => {
+    const qs = `force=${force}${clientId ? `&client_id=${clientId}` : ''}`;
+    return api.get<{ insight: AIInsight }>(`${API_PREFIX}/insights/thread/${threadId}?${qs}`);
   },
 };
 
