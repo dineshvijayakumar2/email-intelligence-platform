@@ -59,7 +59,7 @@ const PlaygroundPage: React.FC = () => {
   const [dateFrom, setDateFrom] = useState(dayjs().subtract(7, 'day').format('YYYY-MM-DD'));
   const [dateTo, setDateTo] = useState(dayjs().format('YYYY-MM-DD'));
   const [maxEmails, setMaxEmails] = useState(5);
-  const [periodType, setPeriodType] = useState<string>('weekly');
+  const [periodType, setPeriodType] = useState<'weekly' | 'monthly' | 'quarterly'>('weekly');
 
   // Prompts
   const [defaults, setDefaults] = useState<Record<string, string>>({});
