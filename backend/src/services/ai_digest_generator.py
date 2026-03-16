@@ -549,7 +549,7 @@ class AIDigestGenerator:
     def _count_threads(self, mailbox_id: str, date_start: str = None, date_end: str = None) -> tuple[int, int]:
         """Count open and overdue threads for a mailbox within the digest period.
 
-        Only counts threads with recent activity (last_message_date within window),
+        Only counts threads with recent activity (last_message_at within window),
         not all historical threads. Falls back to 30-day window if no dates provided.
         """
         try:
@@ -565,10 +565,10 @@ class AIDigestGenerator:
                 .eq("mailbox_id", mailbox_id)
                 .neq("status", "complete")
                 .neq("status", "dropped")
-                .gte("last_message_date", date_start)
+                .gte("last_message_at", date_start)
             )
             if date_end:
-                open_query = open_query.lte("last_message_date", date_end)
+                open_query = open_query.lte("last_message_at", date_end)
             open_resp = self._execute_with_retry(open_query)
             open_count = open_resp.count or 0
 
@@ -578,10 +578,10 @@ class AIDigestGenerator:
                 .select("id", count="exact")
                 .eq("mailbox_id", mailbox_id)
                 .eq("is_overdue", 'true')
-                .gte("last_message_date", date_start)
+                .gte("last_message_at", date_start)
             )
             if date_end:
-                overdue_query = overdue_query.lte("last_message_date", date_end)
+                overdue_query = overdue_query.lte("last_message_at", date_end)
             overdue_resp = self._execute_with_retry(overdue_query)
             overdue_count = overdue_resp.count or 0
 
