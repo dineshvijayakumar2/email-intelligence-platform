@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 PROMPT_VERSION = "v1.3"
 SCORING_VERSION = "v1.0"
 BATCH_SIZE = 20  # emails per Claude call (doubled from 10 for cost reduction)
-GEMINI_BATCH_SIZE = 10  # Gemini needs smaller batches (output token limit)
+GEMINI_BATCH_SIZE = 5  # Gemini needs small batches (limited JSON output tokens)
 DEFAULT_LOOKBACK_DAYS = 7  # Default: only analyze emails from last 7 days
 
 # ---------------------------------------------------------------------------
