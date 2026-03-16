@@ -34,26 +34,16 @@ type TestType =
   | 'insight_thread'
   | 'rebucket';
 
-const TEST_OPTIONS: { value: TestType; label: string; needs: string }[] = [
-  { value: 'email_analysis', label: 'Email Analysis', needs: 'mailbox' },
-  { value: 'daily_digest', label: 'Daily Digest', needs: 'mailbox' },
-  { value: 'weekly_digest', label: 'Weekly Digest', needs: 'mailbox' },
-  { value: 'strategic_digest', label: 'Strategic Digest', needs: 'client' },
-  { value: 'insight_company', label: 'Company Insight', needs: 'entity_id' },
-  { value: 'insight_contact', label: 'Contact Insight', needs: 'entity_id' },
-  { value: 'insight_thread', label: 'Thread Insight', needs: 'entity_id' },
-  { value: 'rebucket', label: 'Re-bucket Signals', needs: 'mailbox' },
+const TEST_OPTIONS: { value: TestType; label: string; needs: string; promptKeys: string[] }[] = [
+  { value: 'email_analysis', label: 'Email Analysis', needs: 'mailbox', promptKeys: ['email_analysis_system', 'email_analysis_user'] },
+  { value: 'daily_digest', label: 'Daily Digest', needs: 'mailbox', promptKeys: ['daily_digest'] },
+  { value: 'weekly_digest', label: 'Weekly Digest', needs: 'mailbox', promptKeys: ['weekly_digest'] },
+  { value: 'strategic_digest', label: 'Strategic Digest', needs: 'client', promptKeys: ['strategic_digest'] },
+  { value: 'insight_company', label: 'Company Insight', needs: 'entity_id', promptKeys: ['insight_company'] },
+  { value: 'insight_contact', label: 'Contact Insight', needs: 'entity_id', promptKeys: ['insight_contact'] },
+  { value: 'insight_thread', label: 'Thread Insight', needs: 'entity_id', promptKeys: ['insight_thread'] },
+  { value: 'rebucket', label: 'Re-bucket Signals', needs: 'mailbox', promptKeys: [] },
 ];
-
-const PROMPT_KEY_MAP: Record<string, string> = {
-  email_analysis: 'email_analysis_system',
-  daily_digest: 'daily_digest',
-  weekly_digest: 'weekly_digest',
-  strategic_digest: 'strategic_digest',
-  insight_company: 'insight_company',
-  insight_contact: 'insight_contact',
-  insight_thread: 'insight_thread',
-};
 
 const PlaygroundPage: React.FC = () => {
   const [clientId, setClientId] = useState('');
@@ -74,6 +64,7 @@ const PlaygroundPage: React.FC = () => {
   // Prompts
   const [defaults, setDefaults] = useState<Record<string, string>>({});
   const [overrides, setOverrides] = useState<Record<string, { prompt_text: string; updated_at?: string }>>({});
+  const [selectedPromptKey, setSelectedPromptKey] = useState('');
   const [activePrompt, setActivePrompt] = useState('');
   const [editedPrompt, setEditedPrompt] = useState('');
   const [isEdited, setIsEdited] = useState(false);
@@ -105,9 +96,14 @@ const PlaygroundPage: React.FC = () => {
       }
       setOverrides(ovMap);
 
-      const promptKey = PROMPT_KEY_MAP[testType];
-      const ov = ovMap[promptKey];
-      const prompt = ov?.prompt_text || defMap[promptKey] || '';
+      // Select first prompt key for this test type
+      const cfg = TEST_OPTIONS.find(t => t.value === testType);
+      const firstKey = selectedPromptKey && cfg?.promptKeys.includes(selectedPromptKey)
+        ? selectedPromptKey
+        : cfg?.promptKeys[0] || '';
+      setSelectedPromptKey(firstKey);
+      const ov = ovMap[firstKey];
+      const prompt = ov?.prompt_text || defMap[firstKey] || '';
       setActivePrompt(prompt);
       setEditedPrompt(prompt);
       setIsEdited(false);
@@ -122,21 +118,32 @@ const PlaygroundPage: React.FC = () => {
     setIsEdited(val !== activePrompt);
   };
 
+  const handlePromptKeySwitch = (key: string) => {
+    setSelectedPromptKey(key);
+    const ov = overrides[key];
+    const prompt = ov?.prompt_text || defaults[key] || '';
+    setActivePrompt(prompt);
+    setEditedPrompt(prompt);
+    setIsEdited(false);
+    setPromptUpdatedAt(ov?.updated_at || null);
+  };
+
   const handleSavePrompt = async () => {
     if (!clientId) { message.warning('Select a client first'); return; }
+    if (!selectedPromptKey) return;
     setSaving(true);
     try {
-      const promptKey = PROMPT_KEY_MAP[testType];
       await api.put('/v1/ai/prompts', {
         client_id: clientId,
-        prompt_key: promptKey,
+        prompt_key: selectedPromptKey,
         prompt_text: editedPrompt,
         description: `Updated from Playground`,
         version: 'v1.0',
       });
-      message.success('Prompt saved');
+      message.success(`Prompt "${selectedPromptKey}" saved`);
       setActivePrompt(editedPrompt);
       setIsEdited(false);
+      setPromptUpdatedAt(new Date().toISOString());
     } catch {
       message.error('Failed to save prompt');
     }
@@ -144,8 +151,7 @@ const PlaygroundPage: React.FC = () => {
   };
 
   const handleResetPrompt = () => {
-    const promptKey = PROMPT_KEY_MAP[testType];
-    setEditedPrompt(defaults[promptKey] || '');
+    setEditedPrompt(defaults[selectedPromptKey] || '');
     setIsEdited(true);
   };
 
@@ -232,8 +238,7 @@ const PlaygroundPage: React.FC = () => {
   };
 
   const testConfig = TEST_OPTIONS.find(t => t.value === testType);
-  const promptKey = PROMPT_KEY_MAP[testType];
-  const hasPrompt = !!promptKey;
+  const hasPrompt = (testConfig?.promptKeys.length || 0) > 0;
 
   return (
     <div style={{ padding: 24, maxWidth: 1600, margin: '0 auto' }}>
@@ -315,7 +320,7 @@ const PlaygroundPage: React.FC = () => {
               Prompt updated: {new Date(promptUpdatedAt).toLocaleString()}
             </Tag>
           )}
-          {!promptUpdatedAt && overrides[PROMPT_KEY_MAP[testType]] === undefined && PROMPT_KEY_MAP[testType] && (
+          {!promptUpdatedAt && !overrides[selectedPromptKey] && selectedPromptKey && (
             <Tag color="default" style={{ marginLeft: 'auto' }}>Using default prompt</Tag>
           )}
         </Space>
@@ -331,8 +336,22 @@ const PlaygroundPage: React.FC = () => {
               title={
                 <Space>
                   <CodeOutlined />
-                  <Text strong>Prompt: {promptKey}</Text>
+                  {(testConfig?.promptKeys.length || 0) > 1 ? (
+                    <Select
+                      value={selectedPromptKey}
+                      onChange={handlePromptKeySwitch}
+                      size="small"
+                      style={{ width: 220 }}
+                      options={testConfig?.promptKeys.map(k => ({
+                        value: k,
+                        label: k.replace(/_/g, ' '),
+                      }))}
+                    />
+                  ) : (
+                    <Text strong>{selectedPromptKey.replace(/_/g, ' ')}</Text>
+                  )}
                   {isEdited && <Tag color="orange">Unsaved</Tag>}
+                  {overrides[selectedPromptKey] && <Tag color="blue">Custom</Tag>}
                 </Space>
               }
               extra={
