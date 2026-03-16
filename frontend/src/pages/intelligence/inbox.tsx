@@ -13,7 +13,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Row, Col, Typography, Button, Table, Tag, Space, Select,
-  Drawer, Descriptions, message, Empty,
+  Drawer, Descriptions, message, Empty, Alert, Progress,
 } from 'antd';
 import type { TableProps } from 'antd';
 import {
@@ -26,6 +26,7 @@ import { MailboxSelector } from '../../components/MailboxSelector';
 import { ActionBucketTag } from '../../components/ai/ActionBucketTag';
 import { FeedbackButtons } from '../../components/ai/FeedbackButtons';
 import { intelligenceApi, bucketApi } from '../../services/aiService';
+import api from '../../services/apiClient';
 import type {
   IntelligenceResult, IntelligenceFilterParams,
   BucketSummary, IntentType, UrgencyLevel, SentimentType, BucketType,
@@ -65,6 +66,8 @@ export const InboxPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [rebucketing, setRebucketing] = useState(false);
+  const [analysisStatus, setAnalysisStatus] = useState<{ status: string; message: string; pct?: number } | null>(null);
+  const analysisPollRef = useRef<any>(null);
   const [page, setPage] = useState(1);
   const [pageSize] = useState(25);
 
@@ -111,10 +114,59 @@ export const InboxPage: React.FC = () => {
     }
   };
 
+  const stopAnalysisPoll = () => {
+    if (analysisPollRef.current) { clearTimeout(analysisPollRef.current); analysisPollRef.current = null; }
+  };
+
+  const pollAnalysisJob = (mbId: string) => {
+    stopAnalysisPoll();
+    const poll = async () => {
+      if (!isMountedRef.current) return;
+      try {
+        // Find the latest ai_analysis job for this mailbox
+        const resp = await api.get<any[]>(`/processing-jobs?mailbox_id=${mbId}&limit=1`);
+        const jobs = Array.isArray(resp) ? resp : (resp as any)?.jobs || [];
+        const job = jobs.find((j: any) => j.job_type === 'ai_analysis' && ['running', 'pending'].includes(j.status));
+        if (job) {
+          setAnalysisStatus({ status: job.status, message: job.progress_message || 'Analyzing...', pct: job.progress_pct });
+          setAnalyzing(true);
+          analysisPollRef.current = setTimeout(poll, 5000);
+          return;
+        }
+        // Check if the most recent ai_analysis job completed/failed
+        const lastJob = jobs.find((j: any) => j.job_type === 'ai_analysis');
+        if (lastJob && ['completed', 'failed'].includes(lastJob.status)) {
+          const isError = lastJob.status === 'failed' || (lastJob.progress_message || '').includes('failed');
+          setAnalysisStatus({
+            status: lastJob.status,
+            message: lastJob.progress_message || (isError ? 'Analysis failed' : 'Analysis complete'),
+            pct: lastJob.progress_pct,
+          });
+          setAnalyzing(false);
+          // Refresh data after completion
+          if (!isError) {
+            loadData();
+            if (mbId) bucketApi.getSummary(mbId).then(setBucketSummary).catch(() => {});
+          }
+          return;
+        }
+      } catch { /* keep polling */ }
+      // No job found — stop
+      setAnalyzing(false);
+    };
+    analysisPollRef.current = setTimeout(poll, 2000);
+  };
+
+  // Check for active analysis on page load / mailbox change
+  useEffect(() => {
+    if (mailboxId) pollAnalysisJob(mailboxId);
+    return () => stopAnalysisPoll();
+  }, [mailboxId]);
+
   const handleAnalyze = async () => {
     if (!mailboxId) return;
     setAnalyzing(true);
-    // Compute timezone-aware date_from from the selected lookback range
+    setAnalysisStatus({ status: 'starting', message: 'Starting AI analysis...', pct: 0 });
     const fromDate = new Date();
     fromDate.setDate(fromDate.getDate() - analysisRange);
     const dateFrom = localDateToISOStart(formatDateForApi(fromDate));
@@ -122,11 +174,12 @@ export const InboxPage: React.FC = () => {
       max_emails: 500,
       date_from: dateFrom,
     });
-    setAnalyzing(false);
     if (result) {
-      message.success(result.message || 'Analysis started');
+      setAnalysisStatus({ status: 'running', message: result.message || 'Analysis started...', pct: 5 });
+      pollAnalysisJob(mailboxId);
     } else {
-      message.error('Failed to start analysis');
+      setAnalysisStatus({ status: 'failed', message: 'Failed to start analysis', pct: 0 });
+      setAnalyzing(false);
     }
   };
 
@@ -353,6 +406,30 @@ export const InboxPage: React.FC = () => {
           </Space>
         </Col>
       </Row>
+
+      {/* Analysis status banner */}
+      {analysisStatus && (
+        <Alert
+          type={analysisStatus.status === 'failed' ? 'error' : analysisStatus.status === 'completed' ? 'success' : 'info'}
+          showIcon
+          closable={['completed', 'failed'].includes(analysisStatus.status)}
+          onClose={() => setAnalysisStatus(null)}
+          style={{ marginBottom: 16 }}
+          message={
+            <Space direction="vertical" size={4} style={{ width: '100%' }}>
+              <span>{analysisStatus.message}</span>
+              {analyzing && analysisStatus.pct != null && (
+                <Progress
+                  percent={analysisStatus.pct}
+                  size="small"
+                  status={analysisStatus.status === 'failed' ? 'exception' : 'active'}
+                  strokeColor={analysisStatus.status === 'running' ? '#667eea' : undefined}
+                />
+              )}
+            </Space>
+          }
+        />
+      )}
 
       {/* Bucket summary chips */}
       {bucketChips.length > 0 && (
