@@ -36,7 +36,8 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 PROMPT_VERSION = "v1.3"
 SCORING_VERSION = "v1.0"
-BATCH_SIZE = 20  # emails per Claude Haiku call (doubled from 10 for cost reduction)
+BATCH_SIZE = 20  # emails per Claude call (doubled from 10 for cost reduction)
+GEMINI_BATCH_SIZE = 10  # Gemini needs smaller batches (output token limit)
 DEFAULT_LOOKBACK_DAYS = 7  # Default: only analyze emails from last 7 days
 
 # ---------------------------------------------------------------------------
@@ -1381,8 +1382,25 @@ class AIEmailAnalyzer:
         # Parse + validate
         valid_results, failed_items = self._parse_and_validate(ai_response, email_ids)
 
-        # Failed items go straight to final failures (no single-email retry — saves cost)
-        final_failures = failed_items
+        # Separate missing_from_response (requeue) from real failures
+        final_failures = []
+        requeued = 0
+        for fail in failed_items:
+            if fail["error"] == "missing_from_response":
+                # Reset to pending so next batch picks it up (LLM just skipped it)
+                try:
+                    self._execute_with_retry(
+                        self.client.table("ai_email_intelligence")
+                        .update({"processing_status": "pending", "error_message": None})
+                        .eq("email_id", fail["email_id"])
+                    )
+                    requeued += 1
+                except Exception:
+                    final_failures.append(fail)
+            else:
+                final_failures.append(fail)
+        if requeued:
+            logger.info(f"Requeued {requeued} emails missing from LLM response (will retry in next batch)")
 
         # Build lifecycle tier lookup from enriched emails
         lifecycle_lookup = {e["id"]: e.get("_lifecycle_tier") for e in emails}
@@ -1483,10 +1501,13 @@ class AIEmailAnalyzer:
         consecutive_failures = 0
         MAX_CONSECUTIVE_FAILURES = 3
 
+        # Use smaller batches for Gemini (returns fewer results per call)
+        effective_batch = GEMINI_BATCH_SIZE if get_ai_settings().cheap_model == "gemini" else BATCH_SIZE
+
         while total_analyzed + total_failed < max_emails:
             # Fetch next batch of unanalyzed emails
             remaining = max_emails - total_analyzed - total_failed
-            fetch_limit = min(BATCH_SIZE, remaining)
+            fetch_limit = min(effective_batch, remaining)
             emails = self._get_unanalyzed_emails(
                 mailbox_id, limit=fetch_limit,
                 date_from=date_from, date_to=date_to,
