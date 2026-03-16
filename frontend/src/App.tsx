@@ -218,7 +218,7 @@ function App() {
             <Route path="/intelligence/opportunities" element={<ProtectedRoute><Layout><OpportunitiesPage /></Layout></ProtectedRoute>} />
             <Route path="/intelligence/usage" element={<AdminRoute><Layout><UsagePage /></Layout></AdminRoute>} />
             <Route path="/intelligence/strategic-digest" element={<ProtectedRoute><Layout><StrategicDigestPage /></Layout></ProtectedRoute>} />
-            <Route path="/intelligence/playground" element={<AdminRoute><Layout><PlaygroundPage /></Layout></AdminRoute>} />
+            <Route path="/manage/ai-playground" element={<AdminRoute><Layout><PlaygroundPage /></Layout></AdminRoute>} />
             <Route path="/intelligence/quickbase" element={<AdminRoute><Layout><QuickbaseConfigPage /></Layout></AdminRoute>} />
             <Route path="/intelligence/quickbase-data" element={<AdminRoute><Layout><QuickbaseDataPage /></Layout></AdminRoute>} />
 

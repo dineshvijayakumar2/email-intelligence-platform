@@ -111,7 +111,6 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
         { key: '/intelligence/digest', label: <Link to="/intelligence/digest">Daily Digest</Link> },
         { key: '/intelligence/opportunities', label: <Link to="/intelligence/opportunities">Opportunities</Link> },
         { key: '/intelligence/strategic-digest', label: <Link to="/intelligence/strategic-digest">Strategic Digest</Link> },
-        { key: '/intelligence/playground', label: <Link to="/intelligence/playground">AI Playground</Link> },
       ],
     },
     {
@@ -144,6 +143,7 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
         { key: '/settings', label: <Link to="/settings">Settings</Link> },
         ...(isAdmin ? [
           { key: '/intelligence/usage', label: <Link to="/intelligence/usage">AI Usage</Link> },
+          { key: '/manage/ai-playground', label: <Link to="/manage/ai-playground">AI Playground</Link> },
           { key: '/intelligence/quickbase', label: <Link to="/intelligence/quickbase">QB Config</Link> },
           { key: '/intelligence/quickbase-data', label: <Link to="/intelligence/quickbase-data">QB Data</Link> },
           { key: '/users', label: <Link to="/users">Users</Link> },

@@ -8,12 +8,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Card, Row, Col, Typography, Select, Button, Input, Space, Tag,
-  Spin, Alert, Tabs, Descriptions, message, Empty,
+  Spin, Alert, Tabs, Descriptions, message, Empty, DatePicker, InputNumber,
 } from 'antd';
 import {
   ExperimentOutlined, SendOutlined, SaveOutlined, UndoOutlined,
-  CodeOutlined,
+  CodeOutlined, ClockCircleOutlined,
 } from '@ant-design/icons';
+import dayjs from 'dayjs';
 import { ClientSelector } from '../../components/analytics/ClientSelector';
 import { MailboxSelector } from '../../components/MailboxSelector';
 import api from '../../services/apiClient';
@@ -64,11 +65,19 @@ const PlaygroundPage: React.FC = () => {
   const [running, setRunning] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // Parameters (passed to endpoints)
+  const [dateFrom, setDateFrom] = useState(dayjs().subtract(7, 'day').format('YYYY-MM-DD'));
+  const [dateTo, setDateTo] = useState(dayjs().format('YYYY-MM-DD'));
+  const [maxEmails, setMaxEmails] = useState(5);
+  const [periodType, setPeriodType] = useState<string>('weekly');
+
   // Prompts
   const [defaults, setDefaults] = useState<Record<string, string>>({});
+  const [overrides, setOverrides] = useState<Record<string, { prompt_text: string; updated_at?: string }>>({});
   const [activePrompt, setActivePrompt] = useState('');
   const [editedPrompt, setEditedPrompt] = useState('');
   const [isEdited, setIsEdited] = useState(false);
+  const [promptUpdatedAt, setPromptUpdatedAt] = useState<string | null>(null);
 
   // Results
   const [result, setResult] = useState<any>(null);
@@ -89,17 +98,20 @@ const PlaygroundPage: React.FC = () => {
       }
       setDefaults(defMap);
 
-      // Apply client overrides
-      const overrides: Record<string, string> = {};
+      // Apply client overrides (with timestamps)
+      const ovMap: Record<string, { prompt_text: string; updated_at?: string }> = {};
       for (const o of overridesResp?.prompts || []) {
-        overrides[o.prompt_key] = o.prompt_text;
+        ovMap[o.prompt_key] = { prompt_text: o.prompt_text, updated_at: o.updated_at };
       }
+      setOverrides(ovMap);
 
       const promptKey = PROMPT_KEY_MAP[testType];
-      const prompt = overrides[promptKey] || defMap[promptKey] || '';
+      const ov = ovMap[promptKey];
+      const prompt = ov?.prompt_text || defMap[promptKey] || '';
       setActivePrompt(prompt);
       setEditedPrompt(prompt);
       setIsEdited(false);
+      setPromptUpdatedAt(ov?.updated_at || null);
     } catch { /* silent */ }
   }, [clientId, testType]);
 
@@ -149,37 +161,38 @@ const PlaygroundPage: React.FC = () => {
       switch (testType) {
         case 'email_analysis':
           if (!mailboxId) throw new Error('Select a mailbox');
-          output = await intelligenceApi.analyze(mailboxId, { max_emails: 5 });
-          // Wait a bit then fetch results
-          await new Promise(r => setTimeout(r, 5000));
-          const intel = await intelligenceApi.list(mailboxId, { page_size: 5 });
-          output = { trigger: output, results: intel.items?.slice(0, 5) };
+          output = await intelligenceApi.analyze(mailboxId, {
+            max_emails: maxEmails,
+            date_from: dateFrom,
+            date_to: dateTo,
+          });
+          // Wait then fetch results
+          await new Promise(r => setTimeout(r, 8000));
+          const intel = await intelligenceApi.list(mailboxId, { page_size: maxEmails });
+          output = { trigger: output, results: intel.items?.slice(0, maxEmails), params: { maxEmails, dateFrom, dateTo } };
           break;
 
         case 'daily_digest':
           if (!mailboxId) throw new Error('Select a mailbox');
-          output = await digestApi.get(mailboxId, new Date().toISOString().split('T')[0], clientId || undefined, true, 'daily');
+          output = await digestApi.get(mailboxId, dateTo, clientId || undefined, true, 'daily');
           break;
 
         case 'weekly_digest':
           if (!mailboxId) throw new Error('Select a mailbox');
-          output = await digestApi.get(mailboxId, new Date().toISOString().split('T')[0], clientId || undefined, true, 'weekly');
+          output = await digestApi.get(mailboxId, dateTo, clientId || undefined, true, 'weekly');
           break;
 
         case 'strategic_digest':
           if (!clientId) throw new Error('Select a client');
-          await strategicDigestApi.generate(clientId, 'weekly');
-          // Poll for completion
-          for (let i = 0; i < 60; i++) {
+          await strategicDigestApi.generate(clientId, periodType);
+          for (let i = 0; i < 120; i++) {
             await new Promise(r => setTimeout(r, 5000));
             const prog = await strategicDigestApi.getProgress(clientId);
             if (prog.phase === 'completed') {
-              output = await strategicDigestApi.get(clientId, 'weekly');
+              output = await strategicDigestApi.get(clientId, periodType);
               break;
             }
-            if (prog.phase === 'failed') {
-              throw new Error(prog.message || 'Generation failed');
-            }
+            if (prog.phase === 'failed') throw new Error(prog.message || 'Generation failed');
           }
           if (!output) throw new Error('Timed out waiting for digest');
           break;
@@ -259,6 +272,54 @@ const PlaygroundPage: React.FC = () => {
           </Button>
         </Space>
       </div>
+
+      {/* Parameters Row */}
+      <Card className="glass-card" size="small" style={{ marginBottom: 16 }}>
+        <Space wrap size="middle">
+          {(testConfig?.needs === 'mailbox' && ['email_analysis'].includes(testType)) && (
+            <>
+              <div>
+                <Text type="secondary" style={{ fontSize: 11, display: 'block' }}>Date From</Text>
+                <DatePicker value={dayjs(dateFrom)} onChange={d => d && setDateFrom(d.format('YYYY-MM-DD'))} size="small" />
+              </div>
+              <div>
+                <Text type="secondary" style={{ fontSize: 11, display: 'block' }}>Date To</Text>
+                <DatePicker value={dayjs(dateTo)} onChange={d => d && setDateTo(d.format('YYYY-MM-DD'))} size="small" />
+              </div>
+              <div>
+                <Text type="secondary" style={{ fontSize: 11, display: 'block' }}>Max Emails</Text>
+                <InputNumber value={maxEmails} onChange={v => setMaxEmails(v || 5)} min={1} max={50} size="small" style={{ width: 80 }} />
+              </div>
+            </>
+          )}
+          {['daily_digest', 'weekly_digest'].includes(testType) && (
+            <div>
+              <Text type="secondary" style={{ fontSize: 11, display: 'block' }}>Digest Date</Text>
+              <DatePicker value={dayjs(dateTo)} onChange={d => d && setDateTo(d.format('YYYY-MM-DD'))} size="small" />
+            </div>
+          )}
+          {testType === 'strategic_digest' && (
+            <div>
+              <Text type="secondary" style={{ fontSize: 11, display: 'block' }}>Period</Text>
+              <Select value={periodType} onChange={setPeriodType} size="small" style={{ width: 120 }}
+                options={[
+                  { value: 'weekly', label: 'Weekly' },
+                  { value: 'monthly', label: 'Monthly' },
+                  { value: 'quarterly', label: 'Quarterly' },
+                ]}
+              />
+            </div>
+          )}
+          {promptUpdatedAt && (
+            <Tag icon={<ClockCircleOutlined />} color="blue" style={{ marginLeft: 'auto' }}>
+              Prompt updated: {new Date(promptUpdatedAt).toLocaleString()}
+            </Tag>
+          )}
+          {!promptUpdatedAt && overrides[PROMPT_KEY_MAP[testType]] === undefined && PROMPT_KEY_MAP[testType] && (
+            <Tag color="default" style={{ marginLeft: 'auto' }}>Using default prompt</Tag>
+          )}
+        </Space>
+      </Card>
 
       {error && <Alert type="error" message={error} showIcon closable onClose={() => setError('')} style={{ marginBottom: 16 }} />}
 
