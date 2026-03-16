@@ -72,8 +72,26 @@ const UsagePage: React.FC = () => {
       setControls(ctrlData);
       setRecentLogs(logsData.items);
       if (modelsData?.models?.length) setModels(modelsData.models);
-      if (ctrlData?.cheap_model) setCheapModel(ctrlData.cheap_model);
-      if (ctrlData?.strategic_model) setStrategicModel(ctrlData.strategic_model);
+
+      // Model dropdowns: prefer client's DB values, fall back to global controls
+      let clientCheap = ctrlData?.cheap_model || 'haiku';
+      let clientStrategic = ctrlData?.strategic_model || 'sonnet';
+      if (cid) {
+        try {
+          const settingsResp = await api.get<any[]>(`/v1/ai/client-settings?client_id=${cid}`);
+          if (settingsResp) {
+            const settingsMap: Record<string, string> = {};
+            for (const row of settingsResp) {
+              settingsMap[row.key] = row.value;
+            }
+            if (settingsMap['ai_cheap_model']) clientCheap = settingsMap['ai_cheap_model'];
+            if (settingsMap['ai_strategic_model']) clientStrategic = settingsMap['ai_strategic_model'];
+          }
+        } catch { /* fall back to global */ }
+      }
+      setCheapModel(clientCheap);
+      setStrategicModel(clientStrategic);
+
       if (keysData) setApiKeys(keysData);
     } catch (err) {
       console.error('Failed to load usage data:', err);

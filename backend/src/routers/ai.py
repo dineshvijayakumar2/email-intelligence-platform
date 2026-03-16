@@ -1204,6 +1204,21 @@ async def get_available_models():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/client-settings")
+async def get_client_settings(
+    client_id: str = Query(...),
+    current_user: dict = Depends(get_current_user),
+):
+    """Get all system_settings for a specific client."""
+    try:
+        resp = _supabase.table("system_settings").select("key,value").eq(
+            "client_id", client_id
+        ).execute()
+        return resp.data or []
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)[:200])
+
+
 def _get_client_setting(key: str, client_id: Optional[str] = None) -> Optional[str]:
     """Load a setting for a specific client. No global fallback."""
     if not _supabase or not client_id:
