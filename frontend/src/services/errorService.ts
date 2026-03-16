@@ -286,6 +286,10 @@ export const errorService = {
       file_error: 'File Error',
       chunk_error: 'Chunk Error',
       validation_error: 'Validation Error',
+      api_error: 'API Error',
+      credit_error: 'Credit/Billing Error',
+      json_parse_error: 'JSON Parse Error',
+      model_error: 'Model Error',
       other_error: 'Other Error',
     };
     return labels[errorType] || errorType;
@@ -324,6 +328,10 @@ export const errorService = {
       tagging: 'Tagging',
       database: 'Database',
       categorization: 'Categorization',
+      ai_analysis: 'AI Analysis',
+      ai_digest: 'AI Digest',
+      ai_insights: 'AI Insights',
+      ai_buckets: 'AI Buckets',
     };
     return labels[phase] || phase;
   },
@@ -339,6 +347,10 @@ export const errorService = {
       tagging: 'purple',
       database: 'orange',
       categorization: 'magenta',
+      ai_analysis: 'red',
+      ai_digest: 'volcano',
+      ai_insights: 'geekblue',
+      ai_buckets: 'gold',
     };
     return colors[phase] || 'default';
   },

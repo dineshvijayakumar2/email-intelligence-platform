@@ -1161,6 +1161,38 @@ class AIEmailAnalyzer:
         except Exception as e:
             logger.error(f"Failed to save intelligence for email {email_id}: {e}")
 
+    def _log_to_job_errors(self, job_id: Optional[str], mailbox_id: str,
+                            error_type: str, message: str, email_ids: List[str] = None):
+        """Log AI errors to the unified job_errors table for visibility on the Errors page."""
+        if not job_id:
+            return
+        try:
+            from .job_error_logger import get_error_logger, ErrorPhase, ErrorType, ContextType
+            error_logger = get_error_logger()
+            if not error_logger:
+                return
+            # Map string error type to enum
+            et_map = {
+                "api_error": ErrorType.CONNECTION_ERROR,
+                "credit_error": ErrorType.AUTH_ERROR,
+                "json_parse_error": ErrorType.PARSE_ERROR,
+                "validation_error": ErrorType.VALIDATION_ERROR,
+            }
+            et = et_map.get(error_type, ErrorType.OTHER_ERROR)
+            error_logger.log_error(
+                job_id=job_id,
+                phase=ErrorPhase.AI_ANALYSIS,
+                error_type=et,
+                error_message=message[:2000],
+                mailbox_id=mailbox_id,
+                context_type=ContextType.BATCH,
+                context_id=",".join((email_ids or [])[:5]),
+                context_details={"email_count": len(email_ids or []), "model": get_ai_settings().cheap_model},
+                is_retryable="credit" not in message.lower(),
+            )
+        except Exception as e:
+            logger.debug(f"Could not log to job_errors: {e}")
+
     def _save_failed(
         self,
         email_id: str,
@@ -1198,6 +1230,7 @@ class AIEmailAnalyzer:
         mailbox_id: str,
         client_id: Optional[str],
         emails: List[dict],
+        job_id: Optional[str] = None,
     ) -> dict:
         """
         Analyze a batch of emails (up to BATCH_SIZE) with one Claude Haiku call.
@@ -1272,6 +1305,8 @@ class AIEmailAnalyzer:
             logger.error(f"AI API call failed for batch of {len(emails)}: {error_detail}")
             for eid in email_ids:
                 self._save_failed(eid, mailbox_id, client_id, fail_msg)
+            # Log to unified job_errors table
+            self._log_to_job_errors(job_id, mailbox_id, "api_error", fail_msg, email_ids)
             error_type = "credit_balance" if "credit balance" in (error_detail or "").lower() else "api_timeout"
 
             usage_tracker = get_usage_tracker()
@@ -1312,11 +1347,18 @@ class AIEmailAnalyzer:
 
         # Save failures
         for fail in final_failures:
-            error_type = "json_parse" if "json_parse" in fail["error"] else "validation"
             self._save_failed(
                 fail["email_id"], mailbox_id, client_id,
                 fail["error"], ai_response
             )
+
+        # Log batch failures to unified job_errors table
+        if final_failures:
+            error_type = "json_parse_error" if any("json_parse" in f["error"] for f in final_failures) else "validation_error"
+            fail_ids = [f["email_id"] for f in final_failures]
+            errors_text = "; ".join(f'{f["email_id"][:8]}: {f["error"][:100]}' for f in final_failures[:5])
+            self._log_to_job_errors(job_id, mailbox_id, error_type,
+                                    f"{len(final_failures)} emails failed: {errors_text}", fail_ids)
 
         # Log usage
         usage_tracker = get_usage_tracker()
@@ -1357,6 +1399,7 @@ class AIEmailAnalyzer:
         max_emails: int = 5000,
         date_from: Optional[str] = None,
         date_to: Optional[str] = None,
+        job_id: Optional[str] = None,
     ) -> dict:
         """
         Loop through all unanalyzed emails in batches.
@@ -1401,7 +1444,7 @@ class AIEmailAnalyzer:
                 logger.info("No more unanalyzed emails found")
                 break
 
-            result = self.analyze_batch(mailbox_id, client_id, emails)
+            result = self.analyze_batch(mailbox_id, client_id, emails, job_id=job_id)
             total_analyzed += result["analyzed"]
             total_failed += result["failed"]
             batch_count += 1

@@ -45,6 +45,10 @@ class ErrorPhase(str, Enum):
     TAGGING = "tagging"
     DATABASE = "database"
     CATEGORIZATION = "categorization"
+    AI_ANALYSIS = "ai_analysis"
+    AI_DIGEST = "ai_digest"
+    AI_INSIGHTS = "ai_insights"
+    AI_BUCKETS = "ai_buckets"
 
 
 class ErrorType(str, Enum):
@@ -61,6 +65,10 @@ class ErrorType(str, Enum):
     VALIDATION_ERROR = "validation_error"
     FILE_ERROR = "file_error"
     CHUNK_ERROR = "chunk_error"
+    API_ERROR = "api_error"
+    CREDIT_ERROR = "credit_error"
+    JSON_PARSE_ERROR = "json_parse_error"
+    MODEL_ERROR = "model_error"
     OTHER_ERROR = "other_error"
 
 
