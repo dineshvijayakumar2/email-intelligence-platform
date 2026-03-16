@@ -1067,30 +1067,54 @@ async def generate_strategic_digest(
 
         pipeline = StrategicDigestPipeline(_supabase, client_id)
 
-        # Initialise progress entry
+        # Create a processing job for persistent progress tracking
+        import uuid
+        job_id = str(uuid.uuid4())
+        started_at = datetime.utcnow().isoformat()
+        try:
+            _supabase.table("processing_jobs").insert({
+                "id": job_id,
+                "mailbox_id": None,
+                "job_type": "strategic_digest",
+                "status": "running",
+                "progress_pct": 0,
+                "progress_message": "Starting strategic digest generation...",
+                "metadata": {"client_id": client_id, "period_type": period_type,
+                             "period_start": start_date.isoformat(), "period_end": end_date.isoformat()},
+            }).execute()
+        except Exception as job_err:
+            logger.warning(f"Could not create processing job: {job_err}")
+            job_id = None
+
+        # Also keep in-memory for fast polling
         _digest_progress[client_id] = {
-            "phase": "starting",
-            "current": 0,
-            "total": 0,
-            "pct": 0,
-            "message": "Initialising…",
-            "started_at": datetime.utcnow().isoformat(),
+            "phase": "starting", "current": 0, "total": 0, "pct": 0,
+            "message": "Initialising…", "started_at": started_at, "job_id": job_id,
         }
+
+        def _update_job(pct: int, msg: str, status: str = "running"):
+            if not job_id:
+                return
+            try:
+                update = {"progress_pct": pct, "progress_message": msg, "status": status}
+                if status in ("completed", "failed", "cancelled"):
+                    update["completed_at"] = datetime.utcnow().isoformat()
+                _supabase.table("processing_jobs").update(update).eq("id", job_id).execute()
+            except Exception:
+                pass
 
         def _on_progress(phase: str, current: int, total: int, message: str = ""):
             pct = round(current / total * 100) if total else 0
+            msg = message or f"{phase.replace('_', ' ').title()} ({current}/{total})"
+            elapsed = round(_time.time() - _digest_progress.get(client_id, {}).get("_t0", _time.time()), 1)
             _digest_progress[client_id] = {
-                "phase": phase,
-                "current": current,
-                "total": total,
-                "pct": pct,
-                "message": message or f"{phase.replace('_', ' ').title()} ({current}/{total})",
-                "started_at": _digest_progress.get(client_id, {}).get("started_at"),
-                "elapsed_s": round(_time.time() - _digest_progress.get(client_id, {}).get("_t0", _time.time()), 1),
+                "phase": phase, "current": current, "total": total, "pct": pct,
+                "message": msg, "started_at": started_at, "elapsed_s": elapsed, "job_id": job_id,
             }
+            _update_job(pct, msg)
 
         _digest_progress[client_id]["_t0"] = _time.time()
-        _digest_cancel[client_id] = False  # reset any previous cancel flag
+        _digest_cancel[client_id] = False
 
         def _cancel_check() -> bool:
             return _digest_cancel.get(client_id, False)
@@ -1106,21 +1130,19 @@ async def generate_strategic_digest(
                 )
                 if _cancel_check():
                     _digest_progress[client_id] = {
-                        "phase": "cancelled", "current": 0, "total": 0,
-                        "pct": 0, "message": "Generation cancelled by user",
+                        "phase": "cancelled", "pct": 0, "message": "Generation cancelled by user", "job_id": job_id,
                     }
-                    logger.info(f"Strategic digest cancelled for client {client_id}")
+                    _update_job(0, "Cancelled by user", "cancelled")
                 else:
                     _digest_progress[client_id] = {
-                        "phase": "completed", "current": 0, "total": 0,
-                        "pct": 100, "message": "Digest generated successfully",
+                        "phase": "completed", "pct": 100, "message": "Digest generated successfully", "job_id": job_id,
                     }
-                    logger.info(f"Strategic digest generated for client {client_id}")
+                    _update_job(100, "Digest generated successfully", "completed")
             except Exception as e:
                 _digest_progress[client_id] = {
-                    "phase": "failed", "current": 0, "total": 0,
-                    "pct": 0, "message": f"Generation failed: {str(e)[:200]}",
+                    "phase": "failed", "pct": 0, "message": f"Generation failed: {str(e)[:200]}", "job_id": job_id,
                 }
+                _update_job(0, f"Failed: {str(e)[:200]}", "failed")
                 logger.error(f"Strategic digest generation failed: {e}")
 
         background_tasks.add_task(_run)
@@ -1130,6 +1152,7 @@ async def generate_strategic_digest(
             "message": "Strategic digest generation started",
             "period_start": start_date.isoformat(),
             "period_end": end_date.isoformat(),
+            "job_id": job_id,
         }
     except HTTPException:
         raise
@@ -1140,11 +1163,38 @@ async def generate_strategic_digest(
 
 @router.get("/strategic-digest/{client_id}/progress")
 async def get_digest_progress(client_id: str):
-    """Return current generation progress for the given client."""
+    """Return current generation progress. Checks in-memory first, falls back to DB."""
     entry = _digest_progress.get(client_id)
-    if not entry:
-        return {"phase": "idle", "pct": 0, "message": "No generation in progress"}
-    return {k: v for k, v in entry.items() if k != "_t0"}
+    if entry and entry.get("phase") not in (None, "idle"):
+        return {k: v for k, v in entry.items() if k != "_t0"}
+
+    # Check DB for a running job (survives page navigation and server restarts)
+    try:
+        resp = _supabase.table("processing_jobs").select(
+            "id,status,progress_pct,progress_message,created_at"
+        ).eq("job_type", "strategic_digest").eq(
+            "status", "running"
+        ).order("created_at", desc=True).limit(1).execute()
+
+        if resp.data:
+            job = resp.data[0]
+            meta = job.get("metadata") or {}
+            if isinstance(meta, str):
+                import json as _json
+                meta = _json.loads(meta)
+            # Only return if this job belongs to the requested client
+            if meta.get("client_id") == client_id or not meta.get("client_id"):
+                return {
+                    "phase": "running",
+                    "pct": job.get("progress_pct", 0),
+                    "message": job.get("progress_message", "Generating..."),
+                    "job_id": job["id"],
+                    "started_at": job.get("created_at"),
+                }
+    except Exception:
+        pass
+
+    return {"phase": "idle", "pct": 0, "message": "No generation in progress"}
 
 
 @router.post("/strategic-digest/{client_id}/cancel")

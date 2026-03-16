@@ -96,44 +96,29 @@ export default function StrategicDigestPage() {
     return () => { isMountedRef.current = false; };
   }, []);
 
-  useEffect(() => {
-    if (clientId) loadDigest();
-  }, [clientId, periodType, loadDigest]);
-
   const stopPolling = () => {
     if (pollRef.current) { clearTimeout(pollRef.current); pollRef.current = null; }
   };
 
-  const handleGenerate = async () => {
-    if (!clientId) return;
-    setGenerating(true);
-    setError('');
-    setCancelling(false);
-    setProgress({ pct: 0, phase: 'starting', message: 'Initialising…' });
+  // Shared polling function — used both after Generate and on page load resume
+  const startPolling = () => {
     stopPolling();
-
-    try {
-      await strategicDigestApi.generate(clientId, periodType);
-    } catch (err: any) {
-      if (isMountedRef.current) {
-        setError(err?.message || 'Failed to start generation');
-        setGenerating(false);
-        setProgress(null);
-      }
-      return;
-    }
-
-    // Poll progress + completion
     const poll = async () => {
-      if (!isMountedRef.current) return;
+      if (!isMountedRef.current || !clientId) return;
       try {
         const prog = await strategicDigestApi.getProgress(clientId);
-        if (isMountedRef.current) {
-          setProgress({ pct: prog.pct, phase: prog.phase, message: prog.message });
+        if (!isMountedRef.current) return;
+
+        if (prog.phase === 'idle') {
+          // No active generation — stop polling
+          setGenerating(false);
+          setProgress(null);
+          return;
         }
 
+        setProgress({ pct: prog.pct, phase: prog.phase, message: prog.message });
+
         if (prog.phase === 'completed') {
-          // Load the finished digest
           try {
             const resp = await strategicDigestApi.get(clientId, periodType);
             if (isMountedRef.current) setDigest(resp?.digest ?? null);
@@ -162,7 +147,46 @@ export default function StrategicDigestPage() {
       pollRef.current = setTimeout(poll, 4000);
     };
 
-    pollRef.current = setTimeout(poll, 3000);
+    pollRef.current = setTimeout(poll, 1000);
+  };
+
+  // On page load: check if there's an active generation running (survives navigation)
+  useEffect(() => {
+    if (!clientId) return;
+    loadDigest();
+
+    // Check for in-progress generation
+    strategicDigestApi.getProgress(clientId).then(prog => {
+      if (!isMountedRef.current) return;
+      if (prog.phase && prog.phase !== 'idle') {
+        // Resume showing progress
+        setGenerating(true);
+        setProgress({ pct: prog.pct, phase: prog.phase, message: prog.message });
+        startPolling();
+      }
+    }).catch(() => {});
+  }, [clientId, periodType]);
+
+  const handleGenerate = async () => {
+    if (!clientId) return;
+    setGenerating(true);
+    setError('');
+    setCancelling(false);
+    setProgress({ pct: 0, phase: 'starting', message: 'Initialising…' });
+    stopPolling();
+
+    try {
+      await strategicDigestApi.generate(clientId, periodType);
+    } catch (err: any) {
+      if (isMountedRef.current) {
+        setError(err?.message || 'Failed to start generation');
+        setGenerating(false);
+        setProgress(null);
+      }
+      return;
+    }
+
+    startPolling();
   };
 
   const handleCancel = async () => {
