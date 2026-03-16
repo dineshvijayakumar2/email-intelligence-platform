@@ -24,7 +24,7 @@ from typing import Optional, List, Dict, Any, Literal
 from datetime import datetime, timedelta
 from pydantic import BaseModel, confloat, constr
 
-from .ai_client import get_ai_client, AIResponse
+from .ai_client import get_ai_client, get_ai_settings, AIResponse
 from .ai_privacy_filter import sanitize_email_body
 from .ai_usage_tracker import get_usage_tracker
 from .ai_action_bucket_engine import derive_email_buckets, BUCKET_ENGINE_VERSION
