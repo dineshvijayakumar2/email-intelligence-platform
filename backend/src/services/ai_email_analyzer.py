@@ -22,7 +22,7 @@ import time
 import logging
 from typing import Optional, List, Dict, Any, Literal
 from datetime import datetime, timedelta
-from pydantic import BaseModel, confloat, constr
+from pydantic import BaseModel, confloat, constr, model_validator
 
 from .ai_client import get_ai_client, get_ai_settings, AIResponse
 from .ai_privacy_filter import sanitize_email_body
@@ -255,37 +255,89 @@ class EntityExtraction(BaseModel):
     action_items_extracted: list[str] = []
 
 
+# Valid values for Literal fields — used for coercion
+_VALID_INTENTS = {
+    "action_required", "fyi_update", "meeting_scheduling", "question",
+    "complaint", "positive_feedback", "pricing_inquiry", "feature_request",
+    "expansion_signal", "churn_risk", "follow_up", "introduction", "other"
+}
+_VALID_URGENCY = {"critical", "high", "medium", "low", "none"}
+_VALID_SENTIMENT = {"very_positive", "positive", "neutral", "negative", "very_negative"}
+_VALID_ACTION_TYPE = {
+    "respond_to_inquiry", "provide_quote", "schedule_meeting",
+    "escalate_internally", "send_follow_up", "resolve_issue",
+    "acknowledge_receipt", "no_action", "delegate", "prepare_document"
+}
+_VALID_BUSINESS_SIGNAL = {
+    "buying_intent", "renewal_intent", "expansion_interest",
+    "churn_signal", "competitive_evaluation", "budget_discussion",
+    "escalation", "positive_feedback", "negative_feedback",
+    "contract_activity", "neutral"
+}
+_VALID_THREAD_ROLE = {"initial", "reply", "forward", "auto_reply", "cc_addition", "internal"}
+
+
+def _coerce_to_valid(value: Optional[str], valid_set: set, default: str) -> str:
+    """Coerce an LLM output to the nearest valid value. Gemini often returns close-but-not-exact values."""
+    if not value:
+        return default
+    v = value.strip().lower().replace("-", "_").replace(" ", "_")
+    if v in valid_set:
+        return v
+    # Partial match: find the first valid value that the LLM value starts with or contains
+    for candidate in valid_set:
+        if v.startswith(candidate) or candidate.startswith(v):
+            return candidate
+    return default
+
+
 class EmailClassificationResult(BaseModel):
-    """Validates each email's AI output. LLM response MUST match this exactly."""
+    """Validates each email's AI output. Coerces close-but-invalid values from Gemini."""
+    model_config = {"extra": "ignore"}  # Ignore extra fields LLMs may add
+
     email_id: str
-    intent: Literal[
-        "action_required", "fyi_update", "meeting_scheduling", "question",
-        "complaint", "positive_feedback", "pricing_inquiry", "feature_request",
-        "expansion_signal", "churn_risk", "follow_up", "introduction", "other"
-    ]
-    urgency: Literal["critical", "high", "medium", "low", "none"]
-    sentiment: Literal["very_positive", "positive", "neutral", "negative", "very_negative"]
-    sentiment_score: confloat(ge=-1.0, le=1.0)
-    action_type: Literal[
-        "respond_to_inquiry", "provide_quote", "schedule_meeting",
-        "escalate_internally", "send_follow_up", "resolve_issue",
-        "acknowledge_receipt", "no_action", "delegate", "prepare_document"
-    ]
-    business_signal: Optional[Literal[
-        "buying_intent", "renewal_intent", "expansion_interest",
-        "churn_signal", "competitive_evaluation", "budget_discussion",
-        "escalation", "positive_feedback", "negative_feedback",
-        "contract_activity", "neutral"
-    ]] = None
-    thread_role: Optional[Literal[
-        "initial", "reply", "forward", "auto_reply", "cc_addition", "internal"
-    ]] = None
-    summary: constr(max_length=500) = ""
-    suggested_action: constr(max_length=300) = ""
+    intent: str = "other"
+    urgency: str = "medium"
+    sentiment: str = "neutral"
+    sentiment_score: float = 0.0
+    action_type: str = "no_action"
+    business_signal: Optional[str] = None
+    thread_role: Optional[str] = None
+    summary: str = ""
+    suggested_action: str = ""
     key_topics: list[str] = []
-    confidence: confloat(ge=0.0, le=1.0) = 0.5
+    confidence: float = 0.5
     justification: str = ""
     entities: EntityExtraction = EntityExtraction()
+
+    @model_validator(mode="before")
+    @classmethod
+    def coerce_enum_fields(cls, data):
+        """Coerce LLM outputs to valid enum values instead of rejecting."""
+        if isinstance(data, dict):
+            data["intent"] = _coerce_to_valid(data.get("intent"), _VALID_INTENTS, "other")
+            data["urgency"] = _coerce_to_valid(data.get("urgency"), _VALID_URGENCY, "medium")
+            data["sentiment"] = _coerce_to_valid(data.get("sentiment"), _VALID_SENTIMENT, "neutral")
+            data["action_type"] = _coerce_to_valid(data.get("action_type"), _VALID_ACTION_TYPE, "no_action")
+            if data.get("business_signal"):
+                data["business_signal"] = _coerce_to_valid(data.get("business_signal"), _VALID_BUSINESS_SIGNAL, "neutral")
+            if data.get("thread_role"):
+                data["thread_role"] = _coerce_to_valid(data.get("thread_role"), _VALID_THREAD_ROLE, "reply")
+            # Clamp scores
+            try:
+                data["sentiment_score"] = max(-1.0, min(1.0, float(data.get("sentiment_score", 0))))
+            except (ValueError, TypeError):
+                data["sentiment_score"] = 0.0
+            try:
+                data["confidence"] = max(0.0, min(1.0, float(data.get("confidence", 0.5))))
+            except (ValueError, TypeError):
+                data["confidence"] = 0.5
+            # Truncate long strings
+            if isinstance(data.get("summary"), str) and len(data["summary"]) > 500:
+                data["summary"] = data["summary"][:500]
+            if isinstance(data.get("suggested_action"), str) and len(data["suggested_action"]) > 300:
+                data["suggested_action"] = data["suggested_action"][:300]
+        return data
 
 
 # ---------------------------------------------------------------------------
