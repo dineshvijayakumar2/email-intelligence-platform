@@ -292,16 +292,18 @@ class EmailClassificationResult(BaseModel):
 # JSON guard layer
 # ---------------------------------------------------------------------------
 def _apply_client_model_settings(supabase_client, client_id: Optional[str]):
-    """Load client's model preferences from DB and apply to global AI settings."""
+    """Load client's model preferences AND API keys from DB and apply."""
     if not client_id or not supabase_client:
         return
     try:
         resp = supabase_client.table("system_settings").select("key,value").eq(
             "client_id", client_id
-        ).in_("key", ["ai_cheap_model", "ai_strategic_model"]).execute()
+        ).execute()
         if not resp.data:
             return
         settings = {row["key"]: row["value"] for row in resp.data}
+
+        # Apply model preferences
         cheap = settings.get("ai_cheap_model")
         strategic = settings.get("ai_strategic_model")
         if cheap or strategic:
@@ -316,8 +318,15 @@ def _apply_client_model_settings(supabase_client, client_id: Optional[str]):
                 strategic=strategic or "sonnet",
             )
             logger.info(f"Applied client model settings: cheap={cheap}, strategic={strategic}")
+
+        # Apply API keys from DB (base64-encoded)
+        import os, base64
+        if settings.get("api_key_google"):
+            os.environ["GOOGLE_GENAI_API_KEY"] = base64.b64decode(settings["api_key_google"]).decode()
+        if settings.get("api_key_anthropic"):
+            os.environ["ANTHROPIC_API_KEY"] = base64.b64decode(settings["api_key_anthropic"]).decode()
     except Exception as e:
-        logger.debug(f"Could not load client model settings: {e}")
+        logger.debug(f"Could not load client settings: {e}")
 
 
 def clean_llm_output(text: str) -> str:
@@ -1199,10 +1208,22 @@ class AIEmailAnalyzer:
         if not emails:
             return {"analyzed": 0, "failed": 0, "skipped": 0}
 
-        if not self.ai_client.is_available:
-            # Graceful degradation — mark all as failed
+        # Apply client's model preferences FIRST (before availability check)
+        _apply_client_model_settings(self.client, client_id)
+
+        # Check if AI is available — for Gemini, we only need Google key (not Anthropic)
+        cheap_model = get_ai_settings().cheap_model
+        ai_available = self.ai_client.is_available  # Anthropic key set
+        if not ai_available and cheap_model not in ("haiku", "sonnet"):
+            # Using a non-Anthropic model — check if it's usable via LangChain
+            import os
+            if cheap_model == "gemini" and (os.getenv("GOOGLE_GENAI_API_KEY") or os.getenv("GEMINI_API_KEY")):
+                ai_available = True
+
+        if not ai_available:
             for email in emails:
-                self._save_failed(email["id"], mailbox_id, client_id, "api_unavailable")
+                self._save_failed(email["id"], mailbox_id, client_id,
+                                  f"api_unavailable: no API key for model '{cheap_model}'")
             usage_tracker = get_usage_tracker()
             if usage_tracker:
                 usage_tracker.log_usage(
@@ -1218,9 +1239,6 @@ class AIEmailAnalyzer:
                     prompt_version=PROMPT_VERSION,
                 )
             return {"analyzed": 0, "failed": len(emails), "skipped": 0}
-
-        # Apply client's model preferences from DB before calling LLM
-        _apply_client_model_settings(self.client, client_id)
 
         email_ids = [e["id"] for e in emails]
 
@@ -1248,11 +1266,12 @@ class AIEmailAnalyzer:
         ai_response = self.ai_client.call_haiku(system_prompt, user_message, max_tokens=max_tokens, json_mode=True)
 
         if ai_response is None:
-            # API failure — mark all as failed
-            for eid in email_ids:
-                self._save_failed(eid, mailbox_id, client_id, "api_call_failed")
-            # Capture the actual error from the AI client
+            # API failure — mark all as failed with detail
             error_detail = getattr(self.ai_client, 'last_error', None) or "api_timeout"
+            fail_msg = f"api_call_failed: {str(error_detail)[:200]}"
+            logger.error(f"AI API call failed for batch of {len(emails)}: {error_detail}")
+            for eid in email_ids:
+                self._save_failed(eid, mailbox_id, client_id, fail_msg)
             error_type = "credit_balance" if "credit balance" in (error_detail or "").lower() else "api_timeout"
 
             usage_tracker = get_usage_tracker()
@@ -1394,7 +1413,7 @@ class AIEmailAnalyzer:
                     logger.error(
                         f"Circuit breaker triggered: {consecutive_failures} consecutive "
                         f"batches with 0 successes. Stopping to avoid wasting resources. "
-                        f"Check your ANTHROPIC_API_KEY and account credits."
+                        f"Check your AI API key and account credits (model: {get_ai_settings().cheap_model})."
                     )
                     break
             else:

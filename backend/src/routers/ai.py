@@ -142,6 +142,36 @@ async def trigger_analysis(
         raise HTTPException(status_code=500, detail=f"Failed to validate mailbox: {str(e)[:200]}")
 
     def run_analysis():
+        import uuid
+        job_id = str(uuid.uuid4())
+        # Create a processing job for visibility
+        try:
+            _supabase.table("processing_jobs").insert({
+                "id": job_id,
+                "mailbox_id": mailbox_id,
+                "job_type": "ai_analysis",
+                "status": "running",
+                "progress_pct": 0,
+                "progress_message": "Starting AI email analysis...",
+                "metadata": {"max_emails": data.max_emails, "date_from": data.date_from, "date_to": data.date_to},
+            }).execute()
+        except Exception as job_err:
+            logger.warning(f"Could not create processing job: {job_err}")
+            job_id = None
+
+        def _update_job(status: str, pct: int, msg: str, error_log: str = None):
+            if not job_id:
+                return
+            try:
+                update = {"status": status, "progress_pct": pct, "progress_message": msg}
+                if error_log:
+                    update["error_log"] = error_log
+                if status in ("completed", "failed"):
+                    update["completed_at"] = datetime.utcnow().isoformat()
+                _supabase.table("processing_jobs").update(update).eq("id", job_id).execute()
+            except Exception:
+                pass
+
         try:
             result = analyzer.analyze_all_unanalyzed(
                 mailbox_id=mailbox_id,
@@ -152,11 +182,35 @@ async def trigger_analysis(
             )
             logger.info(f"Analysis complete for {mailbox_id}: {result}")
 
+            analyzed = result.get("total_analyzed", 0)
+            failed = result.get("total_failed", 0)
+            batches = result.get("batches", 0)
+            _update_job("running", 60, f"Analysis done: {analyzed} analyzed, {failed} failed in {batches} batches. Running bucket engine...")
+
+            # If all failed, log the errors for troubleshooting
+            error_log = None
+            if failed > 0:
+                try:
+                    err_resp = _supabase.table("ai_email_intelligence").select(
+                        "email_id,error_message,model_used"
+                    ).eq("mailbox_id", mailbox_id).eq(
+                        "processing_status", "failed"
+                    ).order("processed_at", desc=True).range(0, 19).execute()
+                    if err_resp.data:
+                        error_log = "\n".join(
+                            f"- {r.get('email_id', '?')[:8]}...: {r.get('error_message', 'unknown')}"
+                            for r in err_resp.data
+                        )
+                except Exception:
+                    pass
+
             # Auto-run bucket engine after analysis
             bucket_engine = get_bucket_engine()
             if bucket_engine:
                 bucket_result = bucket_engine.process_email_buckets(mailbox_id)
                 logger.info(f"Bucket processing complete: {bucket_result}")
+
+            _update_job("running", 80, "Running entity aggregation...")
 
             # Auto-run entity aggregation
             entity_agg = get_entity_aggregator()
@@ -164,8 +218,13 @@ async def trigger_analysis(
                 entity_result = entity_agg.aggregate_entities(mailbox_id, client_id)
                 logger.info(f"Entity aggregation complete: {entity_result}")
 
+            summary = f"Done: {analyzed} analyzed, {failed} failed, {batches} batches"
+            final_status = "completed" if failed == 0 else ("completed" if analyzed > 0 else "failed")
+            _update_job(final_status, 100, summary, error_log)
+
         except Exception as e:
             logger.error(f"Background analysis failed for {mailbox_id}: {e}")
+            _update_job("failed", 0, f"Analysis failed: {str(e)[:300]}", str(e))
 
     background_tasks.add_task(run_analysis)
     audit_from_user(current_user, "analyze", "mailbox", resource_id=mailbox_id, details={"max_emails": data.max_emails})
