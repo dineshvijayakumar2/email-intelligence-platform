@@ -111,6 +111,7 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
         { key: '/intelligence/digest', label: <Link to="/intelligence/digest">Daily Digest</Link> },
         { key: '/intelligence/opportunities', label: <Link to="/intelligence/opportunities">Opportunities</Link> },
         { key: '/intelligence/strategic-digest', label: <Link to="/intelligence/strategic-digest">Strategic Digest</Link> },
+        { key: '/intelligence/playground', label: <Link to="/intelligence/playground">AI Playground</Link> },
       ],
     },
     {

@@ -41,6 +41,7 @@ import DigestPage from './pages/intelligence/digest';
 import OpportunitiesPage from './pages/intelligence/opportunities';
 import UsagePage from './pages/intelligence/usage';
 import StrategicDigestPage from './pages/intelligence/strategic-digest';
+import PlaygroundPage from './pages/intelligence/playground';
 import QuickbaseConfigPage from './pages/intelligence/quickbase-config';
 import QuickbaseDataPage from './pages/intelligence/quickbase-data';
 
@@ -217,6 +218,7 @@ function App() {
             <Route path="/intelligence/opportunities" element={<ProtectedRoute><Layout><OpportunitiesPage /></Layout></ProtectedRoute>} />
             <Route path="/intelligence/usage" element={<AdminRoute><Layout><UsagePage /></Layout></AdminRoute>} />
             <Route path="/intelligence/strategic-digest" element={<ProtectedRoute><Layout><StrategicDigestPage /></Layout></ProtectedRoute>} />
+            <Route path="/intelligence/playground" element={<AdminRoute><Layout><PlaygroundPage /></Layout></AdminRoute>} />
             <Route path="/intelligence/quickbase" element={<AdminRoute><Layout><QuickbaseConfigPage /></Layout></AdminRoute>} />
             <Route path="/intelligence/quickbase-data" element={<AdminRoute><Layout><QuickbaseDataPage /></Layout></AdminRoute>} />
 
