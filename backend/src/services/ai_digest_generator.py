@@ -772,16 +772,40 @@ class AIDigestGenerator:
     # Parse + validate AI response
     # ------------------------------------------------------------------
     def _parse_digest_response(self, ai_response: AIResponse) -> Optional[DigestResult]:
-        """Parse and validate Sonnet response into DigestResult."""
+        """Parse and validate AI response into DigestResult."""
         try:
             cleaned = clean_llm_output(ai_response.content)
-            parsed = json.loads(cleaned)
-            return DigestResult.model_validate(parsed)
+
+            # Primary: json_repair (handles Gemini quirks)
+            parsed = None
+            try:
+                from json_repair import repair_json
+                repaired = repair_json(cleaned, return_objects=True)
+                if isinstance(repaired, dict):
+                    parsed = repaired
+            except Exception:
+                pass
+
+            # Fallback: standard json.loads
+            if parsed is None:
+                parsed = json.loads(cleaned)
+
+            result = DigestResult.model_validate(parsed)
+
+            # Log if digest is empty (LLM returned valid JSON but no content)
+            if not result.summary and not result.action_items and not result.highlights:
+                logger.warning(f"Digest parsed but empty. Raw content (first 500): {ai_response.content[:500]}")
+
+            return result
         except json.JSONDecodeError as e:
-            logger.error(f"Digest JSON parse failed: {e}")
-            return None
+            logger.error(f"Digest JSON parse failed: {e}. Raw (first 500): {ai_response.content[:500]}")
+            # Try to extract at least the summary as a degraded result
+            try:
+                return DigestResult(summary=ai_response.content[:1000])
+            except Exception:
+                return None
         except Exception as e:
-            logger.error(f"Digest validation failed: {e}")
+            logger.error(f"Digest validation failed: {e}. Raw (first 500): {ai_response.content[:500]}")
             return None
 
     # ------------------------------------------------------------------
