@@ -501,8 +501,8 @@ class AIDigestGenerator:
             except Exception as e:
                 logger.warning(f"Fallback email count failed: {e}")
 
-        # Thread counts
-        open_threads, overdue_threads = self._count_threads(mailbox_id)
+        # Thread counts (scoped to digest date window)
+        open_threads, overdue_threads = self._count_threads(mailbox_id, date_start, date_end)
 
         # Bucket summary from engine
         bucket_summary = {}
@@ -546,26 +546,43 @@ class AIDigestGenerator:
             logger.warning(f"Failed to count {direction} emails: {e}")
             return 0
 
-    def _count_threads(self, mailbox_id: str) -> tuple[int, int]:
-        """Count open and overdue threads for a mailbox."""
+    def _count_threads(self, mailbox_id: str, date_start: str = None, date_end: str = None) -> tuple[int, int]:
+        """Count open and overdue threads for a mailbox within the digest period.
+
+        Only counts threads with recent activity (last_message_date within window),
+        not all historical threads. Falls back to 30-day window if no dates provided.
+        """
         try:
-            # Open threads (not complete, not dropped)
-            open_resp = self._execute_with_retry(
+            # Default: threads active in last 30 days
+            if not date_start:
+                from datetime import timedelta
+                date_start = (datetime.utcnow() - timedelta(days=30)).isoformat()
+
+            # Open threads with activity in the window
+            open_query = (
                 self.client.table("thread_status")
                 .select("id", count="exact")
                 .eq("mailbox_id", mailbox_id)
                 .neq("status", "complete")
                 .neq("status", "dropped")
+                .gte("last_message_date", date_start)
             )
+            if date_end:
+                open_query = open_query.lte("last_message_date", date_end)
+            open_resp = self._execute_with_retry(open_query)
             open_count = open_resp.count or 0
 
-            # Overdue threads
-            overdue_resp = self._execute_with_retry(
+            # Overdue threads with activity in the window
+            overdue_query = (
                 self.client.table("thread_status")
                 .select("id", count="exact")
                 .eq("mailbox_id", mailbox_id)
                 .eq("is_overdue", 'true')
+                .gte("last_message_date", date_start)
             )
+            if date_end:
+                overdue_query = overdue_query.lte("last_message_date", date_end)
+            overdue_resp = self._execute_with_retry(overdue_query)
             overdue_count = overdue_resp.count or 0
 
             return open_count, overdue_count

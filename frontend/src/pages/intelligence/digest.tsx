@@ -201,8 +201,8 @@ const DigestPage: React.FC = () => {
             </Col>
           </Row>
 
-          {/* Stats Row */}
-          {digest.stats && Object.keys(digest.stats).length > 0 && (
+          {/* Stats Row — removed, shown in top banner now */}
+          {false && digest.stats && Object.keys(digest.stats).length > 0 && (
             <Card className="glass-card" size="small" style={{ marginTop: 16 }}>
               <Space wrap size="large">
                 {Object.entries(digest.stats).map(([key, value]) => (
