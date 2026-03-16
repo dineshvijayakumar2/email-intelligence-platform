@@ -364,6 +364,12 @@ class AIDigestGenerator:
             self._log_usage(mailbox_id, client_id, ai_response, success=False, error_type="json_parse")
             return None
 
+        # Don't save empty digests — they poison the cache
+        if not digest_data.summary and not digest_data.action_items and not digest_data.highlights:
+            logger.warning("Digest is empty after parsing — not saving to DB")
+            self._log_usage(mailbox_id, client_id, ai_response, success=False, error_type="empty_result")
+            return None
+
         # Save to database
         record = self._save_digest(
             mailbox_id, client_id, target_date, digest_data,
