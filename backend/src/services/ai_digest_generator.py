@@ -423,7 +423,7 @@ class AIDigestGenerator:
             return None
 
         # Don't save empty digests — they poison the cache
-        if not digest_data.summary and not digest_data.action_items and not digest_data.highlights:
+        if not digest_data:
             logger.warning("Digest is empty after parsing — not saving to DB")
             self._log_usage(mailbox_id, client_id, ai_response, success=False, error_type="empty_result")
             return None
@@ -835,8 +835,8 @@ class AIDigestGenerator:
     # ------------------------------------------------------------------
     # Parse + validate AI response
     # ------------------------------------------------------------------
-    def _parse_digest_response(self, ai_response: AIResponse) -> Optional[DigestResult]:
-        """Parse and validate AI response into DigestResult."""
+    def _parse_digest_response(self, ai_response: AIResponse) -> Optional[dict]:
+        """Parse AI response into a dict. Accepts any JSON structure — the prompt defines the schema."""
         try:
             cleaned = clean_llm_output(ai_response.content)
 
@@ -854,22 +854,73 @@ class AIDigestGenerator:
             if parsed is None:
                 parsed = json.loads(cleaned)
 
-            result = DigestResult.model_validate(parsed)
+            if not isinstance(parsed, dict):
+                logger.error(f"Digest response is not a dict: {type(parsed)}")
+                return None
 
-            # Log if digest is empty (LLM returned valid JSON but no content)
-            if not result.summary and not result.action_items and not result.highlights:
-                logger.warning(f"Digest parsed but empty. Raw content (first 500): {ai_response.content[:500]}")
+            # Check if it has any meaningful content
+            has_content = False
+            for v in parsed.values():
+                if v and v != [] and v != {} and v is not None:
+                    has_content = True
+                    break
 
-            return result
+            if not has_content:
+                logger.warning(f"Digest parsed but empty. Raw (first 500): {ai_response.content[:500]}")
+                return None
+
+            # Normalize: ensure legacy keys exist for frontend compatibility
+            # (frontend reads summary, action_items, highlights)
+            if "summary" not in parsed:
+                # Build summary from headline or first string field
+                headline = parsed.get("headline")
+                if isinstance(headline, dict):
+                    parts = [v for v in headline.values() if isinstance(v, str) and v]
+                    parsed["summary"] = " | ".join(parts[:3])
+                elif isinstance(headline, str):
+                    parsed["summary"] = headline
+                else:
+                    # Use first long string value
+                    for v in parsed.values():
+                        if isinstance(v, str) and len(v) > 20:
+                            parsed["summary"] = v
+                            break
+
+            if "action_items" not in parsed:
+                # Map urgent_today to action_items for frontend
+                urgent = parsed.get("urgent_today") or parsed.get("actions") or []
+                if isinstance(urgent, list):
+                    parsed["action_items"] = [
+                        {
+                            "priority": 1,
+                            "action": item.get("action") or item.get("next_action") or str(item),
+                            "contact_name": item.get("customer") or item.get("am"),
+                            "bucket": item.get("quote_no"),
+                        }
+                        for item in urgent if isinstance(item, dict)
+                    ]
+
+            if "highlights" not in parsed:
+                # Map positive_signals or pipeline_watch to highlights
+                signals = parsed.get("positive_signals") or parsed.get("pipeline_watch") or []
+                if isinstance(signals, list):
+                    parsed["highlights"] = [
+                        {
+                            "label": item.get("customer") or item.get("signal") or "Signal",
+                            "detail": item.get("signal") or item.get("status") or str(item),
+                        }
+                        for item in signals if isinstance(item, dict)
+                    ]
+
+            logger.info(f"Digest parsed successfully with keys: {list(parsed.keys())}")
+            return parsed
+
         except json.JSONDecodeError as e:
             logger.error(f"Digest JSON parse failed: {e}. Raw (first 500): {ai_response.content[:500]}")
-            # Try to extract at least the summary as a degraded result
-            try:
-                return DigestResult(summary=ai_response.content[:1000])
-            except Exception:
-                return None
+            # Degraded: return raw text as summary
+            return {"summary": ai_response.content[:1000], "action_items": [], "highlights": []}
         except Exception as e:
-            logger.error(f"Digest validation failed: {e}. Raw (first 500): {ai_response.content[:500]}")
+            logger.error(f"Digest parse error: {e}. Raw (first 500): {ai_response.content[:500]}")
             return None
 
     # ------------------------------------------------------------------
@@ -880,19 +931,29 @@ class AIDigestGenerator:
         mailbox_id: str,
         client_id: Optional[str],
         digest_date: date,
-        digest_data: DigestResult,
+        digest_data: dict,
         context: dict,
         ai_response: AIResponse,
         digest_type: str = "daily",
     ) -> dict:
         """Save generated digest to ai_daily_digests table."""
+        # Extract standard fields + store full AI response for custom schemas
+        summary = digest_data.get("summary", "")
+        action_items = digest_data.get("action_items", [])
+        highlights = digest_data.get("highlights", [])
+        # Ensure they're serializable
+        if not isinstance(action_items, list):
+            action_items = []
+        if not isinstance(highlights, list):
+            highlights = []
+
         record = {
             "mailbox_id": mailbox_id,
             "digest_date": digest_date.isoformat(),
             "digest_type": digest_type,
-            "summary": digest_data.summary,
-            "action_items": [item.model_dump() for item in digest_data.action_items],
-            "highlights": [h.model_dump() for h in digest_data.highlights],
+            "summary": summary[:5000] if isinstance(summary, str) else json.dumps(summary)[:5000],
+            "action_items": action_items,
+            "highlights": highlights,
             "stats": {
                 "in_count": context["in_count"],
                 "out_count": context["out_count"],
