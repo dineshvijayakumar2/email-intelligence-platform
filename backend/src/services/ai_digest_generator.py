@@ -707,10 +707,11 @@ class AIDigestGenerator:
         try:
             resp = self._execute_with_retry(
                 self.client.table("relationship_context_cache")
-                .select("company_name,lifecycle_tier,am_name,"
+                .select("company_id,lifecycle_tier,am_name,"
                         "engagement_trajectory,active_threads_summary,"
                         "communication_health,ai_signals_summary,"
-                        "qb_financial_summary")
+                        "qb_financial_summary,"
+                        "customer_companies(company_name)")
                 .eq("client_id", client_id)
                 .order("computed_at", desc=True)
                 .range(0, 19)  # Top 20 most recently computed
@@ -745,8 +746,12 @@ class AIDigestGenerator:
                     except Exception:
                         financial = {}
 
+                # company_name comes from FK join
+                company_ref = r.get("customer_companies") or {}
+                company_name = company_ref.get("company_name") if isinstance(company_ref, dict) else None
+
                 summaries.append({
-                    "company": r.get("company_name"),
+                    "company": company_name or "Unknown",
                     "lifecycle_tier": r.get("lifecycle_tier") or "unknown",
                     "am": r.get("am_name") or "unassigned",
                     "engagement_trend": r.get("engagement_trajectory") or "unknown",
