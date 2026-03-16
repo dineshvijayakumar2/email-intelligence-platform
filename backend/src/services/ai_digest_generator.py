@@ -17,7 +17,7 @@ import logging
 from typing import Optional, List
 from datetime import datetime, date, timedelta
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from .ai_client import get_ai_client, AIResponse
 from .ai_action_bucket_engine import get_bucket_engine
@@ -166,9 +166,67 @@ class DigestHighlight(BaseModel):
 
 
 class DigestResult(BaseModel):
+    model_config = {"extra": "allow"}  # Accept extra fields from Gemini
+
     summary: str = ""
     action_items: list[DigestActionItem] = []
     highlights: list[DigestHighlight] = []
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_keys(cls, data):
+        """Gemini often returns different key names. Map them to expected schema."""
+        if not isinstance(data, dict):
+            return data
+
+        # Map common Gemini key variations to our schema
+        # Summary: might be "executive_summary", "overview", "analysis", "insight", etc.
+        if not data.get("summary"):
+            for alt_key in ["executive_summary", "overview", "analysis", "insight",
+                            "daily_summary", "weekly_summary", "digest_summary"]:
+                if data.get(alt_key) and isinstance(data[alt_key], str):
+                    data["summary"] = data[alt_key]
+                    break
+            # If still no summary, build one from any string values in the dict
+            if not data.get("summary"):
+                parts = []
+                for k, v in data.items():
+                    if isinstance(v, str) and len(v) > 20 and k not in ("summary",):
+                        parts.append(v)
+                if parts:
+                    data["summary"] = " ".join(parts[:3])
+
+        # Action items: might be "actions", "next_steps", "recommendations", "tasks"
+        if not data.get("action_items"):
+            for alt_key in ["actions", "next_steps", "recommendations", "tasks",
+                            "priority_actions", "suggested_actions"]:
+                if data.get(alt_key) and isinstance(data[alt_key], list):
+                    items = []
+                    for item in data[alt_key]:
+                        if isinstance(item, dict):
+                            items.append(item)
+                        elif isinstance(item, str):
+                            items.append({"action": item, "priority": 3})
+                    data["action_items"] = items
+                    break
+
+        # Highlights: might be "key_observations", "insights", "findings", "patterns"
+        if not data.get("highlights"):
+            for alt_key in ["key_observations", "insights", "findings", "patterns",
+                            "key_insights", "observations"]:
+                if data.get(alt_key) and isinstance(data[alt_key], list):
+                    items = []
+                    for item in data[alt_key]:
+                        if isinstance(item, dict):
+                            label = item.get("label") or item.get("title") or item.get("type") or "Insight"
+                            detail = item.get("detail") or item.get("description") or item.get("text") or str(item)
+                            items.append({"label": label, "detail": detail})
+                        elif isinstance(item, str):
+                            items.append({"label": "Insight", "detail": item})
+                    data["highlights"] = items
+                    break
+
+        return data
 
 
 # ---------------------------------------------------------------------------
