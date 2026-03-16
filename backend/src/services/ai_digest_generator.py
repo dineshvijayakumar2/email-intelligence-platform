@@ -408,7 +408,7 @@ class AIDigestGenerator:
 
         # Call strategic model (respects client's model preference)
         ai_response = self.ai_client.call_sonnet(
-            digest_system_prompt, user_message, max_tokens=2048
+            digest_system_prompt, user_message, max_tokens=8192
         )
 
         if ai_response is None:

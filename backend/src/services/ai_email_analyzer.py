@@ -314,16 +314,34 @@ class EmailClassificationResult(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def coerce_enum_fields(cls, data):
-        """Coerce LLM outputs to valid enum values instead of rejecting."""
+        """Normalize LLM outputs — accept custom prompt values, coerce only when clearly wrong."""
         if isinstance(data, dict):
-            data["intent"] = _coerce_to_valid(data.get("intent"), _VALID_INTENTS, "other")
-            data["urgency"] = _coerce_to_valid(data.get("urgency"), _VALID_URGENCY, "medium")
-            data["sentiment"] = _coerce_to_valid(data.get("sentiment"), _VALID_SENTIMENT, "neutral")
-            data["action_type"] = _coerce_to_valid(data.get("action_type"), _VALID_ACTION_TYPE, "no_action")
-            if data.get("business_signal"):
-                data["business_signal"] = _coerce_to_valid(data.get("business_signal"), _VALID_BUSINESS_SIGNAL, "neutral")
-            if data.get("thread_role"):
-                data["thread_role"] = _coerce_to_valid(data.get("thread_role"), _VALID_THREAD_ROLE, "reply")
+            # Normalize string fields (strip, lowercase, underscore)
+            for field in ("intent", "urgency", "sentiment", "action_type", "business_signal", "thread_role"):
+                val = data.get(field)
+                if isinstance(val, str):
+                    data[field] = val.strip().lower().replace("-", "_").replace(" ", "_")
+
+            # Only coerce urgency/sentiment if completely invalid (these have universal meaning)
+            if data.get("urgency") not in _VALID_URGENCY:
+                data["urgency"] = _coerce_to_valid(data.get("urgency"), _VALID_URGENCY, "medium")
+            if data.get("sentiment") and data["sentiment"] not in _VALID_SENTIMENT:
+                # Accept 'mixed' as a valid sentiment (custom prompt uses it)
+                if data["sentiment"] != "mixed":
+                    data["sentiment"] = _coerce_to_valid(data.get("sentiment"), _VALID_SENTIMENT, "neutral")
+
+            # Intent, action_type, business_signal, thread_role — accept as-is from custom prompts
+            # (custom prompts define their own values like quote_request, job_approval, etc.)
+            if not data.get("intent"):
+                data["intent"] = "other"
+            if not data.get("action_type"):
+                data["action_type"] = "no_action"
+
+            # Map custom fields to standard fields if present
+            # (custom prompt uses action_signal instead of business_signal)
+            if data.get("action_signal") and not data.get("business_signal"):
+                data["business_signal"] = data["action_signal"]
+
             # Clamp scores
             try:
                 data["sentiment_score"] = max(-1.0, min(1.0, float(data.get("sentiment_score", 0))))
