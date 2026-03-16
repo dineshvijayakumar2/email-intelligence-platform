@@ -712,6 +712,22 @@ async def get_digest(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
 
+    # Apply client's model preferences before generating
+    if client_id:
+        from ..services.ai_email_analyzer import _apply_client_model_settings
+        _apply_client_model_settings(_supabase, client_id)
+    elif mailbox_id:
+        # Resolve client_id from mailbox if not provided
+        try:
+            mb_resp = _supabase.table("mailboxes").select("client_id").eq("id", mailbox_id).limit(1).execute()
+            if mb_resp.data and mb_resp.data[0].get("client_id"):
+                resolved_client = mb_resp.data[0]["client_id"]
+                client_id = resolved_client
+                from ..services.ai_email_analyzer import _apply_client_model_settings
+                _apply_client_model_settings(_supabase, resolved_client)
+        except Exception:
+            pass
+
     tz_minutes = tz_offset or 0
     try:
         if force:
