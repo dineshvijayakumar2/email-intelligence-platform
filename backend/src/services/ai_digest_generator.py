@@ -320,20 +320,24 @@ class AIDigestGenerator:
             user_template = DIGEST_USER_TEMPLATE
             prompt_key = "daily_digest"
 
-        # Build user message
-        user_message = user_template.format(
-            scope=scope,
-            time_window_label=time_window_label,
-            in_count=context["in_count"],
-            out_count=context["out_count"],
-            open_threads=context["open_threads"],
-            overdue_threads=context["overdue_threads"],
-            bucket_summary_json=json.dumps(context["bucket_summary"]),
-            business_context_json=json.dumps(business_context, indent=2) if business_context else "Not available",
-            relationship_context_json=json.dumps(relationship_context, indent=2) if relationship_context else "Not available",
-            top_signal_emails_json=json.dumps(context["top_signal_emails"], indent=2),
-            priority_emails_json=json.dumps(context["priority_emails"], indent=2),
-        )
+        # Build user message using replace (not .format()) — DB-loaded prompts
+        # have literal braces that .format() would misinterpret
+        user_message = user_template
+        replacements = {
+            "{scope}": scope,
+            "{time_window_label}": time_window_label,
+            "{in_count}": str(context["in_count"]),
+            "{out_count}": str(context["out_count"]),
+            "{open_threads}": str(context["open_threads"]),
+            "{overdue_threads}": str(context["overdue_threads"]),
+            "{bucket_summary_json}": json.dumps(context["bucket_summary"]),
+            "{business_context_json}": json.dumps(business_context, indent=2) if business_context else "Not available",
+            "{relationship_context_json}": json.dumps(relationship_context, indent=2) if relationship_context else "Not available",
+            "{top_signal_emails_json}": json.dumps(context["top_signal_emails"], indent=2),
+            "{priority_emails_json}": json.dumps(context["priority_emails"], indent=2),
+        }
+        for key, val in replacements.items():
+            user_message = user_message.replace(key, val)
 
         # Load configurable prompt (DB override → hardcoded default)
         from .ai_prompt_loader import get_prompt

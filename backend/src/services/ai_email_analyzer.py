@@ -1207,7 +1207,9 @@ class AIEmailAnalyzer:
         user_template = get_prompt(self.client, PROMPT_KEY_EMAIL_ANALYSIS_USER, USER_PROMPT_TEMPLATE, client_id)
 
         emails_json = self._format_emails_for_prompt(emails)
-        user_message = user_template.format(emails_json=emails_json)
+        # Use replace instead of .format() — DB-loaded prompts have literal braces
+        # that .format() would try to interpret as variables
+        user_message = user_template.replace("{emails_json}", emails_json)
 
         # Call Claude Haiku — scale max_tokens with batch size (~700 tokens per email)
         max_tokens = max(4096, len(emails) * 700)
