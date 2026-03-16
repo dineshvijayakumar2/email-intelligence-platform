@@ -339,12 +339,16 @@ class AIDigestGenerator:
         for key, val in replacements.items():
             user_message = user_message.replace(key, val)
 
+        # Apply client's model preferences from DB
+        from .ai_email_analyzer import _apply_client_model_settings
+        _apply_client_model_settings(self.client, client_id)
+
         # Load configurable prompt (DB override → hardcoded default)
         from .ai_prompt_loader import get_prompt
         digest_system_prompt = get_prompt(self.client, prompt_key,
                                           default_system, client_id)
 
-        # Call Claude Sonnet
+        # Call strategic model (respects client's model preference)
         ai_response = self.ai_client.call_sonnet(
             digest_system_prompt, user_message, max_tokens=2048
         )

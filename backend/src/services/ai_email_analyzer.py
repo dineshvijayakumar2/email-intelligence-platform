@@ -291,6 +291,35 @@ class EmailClassificationResult(BaseModel):
 # ---------------------------------------------------------------------------
 # JSON guard layer
 # ---------------------------------------------------------------------------
+def _apply_client_model_settings(supabase_client, client_id: Optional[str]):
+    """Load client's model preferences from DB and apply to global AI settings."""
+    if not client_id or not supabase_client:
+        return
+    try:
+        resp = supabase_client.table("system_settings").select("key,value").eq(
+            "client_id", client_id
+        ).in_("key", ["ai_cheap_model", "ai_strategic_model"]).execute()
+        if not resp.data:
+            return
+        settings = {row["key"]: row["value"] for row in resp.data}
+        cheap = settings.get("ai_cheap_model")
+        strategic = settings.get("ai_strategic_model")
+        if cheap or strategic:
+            from .ai_client import update_ai_settings
+            from .langchain_core import set_default_models
+            update_ai_settings(
+                cheap_model=cheap or "haiku",
+                strategic_model=strategic or "sonnet",
+            )
+            set_default_models(
+                cheap=cheap or "haiku",
+                strategic=strategic or "sonnet",
+            )
+            logger.info(f"Applied client model settings: cheap={cheap}, strategic={strategic}")
+    except Exception as e:
+        logger.debug(f"Could not load client model settings: {e}")
+
+
 def clean_llm_output(text: str) -> str:
     """Strip markdown fences, comments, trailing commas — handle Gemini quirks."""
     import re
@@ -1189,6 +1218,9 @@ class AIEmailAnalyzer:
                     prompt_version=PROMPT_VERSION,
                 )
             return {"analyzed": 0, "failed": len(emails), "skipped": 0}
+
+        # Apply client's model preferences from DB before calling LLM
+        _apply_client_model_settings(self.client, client_id)
 
         email_ids = [e["id"] for e in emails]
 
