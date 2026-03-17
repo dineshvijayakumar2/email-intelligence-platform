@@ -19,6 +19,7 @@ import type {
   ContactTypeGrouping,
   ContactType,
 } from '../../types/analytics';
+import { formatCurrency } from '../../utils/numberFormat';
 
 const { Text } = Typography;
 const PAGE_SIZE = 20;
@@ -285,7 +286,7 @@ export const ContactsAnalytics: React.FC = () => {
       dataIndex: 'qb_total_revenue',
       key: 'qb_total_revenue',
       width: 110,
-      render: (v: number | null) => v != null ? `$${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : null,
+      render: (v: number | null) => formatCurrency(v, 'AUD', 2),
     },
     { title: 'Score', dataIndex: 'engagement_score', key: 'score', width: 120, render: (v: number) => <EngagementBadge score={v} /> },
     { title: 'Last Contact', dataIndex: 'last_contacted_at', key: 'last', width: 110, render: (v: string) => formatRelativeTime(v) },

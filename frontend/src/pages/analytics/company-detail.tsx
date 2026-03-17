@@ -14,6 +14,7 @@ import {
   threadStatusConfig,
 } from '../../services/analyticsService';
 import type { CompanyAnalytics, ThreadStatusSummary } from '../../types/analytics';
+import { formatCurrency } from '../../utils/numberFormat';
 
 const { Title, Text } = Typography;
 
@@ -166,16 +167,16 @@ export const CompanyDetail: React.FC = () => {
                   <Descriptions.Item label="Tier"><Tag color="purple">{company.qb_tier}</Tag></Descriptions.Item>
                 )}
                 <Descriptions.Item label="Revenue">
-                  ${(company.qb_total_revenue ?? 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                  {formatCurrency(company.qb_total_revenue ?? 0)}
                 </Descriptions.Item>
                 {company.qb_invoiced_ty != null && (
                   <Descriptions.Item label="This Year">
-                    ${company.qb_invoiced_ty.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                    {formatCurrency(company.qb_invoiced_ty)}
                   </Descriptions.Item>
                 )}
                 {company.qb_invoiced_ly != null && (
                   <Descriptions.Item label="Last Year">
-                    ${company.qb_invoiced_ly.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                    {formatCurrency(company.qb_invoiced_ly)}
                     {company.qb_invoiced_ty != null && company.qb_invoiced_ty > company.qb_invoiced_ly && (
                       <ArrowUpOutlined style={{ color: '#52c41a', marginLeft: 6 }} />
                     )}

@@ -11,6 +11,7 @@ import {
   formatRelativeTime,
   engagementStatusConfig,
 } from '../../services/analyticsService';
+import { formatCurrency } from '../../utils/numberFormat';
 import type {
   CompanyAnalytics,
   TopEngagedCompany,
@@ -144,7 +145,7 @@ export const CompaniesAnalytics: React.FC = () => {
       title: 'Revenue TY', dataIndex: 'qb_total_revenue', key: 'qb_total_revenue', width: 110,
       sorter: true,
       sortOrder: getSortOrder('qb_total_revenue'),
-      render: (v: number | null) => v != null ? `$${v.toLocaleString()}` : '-',
+      render: (v: number | null) => formatCurrency(v),
     },
     {
       title: 'Growth', dataIndex: 'qb_growth_90d', key: 'qb_growth_90d', width: 90,
@@ -250,7 +251,7 @@ export const CompaniesAnalytics: React.FC = () => {
     },
     {
       title: 'Revenue TY', dataIndex: 'qb_total_revenue', key: 'qb_total_revenue', width: 110,
-      render: (v: number | null) => v != null ? `$${v.toLocaleString()}` : '-',
+      render: (v: number | null) => formatCurrency(v),
     },
     { title: 'Days Silent', dataIndex: 'days_since_contact', key: 'days', width: 100, render: (v: number) => <Tag color={v > 90 ? 'red' : 'orange'}>{v}d</Tag> },
     { title: 'Contacts', dataIndex: 'contact_count', key: 'contacts', width: 80 },

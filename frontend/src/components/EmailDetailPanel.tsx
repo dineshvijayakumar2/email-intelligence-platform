@@ -211,45 +211,64 @@ export const EmailDetailPanel: React.FC<EmailDetailPanelProps> = ({
             style={{
               backgroundColor: getAvatarColor(email.sender_email),
               flexShrink: 0,
+              alignSelf: 'flex-start',
+              marginTop: 2,
             }}
           >
             {getInitials(email.sender_name || '', email.sender_email)}
           </Avatar>
 
-          <div className="email-detail-meta-info">
-            <div className="email-detail-from">
-              <Text strong>{email.sender_name || email.sender_email}</Text>
-              {email.sender_name && (
-                <Text type="secondary" style={{ fontSize: 13 }}>
-                  &lt;{email.sender_email}&gt;
-                </Text>
-              )}
-            </div>
-            <div className="email-detail-to">
-              <Text type="secondary" style={{ fontSize: 13 }}>
-                To: {email.recipients?.map(r => r.name || r.email).join(', ') || 'Unknown'}
-              </Text>
-            </div>
-            {(email.cc_list?.length ?? 0) > 0 && (
-              <div className="email-detail-cc">
-                <Text type="secondary" style={{ fontSize: 13 }}>
-                  CC: {email.cc_list!.map(r => r.name || r.email).join(', ')}
-                </Text>
-              </div>
-            )}
-            {(email.bcc_list?.length ?? 0) > 0 && (
-              <div className="email-detail-bcc">
-                <Text type="secondary" style={{ fontSize: 13 }}>
-                  BCC: {email.bcc_list!.map(r => r.name || r.email).join(', ')}
-                </Text>
-              </div>
-            )}
-          </div>
-
-          <div className="email-detail-date">
-            <Text type="secondary" style={{ fontSize: 13 }}>
-              {formatDateTime(email.sent_date)}
-            </Text>
+          <div className="email-detail-meta-info" style={{ flex: 1, minWidth: 0 }}>
+            {/* Address header table */}
+            <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
+              <tbody>
+                <tr>
+                  <td style={{ color: '#8c8c8c', whiteSpace: 'nowrap', paddingRight: 8, paddingBottom: 2, verticalAlign: 'top', width: 36 }}>From</td>
+                  <td style={{ paddingBottom: 2, wordBreak: 'break-all' }}>
+                    <Text strong style={{ fontSize: 13 }}>{email.sender_name || email.sender_email}</Text>
+                    {email.sender_name && (
+                      <Text type="secondary" style={{ fontSize: 12, marginLeft: 6 }}>
+                        &lt;{email.sender_email}&gt;
+                      </Text>
+                    )}
+                  </td>
+                </tr>
+                <tr>
+                  <td style={{ color: '#8c8c8c', whiteSpace: 'nowrap', paddingRight: 8, paddingBottom: 2, verticalAlign: 'top' }}>To</td>
+                  <td style={{ paddingBottom: 2, wordBreak: 'break-all' }}>
+                    <Text style={{ fontSize: 13 }}>
+                      {email.recipients?.map(r => r.name ? `${r.name} <${r.email}>` : r.email).join(', ') || '—'}
+                    </Text>
+                  </td>
+                </tr>
+                {(email.cc_list?.length ?? 0) > 0 && (
+                  <tr>
+                    <td style={{ color: '#8c8c8c', whiteSpace: 'nowrap', paddingRight: 8, paddingBottom: 2, verticalAlign: 'top' }}>CC</td>
+                    <td style={{ paddingBottom: 2, wordBreak: 'break-all' }}>
+                      <Text style={{ fontSize: 13 }}>
+                        {email.cc_list!.map(r => r.name ? `${r.name} <${r.email}>` : r.email).join(', ')}
+                      </Text>
+                    </td>
+                  </tr>
+                )}
+                {(email.bcc_list?.length ?? 0) > 0 && (
+                  <tr>
+                    <td style={{ color: '#8c8c8c', whiteSpace: 'nowrap', paddingRight: 8, paddingBottom: 2, verticalAlign: 'top' }}>BCC</td>
+                    <td style={{ paddingBottom: 2, wordBreak: 'break-all' }}>
+                      <Text style={{ fontSize: 13 }}>
+                        {email.bcc_list!.map(r => r.name ? `${r.name} <${r.email}>` : r.email).join(', ')}
+                      </Text>
+                    </td>
+                  </tr>
+                )}
+                <tr>
+                  <td style={{ color: '#8c8c8c', whiteSpace: 'nowrap', paddingRight: 8, verticalAlign: 'top' }}>Date</td>
+                  <td>
+                    <Text type="secondary" style={{ fontSize: 13 }}>{formatDateTime(email.sent_date)}</Text>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
 

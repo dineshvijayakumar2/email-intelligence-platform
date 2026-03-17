@@ -22,6 +22,7 @@ import {
   formatResponseTime,
 } from '../../services/analyticsService';
 import type { DashboardSummary } from '../../types/analytics';
+import { formatCurrency } from '../../utils/numberFormat';
 
 const { Text } = Typography;
 
@@ -133,7 +134,7 @@ export const AnalyticsDashboard: React.FC = () => {
       dataIndex: 'qb_total_revenue',
       key: 'revenue',
       width: 90,
-      render: (v: number) => v != null ? `$${Math.round(v).toLocaleString()}` : '-',
+      render: (v: number) => formatCurrency(v),
     },
     {
       title: 'Score',
