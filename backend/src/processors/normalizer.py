@@ -30,6 +30,9 @@ class EmailNormalizer:
         # Thread index for subject heuristic within a batch
         # Maps (subject_normalized, frozenset(participants)) → thread_id
         self._thread_index: Dict[str, str] = {}
+        # Provider thread ID counter — detect oversized provider groups
+        self._provider_thread_counts: Dict[str, int] = {}
+        self.MAX_PROVIDER_THREAD_SIZE = 200
 
     def reset_thread_index(self):
         """Reset thread index between batches"""
@@ -157,8 +160,12 @@ class EmailNormalizer:
         message_id = self._clean_message_id(email.get('message_id', ''))
 
         # --- Priority 1: Provider thread ID ---
+        # Skip if this provider_thread_id has grown too large (mailing list, recurring meeting)
         if provider_tid:
-            return provider_tid, 1.0
+            self._provider_thread_counts[provider_tid] = self._provider_thread_counts.get(provider_tid, 0) + 1
+            if self._provider_thread_counts[provider_tid] <= self.MAX_PROVIDER_THREAD_SIZE:
+                return provider_tid, 1.0
+            # Too large — fall through to header/heuristic methods
 
         # --- Priority 2: References header (root message) ---
         references = (

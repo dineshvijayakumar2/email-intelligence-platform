@@ -4,6 +4,7 @@ import type { TableProps } from 'antd';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { LeftOutlined } from '@ant-design/icons';
 import { ClientSelector } from '../../components/analytics/ClientSelector';
+import { MailboxSelector } from '../../components/MailboxSelector';
 import { AnalyticsTable } from '../../components/analytics/AnalyticsTable';
 import { threadsApi, formatRelativeTime, threadStatusConfig } from '../../services/analyticsService';
 import type { ThreadStatusSummary, ThreadStatus } from '../../types/analytics';
@@ -34,6 +35,8 @@ export const ThreadAnalytics: React.FC = () => {
   const isDrilldownMode = !!(drilldownContactId || drilldownCompanyId);
 
   const [clientId, setClientId] = useState('');
+  const [mailboxIds, setMailboxIds] = useState<string[]>([]);
+  const mailboxId = mailboxIds[0] || '';
   const [threads, setThreads] = useState<ThreadStatusSummary[]>([]);
   const [threadsTotal, setThreadsTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -72,13 +75,14 @@ export const ThreadAnalytics: React.FC = () => {
     if (isDrilldownMode) return;
     if (!clientId) return;
     loadThreads();
-  }, [clientId, page, statusFilter, search, sortBy, sortDir]);
+  }, [clientId, mailboxId, page, statusFilter, search, sortBy, sortDir]);
 
   const loadThreads = async () => {
     setLoading(true);
     try {
       const result = await threadsApi.list({
         client_id: clientId,
+        mailbox_id: mailboxId || undefined,
         limit: PAGE_SIZE,
         offset: (page - 1) * PAGE_SIZE,
         status: statusFilter || undefined,
@@ -214,7 +218,10 @@ export const ThreadAnalytics: React.FC = () => {
             ? `${statusLabel} — ${threadsTotal} thread${threadsTotal !== 1 ? 's' : ''}`
             : `All Threads (${threadsTotal})`}
         </Text>
-        <ClientSelector value={clientId} onChange={setClientId} />
+        <Space>
+          <ClientSelector value={clientId} onChange={setClientId} />
+          <MailboxSelector value={mailboxIds} onChange={setMailboxIds} mode="single" placeholder="All mailboxes" style={{ width: 220 }} />
+        </Space>
       </div>
       <div className="fade-in-up stagger-1">
         <Space style={{ marginBottom: 16 }} wrap>
