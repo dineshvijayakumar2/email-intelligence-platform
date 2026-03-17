@@ -435,6 +435,47 @@ async def list_qb_sales_line_items(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/rematch")
+async def rematch_qb_data(
+    client_id: str = Query(...),
+    background_tasks: BackgroundTasks = None,
+):
+    """Re-run QB matching + propagation without re-syncing from QuickBase API.
+    Useful after extraction adds new companies/contacts that can now match."""
+    try:
+        cfg_result = _supabase.table('qb_sync_config').select('*').eq(
+            'client_id', client_id
+        ).limit(1).execute()
+        if not cfg_result.data:
+            raise HTTPException(status_code=404, detail="No QB config found")
+
+        config = cfg_result.data[0]
+
+        async def _run_rematch():
+            try:
+                syncer = QuickbaseSync(_supabase, config)
+                c1 = await syncer.match_to_companies()
+                c2 = await syncer.match_to_contacts()
+                c3 = await syncer.match_customers_via_contacts()
+                c4 = await syncer.propagate_qb_data_to_companies()
+                logger.info(f"Rematch complete: {c1} companies by name, {c2} contacts by email, "
+                            f"{c3} companies via contacts, {c4} propagated")
+            except Exception as e:
+                logger.error(f"Rematch failed: {e}")
+
+        if background_tasks:
+            background_tasks.add_task(_run_rematch)
+            return {"status": "accepted", "message": "Re-matching started in background"}
+        else:
+            await _run_rematch()
+            return {"status": "completed", "message": "Re-matching completed"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)[:200])
+
+
 @router.get("/health")
 async def qb_health(client_id: str = Query(...)):
     """QB data health: match rates, enrichment coverage, data quality."""

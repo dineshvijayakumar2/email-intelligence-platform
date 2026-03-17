@@ -281,6 +281,22 @@ const QuickbaseConfigPage: React.FC = () => {
     }
   };
 
+  const [rematching, setRematching] = useState(false);
+
+  const handleRematch = async () => {
+    if (!clientId) return;
+    setRematching(true);
+    try {
+      await api.post<any>(`/v1/quickbase/rematch?client_id=${clientId}`);
+      message.success('Re-matching started — matching QB records to email companies/contacts');
+      setTimeout(() => loadQBStatus(clientId), 5000);
+    } catch (err: any) {
+      message.error(err?.message || 'Re-match failed');
+    } finally {
+      setRematching(false);
+    }
+  };
+
   const handleTableSync = async (tableKey: string) => {
     if (!clientId) return;
     setTableSyncing(prev => ({ ...prev, [tableKey]: true }));
@@ -796,6 +812,14 @@ const QuickbaseConfigPage: React.FC = () => {
                 size="small"
               >
                 Sync Now
+              </Button>
+              <Button
+                icon={<ArrowRightOutlined />}
+                loading={rematching}
+                onClick={handleRematch}
+                size="small"
+              >
+                Re-match
               </Button>
             </Space>
           }

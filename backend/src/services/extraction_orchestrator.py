@@ -931,12 +931,43 @@ class ExtractionOrchestrator:
 
         logger.info(f"Company upsert complete: {result['created']} created, {result['updated']} updated")
 
-        # Sprint 3: QB enrichment sub-step — propagate Quickbase data to companies/contacts
+        # Sprint 3: QB re-match + enrichment (new companies/contacts may match QB records)
+        qb_matched = self._rematch_quickbase()
+        result['qb_new_matches'] = qb_matched
         qb_enriched = self._enrich_from_quickbase()
         result['qb_companies_enriched'] = qb_enriched.get('companies', 0)
         result['qb_contacts_enriched'] = qb_enriched.get('contacts', 0)
 
         return result
+
+    def _rematch_quickbase(self) -> int:
+        """Re-run QB matching after new companies/contacts are created by extraction."""
+        try:
+            import asyncio
+            qb_config = self.client.table('qb_sync_config').select('*').eq(
+                'client_id', self.client_id
+            ).execute()
+            if not qb_config.data or not qb_config.data[0].get('is_active'):
+                return 0
+
+            from .quickbase_sync import QuickbaseSync
+            syncer = QuickbaseSync(self.client, qb_config.data[0])
+
+            # Run matching (async methods called via asyncio)
+            loop = asyncio.new_event_loop()
+            try:
+                c1 = loop.run_until_complete(syncer.match_to_companies())
+                c2 = loop.run_until_complete(syncer.match_to_contacts())
+                c3 = loop.run_until_complete(syncer.match_customers_via_contacts())
+                total = c1 + c2 + c3
+                if total > 0:
+                    logger.info(f"Step 6 QB rematch: {c1} companies, {c2} contacts, {c3} via chain")
+                return total
+            finally:
+                loop.close()
+        except Exception as e:
+            logger.warning(f"Step 6 QB rematch failed (non-critical): {e}")
+            return 0
 
     def _enrich_from_quickbase(self) -> Dict:
         """

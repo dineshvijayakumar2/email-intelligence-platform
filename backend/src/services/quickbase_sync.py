@@ -223,13 +223,33 @@ class QuickbaseSync:
         # Offload blocking Supabase batch-upsert loop to thread pool so the
         # async event loop is not blocked during large syncs (e.g. 80K SLIs)
         def _do_upsert():
+            import time as _time
             total = 0
+            num_batches = (len(rows) + UPSERT_BATCH_SIZE - 1) // UPSERT_BATCH_SIZE
             for i in range(0, len(rows), UPSERT_BATCH_SIZE):
                 batch = rows[i:i + UPSERT_BATCH_SIZE]
-                _execute_with_retry(lambda b=batch: self._supabase.table(table_name).upsert(
-                    b, on_conflict='client_id,qb_record_id'
-                ).execute())
-                total += len(batch)
+                batch_num = i // UPSERT_BATCH_SIZE + 1
+                try:
+                    _execute_with_retry(lambda b=batch: self._supabase.table(table_name).upsert(
+                        b, on_conflict='client_id,qb_record_id'
+                    ).execute())
+                    total += len(batch)
+                except Exception as e:
+                    logger.warning(f"Batch {batch_num}/{num_batches} failed for {table_name}: {e}")
+                    # Retry once after longer pause
+                    _time.sleep(2)
+                    try:
+                        _execute_with_retry(lambda b=batch: self._supabase.table(table_name).upsert(
+                            b, on_conflict='client_id,qb_record_id'
+                        ).execute())
+                        total += len(batch)
+                    except Exception as e2:
+                        logger.error(f"Batch {batch_num} permanently failed: {e2}")
+                # Throttle: small pause every 10 batches to avoid connection exhaustion
+                if batch_num % 10 == 0:
+                    _time.sleep(0.5)
+                    if batch_num % 100 == 0:
+                        logger.info(f"  {table_name}: {total}/{len(rows)} upserted...")
             return total
 
         total = await asyncio.to_thread(_do_upsert)
@@ -388,7 +408,7 @@ class QuickbaseSync:
         try:
             # Get all matched QB contacts with their QB customer link
             qb_contacts = _execute_with_retry(lambda: self._supabase.table('qb_contacts').select(
-                'id, matched_contact_id, customer_id'
+                'id, matched_contact_id, qb_customer_id'
             ).eq('client_id', self._client_id).not_.is_(
                 'matched_contact_id', 'null'
             ).execute())
@@ -428,7 +448,7 @@ class QuickbaseSync:
             matched = 0
             for qb_contact in qb_contacts.data:
                 contact_id = qb_contact.get('matched_contact_id')
-                customer_id = qb_contact.get('customer_id')  # QB customer record ID
+                customer_id = qb_contact.get('qb_customer_id')  # QB customer record ID
                 if not contact_id or not customer_id:
                     continue
 
