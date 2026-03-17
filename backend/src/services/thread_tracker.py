@@ -146,7 +146,7 @@ class ThreadTracker:
         """
         PAGE_SIZE = 500
         COLUMNS = ('id, thread_id, subject, sent_date, is_outbound, '
-                   'customer_contact_id, customer_company_id, processing_status, folder')
+                   'customer_contact_id, customer_company_id, processing_status, folder_path')
         # Folders to exclude from thread analysis
         EXCLUDED_FOLDERS = {'trash', 'junk', 'spam', 'deleted items', 'deleted',
                             'junk email', 'junk e-mail', 'drafts', 'draft'}
@@ -169,14 +169,14 @@ class ThreadTracker:
                     response = query.execute()
                     all_emails = [e for e in (response.data or [])
                                   if e.get('processing_status') != 'failed'
-                                  and (e.get('folder') or '').lower() not in EXCLUDED_FOLDERS]
+                                  and (e.get('folder_path') or '').lower() not in EXCLUDED_FOLDERS]
                     break
 
                 response = query.range(offset, offset + PAGE_SIZE - 1).execute()
                 batch = response.data or []
                 filtered = [e for e in batch
                             if e.get('processing_status') != 'failed'
-                            and (e.get('folder') or '').lower() not in EXCLUDED_FOLDERS]
+                            and (e.get('folder_path') or '').lower() not in EXCLUDED_FOLDERS]
                 all_emails.extend(filtered)
 
                 if len(batch) == 0:

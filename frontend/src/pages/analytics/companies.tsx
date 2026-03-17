@@ -127,6 +127,13 @@ export const CompaniesAnalytics: React.FC = () => {
     },
     {
       title: 'Tier', dataIndex: 'qb_tier', key: 'qb_tier', width: 60,
+      sorter: true,
+      sortOrder: getSortOrder('qb_tier'),
+      filters: [
+        { text: 'A', value: 'A' }, { text: 'B', value: 'B' },
+        { text: 'C', value: 'C' }, { text: 'None', value: '' },
+      ],
+      onFilter: (value: any, record: any) => value === '' ? !record.qb_tier : record.qb_tier === value,
       render: (v: string | null) => {
         if (!v) return null;
         const colors: Record<string, string> = { A: 'green', B: 'blue', C: 'orange' };
@@ -135,10 +142,14 @@ export const CompaniesAnalytics: React.FC = () => {
     },
     {
       title: 'Revenue TY', dataIndex: 'qb_total_revenue', key: 'qb_total_revenue', width: 110,
+      sorter: true,
+      sortOrder: getSortOrder('qb_total_revenue'),
       render: (v: number | null) => v != null ? `$${v.toLocaleString()}` : '-',
     },
     {
       title: 'Growth', dataIndex: 'qb_growth_90d', key: 'qb_growth_90d', width: 90,
+      sorter: true,
+      sortOrder: getSortOrder('qb_growth_90d'),
       render: (v: number | null) => {
         if (v == null) return '-';
         const color = v >= 0 ? 'green' : 'red';
@@ -147,10 +158,17 @@ export const CompaniesAnalytics: React.FC = () => {
     },
     {
       title: 'Type', dataIndex: 'qb_customer_type', key: 'qb_customer_type', width: 120,
+      sorter: true,
+      sortOrder: getSortOrder('qb_customer_type'),
       render: (v: string | null) => <LifecycleBadge tier={v} />,
     },
     {
       title: 'Status', dataIndex: 'engagement_status', key: 'status', width: 100,
+      filters: [
+        { text: 'Active', value: 'active' }, { text: 'Quiet', value: 'quiet' },
+        { text: 'At Risk', value: 'at_risk' }, { text: 'No Activity', value: 'unknown' },
+      ],
+      onFilter: (value: any, record: any) => record.engagement_status === value,
       render: (v: EngagementStatus) => { const cfg = engagementStatusConfig[v] || engagementStatusConfig.unknown; return <Tag color={cfg.color}>{cfg.label}</Tag>; },
     },
     {

@@ -114,6 +114,8 @@ class QuickbaseSync:
         # After sync, match to existing companies/contacts
         matched_companies = await self.match_to_companies()
         matched_contacts = await self.match_to_contacts()
+        matched_via_contacts = await self.match_customers_via_contacts()
+        matched_companies += matched_via_contacts
         counts['matched_companies'] = matched_companies
         counts['matched_contacts'] = matched_contacts
 
@@ -370,6 +372,86 @@ class QuickbaseSync:
 
         logger.info(f"Matched {matched}/{len(unmatched)} QB contacts by email")
         return matched
+
+    async def match_customers_via_contacts(self) -> int:
+        """
+        Match QB customers to companies via email-matched contacts.
+
+        Flow: qb_contacts (matched by email) → customer_contacts → customer_company_id
+        → set qb_customers.matched_company_id for the parent QB customer.
+
+        This catches cases where company name matching fails but we have
+        email-level links through contacts.
+        """
+        # Get QB contacts that are matched but whose parent QB customer is NOT matched
+        # QB contacts have a customer_id field linking to QB customers
+        try:
+            # Get all matched QB contacts with their QB customer link
+            qb_contacts = _execute_with_retry(lambda: self._supabase.table('qb_contacts').select(
+                'id, matched_contact_id, customer_id'
+            ).eq('client_id', self._client_id).not_.is_(
+                'matched_contact_id', 'null'
+            ).execute())
+
+            if not qb_contacts.data:
+                return 0
+
+            # Get unmatched QB customers
+            unmatched_custs = _execute_with_retry(lambda: self._supabase.table('qb_customers').select(
+                'id, qb_record_id'
+            ).eq('client_id', self._client_id).is_(
+                'matched_company_id', 'null'
+            ).execute())
+
+            if not unmatched_custs.data:
+                return 0
+
+            # Build QB record_id → QB customer id lookup
+            qb_cust_by_record = {c['qb_record_id']: c['id'] for c in unmatched_custs.data if c.get('qb_record_id')}
+
+            # Build contact_id → company_id lookup from customer_contacts
+            contact_ids = [c['matched_contact_id'] for c in qb_contacts.data if c.get('matched_contact_id')]
+            if not contact_ids:
+                return 0
+
+            contact_company_map = {}
+            for i in range(0, len(contact_ids), 500):
+                batch = contact_ids[i:i+500]
+                resp = _execute_with_retry(lambda b=batch: self._supabase.table('customer_contacts').select(
+                    'id, customer_company_id'
+                ).in_('id', b).execute())
+                for c in (resp.data or []):
+                    if c.get('customer_company_id'):
+                        contact_company_map[c['id']] = c['customer_company_id']
+
+            # Now match: QB contact → customer_contact → company
+            matched = 0
+            for qb_contact in qb_contacts.data:
+                contact_id = qb_contact.get('matched_contact_id')
+                customer_id = qb_contact.get('customer_id')  # QB customer record ID
+                if not contact_id or not customer_id:
+                    continue
+
+                company_id = contact_company_map.get(contact_id)
+                qb_cust_id = qb_cust_by_record.get(str(customer_id))
+
+                if company_id and qb_cust_id:
+                    try:
+                        _execute_with_retry(lambda cid=company_id, qid=qb_cust_id: (
+                            self._supabase.table('qb_customers').update({
+                                'matched_company_id': cid
+                            }).eq('id', qid).execute()
+                        ))
+                        matched += 1
+                    except Exception:
+                        pass
+
+            logger.info(f"Matched {matched} QB customers via contact email→company chain")
+            return matched
+
+        except Exception as e:
+            logger.warning(f"match_customers_via_contacts failed: {e}")
+            return 0
 
     async def propagate_qb_data_to_companies(self) -> int:
         """

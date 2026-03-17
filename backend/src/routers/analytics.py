@@ -340,6 +340,8 @@ COMPANY_SORT_COLUMNS = {
     'engagement_score', 'company_name', 'total_emails',
     'contact_count', 'decision_maker_count',
     'last_contact_date', 'created_at',
+    'qb_total_revenue', 'qb_tier', 'qb_growth_90d',
+    'qb_customer_type', 'qb_days_since_last_invoice',
 }
 
 THREAD_SORT_COLUMNS = {

@@ -48,34 +48,51 @@ export const ThreadAnalytics: React.FC = () => {
 
   useEffect(() => { isMountedRef.current = true; return () => { isMountedRef.current = false; }; }, []);
 
-  // Drilldown mode: load threads for contact/company
+  // Load threads — handles both drilldown and normal mode with all filters
   useEffect(() => {
-    if (!isDrilldownMode) return;
-    const loadDrilldown = async () => {
-      setLoading(true);
-      try {
-        const result = drilldownContactId
-          ? await threadsApi.byContact(drilldownContactId, 200)
-          : await threadsApi.byCompany(drilldownCompanyId!, 200);
-        if (isMountedRef.current) {
-          setThreads(result.threads);
-          setThreadsTotal(result.total);
+    if (isDrilldownMode) {
+      // Drilldown: use byContact/byCompany but also apply status/search filters
+      const loadDrilldown = async () => {
+        setLoading(true);
+        try {
+          let result;
+          if (drilldownContactId) {
+            result = await threadsApi.byContact(drilldownContactId, 200);
+          } else {
+            result = await threadsApi.byCompany(drilldownCompanyId!, 200);
+          }
+          let filtered = result.threads || [];
+          // Apply client-side filters to drilldown results
+          if (statusFilter) {
+            const statusMap: Record<string, string[]> = {
+              'active': ['ongoing', 'awaiting_our_response'],
+              'overdue': ['overdue'],
+              'complete': ['complete'],
+              'dropped': ['dropped'],
+            };
+            const allowed = statusMap[statusFilter] || [statusFilter];
+            filtered = filtered.filter(t => allowed.includes(t.status));
+          }
+          if (search) {
+            const term = search.toLowerCase();
+            filtered = filtered.filter(t => (t.subject || '').toLowerCase().includes(term));
+          }
+          if (isMountedRef.current) {
+            setThreads(filtered);
+            setThreadsTotal(filtered.length);
+          }
+        } catch (error) {
+          console.error('Error loading drilldown threads:', error);
+        } finally {
+          if (isMountedRef.current) setLoading(false);
         }
-      } catch (error) {
-        console.error('Error loading drilldown threads:', error);
-      } finally {
-        if (isMountedRef.current) setLoading(false);
-      }
-    };
-    loadDrilldown();
-  }, [isDrilldownMode, drilldownContactId, drilldownCompanyId]);
-
-  // Normal mode: load threads with filters
-  useEffect(() => {
-    if (isDrilldownMode) return;
+      };
+      loadDrilldown();
+      return;
+    }
     if (!clientId) return;
     loadThreads();
-  }, [clientId, mailboxId, page, statusFilter, search, sortBy, sortDir]);
+  }, [clientId, mailboxId, page, statusFilter, search, sortBy, sortDir, isDrilldownMode, drilldownContactId, drilldownCompanyId]);
 
   const loadThreads = async () => {
     setLoading(true);

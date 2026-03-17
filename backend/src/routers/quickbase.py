@@ -435,6 +435,38 @@ async def list_qb_sales_line_items(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/health")
+async def qb_health(client_id: str = Query(...)):
+    """QB data health: match rates, enrichment coverage, data quality."""
+    try:
+        # QB customer match rate
+        total_qb = _supabase.table('qb_customers').select('id', count='exact').eq('client_id', client_id).execute()
+        matched_qb = _supabase.table('qb_customers').select('id', count='exact').eq('client_id', client_id).not_.is_('matched_company_id', 'null').execute()
+
+        # QB contact match rate
+        total_qb_contacts = _supabase.table('qb_contacts').select('id', count='exact').eq('client_id', client_id).execute()
+        matched_qb_contacts = _supabase.table('qb_contacts').select('id', count='exact').eq('client_id', client_id).not_.is_('matched_contact_id', 'null').execute()
+
+        # Company enrichment coverage
+        total_companies = _supabase.table('customer_companies').select('id', count='exact').eq('client_id', client_id).execute()
+        enriched_companies = _supabase.table('customer_companies').select('id', count='exact').eq('client_id', client_id).not_.is_('qb_total_revenue', 'null').execute()
+
+        total_c = total_qb.count or 0
+        matched_c = matched_qb.count or 0
+        total_ct = total_qb_contacts.count or 0
+        matched_ct = matched_qb_contacts.count or 0
+        total_co = total_companies.count or 0
+        enriched_co = enriched_companies.count or 0
+
+        return {
+            "qb_customers": {"total": total_c, "matched": matched_c, "unmatched": total_c - matched_c, "match_rate_pct": round(matched_c / total_c * 100, 1) if total_c else 0},
+            "qb_contacts": {"total": total_ct, "matched": matched_ct, "unmatched": total_ct - matched_ct, "match_rate_pct": round(matched_ct / total_ct * 100, 1) if total_ct else 0},
+            "company_enrichment": {"total": total_co, "enriched": enriched_co, "not_enriched": total_co - enriched_co, "coverage_pct": round(enriched_co / total_co * 100, 1) if total_co else 0},
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)[:200])
+
+
 @router.get("/match-preview")
 async def match_preview(client_id: str = Query(...)):
     """Preview proposed company matches (unmatched QB customers vs existing companies)."""
