@@ -159,9 +159,9 @@ class AIInsightsEngine:
 
             # Active threads
             threads = self._supabase.table("thread_status").select(
-                "subject, status, last_activity_at, message_count"
+                "subject, status, last_message_at, message_count"
             ).eq("customer_company_id", company_id).order(
-                "last_activity_at", desc=True
+                "last_message_at", desc=True
             ).limit(5).execute()
 
             # Recent AI signals
@@ -246,7 +246,7 @@ class AIInsightsEngine:
         try:
             # Get thread status
             thread = self._supabase.table("thread_status").select(
-                "subject, status, message_count, last_activity_at, "
+                "subject, status, message_count, last_message_at, "
                 "qb_customer_type, qb_customer_tier"
             ).eq("thread_id", thread_id).single().execute()
 
