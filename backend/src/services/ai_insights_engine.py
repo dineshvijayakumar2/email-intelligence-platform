@@ -165,12 +165,22 @@ class AIInsightsEngine:
                 "last_message_at", desc=True
             ).limit(5).execute()
 
-            # Recent AI signals
-            signals = self._supabase.table("ai_email_intelligence").select(
-                "primary_bucket, intent, urgency, sentiment, business_signal_score"
-            ).eq("customer_company_id", company_id).eq(
-                "processing_status", "completed"
-            ).order("created_at", desc=True).limit(20).execute()
+            # Recent AI signals — ai_email_intelligence has no company column;
+            # resolve via emails.customer_company_id first
+            _email_ids_res = self._supabase.table("emails").select("id").eq(
+                "customer_company_id", company_id
+            ).order("sent_date", desc=True).limit(100).execute()
+            _email_ids = [r["id"] for r in (_email_ids_res.data or [])]
+            if _email_ids:
+                signals = self._supabase.table("ai_email_intelligence").select(
+                    "primary_bucket, intent, urgency, sentiment, business_signal_score"
+                ).in_("email_id", _email_ids).eq(
+                    "processing_status", "completed"
+                ).order("created_at", desc=True).limit(20).execute()
+            else:
+                class _Empty:
+                    data = []
+                signals = _Empty()
 
             # Load per-client currency code
             currency_code = get_client_currency_code(self._supabase, c.get("client_id"))
