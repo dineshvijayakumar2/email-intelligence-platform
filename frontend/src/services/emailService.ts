@@ -10,6 +10,9 @@ export interface Email {
   recipients?: Array<{ email: string; name?: string }>;
   cc_list?: Array<{ email: string; name?: string }>;
   bcc_list?: Array<{ email: string; name?: string }>;
+  attachments?: Array<{ filename: string; size?: number; mimetype?: string }>;
+  provider_web_link?: string;
+  mailbox_type?: string;
   sent_date: string;
   received_date?: string;
   category?: string; // This will come from email_categories join

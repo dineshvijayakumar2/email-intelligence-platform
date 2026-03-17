@@ -517,6 +517,12 @@ const IntelligenceDetail: React.FC<{ item: IntelligenceResult }> = ({ item }) =>
   const recipients = (item.email_recipients || [])
     .map((r: any) => typeof r === 'string' ? r : r?.email || r?.name || '')
     .filter(Boolean);
+  const ccList = (item.email_cc_list || [])
+    .map((r: any) => typeof r === 'string' ? r : r?.email || r?.name || '')
+    .filter(Boolean);
+  const bccList = (item.email_bcc_list || [])
+    .map((r: any) => typeof r === 'string' ? r : r?.email || r?.name || '')
+    .filter(Boolean);
 
   const hasHtml = !!item.email_body_html;
   const hasText = !!item.email_body;
@@ -532,6 +538,16 @@ const IntelligenceDetail: React.FC<{ item: IntelligenceResult }> = ({ item }) =>
         {recipients.length > 0 && (
           <Descriptions.Item label="To">
             <Text type="secondary">{recipients.join(', ')}</Text>
+          </Descriptions.Item>
+        )}
+        {ccList.length > 0 && (
+          <Descriptions.Item label="CC">
+            <Text type="secondary">{ccList.join(', ')}</Text>
+          </Descriptions.Item>
+        )}
+        {bccList.length > 0 && (
+          <Descriptions.Item label="BCC">
+            <Text type="secondary">{bccList.join(', ')}</Text>
           </Descriptions.Item>
         )}
         <Descriptions.Item label="Date">

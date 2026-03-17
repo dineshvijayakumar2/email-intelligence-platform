@@ -180,6 +180,8 @@ class IntelligenceResult(BaseModel):
     email_body: str = ""
     email_body_html: str = ""
     email_recipients: List[Any] = []
+    email_cc_list: List[Any] = []
+    email_bcc_list: List[Any] = []
 
     # Classification
     intent: Optional[str] = None

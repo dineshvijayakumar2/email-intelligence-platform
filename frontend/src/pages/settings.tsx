@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Card,
   Form,
@@ -12,9 +12,11 @@ import {
   Space,
   Divider,
 } from 'antd';
-import { ClockCircleOutlined, GlobalOutlined } from '@ant-design/icons';
+import { ClockCircleOutlined, GlobalOutlined, DollarOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import api from '../services/apiClient';
+import { ClientSelector } from '../components/analytics/ClientSelector';
+import { CURRENCY_OPTIONS } from '../utils/numberFormat';
 
 const { Title, Text } = Typography;
 
@@ -56,12 +58,21 @@ const TIMEZONE_OPTIONS = [
 
 export default function SettingsPage() {
   const [form] = Form.useForm();
+  const [clientForm] = Form.useForm();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [clientId, setClientId] = useState('');
+  const [clientSaving, setClientSaving] = useState(false);
 
   useEffect(() => {
     loadSettings();
   }, []);
+
+  // Load client locale settings when clientId changes
+  useEffect(() => {
+    if (!clientId) return;
+    loadClientLocale(clientId);
+  }, [clientId]);
 
   const loadSettings = async () => {
     try {
@@ -77,6 +88,18 @@ export default function SettingsPage() {
       message.error('Failed to load settings');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadClientLocale = async (cid: string) => {
+    try {
+      const data = await api.get<any>(`/v1/clients/${cid}`);
+      clientForm.setFieldsValue({
+        client_timezone: data.timezone || 'Australia/Sydney',
+        currency_code: data.currency_code || 'AUD',
+      });
+    } catch (err) {
+      // silently fail — defaults remain
     }
   };
 
@@ -98,6 +121,25 @@ export default function SettingsPage() {
     }
   };
 
+  const handleClientLocaleSave = async (values: any) => {
+    if (!clientId) {
+      message.warning('Select a client first');
+      return;
+    }
+    try {
+      setClientSaving(true);
+      await api.patch(`/v1/clients/${clientId}`, {
+        timezone: values.client_timezone,
+        currency_code: values.currency_code,
+      });
+      message.success('Client locale settings saved');
+    } catch (err) {
+      message.error('Failed to save client settings');
+    } finally {
+      setClientSaving(false);
+    }
+  };
+
   // Detect browser timezone for suggestion
   const detectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -113,7 +155,8 @@ export default function SettingsPage() {
     <div style={{ maxWidth: 640, margin: '0 auto' }}>
       <Title level={3}>Settings</Title>
 
-      <Card>
+      {/* ── Business Hours ─────────────────────────────────────────── */}
+      <Card style={{ marginBottom: 24 }}>
         <Space direction="vertical" size="small" style={{ width: '100%', marginBottom: 16 }}>
           <Title level={5} style={{ margin: 0 }}>
             <GlobalOutlined style={{ marginRight: 8 }} />
@@ -170,6 +213,76 @@ export default function SettingsPage() {
           <Form.Item style={{ marginBottom: 0 }}>
             <Button type="primary" htmlType="submit" loading={saving} icon={<ClockCircleOutlined />}>
               Save Business Hours
+            </Button>
+          </Form.Item>
+        </Form>
+      </Card>
+
+      {/* ── Client Locale Settings ─────────────────────────────────── */}
+      <Card>
+        <Space direction="vertical" size="small" style={{ width: '100%', marginBottom: 16 }}>
+          <Title level={5} style={{ margin: 0 }}>
+            <DollarOutlined style={{ marginRight: 8 }} />
+            Client Locale (Admin)
+          </Title>
+          <Text type="secondary">
+            Set the timezone and currency used for AI analysis, digests, and financial figures
+            for each client. These affect how the AI interprets and formats numbers in all prompts.
+          </Text>
+        </Space>
+
+        <Divider style={{ margin: '12px 0 24px' }} />
+
+        <div style={{ marginBottom: 16 }}>
+          <Text strong style={{ display: 'block', marginBottom: 8 }}>Client</Text>
+          <ClientSelector value={clientId} onChange={setClientId} style={{ width: '100%' }} />
+        </div>
+
+        <Form
+          form={clientForm}
+          layout="vertical"
+          onFinish={handleClientLocaleSave}
+          initialValues={{ client_timezone: 'Australia/Sydney', currency_code: 'AUD' }}
+        >
+          <Form.Item label="Client Timezone" name="client_timezone">
+            <Select
+              showSearch
+              options={TIMEZONE_OPTIONS}
+              filterOption={(input, option) =>
+                (option?.label as string)?.toLowerCase().includes(input.toLowerCase()) ||
+                (option?.value as string)?.toLowerCase().includes(input.toLowerCase())
+              }
+              placeholder="Select client timezone"
+              disabled={!clientId}
+            />
+          </Form.Item>
+
+          <Form.Item
+            label="Currency"
+            name="currency_code"
+            extra="Used for all financial figures in AI prompts, digests, and insights."
+          >
+            <Select
+              showSearch
+              options={CURRENCY_OPTIONS}
+              filterOption={(input, option) =>
+                (option?.label as string)?.toLowerCase().includes(input.toLowerCase()) ||
+                (option?.value as string)?.toLowerCase().includes(input.toLowerCase())
+              }
+              placeholder="Select currency"
+              disabled={!clientId}
+            />
+          </Form.Item>
+
+          <Form.Item style={{ marginBottom: 0 }}>
+            <Button
+              type="primary"
+              htmlType="submit"
+              loading={clientSaving}
+              icon={<DollarOutlined />}
+              disabled={!clientId}
+            >
+              Save Client Locale
             </Button>
           </Form.Item>
         </Form>

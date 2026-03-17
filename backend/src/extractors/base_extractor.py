@@ -369,6 +369,9 @@ class BaseExtractor(ABC):
             'source_path': source_path or raw_email.get('source_path', ''),
             'thread_key': thread_key,
 
+            # Provider deep-link (ready-to-open URL in Gmail / OWA)
+            'provider_web_link': raw_email.get('provider_web_link', ''),
+
             # Threading fields (first-class for robust thread grouping)
             'in_reply_to': raw_email.get('in_reply_to', ''),
             'references': raw_email.get('references', ''),

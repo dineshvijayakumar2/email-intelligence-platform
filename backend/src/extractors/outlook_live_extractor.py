@@ -171,7 +171,7 @@ class OutlookLiveExtractor(BaseExtractor):
             # Build Graph API URL with filters
             url = f"{self.graph_endpoint}/me/mailFolders/{folder_id}/messages"
             params = {
-                '$select': 'id,conversationId,internetMessageId,subject,sender,toRecipients,ccRecipients,bccRecipients,receivedDateTime,sentDateTime,body,isRead,hasAttachments,internetMessageHeaders',
+                '$select': 'id,conversationId,internetMessageId,subject,sender,toRecipients,ccRecipients,bccRecipients,receivedDateTime,sentDateTime,body,isRead,hasAttachments,internetMessageHeaders,webLink',
                 '$orderby': 'receivedDateTime desc'
             }
             
@@ -293,6 +293,11 @@ class OutlookLiveExtractor(BaseExtractor):
             'is_reply': is_reply,
             'raw_headers': headers,
             'message_size': len(body_content),
+            # Attachments — names unavailable without extra API call; mark presence
+            'attachments': [{'filename': '(attachment)', 'size': 0}]
+                           if email_data.get('hasAttachments') else [],
+            # Provider deep-link (OWA direct URL from Graph API)
+            'provider_web_link': email_data.get('webLink', ''),
             # Threading fields
             'in_reply_to': headers.get('In-Reply-To', ''),
             'references': headers.get('References', ''),

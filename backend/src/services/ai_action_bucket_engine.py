@@ -30,6 +30,8 @@ import time
 import logging
 from typing import Optional
 
+from ..utils.number_format import format_currency
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -160,7 +162,7 @@ def compute_lifecycle_tier(
 # ---------------------------------------------------------------------------
 # Email-level signal derivation
 # ---------------------------------------------------------------------------
-def derive_email_buckets(intel_row: dict) -> list[dict]:
+def derive_email_buckets(intel_row: dict, currency_code: str = "AUD") -> list[dict]:
     """
     Derive AM-centric signals for a single email from its AI classification.
 
@@ -220,7 +222,7 @@ def derive_email_buckets(intel_row: dict) -> list[dict]:
     has_qb_stale = qb_days_since is not None and qb_days_since > DEAL_STALE_DAYS
 
     if has_churn_signal and (qb_revenue and qb_revenue > 5000):
-        rev_str = f"${qb_revenue:,.0f}"
+        rev_str = format_currency(qb_revenue, currency_code, include_code=True)
         justification = f"Churn/negative signal on {rev_str} customer"
         if has_qb_stale:
             justification += f" ({qb_days_since}d since last order)"
@@ -272,7 +274,7 @@ def derive_email_buckets(intel_row: dict) -> list[dict]:
         for b in buckets:
             if b["bucket"] in ("retention_risk", "deal_at_risk", "response_urgency"):
                 b["confidence"] = round(min(b["confidence"] + 0.1, 1.0), 2)
-                b["justification"] += f" [High-value customer: ${qb_revenue:,.0f}]" if qb_revenue else ""
+                b["justification"] += f" [High-value customer: {format_currency(qb_revenue, currency_code, include_code=True)}]" if qb_revenue else ""
 
     return buckets
 

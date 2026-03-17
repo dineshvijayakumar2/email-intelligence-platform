@@ -538,6 +538,10 @@ class GmailExtractor(BaseExtractor):
                 'attachments': self._extract_attachments(payload),
                 'gmail_id': msg.get('id'),  # Keep Gmail's ID for reference
                 'gmail_thread_id': msg.get('threadId'),
+                'provider_web_link': (
+                    f"https://mail.google.com/mail/u/0/#all/{msg.get('id')}"
+                    if msg.get('id') else ''
+                ),
             }
 
             return self._standardize_email(raw_email)

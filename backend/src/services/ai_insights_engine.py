@@ -19,6 +19,7 @@ from typing import Optional
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from .langchain_core import get_cheap_llm, get_model_config
+from ..utils.number_format import get_client_currency_code, format_currency
 
 logger = logging.getLogger(__name__)
 
@@ -146,7 +147,7 @@ class AIInsightsEngine:
         try:
             # Company profile
             company = self._supabase.table("customer_companies").select(
-                "company_name, industry, engagement_score, total_emails, total_inbound, total_outbound, "
+                "client_id, company_name, industry, engagement_score, total_emails, total_inbound, total_outbound, "
                 "contact_count, decision_maker_count, first_contact_date, last_contact_date, "
                 "qb_customer_type, qb_tier, qb_total_revenue, qb_invoiced_ty, qb_invoiced_ly, "
                 "qb_growth_90d, qb_days_since_last_invoice, qb_account_manager"
@@ -171,6 +172,9 @@ class AIInsightsEngine:
                 "processing_status", "completed"
             ).order("created_at", desc=True).limit(20).execute()
 
+            # Load per-client currency code
+            currency_code = get_client_currency_code(self._supabase, c.get("client_id"))
+
             # Build context string
             parts = [f"Company: {c['company_name']}"]
             if c.get("qb_customer_type"):
@@ -178,9 +182,9 @@ class AIInsightsEngine:
             if c.get("qb_tier"):
                 parts.append(f"Tier: {c['qb_tier']}")
             if c.get("qb_total_revenue"):
-                parts.append(f"Total Revenue: ${c['qb_total_revenue']:,.0f}")
+                parts.append(f"Total Revenue: {format_currency(c['qb_total_revenue'], currency_code, include_code=True)}")
                 if c.get("qb_invoiced_ty") is not None and c.get("qb_invoiced_ly") is not None:
-                    parts.append(f"This Year: ${c['qb_invoiced_ty']:,.0f} | Last Year: ${c['qb_invoiced_ly']:,.0f}")
+                    parts.append(f"This Year: {format_currency(c['qb_invoiced_ty'], currency_code, include_code=True)} | Last Year: {format_currency(c['qb_invoiced_ly'], currency_code, include_code=True)}")
             if c.get("qb_days_since_last_invoice") is not None:
                 parts.append(f"Days Since Last Order: {c['qb_days_since_last_invoice']}")
             parts.append(f"Engagement Score: {c.get('engagement_score', 'N/A')}/100")

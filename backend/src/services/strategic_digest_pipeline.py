@@ -30,6 +30,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.prebuilt import create_react_agent
 
 from .langchain_core import get_strategic_llm, get_model_config
+from ..utils.number_format import get_client_currency_code, format_currency
 from .strategic_context_builder import StrategicContextBuilder
 from .am_efficiency_analyzer import AMEfficiencyAnalyzer
 from .langchain_tools import (
@@ -263,6 +264,7 @@ class StrategicDigestPipeline:
             # -----------------------------------------------------------------
             # Step 4: Compile context into structured prompt
             # -----------------------------------------------------------------
+            currency_code = get_client_currency_code(self.supabase, self.client_id)
             context_prompt = self._compile_context(
                 all_contexts=all_contexts,
                 am_performance=am_efficiency_data,
@@ -272,6 +274,7 @@ class StrategicDigestPipeline:
                 period_end=period_end,
                 comparison_start=comparison_start,
                 comparison_end=comparison_end,
+                currency_code=currency_code,
             )
 
             # Apply client's model preferences from DB
@@ -511,6 +514,7 @@ class StrategicDigestPipeline:
         period_end: date,
         comparison_start: Optional[date],
         comparison_end: Optional[date],
+        currency_code: str = "AUD",
     ) -> str:
         """Compile all gathered context into a structured prompt for the agent."""
 
@@ -581,12 +585,14 @@ class StrategicDigestPipeline:
                 rev_ty = fin.get("invoiced_ty") or 0
                 rev_ly = fin.get("invoiced_ly") or 0
                 days = fin.get("days_since_last_invoice")
-                sections.append(f"  Revenue TY: ${rev_ty:,.0f} | LY: ${rev_ly:,.0f}"
-                                 + (f" | {days}d since last order" if days else ""))
+                sections.append(
+                    f"  Revenue TY: {format_currency(rev_ty, currency_code, include_code=True)}"
+                    f" | LY: {format_currency(rev_ly, currency_code, include_code=True)}"
+                    + (f" | {days}d since last order" if days else ""))
                 open_q = fin.get("open_quotes_count", 0)
                 open_v = fin.get("open_quotes_total", 0)
                 if open_q:
-                    sections.append(f"  Open Quotes: {open_q} (${open_v:,.0f} total)")
+                    sections.append(f"  Open Quotes: {open_q} ({format_currency(open_v, currency_code, include_code=True)} total)")
 
             # Communication health
             comm = ctx.get("communication_health") or {}

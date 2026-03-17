@@ -28,6 +28,7 @@ from .ai_client import get_ai_client, get_ai_settings, AIResponse
 from .ai_privacy_filter import sanitize_email_body
 from .ai_usage_tracker import get_usage_tracker
 from .ai_action_bucket_engine import derive_email_buckets, BUCKET_ENGINE_VERSION
+from ..utils.number_format import get_client_currency_code, format_currency
 
 logger = logging.getLogger(__name__)
 
@@ -191,7 +192,21 @@ PRE-CLASSIFICATION HINTS:
 - Some emails include a "pre_classification" field with rule-based tags already applied (e.g., "urgent", "financial", "meeting", "reply").
 - Use these as strong hints. For example, if tags include "urgent", lean toward higher urgency. If sender_type is "human", treat as a real person.
 - These hints are deterministic and reliable, but you may override them if the email content clearly contradicts them.
-- Do NOT copy pre_classification values verbatim; use your own judgment informed by these hints."""
+- Do NOT copy pre_classification values verbatim; use your own judgment informed by these hints.
+
+CC / BCC CONTEXT:
+- Some emails include "cc" (visible carbon copy) and "bcc" (blind carbon copy outbound recipients).
+- Multiple recipients on CC/BCC signals a broader communication: team update, escalation, or multi-stakeholder decision.
+- If a decision maker or senior contact appears in CC/BCC, treat the email as higher importance.
+- BCC on outbound emails indicates a private record copy — relevant for audit/compliance signals.
+
+THREAD HISTORY:
+- Reply emails may include a "thread_history" array with prior messages in the same conversation (chronological, oldest first).
+- Each entry has: from, direction (inbound/outbound), date, snippet (first 300 chars of body).
+- Use this to understand conversation context: tone shifts, unresolved issues, escalation patterns, repeated asks.
+- If the current email is a follow-up to an unanswered outbound, increase urgency if the contact is chasing.
+- If the thread shows escalating negativity, raise sentiment_score and consider churn/retention signals.
+- If the current email resolves an issue raised in a prior message, set sentiment appropriately positive."""
 
 USER_PROMPT_TEMPLATE = """Analyze the following emails.
 For each email, return one JSON object with the following schema:
@@ -524,7 +539,7 @@ def compute_business_signal_score(flags: dict, business_signal: Optional[str]) -
 # ---------------------------------------------------------------------------
 # Post-processing: extract boolean flags from entities
 # ---------------------------------------------------------------------------
-def post_process_classification(result: EmailClassificationResult) -> dict:
+def post_process_classification(result: EmailClassificationResult, currency_code: str = "AUD") -> dict:
     """
     Convert validated Pydantic result into a database row dict.
     Computes boolean flags and business_signal_score deterministically.
@@ -575,7 +590,7 @@ def post_process_classification(result: EmailClassificationResult) -> dict:
     }
 
     # Derive email-level action buckets (Layer 2 — zero cost)
-    buckets = derive_email_buckets(row_data)
+    buckets = derive_email_buckets(row_data, currency_code=currency_code)
     row_data["action_buckets"] = buckets
     row_data["primary_bucket"] = buckets[0]["bucket"] if buckets else None
     row_data["bucket_engine_version"] = BUCKET_ENGINE_VERSION
@@ -787,7 +802,7 @@ class AIEmailAnalyzer:
             fetch_size = min(PAGE_SIZE, limit - len(all_emails) + 200)  # overfetch to account for filtering
             query = (
                 self.client.table("emails")
-                .select("id,mailbox_id,subject,body_text,sender_email,sender_name,sent_date,direction,folder_path,thread_id,is_reply,client_id,customer_contact_id,customer_company_id")
+                .select("id,mailbox_id,subject,body_text,sender_email,sender_name,sent_date,direction,folder_path,thread_id,is_reply,client_id,customer_contact_id,customer_company_id,cc_list,bcc_list")
                 .eq("mailbox_id", mailbox_id)
                 .order("sent_date", desc=True)
             )
@@ -1017,9 +1032,75 @@ class AIEmailAnalyzer:
             email["_rule_sender_type"] = sender_type
 
     # ------------------------------------------------------------------
+    # Thread context enrichment
+    # ------------------------------------------------------------------
+    def _enrich_with_thread_context(self, emails: List[dict]) -> None:
+        """
+        For each email that belongs to a thread, fetch the prior messages in that
+        thread and attach them as _thread_history.  This gives the AI the full
+        conversation context so it can correctly classify replies (e.g. detect
+        escalation, tone shift, unresolved issue) rather than treating each
+        message in isolation.
+
+        Only fetches threads where is_reply=True or thread has >1 message.
+        Caps each thread at the 10 most recent prior messages to stay within
+        token budget.
+        """
+        MAX_THREAD_MESSAGES = 10
+        MAX_BODY_CHARS = 300  # per prior message — keep tokens low
+
+        # Collect unique thread_ids that need context
+        thread_ids = list({
+            e["thread_id"] for e in emails
+            if e.get("thread_id") and e.get("is_reply")
+        })
+        if not thread_ids:
+            return
+
+        # Fetch prior messages for all threads in one batch
+        # We over-fetch and then filter per email to avoid N+1 queries
+        thread_history: Dict[str, List[dict]] = {}
+        for i in range(0, len(thread_ids), 50):
+            chunk = thread_ids[i:i + 50]
+            try:
+                resp = self._execute_with_retry(
+                    self.client.table("emails")
+                    .select("id,thread_id,subject,sender_email,sender_name,direction,sent_date,body_text")
+                    .in_("thread_id", chunk)
+                    .order("sent_date", desc=False)
+                )
+                for row in (resp.data or []):
+                    tid = row.get("thread_id")
+                    if tid:
+                        thread_history.setdefault(tid, []).append(row)
+            except Exception as e:
+                logger.warning(f"Could not fetch thread context: {e}")
+
+        # Attach history to each email (excluding itself)
+        for email in emails:
+            tid = email.get("thread_id")
+            if not tid or tid not in thread_history:
+                continue
+            all_msgs = thread_history[tid]
+            prior = [m for m in all_msgs if m["id"] != email["id"]]
+            # Take last MAX_THREAD_MESSAGES prior messages
+            prior = prior[-MAX_THREAD_MESSAGES:]
+            if not prior:
+                continue
+            email["_thread_history"] = [
+                {
+                    "from": m.get("sender_email", ""),
+                    "direction": m.get("direction", ""),
+                    "date": (m.get("sent_date") or "")[:10],
+                    "snippet": (m.get("body_text") or "")[:MAX_BODY_CHARS],
+                }
+                for m in prior
+            ]
+
+    # ------------------------------------------------------------------
     # Format emails for the prompt
     # ------------------------------------------------------------------
-    def _format_emails_for_prompt(self, emails: List[dict]) -> str:
+    def _format_emails_for_prompt(self, emails: List[dict], currency_code: str = "AUD") -> str:
         """
         Format a batch of emails into the JSON structure for the prompt.
         Includes Sprint 2 enrichment data (company, role) for better AI context.
@@ -1038,6 +1119,16 @@ class AIEmailAnalyzer:
                 "is_reply": email.get("is_reply", False),
                 "body": body,
             }
+
+            # Add CC/BCC recipient context
+            cc_list = email.get("cc_list") or []
+            bcc_list = email.get("bcc_list") or []
+            if cc_list:
+                entry["cc"] = [r.get("email", "") for r in cc_list if r.get("email")]
+            if bcc_list:
+                # Only outbound emails have meaningful BCC; include for context
+                entry["bcc"] = [r.get("email", "") for r in bcc_list if r.get("email")]
+
             # Add Sprint 2 context (helps AI classify without guessing)
             company = email.get("_company_name", "")
             job_title = email.get("_contact_job_title", "")
@@ -1074,11 +1165,11 @@ class AIEmailAnalyzer:
                 if qb_tier:
                     biz["tier"] = qb_tier
                 if qb_revenue is not None:
-                    rev_parts = [f"total: ${qb_revenue:,.0f}"]
+                    rev_parts = [f"total: {format_currency(qb_revenue, currency_code, include_code=True)}"]
                     if qb_invoiced_ty is not None:
-                        rev_parts.append(f"this year: ${qb_invoiced_ty:,.0f}")
+                        rev_parts.append(f"this year: {format_currency(qb_invoiced_ty, currency_code, include_code=True)}")
                     if qb_invoiced_ly is not None:
-                        rev_parts.append(f"last year: ${qb_invoiced_ly:,.0f}")
+                        rev_parts.append(f"last year: {format_currency(qb_invoiced_ly, currency_code, include_code=True)}")
                     biz["revenue"] = ", ".join(rev_parts)
                 if qb_days_since is not None:
                     biz["days_since_last_order"] = qb_days_since
@@ -1099,6 +1190,11 @@ class AIEmailAnalyzer:
                 if rule_priority:
                     pre_class["priority_score"] = rule_priority
                 entry["pre_classification"] = pre_class
+
+            # Add thread conversation history for reply emails
+            thread_history = email.get("_thread_history")
+            if thread_history:
+                entry["thread_history"] = thread_history
 
             formatted.append(entry)
         return json.dumps(formatted, indent=2)
@@ -1355,12 +1451,18 @@ class AIEmailAnalyzer:
         # Enrich with rule-based tags (from EmailTagger) for pre-classification hints
         self._enrich_with_rule_based_tags(emails)
 
+        # Enrich reply emails with prior thread messages for full conversation context
+        self._enrich_with_thread_context(emails)
+
+        # Load per-client currency code once (mirrors timezone pattern)
+        currency_code = get_client_currency_code(self.client, client_id)
+
         # Build prompt (configurable via ai_prompt_config table)
         from .ai_prompt_loader import get_prompt, PROMPT_KEY_EMAIL_ANALYSIS_SYSTEM, PROMPT_KEY_EMAIL_ANALYSIS_USER
         system_prompt = get_prompt(self.client, PROMPT_KEY_EMAIL_ANALYSIS_SYSTEM, SYSTEM_PROMPT, client_id)
         user_template = get_prompt(self.client, PROMPT_KEY_EMAIL_ANALYSIS_USER, USER_PROMPT_TEMPLATE, client_id)
 
-        emails_json = self._format_emails_for_prompt(emails)
+        emails_json = self._format_emails_for_prompt(emails, currency_code=currency_code)
         # Use replace instead of .format() — DB-loaded prompts have literal braces
         # that .format() would try to interpret as variables
         user_message = user_template.replace("{emails_json}", emails_json)
@@ -1427,7 +1529,7 @@ class AIEmailAnalyzer:
         analyzed_count = 0
         all_valid = valid_results
         for result in all_valid:
-            row_data = post_process_classification(result)
+            row_data = post_process_classification(result, currency_code=currency_code)
             # Inject lifecycle tier computed during enrichment
             row_data["customer_lifecycle_tier"] = lifecycle_lookup.get(result.email_id)
             self._save_completed(result.email_id, mailbox_id, client_id, row_data, ai_response)
@@ -1687,7 +1789,7 @@ class AIEmailAnalyzer:
                 chunk = email_ids[i:i + 500]
                 email_resp = self._execute_with_retry(
                     self.client.table("emails")
-                    .select("id,subject,sender_email,sender_name,sent_date,direction,body_text,body_html,recipients")
+                    .select("id,subject,sender_email,sender_name,sent_date,direction,body_text,body_html,recipients,cc_list,bcc_list")
                     .in_("id", chunk)
                 )
                 for e in (email_resp.data or []):
@@ -1717,6 +1819,8 @@ class AIEmailAnalyzer:
             item["email_body"] = body[:2000] if body else ""
             item["email_body_html"] = email_data.get("body_html") or ""
             item["email_recipients"] = email_data.get("recipients") or []
+            item["email_cc_list"] = email_data.get("cc_list") or []
+            item["email_bcc_list"] = email_data.get("bcc_list") or []
 
             # Coerce None → "" for str fields, None → [] for list fields
             for key in _STR_DEFAULTS:

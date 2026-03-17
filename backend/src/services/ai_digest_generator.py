@@ -23,6 +23,7 @@ from .ai_client import get_ai_client, AIResponse
 from .ai_action_bucket_engine import get_bucket_engine
 from .ai_usage_tracker import get_usage_tracker
 from .ai_email_analyzer import clean_llm_output
+from ..utils.number_format import get_client_currency_code, format_currency
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,8 @@ Focus on:
 - Relationship dynamics (e.g. a key contact going silent, a new stakeholder appearing)
 - Strategic implications (e.g. competitive mentions alongside pricing inquiries)
 - Actionable connections between emails that aren't obvious individually
+- Thread context: use ACTIVE THREADS (with conversation snippets) to identify unresolved issues,
+  escalation patterns, and stalled conversations — not just open/overdue counts
 
 Be factual. Never invent data. Never cite specific counts from the bucket summary — those are already displayed.
 Return STRICT JSON only. No markdown. No explanation. No extra keys."""
@@ -102,6 +105,8 @@ Focus on:
 - Customer behavior patterns: Which companies increased/decreased communication? Any re-engagement or churn signals?
 - Opportunity clusters: Multiple inquiries for similar products/services = market trend worth pursuing
 - Competitive pressure: Any competitor mentions, price sensitivity, or lost-deal signals this week?
+- Thread health: Use ACTIVE THREADS section (with conversation snippets) to identify threads that
+  are stalled, escalating, or unresolved across the week — these are the AM's most urgent actions
 
 Be specific with company names, AM names, and dollar amounts where available.
 Do NOT restate email counts or bucket numbers — the user sees those in the UI.
@@ -427,6 +432,9 @@ BUSINESS SIGNAL EMAILS:
 HIGH PRIORITY EMAILS:
 {json.dumps(context["priority_emails"], indent=2)}
 
+ACTIVE THREADS (with recent conversation):
+{json.dumps(context.get("active_thread_summaries", []), indent=2)}
+
 Generate the {scope} digest now. Return ONLY valid JSON."""
 
         # Call strategic model (respects client's model preference)
@@ -543,6 +551,11 @@ Generate the {scope} digest now. Return ONLY valid JSON."""
         # High priority/urgent emails — filtered by sent_date via email IDs
         priority_emails = self._get_priority_emails(mailbox_id, date_email_ids, limit=10)
 
+        # Active thread summaries with recent message content (not just counts)
+        active_thread_summaries = self._get_active_thread_summaries(
+            mailbox_id, date_start, date_end, limit=10
+        )
+
         return {
             "in_count": in_count,
             "out_count": out_count,
@@ -551,6 +564,7 @@ Generate the {scope} digest now. Return ONLY valid JSON."""
             "bucket_summary": bucket_summary,
             "top_signal_emails": top_signal_emails,
             "priority_emails": priority_emails,
+            "active_thread_summaries": active_thread_summaries,
         }
 
     def _count_emails(self, mailbox_id: str, date_start: str, date_end: str, direction: str) -> int:
@@ -612,6 +626,89 @@ Generate the {scope} digest now. Return ONLY valid JSON."""
         except Exception as e:
             logger.warning(f"Failed to count threads: {e}")
             return 0, 0
+
+    def _get_active_thread_summaries(
+        self,
+        mailbox_id: str,
+        date_start: str,
+        date_end: str,
+        limit: int = 10,
+    ) -> list[dict]:
+        """
+        Fetch the top N active/overdue threads with their recent messages.
+
+        Returns compact thread summaries for the digest prompt so the AI
+        understands ongoing conversation context — not just email counts.
+        Threads are ranked: overdue first, then by most recent activity.
+        """
+        MAX_MSGS_PER_THREAD = 5
+        MAX_SNIPPET = 200
+
+        try:
+            # Fetch active threads with recent activity in the window
+            resp = self._execute_with_retry(
+                self.client.table("thread_status")
+                .select("id,thread_id,subject,status,is_overdue,message_count,last_message_at,"
+                        "primary_contact_email,customer_companies(company_name)")
+                .eq("mailbox_id", mailbox_id)
+                .neq("status", "complete")
+                .neq("status", "dropped")
+                .gte("last_message_at", date_start)
+                .order("is_overdue", desc=True)
+                .order("last_message_at", desc=True)
+                .range(0, limit - 1)
+            )
+            threads = resp.data or []
+        except Exception as e:
+            logger.warning(f"Failed to fetch active threads for digest: {e}")
+            return []
+
+        if not threads:
+            return []
+
+        # Fetch recent messages for each thread
+        thread_ids = [t["thread_id"] for t in threads if t.get("thread_id")]
+        messages_by_thread: dict = {}
+        if thread_ids:
+            try:
+                msgs_resp = self._execute_with_retry(
+                    self.client.table("emails")
+                    .select("thread_id,sender_email,direction,sent_date,body_text,subject")
+                    .in_("thread_id", thread_ids)
+                    .order("sent_date", desc=False)
+                )
+                for m in (msgs_resp.data or []):
+                    tid = m.get("thread_id")
+                    if tid:
+                        messages_by_thread.setdefault(tid, []).append(m)
+            except Exception as e:
+                logger.warning(f"Failed to fetch thread messages for digest: {e}")
+
+        summaries = []
+        for t in threads:
+            tid = t.get("thread_id")
+            msgs = (messages_by_thread.get(tid) or [])[-MAX_MSGS_PER_THREAD:]
+            company = (t.get("customer_companies") or {}).get("company_name") or ""
+            summary = {
+                "subject": t.get("subject", "(no subject)"),
+                "status": t.get("status", "open"),
+                "overdue": bool(t.get("is_overdue")),
+                "message_count": t.get("message_count", len(msgs)),
+                "last_activity": (t.get("last_message_at") or "")[:10],
+                "company": company,
+                "primary_contact": t.get("primary_contact_email", ""),
+                "recent_messages": [
+                    {
+                        "from": m.get("sender_email", ""),
+                        "direction": m.get("direction", ""),
+                        "date": (m.get("sent_date") or "")[:10],
+                        "snippet": (m.get("body_text") or "")[:MAX_SNIPPET],
+                    }
+                    for m in msgs
+                ],
+            }
+            summaries.append(summary)
+        return summaries
 
     def _get_email_ids_for_date_range(self, mailbox_id: str, date_start: str, date_end: str) -> list[str]:
         """Get email IDs whose sent_date falls within the date range.
@@ -786,11 +883,12 @@ Generate the {scope} digest now. Return ONLY valid JSON."""
                 rev_ty = c.get("qb_invoiced_ty") or 0
                 rev_ly = c.get("qb_invoiced_ly") or 0
                 trend = "growing" if rev_ty > rev_ly else ("declining" if rev_ty < rev_ly * 0.9 else "stable")
+                currency_code = get_client_currency_code(self.client, client_id)
                 summaries.append({
                     "company": c["company_name"],
                     "type": c.get("qb_customer_type") or "unknown",
                     "tier": c.get("qb_tier") or "?",
-                    "revenue": f"${c.get('qb_total_revenue', 0):,.0f}",
+                    "revenue": format_currency(c.get("qb_total_revenue", 0), currency_code, include_code=True),
                     "trend": trend,
                     "days_since_order": c.get("qb_days_since_last_invoice"),
                     "engagement": c.get("engagement_score"),

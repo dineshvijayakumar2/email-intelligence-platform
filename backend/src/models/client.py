@@ -49,6 +49,8 @@ class ClientUpdate(BaseModel):
     uses_printiq: Optional[bool] = None
     printiq_api_url: Optional[str] = None
     printiq_api_key: Optional[str] = None
+    timezone: Optional[str] = None
+    currency_code: Optional[str] = Field(None, max_length=3, description="ISO 4217 currency code, e.g. AUD")
 
 
 class ClientResponse(ClientBase):
@@ -56,6 +58,8 @@ class ClientResponse(ClientBase):
     id: str
     uses_quickbase: bool = False
     uses_printiq: bool = False
+    timezone: str = "Australia/Sydney"
+    currency_code: str = "AUD"
     created_at: datetime
     updated_at: datetime
 

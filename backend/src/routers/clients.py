@@ -191,7 +191,7 @@ async def get_client(client_id: str):
     try:
         # Get client
         result = _supabase.table('clients').select(
-            'id, client_name, client_label, status, industry, notes, uses_quickbase, uses_printiq, created_at, updated_at'
+            'id, client_name, client_label, status, industry, notes, uses_quickbase, uses_printiq, timezone, currency_code, created_at, updated_at'
         ).eq('id', client_id).single().execute()
 
         if not result.data:
@@ -319,6 +319,10 @@ async def update_client(client_id: str, data: ClientUpdate):
             update_data['printiq_api_url'] = data.printiq_api_url
         if data.printiq_api_key is not None:
             update_data['printiq_api_key'] = data.printiq_api_key
+        if data.timezone is not None:
+            update_data['timezone'] = data.timezone
+        if data.currency_code is not None:
+            update_data['currency_code'] = data.currency_code.upper()
 
         if not update_data:
             raise HTTPException(status_code=400, detail="No fields to update")

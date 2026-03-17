@@ -16,6 +16,8 @@ import {
   ExpandOutlined,
   CompressOutlined,
   CloseOutlined,
+  LinkOutlined,
+  PaperClipOutlined,
 } from '@ant-design/icons';
 import type { Email } from '../services/emailService';
 
@@ -228,6 +230,20 @@ export const EmailDetailPanel: React.FC<EmailDetailPanelProps> = ({
                 To: {email.recipients?.map(r => r.name || r.email).join(', ') || 'Unknown'}
               </Text>
             </div>
+            {(email.cc_list?.length ?? 0) > 0 && (
+              <div className="email-detail-cc">
+                <Text type="secondary" style={{ fontSize: 13 }}>
+                  CC: {email.cc_list!.map(r => r.name || r.email).join(', ')}
+                </Text>
+              </div>
+            )}
+            {(email.bcc_list?.length ?? 0) > 0 && (
+              <div className="email-detail-bcc">
+                <Text type="secondary" style={{ fontSize: 13 }}>
+                  BCC: {email.bcc_list!.map(r => r.name || r.email).join(', ')}
+                </Text>
+              </div>
+            )}
           </div>
 
           <div className="email-detail-date">
@@ -262,7 +278,38 @@ export const EmailDetailPanel: React.FC<EmailDetailPanelProps> = ({
           {email.is_reply && (
             <Tag color="blue">Reply</Tag>
           )}
+          {(email.attachments?.length ?? 0) > 0 && (
+            <Tag icon={<PaperClipOutlined />} color="default">
+              {email.attachments!.length} attachment{email.attachments!.length !== 1 ? 's' : ''}
+            </Tag>
+          )}
+          {email.provider_web_link && (
+            <Tooltip title="Open in email client">
+              <Button
+                size="small"
+                type="default"
+                icon={<LinkOutlined />}
+                href={email.provider_web_link}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Open in {email.mailbox_type === 'gmail' ? 'Gmail' : 'Outlook'}
+              </Button>
+            </Tooltip>
+          )}
         </div>
+
+        {/* Attachments list */}
+        {(email.attachments?.length ?? 0) > 0 && (
+          <div className="email-detail-attachments" style={{ marginTop: 8 }}>
+            {email.attachments!.map((att, i) => (
+              <Tag key={i} icon={<PaperClipOutlined />} style={{ marginBottom: 4 }}>
+                {att.filename}
+                {att.size ? ` (${Math.round(att.size / 1024)}KB)` : ''}
+              </Tag>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* View Toggle */}

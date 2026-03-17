@@ -65,6 +65,8 @@ export interface IntelligenceResult {
   email_body?: string;
   email_body_html?: string;
   email_recipients?: any[];
+  email_cc_list?: any[];
+  email_bcc_list?: any[];
 
   // Classification
   intent?: IntentType;

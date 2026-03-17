@@ -92,6 +92,8 @@ class EmailNormalizer:
             'recipients': recipients,
             'cc_list': self._clean_recipients(raw_email.get('cc_list', [])),
             'bcc_list': self._clean_recipients(raw_email.get('bcc_list', [])),
+            'attachments': raw_email.get('attachments', []),
+            'provider_web_link': raw_email.get('provider_web_link', '') or None,
             'subject': subject,
             'body_text': body_text,
             'body_html': raw_email.get('body_html', ''),

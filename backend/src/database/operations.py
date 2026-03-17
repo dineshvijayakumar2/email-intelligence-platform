@@ -666,6 +666,8 @@ class EmailOperations:
                 'recipients': email.get('recipients', []),
                 'cc_list': email.get('cc_list', []),
                 'bcc_list': email.get('bcc_list', []),
+                'attachments': email.get('attachments', []),
+                'provider_web_link': email.get('provider_web_link') or None,
                 'raw_headers': email.get('raw_headers', {}),
                 'processing_status': email.get('processing_status', 'success'),
                 # Threading metadata
@@ -678,7 +680,7 @@ class EmailOperations:
             }
             
             # Validate JSON fields
-            for json_field in ['recipients', 'cc_list', 'bcc_list', 'raw_headers']:
+            for json_field in ['recipients', 'cc_list', 'bcc_list', 'attachments', 'raw_headers']:
                 if not isinstance(prepared[json_field], (list, dict)):
                     prepared[json_field] = []
             

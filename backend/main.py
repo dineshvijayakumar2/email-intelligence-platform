@@ -727,6 +727,9 @@ class EmailResponse(BaseModel):
     is_marketing: Optional[bool] = None
     priority_score: Optional[int] = None
     sender_type: Optional[str] = None
+    attachments: Optional[List[Dict[str, Any]]] = None
+    provider_web_link: Optional[str] = None
+    mailbox_type: Optional[str] = None
 
 class EmailListResponse(BaseModel):
     emails: List[EmailResponse]
@@ -3136,15 +3139,18 @@ def transform_email_data(item: dict) -> EmailResponse:
     sender_tag = next((cat for cat in categories if cat['category'].startswith('_meta_sender_')), None)
     sender_type = sender_tag['category'].replace('_meta_sender_', '') if sender_tag else 'unknown'
     
-    # Extract mailbox name from nested structure
+    # Extract mailbox name + type from nested structure
     mailbox_name = 'Unknown'
+    mailbox_type = None
     mailboxes_data = item.get('mailboxes')
     if mailboxes_data:
         # Handle both dict and list formats
         if isinstance(mailboxes_data, dict):
             mailbox_name = mailboxes_data.get('name', 'Unknown')
+            mailbox_type = mailboxes_data.get('mailbox_type')
         elif isinstance(mailboxes_data, list) and len(mailboxes_data) > 0:
             mailbox_name = mailboxes_data[0].get('name', 'Unknown')
+            mailbox_type = mailboxes_data[0].get('mailbox_type')
 
     return EmailResponse(
         id=item['id'],
@@ -3165,11 +3171,14 @@ def transform_email_data(item: dict) -> EmailResponse:
         body_html=item.get('body_html'),
         mailbox_id=item['mailbox_id'],
         mailbox_name=mailbox_name,
+        mailbox_type=mailbox_type,
         tags=tags,
         is_spam=is_spam,
         is_marketing=is_marketing,
         priority_score=priority_score,
-        sender_type=sender_type
+        sender_type=sender_type,
+        attachments=item.get('attachments') or [],
+        provider_web_link=item.get('provider_web_link') or None,
     )
 
 @app.post("/api/emails")
@@ -3731,6 +3740,8 @@ async def get_email_by_id(email_id: str):
                     recipients,
                     cc_list,
                     bcc_list,
+                    attachments,
+                    provider_web_link,
                     sent_date,
                     received_date,
                     is_outbound,
@@ -3740,7 +3751,7 @@ async def get_email_by_id(email_id: str):
                     body_text,
                     body_html,
                     mailbox_id,
-                    mailboxes!inner(name),
+                    mailboxes!inner(name,mailbox_type),
                     email_categories(category)
                 """).eq('id', email_id).single().execute()
             )
