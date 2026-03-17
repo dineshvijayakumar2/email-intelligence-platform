@@ -1257,10 +1257,28 @@ async def list_thread_statuses(
         desc = sort_dir.lower() != 'asc'
         result = query.order(effective_sort, desc=desc, nullsfirst=False).range(offset, offset + limit - 1).execute()
 
-        # Fetch contact/company names for enrichment
+        # Batch-fetch contacts and companies (not N+1)
+        contact_ids = list(set(t['customer_contact_id'] for t in result.data if t.get('customer_contact_id')))
+        company_ids = list(set(t['customer_company_id'] for t in result.data if t.get('customer_company_id')))
+
+        contact_map = {}
+        if contact_ids:
+            try:
+                cr = _supabase.table('customer_contacts').select('id, email_address, full_name').in_('id', contact_ids[:500]).execute()
+                contact_map = {c['id']: c for c in (cr.data or [])}
+            except Exception:
+                pass
+
+        company_map = {}
+        if company_ids:
+            try:
+                cr = _supabase.table('customer_companies').select('id, company_name').in_('id', company_ids[:500]).execute()
+                company_map = {c['id']: c for c in (cr.data or [])}
+            except Exception:
+                pass
+
         threads = []
         for t in result.data:
-            # Map database column names to model field names
             thread_data = {
                 'thread_id': t.get('thread_id'),
                 'subject': t.get('subject'),
@@ -1276,22 +1294,15 @@ async def list_thread_statuses(
 
             thread = ThreadStatusSummary(**thread_data)
 
-            # Enrich with contact info if available
-            if t.get('customer_contact_id'):
-                contact_result = _supabase.table('customer_contacts').select(
-                    'email_address, full_name'
-                ).eq('id', t['customer_contact_id']).execute()
-                if contact_result.data:
-                    thread.contact_email = contact_result.data[0].get('email_address')
-                    thread.contact_name = contact_result.data[0].get('full_name')
+            # Enrich from batch-fetched lookups
+            contact = contact_map.get(t.get('customer_contact_id'))
+            if contact:
+                thread.contact_email = contact.get('email_address')
+                thread.contact_name = contact.get('full_name')
 
-            # Enrich with company name if available
-            if t.get('customer_company_id'):
-                company_result = _supabase.table('customer_companies').select(
-                    'company_name'
-                ).eq('id', t['customer_company_id']).execute()
-                if company_result.data:
-                    thread.company_name = company_result.data[0].get('company_name')
+            company = company_map.get(t.get('customer_company_id'))
+            if company:
+                thread.company_name = company.get('company_name')
 
             threads.append(thread)
 

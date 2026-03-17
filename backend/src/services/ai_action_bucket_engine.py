@@ -743,7 +743,7 @@ class ActionBucketEngine:
                 batch_ids = email_ids[i:i + 50]
                 try:
                     resp = self.client.table("emails").select(
-                        "id,subject,sender_email,sender_name,sent_date"
+                        "id,subject,sender_email,sender_name,sent_date,received_date"
                     ).in_("id", batch_ids).execute()
                     for e in (resp.data or []):
                         email_map[e["id"]] = e
@@ -754,7 +754,7 @@ class ActionBucketEngine:
                 item["email_subject"] = email.get("subject", "")
                 item["email_sender"] = email.get("sender_email", "")
                 item["email_sender_name"] = email.get("sender_name", "")
-                item["email_date"] = email.get("sent_date", "")
+                item["email_date"] = email.get("sent_date") or email.get("received_date") or ""
 
         return trimmed
 
