@@ -499,10 +499,31 @@ async def qb_health(client_id: str = Query(...)):
         total_co = total_companies.count or 0
         enriched_co = enriched_companies.count or 0
 
+        # Enriched companies with email activity (the meaningful metric)
+        active_enriched = 0
+        try:
+            active_resp = _supabase.table('customer_companies').select('id', count='exact').eq(
+                'client_id', client_id
+            ).not_.is_('qb_total_revenue', 'null').gt('total_emails', '0').execute()
+            active_enriched = active_resp.count or 0
+        except Exception:
+            pass
+
+        # Companies with email activity
+        active_companies = 0
+        try:
+            ac_resp = _supabase.table('customer_companies').select('id', count='exact').eq(
+                'client_id', client_id
+            ).gt('total_emails', '0').execute()
+            active_companies = ac_resp.count or 0
+        except Exception:
+            pass
+
         return {
             "qb_customers": {"total": total_c, "matched": matched_c, "unmatched": total_c - matched_c, "match_rate_pct": round(matched_c / total_c * 100, 1) if total_c else 0},
             "qb_contacts": {"total": total_ct, "matched": matched_ct, "unmatched": total_ct - matched_ct, "match_rate_pct": round(matched_ct / total_ct * 100, 1) if total_ct else 0},
             "company_enrichment": {"total": total_co, "enriched": enriched_co, "not_enriched": total_co - enriched_co, "coverage_pct": round(enriched_co / total_co * 100, 1) if total_co else 0},
+            "active_companies": {"total": active_companies, "with_qb_data": active_enriched, "coverage_pct": round(active_enriched / active_companies * 100, 1) if active_companies else 0},
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)[:200])
