@@ -105,7 +105,20 @@ Focus on:
 
 Be specific with company names, AM names, and dollar amounts where available.
 Do NOT restate email counts or bucket numbers — the user sees those in the UI.
-Return STRICT JSON only. No markdown. No explanation."""
+
+Return STRICT JSON only matching this exact schema:
+{
+  "summary": "3-5 sentences: dominant theme of the week, pipeline health trend, emerging risks or opportunities. Be specific — name companies and AMs.",
+  "action_items": [
+    {"email_id": "string or null", "priority": 1, "bucket": "string or null",
+     "action": "specific action for next week", "contact_name": "string or null"}
+  ],
+  "highlights": [
+    {"label": "short trend label", "detail": "week-level pattern: what changed, what it means, what to do"}
+  ]
+}
+
+No markdown. No explanation. JSON only."""
 
 WEEKLY_DIGEST_USER_TEMPLATE = """Generate a WEEKLY strategic intelligence review with trend analysis.
 
@@ -219,8 +232,8 @@ class DigestResult(BaseModel):
         # Highlights: map from many possible keys
         if not data.get("highlights"):
             for alt_key in ["positive_signals", "wins_this_week", "trends_forming",
-                            "key_observations", "insights", "findings", "patterns",
-                            "key_insights", "observations"]:
+                            "pipeline_watch", "at_risk", "key_observations", "insights",
+                            "findings", "patterns", "key_insights", "observations"]:
                 if data.get(alt_key) and isinstance(data[alt_key], list):
                     items = []
                     for item in data[alt_key]:
@@ -900,7 +913,8 @@ Generate the {scope} digest now. Return ONLY valid JSON."""
             # (frontend reads summary, action_items, highlights)
             if "summary" not in parsed:
                 # Build summary from headline, executive_summary, or first string field
-                for alt in ["executive_summary", "headline"]:
+                for alt in ["executive_summary", "headline", "week_summary", "weekly_summary",
+                            "daily_summary", "biggest_risk", "overview"]:
                     val = parsed.get(alt)
                     if isinstance(val, str) and val:
                         parsed["summary"] = val
@@ -920,7 +934,8 @@ Generate the {scope} digest now. Return ONLY valid JSON."""
             if "action_items" not in parsed:
                 # Map from many possible keys (daily + weekly custom prompts)
                 for alt in ["urgent_today", "this_weeks_actions", "urgent_actions",
-                            "actions", "next_steps", "recommendations"]:
+                            "actions", "next_steps", "recommendations",
+                            "priority_actions", "tasks", "suggested_actions"]:
                     items = parsed.get(alt)
                     if isinstance(items, list) and items:
                         parsed["action_items"] = [
@@ -937,7 +952,8 @@ Generate the {scope} digest now. Return ONLY valid JSON."""
             if "highlights" not in parsed:
                 # Map from many possible keys
                 for alt in ["positive_signals", "wins_this_week", "trends_forming",
-                            "pipeline_watch", "key_observations", "insights"]:
+                            "pipeline_watch", "at_risk", "key_observations", "insights",
+                            "key_insights", "observations", "findings", "patterns"]:
                     items = parsed.get(alt)
                     if isinstance(items, list) and items:
                         parsed["highlights"] = [

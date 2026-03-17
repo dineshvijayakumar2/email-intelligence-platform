@@ -426,8 +426,8 @@ class QuickbaseSync:
             if not unmatched_custs.data:
                 return 0
 
-            # Build QB record_id → QB customer id lookup
-            qb_cust_by_record = {c['qb_record_id']: c['id'] for c in unmatched_custs.data if c.get('qb_record_id')}
+            # Build QB record_id → QB customer id lookup (string keys to match any QB ID type)
+            qb_cust_by_record = {str(c['qb_record_id']): c['id'] for c in unmatched_custs.data if c.get('qb_record_id')}
 
             # Build contact_id → company_id lookup from customer_contacts
             contact_ids = [c['matched_contact_id'] for c in qb_contacts.data if c.get('matched_contact_id')]
@@ -444,16 +444,37 @@ class QuickbaseSync:
                     if c.get('customer_company_id'):
                         contact_company_map[c['id']] = c['customer_company_id']
 
+            # Debug: log sample data to diagnose format mismatches
+            sample_contact_ids = [c.get('qb_customer_id') for c in qb_contacts.data[:5] if c.get('qb_customer_id')]
+            sample_record_ids = list(qb_cust_by_record.keys())[:5]
+            logger.info(
+                f"Chain match debug: {len(qb_contacts.data)} matched contacts, "
+                f"{len(unmatched_custs.data)} unmatched customers, "
+                f"{len(contact_company_map)} contacts with companies. "
+                f"Sample qb_customer_id on contacts: {sample_contact_ids}, "
+                f"Sample qb_record_id on customers: {sample_record_ids}"
+            )
+
             # Now match: QB contact → customer_contact → company
             matched = 0
+            no_company = 0
+            no_cust_match = 0
             for qb_contact in qb_contacts.data:
                 contact_id = qb_contact.get('matched_contact_id')
-                customer_id = qb_contact.get('qb_customer_id')  # QB customer record ID
+                customer_id = qb_contact.get('qb_customer_id')
                 if not contact_id or not customer_id:
                     continue
 
                 company_id = contact_company_map.get(contact_id)
-                qb_cust_id = qb_cust_by_record.get(str(customer_id))
+                if not company_id:
+                    no_company += 1
+                    continue
+
+                # Normalise to string — dict keys are already str
+                qb_cust_id = qb_cust_by_record.get(str(int(float(customer_id))))
+                if not qb_cust_id:
+                    no_cust_match += 1
+                    continue
 
                 if company_id and qb_cust_id:
                     try:
@@ -466,7 +487,11 @@ class QuickbaseSync:
                     except Exception:
                         pass
 
-            logger.info(f"Matched {matched} QB customers via contact email→company chain")
+            logger.info(
+                f"Chain match result: {matched} matched, "
+                f"{no_company} contacts without company, "
+                f"{no_cust_match} contacts whose QB customer already matched or ID mismatch"
+            )
             return matched
 
         except Exception as e:

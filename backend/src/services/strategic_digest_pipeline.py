@@ -249,6 +249,18 @@ class StrategicDigestPipeline:
             )
 
             # -----------------------------------------------------------------
+            # Step 3b: Derive email/contact counts from company_contexts
+            # -----------------------------------------------------------------
+            emails_analyzed_count = sum(
+                (ctx.get("ai_signals_summary") or {}).get("total_analyzed", 0)
+                for ctx in company_contexts
+            )
+            contacts_analyzed_count = sum(
+                len(ctx.get("key_contacts") or [])
+                for ctx in company_contexts
+            )
+
+            # -----------------------------------------------------------------
             # Step 4: Compile context into structured prompt
             # -----------------------------------------------------------------
             context_prompt = self._compile_context(
@@ -291,19 +303,54 @@ class StrategicDigestPipeline:
                 on_progress("ai_analysis", 1, 1, "Running AI strategic analysis…")
 
             # -----------------------------------------------------------------
-            # Step 6: Run agent to generate strategic analysis
+            # Step 6: Run agent to generate strategic analysis (with retry)
             # -----------------------------------------------------------------
-            agent_result = await agent.ainvoke({
-                "messages": [HumanMessage(content=context_prompt)],
-            })
+            agent_result = None
+            raw_content = None
+            _transient_codes = {'383', '429', '500', '502', '503', '504',
+                                 'rate', 'quota', 'overload', 'timeout', 'unavailable'}
 
-            # Extract final message content
-            final_message = agent_result["messages"][-1]
-            raw_content = (
-                final_message.content
-                if isinstance(final_message.content, str)
-                else str(final_message.content)
-            )
+            for _attempt in range(3):
+                try:
+                    agent_result = await agent.ainvoke({
+                        "messages": [HumanMessage(content=context_prompt)],
+                    })
+                    final_message = agent_result["messages"][-1]
+                    raw_content = (
+                        final_message.content
+                        if isinstance(final_message.content, str)
+                        else str(final_message.content)
+                    )
+                    break  # success
+                except Exception as _e:
+                    _err = str(_e).lower()
+                    _is_transient = any(c in _err for c in _transient_codes)
+                    if _is_transient and _attempt < 2:
+                        _wait = 10 * (2 ** _attempt)
+                        logger.warning(
+                            f"Agent invocation failed (attempt {_attempt + 1}/3, "
+                            f"error: {str(_e)[:120]}), retrying in {_wait}s…"
+                        )
+                        await asyncio.sleep(_wait)
+                        continue
+                    # Final attempt or non-transient: fall back to direct LLM call
+                    logger.warning(
+                        f"Agent failed after {_attempt + 1} attempt(s): {_e}. "
+                        f"Falling back to direct LLM call (no tools)."
+                    )
+                    direct_messages = [
+                        SystemMessage(content=digest_prompt),
+                        HumanMessage(content=context_prompt),
+                    ]
+                    direct_response = await llm.ainvoke(direct_messages)
+                    raw_content = (
+                        direct_response.content
+                        if isinstance(direct_response.content, str)
+                        else str(direct_response.content)
+                    )
+                    # Wrap in agent_result-compatible structure for token counting
+                    agent_result = {"messages": [direct_response]}
+                    break
 
             # -----------------------------------------------------------------
             # Step 7: Parse response into structured sections
@@ -349,10 +396,10 @@ class StrategicDigestPipeline:
                 "am_performance": json.dumps(parsed.get("am_performance", {})),
                 "action_items": json.dumps(parsed.get("action_items", [])),
                 "companies_analyzed": len(company_contexts),
-                "contacts_analyzed": all_contexts.get("contacts_analyzed", 0),
-                "emails_analyzed": all_contexts.get("emails_analyzed", 0),
-                "qb_orders_included": all_contexts.get("qb_orders_included", 0),
-                "qb_quotes_included": all_contexts.get("qb_quotes_included", 0),
+                "contacts_analyzed": contacts_analyzed_count,
+                "emails_analyzed": emails_analyzed_count,
+                "qb_orders_included": 0,
+                "qb_quotes_included": 0,
                 "model_used": model_config["model"],
                 "total_input_tokens": total_input_tokens,
                 "total_output_tokens": total_output_tokens,
@@ -413,8 +460,8 @@ class StrategicDigestPipeline:
                     "period_start": period_start.isoformat(),
                     "period_end": period_end.isoformat(),
                     "companies_analyzed": len(company_contexts),
-                    "contacts_analyzed": all_contexts.get("contacts_analyzed", 0),
-                    "emails_analyzed": all_contexts.get("emails_analyzed", 0),
+                    "contacts_analyzed": contacts_analyzed_count,
+                    "emails_analyzed": emails_analyzed_count,
                     "model": model_config["model"],
                     "input_tokens": total_input_tokens,
                     "output_tokens": total_output_tokens,
