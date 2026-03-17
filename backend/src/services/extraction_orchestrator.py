@@ -952,79 +952,103 @@ class ExtractionOrchestrator:
         """
         result = {'companies': 0, 'contacts': 0}
 
-        try:
-            # Check if QB is configured for this client
-            qb_config = self.client.table('qb_sync_config').select(
-                'is_active'
-            ).eq('client_id', self.client_id).execute()
+        import time as _time
 
-            if not qb_config.data or not qb_config.data[0].get('is_active'):
-                logger.info("Step 6 QB enrichment: No active QB config — skipping")
-                return result
+        for attempt in range(3):
+            try:
+                # Check if QB is configured for this client
+                qb_config = self.client.table('qb_sync_config').select(
+                    'is_active'
+                ).eq('client_id', self.client_id).execute()
 
-            # Enrich companies from qb_customers (matched records)
-            qb_customers = self.client.table('qb_customers').select(
-                'matched_company_id, customer_status, customer_tier, account_manager, '
-                'total_invoiced, invoiced_ty, invoiced_ly, growth_90d, days_since_last_invoice'
-            ).eq('client_id', self.client_id).not_.is_(
-                'matched_company_id', 'null'
-            ).execute()
+                if not qb_config.data or not qb_config.data[0].get('is_active'):
+                    logger.info("Step 6 QB enrichment: No active QB config — skipping")
+                    return result
 
-            for qb in (qb_customers.data or []):
-                update = {}
-                if qb.get('customer_status'):
-                    update['qb_customer_type'] = qb['customer_status']
-                if qb.get('customer_tier'):
-                    update['qb_tier'] = qb['customer_tier']
-                if qb.get('account_manager'):
-                    update['qb_account_manager'] = qb['account_manager']
-                if qb.get('total_invoiced') is not None:
-                    update['qb_total_revenue'] = qb['total_invoiced']
-                if qb.get('invoiced_ty') is not None:
-                    update['qb_invoiced_ty'] = qb['invoiced_ty']
-                if qb.get('invoiced_ly') is not None:
-                    update['qb_invoiced_ly'] = qb['invoiced_ly']
-                if qb.get('growth_90d') is not None:
-                    update['qb_growth_90d'] = qb['growth_90d']
-                if qb.get('days_since_last_invoice') is not None:
-                    update['qb_days_since_last_invoice'] = qb['days_since_last_invoice']
+                # Enrich companies from qb_customers (matched records)
+                qb_customers = self.client.table('qb_customers').select(
+                    'matched_company_id, customer_status, customer_tier, account_manager, '
+                    'total_invoiced, invoiced_ty, invoiced_ly, growth_90d, days_since_last_invoice'
+                ).eq('client_id', self.client_id).not_.is_(
+                    'matched_company_id', 'null'
+                ).execute()
 
-                if update:
-                    self.client.table('customer_companies').update(
-                        update
-                    ).eq('id', qb['matched_company_id']).execute()
-                    result['companies'] += 1
+                for qb in (qb_customers.data or []):
+                    update = {}
+                    if qb.get('customer_status'):
+                        update['qb_customer_type'] = qb['customer_status']
+                    if qb.get('customer_tier'):
+                        update['qb_tier'] = qb['customer_tier']
+                    if qb.get('account_manager'):
+                        update['qb_account_manager'] = qb['account_manager']
+                    if qb.get('total_invoiced') is not None:
+                        update['qb_total_revenue'] = qb['total_invoiced']
+                    if qb.get('invoiced_ty') is not None:
+                        update['qb_invoiced_ty'] = qb['invoiced_ty']
+                    if qb.get('invoiced_ly') is not None:
+                        update['qb_invoiced_ly'] = qb['invoiced_ly']
+                    if qb.get('growth_90d') is not None:
+                        update['qb_growth_90d'] = qb['growth_90d']
+                    if qb.get('days_since_last_invoice') is not None:
+                        update['qb_days_since_last_invoice'] = qb['days_since_last_invoice']
 
-            # Enrich contacts from qb_contacts (matched records)
-            qb_contacts = self.client.table('qb_contacts').select(
-                'matched_contact_id, quotes_accepted_count, most_recent_quote_date, contact_recency_days'
-            ).eq('client_id', self.client_id).not_.is_(
-                'matched_contact_id', 'null'
-            ).execute()
+                    if update:
+                        try:
+                            self.client.table('customer_companies').update(
+                                update
+                            ).eq('id', qb['matched_company_id']).execute()
+                            result['companies'] += 1
+                        except OSError:
+                            _time.sleep(0.3)  # Back off on connection error
+                            self.client.table('customer_companies').update(
+                                update
+                            ).eq('id', qb['matched_company_id']).execute()
+                            result['companies'] += 1
 
-            for qb in (qb_contacts.data or []):
-                update = {}
-                if qb.get('quotes_accepted_count') is not None:
-                    update['qb_quotes_count'] = qb['quotes_accepted_count']
-                if qb.get('most_recent_quote_date'):
-                    update['qb_last_quote_date'] = qb['most_recent_quote_date']
-                if qb.get('contact_recency_days') is not None:
-                    update['qb_contact_recency_days'] = qb['contact_recency_days']
+                # Enrich contacts from qb_contacts (matched records)
+                qb_contacts = self.client.table('qb_contacts').select(
+                    'matched_contact_id, quotes_accepted_count, most_recent_quote_date, contact_recency_days'
+                ).eq('client_id', self.client_id).not_.is_(
+                    'matched_contact_id', 'null'
+                ).execute()
 
-                if update:
-                    self.client.table('customer_contacts').update(
-                        update
-                    ).eq('id', qb['matched_contact_id']).execute()
-                    result['contacts'] += 1
+                for qb in (qb_contacts.data or []):
+                    update = {}
+                    if qb.get('quotes_accepted_count') is not None:
+                        update['qb_quotes_count'] = qb['quotes_accepted_count']
+                    if qb.get('most_recent_quote_date'):
+                        update['qb_last_quote_date'] = qb['most_recent_quote_date']
+                    if qb.get('contact_recency_days') is not None:
+                        update['qb_contact_recency_days'] = qb['contact_recency_days']
 
-            logger.info(
-                f"Step 6 QB enrichment: {result['companies']} companies, "
-                f"{result['contacts']} contacts enriched from Quickbase"
-            )
+                    if update:
+                        try:
+                            self.client.table('customer_contacts').update(
+                                update
+                            ).eq('id', qb['matched_contact_id']).execute()
+                            result['contacts'] += 1
+                        except OSError:
+                            _time.sleep(0.3)
+                            self.client.table('customer_contacts').update(
+                                update
+                            ).eq('id', qb['matched_contact_id']).execute()
+                            result['contacts'] += 1
 
-        except Exception as e:
-            # QB enrichment is non-critical — don't fail the pipeline
-            logger.warning(f"Step 6 QB enrichment failed (non-critical): {e}")
+                logger.info(
+                    f"Step 6 QB enrichment: {result['companies']} companies, "
+                    f"{result['contacts']} contacts enriched from Quickbase"
+                )
+                break  # Success — exit retry loop
+
+            except OSError as e:
+                if attempt < 2:
+                    logger.warning(f"Step 6 QB enrichment OSError (attempt {attempt+1}/3): {e}")
+                    _time.sleep(1 * (attempt + 1))
+                    continue
+                logger.warning(f"Step 6 QB enrichment failed after 3 attempts: {e}")
+            except Exception as e:
+                logger.warning(f"Step 6 QB enrichment failed (non-critical): {e}")
+                break
 
         return result
 
