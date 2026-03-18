@@ -734,15 +734,11 @@ const UsagePage: React.FC = () => {
           </Col>
           <Col xs={24} sm={6} md={4}>
             <Text type="secondary" style={{ fontSize: 12 }}>Old prompt version</Text>
-            <Select
+            <Input
               value={reanalyzeVersion}
-              onChange={setReanalyzeVersion}
+              onChange={(e) => setReanalyzeVersion(e.target.value)}
+              placeholder="e.g. v1.3"
               style={{ width: '100%', marginTop: 4 }}
-              options={[
-                { value: 'v1.2', label: 'v1.2' },
-                { value: 'v1.1', label: 'v1.1' },
-                { value: 'v1.0', label: 'v1.0' },
-              ]}
             />
           </Col>
           <Col xs={24} sm={6} md={4}>

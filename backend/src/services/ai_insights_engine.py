@@ -70,8 +70,9 @@ Be factual. Never invent data."""
 class AIInsightsEngine:
     """Generate on-demand AI insights for companies, contacts, and threads."""
 
-    def __init__(self, supabase_client):
+    def __init__(self, supabase_client, client_id: Optional[str] = None):
         self._supabase = supabase_client
+        self._client_id = client_id
 
     async def get_company_insight(self, company_id: str, force: bool = False) -> Optional[dict]:
         """Generate or return cached AI insight for a company."""
@@ -88,7 +89,7 @@ class AIInsightsEngine:
 
         # Generate insight
         from .ai_prompt_loader import get_prompt, PROMPT_KEY_INSIGHT_COMPANY
-        prompt = get_prompt(self._supabase, PROMPT_KEY_INSIGHT_COMPANY, COMPANY_INSIGHT_PROMPT)
+        prompt = get_prompt(self._supabase, PROMPT_KEY_INSIGHT_COMPANY, COMPANY_INSIGHT_PROMPT, self._client_id)
         result = self._generate_insight(prompt, context, "company", company_id)
         return result
 
@@ -104,7 +105,7 @@ class AIInsightsEngine:
             return None
 
         from .ai_prompt_loader import get_prompt, PROMPT_KEY_INSIGHT_CONTACT
-        prompt = get_prompt(self._supabase, PROMPT_KEY_INSIGHT_CONTACT, CONTACT_INSIGHT_PROMPT)
+        prompt = get_prompt(self._supabase, PROMPT_KEY_INSIGHT_CONTACT, CONTACT_INSIGHT_PROMPT, self._client_id)
         return self._generate_insight(prompt, context, "contact", contact_id)
 
     async def get_thread_insight(self, thread_id: str, force: bool = False) -> Optional[dict]:
@@ -119,7 +120,7 @@ class AIInsightsEngine:
             return None
 
         from .ai_prompt_loader import get_prompt, PROMPT_KEY_INSIGHT_THREAD
-        prompt = get_prompt(self._supabase, PROMPT_KEY_INSIGHT_THREAD, THREAD_INSIGHT_PROMPT)
+        prompt = get_prompt(self._supabase, PROMPT_KEY_INSIGHT_THREAD, THREAD_INSIGHT_PROMPT, self._client_id)
         return self._generate_insight(prompt, context, "thread", thread_id)
 
     def _get_cached_insight(self, entity_type: str, entity_id: str) -> Optional[dict]:

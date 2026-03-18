@@ -253,6 +253,7 @@ async def trigger_reanalysis(
     """
     _validate_mailbox_access(mailbox_id, accessible_ids)
     from ..services.ai_email_analyzer import PROMPT_VERSION
+    from ..services.ai_prompt_loader import get_prompt_version, PROMPT_KEY_EMAIL_ANALYSIS_SYSTEM
 
     analyzer = get_email_analyzer()
     if not analyzer:
@@ -269,8 +270,11 @@ async def trigger_reanalysis(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to validate mailbox: {str(e)[:200]}")
 
+    # Use the DB prompt's version as current (reflects playground edits)
+    current_version = get_prompt_version(_supabase, PROMPT_KEY_EMAIL_ANALYSIS_SYSTEM, PROMPT_VERSION, client_id)
+
     # Don't allow re-analysis targeting the current prompt version
-    if data.target_prompt_version == PROMPT_VERSION:
+    if data.target_prompt_version == current_version:
         raise HTTPException(
             status_code=400,
             detail=f"Target version {data.target_prompt_version} is the current version. Nothing to re-analyze."
@@ -291,7 +295,7 @@ async def trigger_reanalysis(
             mailbox_id=mailbox_id,
             emails_queued=0,
             old_prompt_version=data.target_prompt_version,
-            new_prompt_version=PROMPT_VERSION,
+            new_prompt_version=current_version,
         )
 
     # Reset candidates to pending
@@ -325,11 +329,11 @@ async def trigger_reanalysis(
 
     return ReanalyzeResponse(
         status="accepted",
-        message=f"Re-analysis started: {reset_count} emails reset from {data.target_prompt_version} to {PROMPT_VERSION}",
+        message=f"Re-analysis started: {reset_count} emails reset from {data.target_prompt_version} to {current_version}",
         mailbox_id=mailbox_id,
         emails_queued=reset_count,
         old_prompt_version=data.target_prompt_version,
-        new_prompt_version=PROMPT_VERSION,
+        new_prompt_version=current_version,
     )
 
 
@@ -1290,7 +1294,7 @@ async def get_company_insight(
             from ..services.ai_email_analyzer import _apply_client_model_settings
             _apply_client_model_settings(_supabase, client_id)
         from ..services.ai_insights_engine import AIInsightsEngine
-        engine = AIInsightsEngine(_supabase)
+        engine = AIInsightsEngine(_supabase, client_id=client_id)
         result = await engine.get_company_insight(company_id, force=force)
         return {"insight": result}
     except Exception as e:
@@ -1310,7 +1314,7 @@ async def get_contact_insight(
             from ..services.ai_email_analyzer import _apply_client_model_settings
             _apply_client_model_settings(_supabase, client_id)
         from ..services.ai_insights_engine import AIInsightsEngine
-        engine = AIInsightsEngine(_supabase)
+        engine = AIInsightsEngine(_supabase, client_id=client_id)
         result = await engine.get_contact_insight(contact_id, force=force)
         return {"insight": result}
     except Exception as e:
@@ -1330,7 +1334,7 @@ async def get_thread_insight(
             from ..services.ai_email_analyzer import _apply_client_model_settings
             _apply_client_model_settings(_supabase, client_id)
         from ..services.ai_insights_engine import AIInsightsEngine
-        engine = AIInsightsEngine(_supabase)
+        engine = AIInsightsEngine(_supabase, client_id=client_id)
         result = await engine.get_thread_insight(thread_id, force=force)
         return {"insight": result}
     except Exception as e:

@@ -1,10 +1,11 @@
 """
-AI Prompt Loader — Loads configurable prompts from DB with multi-level fallback.
+AI Prompt Loader — Loads configurable prompts from DB with auto-seeding.
 
 Resolution order:
   1. Client-specific prompt (ai_prompt_config WHERE client_id = X AND prompt_key = Y)
   2. Global default prompt (ai_prompt_config WHERE client_id IS NULL AND prompt_key = Y)
-  3. Hardcoded default (passed by caller)
+  3. Auto-seed: inserts the builtin default as a global DB row (client_id IS NULL),
+     then returns it — so every prompt key is editable via the playground from first use.
 
 Caching: In-memory TTL cache (5 minutes) to avoid DB hits on every API call.
 """
@@ -38,22 +39,34 @@ def get_prompt(
     Returns:
         The prompt text to use
     """
-    if not client_id:
-        return hardcoded_default
-
-    # Check cache
+    # Check cache (client-specific key if client_id provided, else global key)
     cache_key = (client_id, prompt_key)
     cached = _cache.get(cache_key)
     if cached and (time.time() - cached[2]) < CACHE_TTL:
         return cached[0]
 
-    # Try client-specific prompt from DB
-    result = _load_from_db(supabase_client, prompt_key, client_id)
+    # Try client-specific prompt from DB (only if client_id provided)
+    if client_id:
+        result = _load_from_db(supabase_client, prompt_key, client_id)
+        if result:
+            _cache[cache_key] = (result[0], result[1], time.time())
+            return result[0]
+
+    # Try global prompt from DB (client_id IS NULL)
+    global_key = (None, prompt_key)
+    global_cached = _cache.get(global_key)
+    if global_cached and (time.time() - global_cached[2]) < CACHE_TTL:
+        return global_cached[0]
+
+    result = _load_global_from_db(supabase_client, prompt_key)
     if result:
-        _cache[cache_key] = (result[0], result[1], time.time())
+        _cache[global_key] = (result[0], result[1], time.time())
         return result[0]
 
-    # Fallback: hardcoded default
+    # No DB entry exists — seed the builtin default as a global record so it's
+    # immediately visible and editable in the playground.
+    _seed_global_prompt(supabase_client, prompt_key, hardcoded_default)
+    _cache[global_key] = (hardcoded_default, "v1.0", time.time())
     return hardcoded_default
 
 
@@ -79,6 +92,70 @@ def _load_from_db(
     except Exception as e:
         logger.debug(f"Failed to load prompt '{prompt_key}' for client {client_id}: {e}")
     return None
+
+
+def _load_global_from_db(
+    supabase_client,
+    prompt_key: str,
+) -> Optional[Tuple[str, str]]:
+    """Load global prompt (client_id IS NULL) from ai_prompt_config. Returns (prompt_text, version) or None."""
+    try:
+        resp = (
+            supabase_client.table("ai_prompt_config")
+            .select("prompt_text, version")
+            .eq("prompt_key", prompt_key)
+            .is_("client_id", "null")
+            .eq("is_active", True)
+            .limit(1)
+            .execute()
+        )
+        rows = resp.data or []
+        if rows:
+            return (rows[0]["prompt_text"], rows[0].get("version", "v1.0"))
+    except Exception as e:
+        logger.debug(f"Failed to load global prompt '{prompt_key}': {e}")
+    return None
+
+
+def _seed_global_prompt(supabase_client, prompt_key: str, prompt_text: str) -> None:
+    """Insert a global (client_id IS NULL) prompt row if one doesn't already exist."""
+    try:
+        supabase_client.table("ai_prompt_config").insert({
+            "prompt_key": prompt_key,
+            "prompt_text": prompt_text,
+            "client_id": None,
+            "is_active": True,
+            "description": f"Auto-seeded default for {prompt_key}",
+            "version": "v1.0",
+        }).execute()
+        logger.info(f"Auto-seeded global prompt '{prompt_key}' into DB")
+    except Exception as e:
+        # Ignore unique-constraint violations (already seeded) and other errors
+        logger.debug(f"Seed skipped for '{prompt_key}': {e}")
+
+
+def get_prompt_version(
+    supabase_client,
+    prompt_key: str,
+    hardcoded_version: str,
+    client_id: Optional[str] = None,
+) -> str:
+    """
+    Return the effective version for a prompt key — from DB if available, else hardcoded_version.
+    Follows the same Client → Global → hardcoded resolution order as get_prompt().
+    Used to stamp prompt_version on analyzed emails so reprocessing stays accurate
+    when prompts are edited via the playground.
+    """
+    if client_id:
+        result = _load_from_db(supabase_client, prompt_key, client_id)
+        if result:
+            return result[1]
+
+    result = _load_global_from_db(supabase_client, prompt_key)
+    if result:
+        return result[1]
+
+    return hardcoded_version
 
 
 def invalidate_cache(client_id: Optional[str] = None, prompt_key: Optional[str] = None):

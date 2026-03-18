@@ -1297,6 +1297,7 @@ class AIEmailAnalyzer:
         client_id: Optional[str],
         row_data: dict,
         ai_response: AIResponse,
+        prompt_version: str = PROMPT_VERSION,
     ):
         """Save a successfully analyzed email to ai_email_intelligence."""
         record = {
@@ -1314,7 +1315,7 @@ class AIEmailAnalyzer:
             "processed_at": datetime.utcnow().isoformat(),
             "error_message": None,
             # Version tracking
-            "prompt_version": PROMPT_VERSION,
+            "prompt_version": prompt_version,
             "scoring_version": SCORING_VERSION,
             # Raw AI output (debugging + compliance)
             "raw_ai_response": ai_response.raw_response,
@@ -1367,6 +1368,7 @@ class AIEmailAnalyzer:
         client_id: Optional[str],
         error_message: str,
         ai_response: Optional[AIResponse] = None,
+        prompt_version: str = PROMPT_VERSION,
     ):
         """Mark an email as failed in ai_email_intelligence."""
         record = {
@@ -1375,7 +1377,7 @@ class AIEmailAnalyzer:
             "client_id": client_id,
             "processing_status": "failed",
             "error_message": error_message[:500],
-            "prompt_version": PROMPT_VERSION,
+            "prompt_version": prompt_version,
         }
         if ai_response:
             record["raw_ai_response"] = ai_response.raw_response
@@ -1458,9 +1460,11 @@ class AIEmailAnalyzer:
         currency_code = get_client_currency_code(self.client, client_id)
 
         # Build prompt (configurable via ai_prompt_config table)
-        from .ai_prompt_loader import get_prompt, PROMPT_KEY_EMAIL_ANALYSIS_SYSTEM, PROMPT_KEY_EMAIL_ANALYSIS_USER
+        from .ai_prompt_loader import get_prompt, get_prompt_version, PROMPT_KEY_EMAIL_ANALYSIS_SYSTEM, PROMPT_KEY_EMAIL_ANALYSIS_USER
         system_prompt = get_prompt(self.client, PROMPT_KEY_EMAIL_ANALYSIS_SYSTEM, SYSTEM_PROMPT, client_id)
         user_template = get_prompt(self.client, PROMPT_KEY_EMAIL_ANALYSIS_USER, USER_PROMPT_TEMPLATE, client_id)
+        # Use the DB prompt's version so reprocessing stays accurate after playground edits
+        effective_prompt_version = get_prompt_version(self.client, PROMPT_KEY_EMAIL_ANALYSIS_SYSTEM, PROMPT_VERSION, client_id)
 
         emails_json = self._format_emails_for_prompt(emails, currency_code=currency_code)
         # Use replace instead of .format() — DB-loaded prompts have literal braces
@@ -1477,7 +1481,7 @@ class AIEmailAnalyzer:
             fail_msg = f"api_call_failed: {str(error_detail)[:200]}"
             logger.error(f"AI API call failed for batch of {len(emails)}: {error_detail}")
             for eid in email_ids:
-                self._save_failed(eid, mailbox_id, client_id, fail_msg)
+                self._save_failed(eid, mailbox_id, client_id, fail_msg, prompt_version=effective_prompt_version)
             # Log to unified job_errors table
             self._log_to_job_errors(job_id, mailbox_id, "api_error", fail_msg, email_ids)
             error_type = "credit_balance" if "credit balance" in (error_detail or "").lower() else "api_timeout"
@@ -1495,7 +1499,7 @@ class AIEmailAnalyzer:
                     success=False,
                     error_type=error_type,
                     error_detail=error_detail[:500] if error_detail else None,
-                    prompt_version=PROMPT_VERSION,
+                    prompt_version=effective_prompt_version,
                 )
             return {"analyzed": 0, "failed": len(emails), "skipped": 0}
 
@@ -1532,14 +1536,14 @@ class AIEmailAnalyzer:
             row_data = post_process_classification(result, currency_code=currency_code)
             # Inject lifecycle tier computed during enrichment
             row_data["customer_lifecycle_tier"] = lifecycle_lookup.get(result.email_id)
-            self._save_completed(result.email_id, mailbox_id, client_id, row_data, ai_response)
+            self._save_completed(result.email_id, mailbox_id, client_id, row_data, ai_response, prompt_version=effective_prompt_version)
             analyzed_count += 1
 
         # Save failures
         for fail in final_failures:
             self._save_failed(
                 fail["email_id"], mailbox_id, client_id,
-                fail["error"], ai_response
+                fail["error"], ai_response, prompt_version=effective_prompt_version
             )
 
         # Log batch failures to unified job_errors table

@@ -25,4 +25,4 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_prompt_config_global
 CREATE INDEX IF NOT EXISTS idx_prompt_config_client
     ON ai_prompt_config(client_id, prompt_key) WHERE is_active = TRUE;
 
-COMMENT ON TABLE ai_prompt_config IS 'Configurable AI prompts — per-client overrides with global defaults. Code-level hardcoded prompts are the final fallback.';
+COMMENT ON TABLE ai_prompt_config IS 'Configurable AI prompts — per-client overrides with global defaults. On first use, builtin defaults are auto-seeded as global rows (client_id IS NULL) so all prompts are editable via the playground from day one.';

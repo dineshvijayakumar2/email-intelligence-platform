@@ -45,6 +45,58 @@ const TEST_OPTIONS: { value: TestType; label: string; needs: string; promptKeys:
   { value: 'rebucket', label: 'Re-bucket Signals', needs: 'mailbox', promptKeys: [] },
 ];
 
+// Per-key hints shown below the prompt editor so editors know what context the LLM receives.
+const PROMPT_HINTS: Record<string, { label: string; color: string; detail: string; requiredVars?: string[] }> = {
+  email_analysis_system: {
+    label: 'System prompt',
+    color: 'blue',
+    detail: 'No variables needed. Sets classification rules and persona. Data is passed separately.',
+  },
+  email_analysis_user: {
+    label: 'User template',
+    color: 'orange',
+    detail: 'Must keep {emails_json} — replaced at runtime with the JSON batch of emails to classify.',
+    requiredVars: ['{emails_json}'],
+  },
+  daily_digest: {
+    label: 'System prompt',
+    color: 'blue',
+    detail: 'No variables needed. Backend auto-injects: time window, email stats, business context (QB), relationship context (90d), signal emails, priority emails, active threads.',
+  },
+  weekly_digest: {
+    label: 'System prompt',
+    color: 'blue',
+    detail: 'No variables needed. Same auto-injected data as daily digest, covering the full prior week.',
+  },
+  strategic_digest: {
+    label: 'System prompt — agent',
+    color: 'purple',
+    detail: 'No variables needed. LangGraph agent uses tool calls to look up customer data, quotes, threads at runtime. Define analysis approach and output schema here.',
+  },
+  insight_company: {
+    label: 'System prompt',
+    color: 'blue',
+    detail: 'No variables needed. Auto-injected: company revenue (TY/LY), QB profile, email stats (30/90d), engagement score, open threads.',
+  },
+  insight_contact: {
+    label: 'System prompt',
+    color: 'blue',
+    detail: 'No variables needed. Auto-injected: contact email history, response times, quote behaviour, engagement score.',
+  },
+  insight_thread: {
+    label: 'System prompt',
+    color: 'blue',
+    detail: 'No variables needed. Auto-injected: thread messages, participants, quote/job context, hours since last reply, SLA status.',
+  },
+};
+
+/** Suggest the next minor version: "v1.3" → "v1.4", anything unparseable → "v1.0" */
+function bumpVersion(current?: string): string {
+  const m = (current || '').match(/^v(\d+)\.(\d+)$/);
+  if (!m) return 'v1.0';
+  return `v${m[1]}.${parseInt(m[2], 10) + 1}`;
+}
+
 const PlaygroundPage: React.FC = () => {
   const [clientId, setClientId] = useState('');
   const [mailboxIds, setMailboxIds] = useState<string[]>([]);
@@ -63,12 +115,13 @@ const PlaygroundPage: React.FC = () => {
 
   // Prompts
   const [defaults, setDefaults] = useState<Record<string, string>>({});
-  const [overrides, setOverrides] = useState<Record<string, { prompt_text: string; updated_at?: string }>>({});
+  const [overrides, setOverrides] = useState<Record<string, { prompt_text: string; updated_at?: string; version?: string }>>({});
   const [selectedPromptKey, setSelectedPromptKey] = useState('');
   const [activePrompt, setActivePrompt] = useState('');
   const [editedPrompt, setEditedPrompt] = useState('');
   const [isEdited, setIsEdited] = useState(false);
   const [promptUpdatedAt, setPromptUpdatedAt] = useState<string | null>(null);
+  const [saveVersion, setSaveVersion] = useState('v1.0');
 
   // Results
   const [result, setResult] = useState<any>(null);
@@ -89,10 +142,10 @@ const PlaygroundPage: React.FC = () => {
       }
       setDefaults(defMap);
 
-      // Apply client overrides (with timestamps)
-      const ovMap: Record<string, { prompt_text: string; updated_at?: string }> = {};
+      // Apply client overrides (with timestamps + version)
+      const ovMap: Record<string, { prompt_text: string; updated_at?: string; version?: string }> = {};
       for (const o of overridesResp?.prompts || []) {
-        ovMap[o.prompt_key] = { prompt_text: o.prompt_text, updated_at: o.updated_at };
+        ovMap[o.prompt_key] = { prompt_text: o.prompt_text, updated_at: o.updated_at, version: o.version };
       }
       setOverrides(ovMap);
 
@@ -108,6 +161,7 @@ const PlaygroundPage: React.FC = () => {
       setEditedPrompt(prompt);
       setIsEdited(false);
       setPromptUpdatedAt(ov?.updated_at || null);
+      setSaveVersion(bumpVersion(ov?.version));
     } catch { /* silent */ }
   }, [clientId, testType]);
 
@@ -126,11 +180,20 @@ const PlaygroundPage: React.FC = () => {
     setEditedPrompt(prompt);
     setIsEdited(false);
     setPromptUpdatedAt(ov?.updated_at || null);
+    setSaveVersion(bumpVersion(ov?.version));
   };
 
   const handleSavePrompt = async () => {
     if (!clientId) { message.warning('Select a client first'); return; }
     if (!selectedPromptKey) return;
+    // Validate required template variables
+    const hint = PROMPT_HINTS[selectedPromptKey];
+    for (const v of hint?.requiredVars || []) {
+      if (!editedPrompt.includes(v)) {
+        message.error(`Prompt must include ${v} — it is replaced at runtime with the email data.`);
+        return;
+      }
+    }
     setSaving(true);
     try {
       await api.put('/v1/ai/prompts', {
@@ -138,12 +201,13 @@ const PlaygroundPage: React.FC = () => {
         prompt_key: selectedPromptKey,
         prompt_text: editedPrompt,
         description: `Updated from Playground`,
-        version: 'v1.0',
+        version: saveVersion,
       });
-      message.success(`Prompt "${selectedPromptKey}" saved`);
+      message.success(`Prompt "${selectedPromptKey}" saved as ${saveVersion}`);
       setActivePrompt(editedPrompt);
       setIsEdited(false);
       setPromptUpdatedAt(new Date().toISOString());
+      setOverrides(prev => ({ ...prev, [selectedPromptKey]: { prompt_text: editedPrompt, updated_at: new Date().toISOString(), version: saveVersion } }));
     } catch {
       message.error('Failed to save prompt');
     }
@@ -359,13 +423,20 @@ const PlaygroundPage: React.FC = () => {
                   <Button size="small" icon={<UndoOutlined />} onClick={handleResetPrompt}>
                     Reset to Default
                   </Button>
+                  <Input
+                    size="small"
+                    value={saveVersion}
+                    onChange={e => setSaveVersion(e.target.value)}
+                    style={{ width: 72, fontFamily: 'monospace', fontSize: 11 }}
+                    placeholder="v1.0"
+                  />
                   <Button size="small" type="primary" icon={<SaveOutlined />} onClick={handleSavePrompt} loading={saving} disabled={!isEdited}>
                     Save
                   </Button>
                 </Space>
               }
               className="glass-card"
-              bodyStyle={{ padding: 0 }}
+              styles={{ body: { padding: 0 } }}
             >
               <TextArea
                 value={editedPrompt}
@@ -373,8 +444,18 @@ const PlaygroundPage: React.FC = () => {
                 rows={24}
                 style={{ fontFamily: 'monospace', fontSize: 11, border: 'none', borderRadius: 0, resize: 'vertical' }}
               />
-              <div style={{ padding: '8px 12px', background: '#fafafa', borderTop: '1px solid #f0f0f0', fontSize: 11 }}>
-                <Text type="secondary">{editedPrompt.length} chars</Text>
+              <div style={{ padding: '8px 12px', background: '#fafafa', borderTop: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Text type="secondary" style={{ fontSize: 11 }}>{editedPrompt.length} chars</Text>
+                {PROMPT_HINTS[selectedPromptKey] && (
+                  <>
+                    <Tag color={PROMPT_HINTS[selectedPromptKey].color} style={{ margin: 0, fontSize: 10 }}>
+                      {PROMPT_HINTS[selectedPromptKey].label}
+                    </Tag>
+                    <Text type="secondary" style={{ fontSize: 11 }}>
+                      {PROMPT_HINTS[selectedPromptKey].detail}
+                    </Text>
+                  </>
+                )}
               </div>
             </Card>
           )}
