@@ -509,3 +509,149 @@ async def refresh_engagement_metrics(company_id: str):
     except Exception as e:
         logger.error(f"Failed to refresh engagement metrics: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Sprint 4: Sales Intelligence endpoints
+# ---------------------------------------------------------------------------
+
+@router.get("/{company_id}/order-history")
+async def get_order_history(
+    company_id: str,
+    limit: int = Query(50, ge=1, le=200),
+):
+    """
+    Merged timeline of quotes + jobs for a company, sorted by date descending.
+    Used by the Order History section of the Customer Profile page.
+    """
+    try:
+        # Resolve QB customer record IDs for this company
+        cust_result = _supabase.table('qb_customers').select(
+            'qb_record_id, client_id'
+        ).eq('matched_company_id', company_id).execute()
+
+        if not cust_result.data:
+            return {'items': [], 'company_id': company_id}
+
+        qb_record_ids = [r['qb_record_id'] for r in cust_result.data if r.get('qb_record_id')]
+        client_id = cust_result.data[0]['client_id']
+
+        if not qb_record_ids:
+            return {'items': [], 'company_id': company_id}
+
+        # Fetch quotes
+        quotes_result = _supabase.table('qb_quotes').select(
+            'quote_no, date_created, category, sell_ex_tax, contact_name, contact_email, has_job, job_no'
+        ).in_('qb_customer_id', qb_record_ids).eq('client_id', client_id).execute()
+
+        # Fetch jobs
+        jobs_result = _supabase.table('qb_jobs').select(
+            'job_no, accepted_date, due_date, job_status, invoiced_margin, quote_no'
+        ).in_('qb_customer_id', qb_record_ids).eq('client_id', client_id).execute()
+
+        items = []
+
+        for q in (quotes_result.data or []):
+            items.append({
+                'type': 'quote',
+                'date': q.get('date_created'),
+                'ref_no': q.get('quote_no'),
+                'category': q.get('category'),
+                'value': q.get('sell_ex_tax'),
+                'status': 'Accepted' if q.get('has_job') else 'Quoted',
+                'contact_name': q.get('contact_name'),
+                'contact_email': q.get('contact_email'),
+                'job_no': q.get('job_no'),
+            })
+
+        for j in (jobs_result.data or []):
+            items.append({
+                'type': 'job',
+                'date': j.get('accepted_date'),
+                'ref_no': j.get('job_no'),
+                'category': None,
+                'value': j.get('invoiced_margin'),
+                'status': j.get('job_status'),
+                'contact_name': None,
+                'contact_email': None,
+                'job_no': j.get('job_no'),
+                'due_date': j.get('due_date'),
+                'quote_no': j.get('quote_no'),
+            })
+
+        # Sort by date descending (None dates go last)
+        items.sort(key=lambda x: x.get('date') or '', reverse=True)
+
+        return {'items': items[:limit], 'company_id': company_id, 'total': len(items)}
+
+    except Exception as e:
+        logger.error(f"Failed to get order history for {company_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{company_id}/product-profile")
+async def get_product_profile(company_id: str):
+    """
+    Product categories (revenue by group) and operations used by a company.
+    Used by the Product Profile section of the Customer Profile page.
+    """
+    try:
+        from ..services.recommendation_engine import RecommendationEngine
+
+        # Resolve client_id
+        cust_result = _supabase.table('qb_customers').select(
+            'client_id'
+        ).eq('matched_company_id', company_id).limit(1).execute()
+
+        client_id = cust_result.data[0]['client_id'] if cust_result.data else None
+        if not client_id:
+            # Fall back to company's client_id
+            co_result = _supabase.table('customer_companies').select(
+                'client_id'
+            ).eq('id', company_id).limit(1).execute()
+            client_id = co_result.data[0]['client_id'] if co_result.data else None
+
+        if not client_id:
+            return {'categories': [], 'operations': [], 'company_id': company_id}
+
+        engine = RecommendationEngine(_supabase, client_id)
+        profile = engine.get_product_profile(company_id)
+        profile['company_id'] = company_id
+        return profile
+
+    except Exception as e:
+        logger.error(f"Failed to get product profile for {company_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{company_id}/recommendations")
+async def get_recommendations(
+    company_id: str,
+    force: bool = Query(False, description="Bypass 24h cache and recompute"),
+):
+    """
+    Sales recommendations for a company: cross-contact gaps (Level 1) and
+    related product opportunities (Level 2). Cached 24h.
+    """
+    try:
+        from ..services.recommendation_engine import RecommendationEngine
+
+        # Resolve client_id
+        co_result = _supabase.table('customer_companies').select(
+            'client_id'
+        ).eq('id', company_id).limit(1).execute()
+
+        if not co_result.data:
+            raise HTTPException(status_code=404, detail="Company not found")
+
+        client_id = co_result.data[0]['client_id']
+        engine = RecommendationEngine(_supabase, client_id)
+        result = engine.get_recommendations(company_id, force=force)
+        result['company_id'] = company_id
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get recommendations for {company_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

@@ -124,7 +124,7 @@ async def upsert_config(client_id: str = Query(...), config: QBSyncConfigCreate 
 
 # --- Sync endpoints ---
 
-VALID_TABLES = {'customers', 'contacts', 'quotes', 'jobs', 'sales_line_items'}
+VALID_TABLES = {'customers', 'contacts', 'quotes', 'jobs', 'sales_line_items', 'operations'}
 
 
 @router.post("/sync", response_model=QBSyncResult)
@@ -432,6 +432,62 @@ async def list_qb_sales_line_items(
         return {"sales_line_items": result.data or [], "total": result.count or 0}
     except Exception as e:
         logger.error(f"Failed to list QB sales line items: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/operations")
+async def list_qb_operations(
+    client_id: str = Query(...),
+    company_id: Optional[str] = Query(default=None, description="Filter by matched company UUID"),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    search: Optional[str] = Query(default=None),
+):
+    """List cached QB operations (product/service detail per job)."""
+    try:
+        query = _supabase.table('qb_operations').select('*', count='exact').eq('client_id', client_id)
+        if company_id:
+            query = query.eq('matched_company_id', company_id)
+        if search:
+            query = query.or_(
+                f"operation_name.ilike.%{search}%,department.ilike.%{search}%,customer_name.ilike.%{search}%"
+            )
+        result = query.order('date_accepted', desc=True).range(offset, offset + limit - 1).execute()
+        return {"operations": result.data or [], "total": result.count or 0}
+    except Exception as e:
+        logger.error(f"Failed to list QB operations: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/recommendations/recompute-affinities")
+async def recompute_affinities(
+    client_id: str = Query(...),
+    background_tasks: BackgroundTasks = None,
+):
+    """
+    Recompute product_affinities for a client from all qb_operations.
+    Triggered automatically after QB sync; can also be called manually.
+    """
+    try:
+        from ..services.recommendation_engine import RecommendationEngine
+
+        async def _run():
+            try:
+                engine = RecommendationEngine(_supabase, client_id)
+                count = engine.recompute_affinities()
+                logger.info(f"Affinity recompute done: {count} pairs for client {client_id}")
+            except Exception as e:
+                logger.error(f"Affinity recompute failed: {e}")
+
+        if background_tasks:
+            background_tasks.add_task(_run)
+            return {"status": "accepted", "message": "Affinity recomputation started in background"}
+        else:
+            engine = RecommendationEngine(_supabase, client_id)
+            count = engine.recompute_affinities()
+            return {"status": "completed", "affinity_pairs_stored": count}
+
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 

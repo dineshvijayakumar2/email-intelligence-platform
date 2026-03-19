@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Row, Col, Typography, Button, Tag, Descriptions, Skeleton, Table } from 'antd';
+import { Row, Col, Typography, Button, Tag, Descriptions, Skeleton, Table, Collapse } from 'antd';
 import { ArrowLeftOutlined, ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import { MetricCard } from '../../components/analytics/MetricCard';
 import AIInsightsCard from '../../components/AIInsightsCard';
 import { EngagementBadge } from '../../components/analytics/EngagementBadge';
 import { LifecycleBadge } from '../../components/analytics/LifecycleBadge';
+import { OrderHistoryTable } from '../../components/OrderHistoryTable';
+import { ProductProfileCard } from '../../components/ProductProfileCard';
+import { RecommendationsPanel } from '../../components/RecommendationsPanel';
 import {
   companiesApi,
   threadsApi,
@@ -28,6 +31,10 @@ export const CompanyDetail: React.FC = () => {
   const [totalSent, setTotalSent] = useState(0);
   const [totalReceived, setTotalReceived] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [orderHistory, setOrderHistory] = useState<any[]>([]);
+  const [orderHistoryLoading, setOrderHistoryLoading] = useState(false);
+  const [productProfile, setProductProfile] = useState<{ categories: any[]; operations: any[] }>({ categories: [], operations: [] });
+  const [productProfileLoading, setProductProfileLoading] = useState(false);
 
   useEffect(() => { isMountedRef.current = true; return () => { isMountedRef.current = false; }; }, []);
 
@@ -48,6 +55,15 @@ export const CompanyDetail: React.FC = () => {
         setThreads(threadResult.threads);
         setLoading(false);
       }
+      // Load supplementary data in parallel (non-blocking)
+      setOrderHistoryLoading(true);
+      setProductProfileLoading(true);
+      companiesApi.getOrderHistory(companyId).then(d => {
+        if (isMountedRef.current) { setOrderHistory(d.items || []); setOrderHistoryLoading(false); }
+      });
+      companiesApi.getProductProfile(companyId).then(d => {
+        if (isMountedRef.current) { setProductProfile(d); setProductProfileLoading(false); }
+      });
     };
     load();
   }, [companyId]);
@@ -224,6 +240,42 @@ export const CompanyDetail: React.FC = () => {
           </div>
         </Col>
       </Row>
+
+      {/* Product Profile + Recommendations */}
+      <Row gutter={[16, 16]} style={{ marginTop: 16 }} className="fade-in-up stagger-3">
+        <Col xs={24} lg={12}>
+          <div className="glass-card" style={{ padding: 20 }}>
+            <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 12 }}>Product Profile</Text>
+            <ProductProfileCard
+              categories={productProfile.categories}
+              operations={productProfile.operations}
+              loading={productProfileLoading}
+            />
+          </div>
+        </Col>
+        <Col xs={24} lg={12}>
+          <div className="glass-card" style={{ padding: 20 }}>
+            <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 12 }}>Sales Opportunities</Text>
+            {companyId && <RecommendationsPanel companyId={companyId} />}
+          </div>
+        </Col>
+      </Row>
+
+      {/* Order History */}
+      <div style={{ marginTop: 16 }} className="fade-in-up stagger-4">
+        <Collapse
+          ghost
+          items={[{
+            key: 'order-history',
+            label: <Text strong style={{ fontSize: 15 }}>Order History ({orderHistory.length})</Text>,
+            children: (
+              <div className="glass-table-container" style={{ padding: 8 }}>
+                <OrderHistoryTable items={orderHistory} loading={orderHistoryLoading} />
+              </div>
+            ),
+          }]}
+        />
+      </div>
 
       {companyId && <AIInsightsCard entityType="company" entityId={companyId} />}
     </div>

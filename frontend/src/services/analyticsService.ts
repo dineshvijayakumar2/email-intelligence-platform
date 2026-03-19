@@ -371,6 +371,44 @@ export const companiesApi = {
       return [];
     }
   },
+
+  // Sprint 4: Sales Intelligence endpoints (on /customers router, no /v1 prefix)
+
+  /** GET /customers/{companyId}/order-history */
+  async getOrderHistory(companyId: string, limit = 50): Promise<{ items: any[]; total: number }> {
+    try {
+      return await api.get<{ items: any[]; total: number }>(
+        `/customers/${companyId}/order-history?limit=${limit}`,
+        { timeout: 10000 }
+      );
+    } catch {
+      return { items: [], total: 0 };
+    }
+  },
+
+  /** GET /customers/{companyId}/product-profile */
+  async getProductProfile(companyId: string): Promise<{ categories: any[]; operations: any[] }> {
+    try {
+      return await api.get<{ categories: any[]; operations: any[] }>(
+        `/customers/${companyId}/product-profile`,
+        { timeout: 10000 }
+      );
+    } catch {
+      return { categories: [], operations: [] };
+    }
+  },
+
+  /** GET /customers/{companyId}/recommendations */
+  async getRecommendations(companyId: string, force = false): Promise<{ cross_contact_recs: any[]; related_product_recs: any[]; product_profile: any; computed_at?: string }> {
+    try {
+      return await api.get<any>(
+        `/customers/${companyId}/recommendations${force ? '?force=true' : ''}`,
+        { timeout: 15000 }
+      );
+    } catch {
+      return { cross_contact_recs: [], related_product_recs: [], product_profile: {} };
+    }
+  },
 };
 
 // ============================================================================

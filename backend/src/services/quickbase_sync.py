@@ -64,11 +64,12 @@ class QuickbaseSync:
 
     # Maps logical table name → qb_sync_config field holding the QB table ID
     _TABLE_ID_CONFIG_FIELD = {
-        'customers':       'customers_table_id',
-        'contacts':        'contacts_table_id',
-        'quotes':          'quotes_table_id',
-        'jobs':            'jobs_table_id',
+        'customers':        'customers_table_id',
+        'contacts':         'contacts_table_id',
+        'quotes':           'quotes_table_id',
+        'jobs':             'jobs_table_id',
         'sales_line_items': 'sales_line_items_table_id',
+        'operations':       'operations_table_id',
     }
 
     def _write_sync_log(self, table_name: str, record_count: int, status: str = 'success', error_message: str = None):
@@ -96,6 +97,7 @@ class QuickbaseSync:
             ('quotes', self.sync_quotes),
             ('jobs', self.sync_jobs),
             ('sales_line_items', self.sync_sales_line_items),
+            ('operations', self.sync_operations),
         ]
         to_sync = [(k, fn) for k, fn in all_fns if tables is None or k in tables]
         label = ', '.join(k for k, _ in to_sync)
@@ -182,6 +184,62 @@ class QuickbaseSync:
         logger.info(f"Fetched {len(records)} sales line items from QB")
 
         return await self._upsert_records('qb_sales_line_items', records, mapping)
+
+    async def sync_operations(self) -> int:
+        """Sync QB Operations table → qb_operations. Skips if operations_table_id not configured."""
+        operations_table_id = self._config.get('operations_table_id')
+        if not operations_table_id:
+            logger.info("operations_table_id not set in QB config — skipping operations sync")
+            return 0
+
+        mapping = self._field_mappings.get('operations', DEFAULT_FIELD_MAPPINGS['operations'])
+        select_fields = QuickbaseClient.get_select_fields(mapping)
+
+        records = await self._qb_client.query_all_records(operations_table_id, select_fields)
+        logger.info(f"Fetched {len(records)} operations from QB")
+
+        count = await self._upsert_records('qb_operations', records, mapping)
+        if count:
+            await self.match_operations_to_companies()
+        return count
+
+    async def match_operations_to_companies(self) -> int:
+        """
+        Resolve qb_operations.matched_company_id via:
+        qb_operations.qb_customer_id → qb_customers.qb_record_id → qb_customers.matched_company_id
+        """
+        ops_result = _execute_with_retry(lambda: self._supabase.table('qb_operations').select(
+            'id, qb_customer_id'
+        ).eq('client_id', self._client_id).is_('matched_company_id', 'null').execute())
+
+        unmatched = [r for r in (ops_result.data or []) if r.get('qb_customer_id')]
+        if not unmatched:
+            return 0
+
+        # Build qb_record_id → matched_company_id from already-matched qb_customers
+        cust_result = _execute_with_retry(lambda: self._supabase.table('qb_customers').select(
+            'qb_record_id, matched_company_id'
+        ).eq('client_id', self._client_id).not_.is_('matched_company_id', 'null').execute())
+
+        customer_map = {
+            r['qb_record_id']: r['matched_company_id']
+            for r in (cust_result.data or [])
+            if r.get('qb_record_id') and r.get('matched_company_id')
+        }
+
+        matched = 0
+        for op in unmatched:
+            company_id = customer_map.get(op['qb_customer_id'])
+            if company_id:
+                _execute_with_retry(lambda cid=company_id, oid=op['id']: (
+                    self._supabase.table('qb_operations').update({
+                        'matched_company_id': cid
+                    }).eq('id', oid).execute()
+                ))
+                matched += 1
+
+        logger.info(f"Matched {matched}/{len(unmatched)} QB operations to companies")
+        return matched
 
     async def _upsert_records(
         self, table_name: str, records: list[dict], mapping: dict[str, str],

@@ -172,6 +172,7 @@ class OutlookLiveExtractor(BaseExtractor):
             url = f"{self.graph_endpoint}/me/mailFolders/{folder_id}/messages"
             params = {
                 '$select': 'id,conversationId,internetMessageId,subject,sender,toRecipients,ccRecipients,bccRecipients,receivedDateTime,sentDateTime,body,isRead,hasAttachments,internetMessageHeaders,webLink',
+                '$expand': 'attachments($select=name,size,contentType)',
                 '$orderby': 'receivedDateTime desc'
             }
             
@@ -293,11 +294,13 @@ class OutlookLiveExtractor(BaseExtractor):
             'is_reply': is_reply,
             'raw_headers': headers,
             'message_size': len(body_content),
-            # Attachments — names unavailable without extra API call; mark presence
-            'attachments': [{'filename': '(attachment)', 'size': 0}]
-                           if email_data.get('hasAttachments') else [],
-            # Provider deep-link (OWA direct URL from Graph API)
-            'provider_web_link': email_data.get('webLink', ''),
+            # Attachments — expanded inline via $expand=attachments
+            'attachments': self._parse_graph_attachments(email_data),
+            # Provider deep-link (OWA direct URL from Graph API, with fallback)
+            'provider_web_link': (
+                email_data.get('webLink')
+                or self._build_outlook_web_link(email_data.get('id', ''))
+            ),
             # Threading fields
             'in_reply_to': headers.get('In-Reply-To', ''),
             'references': headers.get('References', ''),
@@ -306,6 +309,34 @@ class OutlookLiveExtractor(BaseExtractor):
         
         return self._standardize_email(standardized)
     
+    def _parse_graph_attachments(self, email_data: Dict) -> List[Dict]:
+        """Parse expanded attachment metadata from Graph API response"""
+        graph_attachments = email_data.get('attachments', [])
+        if graph_attachments:
+            attachments = []
+            for att in graph_attachments:
+                # Skip inline/hidden attachments (e.g. embedded images)
+                if att.get('isInline'):
+                    continue
+                attachments.append({
+                    'filename': att.get('name') or '(unnamed)',
+                    'size': att.get('size') or 0,
+                    'mimetype': att.get('contentType') or '',
+                })
+            return attachments
+        # Fallback: hasAttachments flag but no expanded data
+        if email_data.get('hasAttachments'):
+            return [{'filename': '(attachment)', 'size': 0}]
+        return []
+
+    @staticmethod
+    def _build_outlook_web_link(graph_id: str) -> str:
+        """Construct Outlook Web deep link from Graph message ID as fallback"""
+        if not graph_id:
+            return ''
+        from urllib.parse import quote
+        return f"https://outlook.live.com/mail/0/id/{quote(graph_id, safe='')}"
+
     def _parse_graph_recipients(self, recipients_data: List[Dict]) -> List[Dict]:
         """Parse Graph API recipients format"""
         recipients = []
