@@ -45,6 +45,17 @@ Full plan: Claude plan file `compressed-mixing-blum.md` + `docs/PLATFORM_PROGRES
 
 ### Sprint 4: Sales Intelligence Engine — IN PROGRESS
 
+#### Nav restructure — ✅ COMPLETE (19 Mar 2026)
+- [x] Routes renamed: `/analytics/*` → `/customers/*`, `/intelligence/*` → `/insights/*`, operational pages → `/manage/*`
+- [x] Layout.tsx: Analytics + Intelligence sections → Customers + Insights
+- [x] All internal navigate() calls updated across 7 page files
+- [x] Legacy redirect routes added for all old paths
+
+#### S4.0 — Communication Guidelines in Prompt Templates (prerequisite — implement first)
+- [ ] Update `_get_default_prompts()` in `prompts.py`: add Communication Guidelines block to email analysis, daily digest, strategic digest, and AI insights prompts
+- [ ] Guidelines: consultative B2B tone, outcome/risk framing, avoid fluff, treat silence/reorder/campaign signals as business intelligence
+- [ ] Bump version numbers on updated templates → existing reprocessing flow handles re-analysis
+
 #### Phase A — Backend foundation
 - [x] Migration 032: `qb_operations` table + `operations_table_id` on `qb_sync_config`
 - [ ] Migration 033: `customer_recommendations` + `product_affinities` tables

@@ -26,7 +26,8 @@ A commercial intelligence platform for B2B account management teams. It syncs em
 | Sprint 3 | QB integration, AI pipeline, strategic digest, prompt system | ✅ Complete | Mar 2026 |
 | Prompt System Hardening | DB persistence, version tracking, playground fixes | ✅ Complete | 19 Mar 2026 |
 | Invite User System | Admin-controlled onboarding, restrict open sign-up | 🔲 Planned | Not started |
-| Sprint 4 — Sales Intelligence | QB Operations sync, Customer Profile redesign, Recommendation Engine, Vector AI + Chat Agent | 🔲 In Progress | Mar 2026 |
+| Nav restructure | Analytics + Intelligence → Customers + Insights + Manage (route rename, no new pages) | ✅ Complete | 19 Mar 2026 |
+| Sprint 4 — Sales Intelligence | Client AI Context, QB Operations sync, Customer Profile redesign, Recommendation Engine, Vector AI + Chat Agent | 🔲 In Progress | Mar 2026 |
 
 ---
 
@@ -581,9 +582,31 @@ Sprint 4 additions (vector embeddings + AI Chat Agent): +~$3–8/month → well 
 
 ## 🔲 IN PROGRESS — Sprint 4: Sales Intelligence Engine
 
-**Goal:** Merge email engagement intelligence with production intelligence from QuickBase — showing not just who's communicating, but what they buy, what they should be buying, and what to recommend next.
+**Goal:** Merge email engagement intelligence with production intelligence from QuickBase — showing not just who's communicating, but what they buy, what they should be buying, and what to recommend next. All AI output shaped by client-specific tone and positioning context.
 
-**Four tracks:**
+**Five tracks:**
+
+### S4.0 — Communication Guidelines in Prompt Templates
+
+**Problem:** AI output is generic — doesn't reflect the AM-facing, B2B consultative tone appropriate for account management in industries like commercial print.
+
+**Solution:** Add a "Communication Guidelines" block to the existing base prompt templates. No per-client config — these are good practice for any B2B AM platform and apply universally. Already editable via AI Playground.
+
+| Item | Detail |
+|------|--------|
+| No new DB | Uses existing `prompt_templates` table — just a prompt content update |
+| No new endpoints | AI Playground already supports editing these templates |
+| Version bump | Each updated template gets a new version number (existing versioning system) |
+| Scope | Applied to: email analysis, daily/weekly digest, strategic digest, AI insights, AI Chat Agent |
+
+**Guideline principles added to prompts:**
+- Tone: consultative, commercially grounded, outcome-focused — like a senior operator, not a vendor
+- Lead with: what matters, why it matters, consequence of inaction
+- Avoid: superlatives, marketing fluff, technical jargon without context
+- Frame signals as: risks, opportunities, and recommended next actions with rationale
+- For B2B print/production context: flag reorder patterns, campaign timing, account silences as business signals
+
+**Implementation:** Update seeded prompt content in `prompts.py` `_get_default_prompts()` → bump version → existing reprocessing flow handles re-analysis if triggered.
 
 ### S4.1 — QB Operations Table Sync
 
