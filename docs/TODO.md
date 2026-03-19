@@ -28,9 +28,9 @@ Design: `docs/INVITE_USER_SMTPLESS.md`
 
 ---
 
-## CURRENT FOCUS: Sprint 4 Power Mode (PLANNED)
+## CURRENT FOCUS: Sprint 4 — Sales Intelligence Engine (IN PROGRESS)
 
-Full plan: `docs/SPRINT3_4_IMPLEMENTATION_PLAN.md`
+Full plan: Claude plan file `compressed-mixing-blum.md` + `docs/PLATFORM_PROGRESS.md`
 
 ### Sprint 3: AI Layer + QB Integration + AM Rehaul — ✅ COMPLETE (March 15, 2026)
 - [x] Sessions 1-6: Intelligence Engine + Buckets + Digest + Frontend
@@ -43,14 +43,44 @@ Full plan: `docs/SPRINT3_4_IMPLEMENTATION_PLAN.md`
 - [x] Frontend: Strategic Digest page, lifecycle badges, Re-bucket button
 - [x] Migration 026: AM lifecycle rehaul (timezone, lifecycle tiers, has_response_urgency)
 
-### Sprint 4: Power Mode — NOT STARTED
-- [ ] Deal Radar (proactive deal monitoring)
-- [ ] Ghost Writer (AI-suggested email responses)
-- [ ] Communication Heatmap (activity visualization)
-- [ ] War Room (at-risk customer dashboard)
-- [ ] Smart Alerts (proactive notifications)
-- [ ] AM Scoreboard (performance leaderboard)
-- [ ] Executive Report (automated periodic reports)
+### Sprint 4: Sales Intelligence Engine — IN PROGRESS
+
+#### Phase A — Backend foundation
+- [x] Migration 032: `qb_operations` table + `operations_table_id` on `qb_sync_config`
+- [ ] Migration 033: `customer_recommendations` + `product_affinities` tables
+- [ ] Migration 034: pgvector extension + embedding columns + HNSW indexes + search RPCs
+- [ ] `quickbase_sync.py`: Add `_sync_operations()` method
+- [ ] `recommendation_engine.py`: Level 1 (cross-contact gaps) + Level 2 (market basket) algorithms
+- [ ] `customers.py`: Add 3 new endpoints (`/order-history`, `/product-profile`, `/recommendations`)
+- [ ] `quickbase.py`: Add `/operations` list endpoint
+
+#### Phase B — Customer profile frontend
+- [ ] `OrderHistoryTable.tsx`: Merged quote/job/invoice timeline component
+- [ ] `ProductProfileCard.tsx`: Category breakdown bar chart
+- [ ] `RecommendationsPanel.tsx`: Two-section recommendations display
+- [ ] `company-detail.tsx`: Full redesign — 6-section customer profile
+- [ ] `analyticsService.ts`: Add 3 new API wrappers
+
+#### Phase C — Surface recommendations across platform
+- [ ] `inbox.tsx`: Add collapsible "Sales Opportunities" panel in email detail drawer
+- [ ] `ai_digest_generator.py` + `digest.tsx`: Add "Sales Opportunities" section (top 5 companies)
+- [ ] `quickbase-config.tsx`: Add Operations Table ID read-only display field
+
+#### Phase D — Vector infrastructure
+- [ ] `vector_service.py`: Embedding service + semantic search functions
+- [ ] `POST /api/v1/agent/reembed`: Bootstrap endpoint — embed all existing data
+- [ ] Run bootstrap reembed against production data
+
+#### Phase E — Rebuild AI features around vectors
+- [ ] `ai_email_analyzer.py`: Pre-batch vector context retrieval (group by company → history inject)
+- [ ] `ai_digest_generator.py`: Hybrid semantic + structured retrieval (3 parallel queries)
+- [ ] `langchain_tools.py`: Add `semantic_search_emails` + `semantic_search_operations` tools
+- [ ] Wire embed triggers: after analysis → `embed_emails_batch()`; after QB sync → `embed_operations()`
+
+#### Phase F — AI Chat Agent
+- [ ] `ai_agent_service.py`: General Q&A agent with all 6 tools
+- [ ] `ai.py` router: Add `POST /api/v1/agent/chat` + `POST /api/v1/agent/reembed`
+- [ ] `agent.tsx`: Chat UI page at `/intelligence/agent`
 
 ---
 

@@ -81,7 +81,7 @@ export const CompanyDetail: React.FC = () => {
   if (loading) {
     return (
       <div className="glass-page-bg" style={{ padding: 24 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/analytics/companies')} style={{ marginBottom: 16 }}>Back</Button>
+        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/customers')} style={{ marginBottom: 16 }}>Back</Button>
         <Skeleton active paragraph={{ rows: 10 }} />
       </div>
     );
@@ -90,7 +90,7 @@ export const CompanyDetail: React.FC = () => {
   if (!company) {
     return (
       <div className="glass-page-bg" style={{ padding: 24 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/analytics/companies')} style={{ marginBottom: 16 }}>Back</Button>
+        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/customers')} style={{ marginBottom: 16 }}>Back</Button>
         <Text type="secondary">Company not found</Text>
       </div>
     );
@@ -101,7 +101,7 @@ export const CompanyDetail: React.FC = () => {
 
   return (
     <div className="glass-page-bg" style={{ padding: 24 }}>
-      <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/analytics/companies')} style={{ marginBottom: 16 }}>Back to Companies</Button>
+      <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/customers')} style={{ marginBottom: 16 }}>Back to Companies</Button>
 
       <div className="glass-card fade-in-up" style={{ padding: 20, marginBottom: 16 }}>
         <Row align="middle" gutter={16}>
@@ -127,16 +127,16 @@ export const CompanyDetail: React.FC = () => {
           />
         </Col>
         <Col xs={12} sm={6}>
-          <MetricCard title="Contacts" value={company.contact_count} onClick={() => navigate(`/analytics/contacts?company=${companyParam}`)} />
+          <MetricCard title="Contacts" value={company.contact_count} onClick={() => navigate(`/customers/contacts?company=${companyParam}`)} />
         </Col>
         <Col xs={12} sm={6}>
-          <MetricCard title="Decision Makers" value={company.decision_maker_count} onClick={() => navigate(`/analytics/contacts?company=${companyParam}&dm=true`)} />
+          <MetricCard title="Decision Makers" value={company.decision_maker_count} onClick={() => navigate(`/customers/contacts?company=${companyParam}&dm=true`)} />
         </Col>
         <Col xs={12} sm={6}>
           <MetricCard
             title="Active Threads"
             value={company.active_threads}
-            onClick={() => navigate(`/analytics/threads?company_id=${companyId}&name=${companyParam}`)}
+            onClick={() => navigate(`/customers/threads?company_id=${companyId}&name=${companyParam}`)}
           />
         </Col>
       </Row>
@@ -205,7 +205,7 @@ export const CompanyDetail: React.FC = () => {
         <Col xs={24} lg={14}>
           <div className="glass-table-container" style={{ padding: 16 }}>
             <a
-              onClick={() => navigate(`/analytics/threads?company_id=${companyId}&name=${companyParam}`)}
+              onClick={() => navigate(`/customers/threads?company_id=${companyId}&name=${companyParam}`)}
               style={{ fontSize: 16, fontWeight: 600, display: 'block', marginBottom: 12, color: '#667eea', cursor: 'pointer' }}
             >
               Threads ({threads.length})

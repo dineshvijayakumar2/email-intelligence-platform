@@ -151,7 +151,7 @@ export const Dashboard: React.FC = () => {
           </div>
         </Col>
         <Col xs={12} sm={6}>
-          <div className="glass-card" style={{ padding: 20, cursor: urgentCount > 0 ? 'pointer' : 'default' }} onClick={() => urgentCount > 0 && navigate('/intelligence/inbox')}>
+          <div className="glass-card" style={{ padding: 20, cursor: urgentCount > 0 ? 'pointer' : 'default' }} onClick={() => urgentCount > 0 && navigate('/insights/inbox')}>
             {aiLoading ? <Skeleton.Input active style={{ width: 60, height: 28 }} /> : (
               <Statistic
                 title="Needs Attention"
@@ -163,7 +163,7 @@ export const Dashboard: React.FC = () => {
           </div>
         </Col>
         <Col xs={12} sm={6}>
-          <div className="glass-card" style={{ padding: 20, cursor: opportunityCount > 0 ? 'pointer' : 'default' }} onClick={() => opportunityCount > 0 && navigate('/intelligence/opportunities')}>
+          <div className="glass-card" style={{ padding: 20, cursor: opportunityCount > 0 ? 'pointer' : 'default' }} onClick={() => opportunityCount > 0 && navigate('/insights/opportunities')}>
             {aiLoading ? <Skeleton.Input active style={{ width: 60, height: 28 }} /> : (
               <Statistic
                 title="Opportunities"
@@ -249,7 +249,7 @@ export const Dashboard: React.FC = () => {
                 <BulbOutlined style={{ color: '#667eea', fontSize: 18 }} />
                 <Text strong style={{ fontSize: 16 }}>AI Signals</Text>
               </Space>
-              <Link to="/intelligence/inbox" style={{ color: '#667eea', fontSize: 13 }}>View All <ArrowRightOutlined /></Link>
+              <Link to="/insights/inbox" style={{ color: '#667eea', fontSize: 13 }}>View All <ArrowRightOutlined /></Link>
             </div>
 
             {aiLoading ? (
@@ -265,7 +265,7 @@ export const Dashboard: React.FC = () => {
                     <div
                       key={key}
                       style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', borderRadius: 8, background: 'rgba(0,0,0,0.02)', cursor: 'pointer' }}
-                      onClick={() => navigate('/intelligence/inbox')}
+                      onClick={() => navigate('/insights/inbox')}
                     >
                       <Space size={8}>
                         <span style={{ color: cfg.color }}>{cfg.icon}</span>
@@ -276,7 +276,7 @@ export const Dashboard: React.FC = () => {
                   );
                 })}
                 <div style={{ marginTop: 8 }}>
-                  <Link to="/intelligence/digest" style={{ fontSize: 13, color: '#667eea' }}>
+                  <Link to="/insights/digest" style={{ fontSize: 13, color: '#667eea' }}>
                     <BulbOutlined /> View today's digest <ArrowRightOutlined />
                   </Link>
                 </div>
@@ -285,7 +285,7 @@ export const Dashboard: React.FC = () => {
               <div style={{ textAlign: 'center', padding: '24px 0' }}>
                 <CheckCircleOutlined style={{ fontSize: 32, color: '#52c41a', marginBottom: 12 }} />
                 <Text type="secondary" style={{ display: 'block' }}>No action items detected</Text>
-                <Link to="/intelligence/digest" style={{ fontSize: 13, color: '#667eea', marginTop: 8, display: 'inline-block' }}>
+                <Link to="/insights/digest" style={{ fontSize: 13, color: '#667eea', marginTop: 8, display: 'inline-block' }}>
                   View digest <ArrowRightOutlined />
                 </Link>
               </div>
@@ -301,7 +301,7 @@ export const Dashboard: React.FC = () => {
           <div className="glass-table-container" style={{ height: '100%' }}>
             <div style={{ padding: '16px 24px', borderBottom: '1px solid rgba(102, 126, 234, 0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Text strong style={{ fontSize: 16 }}>Priority Actions</Text>
-              <Link to="/intelligence/opportunities" style={{ color: '#667eea', fontSize: 13 }}>All Opportunities <ArrowRightOutlined /></Link>
+              <Link to="/insights/opportunities" style={{ color: '#667eea', fontSize: 13 }}>All Opportunities <ArrowRightOutlined /></Link>
             </div>
             {aiLoading ? (
               <div style={{ padding: 16 }}>

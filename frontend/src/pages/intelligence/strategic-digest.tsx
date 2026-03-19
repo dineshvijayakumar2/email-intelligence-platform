@@ -438,7 +438,7 @@ export default function StrategicDigestPage() {
                     <Card
                       size="small"
                       hoverable
-                      onClick={() => r.company_id ? navigate(`/analytics/company/${r.company_id}`) : undefined}
+                      onClick={() => r.company_id ? navigate(`/customers/${r.company_id}`) : undefined}
                       style={{
                         height: '100%',
                         borderLeft: r.lifecycle_tier === 'at_risk' ? '3px solid #fa8c16' :

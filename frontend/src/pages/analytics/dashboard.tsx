@@ -149,7 +149,7 @@ export const AnalyticsDashboard: React.FC = () => {
       key: 'contacts',
       width: 80,
       render: (v: number, r: any) => (
-        <a onClick={(e) => { e.stopPropagation(); navigate(`/analytics/contacts?company=${encodeURIComponent(r.company_name)}`); }} style={{ color: '#667eea' }}>
+        <a onClick={(e) => { e.stopPropagation(); navigate(`/customers/contacts?company=${encodeURIComponent(r.company_name)}`); }} style={{ color: '#667eea' }}>
           {v ?? 0}
         </a>
       ),
@@ -207,7 +207,7 @@ export const AnalyticsDashboard: React.FC = () => {
                 value={data?.total_contacts}
                 prefix={<TeamOutlined />}
                 loading={loading}
-                onClick={() => navigate('/analytics/contacts')}
+                onClick={() => navigate('/customers/contacts')}
               />
             </Col>
             <Col xs={12} sm={8} lg={4}>
@@ -216,7 +216,7 @@ export const AnalyticsDashboard: React.FC = () => {
                 value={data?.total_companies}
                 prefix={<BankOutlined />}
                 loading={loading}
-                onClick={() => navigate('/analytics/companies')}
+                onClick={() => navigate('/customers')}
               />
             </Col>
             <Col xs={12} sm={8} lg={4}>
@@ -233,7 +233,7 @@ export const AnalyticsDashboard: React.FC = () => {
                 value={data?.active_threads}
                 prefix={<MessageOutlined />}
                 loading={loading}
-                onClick={() => navigate('/analytics/threads?status=active')}
+                onClick={() => navigate('/customers/threads?status=active')}
               />
             </Col>
             <Col xs={12} sm={8} lg={4}>
@@ -242,7 +242,7 @@ export const AnalyticsDashboard: React.FC = () => {
                 value={data?.overdue_threads}
                 prefix={<WarningOutlined />}
                 loading={loading}
-                onClick={() => navigate('/analytics/threads?status=overdue')}
+                onClick={() => navigate('/customers/threads?status=overdue')}
               />
             </Col>
             <Col xs={12} sm={8} lg={4}>
@@ -251,7 +251,7 @@ export const AnalyticsDashboard: React.FC = () => {
                 value={formatResponseTime(data?.avg_response_time_hours)}
                 prefix={<ClockCircleOutlined />}
                 loading={loading}
-                onClick={() => navigate('/analytics/response-times')}
+                onClick={() => navigate('/manage/response-times')}
               />
             </Col>
           </Row>
@@ -317,7 +317,7 @@ export const AnalyticsDashboard: React.FC = () => {
             <Col xs={24} lg={8}>
               <div className="glass-table-container" style={{ padding: 16 }}>
                 <a
-                  onClick={() => navigate('/analytics/contacts')}
+                  onClick={() => navigate('/customers/contacts')}
                   style={{ fontSize: 16, fontWeight: 600, display: 'block', marginBottom: 12, color: '#667eea', cursor: 'pointer' }}
                 >
                   Top Engaged Contacts
@@ -330,7 +330,7 @@ export const AnalyticsDashboard: React.FC = () => {
                     size="small"
                     pagination={false}
                     onRow={(record) => ({
-                      onClick: () => navigate(`/analytics/contacts/${record.id}`),
+                      onClick: () => navigate(`/customers/contacts/${record.id}`),
                       style: { cursor: 'pointer' },
                     })}
                   />
@@ -340,7 +340,7 @@ export const AnalyticsDashboard: React.FC = () => {
             <Col xs={24} lg={8}>
               <div className="glass-table-container" style={{ padding: 16 }}>
                 <a
-                  onClick={() => navigate('/analytics/companies')}
+                  onClick={() => navigate('/customers')}
                   style={{ fontSize: 16, fontWeight: 600, display: 'block', marginBottom: 12, color: '#667eea', cursor: 'pointer' }}
                 >
                   Top Engaged Companies
@@ -353,7 +353,7 @@ export const AnalyticsDashboard: React.FC = () => {
                     size="small"
                     pagination={false}
                     onRow={(record) => ({
-                      onClick: () => navigate(`/analytics/companies/${record.id}`),
+                      onClick: () => navigate(`/customers/${record.id}`),
                       style: { cursor: 'pointer' },
                     })}
                   />
@@ -365,7 +365,7 @@ export const AnalyticsDashboard: React.FC = () => {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                   <WarningOutlined style={{ color: '#f5222d' }} />
                   <a
-                    onClick={() => navigate('/analytics/contacts')}
+                    onClick={() => navigate('/customers/contacts')}
                     style={{ fontSize: 16, fontWeight: 600, color: '#667eea', cursor: 'pointer' }}
                   >
                     At-Risk Contacts
@@ -379,7 +379,7 @@ export const AnalyticsDashboard: React.FC = () => {
                     size="small"
                     pagination={false}
                     onRow={(record) => ({
-                      onClick: () => navigate(`/analytics/contacts/${record.id}`),
+                      onClick: () => navigate(`/customers/contacts/${record.id}`),
                       style: { cursor: 'pointer' },
                     })}
                   />

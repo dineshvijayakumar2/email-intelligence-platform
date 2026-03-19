@@ -307,7 +307,7 @@ export const ContactsAnalytics: React.FC = () => {
   ];
 
   const handleRowClick = (record: any) => {
-    navigate(`/analytics/contacts/${record.id}`);
+    navigate(`/customers/contacts/${record.id}`);
   };
 
   const companyDrilldown = searchParams.get('company');

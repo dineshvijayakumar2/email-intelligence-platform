@@ -22,25 +22,26 @@ import UsersPage from './pages/users';
 import AdminDataViewPage from './pages/admin-data';
 import OAuthCallback from './pages/oauth-callback';
 
-// Analytics pages
-import { AnalyticsDashboard } from './pages/analytics/dashboard';
+// Customers pages (formerly analytics/companies, contacts, threads)
 import { ContactsAnalytics } from './pages/analytics/contacts';
 import { ContactDetail } from './pages/analytics/contact-detail';
 import { CompaniesAnalytics } from './pages/analytics/companies';
 import { CompanyDetail } from './pages/analytics/company-detail';
 import { ThreadAnalytics } from './pages/analytics/threads';
+
+// Insights pages (formerly intelligence/*)
+import InboxPage from './pages/intelligence/inbox';
+import DigestPage from './pages/intelligence/digest';
+import OpportunitiesPage from './pages/intelligence/opportunities';
+import StrategicDigestPage from './pages/intelligence/strategic-digest';
+
+// Manage pages
 import { ResponseTimesAnalytics } from './pages/analytics/response-times';
 import { CommunicationPatterns } from './pages/analytics/patterns';
 import { EmailRulesPage } from './pages/analytics/email-rules';
 import { DataHealthDashboard } from './pages/analytics/data-health';
 import { ExtractionManagement } from './pages/extraction';
-
-// Intelligence pages (Sprint 3)
-import InboxPage from './pages/intelligence/inbox';
-import DigestPage from './pages/intelligence/digest';
-import OpportunitiesPage from './pages/intelligence/opportunities';
 import UsagePage from './pages/intelligence/usage';
-import StrategicDigestPage from './pages/intelligence/strategic-digest';
 import PlaygroundPage from './pages/intelligence/playground';
 import QuickbaseConfigPage from './pages/intelligence/quickbase-config';
 import QuickbaseDataPage from './pages/intelligence/quickbase-data';
@@ -68,174 +69,77 @@ function App() {
             <Route path="/reset-password" element={<ResetPasswordPage />} />
 
             {/* Protected routes - require authentication */}
-            <Route
-              path="/"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Dashboard />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/mailboxes"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <MailboxList />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/mailboxes/create"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <MailboxCreate />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/mailboxes/edit/:id"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <MailboxEdit />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/mailboxes/process/:id"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <MailboxProcess />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/emails"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <EmailList />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/emails/:mailboxId"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <EmailList />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/emails/:mailboxId/:emailId"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <EmailList />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/processing"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <ProcessingJobs />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/processing/:mailboxId"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <ProcessingJobs />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/errors"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <ErrorsPage />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/errors/:mailboxId"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <ErrorsPage />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/clients"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <ClientsPage />
-                  </Layout>
-                </ProtectedRoute>
-              }
-            />
+            <Route path="/" element={<ProtectedRoute><Layout><Dashboard /></Layout></ProtectedRoute>} />
 
-            {/* Analytics routes */}
-            <Route path="/analytics" element={<ProtectedRoute><Layout><AnalyticsDashboard /></Layout></ProtectedRoute>} />
-            <Route path="/analytics/contacts" element={<ProtectedRoute><Layout><ContactsAnalytics /></Layout></ProtectedRoute>} />
-            <Route path="/analytics/contacts/:contactId" element={<ProtectedRoute><Layout><ContactDetail /></Layout></ProtectedRoute>} />
-            <Route path="/analytics/companies" element={<ProtectedRoute><Layout><CompaniesAnalytics /></Layout></ProtectedRoute>} />
-            <Route path="/analytics/companies/:companyId" element={<ProtectedRoute><Layout><CompanyDetail /></Layout></ProtectedRoute>} />
-            <Route path="/analytics/threads" element={<ProtectedRoute><Layout><ThreadAnalytics /></Layout></ProtectedRoute>} />
-            <Route path="/analytics/response-times" element={<ProtectedRoute><Layout><ResponseTimesAnalytics /></Layout></ProtectedRoute>} />
-            <Route path="/analytics/email-rules" element={<ProtectedRoute><Layout><EmailRulesPage /></Layout></ProtectedRoute>} />
-            <Route path="/analytics/data-health" element={<ProtectedRoute><Layout><DataHealthDashboard /></Layout></ProtectedRoute>} />
-            <Route path="/analytics/patterns" element={<ProtectedRoute><Layout><CommunicationPatterns /></Layout></ProtectedRoute>} />
-            <Route path="/extraction" element={<ProtectedRoute><Layout><ExtractionManagement /></Layout></ProtectedRoute>} />
+            {/* Mailbox routes */}
+            <Route path="/mailboxes" element={<ProtectedRoute><Layout><MailboxList /></Layout></ProtectedRoute>} />
+            <Route path="/mailboxes/create" element={<ProtectedRoute><Layout><MailboxCreate /></Layout></ProtectedRoute>} />
+            <Route path="/mailboxes/edit/:id" element={<ProtectedRoute><Layout><MailboxEdit /></Layout></ProtectedRoute>} />
+            <Route path="/mailboxes/process/:id" element={<ProtectedRoute><Layout><MailboxProcess /></Layout></ProtectedRoute>} />
 
-            {/* Intelligence routes (Sprint 3) */}
-            <Route path="/intelligence/inbox" element={<ProtectedRoute><Layout><InboxPage /></Layout></ProtectedRoute>} />
-            <Route path="/intelligence/digest" element={<ProtectedRoute><Layout><DigestPage /></Layout></ProtectedRoute>} />
-            <Route path="/intelligence/opportunities" element={<ProtectedRoute><Layout><OpportunitiesPage /></Layout></ProtectedRoute>} />
-            <Route path="/intelligence/usage" element={<AdminRoute><Layout><UsagePage /></Layout></AdminRoute>} />
-            <Route path="/intelligence/strategic-digest" element={<ProtectedRoute><Layout><StrategicDigestPage /></Layout></ProtectedRoute>} />
+            {/* Email routes */}
+            <Route path="/emails" element={<ProtectedRoute><Layout><EmailList /></Layout></ProtectedRoute>} />
+            <Route path="/emails/:mailboxId" element={<ProtectedRoute><Layout><EmailList /></Layout></ProtectedRoute>} />
+            <Route path="/emails/:mailboxId/:emailId" element={<ProtectedRoute><Layout><EmailList /></Layout></ProtectedRoute>} />
+
+            {/* Customers routes (formerly /analytics/companies, /analytics/contacts, /analytics/threads) */}
+            <Route path="/customers" element={<ProtectedRoute><Layout><CompaniesAnalytics /></Layout></ProtectedRoute>} />
+            <Route path="/customers/:companyId" element={<ProtectedRoute><Layout><CompanyDetail /></Layout></ProtectedRoute>} />
+            <Route path="/customers/contacts" element={<ProtectedRoute><Layout><ContactsAnalytics /></Layout></ProtectedRoute>} />
+            <Route path="/customers/contacts/:contactId" element={<ProtectedRoute><Layout><ContactDetail /></Layout></ProtectedRoute>} />
+            <Route path="/customers/threads" element={<ProtectedRoute><Layout><ThreadAnalytics /></Layout></ProtectedRoute>} />
+
+            {/* Insights routes (formerly /intelligence/*) */}
+            <Route path="/insights/inbox" element={<ProtectedRoute><Layout><InboxPage /></Layout></ProtectedRoute>} />
+            <Route path="/insights/digest" element={<ProtectedRoute><Layout><DigestPage /></Layout></ProtectedRoute>} />
+            <Route path="/insights/opportunities" element={<ProtectedRoute><Layout><OpportunitiesPage /></Layout></ProtectedRoute>} />
+            <Route path="/insights/strategic" element={<ProtectedRoute><Layout><StrategicDigestPage /></Layout></ProtectedRoute>} />
+
+            {/* Manage routes */}
+            <Route path="/manage/response-times" element={<ProtectedRoute><Layout><ResponseTimesAnalytics /></Layout></ProtectedRoute>} />
+            <Route path="/manage/patterns" element={<ProtectedRoute><Layout><CommunicationPatterns /></Layout></ProtectedRoute>} />
+            <Route path="/manage/email-rules" element={<ProtectedRoute><Layout><EmailRulesPage /></Layout></ProtectedRoute>} />
+            <Route path="/manage/data-health" element={<ProtectedRoute><Layout><DataHealthDashboard /></Layout></ProtectedRoute>} />
+            <Route path="/manage/extraction" element={<ProtectedRoute><Layout><ExtractionManagement /></Layout></ProtectedRoute>} />
+            <Route path="/manage/processing" element={<ProtectedRoute><Layout><ProcessingJobs /></Layout></ProtectedRoute>} />
+            <Route path="/manage/processing/:mailboxId" element={<ProtectedRoute><Layout><ProcessingJobs /></Layout></ProtectedRoute>} />
+            <Route path="/manage/errors" element={<ProtectedRoute><Layout><ErrorsPage /></Layout></ProtectedRoute>} />
+            <Route path="/manage/errors/:mailboxId" element={<ProtectedRoute><Layout><ErrorsPage /></Layout></ProtectedRoute>} />
+            <Route path="/clients" element={<ProtectedRoute><Layout><ClientsPage /></Layout></ProtectedRoute>} />
+            <Route path="/settings" element={<ProtectedRoute><Layout><SettingsPage /></Layout></ProtectedRoute>} />
+
+            {/* Admin-only manage routes */}
+            <Route path="/manage/ai-usage" element={<AdminRoute><Layout><UsagePage /></Layout></AdminRoute>} />
             <Route path="/manage/ai-playground" element={<AdminRoute><Layout><PlaygroundPage /></Layout></AdminRoute>} />
-            <Route path="/intelligence/quickbase" element={<AdminRoute><Layout><QuickbaseConfigPage /></Layout></AdminRoute>} />
-            <Route path="/intelligence/quickbase-data" element={<AdminRoute><Layout><QuickbaseDataPage /></Layout></AdminRoute>} />
-
-            {/* Admin-only routes */}
-            <Route
-              path="/users"
-              element={
-                <AdminRoute>
-                  <Layout>
-                    <UsersPage />
-                  </Layout>
-                </AdminRoute>
-              }
-            />
+            <Route path="/manage/quickbase" element={<AdminRoute><Layout><QuickbaseConfigPage /></Layout></AdminRoute>} />
+            <Route path="/manage/quickbase-data" element={<AdminRoute><Layout><QuickbaseDataPage /></Layout></AdminRoute>} />
+            <Route path="/users" element={<AdminRoute><Layout><UsersPage /></Layout></AdminRoute>} />
             <Route path="/admin/data" element={<AdminRoute><Layout><AdminDataViewPage /></Layout></AdminRoute>} />
             <Route path="/admin/audit-logs" element={<AdminRoute><Layout><AuditLogsPage /></Layout></AdminRoute>} />
-            <Route path="/settings" element={<ProtectedRoute><Layout><SettingsPage /></Layout></ProtectedRoute>} />
+
+            {/* Legacy redirects — old routes redirect to new paths */}
+            <Route path="/analytics" element={<Navigate to="/customers" replace />} />
+            <Route path="/analytics/companies" element={<Navigate to="/customers" replace />} />
+            <Route path="/analytics/companies/:id" element={<Navigate to="/customers/:id" replace />} />
+            <Route path="/analytics/contacts" element={<Navigate to="/customers/contacts" replace />} />
+            <Route path="/analytics/contacts/:id" element={<Navigate to="/customers/contacts/:id" replace />} />
+            <Route path="/analytics/threads" element={<Navigate to="/customers/threads" replace />} />
+            <Route path="/analytics/response-times" element={<Navigate to="/manage/response-times" replace />} />
+            <Route path="/analytics/patterns" element={<Navigate to="/manage/patterns" replace />} />
+            <Route path="/analytics/data-health" element={<Navigate to="/manage/data-health" replace />} />
+            <Route path="/analytics/email-rules" element={<Navigate to="/manage/email-rules" replace />} />
+            <Route path="/intelligence/inbox" element={<Navigate to="/insights/inbox" replace />} />
+            <Route path="/intelligence/digest" element={<Navigate to="/insights/digest" replace />} />
+            <Route path="/intelligence/opportunities" element={<Navigate to="/insights/opportunities" replace />} />
+            <Route path="/intelligence/strategic-digest" element={<Navigate to="/insights/strategic" replace />} />
+            <Route path="/intelligence/usage" element={<Navigate to="/manage/ai-usage" replace />} />
+            <Route path="/intelligence/quickbase" element={<Navigate to="/manage/quickbase" replace />} />
+            <Route path="/intelligence/quickbase-data" element={<Navigate to="/manage/quickbase-data" replace />} />
+            <Route path="/processing" element={<Navigate to="/manage/processing" replace />} />
+            <Route path="/processing/:mailboxId" element={<Navigate to="/manage/processing/:mailboxId" replace />} />
+            <Route path="/errors" element={<Navigate to="/manage/errors" replace />} />
+            <Route path="/errors/:mailboxId" element={<Navigate to="/manage/errors/:mailboxId" replace />} />
+            <Route path="/extraction" element={<Navigate to="/manage/extraction" replace />} />
 
             {/* OAuth callback routes - for popup windows */}
             <Route path="/auth/microsoft/callback" element={<OAuthCallback />} />

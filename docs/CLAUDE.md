@@ -390,9 +390,15 @@ Restrict open sign-up — admin-controlled user onboarding via invite system.
 - AM efficiency: business-hours response times, quote conversion, revenue attribution
 - Migrations: 021 (9 QB tables), 021a (enrichment columns), 026 (AM lifecycle rehaul)
 
-**Sprint 4: Power Mode — PLANNED**
-- Deal Radar, Ghost Writer, Heatmap, War Room, Alerts, Scoreboard, Executive Report
-- Plan doc: `docs/SPRINT3_4_IMPLEMENTATION_PLAN.md`
+**Sprint 4: Sales Intelligence Engine — IN PROGRESS (March 2026)**
+- S4.1: QB Operations table sync (`bvqsudnif` — operation_name, department, job linkage, financials)
+- S4.2: Customer Profile redesign — 6-section full profile (product breakdown, order history, recommendations, timeline)
+- S4.3: Recommendation Engine — Level 1 cross-contact gaps + Level 2 market basket analysis ($0 cost)
+- S4.4: Vector Intelligence — pgvector embeddings (emails + companies + operations), rebuilt AI email analysis + digests around semantic retrieval, AI Chat Agent (`/intelligence/agent`)
+- New DB tables: `qb_operations`, `customer_recommendations`, `product_affinities` (migrations 032–034)
+- New services: `recommendation_engine.py`, `vector_service.py`, `ai_agent_service.py`
+- New frontend: `OrderHistoryTable`, `ProductProfileCard`, `RecommendationsPanel`, `agent.tsx`
+- Full plan: Claude plan file `compressed-mixing-blum.md` + `docs/PLATFORM_PROGRESS.md`
 
 See [TODO.md](TODO.md) for task list, [CONTINUATION_GUIDE.md](CONTINUATION_GUIDE.md) for handoff.
 

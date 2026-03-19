@@ -202,7 +202,7 @@ export const CompaniesAnalytics: React.FC = () => {
       sorter: true,
       sortOrder: getSortOrder('contact_count'),
       render: (v: number, r: CompanyAnalytics) => (
-        <a onClick={(e) => { e.stopPropagation(); navigate(`/analytics/contacts?company=${encodeURIComponent(r.company_name)}`); }} style={{ color: '#667eea' }}>
+        <a onClick={(e) => { e.stopPropagation(); navigate(`/customers/contacts?company=${encodeURIComponent(r.company_name)}`); }} style={{ color: '#667eea' }}>
           {v ?? 0}
         </a>
       ),
@@ -215,7 +215,7 @@ export const CompaniesAnalytics: React.FC = () => {
       sorter: true,
       sortOrder: getSortOrder('decision_maker_count'),
       render: (v: number, r: CompanyAnalytics) => (
-        <a onClick={(e) => { e.stopPropagation(); navigate(`/analytics/contacts?company=${encodeURIComponent(r.company_name)}&dm=true`); }} style={{ color: '#667eea' }}>
+        <a onClick={(e) => { e.stopPropagation(); navigate(`/customers/contacts?company=${encodeURIComponent(r.company_name)}&dm=true`); }} style={{ color: '#667eea' }}>
           {v ?? 0}
         </a>
       ),
@@ -307,15 +307,15 @@ export const CompaniesAnalytics: React.FC = () => {
                   pageSize={PAGE_SIZE}
                   currentPage={page}
                   onPageChange={setPage}
-                  onRowClick={(r) => navigate(`/analytics/companies/${r.id}`)}
+                  onRowClick={(r) => navigate(`/customers/${r.id}`)}
                   onChange={handleTableChange}
                   rowKey="id"
                 />
               </>
             ),
           },
-          { key: 'top', label: 'Top Engaged', children: <AnalyticsTable columns={topColumns} data={topEngaged} total={topEngaged.length} loading={topLoading} onRowClick={(r) => navigate(`/analytics/companies/${r.id}`)} /> },
-          { key: 'atrisk', label: 'At Risk', children: <AnalyticsTable columns={atRiskColumns} data={atRisk} total={atRisk.length} loading={atRiskLoading} onRowClick={(r) => navigate(`/analytics/companies/${r.id}`)} /> },
+          { key: 'top', label: 'Top Engaged', children: <AnalyticsTable columns={topColumns} data={topEngaged} total={topEngaged.length} loading={topLoading} onRowClick={(r) => navigate(`/customers/${r.id}`)} /> },
+          { key: 'atrisk', label: 'At Risk', children: <AnalyticsTable columns={atRiskColumns} data={atRisk} total={atRisk.length} loading={atRiskLoading} onRowClick={(r) => navigate(`/customers/${r.id}`)} /> },
           { key: 'status', label: 'By Engagement', children: <AnalyticsTable columns={statusColumns} data={statusGroups} total={statusGroups.length} loading={statusLoading} rowKey="engagement_status" /> },
         ]} />
       </div>

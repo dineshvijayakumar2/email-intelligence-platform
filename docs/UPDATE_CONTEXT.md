@@ -2,7 +2,7 @@
 
 ## Session Summary
 
-This document captures the current state of the Email Intelligence Platform. Sprint 3 (AI Semantic Intelligence + QuickBase Integration + AM-Centric Rehaul) is COMPLETE. Sprint 4 (Power Mode) is planned but not started.
+This document captures the current state of the Email Intelligence Platform. Sprint 3 (AI Semantic Intelligence + QuickBase Integration + AM-Centric Rehaul) is COMPLETE. Sprint 4 (Sales Intelligence Engine) is in progress.
 
 ---
 
@@ -48,9 +48,9 @@ Based on updated user stories, Stage 2 is now organized into 3 sprints:
 | Frontend (Inbox, Digest, Opportunities, Usage, Strategic Digest) | **Complete** |
 | AM-Centric Rehaul (migration 026) | **Complete** |
 
-### Next: Sprint 4 — Power Mode (Planned)
-7 features: Deal Radar, Ghost Writer, Heatmap, War Room, Alerts, Scoreboard, Executive Report.
-Plan: `docs/SPRINT3_4_IMPLEMENTATION_PLAN.md`
+### Next: Sprint 4 — Sales Intelligence Engine (In Progress)
+4 tracks: QB Operations sync (table `bvqsudnif`), Customer Profile redesign, Recommendation Engine (Level 1 cross-contact + Level 2 market basket), Vector AI infrastructure + Chat Agent.
+Plan: See `docs/CLAUDE.md` Current Development Focus or Claude plan file `compressed-mixing-blum.md`.
 
 ---
 

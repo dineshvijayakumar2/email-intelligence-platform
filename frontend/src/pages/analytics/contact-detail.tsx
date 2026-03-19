@@ -88,7 +88,7 @@ export const ContactDetail: React.FC = () => {
   if (loading) {
     return (
       <div className="glass-page-bg" style={{ padding: 24 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/analytics/contacts')} style={{ marginBottom: 16 }}>Back</Button>
+        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/customers/contacts')} style={{ marginBottom: 16 }}>Back</Button>
         <Skeleton active paragraph={{ rows: 12 }} />
       </div>
     );
@@ -97,7 +97,7 @@ export const ContactDetail: React.FC = () => {
   if (!contact) {
     return (
       <div className="glass-page-bg" style={{ padding: 24 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/analytics/contacts')} style={{ marginBottom: 16 }}>Back</Button>
+        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/customers/contacts')} style={{ marginBottom: 16 }}>Back</Button>
         <Text type="secondary">Contact not found</Text>
       </div>
     );
@@ -105,7 +105,7 @@ export const ContactDetail: React.FC = () => {
 
   return (
     <div className="glass-page-bg" style={{ padding: 24 }}>
-      <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/analytics/contacts')} style={{ marginBottom: 16 }}>Back to Contacts</Button>
+      <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/customers/contacts')} style={{ marginBottom: 16 }}>Back to Contacts</Button>
 
       {/* Header */}
       <div className="glass-card fade-in-up" style={{ padding: 20, marginBottom: 16 }}>
@@ -165,7 +165,7 @@ export const ContactDetail: React.FC = () => {
         <Col xs={24} lg={14}>
           <div className="glass-table-container" style={{ padding: 16 }}>
             <a
-              onClick={() => navigate(`/analytics/threads?contact_id=${contactId}&name=${encodeURIComponent(contact.full_name || contact.email_address)}`)}
+              onClick={() => navigate(`/customers/threads?contact_id=${contactId}&name=${encodeURIComponent(contact.full_name || contact.email_address)}`)}
               style={{ fontSize: 16, fontWeight: 600, display: 'block', marginBottom: 12, color: '#667eea', cursor: 'pointer' }}
             >
               Threads ({threads.length})

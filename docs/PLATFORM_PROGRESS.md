@@ -26,7 +26,7 @@ A commercial intelligence platform for B2B account management teams. It syncs em
 | Sprint 3 | QB integration, AI pipeline, strategic digest, prompt system | ✅ Complete | Mar 2026 |
 | Prompt System Hardening | DB persistence, version tracking, playground fixes | ✅ Complete | 19 Mar 2026 |
 | Invite User System | Admin-controlled onboarding, restrict open sign-up | 🔲 Planned | Not started |
-| Sprint 4 — Power Mode | Deal Radar, Ghost Writer, Heatmap, War Room, Alerts, Scoreboard, Report | 🔲 Planned | Not started |
+| Sprint 4 — Sales Intelligence | QB Operations sync, Customer Profile redesign, Recommendation Engine, Vector AI + Chat Agent | 🔲 In Progress | Mar 2026 |
 
 ---
 
@@ -552,7 +552,7 @@ VITE_MICROSOFT_CLIENT_ID=...
 | **Total current** | **~$14–24/month** |
 | **Budget cap** | **$50/month** |
 
-Sprint 4 additions (Ghost Writer + Executive Report): +~$2.80/month → well within budget.
+Sprint 4 additions (vector embeddings + AI Chat Agent): +~$3–8/month → well within budget.
 
 ---
 
@@ -579,47 +579,117 @@ Sprint 4 additions (Ghost Writer + Executive Report): +~$2.80/month → well wit
 
 ---
 
-## 🔲 PLANNED — Sprint 4: Power Mode (7 features, Not started)
+## 🔲 IN PROGRESS — Sprint 4: Sales Intelligence Engine
 
-**Full technical plan:** `docs/SPRINT3_4_IMPLEMENTATION_PLAN.md`
+**Goal:** Merge email engagement intelligence with production intelligence from QuickBase — showing not just who's communicating, but what they buy, what they should be buying, and what to recommend next.
 
-### C1. Deal Radar — Predictive Revenue Intelligence
-**What it does:** Scores every active deal thread with a probability (0–100%) and trajectory (rising/falling/flat). Flags deals about to close and deals going cold.
-**Data sources:** AI classifications + QB quote data + email silence signals
-**Cost:** $0 (pure Python computation)
-**UI:** `/intelligence/deal-radar` — pipeline cards with trajectory arrows
+**Four tracks:**
 
-### C2. Ghost Writer — AI Reply Suggestions
-**What it does:** On demand, suggests 3 draft replies for any email thread: Quick / Thorough / Escalate. Uses full thread context + customer QB profile.
-**Cost:** ~$1.80/month (Claude Haiku, cached 24h)
-**UI:** "Suggested Replies" section in Smart Inbox email drawer with Copy button
+### S4.1 — QB Operations Table Sync
 
-### C3. Relationship Heatmap — Visual Account Health
-**What it does:** Grid/treemap where colour = engagement health (green/yellow/red) and size = QB revenue. Instant portfolio health overview.
-**Cost:** $0 (frontend-only, uses existing data)
-**UI:** `/analytics/heatmap` — hover tooltip, click → company detail, filter by AM
+**Table:** `bvqsudnif` (Operations — granular product/service detail per job)
 
-### C4. War Room — Competitive Intelligence Dashboard
-**What it does:** Aggregated view of competitor mentions across all emails — which competitors are being named, which accounts are at risk, win/loss patterns.
-**Cost:** $0 (uses existing entity extraction)
-**UI:** `/intelligence/war-room` — bar chart, active battles with deal values
+| Key Field | QB Field ID | Purpose |
+|-----------|-------------|---------|
+| `operation_name` | 9 | Product/service identifier (e.g. "HP Indigo 4-col Process") |
+| `department` | 11 | Production department ("Press", "Finishing", "Wide Format") |
+| `job_no` | 7 | FK to `qb_jobs` (`buziry2ri`) |
+| `qb_customer_id` | 14 | FK to `qb_customers` (`buzhzbv39`) |
+| `quantity` | 20 | Units produced |
+| `cost_plus_price` | 23 | Selling price |
+| `profit_pct` | 25 | Margin % |
+| `finishing_type` | 26 | e.g. "Perfect Bind", "Guillotine" |
 
-### C5. Executive Briefing — PDF Report
-**What it does:** Generates a PDF combining strategic digest + deal radar + heatmap + AM performance. One-click board-ready report.
-**Cost:** ~$1/month (Claude Sonnet for narrative, reportlab/weasyprint for PDF)
-**UI:** "Generate Report" button on strategic digest + dashboard
+**New DB tables:** `qb_operations` (migration 032 ✅), `customer_recommendations`, `product_affinities` (migration 033)
 
-### C6. Smart Alerts — Proactive Notifications
-**What it does:** Triggers in-app alerts when: churn risk on >$50K account, buying signal from prospect, competitor mentioned, missed opportunity >24h, deal probability drops >15 points.
-**Cost:** $0 (rule-based, no AI)
-**UI:** Notification bell in header + alert preferences in settings
+**Backend changes:** `_sync_operations()` in `quickbase_sync.py`, `/quickbase/operations` endpoint
 
-### C7. AM Scoreboard — Performance Leaderboard
-**What it does:** Gamified AM performance scores based on response speed, SLA compliance, signals actioned, customers retained, new customers acquired.
-**Cost:** $0 (computed from existing data)
-**UI:** Leaderboard on main dashboard + `/intelligence/scoreboard` page
+### S4.2 — Customer Profile Page Redesign
 
-**Sprint 4 effort estimate: 3 weeks**
+**Route:** Keep `/analytics/companies/:id` — redesign `company-detail.tsx` in-place as a 6-section full customer profile:
+
+1. **Header** — company name, tier/lifecycle badges, AM, revenue YTD, days since last order
+2. **Product Profile** — bar chart of product categories bought (revenue + frequency)
+3. **Relationship Overview** — engagement score, email stats, first/last contact
+4. **Contacts Table** — role, seniority, score, last email, products involved in, quote count
+5. **Order History** — merged quotes + jobs + invoices timeline (date, type, ref, category, value, status, contact)
+6. **Recommendations** — cross-contact gaps + related product affinities
+7. **Communication Timeline** — recent threads + AI signals
+
+**New API endpoints:** `/customers/{company_id}/order-history`, `/customers/{company_id}/product-profile`, `/customers/{company_id}/recommendations`
+
+**New components:** `OrderHistoryTable.tsx`, `ProductProfileCard.tsx`, `RecommendationsPanel.tsx`
+
+### S4.3 — Recommendation Engine (Two Levels, $0 cost)
+
+#### Level 1: Cross-Contact Gaps (within a company)
+
+**Algorithm:** `qb_operations.job_no → qb_quotes.job_no → qb_quotes.contact_email → customer_contacts.email_address`
+
+For each contact: find operations the company has bought that this contact hasn't been involved in → recommendation to engage them on that product/service.
+
+**Output example:**
+```
+"2 other contacts at Acme Co have ordered Wide Format — Jane Smith hasn't been involved"
+```
+
+#### Level 2: Related Product Affinities (across portfolio)
+
+**Algorithm:** Market basket analysis — co-occurrence counting of `operation_name` and `department` across all companies. `confidence = companies_using_both / companies_using_A`.
+
+**Output example:**
+```
+"68% of customers using HP Indigo also use Scodix Foiling — Acme Co hasn't tried this"
+```
+
+**Caching:** 24h TTL in `customer_recommendations` table (same pattern as `relationship_context_cache`).
+
+**Recommendations surfaced at:**
+- Customer Profile → `RecommendationsPanel` component
+- Smart Inbox → collapsible "Sales Opportunities" panel in email detail drawer
+- Daily/Weekly Digest → "Sales Opportunities" section (top 5 companies)
+
+### S4.4 — Vector Intelligence + AI Chat Agent
+
+**Goal:** Embed all intelligence data into pgvector so a conversational agent can answer any portfolio question semantically — e.g. "Which customers should I approach about Wide Format this week?"
+
+**Embedding model:** `models/text-embedding-004` (Google, 768 dims) — already available via `langchain-google-genai` (no new packages)
+
+**One-time bootstrap cost:** ~$0.15 for all 26K emails + companies + operations
+
+| What gets embedded | Table column | Used for |
+|--------------------|-------------|---------|
+| Email AI summaries + signals | `ai_email_intelligence.embedding` | Email semantic search, historical context |
+| Company profiles | `customer_companies.embedding` | Company semantic search |
+| QB operations | `qb_operations.embedding` | Product/service semantic search |
+
+**New migration 034:** `vector` extension + HNSW indexes + `search_email_intelligence()` Supabase RPC
+
+**New service `vector_service.py`:** `embed_texts()`, `embed_emails_batch()`, `embed_companies()`, `embed_operations()`, `search_emails()`, `search_companies()`, `search_operations()`, `get_company_history_context()`
+
+**AI feature rebuilds:**
+- `ai_email_analyzer.py` — Group batch by company → 1 vector search per company → inject historical context into prompt
+- `ai_digest_generator.py` — Replace fixed context with hybrid: 3 parallel semantic queries + structured QB stats
+- `langchain_tools.py` — Add `semantic_search_emails` + `semantic_search_operations` tools (6 tools total in strategic digest agent)
+
+**New AI Chat Agent (`ai_agent_service.py`):** General portfolio Q&A with all 6 tools, stateless per-request, conversation history passed in
+
+**New frontend page `agent.tsx`:** `/intelligence/agent` — chat UI with pre-suggested prompts, tool call visibility, source citations
+
+---
+
+## Sprint 4 Cost Impact
+
+| Component | Cost |
+|-----------|------|
+| QB Operations sync | $0 |
+| Recommendation Engine (Level 1 + Level 2) | $0 — pure Python |
+| One-time bootstrap embedding | ~$0.15 total |
+| Per-email vector context (1 search/company, not 1/email) | ~$0.0001/email |
+| Digest semantic retrieval (3 queries/digest) | ~$0.001/digest |
+| AI Chat Agent (Claude Sonnet, 5 AMs × 5 queries/day) | ~$3–8/month |
+| **Total Sprint 4 monthly addition** | **~$3–8/month** |
+| **New total (Sprint 3 + Sprint 4)** | **~$17–32/month** |
 
 ---
 
@@ -627,17 +697,13 @@ Sprint 4 additions (Ghost Writer + Executive Report): +~$2.80/month → well wit
 
 1. **No invite-only access control** — open sign-up currently. Any user who knows the URL can register. Invite system is designed but not built.
 
-2. **No proactive alerts** — the platform surfaces insights reactively (user must log in). Smart Alerts (C6) would push notifications when a high-value account goes silent or a buying signal appears.
+2. **No product intelligence** — the platform shows email engagement but not what customers actually buy. Sprint 4 Operations sync + Customer Profile redesign fills this gap.
 
-3. **No deal pipeline view** — quotes and jobs are visible in QB data but there is no deal probability scoring or pipeline stage tracking. Deal Radar (C1) fills this gap.
+3. **No recommendation engine** — AMs have no systematic guidance on cross-sell/upsell opportunities. Sprint 4 Recommendation Engine (Level 1 + Level 2) fills this gap.
 
-4. **No PDF reporting** — insights live only in the app. Executive Briefing (C5) would produce a shareable PDF.
+4. **No semantic search** — insights can only be found by navigating to specific pages. Sprint 4 AI Chat Agent fills this gap with natural language portfolio Q&A.
 
-5. **No reply drafting** — AMs must write their own emails. Ghost Writer (C2) would suggest drafts using full thread + customer context.
-
-6. **No visual portfolio overview** — health of all accounts requires navigating individual pages. Heatmap (C3) gives instant visual overview.
-
-7. **No AM performance gamification** — AM comparison metrics exist in strategic digest but no persistent scoreboard or trend tracking. Scoreboard (C7) adds this.
+5. **No deep email-CRM fusion** — email engagement and CRM revenue data are in separate views. Sprint 4 Customer Profile and vector-enhanced AI analysis merge these into a single picture.
 
 ---
 
