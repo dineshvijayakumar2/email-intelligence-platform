@@ -8,19 +8,11 @@ Resolution order:
      then returns it — so every prompt key is editable via the playground from first use.
 
 Caching: In-memory TTL cache (5 minutes) to avoid DB hits on every API call.
-
-JSON sync: On startup, sync_from_json_files() reads backend/src/prompts/*.json and
-UPSERTs global DB rows when the JSON version is newer — keeping JSON files and DB
-always synchronised. Client-specific overrides are never touched.
 """
 
 import time
-import json
 import logging
-from pathlib import Path
 from typing import Optional, Dict, Tuple
-
-PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 
 logger = logging.getLogger(__name__)
 
@@ -177,77 +169,6 @@ def invalidate_cache(client_id: Optional[str] = None, prompt_key: Optional[str] 
             del _cache[k]
     else:
         _cache.clear()
-
-
-def sync_from_json_files(supabase_client) -> None:
-    """
-    Sync prompt JSON files → ai_prompt_config DB table (global rows only).
-
-    Called once at startup. For each *.json file in backend/src/prompts/:
-    - If no global DB row exists → INSERT
-    - If global DB row exists and JSON version > DB version → UPDATE
-    - Client-specific overrides (client_id IS NOT NULL) are never touched.
-    """
-    if not PROMPTS_DIR.exists():
-        logger.warning(f"[PromptSync] Prompts directory not found: {PROMPTS_DIR}")
-        return
-
-    synced, skipped, failed = 0, 0, 0
-    for json_file in sorted(PROMPTS_DIR.glob("*.json")):
-        try:
-            with open(json_file, encoding="utf-8") as f:
-                data = json.load(f)
-
-            prompt_key = data.get("prompt_key")
-            json_version = data.get("version")
-            prompt_text = data.get("prompt_text")
-            description = data.get("description", f"Default for {prompt_key}")
-
-            if not (prompt_key and json_version and prompt_text):
-                logger.warning(f"[PromptSync] Skipping {json_file.name}: missing required fields")
-                continue
-
-            existing = _load_global_from_db(supabase_client, prompt_key)
-
-            if existing is None:
-                supabase_client.table("ai_prompt_config").insert({
-                    "prompt_key": prompt_key,
-                    "prompt_text": prompt_text,
-                    "version": json_version,
-                    "client_id": None,
-                    "is_active": True,
-                    "description": description,
-                }).execute()
-                logger.info(f"[PromptSync] Seeded '{prompt_key}' ({json_version})")
-                synced += 1
-            elif _version_gt(json_version, existing[1]):
-                supabase_client.table("ai_prompt_config").update({
-                    "prompt_text": prompt_text,
-                    "version": json_version,
-                    "description": description,
-                }).eq("prompt_key", prompt_key).is_("client_id", "null").execute()
-                _cache.pop((None, prompt_key), None)  # Invalidate cache
-                logger.info(f"[PromptSync] Updated '{prompt_key}': {existing[1]} → {json_version}")
-                synced += 1
-            else:
-                logger.debug(f"[PromptSync] '{prompt_key}' DB ({existing[1]}) >= JSON ({json_version}), skipped")
-                skipped += 1
-
-        except Exception as e:
-            logger.warning(f"[PromptSync] Failed to process {json_file.name}: {e}")
-            failed += 1
-
-    logger.info(f"[PromptSync] Complete — {synced} synced, {skipped} skipped, {failed} failed")
-
-
-def _version_gt(v1: str, v2: str) -> bool:
-    """Returns True if version string v1 > v2 (e.g. 'v1.4' > 'v1.3')."""
-    def parse(v):
-        try:
-            return [int(x) for x in v.lstrip("v").split(".")]
-        except Exception:
-            return [0]
-    return parse(v1) > parse(v2)
 
 
 # Prompt key constants (used across services)
