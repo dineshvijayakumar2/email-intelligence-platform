@@ -8,8 +8,10 @@ Stage 2 - Role-Based Access Control Implementation
 """
 
 from fastapi import Header, HTTPException, Depends
-from typing import Optional, Dict, Callable
+from typing import Optional, Dict, Callable, Tuple
 import os
+import time
+import hashlib
 import logging
 from ..utils.audit import log_audit
 
@@ -17,6 +19,15 @@ logger = logging.getLogger(__name__)
 
 # Supabase client will be injected from main.py
 _supabase = None
+
+# In-process auth cache: token_hash -> (user_dict, expires_at)
+# Avoids a Supabase auth API call on every request (5-min TTL)
+_auth_cache: Dict[str, Tuple[Dict, float]] = {}
+_AUTH_CACHE_TTL = 300  # seconds
+
+
+def _cache_key(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
 
 
 def init_auth_dependencies(supabase_client):
@@ -31,9 +42,10 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> Dict:
 
     This is the main authentication dependency. It:
     1. Extracts the JWT from Authorization header
-    2. Verifies the token using Supabase JWT secret
-    3. Fetches user profile from user_profiles table
-    4. Returns user info dict with id, email, name, roles
+    2. Checks in-process cache (5-min TTL) to avoid hitting Supabase on every request
+    3. On cache miss: verifies via supabase.auth.get_user() — works for ES256/RS256/HS256
+    4. Fetches user profile from user_profiles table
+    5. Returns user info dict with id, email, name, roles
 
     Args:
         authorization: Bearer token from Authorization header
@@ -53,6 +65,12 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> Dict:
         )
 
     token = authorization.replace('Bearer ', '')
+
+    # Check cache first
+    key = _cache_key(token)
+    cached = _auth_cache.get(key)
+    if cached and cached[1] > time.time():
+        return cached[0]
 
     try:
         # Verify token via Supabase admin API — works for ES256, RS256, and HS256
@@ -107,12 +125,17 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> Dict:
             log_audit(action="login_blocked", resource_type="user", user_id=user_id, user_email=result_data.get('email'), details={"reason": "account_deactivated"})
             raise HTTPException(status_code=403, detail="Account is deactivated")
 
-        return {
+        user_info = {
             'user_id': user_id,
             'email': result_data['email'],
             'name': result_data['name'],
-            'roles': result_data.get('roles', ['account_manager'])  # Default to array if missing
+            'roles': result_data.get('roles', ['account_manager'])
         }
+
+        # Cache for 5 minutes to avoid per-request Supabase auth calls
+        _auth_cache[key] = (user_info, time.time() + _AUTH_CACHE_TTL)
+
+        return user_info
 
     except HTTPException:
         raise

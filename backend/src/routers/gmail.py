@@ -86,7 +86,7 @@ class DateRangeFetchRequest(BaseModel):
     user_id: str
     start_date: str  # YYYY-MM-DD format
     end_date: str    # YYYY-MM-DD format
-    max_emails: Optional[int] = None
+    max_emails: Optional[int] = 2000  # Hard cap to prevent connection overload
 
 
 class GmailConfigUpdate(BaseModel):
@@ -726,6 +726,7 @@ def _run_date_range_fetch(
                     result = email_ops.batch_insert_emails(batch, mailbox_id, batch_size=BATCH_SIZE)
                     failed += result.get('failed', 0)
                     batch = []
+                    import time; time.sleep(0.2)  # Throttle: prevent DB connection spikes
 
                     # Update progress
                     _supabase.table('processing_jobs').update({

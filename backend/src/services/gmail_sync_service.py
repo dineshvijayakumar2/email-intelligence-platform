@@ -36,7 +36,7 @@ def _get_sync_interval() -> int:
     Maximum: 1440 minutes (24 hours)
     """
     try:
-        interval = int(os.getenv('GMAIL_SYNC_INTERVAL_MINUTES', '15'))
+        interval = int(os.getenv('GMAIL_SYNC_INTERVAL_MINUTES', '30'))
         # Clamp to reasonable range
         return max(1, min(1440, interval))
     except (ValueError, TypeError):
