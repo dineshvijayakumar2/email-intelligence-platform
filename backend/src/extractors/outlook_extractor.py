@@ -455,7 +455,8 @@ class OutlookExtractor(BaseExtractor):
                 '$select': 'id,subject,from,toRecipients,ccRecipients,bccRecipients,'
                           'sentDateTime,receivedDateTime,body,bodyPreview,hasAttachments,'
                           'internetMessageId,conversationId,parentFolderId,isRead,isDraft,'
-                          'internetMessageHeaders'
+                          'internetMessageHeaders,webLink',
+                '$expand': 'attachments($select=name,size,contentType)',
             }
 
         extracted = 0
@@ -648,6 +649,10 @@ class OutlookExtractor(BaseExtractor):
                 'in_reply_to': raw_headers.get('In-Reply-To', ''),
                 'references': raw_headers.get('References', ''),
                 'attachments': self._extract_attachment_metadata(msg),
+                'provider_web_link': (
+                    msg.get('webLink')
+                    or self._build_outlook_web_link(msg.get('id', ''))
+                ),
                 'outlook_id': msg.get('id'),  # Keep Outlook's ID for reference
                 'outlook_conversation_id': msg.get('conversationId'),
             }
@@ -713,15 +718,31 @@ class OutlookExtractor(BaseExtractor):
         return mapped if mapped else folder_name
 
     def _extract_attachment_metadata(self, msg: Dict) -> List[Dict]:
-        """Extract attachment metadata from message"""
-        if not msg.get('hasAttachments'):
-            return []
+        """Parse expanded attachment metadata from Graph API response"""
+        graph_attachments = msg.get('attachments', [])
+        if graph_attachments:
+            attachments = []
+            for att in graph_attachments:
+                if att.get('isInline'):
+                    continue
+                attachments.append({
+                    'filename': att.get('name') or '(unnamed)',
+                    'size': att.get('size') or 0,
+                    'mimetype': att.get('contentType') or '',
+                })
+            return attachments
+        # Fallback: hasAttachments flag but no expanded data
+        if msg.get('hasAttachments'):
+            return [{'filename': '(attachment)', 'size': 0}]
+        return []
 
-        # Note: Full attachment data requires separate API call
-        # For now, just indicate attachments exist
-        # Could be enhanced to fetch attachment details if needed
-        return [{'filename': 'attachment', 'size': 0, 'mime_type': 'application/octet-stream'}] \
-            if msg.get('hasAttachments') else []
+    @staticmethod
+    def _build_outlook_web_link(graph_id: str) -> str:
+        """Construct Outlook Web deep link from Graph message ID as fallback"""
+        if not graph_id:
+            return ''
+        from urllib.parse import quote
+        return f"https://outlook.live.com/mail/0/id/{quote(graph_id, safe='')}"
 
     def get_current_delta_link(self) -> Optional[Dict]:
         """
@@ -789,7 +810,8 @@ class OutlookExtractor(BaseExtractor):
                 '$select': 'id,subject,from,toRecipients,ccRecipients,bccRecipients,'
                           'sentDateTime,receivedDateTime,body,bodyPreview,hasAttachments,'
                           'internetMessageId,conversationId,parentFolderId,isRead,isDraft,'
-                          'internetMessageHeaders'
+                          'internetMessageHeaders,webLink',
+                '$expand': 'attachments($select=name,size,contentType)',
             }
 
             while url:

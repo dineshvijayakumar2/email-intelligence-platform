@@ -148,7 +148,7 @@ export const processingService = {
       mbox_extraction: 'MBOX Extraction',
       outlook_extraction: 'Outlook Extraction',
       extraction: 'Email Extraction',
-      reprocessing: 'Reprocessing (Categorization)',
+      reprocessing: 'Re-sync (Attachments & Links)',
       categorization: 'Email Categorization',
       enrichment: 'AI Enrichment',
       cleanup: 'Data Cleanup'

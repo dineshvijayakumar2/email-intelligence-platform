@@ -235,7 +235,7 @@ export const dashboardService = {
       mbox_extraction: 'MBOX Extraction',
       outlook_extraction: 'Outlook Extraction',
       extraction: 'Email Extraction',
-      reprocessing: 'Reprocessing',
+      reprocessing: 'Re-sync (Attachments & Links)',
       categorization: 'Categorization',
     };
     return labels[jobType] || jobType;

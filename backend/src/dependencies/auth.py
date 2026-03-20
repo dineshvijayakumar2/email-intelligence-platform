@@ -9,8 +9,6 @@ Stage 2 - Role-Based Access Control Implementation
 
 from fastapi import Header, HTTPException, Depends
 from typing import Optional, Dict, Callable
-import jwt
-from jwt import PyJWKClient
 import os
 import logging
 from ..utils.audit import log_audit
@@ -19,13 +17,6 @@ logger = logging.getLogger(__name__)
 
 # Supabase client will be injected from main.py
 _supabase = None
-
-# Supabase configuration
-SUPABASE_URL = os.getenv('SUPABASE_URL')
-SUPABASE_JWT_SECRET = os.getenv('SUPABASE_JWT_SECRET')
-
-# JWKS client for ES256 tokens (lazy loaded)
-_jwks_client = None
 
 
 def init_auth_dependencies(supabase_client):
@@ -64,53 +55,22 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> Dict:
     token = authorization.replace('Bearer ', '')
 
     try:
-        # Verify Supabase JWT
-        # Try ES256/RS256 first (using JWKS), then fall back to HS256 (using secret)
-        payload = None
+        # Verify token via Supabase admin API — works for ES256, RS256, and HS256
+        # without any JWKS dependency or local JWT secret
+        try:
+            user_response = _supabase.auth.get_user(token)
+        except Exception as e:
+            err_str = str(e).lower()
+            if 'expired' in err_str:
+                log_audit(action="login_failure", resource_type="auth", details={"reason": "token_expired"})
+                raise HTTPException(status_code=401, detail="Token has expired", headers={"WWW-Authenticate": "Bearer"})
+            logger.warning(f"Supabase auth.get_user failed: {e}")
+            raise HTTPException(status_code=401, detail="Invalid token", headers={"WWW-Authenticate": "Bearer"})
 
-        # Decode header to check algorithm
-        unverified_header = jwt.get_unverified_header(token)
-        alg = unverified_header.get('alg', 'HS256')
-
-        if alg in ['ES256', 'RS256']:
-            # Use JWKS for ES256/RS256
-            global _jwks_client
-            if _jwks_client is None and SUPABASE_URL:
-                jwks_url = f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json"
-                _jwks_client = PyJWKClient(jwks_url)
-
-            if _jwks_client:
-                try:
-                    signing_key = _jwks_client.get_signing_key_from_jwt(token)
-                    payload = jwt.decode(
-                        token,
-                        signing_key.key,
-                        algorithms=['ES256', 'RS256'],
-                        audience='authenticated',
-                        options={"verify_signature": True}
-                    )
-                except Exception as e:
-                    logger.warning(f"JWKS verification failed: {e}, trying HS256")
-
-        # Fall back to HS256 if ES256/RS256 failed or not applicable
-        if payload is None:
-            if not SUPABASE_JWT_SECRET:
-                raise HTTPException(
-                    status_code=500,
-                    detail="Authentication not configured"
-                )
-            payload = jwt.decode(
-                token,
-                SUPABASE_JWT_SECRET,
-                algorithms=['HS256'],
-                audience='authenticated',
-                options={"verify_signature": True}
-            )
-
-        user_id = payload.get('sub')  # Supabase uses 'sub' for user ID
-
-        if not user_id:
+        if not user_response or not user_response.user:
             raise HTTPException(status_code=401, detail="Invalid token payload")
+
+        user_id = user_response.user.id
 
         # Get user profile with roles
         result = _supabase.table('user_profiles').select(
@@ -154,28 +114,6 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> Dict:
             'roles': result_data.get('roles', ['account_manager'])  # Default to array if missing
         }
 
-    except jwt.ExpiredSignatureError:
-        log_audit(action="login_failure", resource_type="auth", details={"reason": "token_expired"})
-        raise HTTPException(
-            status_code=401,
-            detail="Token has expired",
-            headers={"WWW-Authenticate": "Bearer"}
-        )
-    except jwt.InvalidAudienceError:
-        log_audit(action="login_failure", resource_type="auth", details={"reason": "invalid_audience"})
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid token audience",
-            headers={"WWW-Authenticate": "Bearer"}
-        )
-    except jwt.InvalidTokenError as e:
-        logger.warning(f"Invalid token: {e}")
-        log_audit(action="login_failure", resource_type="auth", details={"reason": "invalid_token", "error": str(e)[:200]})
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid token",
-            headers={"WWW-Authenticate": "Bearer"}
-        )
     except HTTPException:
         raise
     except Exception as e:

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Row, Col, Typography, Form, Select, Radio, Slider, Switch, Button, Tag, Progress, message, Divider } from 'antd';
-import { RocketOutlined, StopOutlined } from '@ant-design/icons';
+import { Row, Col, Typography, Form, Select, Radio, Slider, Switch, Button, Tag, Progress, message, Divider, Tooltip } from 'antd';
+import { RocketOutlined, StopOutlined, SyncOutlined } from '@ant-design/icons';
 import { mailboxService, Mailbox } from '../services/mailboxService';
 import { AnalyticsTable } from '../components/analytics/AnalyticsTable';
 import { extractionApi, clearAnalyticsCache } from '../services/analyticsService';
@@ -20,6 +20,7 @@ export const ExtractionManagement: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [activeProgress, setActiveProgress] = useState<Record<string, ExtractionProgressResponse>>({});
+  const [resyncing, setResyncing] = useState(false);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -101,6 +102,25 @@ export const ExtractionManagement: React.FC = () => {
     else message.error('Failed to cancel job');
   };
 
+  const handleResyncMetadata = async () => {
+    const mailboxId = form.getFieldValue('mailbox_id');
+    if (!mailboxId) { message.warning('Select a mailbox first'); return; }
+    const mb = mailboxes.find(m => m.id === mailboxId);
+    if (mb && !['outlook_live', 'outlook'].includes(mb.mailbox_type)) {
+      message.warning('Metadata re-sync is only available for Outlook mailboxes');
+      return;
+    }
+    try {
+      setResyncing(true);
+      await mailboxService.resyncMetadata(mailboxId);
+      message.success('Metadata re-sync started — attachment names & web links will be backfilled');
+    } catch {
+      message.error('Failed to start metadata re-sync');
+    } finally {
+      setResyncing(false);
+    }
+  };
+
   const mode = Form.useWatch('mode', form);
 
   const jobColumns = [
@@ -166,6 +186,11 @@ export const ExtractionManagement: React.FC = () => {
           <Form.Item name="exclude_internal" valuePropName="checked"><Switch checkedChildren="Excl Internal" unCheckedChildren="Incl Internal" /></Form.Item>
           <Form.Item>
             <Button type="primary" htmlType="submit" icon={<RocketOutlined />} loading={submitting}>Run Extraction</Button>
+          </Form.Item>
+          <Form.Item>
+            <Tooltip title="Re-fetch emails from Outlook to backfill attachment names & open-in-web links">
+              <Button icon={<SyncOutlined spin={resyncing} />} loading={resyncing} onClick={handleResyncMetadata}>Re-sync Metadata</Button>
+            </Tooltip>
           </Form.Item>
         </Form>
       </div>

@@ -1243,6 +1243,48 @@ async def assign_mailbox_to_user(
         logger.error(f"Error assigning mailbox to user: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to assign mailbox: {str(e)}")
 
+@app.post("/api/mailboxes/{mailbox_id}/resync-metadata")
+async def resync_metadata(mailbox_id: str, background_tasks: BackgroundTasks):
+    """
+    Re-extract emails from mail provider to backfill attachment names
+    and provider web links for existing emails.
+    """
+    try:
+        sb = get_supabase()
+        mb_result = sb.table('mailboxes').select(
+            'id, mailbox_type, connection_config'
+        ).eq('id', mailbox_id).single().execute()
+
+        if not mb_result.data:
+            raise HTTPException(status_code=404, detail="Mailbox not found")
+
+        mailbox = mb_result.data
+        if mailbox.get('mailbox_type', '') not in ('outlook_live', 'outlook'):
+            raise HTTPException(status_code=400, detail="Only Outlook mailboxes support metadata re-sync")
+
+        # Create tracking job
+        job_data = {
+            "job_type": "reprocessing",
+            "mailbox_id": mailbox_id,
+            "status": "pending",
+            "total_records": 0,
+            "processed_records": 0,
+            "failed_records": 0,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        result = sb.table('processing_jobs').insert(job_data).execute()
+        job_id = result.data[0]['id']
+
+        background_tasks.add_task(run_reprocessing, job_id, mailbox)
+        return {"message": "Metadata re-sync started", "job_id": job_id}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to start metadata re-sync for {mailbox_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/mailboxes/{mailbox_id}/sync")
 async def sync_mailbox(mailbox_id: str):
     """Trigger sync for a mailbox"""
@@ -2409,10 +2451,12 @@ async def delete_job(job_id: str):
 
 @app.post("/api/processing-jobs/{job_id}/reprocess")
 async def reprocess_emails(job_id: str, background_tasks: BackgroundTasks):
-    """Reprocess existing emails to add categorization/tags"""
-
+    """
+    Re-sync a mailbox from the mail provider to backfill attachment names
+    and provider web links for existing emails.  Uses the same upsert path
+    as live sync so existing rows are updated in-place.
+    """
     try:
-        # Get the job details
         job_result = get_supabase().table('processing_jobs').select('*').eq('id', job_id).execute()
         if not job_result.data:
             raise HTTPException(status_code=404, detail="Job not found")
@@ -2420,309 +2464,127 @@ async def reprocess_emails(job_id: str, background_tasks: BackgroundTasks):
         job = job_result.data[0]
         mailbox_id = job['mailbox_id']
 
-        # Create a new reprocessing job
-        reprocess_job_data = {
+        # Look up mailbox to get type + connection config
+        mb_result = get_supabase().table('mailboxes').select(
+            'id, mailbox_type, connection_config'
+        ).eq('id', mailbox_id).single().execute()
+
+        if not mb_result.data:
+            raise HTTPException(status_code=404, detail="Mailbox not found")
+
+        mailbox = mb_result.data
+        mailbox_type = mailbox.get('mailbox_type', '')
+
+        if mailbox_type not in ('outlook_live', 'outlook'):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Reprocess not supported for mailbox type '{mailbox_type}'. Only Outlook mailboxes can be re-synced."
+            )
+
+        # Create a tracking job
+        reprocess_job = {
             "job_type": "reprocessing",
             "mailbox_id": mailbox_id,
             "status": "pending",
-            "total_records": 0,  # Will be updated
+            "total_records": 0,
             "processed_records": 0,
             "failed_records": 0,
             "created_at": datetime.now(timezone.utc).isoformat()
         }
-
-        result = get_supabase().table('processing_jobs').insert(reprocess_job_data).execute()
+        result = get_supabase().table('processing_jobs').insert(reprocess_job).execute()
         new_job_id = result.data[0]['id']
 
-        # Start reprocessing in background
-        background_tasks.add_task(run_reprocessing, new_job_id, mailbox_id)
-
-        return {
-            "message": "Reprocessing started",
-            "job_id": new_job_id
-        }
+        background_tasks.add_task(run_reprocessing, new_job_id, mailbox)
+        return {"message": "Reprocessing started — re-syncing from mail provider", "job_id": new_job_id}
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to start reprocessing: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to start reprocessing: {str(e)}")
+        logger.error(f"Failed to start reprocessing: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
-async def run_reprocessing(job_id: str, mailbox_id: str):
+
+async def run_reprocessing(job_id: str, mailbox: dict):
     """
-    Run reprocessing to:
-    1. Re-normalize emails with new folder inference logic
-    2. Update folder_path in emails table
-    3. Re-tag emails with updated logic
-    4. Update folders table
+    Re-extract emails from the mail provider (Outlook Graph API) and upsert
+    them into the DB.  This backfills attachment filenames, sizes, and
+    provider_web_link for all existing emails.
     """
+    mailbox_id = mailbox['id']
+    config = mailbox.get('connection_config') or {}
 
     try:
-        from src.processors.email_tagger import EmailTagger
-        from src.processors.normalizer import EmailNormalizer
+        from src.extractors.outlook_extractor import OutlookExtractor
+        from src.database.operations import EmailOperations
 
-        logger.info(f"Starting reprocessing job {job_id} for mailbox {mailbox_id}")
+        logger.info(f"Reprocessing job {job_id}: re-syncing mailbox {mailbox_id} from Outlook Graph API")
 
-        # Update status to running
         await update_job_status(job_id, "running", {
             "started_at": datetime.now(timezone.utc).isoformat()
         })
 
-        # Initialize normalizer and tagger
-        normalizer = EmailNormalizer()
-        tagger = EmailTagger()
+        # Connect to Outlook
+        extractor = OutlookExtractor({
+            'access_token': config.get('outlook_access_token') or config.get('access_token', ''),
+            'refresh_token': config.get('outlook_refresh_token') or config.get('refresh_token'),
+            'mailbox_id': mailbox_id,
+            # Intentionally omit delta_links → full re-fetch, not incremental
+        })
 
-        sb = get_supabase()
-
-        # Get total count first (lightweight query)
-        count_result = sb.table('emails').select('id', count='exact').eq('mailbox_id', mailbox_id).execute()
-        total_emails = count_result.count or 0
-        logger.info(f"Found {total_emails} emails to reprocess")
-
-        if total_emails == 0:
-            logger.warning(f"No emails found for mailbox {mailbox_id}")
-            await update_job_status(job_id, "completed", {
-                "total_records": 0,
-                "processed_records": 0,
-                "failed_records": 0
-            })
+        if not extractor.connect():
+            error = extractor.auth_error or 'Failed to connect to Outlook API'
+            await update_job_status(job_id, "failed", {"error_log": [error]})
             return
 
-        # Update total records
-        await update_job_status(job_id, "running", {
-            "total_records": total_emails
-        })
-
-        processed = 0
+        email_ops = EmailOperations()
+        success = 0
         failed = 0
-        folders_to_create = set()
-
-        # Process in batches using pagination (avoid loading all emails into memory)
+        batch = []
         batch_size = 100
-        offset = 0
 
-        while offset < total_emails:
-            # Check if job should be stopped or paused
-            job_status_result = sb.table('processing_jobs').select('status').eq('id', job_id).execute()
-            if job_status_result.data:
-                current_status = job_status_result.data[0]['status']
+        for email in extractor.extract_emails():
+            batch.append(email)
+            if len(batch) >= batch_size:
+                result = email_ops.batch_insert_emails(batch, mailbox_id)
+                success += result.get('success', 0)
+                failed += result.get('failed', 0)
+                batch = []
 
-                if current_status in ['stopped', 'cancelled', 'failed']:
-                    logger.info(f"Reprocessing job {job_id} stopped at offset {offset}")
+                await update_job_status(job_id, "running", {
+                    "processed_records": success,
+                    "failed_records": failed
+                })
+                logger.info(f"Reprocess progress: {success} upserted, {failed} failed")
+
+                # Check for stop/cancel
+                job_check = get_supabase().table('processing_jobs').select('status').eq('id', job_id).execute()
+                if job_check.data and job_check.data[0]['status'] in ('stopped', 'cancelled'):
+                    logger.info(f"Reprocessing job {job_id} stopped by user")
                     break
 
-                if current_status == 'paused':
-                    logger.info(f"Reprocessing job {job_id} paused at offset {offset}, waiting...")
-                    # Wait for resume or stop
-                    from src.database.operations import DatabaseOperations
-                    db_ops = DatabaseOperations(mailbox_id=mailbox_id)
-                    if not db_ops.wait_while_paused(job_id):
-                        logger.info(f"Reprocessing job {job_id} stopped while paused")
-                        break
-                    logger.info(f"Reprocessing job {job_id} resumed")
+        # Flush remaining
+        if batch:
+            result = email_ops.batch_insert_emails(batch, mailbox_id)
+            success += result.get('success', 0)
+            failed += result.get('failed', 0)
 
-            # Fetch one batch at a time from database
-            logger.info(f"Fetching batch: offset={offset}, limit={batch_size}")
-            result = sb.table('emails').select('*').eq('mailbox_id', mailbox_id).range(offset, offset + batch_size - 1).execute()
-            batch = result.data
+        extractor.disconnect()
 
-            if not batch:
-                break  # No more emails
-
-            # OPTIMIZED: Process entire batch with bulk operations instead of individual queries
-            batch_folder_updates = []
-            batch_email_ids = []
-            all_category_inserts = []
-
-            for email in batch:
-                try:
-                    # Step 1: Re-normalize email with new folder inference
-                    inferred_folder = normalizer._infer_folder_path(
-                        provided_folder=None,  # Force inference
-                        is_outbound=email.get('is_outbound', False),
-                        sender_email=email.get('sender_email', ''),
-                        recipients=email.get('recipients', []),
-                        subject=email.get('subject', ''),
-                        body_text=email.get('body_text', '')
-                    )
-
-                    # Collect folder updates for bulk operation
-                    old_folder = email.get('folder_path', '')
-                    if inferred_folder != old_folder:
-                        batch_folder_updates.append({
-                            'id': email['id'],
-                            'folder_path': inferred_folder
-                        })
-                        email['folder_path'] = inferred_folder  # Update for tagging
-
-                    # Track folders that need to exist
-                    folders_to_create.add(inferred_folder)
-
-                    # Step 2: Tag the email (with updated folder_path)
-                    tag_result = tagger.tag_email(email)
-
-                    # Collect email ID for bulk delete
-                    batch_email_ids.append(email['id'])
-
-                    # Collect all category inserts for bulk operation
-                    # Add regular tags
-                    for tag in tag_result.get('tags', []):
-                        all_category_inserts.append({
-                            'email_id': email['id'],
-                            'category': tag,
-                            'confidence': 1.0,
-                            'detection_method': 'rule_based',
-                        })
-
-                    # Add metadata tags
-                    if tag_result.get('is_spam'):
-                        all_category_inserts.append({
-                            'email_id': email['id'],
-                            'category': '_meta_spam',
-                            'confidence': 1.0,
-                            'detection_method': 'rule_based',
-                        })
-
-                    if tag_result.get('is_marketing'):
-                        all_category_inserts.append({
-                            'email_id': email['id'],
-                            'category': '_meta_marketing',
-                            'confidence': 1.0,
-                            'detection_method': 'rule_based',
-                        })
-
-                    # Add priority
-                    priority_score = tag_result.get('priority_score', 5)
-                    all_category_inserts.append({
-                        'email_id': email['id'],
-                        'category': f'_meta_priority_{priority_score}',
-                        'confidence': 1.0,
-                        'detection_method': 'rule_based',
-                    })
-
-                    # Add sender type
-                    sender_type = tag_result.get('sender_type', 'unknown')
-                    all_category_inserts.append({
-                        'email_id': email['id'],
-                        'category': f'_meta_sender_{sender_type}',
-                        'confidence': 1.0,
-                        'detection_method': 'rule_based',
-                    })
-
-                    processed += 1
-
-                except Exception as e:
-                    logger.error(f"Failed to reprocess email {email.get('id', 'unknown')}: {str(e)}")
-                    failed += 1
-
-            # Perform bulk database operations for the entire batch
-            try:
-                # Bulk update folder paths (if any changed)
-                if batch_folder_updates:
-                    for update in batch_folder_updates:
-                        sb.table('emails').update({
-                            'folder_path': update['folder_path']
-                        }).eq('id', update['id']).execute()
-                    logger.info(f"Updated {len(batch_folder_updates)} folder paths")
-
-                # Bulk delete old categories for all emails in batch
-                if batch_email_ids:
-                    sb.table('email_categories').delete().in_('email_id', batch_email_ids).execute()
-                    logger.info(f"Deleted old categories for {len(batch_email_ids)} emails")
-
-                # Bulk insert new categories in chunks (Supabase has limits)
-                if all_category_inserts:
-                    chunk_size = 1000
-                    for i in range(0, len(all_category_inserts), chunk_size):
-                        chunk = all_category_inserts[i:i + chunk_size]
-                        sb.table('email_categories').insert(chunk).execute()
-                    logger.info(f"Inserted {len(all_category_inserts)} new categories")
-
-            except Exception as e:
-                logger.error(f"Bulk operation failed for batch at offset {offset}: {str(e)}")
-                # Don't fail the whole job, just log and continue
-
-            # Update progress after each batch
-            await update_job_status(job_id, "running", {
-                "processed_records": processed,
-                "failed_records": failed
-            })
-
-            logger.info(f"Reprocessing progress: {processed}/{total_emails} (batch offset: {offset})")
-
-            # Move to next batch
-            offset += batch_size
-
-        # Step 3: Ensure all folders exist in folders table
-        logger.info(f"Creating {len(folders_to_create)} folder entries...")
-        folder_type_map = {
-            'Inbox': 'inbox',
-            'INBOX': 'inbox',
-            'Sent': 'sent',
-            'Sent Items': 'sent',
-            'Spam': 'spam',
-            'Junk': 'spam',
-            'Trash': 'trash',
-            'Deleted Items': 'trash',
-            'Drafts': 'drafts',
-            'Archive': 'archive',
-            'Archived': 'archive'
-        }
-
-        # Check which folders already exist
-        existing_folders = set()
-        try:
-            result = sb.table('folders').select('folder_path').eq('mailbox_id', mailbox_id).execute()
-            if result.data:
-                existing_folders = {f['folder_path'] for f in result.data}
-        except Exception as e:
-            logger.warning(f"Failed to check existing folders: {e}")
-
-        # Create missing folders
-        new_folders = []
-        for folder_path in folders_to_create:
-            if folder_path not in existing_folders:
-                folder_type = folder_type_map.get(folder_path, 'user')
-                new_folders.append({
-                    'folder_path': folder_path,
-                    'mailbox_id': mailbox_id,
-                    'folder_type': folder_type,
-                    'message_count': 0
-                })
-
-        if new_folders:
-            try:
-                sb.table('folders').insert(new_folders).execute()
-                logger.info(f"Created {len(new_folders)} new folder entries")
-            except Exception as e:
-                logger.warning(f"Failed to create folders: {e}")
-
-        # Step 4: Update folder counts
-        try:
-            sb.rpc('update_folder_counts', {}).execute()
-            logger.info("Folder counts updated")
-        except Exception as e:
-            logger.warning(f"Failed to update folder counts: {e}")
-
-        # Mark as completed
         await update_job_status(job_id, "completed", {
-            "processed_records": processed,
+            "processed_records": success,
             "failed_records": failed,
+            "total_records": success + failed,
             "completed_at": datetime.now(timezone.utc).isoformat()
         })
-
-        logger.info(f"Reprocessing job {job_id} completed. Processed: {processed}, Failed: {failed}")
+        logger.info(f"Reprocessing job {job_id} done: {success} upserted, {failed} failed")
 
     except Exception as e:
-        error_msg = f"Reprocessing error: {str(e)}"
+        error_msg = f"Reprocessing error: {e}"
         logger.error(error_msg, exc_info=True)
-
-        # Check if job was already stopped (don't override stopped status)
         job_result = get_supabase().table('processing_jobs').select('status').eq('id', job_id).execute()
         if job_result.data and job_result.data[0].get('status') in ['stopped', 'cancelled']:
-            logger.warning(f"Reprocessing exception occurred after job was stopped: {error_msg}")
+            logger.warning(f"Reprocessing exception after stop: {error_msg}")
         else:
-            # Not stopped - genuine failure
             await update_job_status(job_id, "failed", {
                 "error_log": [error_msg],
                 "completed_at": datetime.now(timezone.utc).isoformat()

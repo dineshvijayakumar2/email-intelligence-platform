@@ -8,18 +8,9 @@ Reuses verification logic from dependencies/auth.py but without FastAPI Depends.
 import os
 import logging
 from typing import Dict, Optional, List
-import jwt
-from jwt import PyJWKClient
 from fastapi import WebSocketException, status
 
 logger = logging.getLogger(__name__)
-
-# Supabase configuration
-SUPABASE_URL = os.getenv('SUPABASE_URL')
-SUPABASE_JWT_SECRET = os.getenv('SUPABASE_JWT_SECRET')
-
-# JWKS client for ES256 tokens (lazy loaded)
-_jwks_client: Optional[PyJWKClient] = None
 
 # Supabase client (injected from main)
 _supabase = None
@@ -51,37 +42,26 @@ async def authenticate_websocket(token: str) -> Dict:
         )
 
     try:
-        # Verify JWT
-        payload = _verify_jwt(token)
+        # Verify token via Supabase admin API — no JWKS dependency
+        try:
+            user_response = _supabase.auth.get_user(token)
+        except Exception as e:
+            err_str = str(e).lower()
+            if 'expired' in err_str:
+                raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION, reason="Token has expired")
+            logger.warning(f"[WebSocket Auth] get_user failed: {e}")
+            raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token")
 
-        user_id = payload.get('sub')  # Supabase uses 'sub' for user ID
-        if not user_id:
-            raise WebSocketException(
-                code=status.WS_1008_POLICY_VIOLATION,
-                reason="Invalid token payload"
-            )
+        if not user_response or not user_response.user:
+            raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token payload")
+
+        user_id = user_response.user.id
 
         # Get user profile with roles
-        user_data = await _get_user_profile(user_id, payload)
+        user_data = await _get_user_profile(user_id, {})
 
         return user_data
 
-    except jwt.ExpiredSignatureError:
-        raise WebSocketException(
-            code=status.WS_1008_POLICY_VIOLATION,
-            reason="Token has expired"
-        )
-    except jwt.InvalidAudienceError:
-        raise WebSocketException(
-            code=status.WS_1008_POLICY_VIOLATION,
-            reason="Invalid token audience"
-        )
-    except jwt.InvalidTokenError as e:
-        logger.warning(f"[WebSocket Auth] Invalid token: {e}")
-        raise WebSocketException(
-            code=status.WS_1008_POLICY_VIOLATION,
-            reason="Invalid token"
-        )
     except WebSocketException:
         raise
     except Exception as e:
@@ -91,56 +71,6 @@ async def authenticate_websocket(token: str) -> Dict:
             reason="Authentication error"
         )
 
-
-def _verify_jwt(token: str) -> Dict:
-    """
-    Verify JWT token and return payload.
-
-    Supports both ES256/RS256 (via JWKS) and HS256 (via shared secret).
-    """
-    global _jwks_client
-
-    # Decode header to check algorithm
-    unverified_header = jwt.get_unverified_header(token)
-    alg = unverified_header.get('alg', 'HS256')
-
-    payload = None
-
-    if alg in ['ES256', 'RS256']:
-        # Use JWKS for ES256/RS256
-        if _jwks_client is None and SUPABASE_URL:
-            jwks_url = f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json"
-            _jwks_client = PyJWKClient(jwks_url)
-
-        if _jwks_client:
-            try:
-                signing_key = _jwks_client.get_signing_key_from_jwt(token)
-                payload = jwt.decode(
-                    token,
-                    signing_key.key,
-                    algorithms=['ES256', 'RS256'],
-                    audience='authenticated',
-                    options={"verify_signature": True}
-                )
-            except Exception as e:
-                logger.warning(f"[WebSocket Auth] JWKS verification failed: {e}, trying HS256")
-
-    # Fall back to HS256 if ES256/RS256 failed or not applicable
-    if payload is None:
-        if not SUPABASE_JWT_SECRET:
-            raise WebSocketException(
-                code=status.WS_1011_INTERNAL_ERROR,
-                reason="Authentication not configured"
-            )
-        payload = jwt.decode(
-            token,
-            SUPABASE_JWT_SECRET,
-            algorithms=['HS256'],
-            audience='authenticated',
-            options={"verify_signature": True}
-        )
-
-    return payload
 
 
 async def _get_user_profile(user_id: str, payload: Dict) -> Dict:

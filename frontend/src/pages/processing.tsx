@@ -150,7 +150,7 @@ export const ProcessingJobs: React.FC = () => {
 
       await processingService.reprocessJob(jobId);
 
-      message.success(`Reprocessing started! Watch for the new "Reprocessing" job in the list.`);
+      message.success(`Re-sync started! Attachment names & web links will be backfilled.`);
 
       // Reload jobs to show the new reprocessing job
       refreshJobs();
@@ -467,8 +467,8 @@ export const ProcessingJobs: React.FC = () => {
             </Tooltip>
           )}
 
-          {record.status === 'completed' && record.job_type.toLowerCase().includes('extraction') && (
-            <Tooltip title={reprocessingJobs.has(record.id) ? "Starting reprocessing..." : "Reprocess with Categorization"}>
+          {record.status === 'completed' && (record.job_type.toLowerCase().includes('extraction') || record.job_type.toLowerCase().includes('sync')) && (
+            <Tooltip title={reprocessingJobs.has(record.id) ? "Re-syncing..." : "Re-sync from mail provider (backfill attachments & links)"}>
               <Button
                 type="text"
                 icon={<SyncOutlined spin={reprocessingJobs.has(record.id)} />}

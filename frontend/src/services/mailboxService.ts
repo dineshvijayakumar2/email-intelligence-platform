@@ -196,5 +196,9 @@ export const mailboxService = {
   // Trigger sync for a mailbox
   async syncMailbox(id: string): Promise<void> {
     await api.post(`/mailboxes/${id}/sync`);
-  }
+  },
+
+  async resyncMetadata(id: string): Promise<{ message: string; job_id: string }> {
+    return api.post<{ message: string; job_id: string }>(`/mailboxes/${id}/resync-metadata`);
+  },
 };
