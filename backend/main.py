@@ -536,6 +536,13 @@ async def startup_event():
     """Initialize services on startup"""
     global _gmail_sync_service, _outlook_sync_service
 
+    # Sync prompt JSON files → DB (S4.0: keeps JSON and DB always in sync)
+    try:
+        from src.services.ai_prompt_loader import sync_from_json_files
+        sync_from_json_files(get_supabase())
+    except Exception as e:
+        logger.warning(f"Prompt JSON sync failed (non-critical): {e}")
+
     try:
         initialize_business_hierarchy_routers()
     except Exception as e:
