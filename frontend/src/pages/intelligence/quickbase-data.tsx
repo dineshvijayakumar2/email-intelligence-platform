@@ -134,6 +134,44 @@ const sliColumns = [
     render: (v: string) => v ? new Date(v).toLocaleDateString() : '-' },
 ];
 
+const operationsColumns = [
+  { title: 'Operation', dataIndex: 'operation_name', key: 'operation_name', width: 200, ellipsis: true },
+  { title: 'Department', dataIndex: 'department', key: 'department', width: 130,
+    render: (v: string) => v ? <Tag>{v}</Tag> : <Text type="secondary" style={{ fontSize: 11 }}>—</Text> },
+  { title: 'Machine', dataIndex: 'machine', key: 'machine', width: 160, ellipsis: true },
+  { title: 'Job No', dataIndex: 'job_no', key: 'job_no', width: 90 },
+  { title: 'Customer', dataIndex: 'customer_name', key: 'customer_name', width: 180, ellipsis: true },
+  { title: 'AM', dataIndex: 'am_job', key: 'am_job', width: 130, ellipsis: true },
+  { title: 'Capability Tags', dataIndex: 'capability_tags', key: 'capability_tags', width: 200,
+    render: (v: string[]) => {
+      if (!v || v.length === 0) return <Text type="secondary" style={{ fontSize: 11 }}>unclassified</Text>;
+      return <Space size={2} wrap>{v.map((t: string) => <Tag key={t} color="blue" style={{ fontSize: 11 }}>{t}</Tag>)}</Space>;
+    } },
+  { title: 'Row Type', dataIndex: 'row_type', key: 'row_type', width: 110,
+    render: (v: string) => {
+      const colorMap: Record<string, string> = {
+        production: 'green', outsource: 'orange', rush_charge: 'red',
+        admin: 'default', logistics: 'cyan', costing: 'purple',
+      };
+      return v ? <Tag color={colorMap[v] || 'default'}>{v}</Tag> : '-';
+    } },
+  { title: 'Flags', key: 'flags', width: 120,
+    render: (_: any, r: any) => (
+      <Space size={2}>
+        {r.am_rush && <Tag color="volcano" style={{ fontSize: 10, padding: '0 4px' }}>AM Rush</Tag>}
+        {r.factory_rush && <Tag color="red" style={{ fontSize: 10, padding: '0 4px' }}>Factory Rush</Tag>}
+        {r.has_outsource_component && <Tag color="orange" style={{ fontSize: 10, padding: '0 4px' }}>Outsource</Tag>}
+      </Space>
+    ) },
+  { title: 'Contact Email', dataIndex: 'contact_email', key: 'contact_email', width: 200, ellipsis: true },
+  { title: 'Date Accepted', dataIndex: 'date_accepted', key: 'date_accepted', width: 110,
+    render: (v: string) => v ? new Date(v).toLocaleDateString() : '-' },
+  { title: 'Cost+ Price', dataIndex: 'cost_plus_price', key: 'cost_plus_price', width: 110, align: 'right' as const,
+    render: (v: number) => v != null ? `$${Number(v).toLocaleString()}` : '-' },
+  { title: 'Profit %', dataIndex: 'profit_pct', key: 'profit_pct', width: 90, align: 'right' as const,
+    render: (v: number) => v != null ? `${Number(v).toFixed(1)}%` : '-' },
+];
+
 // ---------------------------------------------------------------------------
 // Page component
 // ---------------------------------------------------------------------------
@@ -148,6 +186,7 @@ const QuickbaseDataPage: React.FC = () => {
   const [quotes, setQuotes] = useState<PageState>(emptyPage());
   const [jobs, setJobs] = useState<PageState>(emptyPage());
   const [sli, setSli] = useState<PageState>(emptyPage());
+  const [operations, setOperations] = useState<PageState>(emptyPage());
   const isMounted = useRef(true);
 
   useEffect(() => {
@@ -187,6 +226,7 @@ const QuickbaseDataPage: React.FC = () => {
         if (rc.quotes)         setQuotes(prev => ({ ...prev, total: rc.quotes }));
         if (rc.jobs)           setJobs(prev => ({ ...prev, total: rc.jobs }));
         if (rc.sales_line_items) setSli(prev => ({ ...prev, total: rc.sales_line_items }));
+        if (rc.operations)       setOperations(prev => ({ ...prev, total: rc.operations }));
       })
       .catch(() => {});
   }, [clientId]);
@@ -247,6 +287,7 @@ const QuickbaseDataPage: React.FC = () => {
         case 'quotes': fetchTable('quotes', setQuotes, 'quotes', 'quotes', 1, '', clientId); break;
         case 'jobs': fetchTable('jobs', setJobs, 'jobs', 'jobs', 1, '', clientId); break;
         case 'sales_line_items': fetchTable('sli', setSli, 'sales-line-items', 'sales_line_items', 1, '', clientId); break;
+        case 'operations': fetchTable('operations', setOperations, 'operations', 'operations', 1, '', clientId); break;
       }
     };
     load(activeTab);
@@ -343,6 +384,11 @@ const QuickbaseDataPage: React.FC = () => {
       label: <span>Sales Line Items <Badge count={sli.total} overflowCount={99999} color="#667eea" /></span>,
       children: makeTabContent(sli, setSli, 'sales-line-items', 'sales_line_items', sliColumns, 'sales_line_items'),
     },
+    {
+      key: 'operations',
+      label: <span>Operations <Badge count={operations.total} overflowCount={99999} color="#667eea" /></span>,
+      children: makeTabContent(operations, setOperations, 'operations', 'operations', operationsColumns, 'operations'),
+    },
   ];
 
   // Summary stats
@@ -352,6 +398,7 @@ const QuickbaseDataPage: React.FC = () => {
     { label: 'Quotes', value: quotes.total },
     { label: 'Jobs', value: jobs.total },
     { label: 'Sales Line Items', value: sli.total },
+    { label: 'Operations', value: operations.total },
   ];
 
   return (

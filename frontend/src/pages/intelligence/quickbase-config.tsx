@@ -58,6 +58,16 @@ const DEFAULT_MAPPINGS: Record<string, Record<string, string>> = {
     "17": "qb_customer_id", "19": "inv_date", "21": "subtotal",
     "22": "total", "24": "job_title", "56": "product_group", "60": "industry",
   },
+  operations: {
+    "3": "qb_record_id", "6": "operation_id", "7": "job_no", "8": "quote_no",
+    "9": "operation_name", "10": "machine", "11": "department",
+    "12": "date_accepted", "13": "date_due", "14": "qb_customer_id",
+    "15": "customer_code", "16": "customer_name", "17": "am_job",
+    "18": "am_customer", "19": "job_title", "20": "quantity",
+    "21": "production_status", "22": "cost_price", "23": "cost_plus_price",
+    "24": "profit_amount", "25": "profit_pct", "26": "finishing_type",
+    "27": "first_invoice_no", "28": "first_invoice_date",
+  },
 };
 
 const DEST_COLUMNS: Record<string, string[]> = {
@@ -89,6 +99,15 @@ const DEST_COLUMNS: Record<string, string[]> = {
     'customer_name', 'qb_customer_id', 'inv_date', 'subtotal', 'total',
     'job_title', 'product_group', 'industry',
   ],
+  operations: [
+    'qb_record_id', 'operation_id', 'job_no', 'quote_no', 'operation_name',
+    'machine', 'department', 'date_accepted', 'date_due', 'qb_customer_id',
+    'customer_code', 'customer_name', 'am_job', 'am_customer', 'job_title',
+    'quantity', 'production_status', 'cost_price', 'cost_plus_price',
+    'profit_amount', 'profit_pct', 'finishing_type', 'first_invoice_no',
+    'first_invoice_date', 'capability_tags', 'has_coating', 'has_sewing',
+    'has_outsource_component', 'am_rush', 'factory_rush', 'row_type', 'contact_email',
+  ],
 };
 
 const TABLES = [
@@ -97,6 +116,7 @@ const TABLES = [
   { key: 'quotes', label: 'Quotes', configField: 'quotes_table_id' },
   { key: 'jobs', label: 'Jobs', configField: 'jobs_table_id' },
   { key: 'sales_line_items', label: 'Sales Line Items', configField: 'sales_line_items_table_id' },
+  { key: 'operations', label: 'Operations', configField: 'operations_table_id' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -201,6 +221,7 @@ const QuickbaseConfigPage: React.FC = () => {
         quotes_table_id: cfg.quotes_table_id,
         jobs_table_id: cfg.jobs_table_id,
         sales_line_items_table_id: cfg.sales_line_items_table_id,
+        operations_table_id: cfg.operations_table_id,
         sync_interval_hours: cfg.sync_interval_hours ?? 6,
       });
 
@@ -227,6 +248,7 @@ const QuickbaseConfigPage: React.FC = () => {
           quotes_table_id: 'buz9p6tzu',
           jobs_table_id: 'buziry2ri',
           sales_line_items_table_id: 'bu4cwdinf',
+          operations_table_id: 'bvqsudnif',
           sync_interval_hours: 6,
         });
         setFieldMappings(initDefaultMappings());
@@ -831,6 +853,7 @@ const QuickbaseConfigPage: React.FC = () => {
               { label: 'Quotes', key: 'quotes' },
               { label: 'Jobs', key: 'jobs' },
               { label: 'Sales Line Items', key: 'sales_line_items' },
+              { label: 'Operations', key: 'operations' },
             ].map(({ label, key }) => {
               const log = qbStatus.table_logs.find(l => l.table_name === key);
               const hasError = log?.status === 'error';

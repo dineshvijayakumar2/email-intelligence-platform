@@ -2,8 +2,10 @@
 Quickbase Integration Router — Sync config, trigger sync, view cached data.
 """
 
+import json
 import logging
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
@@ -65,6 +67,7 @@ async def get_config(client_id: str = Query(...)):
             quotes_table_id=cfg['quotes_table_id'],
             jobs_table_id=cfg['jobs_table_id'],
             sales_line_items_table_id=cfg['sales_line_items_table_id'],
+            operations_table_id=cfg.get('operations_table_id', 'bvqsudnif'),
             field_mappings=cfg.get('field_mappings'),
             sync_interval_hours=cfg.get('sync_interval_hours', 6),
             last_sync_at=cfg.get('last_sync_at'),
@@ -91,6 +94,7 @@ async def upsert_config(client_id: str = Query(...), config: QBSyncConfigCreate 
             'quotes_table_id': config.quotes_table_id,
             'jobs_table_id': config.jobs_table_id,
             'sales_line_items_table_id': config.sales_line_items_table_id,
+            'operations_table_id': config.operations_table_id or 'bvqsudnif',
             'field_mappings': config.field_mappings or {},
             'sync_interval_hours': config.sync_interval_hours,
             'is_active': True,
@@ -253,6 +257,7 @@ async def get_table_fields(
         'quotes': 'quotes_table_id',
         'jobs': 'jobs_table_id',
         'sales_line_items': 'sales_line_items_table_id',
+        'operations': 'operations_table_id',
     }
     if table not in table_map:
         raise HTTPException(status_code=400, detail=f"Unknown table: {table}")
@@ -277,6 +282,26 @@ async def get_table_fields(
                 synced_at = cached.data[0].get('synced_at')
                 fields = [{"id": r['field_id'], "label": r['field_label'], "type": r.get('field_type')} for r in cached.data]
                 return {"fields": fields, "synced_at": synced_at, "from_cache": True}
+
+            # --- Cache miss: check for local bundled field schema (avoids requiring live QB call) ---
+            project_root = Path(__file__).parent.parent.parent.parent
+            local_seed = project_root / 'quickbase-integration' / f'operations_{qb_table_id}_fields_list.json'
+            if local_seed.exists():
+                raw = json.loads(local_seed.read_text())
+                fields = [{"id": f["id"], "label": f["label"], "type": f.get("fieldType")} for f in raw]
+                now = datetime.now(timezone.utc).isoformat()
+                rows = [
+                    {"client_id": client_id, "table_id": qb_table_id, "table_name": table,
+                     "field_id": f["id"], "field_label": f["label"], "field_type": f.get("fieldType"),
+                     "synced_at": now}
+                    for f in raw
+                ]
+                if rows:
+                    _supabase.table('qb_field_definitions').upsert(
+                        rows, on_conflict='client_id,table_id,field_id'
+                    ).execute()
+                logger.info(f"QB fields seeded from local JSON: table={table} count={len(fields)}")
+                return {"fields": fields, "synced_at": now, "from_cache": False}
 
         # --- Cache miss or force: fetch from QB ---
         from ..services.quickbase_client import QuickbaseClient

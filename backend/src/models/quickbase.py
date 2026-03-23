@@ -14,6 +14,7 @@ class QBSyncConfigCreate(BaseModel):
     quotes_table_id: str
     jobs_table_id: str
     sales_line_items_table_id: str
+    operations_table_id: Optional[str] = 'bvqsudnif'
     field_mappings: Optional[dict] = None
     sync_interval_hours: Optional[int] = None  # None = manual mode (no auto-sync)
 
@@ -28,6 +29,7 @@ class QBSyncConfigResponse(BaseModel):
     quotes_table_id: str
     jobs_table_id: str
     sales_line_items_table_id: str
+    operations_table_id: Optional[str] = 'bvqsudnif'
     field_mappings: Optional[dict] = None
     sync_interval_hours: Optional[int] = None  # None = manual mode
     last_sync_at: Optional[datetime] = None
