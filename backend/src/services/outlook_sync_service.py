@@ -160,11 +160,24 @@ class OutlookSyncService:
                     logger.debug(f"Skipping mailbox {mailbox_id} - authentication expired, user reconnection required")
                     continue
 
+                # Skip if synced recently enough — prevents re-syncing every mailbox
+                # on every backend restart (only sync if past the interval window)
+                last_sync = config.get('outlook_last_sync_at') or mailbox.get('last_sync_at')
+                if last_sync:
+                    last_sync_dt = datetime.fromisoformat(last_sync.replace('Z', '+00:00'))
+                    next_due_at = last_sync_dt + timedelta(minutes=self.sync_interval_minutes)
+                    if datetime.now(timezone.utc) < next_due_at:
+                        logger.debug(
+                            f"Skipping mailbox {mailbox_id} - last synced {last_sync_dt.strftime('%H:%M:%S')}, "
+                            f"next due at {next_due_at.strftime('%H:%M:%S')}"
+                        )
+                        continue
+
                 # Skip if in transient error state and not enough time has passed
                 if config.get('outlook_sync_status') == 'error':
-                    last_sync = config.get('outlook_last_sync_at')
-                    if last_sync:
-                        last_sync_dt = datetime.fromisoformat(last_sync.replace('Z', '+00:00'))
+                    last_sync_err = config.get('outlook_last_sync_at')
+                    if last_sync_err:
+                        last_sync_dt = datetime.fromisoformat(last_sync_err.replace('Z', '+00:00'))
                         backoff_time = datetime.now(timezone.utc) - timedelta(minutes=self.RATE_LIMIT_BACKOFF_MINUTES)
                         if last_sync_dt > backoff_time:
                             logger.debug(f"Skipping mailbox {mailbox_id} - in error backoff period")
@@ -433,11 +446,20 @@ class OutlookSyncService:
                     logger.debug(f"Skipping {user_id} - sync already in progress")
                     continue
 
+                # Skip if synced recently enough (interval check)
+                last_sync = user.get('last_sync_at')
+                if last_sync:
+                    last_sync_dt = datetime.fromisoformat(last_sync.replace('Z', '+00:00'))
+                    next_due_at = last_sync_dt + timedelta(minutes=self.sync_interval_minutes)
+                    if datetime.now(timezone.utc) < next_due_at:
+                        logger.debug(f"Skipping {user_id} - not due until {next_due_at.strftime('%H:%M:%S')}")
+                        continue
+
                 # Skip if in error state and not enough time has passed
                 if user.get('sync_status') == 'error':
-                    last_sync = user.get('last_sync_at')
-                    if last_sync:
-                        last_sync_dt = datetime.fromisoformat(last_sync.replace('Z', '+00:00'))
+                    last_sync_err = user.get('last_sync_at')
+                    if last_sync_err:
+                        last_sync_dt = datetime.fromisoformat(last_sync_err.replace('Z', '+00:00'))
                         backoff_time = datetime.now(timezone.utc) - timedelta(minutes=self.RATE_LIMIT_BACKOFF_MINUTES)
                         if last_sync_dt > backoff_time:
                             logger.debug(f"Skipping {user_id} - in error backoff period")
