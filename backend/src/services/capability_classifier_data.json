@@ -1,0 +1,5935 @@
+[
+  {
+    "dept": "Coating",
+    "op": "Cello",
+    "machine": "Celloglazer - Autobond",
+    "count": 588,
+    "tag": null,
+    "flags": [
+      "has_coating"
+    ],
+    "row_type": "process"
+  },
+  {
+    "dept": "Coating",
+    "op": "Harris & Bruno Postcoat - Aqueous (MIN 200gsm)",
+    "machine": "Coater - H&B",
+    "count": 210,
+    "tag": null,
+    "flags": [
+      "has_coating"
+    ],
+    "row_type": "process"
+  },
+  {
+    "dept": "Coating",
+    "op": "Gloss",
+    "machine": "Celloglazer - Autobond",
+    "count": 46,
+    "tag": null,
+    "flags": [
+      "has_coating"
+    ],
+    "row_type": "process"
+  },
+  {
+    "dept": "Wide Format Finishing",
+    "op": "Application tape for decals",
+    "machine": "Large format laminator",
+    "count": 19,
+    "tag": null,
+    "flags": [
+      "has_coating"
+    ],
+    "row_type": "process"
+  },
+  {
+    "dept": "Coating",
+    "op": "Soft-touch",
+    "machine": "Celloglazer - Autobond",
+    "count": 14,
+    "tag": null,
+    "flags": [
+      "has_coating"
+    ],
+    "row_type": "process"
+  },
+  {
+    "dept": "Coating",
+    "op": "Matte",
+    "machine": "Celloglazer - Autobond",
+    "count": 6,
+    "tag": null,
+    "flags": [
+      "has_coating"
+    ],
+    "row_type": "process"
+  },
+  {
+    "dept": "Coating",
+    "op": "Anti-scuff matte",
+    "machine": "Celloglazer - Autobond",
+    "count": 4,
+    "tag": null,
+    "flags": [
+      "has_coating"
+    ],
+    "row_type": "process"
+  },
+  {
+    "dept": "Coating",
+    "op": "Harris & Bruno Postcoat - Aqueous (MIN 200gsm)",
+    "machine": "Celloglazer - Autobond",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_coating"
+    ],
+    "row_type": "process"
+  },
+  {
+    "dept": "Coating",
+    "op": "Cello",
+    "machine": null,
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_coating"
+    ],
+    "row_type": "process"
+  },
+  {
+    "dept": "Dispatch",
+    "op": "1x Delivery + return delivery to supplier (to and fro)",
+    "machine": "Outsource",
+    "count": 286,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "logistics"
+  },
+  {
+    "dept": "Outwork",
+    "op": "(New)",
+    "machine": "No machine",
+    "count": 47,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) + 40%",
+    "machine": "No machine",
+    "count": 41,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Dispatch",
+    "op": "2x Delivery + return delivery to supplier (to and fro)",
+    "machine": "Outsource",
+    "count": 39,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "logistics"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 1",
+    "machine": "No machine",
+    "count": 36,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "no mark up",
+    "machine": "No machine",
+    "count": 20,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "None",
+    "op": "Full Outsource",
+    "machine": null,
+    "count": 18,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Delivery of stock",
+    "machine": "No machine",
+    "count": 16,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "logistics"
+  },
+  {
+    "dept": "Dispatch",
+    "op": "3x Delivery + return delivery to supplier (to and fro",
+    "machine": "Outsource",
+    "count": 15,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "logistics"
+  },
+  {
+    "dept": "Design",
+    "op": "Outsource (2) @ 1",
+    "machine": "No machine",
+    "count": 13,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "A2 Fold to A4 - Max 150gsm",
+    "machine": "Outsource",
+    "count": 10,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "process"
+  },
+  {
+    "dept": "Outwork",
+    "op": "A2 Fold to A4 - Max 150gsm",
+    "machine": "Folding Outsource",
+    "count": 9,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "process"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Tabbing Outsource",
+    "machine": "No machine",
+    "count": 7,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 400",
+    "machine": "No machine",
+    "count": 7,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "A2 Fold to A3 - Max 150gsm",
+    "machine": "Outsource",
+    "count": 7,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "process"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1)",
+    "machine": "No machine",
+    "count": 6,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Paper Stock Draw",
+    "machine": null,
+    "count": 6,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "process"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Ink Stock Draw",
+    "machine": null,
+    "count": 6,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "process"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 0",
+    "machine": "No machine",
+    "count": 5,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (3) @ 1",
+    "machine": "No machine",
+    "count": 5,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 600",
+    "machine": "No machine",
+    "count": 5,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 250",
+    "machine": "No machine",
+    "count": 5,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (4) @ 1",
+    "machine": "No machine",
+    "count": 4,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 200",
+    "machine": "No machine",
+    "count": 4,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 500",
+    "machine": "No machine",
+    "count": 4,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 300",
+    "machine": "No machine",
+    "count": 4,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 51.99",
+    "machine": "No machine",
+    "count": 4,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 5000",
+    "machine": "No machine",
+    "count": 3,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (2)+ 40%",
+    "machine": "No machine",
+    "count": 3,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 800",
+    "machine": "No machine",
+    "count": 3,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 1",
+    "machine": "Spot UV Outsource",
+    "count": 3,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Design",
+    "op": "Outsource (2) @ 1",
+    "machine": "Outsource",
+    "count": 3,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 1",
+    "machine": "Emboss/Deboss Outsource",
+    "count": 3,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (3) @ 1",
+    "machine": "Folding Outsource",
+    "count": 3,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 9200",
+    "machine": "No machine",
+    "count": 2,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 4105",
+    "machine": "No machine",
+    "count": 2,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Tabbing Outsource",
+    "machine": "Tabbing Outsource",
+    "count": 2,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 1530",
+    "machine": "No machine",
+    "count": 2,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 525",
+    "machine": "No machine",
+    "count": 2,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) + 40%",
+    "machine": "Assembly Outsource",
+    "count": 2,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 1",
+    "machine": "Outsource",
+    "count": 2,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 550",
+    "machine": "No machine",
+    "count": 2,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 1",
+    "machine": "Binding Outsource",
+    "count": 2,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) + 40%",
+    "machine": "Folding Outsource",
+    "count": 2,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 350",
+    "machine": "No machine",
+    "count": 2,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 220",
+    "machine": "No machine",
+    "count": 2,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Design",
+    "op": "Outsource (2) @ 1",
+    "machine": "Handwork",
+    "count": 2,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "process"
+  },
+  {
+    "dept": "Design",
+    "op": "Outsource (2) @ 1",
+    "machine": "Folding Outsource",
+    "count": 2,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Design",
+    "op": "Outsource (2) @ 10045.45",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 6512",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 8880",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 8177.09",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 6780",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 6250",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 4873.9",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 5195",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Design",
+    "op": "Outsource (2) @ 0",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 3100",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 3400",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 3372.96",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (4) + 40% @ 2300",
+    "machine": "Outsource",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 2700",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Design",
+    "op": "Outsource (2) @ 2966.6",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 3885.74",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 2682.66",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (4) + 40% @ 2562.5",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) + 40%",
+    "machine": "Outsource",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 1372.8",
+    "machine": "Assembly Outsource",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 2320",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 2296",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 2150",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 2000",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 1950",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 1850",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 1800",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 1540",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 1523.64",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Design",
+    "op": "Outsource (2) @ 1416.55",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 1257",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 1365",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 1295",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 1267.81",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 1267.81",
+    "machine": "Assembly Outsource",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 1152.02",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Hand tapex 2 Pieces",
+    "machine": "Binding Outsource",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "process"
+  },
+  {
+    "dept": "Design",
+    "op": "Outsource (2) @ 1100",
+    "machine": "Spot UV Outsource",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 1097.84",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 1095",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 1057.8",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Design",
+    "op": "Outsource (2) @ 990",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 980",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 950",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 921.78",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Design",
+    "op": "Outsource (2) @ 918",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 900",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 899.27",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 858",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 780",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 750",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 690",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 650",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 632",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 436.36",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 612.31",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 608.4",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (4) @ 1",
+    "machine": "Folding Outsource",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (3) @ 600",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (4) @ 600",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 510",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 495",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 475",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (4) @ 450",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 450",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Design",
+    "op": "Outsource (2) @ 1",
+    "machine": "Emboss/Deboss Outsource",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 447.27",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 426",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) + 40%",
+    "machine": "Binding Outsource",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 420",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 500",
+    "machine": "Emboss/Deboss Outsource",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 406.2",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (3) @ 1",
+    "machine": "Crease + Fold - Horizon",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "process"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (3) @ 1",
+    "machine": "Handwork",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "process"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 400",
+    "machine": "Folding Outsource",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 393",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 386",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 380.91",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 377",
+    "machine": "Binding Outsource",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 363",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 360",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Design",
+    "op": "Outsource (2) @ 350",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (4) @ 338",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 338",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 330",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 1",
+    "machine": "Tabbing Outsource",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 1",
+    "machine": "Folding Outsource",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 590",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Folding Outsource",
+    "machine": "Folding Outsource",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "process"
+  },
+  {
+    "dept": "Design",
+    "op": "Outsource (2) @ 300",
+    "machine": "Emboss/Deboss Outsource",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (4) + 40% @ 300",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Custom Item per unit (1)",
+    "machine": "Binding Outsource",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "costing"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 270",
+    "machine": "Outsource",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 261",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (3) + 40% @ 250",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 200",
+    "machine": "Outsource",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Design",
+    "op": "Outsource (2) @ 239",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 236",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Max height 520mm",
+    "machine": "Folding Outsource",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "constraint"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 518.18",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "no mark up",
+    "machine": "Folding Outsource",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Design",
+    "op": "Outsource (2) @ 1",
+    "machine": "Crease + Fold - Horizon",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "process"
+  },
+  {
+    "dept": "Outwork",
+    "op": "A2 Fold to A5 - Max 150gsm",
+    "machine": "Outsource",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "process"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 200",
+    "machine": "Binding Outsource",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 200",
+    "machine": "Folding Outsource",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 195",
+    "machine": "Folding Outsource",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 192",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 192",
+    "machine": "Outsource",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 185",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 190",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 180",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 170.11",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 160",
+    "machine": "Folding Outsource",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 150",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (3) + 40% @ 148",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 135",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 1",
+    "machine": null,
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 125",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 120",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Max height 500mm",
+    "machine": "Folding Outsource",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "constraint"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 100",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 100",
+    "machine": "Folding Outsource",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 240",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 80",
+    "machine": "Crease + Fold - Horizon",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "process"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 80",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 70",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Design",
+    "op": "Outsource (2) @ 40",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "outsource"
+  },
+  {
+    "dept": "Prepress",
+    "op": "RUSH: Approx 1 working days after proof approval",
+    "machine": null,
+    "count": 103,
+    "tag": null,
+    "flags": [
+      "was_rush"
+    ],
+    "row_type": "leadtime"
+  },
+  {
+    "dept": "Rush",
+    "op": "Job $ Charge",
+    "machine": "No machine",
+    "count": 47,
+    "tag": null,
+    "flags": [
+      "was_rush"
+    ],
+    "row_type": "rush_charge"
+  },
+  {
+    "dept": "Prepress",
+    "op": "RUSH: Approx 2 working days after proof approval",
+    "machine": null,
+    "count": 39,
+    "tag": null,
+    "flags": [
+      "was_rush"
+    ],
+    "row_type": "leadtime"
+  },
+  {
+    "dept": "Prepress",
+    "op": "RUSH: Approx 3 working days after proof approval",
+    "machine": null,
+    "count": 32,
+    "tag": null,
+    "flags": [
+      "was_rush"
+    ],
+    "row_type": "leadtime"
+  },
+  {
+    "dept": "Prepress",
+    "op": "RUSH: Approx 0 working days after proof approval",
+    "machine": null,
+    "count": 27,
+    "tag": null,
+    "flags": [
+      "was_rush"
+    ],
+    "row_type": "leadtime"
+  },
+  {
+    "dept": "Rush",
+    "op": "5 business day turnaround",
+    "machine": "No machine",
+    "count": 3,
+    "tag": null,
+    "flags": [
+      "was_rush"
+    ],
+    "row_type": "rush_charge"
+  },
+  {
+    "dept": "Prepress",
+    "op": "RUSH: Approx 4 working days after proof approval",
+    "machine": null,
+    "count": 2,
+    "tag": null,
+    "flags": [
+      "was_rush"
+    ],
+    "row_type": "leadtime"
+  },
+  {
+    "dept": "Rush",
+    "op": "Normal production turnaround 3-4 working days",
+    "machine": "No machine",
+    "count": 2,
+    "tag": null,
+    "flags": [
+      "was_rush"
+    ],
+    "row_type": "rush_charge"
+  },
+  {
+    "dept": "Rush",
+    "op": "Normal production turnaround 5-6 working days",
+    "machine": "No machine",
+    "count": 2,
+    "tag": null,
+    "flags": [
+      "was_rush"
+    ],
+    "row_type": "rush_charge"
+  },
+  {
+    "dept": "Prepress",
+    "op": "RUSH: Approx 10 working days after proof approval",
+    "machine": null,
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "was_rush"
+    ],
+    "row_type": "leadtime"
+  },
+  {
+    "dept": "Prepress",
+    "op": "RUSH: Approx 6 working days after proof approval",
+    "machine": null,
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "was_rush"
+    ],
+    "row_type": "leadtime"
+  },
+  {
+    "dept": "Prepress",
+    "op": "RUSH: Approx. 0 business days after art approval",
+    "machine": null,
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "was_rush"
+    ],
+    "row_type": "leadtime"
+  },
+  {
+    "dept": "Prepress",
+    "op": "RUSH: Approx. 2 business days after art approval",
+    "machine": null,
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "was_rush"
+    ],
+    "row_type": "leadtime"
+  },
+  {
+    "dept": "Prepress",
+    "op": "RUSH: Approx xxx working days after proof approval",
+    "machine": null,
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "was_rush"
+    ],
+    "row_type": "leadtime"
+  },
+  {
+    "dept": "Prepress",
+    "op": "RUSH: Approx. 1 business days after art approval",
+    "machine": null,
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "was_rush"
+    ],
+    "row_type": "leadtime"
+  },
+  {
+    "dept": "Rush",
+    "op": "Normal production turnaround 7+ working days",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "was_rush"
+    ],
+    "row_type": "rush_charge"
+  },
+  {
+    "dept": "Rush",
+    "op": "3 business day turnaround ($59 extra)",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [
+      "was_rush"
+    ],
+    "row_type": "rush_charge"
+  },
+  {
+    "dept": "None",
+    "op": "Drying",
+    "machine": null,
+    "count": 5145,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "None",
+    "op": "Imposition",
+    "machine": null,
+    "count": 5145,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Digital sheetfed print",
+    "op": "Paper Stock Draw",
+    "machine": null,
+    "count": 4193,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "None",
+    "op": "Dispatch",
+    "machine": null,
+    "count": 3922,
+    "tag": null,
+    "flags": [],
+    "row_type": "logistics"
+  },
+  {
+    "dept": "Digital sheetfed print",
+    "op": "Ink Stock Draw",
+    "machine": null,
+    "count": 3885,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Prepress",
+    "op": "Prepress",
+    "machine": "Pre Press",
+    "count": 3676,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Guillotine",
+    "op": "Guillotine",
+    "machine": "Polar 115",
+    "count": 3542,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Coating",
+    "op": "H&B Pre-coat",
+    "machine": "Coater - H&B",
+    "count": 3500,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Packaging",
+    "machine": "Packing",
+    "count": 3062,
+    "tag": null,
+    "flags": [],
+    "row_type": "logistics"
+  },
+  {
+    "dept": "Prepress",
+    "op": "Delivery",
+    "machine": "No machine",
+    "count": 2032,
+    "tag": null,
+    "flags": [],
+    "row_type": "logistics"
+  },
+  {
+    "dept": "Digital sheetfed print",
+    "op": "Proofing",
+    "machine": "No machine",
+    "count": 1812,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Prepress",
+    "op": "Artwork preflight",
+    "machine": "Setup",
+    "count": 1703,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Wide Format Print",
+    "op": "Paper Stock Draw",
+    "machine": null,
+    "count": 1206,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Prepress",
+    "op": "STD: Approx 2 working days after proof approval",
+    "machine": null,
+    "count": 1205,
+    "tag": null,
+    "flags": [],
+    "row_type": "leadtime"
+  },
+  {
+    "dept": "Prepress",
+    "op": "Setup",
+    "machine": "No machine",
+    "count": 1076,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Max height 500mm",
+    "machine": "Crease + Fold - Horizon",
+    "count": 985,
+    "tag": null,
+    "flags": [],
+    "row_type": "constraint"
+  },
+  {
+    "dept": "Wide Format Print",
+    "op": "Ink Stock Draw",
+    "machine": null,
+    "count": 936,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Wide Format Finishing",
+    "op": "Zund large format cutting",
+    "machine": "Flatbed Cutter - Zund",
+    "count": 841,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Prepress",
+    "op": "$",
+    "machine": "Pre Press",
+    "count": 764,
+    "tag": null,
+    "flags": [],
+    "row_type": "costing"
+  },
+  {
+    "dept": "Guillotine",
+    "op": "Guillotine Pre-Trim",
+    "machine": "ALL Guillotine pre-trim",
+    "count": 746,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Prepress",
+    "op": "PDF Proof",
+    "machine": "No machine",
+    "count": 670,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Wide-format finishing",
+    "op": "Guillotine",
+    "machine": "Zund",
+    "count": 580,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "NO Trimming",
+    "machine": "No machine",
+    "count": 562,
+    "tag": null,
+    "flags": [],
+    "row_type": "constraint"
+  },
+  {
+    "dept": "Digital sheetfed print",
+    "op": "Internal Proofing",
+    "machine": "No machine",
+    "count": 459,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Prepress",
+    "op": "Large format preflight",
+    "machine": "No machine",
+    "count": 408,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Prepress",
+    "op": "STD: Approx 4 working days after proof approval",
+    "machine": null,
+    "count": 354,
+    "tag": null,
+    "flags": [],
+    "row_type": "leadtime"
+  },
+  {
+    "dept": "Prepress",
+    "op": "STD: Approx 3 working days after proof approval",
+    "machine": null,
+    "count": 283,
+    "tag": null,
+    "flags": [],
+    "row_type": "leadtime"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Includes local delivery by regular courier",
+    "machine": "No machine",
+    "count": 268,
+    "tag": null,
+    "flags": [],
+    "row_type": "logistics"
+  },
+  {
+    "dept": "Design",
+    "op": "Ink Stock Draw",
+    "machine": null,
+    "count": 261,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Trim to size & Bulk pack",
+    "machine": "Packing & Finishing - Wide For",
+    "count": 235,
+    "tag": null,
+    "flags": [],
+    "row_type": "logistics"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Package Flat",
+    "machine": "Packing",
+    "count": 195,
+    "tag": null,
+    "flags": [],
+    "row_type": "logistics"
+  },
+  {
+    "dept": "Coating",
+    "op": "H&B Pre-coat",
+    "machine": "No machine",
+    "count": 186,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Additional Guillotine Final Book Trim",
+    "machine": "Intermmediate-Trim Guillo",
+    "count": 154,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Per unit finishing",
+    "machine": "Handwork",
+    "count": 140,
+    "tag": null,
+    "flags": [],
+    "row_type": "costing"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Bulk Packing onto Pallets",
+    "machine": "No machine",
+    "count": 139,
+    "tag": null,
+    "flags": [],
+    "row_type": "logistics"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Custom Item per unit (1)",
+    "machine": "No machine",
+    "count": 131,
+    "tag": null,
+    "flags": [],
+    "row_type": "costing"
+  },
+  {
+    "dept": "Prepress",
+    "op": "Job %",
+    "machine": null,
+    "count": 129,
+    "tag": null,
+    "flags": [],
+    "row_type": "costing"
+  },
+  {
+    "dept": "Digital sheetfed print",
+    "op": "Proofing Requirements",
+    "machine": "No machine",
+    "count": 114,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Includes delivery by regular road freight",
+    "machine": "No machine",
+    "count": 114,
+    "tag": null,
+    "flags": [],
+    "row_type": "logistics"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Multiplies with quantity.",
+    "machine": "Handwork",
+    "count": 104,
+    "tag": null,
+    "flags": [],
+    "row_type": "costing"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Drilling x 4",
+    "machine": "Drilling Machine",
+    "count": 76,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Wide-format production",
+    "op": "Paper Stock Draw",
+    "machine": null,
+    "count": 66,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Coating",
+    "op": "Precoat Internal House Stocks",
+    "machine": "No machine",
+    "count": 59,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Wide-format production",
+    "op": "Ink Stock Draw",
+    "machine": null,
+    "count": 57,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Drilling x 1",
+    "machine": "Drilling Machine",
+    "count": 55,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Does not multiply with quantity.",
+    "machine": "Handwork",
+    "count": 54,
+    "tag": null,
+    "flags": [],
+    "row_type": "costing"
+  },
+  {
+    "dept": "Design",
+    "op": "Paper Stock Draw",
+    "machine": null,
+    "count": 50,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Attach Strut",
+    "machine": "Handwork",
+    "count": 46,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Digital sheetfed print",
+    "op": "2 x Set Digital Printed Proof Sheets",
+    "machine": "No machine",
+    "count": 43,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Guillotine",
+    "op": "Guillotine Pre-Trim",
+    "machine": "Polar 92EM",
+    "count": 42,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Dispatch",
+    "op": "Shrink wrapping / 25",
+    "machine": "Shrink Wrapper 6000",
+    "count": 39,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Prepress",
+    "op": "Management @ 250",
+    "machine": "No machine",
+    "count": 38,
+    "tag": null,
+    "flags": [],
+    "row_type": "costing"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Section",
+    "machine": "Crease + Fold - Horizon",
+    "count": 34,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Wide-format finishing",
+    "op": "Guillotine Pre-Trim",
+    "machine": "Zund",
+    "count": 32,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Trim to size & Pack 250 per box",
+    "machine": "No machine",
+    "count": 30,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Client to collect",
+    "machine": "No machine",
+    "count": 30,
+    "tag": null,
+    "flags": [],
+    "row_type": "logistics"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Corner:",
+    "machine": "Round cornering machine",
+    "count": 25,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Max height 520mm",
+    "machine": "Handwork",
+    "count": 24,
+    "tag": null,
+    "flags": [],
+    "row_type": "constraint"
+  },
+  {
+    "dept": "Wide Format Finishing",
+    "op": "Zund large format cutting",
+    "machine": "Polar 115",
+    "count": 22,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Finishing hand assembly",
+    "machine": "Handwork",
+    "count": 22,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Crease/Fold",
+    "machine": "Crease + Fold - Horizon",
+    "count": 22,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Hand tapex 1 Pieces",
+    "machine": "Handwork",
+    "count": 21,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Prepress",
+    "op": "Management @ 100",
+    "machine": "No machine",
+    "count": 21,
+    "tag": null,
+    "flags": [],
+    "row_type": "costing"
+  },
+  {
+    "dept": "Wide-format finishing",
+    "op": "Guillotine",
+    "machine": "Polar 115",
+    "count": 21,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Dispatch",
+    "op": "Shrink wrapping / 10",
+    "machine": "Shrink Wrapper 6000",
+    "count": 21,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Includes delivery by overnight express",
+    "machine": "No machine",
+    "count": 21,
+    "tag": null,
+    "flags": [],
+    "row_type": "logistics"
+  },
+  {
+    "dept": "Prepress",
+    "op": "STD: Approx. 2 business days after art approval",
+    "machine": null,
+    "count": 21,
+    "tag": null,
+    "flags": [],
+    "row_type": "leadtime"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Drilling x 3",
+    "machine": "Drilling Machine",
+    "count": 20,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Digital sheetfed print",
+    "op": "1 x Set Digital Printed Proof Sheets",
+    "machine": "No machine",
+    "count": 19,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Case Making",
+    "op": "Adds set-up charge + per magnet price to drill and insert. Includes magnets (10mm x 1.5mm standard magnet only).",
+    "machine": "No machine",
+    "count": 18,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Hand tapex 2 Pieces",
+    "machine": "Handwork",
+    "count": 18,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Round corners all sides",
+    "machine": "Round cornering machine",
+    "count": 18,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Prepress",
+    "op": "BC Setup",
+    "machine": "No machine",
+    "count": 18,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Tape application",
+    "machine": "Handwork",
+    "count": 17,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Dispatch",
+    "op": "Custom Delivery + return delivery to supplier (to and fro)",
+    "machine": "No machine",
+    "count": 17,
+    "tag": null,
+    "flags": [],
+    "row_type": "logistics"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Paper Banding",
+    "machine": "Paper Banding",
+    "count": 17,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Prepress",
+    "op": "STD: Approx 6 working days after proof approval",
+    "machine": null,
+    "count": 16,
+    "tag": null,
+    "flags": [],
+    "row_type": "leadtime"
+  },
+  {
+    "dept": "Prepress",
+    "op": "Online Administration Fee",
+    "machine": "No machine",
+    "count": 15,
+    "tag": null,
+    "flags": [],
+    "row_type": "admin"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Adds set-up charge + per magnet price to drill and insert. Includes magnets (10mm x 1.5mm standard magnet only).",
+    "machine": "No machine",
+    "count": 14,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Design",
+    "op": "1 x Digital Printed Proof Mock-up",
+    "machine": "No machine",
+    "count": 14,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Guillotine",
+    "op": "Guillotine Pre-Trim",
+    "machine": "Polar 115",
+    "count": 14,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Padding only",
+    "machine": "Handwork",
+    "count": 13,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Job Hand Collation",
+    "machine": "Handwork",
+    "count": 13,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Thread - white",
+    "machine": "No machine",
+    "count": 13,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Prepress",
+    "op": "Prepress Complexity 1",
+    "machine": "Pre Press",
+    "count": 12,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Prepress",
+    "op": "Management @ 150",
+    "machine": "No machine",
+    "count": 11,
+    "tag": null,
+    "flags": [],
+    "row_type": "costing"
+  },
+  {
+    "dept": "Prepress",
+    "op": "Prepress Complexity 2",
+    "machine": "Pre Press",
+    "count": 11,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Prepress",
+    "op": "Management @ 500",
+    "machine": "No machine",
+    "count": 10,
+    "tag": null,
+    "flags": [],
+    "row_type": "costing"
+  },
+  {
+    "dept": "Wide Format Finishing",
+    "op": "Zund large format cutting",
+    "machine": "Flatbed Cutter - JWEI",
+    "count": 10,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Prepress",
+    "op": "Management @ 200",
+    "machine": "No machine",
+    "count": 10,
+    "tag": null,
+    "flags": [],
+    "row_type": "costing"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Hand Collate x 2",
+    "machine": "Handwork",
+    "count": 10,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Perforated",
+    "machine": "Crease + Fold - Horizon",
+    "count": 10,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Prepress",
+    "op": "Management @ 50",
+    "machine": "No machine",
+    "count": 10,
+    "tag": null,
+    "flags": [],
+    "row_type": "costing"
+  },
+  {
+    "dept": "Prepress",
+    "op": "STD: Approx. 3 business days after art approval",
+    "machine": null,
+    "count": 10,
+    "tag": null,
+    "flags": [],
+    "row_type": "leadtime"
+  },
+  {
+    "dept": "Prepress",
+    "op": "STD: Approx. 4 business days after art approval",
+    "machine": null,
+    "count": 10,
+    "tag": null,
+    "flags": [],
+    "row_type": "leadtime"
+  },
+  {
+    "dept": "Prepress",
+    "op": "Management @ 300",
+    "machine": "No machine",
+    "count": 9,
+    "tag": null,
+    "flags": [],
+    "row_type": "costing"
+  },
+  {
+    "dept": "Guillotine",
+    "op": "Guillotine",
+    "machine": "Zund",
+    "count": 9,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Prepress",
+    "op": "STD: Approx 5 working days after proof approval",
+    "machine": null,
+    "count": 9,
+    "tag": null,
+    "flags": [],
+    "row_type": "leadtime"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Includes delivery of proof and final job by regular road freight",
+    "machine": "No machine",
+    "count": 8,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Drilling x 2",
+    "machine": "Drilling Machine",
+    "count": 8,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Prepress",
+    "op": "Management @ 350",
+    "machine": "No machine",
+    "count": 7,
+    "tag": null,
+    "flags": [],
+    "row_type": "costing"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Hand tape (Red Tape)",
+    "machine": "Handwork",
+    "count": 7,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Finishing hand aseembly",
+    "machine": "No machine",
+    "count": 7,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Paper wrapping",
+    "machine": "No machine",
+    "count": 7,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Dispatch",
+    "op": "Shrink wrapping / 250",
+    "machine": "Shrink Wrapper 6000",
+    "count": 7,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Prepress",
+    "op": "STD: Approx 16 working days after proof approval",
+    "machine": null,
+    "count": 7,
+    "tag": null,
+    "flags": [],
+    "row_type": "leadtime"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Hand Collate x 1",
+    "machine": "Handwork",
+    "count": 6,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Padding",
+    "machine": "Hand Padding",
+    "count": 6,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Prepress",
+    "op": "STD: Approx xxx working days after proof approval",
+    "machine": null,
+    "count": 6,
+    "tag": null,
+    "flags": [],
+    "row_type": "leadtime"
+  },
+  {
+    "dept": "None",
+    "op": "Delivery not included, pickup only",
+    "machine": "No machine",
+    "count": 6,
+    "tag": null,
+    "flags": [],
+    "row_type": "logistics"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Custom Item per unit (1)",
+    "machine": "Handwork",
+    "count": 5,
+    "tag": null,
+    "flags": [],
+    "row_type": "costing"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Hand tapex 10 Pieces",
+    "machine": "Handwork",
+    "count": 5,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Prepress",
+    "op": "How Many Kinds",
+    "machine": "No machine",
+    "count": 5,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Prepress",
+    "op": "Proofing Setup",
+    "machine": "No machine",
+    "count": 5,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Additional Guillotine Embellishment Pre-trim",
+    "machine": "Intermmediate-Trim Guillo",
+    "count": 5,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Drilling x 6",
+    "machine": "Drilling Machine",
+    "count": 5,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Coating",
+    "op": "H&B Pre-coat",
+    "machine": "HP Indigo 15k HD",
+    "count": 5,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "None",
+    "machine": "No machine",
+    "count": 5,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Velcro",
+    "machine": "No machine",
+    "count": 4,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Layflat Foldlays/hr (Child)",
+    "machine": "Layflat Fusing",
+    "count": 4,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Chicago screws x 4",
+    "machine": "Handwork",
+    "count": 4,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Hand Collate x 4",
+    "machine": "Handwork",
+    "count": 4,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Prepress",
+    "op": "Management @ 80",
+    "machine": "No machine",
+    "count": 4,
+    "tag": null,
+    "flags": [],
+    "row_type": "costing"
+  },
+  {
+    "dept": "Wide Format Finishing",
+    "op": "Finishing hand aseembly",
+    "machine": "No machine",
+    "count": 4,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "None",
+    "op": "Guillotine Pre-Trim",
+    "machine": "NEW TEST GUILOTINE",
+    "count": 4,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Dispatch",
+    "op": "Shrink wrapping / 30",
+    "machine": "Shrink Wrapper 6000",
+    "count": 4,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Includes delivery by fast courier",
+    "machine": "No machine",
+    "count": 4,
+    "tag": null,
+    "flags": [],
+    "row_type": "logistics"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Hand tapex 3 Pieces",
+    "machine": "Handwork",
+    "count": 3,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Corner cut x2 Corners",
+    "machine": "Round cornering machine",
+    "count": 3,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Wide Format Finishing",
+    "op": "Zund large format cutting",
+    "machine": "Vinyl Cutter - Summa",
+    "count": 3,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Prepress",
+    "op": "Case Binding Setup",
+    "machine": "No machine",
+    "count": 3,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Attach A4 strut",
+    "machine": "Handwork",
+    "count": 3,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Wide Format Finishing",
+    "op": "Zund Cutting",
+    "machine": "Flatbed Cutter - Zund",
+    "count": 3,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Coating",
+    "op": "Precoat Internal House Stocks",
+    "machine": "Sapphire",
+    "count": 3,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Dispatch",
+    "op": "Shrink wrapping / 100",
+    "machine": "Shrink Wrapper 6000",
+    "count": 3,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Dispatch",
+    "op": "Shrink wrapping / 1",
+    "machine": "Shrink Wrapper 6000",
+    "count": 3,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Digital sheetfed print",
+    "op": "Paper Additional Picking Fee",
+    "machine": "No machine",
+    "count": 3,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Coating",
+    "op": "H&B Pre-coat",
+    "machine": "HP Indigo 7900",
+    "count": 3,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Chicago screws x 8",
+    "machine": "Handwork",
+    "count": 2,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Prepress",
+    "op": "Management @ 400",
+    "machine": "No machine",
+    "count": 2,
+    "tag": null,
+    "flags": [],
+    "row_type": "costing"
+  },
+  {
+    "dept": "None",
+    "op": "LF Zund simple cut to shape",
+    "machine": "Flatbed Cutter - Zund",
+    "count": 2,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Digital sheetfed print",
+    "op": "1 x Set Digital Printed Proof",
+    "machine": "No machine",
+    "count": 2,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Wide Format Finishing",
+    "op": "Zund large format cutting",
+    "machine": "ALL Guillotine pre-trim",
+    "count": 2,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Wide Format Finishing",
+    "op": "Pull up banner silver base economy",
+    "machine": "Handwork",
+    "count": 2,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Prepress",
+    "op": "PMS Colour Chart Proofing",
+    "machine": "No machine",
+    "count": 2,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Wide Format Finishing",
+    "op": "TEST Zund Interm Setup (Child Section)",
+    "machine": "Flatbed Cutter - Zund",
+    "count": 2,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Crease/Fold",
+    "machine": "Morgan Hand Digi Folder",
+    "count": 2,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Max height 500mm",
+    "machine": "Hand Creaser - Morgana",
+    "count": 2,
+    "tag": null,
+    "flags": [],
+    "row_type": "constraint"
+  },
+  {
+    "dept": "Wide Format Finishing",
+    "op": "Finishing hand aseembly",
+    "machine": "Packing",
+    "count": 2,
+    "tag": null,
+    "flags": [],
+    "row_type": "logistics"
+  },
+  {
+    "dept": "Wide-format finishing",
+    "op": "Guillotine Pre-Trim",
+    "machine": "Large format trimming",
+    "count": 2,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Wide Format Finishing",
+    "op": "TEST Zund Cutting (Child Section)",
+    "machine": "Flatbed Cutter - Zund",
+    "count": 2,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Drilling x 5",
+    "machine": "Drilling Machine",
+    "count": 2,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Prepress",
+    "op": "BC Typesetting / Layout per Name",
+    "machine": "No machine",
+    "count": 2,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Finishing hand aseembly",
+    "machine": "Handwork",
+    "count": 2,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Prepress",
+    "op": "STD: Approx 9 working days after proof approval",
+    "machine": null,
+    "count": 2,
+    "tag": null,
+    "flags": [],
+    "row_type": "leadtime"
+  },
+  {
+    "dept": "Coating",
+    "op": "H&B Pre-coat",
+    "machine": null,
+    "count": 2,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Prepress",
+    "op": "STD: Approx 20 working days after proof approval",
+    "machine": null,
+    "count": 2,
+    "tag": null,
+    "flags": [],
+    "row_type": "leadtime"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Thread - black",
+    "machine": "No machine",
+    "count": 2,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Prepress",
+    "op": "Management @ 1500",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "costing"
+  },
+  {
+    "dept": "Prepress",
+    "op": "Management @ 1450",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "costing"
+  },
+  {
+    "dept": "Prepress",
+    "op": "Management @ 824",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "costing"
+  },
+  {
+    "dept": "Prepress",
+    "op": "Management @ 594.08",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "costing"
+  },
+  {
+    "dept": "Wide Format Finishing",
+    "op": "Zund large format cutting",
+    "machine": "Auto Creaser - Morgana",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Prepress",
+    "op": "Management @ 348",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "costing"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Chicago screws x 3",
+    "machine": "Handwork",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Prepress",
+    "op": "Prepress Complexity 3",
+    "machine": "Pre Press",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Prepress",
+    "op": "Management @ 240",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "costing"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Hand Collate x 8",
+    "machine": "Handwork",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Round Corner x2 x 2",
+    "machine": "Round cornering machine",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Post Print pre Finish(section)",
+    "machine": "Intermmediate-Trim Guillo",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Hand Saddle Stitch (NEEDS CREASING ON ALL SHEETS)",
+    "machine": "Crease + Fold - Horizon",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Per unit finishing",
+    "machine": "Flatbed Cutter - Zund",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "costing"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Custom Item per unit (2)",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "costing"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Max height 520mm",
+    "machine": "Hand Creaser - Morgana",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "constraint"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Hand tapex 5 Pieces",
+    "machine": "Handwork",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "process number 1 @ 70",
+    "machine": "Flatbed Cutter - Zund",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Prepress",
+    "op": "Management @ 70",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "costing"
+  },
+  {
+    "dept": "Wide Format Finishing",
+    "op": "Zund large format cutting",
+    "machine": "Large format trimming",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Wide Format Finishing",
+    "op": "Zund large format cutting",
+    "machine": "Laser Cutter - Universal",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "process number 1 @ 50",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Case Making",
+    "op": "Adds set-up charge + per magnet price to drill and insert. Includes magnets (10mm x 1.5mm standard magnet only).",
+    "machine": "Handwork",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Prepress",
+    "op": "Management @ 45",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "costing"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Hand Collate x 50",
+    "machine": "Handwork",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Wide Format Finishing",
+    "op": "Zund large format cutting",
+    "machine": "Zund",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Drilling x 8",
+    "machine": "Drilling Machine",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Prepress",
+    "op": "Management @ 31",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "costing"
+  },
+  {
+    "dept": "Wide Format Finishing",
+    "op": "Application tape for decals",
+    "machine": "Flatbed Cutter - Zund",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Wide Format Finishing",
+    "op": "Adds set-up charge + per-eyelet charge. x 4",
+    "machine": "Packing & Finishing - Wide For",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "logistics"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Round Corner x2 x 4",
+    "machine": "Round cornering machine",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Design, setup, prepress",
+    "op": "Large format preflight",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Prepress",
+    "op": "Management @ 19.5",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "costing"
+  },
+  {
+    "dept": "Wide-format finishing",
+    "op": "Guillotine",
+    "machine": "Large format trimming",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Custom Item per unit (1)",
+    "machine": "Fuji Revoria",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "costing"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Roll & Packed in Tubes / 1",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Dispatch",
+    "op": "Shrink wrapping / 8",
+    "machine": "Shrink Wrapper 6000",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Crease/Fold",
+    "machine": "Handwork",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Crease/Fold",
+    "machine": "Auto Creaser - Morgana",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Multiplies with quantity.",
+    "machine": "Packing",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "costing"
+  },
+  {
+    "dept": "Wide Format Finishing",
+    "op": "Finishing hand aseembly",
+    "machine": "Handwork",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Finishing hand aseembly",
+    "machine": "Packing & Finishing - Wide For",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "logistics"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Packaging",
+    "machine": null,
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "logistics"
+  },
+  {
+    "dept": "Handwork & finishing",
+    "op": "Packaging",
+    "machine": "Packing",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "logistics"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Roll & Packed in Tubes / 2",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Padding only",
+    "machine": "Hand Padding",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Dispatch",
+    "op": "Shrink wrapping / 10",
+    "machine": "Handwork",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Paper wrapping",
+    "machine": "Packing",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "logistics"
+  },
+  {
+    "dept": "Dispatch",
+    "op": "Shrink wrapping / 100",
+    "machine": "Handwork",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Dispatch",
+    "op": "Shrink wrapping / 50",
+    "machine": "Shrink Wrapper 6000",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Prepress",
+    "op": "STD: Approx. 6 business days after art approval",
+    "machine": null,
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "leadtime"
+  },
+  {
+    "dept": "Prepress",
+    "op": "STD: Approx 12 working days after proof approval",
+    "machine": null,
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "leadtime"
+  },
+  {
+    "dept": "Coating",
+    "op": "H&B Pre-coat",
+    "machine": "Fuji Revoria",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Wide Format Finishing",
+    "op": "TEST Zund (Parent)",
+    "machine": "Flatbed Cutter - JWEI",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Coating",
+    "op": "H&B Pre-coat",
+    "machine": "LED UV Printer - SwissQ",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Prepress",
+    "op": "Prepaid",
+    "machine": "No machine",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Coating",
+    "op": "H&B Pre-coat",
+    "machine": "Polar 115",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Prepress",
+    "op": "STD: Approx 10 working days after proof approval",
+    "machine": null,
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "leadtime"
+  },
+  {
+    "dept": "Prepress",
+    "op": "STD: Approx 15 working days after proof approval",
+    "machine": null,
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "leadtime"
+  },
+  {
+    "dept": "Finishing",
+    "op": "Job Hand Collation",
+    "machine": "Packing",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "logistics"
+  },
+  {
+    "dept": "Wide Format Finishing",
+    "op": "TEST Zund (Parent)",
+    "machine": "Flatbed Cutter - Zund",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Design, setup, prepress",
+    "op": "Prepress",
+    "machine": "Pre Press",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Coating",
+    "op": "H&B Pre-coat",
+    "machine": "Handwork",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "process"
+  },
+  {
+    "dept": "Design",
+    "op": "Maui Artwork setup",
+    "machine": "Graphic design",
+    "count": 324,
+    "tag": "Design Services",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Design",
+    "op": "Artwork and layout",
+    "machine": "No machine",
+    "count": 208,
+    "tag": "Design Services",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Design",
+    "op": "Artwork and layout",
+    "machine": "Graphic design",
+    "count": 70,
+    "tag": "Design Services",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Design",
+    "op": "Variable data Setup & Design",
+    "machine": "No machine",
+    "count": 57,
+    "tag": "Design Services",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Design",
+    "op": "Technical design, knife adjustments and related PrePress.",
+    "machine": "Industrial Design",
+    "count": 46,
+    "tag": "Design Services",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Adds m2 charge to have anti-graffiti coating applied to one side of vinyl banner. $14.50/m2 cost. Adds 30% markup.",
+    "machine": "Celloglazer - Autobond",
+    "count": 1,
+    "tag": "Display / Installation",
+    "flags": [
+      "has_coating",
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Install",
+    "machine": "No machine",
+    "count": 37,
+    "tag": "Display / Installation",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Hourly install rate 2 man @ 16.8",
+    "machine": "No machine",
+    "count": 1,
+    "tag": "Display / Installation",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Install",
+    "machine": "Assembly Outsource",
+    "count": 1,
+    "tag": "Display / Installation",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Wide Format Finishing",
+    "op": "Poles with metal eyelets / Supply Only + hanging kit",
+    "machine": "No machine",
+    "count": 36,
+    "tag": "Display / Installation",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Wide Format Finishing",
+    "op": "Clear Plastic Rails / Supply Only + hanging kit",
+    "machine": "No machine",
+    "count": 20,
+    "tag": "Display / Installation",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Wide Format Finishing",
+    "op": "Pull up banner silver base economy",
+    "machine": "No machine",
+    "count": 15,
+    "tag": "Display / Installation",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Hot foil stamping",
+    "machine": "Digital Foil - Autobond",
+    "count": 1,
+    "tag": "Embellishment",
+    "flags": [
+      "has_coating",
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Hot foil stamping",
+    "machine": "Foil Outsource",
+    "count": 78,
+    "tag": "Embellishment",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 1",
+    "machine": "Foil Outsource",
+    "count": 23,
+    "tag": "Embellishment",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Spot UV - outsource",
+    "machine": "Outsource",
+    "count": 16,
+    "tag": "Embellishment",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Creation of stamping die only",
+    "machine": "Foil Autoprint",
+    "count": 8,
+    "tag": "Embellishment",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Spot UV - outsource",
+    "machine": "Spot UV Outsource",
+    "count": 8,
+    "tag": "Embellishment",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Emboss with counter",
+    "machine": "No machine",
+    "count": 6,
+    "tag": "Embellishment",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Emboss with counter",
+    "machine": "Emboss/Deboss Outsource",
+    "count": 5,
+    "tag": "Embellishment",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Hot foil stamping",
+    "machine": "Emboss/Deboss Outsource",
+    "count": 3,
+    "tag": "Embellishment",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 664",
+    "machine": "Foil Outsource",
+    "count": 3,
+    "tag": "Embellishment",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Spot UV Digital - outsource",
+    "machine": "Outsource",
+    "count": 3,
+    "tag": "Embellishment",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Creation of stamping die only",
+    "machine": "Foil Outsource",
+    "count": 3,
+    "tag": "Embellishment",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Spot UV Digital - outsource",
+    "machine": "Spot UV Outsource",
+    "count": 3,
+    "tag": "Embellishment",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Spot UV Digital Hi-Build - outsource",
+    "machine": "Spot UV Outsource",
+    "count": 3,
+    "tag": "Embellishment",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Emboss with counter",
+    "machine": "Foil Outsource",
+    "count": 2,
+    "tag": "Embellishment",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Design",
+    "op": "Outsource (2) @ 1",
+    "machine": "Foil Outsource",
+    "count": 2,
+    "tag": "Embellishment",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Spot UV Digital Hi-Build - outsource",
+    "machine": "Outsource",
+    "count": 2,
+    "tag": "Embellishment",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Spot UV - outsource x 1500",
+    "machine": null,
+    "count": 1,
+    "tag": "Embellishment",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Creation of debossing die only",
+    "machine": "No machine",
+    "count": 1,
+    "tag": "Embellishment",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Spot UV - outsource x 0",
+    "machine": "Spot UV Outsource",
+    "count": 1,
+    "tag": "Embellishment",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "External die-cutting",
+    "machine": "Foil Emboss Die Cut - ThermoTy",
+    "count": 1,
+    "tag": "Embellishment",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Hot foil stamping",
+    "machine": "Foil Autoprint",
+    "count": 1,
+    "tag": "Embellishment",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (3) @ 1",
+    "machine": "Foil Outsource",
+    "count": 1,
+    "tag": "Embellishment",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Spot UV - outsource x 0",
+    "machine": "Outsource",
+    "count": 1,
+    "tag": "Embellishment",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 300",
+    "machine": "Foil Outsource",
+    "count": 1,
+    "tag": "Embellishment",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Hot foil stamping",
+    "machine": "Foil Emboss Die Cut - ThermoTy",
+    "count": 1,
+    "tag": "Embellishment",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 200",
+    "machine": "Foil Outsource",
+    "count": 1,
+    "tag": "Embellishment",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Wide Format Print",
+    "op": "Printing",
+    "machine": "LED UV Printer - SwissQ",
+    "count": 768,
+    "tag": "Embellishment",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Case Making",
+    "op": "Hand Foil / Deboss inhouse",
+    "machine": "Foil Autoprint",
+    "count": 137,
+    "tag": "Embellishment",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Wide Format Print",
+    "op": "Hand Lay onto SwissQ",
+    "machine": "No machine",
+    "count": 101,
+    "tag": "Embellishment",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Wide Format Print",
+    "op": "SwissQ Spot Gloss Varnish",
+    "machine": "No machine",
+    "count": 35,
+    "tag": "Embellishment",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Wide Format Print",
+    "op": "SwissQ Spot Gloss Hi-Build Varnish",
+    "machine": "No machine",
+    "count": 25,
+    "tag": "Embellishment",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Wide Format Print",
+    "op": "SwissQ Spot Gloss Varnish",
+    "machine": "LED UV Printer - SwissQ",
+    "count": 8,
+    "tag": "Embellishment",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Coating",
+    "op": "Digital foil - Gold (SINGLE SIDE ONLY)",
+    "machine": "Digital Foil - Autobond",
+    "count": 7,
+    "tag": "Embellishment",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Wide Format Print",
+    "op": "SwissQ Spot Gloss Hi-Build Varnish",
+    "machine": "LED UV Printer - SwissQ",
+    "count": 5,
+    "tag": "Embellishment",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Digital sheetfed print",
+    "op": "Printing",
+    "machine": "LED UV Printer - SwissQ",
+    "count": 5,
+    "tag": "Embellishment",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Embellishment",
+    "op": "Digital foil - Gold (SINGLE SIDE ONLY)",
+    "machine": "Digital Foil - Autobond",
+    "count": 4,
+    "tag": "Embellishment",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Case Making",
+    "op": "Traditional Foiling/Deboss Internal",
+    "machine": "Foil Emboss Die Cut - ThermoTy",
+    "count": 2,
+    "tag": "Embellishment",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Case Making",
+    "op": "Embossing with die and counter",
+    "machine": "Foil Emboss Die Cut - ThermoTy",
+    "count": 2,
+    "tag": "Embellishment",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Embellishment",
+    "op": "Digital foil - Coloured (SINGLE SIDE ONLY)",
+    "machine": "Digital Foil - Autobond",
+    "count": 1,
+    "tag": "Embellishment",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Wide Format Finishing",
+    "op": "Zund large format cutting",
+    "machine": "Foil Emboss Die Cut - ThermoTy",
+    "count": 1,
+    "tag": "Embellishment",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Case Making",
+    "op": "Traditional Foiling/Deboss Internal",
+    "machine": "Zund",
+    "count": 1,
+    "tag": "Embellishment",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Embellishment",
+    "op": "Digital foil - Silver (SINGLE SIDE ONLY)",
+    "machine": "Digital Foil - Autobond",
+    "count": 1,
+    "tag": "Embellishment",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Wide Format Print",
+    "op": "Hand Lay onto SwissQ",
+    "machine": "Casebinding Inhouse",
+    "count": 1,
+    "tag": "Embellishment",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Embellishment",
+    "op": "Debossing",
+    "machine": "Foil Emboss Die Cut - ThermoTy",
+    "count": 1,
+    "tag": "Embellishment",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Coating",
+    "op": "Digital foil - Silver (SINGLE SIDE ONLY)",
+    "machine": "Digital Foil - Autobond",
+    "count": 1,
+    "tag": "Embellishment",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Coating",
+    "op": "Digital foil - Coloured (SINGLE SIDE ONLY)",
+    "machine": "Digital Foil - Autobond",
+    "count": 1,
+    "tag": "Embellishment",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Design",
+    "op": "Printing",
+    "machine": "TEST LED UV Printer - SwissQ",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Wide-format production",
+    "op": "Printing",
+    "machine": "LED UV Printer - SwissQ",
+    "count": 1,
+    "tag": null,
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Printing",
+    "machine": "Outsource Printing",
+    "count": 6,
+    "tag": "Flat Sheets",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "None",
+    "op": "Full Outsource",
+    "machine": "HP Indigo 15k HD",
+    "count": 3,
+    "tag": "Flat Sheets",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 11775.45",
+    "machine": "HP Indigo 7900",
+    "count": 1,
+    "tag": "Flat Sheets",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Digital sheetfed print",
+    "op": "Printing",
+    "machine": "HP Indigo 7900",
+    "count": 2085,
+    "tag": "Flat Sheets",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Digital sheetfed print",
+    "op": "Printing",
+    "machine": "HP Indigo 15k HD",
+    "count": 1481,
+    "tag": "Flat Sheets",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Digital sheetfed print",
+    "op": "Printing",
+    "machine": "No Printing Press",
+    "count": 333,
+    "tag": "Flat Sheets",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Digital sheetfed print",
+    "op": "Printing",
+    "machine": "Fuji Revoria",
+    "count": 285,
+    "tag": "Flat Sheets",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Digital sheetfed print",
+    "op": "Printing",
+    "machine": "Envelope Printer - Intec",
+    "count": 2,
+    "tag": "Flat Sheets",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Case Making",
+    "op": "Fuse back to back",
+    "machine": "Large format laminator",
+    "count": 2,
+    "tag": "Hard Cover Books",
+    "flags": [
+      "has_coating"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "JOB - Manual Section Sewing",
+    "machine": "Section Sewer - Manual",
+    "count": 38,
+    "tag": "Hard Cover Books",
+    "flags": [
+      "has_sewing"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "SECTION - Manual Section Sewing",
+    "machine": "Section Sewer - Manual",
+    "count": 21,
+    "tag": "Hard Cover Books",
+    "flags": [
+      "has_sewing"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Section sewing binding 440x350mm Max Size",
+    "machine": "Section Sewer - Manual",
+    "count": 21,
+    "tag": "Hard Cover Books",
+    "flags": [
+      "has_sewing"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Oversewn exposed spine (loose ends)",
+    "machine": "Sewing Machine - Juki",
+    "count": 13,
+    "tag": "Hard Cover Books",
+    "flags": [
+      "has_sewing"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Oversewn wrapped cover (loose ends)",
+    "machine": "Sewing Machine - Juki",
+    "count": 3,
+    "tag": "Hard Cover Books",
+    "flags": [
+      "has_sewing"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Oversewn exposed spine (tied ends)",
+    "machine": "Sewing Machine - Juki",
+    "count": 3,
+    "tag": "Hard Cover Books",
+    "flags": [
+      "has_sewing"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Oversewn DIFFICULT exposed spine (loose ends)",
+    "machine": "Sewing Machine - Juki",
+    "count": 2,
+    "tag": "Hard Cover Books",
+    "flags": [
+      "has_sewing"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Oversewn wrapped cover (tied ends)",
+    "machine": "Sewing Machine - Juki",
+    "count": 2,
+    "tag": "Hard Cover Books",
+    "flags": [
+      "has_sewing"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Oversewn wrapped cover (loose ends)",
+    "machine": "Hand Padding",
+    "count": 1,
+    "tag": "Hard Cover Books",
+    "flags": [
+      "has_sewing"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Oversewn exposed spine (loose ends)",
+    "machine": "Hand Padding",
+    "count": 1,
+    "tag": "Hard Cover Books",
+    "flags": [
+      "has_sewing"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Oversewn DIFFICULT wrapped cover (tied ends)",
+    "machine": "Sewing Machine - Juki",
+    "count": 1,
+    "tag": "Hard Cover Books",
+    "flags": [
+      "has_sewing"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Oversewn DIFFICULT exposed spine (tied ends)",
+    "machine": "Sewing Machine - Juki",
+    "count": 1,
+    "tag": "Hard Cover Books",
+    "flags": [
+      "has_sewing"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Casebinding",
+    "machine": "Casebinding Inhouse",
+    "count": 1,
+    "tag": "Hard Cover Books",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Case Making",
+    "op": "Adds set-up charge + custom per item price to wrap/hand casebind (time based).",
+    "machine": "Casebinding Inhouse",
+    "count": 113,
+    "tag": "Hard Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Case Making",
+    "op": "Fuse back to back",
+    "machine": "Teco gluing",
+    "count": 107,
+    "tag": "Hard Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Adds set-up charge + custom per item price to wrap/hand casebind (time based).",
+    "machine": "Casebinding Inhouse",
+    "count": 99,
+    "tag": "Hard Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Case Making",
+    "op": "Adds set-up charge + m2 area rate + per item price to glue Text Block to Cover by hand, Includes Nipping.",
+    "machine": "Casebinding Inhouse",
+    "count": 53,
+    "tag": "Hard Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Case Making",
+    "op": "Adds set-up charge + per book price to apply end papers. Excludes Stock.",
+    "machine": "Casebinding Inhouse",
+    "count": 49,
+    "tag": "Hard Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Adds set-up charge + m2 area rate + per item price to glue Text Block to Cover by hand, Includes Nipping.",
+    "machine": "Casebinding Inhouse",
+    "count": 48,
+    "tag": "Hard Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Adds set-up charge + per book price to apply end papers. Excludes Stock.",
+    "machine": "Casebinding Inhouse",
+    "count": 47,
+    "tag": "Hard Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Case Making",
+    "op": "Adds set-up charge + per unit cost to add a head & tail band to a book.",
+    "machine": "Casebinding Inhouse",
+    "count": 47,
+    "tag": "Hard Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Case Making",
+    "op": "Adds set-up charge + per unit perimeter charge. Excludes boards.",
+    "machine": "Casebinding Inhouse",
+    "count": 36,
+    "tag": "Hard Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Case Making",
+    "op": "Fuse or mounting",
+    "machine": "Teco gluing",
+    "count": 17,
+    "tag": "Hard Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Case Making",
+    "op": "Adds set-up charge + per unit price to attach one D-ring. You must manually enter the item charge based on the D-ring size/colour.",
+    "machine": "No machine",
+    "count": 14,
+    "tag": "Hard Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Case Making",
+    "op": "Casebinding",
+    "machine": "Casebinding Inhouse",
+    "count": 11,
+    "tag": "Hard Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Case Making",
+    "op": "Adds set-up charge + per item price to apply ribbons. Includes ribbon (up to 500mm length - house colours only). x 1",
+    "machine": "Casebinding Inhouse",
+    "count": 10,
+    "tag": "Hard Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Case Making",
+    "op": "Adds set-up charge + per-corner charge to join edges of grooved boxes with heat-activated tape machine. x 4",
+    "machine": "Casebinding Inhouse",
+    "count": 4,
+    "tag": "Hard Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Adds set-up charge + per item price to apply ribbons. Includes ribbon (up to 500mm length - house colours only). x 2",
+    "machine": "Casebinding Inhouse",
+    "count": 3,
+    "tag": "Hard Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Case Making",
+    "op": "Adds set-up charge + per item price to apply ribbons. Includes ribbon (up to 500mm length - house colours only). x 2",
+    "machine": "Casebinding Inhouse",
+    "count": 3,
+    "tag": "Hard Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Adds set-up charge + per book price to nip the spine.",
+    "machine": "Casebinding Inhouse",
+    "count": 3,
+    "tag": "Hard Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Adds set-up charge + per item price to apply ribbons. Includes ribbon (up to 500mm length - house colours only). x 1",
+    "machine": "Casebinding Inhouse",
+    "count": 2,
+    "tag": "Hard Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Case Making",
+    "op": "1 x Book Ribbon",
+    "machine": "No machine",
+    "count": 2,
+    "tag": "Hard Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Adds set-up charge + per unit price to attach one D-ring. You must manually enter the item charge based on the D-ring size/colour.",
+    "machine": "Casebinding Inhouse",
+    "count": 2,
+    "tag": "Hard Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Saddle Sewing and Oversewing - Loose, Tied",
+    "machine": "Sewing Machine - Juki",
+    "count": 53,
+    "tag": "Soft Cover Books",
+    "flags": [
+      "has_sewing"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Saddle sewn binding - tied ends",
+    "machine": "Sewing Machine - Juki",
+    "count": 16,
+    "tag": "Soft Cover Books",
+    "flags": [
+      "has_sewing"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Saddle sewn binding - loose threads",
+    "machine": "Sewing Machine - Juki",
+    "count": 5,
+    "tag": "Soft Cover Books",
+    "flags": [
+      "has_sewing"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Saddle Sewn, Machine Tied Ends",
+    "machine": "Sewing Machine - Juki",
+    "count": 4,
+    "tag": "Soft Cover Books",
+    "flags": [
+      "has_sewing"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Section",
+    "machine": "Section Sewer - Manual",
+    "count": 3,
+    "tag": null,
+    "flags": [
+      "has_sewing"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Multiple Paper Types - 440x350mm Max",
+    "machine": "Section Sewer - Manual",
+    "count": 2,
+    "tag": null,
+    "flags": [
+      "has_sewing"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Saddle Sewn, Loose Ends",
+    "machine": "Sewing Machine - Juki",
+    "count": 1,
+    "tag": "Soft Cover Books",
+    "flags": [
+      "has_sewing"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Saddle Sewn, Hand Tied Ends",
+    "machine": "Sewing Machine - Juki",
+    "count": 1,
+    "tag": "Soft Cover Books",
+    "flags": [
+      "has_sewing"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Saddle Sewing and Oversewing - Loose, Tied",
+    "machine": "Saddle Stitcher - Horizon",
+    "count": 1,
+    "tag": "Soft Cover Books",
+    "flags": [
+      "has_sewing"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Wrapped cover hidden thread",
+    "machine": "Sewing Machine - Juki",
+    "count": 1,
+    "tag": "Soft Cover Books",
+    "flags": [
+      "has_sewing"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Plasticoil",
+    "machine": "Binding Outsource",
+    "count": 4,
+    "tag": "Soft Cover Books",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Adds set-up charge + m2 area rate + per item price to glue Text Block to Cover by hand, Includes Nipping.",
+    "machine": "Outsource",
+    "count": 1,
+    "tag": "Soft Cover Books",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Perfect binding",
+    "machine": "PUR Binder - Horizon 280",
+    "count": 258,
+    "tag": "Soft Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Saddle stitching 248x355mm Max Size Portrait **300GSM GRAIN DIR**",
+    "machine": "Saddle Stitcher - Horizon",
+    "count": 166,
+    "tag": "Soft Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Perfect binding",
+    "machine": "PUR Binder - Morgana 300",
+    "count": 54,
+    "tag": "Soft Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Section",
+    "machine": "Saddle Stitcher - Horizon",
+    "count": 53,
+    "tag": "Soft Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Hand Saddle Stitch (NEEDS CREASING ON ALL SHEETS)",
+    "machine": "Hand Saddle Stitch",
+    "count": 33,
+    "tag": "Soft Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Saddle stitch bind",
+    "machine": "Saddle Stitcher - Horizon",
+    "count": 20,
+    "tag": "Soft Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Wire binding 2:1",
+    "machine": "Wiro Binder - Renz",
+    "count": 18,
+    "tag": "Soft Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Adds set-up charge + per unit price to attach one D-ring. You must manually enter the item charge based on the D-ring size/colour.",
+    "machine": "No machine",
+    "count": 18,
+    "tag": "Soft Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Wire binding 3:1",
+    "machine": "Wiro Binder - Renz",
+    "count": 11,
+    "tag": "Soft Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Wire - Black",
+    "machine": "No machine",
+    "count": 7,
+    "tag": "Soft Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Layflat Units (child)",
+    "machine": "Layflat Fusing",
+    "count": 4,
+    "tag": "Soft Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Layflat Fusing (parent)",
+    "machine": "Layflat Fusing",
+    "count": 4,
+    "tag": "Soft Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "White",
+    "machine": "No machine",
+    "count": 4,
+    "tag": "Soft Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Perfect binding",
+    "machine": null,
+    "count": 3,
+    "tag": "Soft Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Wire - White",
+    "machine": "No machine",
+    "count": 3,
+    "tag": "Soft Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Plasticoil",
+    "machine": "Plasticoil",
+    "count": 2,
+    "tag": "Soft Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Layflat covers",
+    "machine": "No machine",
+    "count": 2,
+    "tag": "Soft Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Hand Saddle Stitch (NEEDS CREASING ON ALL SHEETS)",
+    "machine": "Saddle Stitcher - Horizon",
+    "count": 1,
+    "tag": "Soft Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Jet black (+$49.00)",
+    "machine": "No machine",
+    "count": 1,
+    "tag": "Soft Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Light pink  (+$49.00)",
+    "machine": "No machine",
+    "count": 1,
+    "tag": "Soft Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "Saddle stitch bind",
+    "machine": "Hand Saddle Stitch",
+    "count": 1,
+    "tag": "Soft Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Bindery",
+    "op": "12mm KNURLED BODIES NICKLE w/screws",
+    "machine": null,
+    "count": 1,
+    "tag": "Soft Cover Books",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Creation of stamping die only",
+    "machine": "No machine",
+    "count": 50,
+    "tag": "Specialty Finishing",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "External die-cutting",
+    "machine": "Die Cut Outsource",
+    "count": 36,
+    "tag": "Specialty Finishing",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "External die-cutting",
+    "machine": "No machine",
+    "count": 18,
+    "tag": "Specialty Finishing",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 1",
+    "machine": "Die Cut Outsource",
+    "count": 7,
+    "tag": "Specialty Finishing",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Design",
+    "op": "Outsource (2) @ 1",
+    "machine": "Die Cut Outsource",
+    "count": 7,
+    "tag": "Specialty Finishing",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (3) @ 1",
+    "machine": "Die Cut Outsource",
+    "count": 3,
+    "tag": "Specialty Finishing",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 200",
+    "machine": "Die Cut Outsource",
+    "count": 3,
+    "tag": "Specialty Finishing",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 400",
+    "machine": "Die Cut Outsource",
+    "count": 2,
+    "tag": "Specialty Finishing",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 1700",
+    "machine": "Die Cut Outsource",
+    "count": 1,
+    "tag": "Specialty Finishing",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 620",
+    "machine": "Die Cut Outsource",
+    "count": 1,
+    "tag": "Specialty Finishing",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 440",
+    "machine": "Die Cut Outsource",
+    "count": 1,
+    "tag": "Specialty Finishing",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 420",
+    "machine": "Die Cut Outsource",
+    "count": 1,
+    "tag": "Specialty Finishing",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "External die-cutting",
+    "machine": "Zund",
+    "count": 1,
+    "tag": "Specialty Finishing",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Wide Format Finishing",
+    "op": "Zund large format bevel cutting",
+    "machine": "Flatbed Cutter - Zund",
+    "count": 51,
+    "tag": "Specialty Finishing",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Laser cutting",
+    "op": "Laser through cut",
+    "machine": "Laser Cutter - Universal",
+    "count": 26,
+    "tag": "Specialty Finishing",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Wide Format Finishing",
+    "op": "Groove cuts",
+    "machine": "Grooving - Koten",
+    "count": 15,
+    "tag": "Specialty Finishing",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Wide Format Finishing",
+    "op": "Digital top-cut to shape",
+    "machine": "Flatbed Cutter - JWEI",
+    "count": 6,
+    "tag": "Specialty Finishing",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Wide Format Finishing",
+    "op": "Digital top-cut to shape",
+    "machine": "Zund",
+    "count": 2,
+    "tag": "Specialty Finishing",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Laser cutting",
+    "op": "Laser through cut",
+    "machine": "Flatbed Cutter - Zund",
+    "count": 1,
+    "tag": "Specialty Finishing",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Wide Format Finishing",
+    "op": "Groove cuts",
+    "machine": "Zund",
+    "count": 1,
+    "tag": "Specialty Finishing",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Wide Format Finishing",
+    "op": "Digital top-cut to shape",
+    "machine": "Flatbed Cutter - Zund",
+    "count": 1,
+    "tag": "Specialty Finishing",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Wide Format Finishing",
+    "op": "Adds laminate setup + labour charge per m2. ***Excludes media - add chosen laminate in separate section @ same size as underlying media.",
+    "machine": "Large format laminator",
+    "count": 89,
+    "tag": "Wide Format",
+    "flags": [
+      "has_coating"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Wide Format Finishing",
+    "op": "Matt laminate 6 yr",
+    "machine": "Large format laminator",
+    "count": 85,
+    "tag": "Wide Format",
+    "flags": [
+      "has_coating"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Wide Format Finishing",
+    "op": "Mounting + Double sided adhesive film",
+    "machine": "Large format laminator",
+    "count": 5,
+    "tag": "Wide Format",
+    "flags": [
+      "has_coating"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Wide Format Finishing",
+    "op": "Mounting only please add mount film",
+    "machine": "Large format laminator",
+    "count": 3,
+    "tag": "Wide Format",
+    "flags": [
+      "has_coating"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Outwork",
+    "op": "Outsource (1) @ 322",
+    "machine": "Latex Printer - HP",
+    "count": 1,
+    "tag": "Wide Format",
+    "flags": [
+      "has_outsource_component"
+    ],
+    "row_type": "production"
+  },
+  {
+    "dept": "Wide Format Print",
+    "op": "Printing",
+    "machine": "Latex Printer - HP",
+    "count": 265,
+    "tag": "Wide Format",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Wide Format Print",
+    "op": "Printing",
+    "machine": "Aqueous Printer - Epson",
+    "count": 132,
+    "tag": "Wide Format",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Wide-format production",
+    "op": "Printing",
+    "machine": "Solvent Printer - Epson",
+    "count": 63,
+    "tag": "Wide Format",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Wide Format Print",
+    "op": "Printing",
+    "machine": "Solvent Printer - Epson",
+    "count": 57,
+    "tag": "Wide Format",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Wide Format Print",
+    "op": "Printing",
+    "machine": "UV Printer - Compress",
+    "count": 30,
+    "tag": "Wide Format",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Wide Format Print",
+    "op": "Printing",
+    "machine": "HP Indigo 15k HD",
+    "count": 2,
+    "tag": "Wide Format",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Wide-format production",
+    "op": "Printing",
+    "machine": "Latex Printer - HP",
+    "count": 2,
+    "tag": "Wide Format",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Wide Format Finishing",
+    "op": "Edge Tape Black 10mm",
+    "machine": "No machine",
+    "count": 2,
+    "tag": "Wide Format",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Digital sheetfed print",
+    "op": "Printing",
+    "machine": "Solvent Printer - Epson",
+    "count": 2,
+    "tag": null,
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Wide Format Print",
+    "op": "BETA Edge Printing",
+    "machine": "UV Printer - Compress",
+    "count": 1,
+    "tag": "Wide Format",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Wide Format Finishing",
+    "op": "Vinyl Cut - Time",
+    "machine": "Vinyl Cutter - Summa",
+    "count": 1,
+    "tag": "Wide Format",
+    "flags": [],
+    "row_type": "production"
+  },
+  {
+    "dept": "Wide Format Print",
+    "op": "Printing",
+    "machine": "No Printing Press",
+    "count": 1,
+    "tag": "Wide Format",
+    "flags": [],
+    "row_type": "production"
+  }
+]

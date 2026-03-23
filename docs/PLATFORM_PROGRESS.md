@@ -604,7 +604,7 @@ A "Communication Guidelines" block is added to all base prompt templates, shapin
 - Treat account silences, reorder patterns, and campaign timing as business signals
 - Avoid superlatives, marketing fluff, and jargon without context
 
-### S4.1 — QB Operations Table Sync
+### S4.1 — QB Operations Table Sync + Capability Intelligence
 
 **Table:** `bvqsudnif` (Operations — granular product/service detail per job)
 
@@ -619,9 +619,66 @@ A "Communication Guidelines" block is added to all base prompt templates, shapin
 | `profit_pct` | 25 | Margin % |
 | `finishing_type` | 26 | e.g. "Perfect Bind", "Guillotine" |
 
-**New DB tables:** `qb_operations` (migration 032 ✅), `customer_recommendations`, `product_affinities` (migration 033)
+**QB Data Model (confirmed Mar 2026):**
+```
+Customer → Unique Emails (1:many — all customer email addresses)
+  → Contacts (many per email — multiple people share an email)
+    → Quotes (linked to Unique Email + Contact)
+      → Job (1 quote → 1 job, essentially 1:1 — 8 exceptions in 147K jobs)
+        ├── Operations (many — each production step: "HP Indigo", "Scodix Foiling", etc.)
+        ├── Sales Line Items (invoiced line items)
+        └── Factory Rush Level (set at invoice time, not before)
+```
 
-**Backend changes:** `_sync_operations()` in `quickbase_sync.py`, `/quickbase/operations` endpoint
+**Key data facts:**
+- ~70,000 operation records; 597 unique (dept, op, machine) tuples cover 100% of data
+- `am_rush`: operation_name starts with `"RUSH: Approx"` — AM acknowledged rush at job creation
+- `factory_rush`: `qb_jobs.factory_rush_level` IS NOT NULL — set when invoice generated. 253 of 295 factory-rush jobs had NO am_rush (customer got rush service without being charged)
+- `has_outsource_component`: operation sent to external supplier — NOT an inhouse capability
+- `contact_email` derived via: `qb_operations.job_no → qb_quotes.contact_email` (all data already synced)
+- `factory_rush` derived via: `qb_operations.job_no → qb_jobs.factory_rush_level` (already synced as field 21)
+- T-Cancelled (`production_status = 'T-Cancelled'`) filtered before storing — clean data in DB
+- Industry classification: direct QB relationship on Operations table → joined via `matched_company_id → customer_companies.industry`
+
+**WHAT NOT TO DO (critical):**
+- Do NOT use raw operation names (423 values) for recommendations — 'Paper Stock Draw' is not a product
+- Do NOT use department names as capability proxies — 'None' is the second-largest department (15K rows)
+- Do NOT treat outsource operations (`has_outsource_component=TRUE`) as inhouse capabilities
+- Do NOT include T-Cancelled jobs in any analysis (already handled at sync time)
+
+**Capability Taxonomy (8 MVP tags):**
+
+| Tag | Examples |
+|-----|---------|
+| Flat Sheets | HP Indigo, Komori offset, digital colour, VDP |
+| Soft Cover Books | Perfect bind, saddle stitch, saddle sewn, wire bind |
+| Hard Cover Books | Casebinding, section sewing, oversewing |
+| Wide Format | WF Print, WF Laminating, WF Mounting |
+| Embellishment | Scodix Foiling, Spot UV, Digital Foil, Embossing |
+| Specialty Finishing | Zund cut types, Laser Cut, Die Cut |
+| Design Services | Design/Artwork, Pre-Press |
+| Display / Installation | Signage, display, installation |
+
+Phase 2A will expand to ~30 granular sub-tags per MVP tag.
+
+**Intelligence columns added to `qb_operations` (migration 035):**
+- `capability_tags JSONB` — array of MVP tag names (GIN indexed)
+- `has_coating`, `has_sewing`, `has_outsource_component` — operation flags from classifier
+- `am_rush`, `factory_rush` — rush flags from QB data (separate, different sources)
+- `row_type VARCHAR(20)` — production/process/outsource/logistics/leadtime/costing/rush_charge/admin/constraint
+- `contact_email TEXT` — join via job_no → qb_quotes (enrichment step, no QB admin needed)
+
+**New DB tables (migrations 032–035):**
+- `qb_operations` (032) — raw QB operations cache
+- `customer_recommendations`, `product_affinities` (034) — recommendation cache
+- `client_taxonomy_config` (035) — generic per-client JSON config (capability tags, classifier rules, rush settings)
+- `customer_intelligence_cache` (035) — per-company (+ contact_id for Phase 2B) computed profiles
+
+**Backend changes:**
+- `capability_classifier.py` — loads rules from DB, exact match on (dept, op, machine), keyword fallback, `reclassify_all()`
+- `quickbase_sync.py` — `sync_operations()` + `enrich_operations()` (classify + contact_email + factory_rush joins)
+- `intelligence_config.py` router — CRUD for taxonomy config, CSV import for classifier rules, reclassify trigger
+- `/manage/intelligence-config` frontend — 4-tab page: Capability Tags, Classifier Rules (CSV import), Rush Settings, Cache & Rebuild
 
 ### S4.2 — Customer Profile Page Redesign
 
@@ -654,11 +711,11 @@ For each contact: find operations the company has bought that this contact hasn'
 
 #### Level 2: Related Product Affinities (across portfolio)
 
-**Algorithm:** Market basket analysis — co-occurrence counting of `operation_name` and `department` across all companies. `confidence = companies_using_both / companies_using_A`.
+**Algorithm:** Market basket analysis on `capability_tags` (8 MVP tags, not raw operation names). Co-occurrence counting across all companies where `has_outsource_component=FALSE`. `confidence = companies_using_both / companies_using_A`. 8 tags = 8×8 = 64 pairs max — trivial to compute.
 
 **Output example:**
 ```
-"68% of customers using HP Indigo also use Scodix Foiling — Acme Co hasn't tried this"
+"68% of customers using Embellishment also use Wide Format — Acme Co hasn't tried this"
 ```
 
 **Caching:** 24h TTL in `customer_recommendations` table (same pattern as `relationship_context_cache`).

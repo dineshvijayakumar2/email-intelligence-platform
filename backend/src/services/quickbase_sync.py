@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from .quickbase_client import QuickbaseClient, DEFAULT_FIELD_MAPPINGS
+from . import capability_classifier
 
 logger = logging.getLogger(__name__)
 
@@ -198,10 +199,197 @@ class QuickbaseSync:
         records = await self._qb_client.query_all_records(operations_table_id, select_fields)
         logger.info(f"Fetched {len(records)} operations from QB")
 
+        # Filter T-Cancelled in Python — not in QB query, so that status changes
+        # after initial sync correctly update the stored production_status field.
+        # Field 21 = production_status in the operations mapping.
+        before = len(records)
+        records = [
+            r for r in records
+            if (r.get('21') or {}).get('value') != 'T-Cancelled'
+        ]
+        if before != len(records):
+            logger.info(f"Filtered {before - len(records)} T-Cancelled operations")
+
         count = await self._upsert_records('qb_operations', records, mapping)
         if count:
             await self.match_operations_to_companies()
+            await self.enrich_operations()
         return count
+
+    async def enrich_operations(self) -> dict:
+        """
+        Post-sync enrichment for qb_operations — no QB API calls, pure DB joins + classification.
+
+        Steps:
+          1. Classify: capability_tags + has_coating/sewing/outsource + row_type via classifier
+          2. am_rush: pattern match on operation_name
+          3. contact_email: join qb_operations.job_no → qb_quotes.contact_email
+          4. factory_rush: join qb_operations.job_no → qb_jobs.factory_rush_level IS NOT NULL
+
+        Called automatically after sync_operations(). Also triggered by POST /intelligence-config/reclassify.
+        """
+        logger.info(f"[Enrich] Starting operations enrichment for client {self._client_id}")
+        counts = {}
+
+        # ── 1 + 2: Classify + am_rush ────────────────────────────────────────
+        counts['classified'] = await asyncio.to_thread(
+            self._classify_operations
+        )
+
+        # ── 3: contact_email join ────────────────────────────────────────────
+        counts['contact_email'] = await asyncio.to_thread(
+            self._join_contact_email
+        )
+
+        # ── 4: factory_rush join ─────────────────────────────────────────────
+        counts['factory_rush'] = await asyncio.to_thread(
+            self._join_factory_rush
+        )
+
+        logger.info(f"[Enrich] Complete for client {self._client_id}: {counts}")
+        return counts
+
+    def _classify_operations(self) -> int:
+        """Classify all unclassified (capability_tags = []) operations using capability_classifier."""
+        import time as _time
+        total = 0
+        offset = 0
+        batch_size = 500
+
+        while True:
+            result = _execute_with_retry(lambda o=offset: self._supabase.table('qb_operations').select(
+                'id, department, operation_name, machine'
+            ).eq('client_id', self._client_id).eq('capability_tags', '[]').range(
+                o, o + batch_size - 1
+            ).execute())
+
+            rows = result.data or []
+            if not rows:
+                break
+
+            for row in rows:
+                result_cls = capability_classifier.classify(
+                    self._supabase,
+                    self._client_id,
+                    dept=row.get('department'),
+                    op=row.get('operation_name'),
+                    machine=row.get('machine'),
+                    operation_name=row.get('operation_name'),
+                )
+                try:
+                    _execute_with_retry(lambda rid=row['id'], r=result_cls: (
+                        self._supabase.table('qb_operations').update({
+                            'capability_tags':         r['capability_tags'],
+                            'has_coating':             r['has_coating'],
+                            'has_sewing':              r['has_sewing'],
+                            'has_outsource_component': r['has_outsource_component'],
+                            'am_rush':                 r['am_rush'],
+                            'row_type':                r['row_type'],
+                        }).eq('id', rid).execute()
+                    ))
+                    total += 1
+                except Exception as e:
+                    logger.warning(f"[Enrich] classify update failed for op {row['id']}: {e}")
+
+            offset += len(rows)
+            if len(rows) < batch_size:
+                break
+            if offset % 5000 == 0:
+                logger.info(f"[Enrich] Classified {total} operations so far...")
+
+        logger.info(f"[Enrich] Classified {total} operations for client {self._client_id}")
+        return total
+
+    def _join_contact_email(self) -> int:
+        """
+        Populate contact_email on qb_operations via:
+          qb_operations.job_no → qb_quotes.job_no → qb_quotes.contact_email
+        Only updates rows where contact_email is NULL.
+        """
+        # Fetch ops missing contact_email
+        result = _execute_with_retry(lambda: self._supabase.table('qb_operations').select(
+            'id, job_no'
+        ).eq('client_id', self._client_id).is_('contact_email', 'null').not_.is_(
+            'job_no', 'null'
+        ).execute())
+
+        ops = result.data or []
+        if not ops:
+            return 0
+
+        # Build job_no → contact_email map from qb_quotes
+        job_nos = list({r['job_no'] for r in ops if r.get('job_no')})
+        quote_map: dict[str, str] = {}
+        for i in range(0, len(job_nos), 500):
+            batch_jobs = job_nos[i:i + 500]
+            q_result = _execute_with_retry(lambda b=batch_jobs: self._supabase.table('qb_quotes').select(
+                'job_no, contact_email'
+            ).eq('client_id', self._client_id).in_('job_no', b).execute())
+            for q in (q_result.data or []):
+                if q.get('job_no') and q.get('contact_email') and q['job_no'] not in quote_map:
+                    quote_map[q['job_no']] = q['contact_email']
+
+        updated = 0
+        for op in ops:
+            email = quote_map.get(op.get('job_no'))
+            if email:
+                try:
+                    _execute_with_retry(lambda oid=op['id'], e=email: (
+                        self._supabase.table('qb_operations').update({
+                            'contact_email': e
+                        }).eq('id', oid).execute()
+                    ))
+                    updated += 1
+                except Exception as ex:
+                    logger.warning(f"[Enrich] contact_email update failed for op {op['id']}: {ex}")
+
+        logger.info(f"[Enrich] contact_email populated for {updated}/{len(ops)} operations")
+        return updated
+
+    def _join_factory_rush(self) -> int:
+        """
+        Set factory_rush=TRUE on qb_operations where linked qb_jobs.factory_rush_level IS NOT NULL.
+        qb_operations.job_no → qb_jobs.job_no → qb_jobs.factory_rush_level
+        Only processes rows where factory_rush is currently FALSE and job_no is set.
+        """
+        # Fetch ops with a job_no that haven't been checked yet (factory_rush=FALSE)
+        result = _execute_with_retry(lambda: self._supabase.table('qb_operations').select(
+            'id, job_no'
+        ).eq('client_id', self._client_id).eq('factory_rush', False).not_.is_(
+            'job_no', 'null'
+        ).execute())
+
+        ops = result.data or []
+        if not ops:
+            return 0
+
+        # Build job_no → factory_rush from qb_jobs
+        job_nos = list({r['job_no'] for r in ops if r.get('job_no')})
+        rush_job_nos: set[str] = set()
+        for i in range(0, len(job_nos), 500):
+            batch_jobs = job_nos[i:i + 500]
+            j_result = _execute_with_retry(lambda b=batch_jobs: self._supabase.table('qb_jobs').select(
+                'job_no, factory_rush_level'
+            ).eq('client_id', self._client_id).in_('job_no', b).execute())
+            for j in (j_result.data or []):
+                if j.get('job_no') and j.get('factory_rush_level'):
+                    rush_job_nos.add(j['job_no'])
+
+        updated = 0
+        for op in ops:
+            if op.get('job_no') in rush_job_nos:
+                try:
+                    _execute_with_retry(lambda oid=op['id']: (
+                        self._supabase.table('qb_operations').update({
+                            'factory_rush': True
+                        }).eq('id', oid).execute()
+                    ))
+                    updated += 1
+                except Exception as ex:
+                    logger.warning(f"[Enrich] factory_rush update failed for op {op['id']}: {ex}")
+
+        logger.info(f"[Enrich] factory_rush set for {updated} operations")
+        return updated
 
     async def match_operations_to_companies(self) -> int:
         """
