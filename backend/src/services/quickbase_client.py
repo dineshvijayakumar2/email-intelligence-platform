@@ -221,6 +221,43 @@ class QuickbaseClient:
 
         return all_records
 
+    async def query_records_streamed(
+        self,
+        table_id: str,
+        select_fields: list[int],
+        where: Optional[str] = None,
+        sort_by: Optional[list[dict]] = None,
+    ):
+        """
+        Async generator yielding (page_records, total) one QB page (≤1000 records) at a time.
+        Use instead of query_all_records when the table is large — the caller can upsert each
+        page immediately rather than buffering all records in memory first.
+        """
+        skip = 0
+        page_size = 1000
+        total = None
+
+        while True:
+            result = await self.query_records(
+                table_id=table_id,
+                select_fields=select_fields,
+                where=where,
+                sort_by=sort_by,
+                skip=skip,
+                top=page_size,
+            )
+            records = result.get("data", [])
+            metadata = result.get("metadata", {})
+            total = metadata.get("totalRecords", 0)
+
+            if records:
+                logger.info(f"QB stream: page skip={skip} fetched={len(records)} total={total}")
+                yield records, total
+
+            skip += len(records)
+            if not records or skip >= total:
+                break
+
     async def get_fields(self, table_id: str) -> list[dict]:
         """Get field definitions for a table."""
         async with httpx.AsyncClient(timeout=15.0) as client:

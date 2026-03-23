@@ -187,7 +187,13 @@ class QuickbaseSync:
         return await self._upsert_records('qb_sales_line_items', records, mapping)
 
     async def sync_operations(self) -> int:
-        """Sync QB Operations table → qb_operations. Skips if operations_table_id not configured."""
+        """Sync QB Operations table → qb_operations. Skips if operations_table_id not configured.
+
+        Uses page-by-page streaming: each 1,000-record QB page is upserted immediately
+        rather than buffering the entire table (~650K rows) in memory before writing.
+        This means a schema/constraint error surfaces on the first page instead of
+        after fetching all records.
+        """
         operations_table_id = self._config.get('operations_table_id')
         if not operations_table_id:
             logger.info("operations_table_id not set in QB config — skipping operations sync")
@@ -196,25 +202,39 @@ class QuickbaseSync:
         mapping = self._field_mappings.get('operations', DEFAULT_FIELD_MAPPINGS['operations'])
         select_fields = QuickbaseClient.get_select_fields(mapping)
 
-        records = await self._qb_client.query_all_records(operations_table_id, select_fields)
-        logger.info(f"Fetched {len(records)} operations from QB")
+        total_count = 0
+        page_num = 0
+        t_cancelled_filtered = 0
 
-        # Filter T-Cancelled in Python — not in QB query, so that status changes
-        # after initial sync correctly update the stored production_status field.
-        # Field 21 = production_status in the operations mapping.
-        before = len(records)
-        records = [
-            r for r in records
-            if (r.get('21') or {}).get('value') != 'T-Cancelled'
-        ]
-        if before != len(records):
-            logger.info(f"Filtered {before - len(records)} T-Cancelled operations")
+        async for page_records, qb_total in self._qb_client.query_records_streamed(
+            operations_table_id, select_fields
+        ):
+            page_num += 1
 
-        count = await self._upsert_records('qb_operations', records, mapping)
-        if count:
+            # Filter T-Cancelled in Python so status changes after initial sync
+            # correctly update the stored production_status (field 21).
+            before = len(page_records)
+            page_records = [
+                r for r in page_records
+                if (r.get('21') or {}).get('value') != 'T-Cancelled'
+            ]
+            t_cancelled_filtered += before - len(page_records)
+
+            logger.info(
+                f"Operations page {page_num}: upserting {len(page_records)} records "
+                f"(QB total: {qb_total}, T-Cancelled filtered so far: {t_cancelled_filtered})"
+            )
+            page_count = await self._upsert_records('qb_operations', page_records, mapping)
+            total_count += page_count
+
+        logger.info(
+            f"Operations sync complete: {total_count} upserted, "
+            f"{t_cancelled_filtered} T-Cancelled filtered across {page_num} pages"
+        )
+        if total_count:
             await self.match_operations_to_companies()
             await self.enrich_operations()
-        return count
+        return total_count
 
     async def enrich_operations(self) -> dict:
         """
@@ -455,6 +475,12 @@ class QuickbaseSync:
                 elif isinstance(v, str):
                     # Strip null bytes — Postgres text columns reject \u0000
                     mapped[k] = v.replace('\x00', '')
+                # Numeric overflow guard: values outside ±9,999,999 would overflow any
+                # DECIMAL(≤8, x) column. Set to None rather than hard-erroring the batch.
+                if isinstance(mapped[k], (int, float)) and not isinstance(mapped[k], bool):
+                    if abs(mapped[k]) > 9_999_999:
+                        logger.debug(f"Nullifying {k}={mapped[k]} — numeric overflow guard")
+                        mapped[k] = None
             # Skip rows missing any required (NOT NULL) field
             if required_fields and any(mapped.get(f) is None for f in required_fields):
                 skipped += 1
@@ -471,6 +497,8 @@ class QuickbaseSync:
         def _do_upsert():
             import time as _time
             total = 0
+            consecutive_failures = 0
+            MAX_CONSECUTIVE_FAILURES = 3
             num_batches = (len(rows) + UPSERT_BATCH_SIZE - 1) // UPSERT_BATCH_SIZE
             for i in range(0, len(rows), UPSERT_BATCH_SIZE):
                 batch = rows[i:i + UPSERT_BATCH_SIZE]
@@ -480,6 +508,7 @@ class QuickbaseSync:
                         b, on_conflict='client_id,qb_record_id'
                     ).execute())
                     total += len(batch)
+                    consecutive_failures = 0
                 except Exception as e:
                     logger.warning(f"Batch {batch_num}/{num_batches} failed for {table_name}: {e}")
                     # Retry once after longer pause
@@ -489,8 +518,15 @@ class QuickbaseSync:
                             b, on_conflict='client_id,qb_record_id'
                         ).execute())
                         total += len(batch)
+                        consecutive_failures = 0
                     except Exception as e2:
                         logger.error(f"Batch {batch_num} permanently failed: {e2}")
+                        consecutive_failures += 1
+                        if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
+                            raise RuntimeError(
+                                f"Aborting {table_name} upsert after {consecutive_failures} "
+                                f"consecutive batch failures. Last error: {e2}"
+                            ) from e2
                 # Throttle: small pause every 10 batches to avoid connection exhaustion
                 if batch_num % 10 == 0:
                     _time.sleep(0.5)
