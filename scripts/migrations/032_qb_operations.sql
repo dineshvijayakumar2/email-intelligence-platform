@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS qb_operations (
     cost_price          DECIMAL(12,2),   -- field 22: Cost Price
     cost_plus_price     DECIMAL(12,2),   -- field 23: Cost+ Price (selling price)
     profit_amount       DECIMAL(12,2),   -- field 24: Profit $
-    profit_pct          DECIMAL(5,2),    -- field 25: Profit %
+    profit_pct          DECIMAL(8,2),    -- field 25: Profit %
 
     -- Platform matching
     matched_company_id  UUID REFERENCES customer_companies(id) ON DELETE SET NULL,
