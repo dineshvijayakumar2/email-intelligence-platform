@@ -290,7 +290,7 @@ async def get_table_data(
         query = _supabase.table(table_name).select('*')
 
         # Apply global search
-        search_term = search.strip().replace('%', '') if search else ""
+        search_term = search.strip().replace('%', r'\%').replace('_', r'\_') if search else ""
         if search_term and search_columns:
             or_conditions = ",".join(
                 f"{col}.ilike.%{search_term}%"

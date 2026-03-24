@@ -332,3 +332,106 @@ def lookup_quote_detail(quote_no: str) -> str:
                 lines.append(f"    Pieces: {j.get('pieces_ordered', 'N/A')} | Kinds: {j.get('kinds_ordered', 'N/A')}")
 
     return "\n".join(lines)
+
+
+# ===========================================================================
+# Semantic Search Tools (Sprint 4 S4.4 — requires pgvector + embeddings)
+# ===========================================================================
+
+@tool
+def semantic_search_emails(query: str) -> str:
+    """Search email intelligence records semantically.
+
+    Use this when you need to find emails about a specific topic, customer concern,
+    or business context that can't be found by exact name matching.
+
+    Args:
+        query: Natural language search query (e.g. "delayed delivery complaints",
+               "wide format printing quote follow-up")
+
+    Returns:
+        Formatted list of matching emails with subject, summary, intent, and similarity score.
+    """
+    import asyncio
+    from .vector_service import VectorService
+
+    client = _get_client()
+    vs = VectorService(client)
+
+    try:
+        results = asyncio.get_event_loop().run_until_complete(
+            vs.search_emails(query, threshold=0.6, limit=8)
+        )
+    except RuntimeError:
+        # Already in async context — use thread
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            results = pool.submit(
+                lambda: asyncio.run(vs.search_emails(query, threshold=0.6, limit=8))
+            ).result()
+    except Exception as e:
+        logger.error(f"semantic_search_emails failed: {e}")
+        return f"Semantic search failed: {e}"
+
+    if not results:
+        return f"No emails found matching '{query}'"
+
+    lines = [f"Found {len(results)} emails matching '{query}':\n"]
+    for r in results:
+        lines.append(f"  Subject: {r.get('email_subject', 'N/A')}")
+        lines.append(f"  Summary: {r.get('ai_summary', 'N/A')}")
+        lines.append(f"  Intent: {r.get('intent', 'N/A')} | Urgency: {r.get('urgency', 'N/A')}")
+        lines.append(f"  Similarity: {r.get('similarity', 0):.2f}")
+        lines.append("")
+    return "\n".join(lines)
+
+
+@tool
+def semantic_search_operations(query: str) -> str:
+    """Search QB operations (production/finishing/outsource records) semantically.
+
+    Use this when you need to find what products/services a company has ordered,
+    what capabilities have been used, or search for specific production processes.
+
+    Args:
+        query: Natural language search query (e.g. "embellishment foil stamping",
+               "wide format banner printing", "soft cover book binding")
+
+    Returns:
+        Formatted list of matching operations with name, department, machine,
+        customer, capability tags, and similarity score.
+    """
+    import asyncio
+    from .vector_service import VectorService
+
+    client = _get_client()
+    vs = VectorService(client)
+
+    try:
+        results = asyncio.get_event_loop().run_until_complete(
+            vs.search_operations(query, threshold=0.6, limit=10)
+        )
+    except RuntimeError:
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            results = pool.submit(
+                lambda: asyncio.run(vs.search_operations(query, threshold=0.6, limit=10))
+            ).result()
+    except Exception as e:
+        logger.error(f"semantic_search_operations failed: {e}")
+        return f"Semantic search failed: {e}"
+
+    if not results:
+        return f"No operations found matching '{query}'"
+
+    lines = [f"Found {len(results)} operations matching '{query}':\n"]
+    for r in results:
+        tags = r.get('capability_tags', [])
+        tag_str = ', '.join(tags) if isinstance(tags, list) and tags else 'unclassified'
+        lines.append(f"  Operation: {r.get('operation_name', 'N/A')}")
+        lines.append(f"  Dept: {r.get('department', 'N/A')} | Machine: {r.get('machine', 'N/A')}")
+        lines.append(f"  Customer: {r.get('customer_name', 'N/A')}")
+        lines.append(f"  Capabilities: {tag_str} | Type: {r.get('row_type', 'N/A')}")
+        lines.append(f"  Similarity: {r.get('similarity', 0):.2f}")
+        lines.append("")
+    return "\n".join(lines)

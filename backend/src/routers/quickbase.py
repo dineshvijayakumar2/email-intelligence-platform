@@ -21,6 +21,11 @@ from ..services.quickbase_sync import QuickbaseSync
 
 logger = logging.getLogger(__name__)
 
+
+def _sanitize_search(term: str) -> str:
+    """Escape SQL ILIKE wildcards in user-supplied search terms."""
+    return term.replace('%', r'\%').replace('_', r'\_')
+
 router = APIRouter(prefix="/quickbase", tags=["quickbase"])
 
 _supabase = None
@@ -395,7 +400,8 @@ async def list_qb_contacts(
     try:
         query = _supabase.table('qb_contacts').select('*', count='exact').eq('client_id', client_id)
         if search:
-            query = query.or_(f"first_name.ilike.%{search}%,surname.ilike.%{search}%,email.ilike.%{search}%")
+            s = _sanitize_search(search)
+            query = query.or_(f"first_name.ilike.%{s}%,surname.ilike.%{s}%,email.ilike.%{s}%")
         result = query.order('surname').range(offset, offset + limit - 1).execute()
         return {"contacts": result.data or [], "total": result.count or 0}
     except Exception as e:
@@ -414,7 +420,8 @@ async def list_qb_quotes(
     try:
         query = _supabase.table('qb_quotes').select('*', count='exact').eq('client_id', client_id)
         if search:
-            query = query.or_(f"quote_no.ilike.%{search}%,contact_name.ilike.%{search}%")
+            s = _sanitize_search(search)
+            query = query.or_(f"quote_no.ilike.%{s}%,contact_name.ilike.%{s}%")
         result = query.order('date_created', desc=True).range(offset, offset + limit - 1).execute()
         return {"quotes": result.data or [], "total": result.count or 0}
     except Exception as e:
@@ -433,7 +440,8 @@ async def list_qb_jobs(
     try:
         query = _supabase.table('qb_jobs').select('*', count='exact').eq('client_id', client_id)
         if search:
-            query = query.or_(f"job_no.ilike.%{search}%,job_status.ilike.%{search}%")
+            s = _sanitize_search(search)
+            query = query.or_(f"job_no.ilike.%{s}%,job_status.ilike.%{s}%")
         result = query.order('accepted_date', desc=True).range(offset, offset + limit - 1).execute()
         return {"jobs": result.data or [], "total": result.count or 0}
     except Exception as e:
@@ -452,7 +460,8 @@ async def list_qb_sales_line_items(
     try:
         query = _supabase.table('qb_sales_line_items').select('*', count='exact').eq('client_id', client_id)
         if search:
-            query = query.or_(f"customer_name.ilike.%{search}%,job_no.ilike.%{search}%,invoice_no.ilike.%{search}%")
+            s = _sanitize_search(search)
+            query = query.or_(f"customer_name.ilike.%{s}%,job_no.ilike.%{s}%,invoice_no.ilike.%{s}%")
         result = query.order('inv_date', desc=True).range(offset, offset + limit - 1).execute()
         return {"sales_line_items": result.data or [], "total": result.count or 0}
     except Exception as e:
@@ -474,8 +483,9 @@ async def list_qb_operations(
         if company_id:
             query = query.eq('matched_company_id', company_id)
         if search:
+            s = _sanitize_search(search)
             query = query.or_(
-                f"operation_name.ilike.%{search}%,department.ilike.%{search}%,customer_name.ilike.%{search}%"
+                f"operation_name.ilike.%{s}%,department.ilike.%{s}%,customer_name.ilike.%{s}%"
             )
         result = query.order('date_accepted', desc=True).range(offset, offset + limit - 1).execute()
         return {"operations": result.data or [], "total": result.count or 0}

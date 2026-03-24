@@ -23,6 +23,11 @@ from ..models.customer import (
 
 logger = logging.getLogger(__name__)
 
+
+def _sanitize_search(term: str) -> str:
+    """Escape SQL ILIKE wildcards in user-supplied search terms."""
+    return term.replace('%', r'\%').replace('_', r'\_')
+
 router = APIRouter(prefix="/customers", tags=["customers"])
 
 # Supabase client will be injected from main.py
@@ -145,7 +150,7 @@ async def list_customer_companies(
             query = query.eq('client_id', client_id)
 
         if search:
-            query = query.ilike('company_name', f'%{search}%')
+            query = query.ilike('company_name', f'%{_sanitize_search(search)}%')
 
         result = query.order('company_name').range(offset, offset + limit - 1).execute()
 
@@ -187,7 +192,7 @@ async def list_customer_companies(
         if client_id:
             count_query = count_query.eq('client_id', client_id)
         if search:
-            count_query = count_query.ilike('company_name', f'%{search}%')
+            count_query = count_query.ilike('company_name', f'%{_sanitize_search(search)}%')
         count_result = count_query.execute()
         total = count_result.count if count_result.count else len(count_result.data)
 

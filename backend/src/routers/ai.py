@@ -11,6 +11,7 @@ Router prefix: /ai, tags: ["ai-intelligence"]
 from fastapi import APIRouter, HTTPException, Query, BackgroundTasks, Depends
 from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
+import asyncio
 import logging
 import time as _time
 
@@ -1608,3 +1609,230 @@ async def delete_prompt(
         return {"status": "deleted"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)[:200])
+
+
+# ===========================================================================
+# Vector / Semantic Search Endpoints (Sprint 4 S4.4)
+# ===========================================================================
+
+_vector_service = None
+
+def _get_vector_service():
+    global _vector_service
+    if _vector_service is None:
+        from ..services.vector_service import VectorService
+        _vector_service = VectorService(_supabase)
+    return _vector_service
+
+
+# ── In-memory reembed progress tracking ───────────────────────────────────
+_reembed_progress: Dict[str, Dict[str, Any]] = {}
+_reembed_cancel: Dict[str, bool] = {}  # client_id -> cancel flag
+
+
+@router.post("/vector/reembed")
+async def trigger_reembed(
+    background_tasks: BackgroundTasks,
+    client_id: Optional[str] = Query(None),
+    limit: Optional[int] = Query(None, description="Max records to embed per table (for testing)"),
+    current_user: dict = Depends(require_role("admin")),
+):
+    """Bootstrap or re-embed all entities (emails + companies + operations).
+
+    Runs in background. Poll GET /ai/vector/reembed/status for progress.
+    Pass ?limit=10 to test with a small batch locally.
+    """
+    if not client_id:
+        client_id = current_user.get("client_id")
+    if not client_id:
+        raise HTTPException(status_code=400, detail="client_id required")
+
+    if _reembed_progress.get(client_id, {}).get("status") == "running":
+        return {"status": "already_running", "progress": _reembed_progress[client_id]}
+
+    _reembed_progress[client_id] = {"status": "running", "started_at": _time.time(), "limit": limit}
+    _reembed_cancel[client_id] = False
+
+    async def _run():
+        try:
+            vs = _get_vector_service()
+            # Pass cancel checker so the service can stop between batches
+            result = await vs.reembed_all(
+                client_id, limit=limit,
+                cancel_check=lambda: _reembed_cancel.get(client_id, False),
+            )
+            status = "stopped" if _reembed_cancel.get(client_id) else "complete"
+            _reembed_progress[client_id] = {
+                "status": status,
+                "result": result,
+                "completed_at": _time.time(),
+            }
+        except Exception as e:
+            logger.error(f"Reembed failed for {client_id}: {e}")
+            _reembed_progress[client_id] = {
+                "status": "error",
+                "error": str(e)[:500],
+            }
+
+    # Run in a detached asyncio task so it doesn't block BackgroundTasks
+    # or compete with HTTP request handling
+    asyncio.create_task(_run())
+    return {"status": "started", "client_id": client_id, "limit": limit}
+
+
+@router.get("/vector/reembed/status")
+async def get_reembed_status(
+    client_id: Optional[str] = Query(None),
+    current_user: dict = Depends(get_current_user),
+):
+    """Poll reembed job status."""
+    if not client_id:
+        client_id = current_user.get("client_id")
+    progress = _reembed_progress.get(client_id)
+    if not progress:
+        return {"status": "idle"}
+    return progress
+
+
+@router.post("/vector/reembed/stop")
+async def stop_reembed(
+    client_id: Optional[str] = Query(None),
+    current_user: dict = Depends(require_role("admin")),
+):
+    """Stop a running reembed job. Already-embedded records are kept."""
+    if not client_id:
+        client_id = current_user.get("client_id")
+    if not client_id:
+        raise HTTPException(status_code=400, detail="client_id required")
+
+    if _reembed_progress.get(client_id, {}).get("status") != "running":
+        return {"status": "not_running"}
+
+    _reembed_cancel[client_id] = True
+    logger.info(f"[Vector] Stop requested for reembed job {client_id}")
+    return {"status": "stopping"}
+
+
+@router.get("/vector/search/emails")
+async def search_emails_semantic(
+    q: str = Query(..., min_length=3, description="Search query"),
+    client_id: Optional[str] = Query(None),
+    threshold: float = Query(0.65, ge=0.0, le=1.0),
+    limit: int = Query(10, ge=1, le=50),
+    current_user: dict = Depends(get_current_user),
+):
+    """Semantic search over email intelligence records."""
+    if not client_id:
+        client_id = current_user.get("client_id")
+    try:
+        vs = _get_vector_service()
+        results = await vs.search_emails(q, client_id, threshold, limit)
+        return {"query": q, "results": results, "count": len(results)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)[:200])
+
+
+@router.get("/vector/search/companies")
+async def search_companies_semantic(
+    q: str = Query(..., min_length=3, description="Search query"),
+    client_id: Optional[str] = Query(None),
+    threshold: float = Query(0.65, ge=0.0, le=1.0),
+    limit: int = Query(10, ge=1, le=50),
+    current_user: dict = Depends(get_current_user),
+):
+    """Semantic search over companies."""
+    if not client_id:
+        client_id = current_user.get("client_id")
+    try:
+        vs = _get_vector_service()
+        results = await vs.search_companies(q, client_id, threshold, limit)
+        return {"query": q, "results": results, "count": len(results)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)[:200])
+
+
+@router.get("/vector/search/operations")
+async def search_operations_semantic(
+    q: str = Query(..., min_length=3, description="Search query"),
+    client_id: Optional[str] = Query(None),
+    threshold: float = Query(0.65, ge=0.0, le=1.0),
+    limit: int = Query(10, ge=1, le=50),
+    current_user: dict = Depends(get_current_user),
+):
+    """Semantic search over QB operations."""
+    if not client_id:
+        client_id = current_user.get("client_id")
+    try:
+        vs = _get_vector_service()
+        results = await vs.search_operations(q, client_id, threshold, limit)
+        return {"query": q, "results": results, "count": len(results)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)[:200])
+
+
+@router.get("/vector/search")
+async def search_all_semantic(
+    q: str = Query(..., min_length=3, description="Search query"),
+    client_id: Optional[str] = Query(None),
+    threshold: float = Query(0.65, ge=0.0, le=1.0),
+    limit: int = Query(5, ge=1, le=20),
+    current_user: dict = Depends(get_current_user),
+):
+    """Unified semantic search across emails, companies, and operations."""
+    if not client_id:
+        client_id = current_user.get("client_id")
+    try:
+        import asyncio
+        vs = _get_vector_service()
+        emails, companies, operations = await asyncio.gather(
+            vs.search_emails(q, client_id, threshold, limit),
+            vs.search_companies(q, client_id, threshold, limit),
+            vs.search_operations(q, client_id, threshold, limit),
+        )
+        return {
+            "query": q,
+            "emails": emails,
+            "companies": companies,
+            "operations": operations,
+            "total": len(emails) + len(companies) + len(operations),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)[:200])
+
+
+@router.get("/vector/stats")
+async def get_vector_stats(
+    client_id: Optional[str] = Query(None),
+    current_user: dict = Depends(get_current_user),
+):
+    """Get embedding coverage stats — how many records have embeddings."""
+    if not client_id:
+        client_id = current_user.get("client_id")
+
+    stats = {}
+    for table, label in [
+        ("emails", "emails"),
+        ("customer_companies", "companies"),
+        ("qb_operations", "operations"),
+    ]:
+        try:
+            total = _supabase.table(table).select(
+                "id", count="exact"
+            ).eq("client_id", client_id).execute()
+            embedded = _supabase.table(table).select(
+                "id", count="exact"
+            ).eq("client_id", client_id).not_.is_("embedding", "null").execute()
+            stats[label] = {
+                "total": total.count or 0,
+                "embedded": embedded.count or 0,
+            }
+        except Exception:
+            # embedding column may not exist yet — report 0/0
+            try:
+                total = _supabase.table(table).select(
+                    "id", count="exact"
+                ).eq("client_id", client_id).execute()
+                stats[label] = {"total": total.count or 0, "embedded": 0}
+            except Exception:
+                stats[label] = {"total": 0, "embedded": 0}
+    return stats

@@ -41,6 +41,7 @@ const pageTitles: Record<string, string> = {
   '/insights/digest': 'Daily Digest',
   '/insights/opportunities': 'Opportunities',
   '/insights/strategic': 'Strategic Digest',
+  '/insights/search': 'Semantic Search',
   '/insights/agent': 'AI Assistant',
   // Manage
   '/manage/response-times': 'Response Times',
@@ -109,7 +110,7 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
       label: <Link to="/emails">Emails</Link>,
     },
     {
-      key: '/customers',
+      key: 'customers-menu',
       icon: <TeamOutlined />,
       label: 'Customers',
       children: [
@@ -127,6 +128,7 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
         { key: '/insights/digest', label: <Link to="/insights/digest">Daily Digest</Link> },
         { key: '/insights/opportunities', label: <Link to="/insights/opportunities">Opportunities</Link> },
         { key: '/insights/strategic', label: <Link to="/insights/strategic">Strategic Digest</Link> },
+        { key: '/insights/search', label: <Link to="/insights/search">Semantic Search</Link> },
       ],
     },
     {
