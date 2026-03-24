@@ -649,7 +649,7 @@ Generate the {scope} digest now. Return ONLY valid JSON."""
             resp = self._execute_with_retry(
                 self.client.table("thread_status")
                 .select("id,thread_id,subject,status,is_overdue,message_count,last_message_at,"
-                        "primary_contact_email,customer_companies(company_name)")
+                        "primary_contact_email,customer_companies!thread_status_primary_company_id_fkey(company_name)")
                 .eq("mailbox_id", mailbox_id)
                 .neq("status", "complete")
                 .neq("status", "dropped")
