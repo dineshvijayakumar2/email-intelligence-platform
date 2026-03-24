@@ -48,6 +48,12 @@ from ..services.extraction_orchestrator import ExtractionOrchestrator
 
 logger = logging.getLogger(__name__)
 
+
+def _sanitize_search_term(term: str) -> str:
+    """Escape SQL ILIKE wildcards in user-supplied search terms."""
+    return term.replace('%', r'\%').replace('_', r'\_')
+
+
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 # Supabase client will be injected from main.py
@@ -405,7 +411,7 @@ async def list_contact_analytics(
         if min_engagement_score is not None:
             query = query.gte('engagement_score', int(min_engagement_score))
         if search and search.strip():
-            term = search.strip()
+            term = _sanitize_search_term(search.strip())
             query = query.or_(f"full_name.ilike.%{term}%,email_address.ilike.%{term}%,company_name.ilike.%{term}%")
 
         effective_sort = sort_by if sort_by in CONTACT_SORT_COLUMNS else 'engagement_score'
@@ -436,7 +442,7 @@ async def list_contact_analytics(
         if min_engagement_score is not None:
             count_query = count_query.gte('engagement_score', int(min_engagement_score))
         if search and search.strip():
-            term = search.strip()
+            term = _sanitize_search_term(search.strip())
             count_query = count_query.or_(f"full_name.ilike.%{term}%,email_address.ilike.%{term}%,company_name.ilike.%{term}%")
 
         count_result = count_query.execute()
@@ -806,7 +812,7 @@ async def list_company_analytics(
         if min_engagement_score is not None:
             query = query.gte('engagement_score', int(min_engagement_score))
         if search and search.strip():
-            term = search.strip()
+            term = _sanitize_search_term(search.strip())
             query = query.or_(f"company_name.ilike.%{term}%,industry.ilike.%{term}%")
 
         effective_sort = sort_by if sort_by in COMPANY_SORT_COLUMNS else 'engagement_score'
@@ -856,7 +862,7 @@ async def list_company_analytics(
         if min_engagement_score is not None:
             count_query = count_query.gte('engagement_score', int(min_engagement_score))
         if search and search.strip():
-            term = search.strip()
+            term = _sanitize_search_term(search.strip())
             count_query = count_query.or_(f"company_name.ilike.%{term}%,industry.ilike.%{term}%")
         count_result = count_query.execute()
         total = count_result.count if count_result.count else len(count_result.data)
@@ -1252,7 +1258,7 @@ async def list_thread_statuses(
             else:
                 query = query.in_('status', status_db_values)
         if search and search.strip():
-            term = search.strip()
+            term = _sanitize_search_term(search.strip())
             query = query.ilike('subject', f'%{term}%')
 
         effective_sort = sort_by if sort_by in THREAD_SORT_COLUMNS else 'last_message_at'
@@ -1320,7 +1326,7 @@ async def list_thread_statuses(
             else:
                 count_query = count_query.in_('status', status_db_values)
         if search and search.strip():
-            term = search.strip()
+            term = _sanitize_search_term(search.strip())
             count_query = count_query.ilike('subject', f'%{term}%')
         count_result = count_query.execute()
         total = count_result.count if count_result.count else len(count_result.data)

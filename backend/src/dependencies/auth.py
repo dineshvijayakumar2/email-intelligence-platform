@@ -13,6 +13,7 @@ import os
 import time
 import hashlib
 import logging
+import threading
 from ..utils.audit import log_audit
 
 logger = logging.getLogger(__name__)
@@ -23,7 +24,9 @@ _supabase = None
 # In-process auth cache: token_hash -> (user_dict, expires_at)
 # Avoids a Supabase auth API call on every request (5-min TTL)
 _auth_cache: Dict[str, Tuple[Dict, float]] = {}
+_auth_cache_lock = threading.Lock()
 _AUTH_CACHE_TTL = 300  # seconds
+_AUTH_CACHE_MAX_SIZE = 1000  # prevent unbounded growth
 
 
 def _cache_key(token: str) -> str:
@@ -66,9 +69,10 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> Dict:
 
     token = authorization.replace('Bearer ', '')
 
-    # Check cache first
+    # Check cache first (thread-safe read)
     key = _cache_key(token)
-    cached = _auth_cache.get(key)
+    with _auth_cache_lock:
+        cached = _auth_cache.get(key)
     if cached and cached[1] > time.time():
         return cached[0]
 
@@ -99,7 +103,7 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> Dict:
             # User profile doesn't exist yet - this can happen if trigger didn't fire
             # Create a minimal profile
             logger.warning(f"User profile not found for {user_id}, creating default")
-            email = payload.get('email', '')
+            email = getattr(user_response.user, 'email', '') or ''
             name = email.split('@')[0] if email else 'User'
 
             try:
@@ -132,8 +136,20 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> Dict:
             'roles': result_data.get('roles', ['account_manager'])
         }
 
-        # Cache for 5 minutes to avoid per-request Supabase auth calls
-        _auth_cache[key] = (user_info, time.time() + _AUTH_CACHE_TTL)
+        # Cache for 5 minutes to avoid per-request Supabase auth calls (thread-safe write)
+        with _auth_cache_lock:
+            # Evict oldest entries if cache is too large
+            if len(_auth_cache) >= _AUTH_CACHE_MAX_SIZE:
+                now = time.time()
+                expired = [k for k, (_, exp) in _auth_cache.items() if exp <= now]
+                for k in expired:
+                    del _auth_cache[k]
+                # If still too large, remove oldest 20%
+                if len(_auth_cache) >= _AUTH_CACHE_MAX_SIZE:
+                    to_remove = sorted(_auth_cache.items(), key=lambda x: x[1][1])[:_AUTH_CACHE_MAX_SIZE // 5]
+                    for k, _ in to_remove:
+                        del _auth_cache[k]
+            _auth_cache[key] = (user_info, time.time() + _AUTH_CACHE_TTL)
 
         return user_info
 
