@@ -168,13 +168,14 @@ const VectorSearchPage: React.FC = () => {
     }
   };
 
-  const handleReembed = async () => {
+  const handleReembed = async (tables?: string[]) => {
     try {
-      const resp = await vectorApi.triggerReembed(clientId);
+      const resp = await vectorApi.triggerReembed(clientId, tables);
       if (resp.status === 'already_running') {
         message.info('Embedding already in progress');
       } else {
-        message.success('Embedding started in background');
+        const label = tables ? tables.join(' + ') : 'all tables';
+        message.success(`Embedding ${label} in background`);
       }
       setReembedStatus({ status: 'running', started_at: Date.now() / 1000 });
     } catch (err: any) {
@@ -335,7 +336,7 @@ const VectorSearchPage: React.FC = () => {
                       );
                     })}
                   </Row>
-                  <Space>
+                  <Space wrap>
                     {reembedStatus?.status === 'running' ? (
                       <Button
                         danger
@@ -345,13 +346,33 @@ const VectorSearchPage: React.FC = () => {
                         Stop Embedding
                       </Button>
                     ) : (
-                      <Button
-                        type="primary"
-                        icon={<ThunderboltOutlined />}
-                        onClick={handleReembed}
-                      >
-                        Embed All Records
-                      </Button>
+                      <>
+                        <Button
+                          type="primary"
+                          icon={<MailOutlined />}
+                          onClick={() => handleReembed(['emails'])}
+                        >
+                          Embed Emails
+                        </Button>
+                        <Button
+                          icon={<BankOutlined />}
+                          onClick={() => handleReembed(['companies'])}
+                        >
+                          Embed Companies
+                        </Button>
+                        <Button
+                          icon={<ToolOutlined />}
+                          onClick={() => handleReembed(['operations'])}
+                        >
+                          Embed Operations
+                        </Button>
+                        <Button
+                          icon={<ThunderboltOutlined />}
+                          onClick={() => handleReembed()}
+                        >
+                          Embed All
+                        </Button>
+                      </>
                     )}
                     <Button icon={<ReloadOutlined />} onClick={loadStats}>Refresh Stats</Button>
                     {reembedStatus?.status === 'complete' && reembedStatus.result && (

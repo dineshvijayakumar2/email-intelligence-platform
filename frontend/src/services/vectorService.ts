@@ -86,9 +86,13 @@ export async function getVectorStats(clientId?: string): Promise<VectorStats> {
   return api.get<VectorStats>(`/v1/ai/vector/stats${params}`);
 }
 
-export async function triggerReembed(clientId?: string): Promise<{ status: string; client_id?: string }> {
-  const params = clientId ? `?client_id=${clientId}` : '';
-  return api.post<any>(`/v1/ai/vector/reembed${params}`);
+export async function triggerReembed(
+  clientId?: string, tables?: string[],
+): Promise<{ status: string; client_id?: string }> {
+  const params = new URLSearchParams();
+  if (clientId) params.set('client_id', clientId);
+  if (tables && tables.length > 0) params.set('tables', tables.join(','));
+  return api.post<any>(`/v1/ai/vector/reembed?${params}`);
 }
 
 export async function getReembedStatus(clientId?: string): Promise<ReembedStatus> {

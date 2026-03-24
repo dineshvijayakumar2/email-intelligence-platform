@@ -1635,12 +1635,14 @@ async def trigger_reembed(
     background_tasks: BackgroundTasks,
     client_id: Optional[str] = Query(None),
     limit: Optional[int] = Query(None, description="Max records to embed per table (for testing)"),
+    tables: Optional[str] = Query(None, description="Comma-separated tables to embed: emails,companies,operations. Default: all."),
     current_user: dict = Depends(require_role("admin")),
 ):
-    """Bootstrap or re-embed all entities (emails + companies + operations).
+    """Bootstrap or re-embed entities. Optionally specify which tables.
 
     Runs in background. Poll GET /ai/vector/reembed/status for progress.
     Pass ?limit=10 to test with a small batch locally.
+    Pass ?tables=emails,companies to skip operations.
     """
     if not client_id:
         client_id = current_user.get("client_id")
@@ -1650,15 +1652,16 @@ async def trigger_reembed(
     if _reembed_progress.get(client_id, {}).get("status") == "running":
         return {"status": "already_running", "progress": _reembed_progress[client_id]}
 
-    _reembed_progress[client_id] = {"status": "running", "started_at": _time.time(), "limit": limit}
+    table_list = [t.strip() for t in tables.split(",")] if tables else ["emails", "companies", "operations"]
+
+    _reembed_progress[client_id] = {"status": "running", "started_at": _time.time(), "limit": limit, "tables": table_list}
     _reembed_cancel[client_id] = False
 
     async def _run():
         try:
             vs = _get_vector_service()
-            # Pass cancel checker so the service can stop between batches
             result = await vs.reembed_all(
-                client_id, limit=limit,
+                client_id, limit=limit, tables=table_list,
                 cancel_check=lambda: _reembed_cancel.get(client_id, False),
             )
             status = "stopped" if _reembed_cancel.get(client_id) else "complete"

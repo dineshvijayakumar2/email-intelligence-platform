@@ -425,30 +425,37 @@ class VectorService:
 
     async def reembed_all(
         self, client_id: str, limit: int | None = None,
+        tables: list[str] | None = None,
         cancel_check: callable = None,
     ) -> dict:
-        """Bootstrap / re-embed all entities for a client. Returns combined stats.
+        """Bootstrap / re-embed entities for a client. Returns combined stats.
 
         Args:
             limit: Max records to embed per table. Pass small value (e.g. 10) for local testing.
-            cancel_check: Callable returning True if job should stop. Checked between tables and batches.
+            tables: Which tables to embed. Default: ["emails", "companies", "operations"].
+            cancel_check: Callable returning True if job should stop.
         """
         self._cancel_check = cancel_check or (lambda: False)
-        logger.info(f"[Vector] Starting full reembed for client {client_id}" + (f" (limit={limit})" if limit else ""))
+        if tables is None:
+            tables = ["emails", "companies", "operations"]
 
-        emails = await self.embed_emails_batch(client_id, limit=limit)
+        logger.info(f"[Vector] Starting reembed for client {client_id}, tables={tables}" + (f" (limit={limit})" if limit else ""))
+
+        skip = {"embedded": 0, "skipped": 0, "elapsed_s": 0}
+
+        emails = await self.embed_emails_batch(client_id, limit=limit) if "emails" in tables else skip
         if self._cancel_check():
             logger.info(f"[Vector] Stopped after emails ({emails['embedded']} embedded)")
-            return {"emails": emails, "companies": {"embedded": 0}, "operations": {"embedded": 0},
+            return {"emails": emails, "companies": skip, "operations": skip,
                     "total_embedded": emails["embedded"]}
 
-        companies = await self.embed_companies(client_id, limit=limit)
+        companies = await self.embed_companies(client_id, limit=limit) if "companies" in tables else skip
         if self._cancel_check():
             logger.info(f"[Vector] Stopped after companies ({companies['embedded']} embedded)")
-            return {"emails": emails, "companies": companies, "operations": {"embedded": 0},
+            return {"emails": emails, "companies": companies, "operations": skip,
                     "total_embedded": emails["embedded"] + companies["embedded"]}
 
-        operations = await self.embed_operations(client_id, limit=limit)
+        operations = await self.embed_operations(client_id, limit=limit) if "operations" in tables else skip
 
         total = {
             "emails": emails,
@@ -458,5 +465,5 @@ class VectorService:
                 emails["embedded"] + companies["embedded"] + operations["embedded"]
             ),
         }
-        logger.info(f"[Vector] Full reembed complete for client {client_id}: {total}")
+        logger.info(f"[Vector] Reembed complete for client {client_id}: {total}")
         return total
