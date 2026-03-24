@@ -291,10 +291,11 @@ class ExtractionOrchestrator:
         exclude_shared: bool = True,
         exclude_internal: bool = True,
         force_relink: bool = False,
-        skip_role_classification: bool = False
+        skip_role_classification: bool = False,
+        lightweight: bool = False,
     ) -> Dict:
         """
-        Run the complete 13-step extraction pipeline
+        Run the extraction pipeline.
 
         Args:
             exclude_mailing_lists: Skip mailing list emails in contact extraction
@@ -303,6 +304,9 @@ class ExtractionOrchestrator:
             exclude_internal: Skip internal domain contacts
             force_relink: Force relink even if emails already linked
             skip_role_classification: Skip role classification step (faster)
+            lightweight: If True, only run steps 1-9 (contact/company extraction + email linking).
+                        Skips heavy steps 10-13 (engagement scoring, response times, company stats).
+                        Use for auto-sync; run full extraction manually when needed.
 
         Returns:
             Dictionary with extraction results and statistics
@@ -387,29 +391,40 @@ class ExtractionOrchestrator:
             self._run_step(9, "Link emails to contacts/companies",
                           lambda: self._step_link_emails(force_relink))
 
-            # ============================================================
-            # STEP 10: Calculate Engagement Scores
-            # ============================================================
-            self._run_step(10, "Calculate engagement scores",
-                          self._step_calculate_engagement)
+            if lightweight:
+                # Lightweight mode: skip heavy analytics steps (10-12)
+                logger.info("Lightweight mode: skipping steps 10-12 (engagement, stats, report)")
+                self.current_step = 12
 
-            # ============================================================
-            # STEP 11: Update Company Statistics
-            # ============================================================
-            self._run_step(11, "Update company statistics",
-                          self._step_update_company_stats)
+                # ============================================================
+                # STEP 13: Complete Job (still finalize)
+                # ============================================================
+                self._run_step(13, "Finalize extraction job",
+                              self._step_complete_job)
+            else:
+                # ============================================================
+                # STEP 10: Calculate Engagement Scores
+                # ============================================================
+                self._run_step(10, "Calculate engagement scores",
+                              self._step_calculate_engagement)
 
-            # ============================================================
-            # STEP 12: Generate Report
-            # ============================================================
-            self._run_step(12, "Generate extraction report",
-                          self._step_generate_report)
+                # ============================================================
+                # STEP 11: Update Company Statistics
+                # ============================================================
+                self._run_step(11, "Update company statistics",
+                              self._step_update_company_stats)
 
-            # ============================================================
-            # STEP 13: Complete Job
-            # ============================================================
-            self._run_step(13, "Finalize extraction job",
-                          self._step_complete_job)
+                # ============================================================
+                # STEP 12: Generate Report
+                # ============================================================
+                self._run_step(12, "Generate extraction report",
+                              self._step_generate_report)
+
+                # ============================================================
+                # STEP 13: Complete Job
+                # ============================================================
+                self._run_step(13, "Finalize extraction job",
+                              self._step_complete_job)
 
             # Calculate duration
             duration = (datetime.utcnow() - start_time).total_seconds()
@@ -549,7 +564,16 @@ class ExtractionOrchestrator:
                 'updated_at': datetime.utcnow().isoformat()
             }
 
-            self.client.table('extraction_jobs').update(update_data).eq('id', self.job_id).execute()
+            # Retry once on transient Cloudflare/Supabase errors
+            for attempt in range(2):
+                try:
+                    self.client.table('extraction_jobs').update(update_data).eq('id', self.job_id).execute()
+                    break
+                except Exception as db_err:
+                    if attempt == 0 and ('400' in str(db_err) or 'Bad Request' in str(db_err)):
+                        import time; time.sleep(1)
+                    else:
+                        raise db_err
 
             # Update Redis
             if self.use_redis and self.redis_manager:

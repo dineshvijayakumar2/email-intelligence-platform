@@ -339,6 +339,7 @@ class OutlookSyncService:
                     lambda: orchestrator.run_extraction(
                         exclude_mailing_lists=True,
                         exclude_noreply=True,
+                        lightweight=True,  # Skip heavy steps 10-12 during auto-sync
                     )
                 )
 
