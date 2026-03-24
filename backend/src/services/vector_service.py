@@ -115,6 +115,11 @@ class VectorService:
         """Run a blocking Supabase call in a thread to avoid blocking the event loop."""
         return await asyncio.to_thread(fn)
 
+    @staticmethod
+    def _vecs_to_pg(embeddings: list[list[float]]) -> list[str]:
+        """Convert embedding float arrays to PostgreSQL vector string format."""
+        return [f"[{','.join(str(v) for v in emb)}]" for emb in embeddings]
+
     # ── Embed: Emails (from raw emails table) ─────────────────────────────
 
     async def embed_emails_batch(
@@ -154,15 +159,23 @@ class VectorService:
 
             if texts:
                 embeddings = await embed_texts(texts)
-                for row_id, emb in zip(ids, embeddings):
-                    try:
-                        await self._db(lambda rid=row_id, e=emb: self._sb.table("emails").update(
-                            {"embedding": e}
-                        ).eq("id", rid).execute())
-                        total_embedded += 1
-                    except Exception as e:
-                        logger.warning(f"Failed to store email embedding {row_id}: {e}")
-                        total_skipped += 1
+                try:
+                    await self._db(lambda: self._sb.rpc("batch_update_embeddings_emails", {
+                        "p_ids": ids,
+                        "p_embeddings": self._vecs_to_pg(embeddings),
+                    }).execute())
+                    total_embedded += len(ids)
+                except Exception as e:
+                    logger.warning(f"Batch update failed for {len(ids)} emails, falling back to individual: {e}")
+                    for row_id, emb in zip(ids, embeddings):
+                        try:
+                            await self._db(lambda rid=row_id, e=emb: self._sb.table("emails").update(
+                                {"embedding": e}
+                            ).eq("id", rid).execute())
+                            total_embedded += 1
+                        except Exception as e2:
+                            logger.warning(f"Failed to store email embedding {row_id}: {e2}")
+                            total_skipped += 1
 
             offset += batch_size
             if limit and total_embedded >= limit:
@@ -239,14 +252,22 @@ class VectorService:
 
             if texts:
                 embeddings = await embed_texts(texts)
-                for row_id, emb in zip(ids, embeddings):
-                    try:
-                        await self._db(lambda rid=row_id, e=emb: self._sb.table("customer_companies").update(
-                            {"embedding": e}
-                        ).eq("id", rid).execute())
-                        total_embedded += 1
-                    except Exception as e:
-                        logger.warning(f"Failed to store company embedding {row_id}: {e}")
+                try:
+                    await self._db(lambda: self._sb.rpc("batch_update_embeddings_companies", {
+                        "p_ids": ids,
+                        "p_embeddings": self._vecs_to_pg(embeddings),
+                    }).execute())
+                    total_embedded += len(ids)
+                except Exception as e:
+                    logger.warning(f"Batch update failed for companies, falling back: {e}")
+                    for row_id, emb in zip(ids, embeddings):
+                        try:
+                            await self._db(lambda rid=row_id, e=emb: self._sb.table("customer_companies").update(
+                                {"embedding": e}
+                            ).eq("id", rid).execute())
+                            total_embedded += 1
+                        except Exception as e2:
+                            logger.warning(f"Failed to store company embedding {row_id}: {e2}")
 
             offset += 500
             if limit and total_embedded >= limit:
@@ -309,14 +330,22 @@ class VectorService:
 
             if texts:
                 embeddings = await embed_texts(texts)
-                for row_id, emb in zip(ids, embeddings):
-                    try:
-                        await self._db(lambda rid=row_id, e=emb: self._sb.table("qb_operations").update(
-                            {"embedding": e}
-                        ).eq("id", rid).execute())
-                        total_embedded += 1
-                    except Exception as e:
-                        logger.warning(f"Failed to store operation embedding {row_id}: {e}")
+                try:
+                    await self._db(lambda: self._sb.rpc("batch_update_embeddings_operations", {
+                        "p_ids": ids,
+                        "p_embeddings": self._vecs_to_pg(embeddings),
+                    }).execute())
+                    total_embedded += len(ids)
+                except Exception as e:
+                    logger.warning(f"Batch update failed for operations, falling back: {e}")
+                    for row_id, emb in zip(ids, embeddings):
+                        try:
+                            await self._db(lambda rid=row_id, e=emb: self._sb.table("qb_operations").update(
+                                {"embedding": e}
+                            ).eq("id", rid).execute())
+                            total_embedded += 1
+                        except Exception as e2:
+                            logger.warning(f"Failed to store operation embedding {row_id}: {e2}")
 
             offset += batch_size
             if limit and total_embedded >= limit:
