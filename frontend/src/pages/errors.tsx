@@ -272,7 +272,7 @@ const ErrorsPage: React.FC = () => {
     setSelectedMailboxId(mailboxId);
     if (mailboxId) {
       // Navigate to URL with mailbox filter
-      navigate(`/errors/${mailboxId}`);
+      navigate(`/manage/errors/${mailboxId}`);
       // Find first job with errors for this mailbox
       const job = jobs.find(j => j.mailbox_id === mailboxId && j.failed_records > 0);
       if (job) {

@@ -1,5 +1,11 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
+
+/** Redirect old parameterized routes (e.g. /errors/:mailboxId → /manage/errors/:mailboxId) */
+const RedirectWithParams: React.FC<{ to: string }> = ({ to }) => {
+  const { mailboxId } = useParams();
+  return <Navigate to={`${to}/${mailboxId}`} replace />;
+};
 import { ConfigProvider } from 'antd';
 
 // Auth
@@ -140,9 +146,9 @@ function App() {
             <Route path="/intelligence/quickbase" element={<Navigate to="/manage/quickbase" replace />} />
             <Route path="/intelligence/quickbase-data" element={<Navigate to="/manage/quickbase-data" replace />} />
             <Route path="/processing" element={<Navigate to="/manage/processing" replace />} />
-            <Route path="/processing/:mailboxId" element={<Navigate to="/manage/processing/:mailboxId" replace />} />
+            <Route path="/processing/:mailboxId" element={<RedirectWithParams to="/manage/processing" />} />
             <Route path="/errors" element={<Navigate to="/manage/errors" replace />} />
-            <Route path="/errors/:mailboxId" element={<Navigate to="/manage/errors/:mailboxId" replace />} />
+            <Route path="/errors/:mailboxId" element={<RedirectWithParams to="/manage/errors" />} />
             <Route path="/extraction" element={<Navigate to="/manage/extraction" replace />} />
 
             {/* OAuth callback routes - for popup windows */}

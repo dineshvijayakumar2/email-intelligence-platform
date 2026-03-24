@@ -659,7 +659,7 @@ export const MailboxList: React.FC = () => {
             danger
             size="small"
             icon={<ExclamationCircleOutlined />}
-            onClick={() => navigate(`/errors/${record.id}`)}
+            onClick={() => navigate(`/manage/errors/${record.id}`)}
           >
             {totalFailed > 0 ? totalFailed : failedJobs.length}
           </Button>
