@@ -559,8 +559,39 @@ export const MailboxProcess: React.FC = () => {
         </Card>
       )}
 
-      {/* Processing Configuration */}
-      {!currentJob || ['completed', 'failed', 'stopped', 'interrupted'].includes(currentJob.status) ? (
+      {/* LIVE mailbox notice — sync handles everything automatically */}
+      {['gmail', 'outlook_live'].includes(mailbox.mailbox_type) && (
+        <Card title={<Space><SyncOutlined />LIVE Sync Active</Space>}>
+          <Alert
+            type="success"
+            showIcon
+            message="This mailbox syncs automatically"
+            description={
+              <div>
+                <p style={{ margin: '8px 0' }}>
+                  New emails are fetched every {mailbox.mailbox_type === 'gmail' ? '15' : '30'} minutes via{' '}
+                  {mailbox.mailbox_type === 'gmail' ? 'Gmail' : 'Outlook'} API. Contacts and companies are
+                  extracted automatically after each sync.
+                </p>
+                <p style={{ margin: '8px 0' }}>
+                  <strong>To run AI analysis:</strong> Go to <a href="/insights/inbox">Smart Inbox</a> and click "Analyze New Emails".
+                </p>
+                <p style={{ margin: '8px 0' }}>
+                  <strong>To run full extraction</strong> (engagement scoring, company stats): Go to{' '}
+                  <a href="/manage/extraction">Extraction</a> and trigger a full run for this mailbox.
+                </p>
+              </div>
+            }
+            style={{ marginBottom: 16 }}
+          />
+          <Button onClick={() => navigate('/mailboxes')}>Back to Mailboxes</Button>
+        </Card>
+      )}
+
+      {/* Processing Configuration — archive mailboxes only */}
+      {!['gmail', 'outlook_live'].includes(mailbox.mailbox_type) && (
+        !currentJob || ['completed', 'failed', 'stopped', 'interrupted'].includes(currentJob.status)
+      ) ? (
         <Card title={<Space><PlayCircleOutlined />Start New Processing Job</Space>}>
           <Form
             form={form}
@@ -794,7 +825,7 @@ export const MailboxProcess: React.FC = () => {
             </Form.Item>
           </Form>
         </Card>
-      ) : (
+      ) : !['gmail', 'outlook_live'].includes(mailbox.mailbox_type) ? (
         <Card title={<Space><PauseCircleOutlined />Processing In Progress</Space>}>
           <Alert
             message="Processing job is currently running"
@@ -808,7 +839,7 @@ export const MailboxProcess: React.FC = () => {
             </Button>
           </div>
         </Card>
-      )}
+      ) : null}
 
       {/* Job History */}
       {jobHistory.length > 0 && (
