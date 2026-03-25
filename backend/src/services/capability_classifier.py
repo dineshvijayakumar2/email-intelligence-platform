@@ -81,14 +81,26 @@ def _build_lookup(rules: list[dict]) -> dict:
     lookup = {}
     for r in rules:
         key = (
-            _normalize(r.get("dept")),
-            _normalize(r.get("op")),
+            _normalize(r.get("dept") or r.get("department")),
+            _normalize(r.get("op") or r.get("operation")),
             _normalize(r.get("machine")),
         )
+        # MVP tag: accept both "tag" and "mvp_tag" field names
+        mvp_tag = r.get("tag") or r.get("mvp_tag")
+        if mvp_tag == "(none)":
+            mvp_tag = None
+
+        # Flags: accept both list format ["has_coating"] and boolean fields {has_coating: true}
+        flags = r.get("flags", [])
+        if not flags:
+            for flag_name in ("has_coating", "has_sewing", "has_outsource_component", "am_rush"):
+                if r.get(flag_name):
+                    flags.append(flag_name)
+
         lookup[key] = {
-            "tag":          r.get("tag"),           # MVP tag or None
-            "granular_tags": r.get("granular_tags", []),  # Phase 2A sub-tags
-            "flags":        r.get("flags", []),
+            "tag":          mvp_tag,
+            "granular_tags": r.get("granular_tags", []),
+            "flags":        flags,
             "row_type":     r.get("row_type"),
         }
     return lookup

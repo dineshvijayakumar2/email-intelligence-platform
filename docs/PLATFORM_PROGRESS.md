@@ -27,7 +27,7 @@ A commercial intelligence platform for B2B account management teams. It syncs em
 | Prompt System Hardening | DB persistence, version tracking, playground fixes | ✅ Complete | 19 Mar 2026 |
 | Invite User System | Admin-controlled onboarding, restrict open sign-up | 🔲 Planned | Not started |
 | Nav restructure | Analytics + Intelligence → Customers + Insights + Manage (route rename, no new pages) | ✅ Complete | 19 Mar 2026 |
-| Sprint 4 — Sales Intelligence | QB Operations sync, Customer Profile redesign, Recommendation Engine, Vector AI + Chat Agent | 🔲 In Progress | Mar 2026 |
+| Sprint 4 — Sales Intelligence | QB Operations sync, Capability Intelligence, Vector Search, Customer Analytics | 🟡 In Progress | Mar 2026 |
 
 ---
 
@@ -580,9 +580,34 @@ Sprint 4 additions (vector embeddings + AI Chat Agent): +~$3–8/month → well 
 
 ---
 
-## 🔲 IN PROGRESS — Sprint 4: Sales Intelligence Engine
+## 🟡 IN PROGRESS — Sprint 4: Sales Intelligence Engine
 
 **Goal:** Merge email engagement intelligence with production intelligence from QuickBase — showing not just who's communicating, but what they buy, what they should be buying, and what to recommend next.
+
+### Completed (Mar 2026):
+- ✅ S4.0: Communication Guidelines in prompt templates
+- ✅ S4.1: QB Operations sync (650K+ records) + Capability Intelligence (8 MVP tags, 597 classifier rules)
+- ✅ S4.1: Operations table in QB Config + QB Data pages (6th table)
+- ✅ S4.4: Vector embeddings (pgvector, gemini-embedding-001, 768 dims, HNSW indexes)
+- ✅ S4.4: Semantic Search page (`/insights/search`) — unified email/company/operations search
+- ✅ S4.4: Per-table embedding controls, stop button, batch RPC updates
+- ✅ Fix: Lightweight extraction for auto-sync (steps 1-9 only, skips heavy analytics)
+- ✅ Fix: LIVE mailbox process page shows sync info instead of old processing form
+- ✅ Fix: Disambiguate thread_status FK in digest generator
+- ✅ Fix: Optimized response time query (covering index + semi-join)
+- ✅ Fix: profit_pct column widened (DECIMAL(5,2) → DECIMAL(8,2))
+- ✅ Fix: Redirect routes preserve mailboxId params
+
+### In Progress:
+- 🟡 Classifier rules fix — JSON missing 170 capability-tagged rules (only process rules loaded)
+- 🟡 Phase 2: Customer Intelligence Analytics (5 features planned)
+
+### Planned:
+- Phase 2A: Strike rate + Contact capability tags
+- Phase 2B: Seasonality trends
+- Phase 2C: Capability ordering rhythm
+- Phase 2D: Enriched AI insights with precomputed analytics + vector context
+- AI Chat Agent (`/insights/agent`)
 
 **Five tracks:**
 
@@ -725,32 +750,40 @@ For each contact: find operations the company has bought that this contact hasn'
 - Smart Inbox → collapsible "Sales Opportunities" panel in email detail drawer
 - Daily/Weekly Digest → "Sales Opportunities" section (top 5 companies)
 
-### S4.4 — Vector Intelligence + AI Chat Agent
+### S4.4 — Vector Intelligence (✅ Complete) + AI Chat Agent (Planned)
 
-**Goal:** Embed all intelligence data into pgvector so a conversational agent can answer any portfolio question semantically — e.g. "Which customers should I approach about Wide Format this week?"
+**Embedding model:** `gemini-embedding-001` (Google, 768 dims via `output_dimensionality`) — `langchain-google-genai`
 
-**Embedding model:** `models/text-embedding-004` (Google, 768 dims) — already available via `langchain-google-genai` (no new packages)
+| What gets embedded | Table column | Embed text | Status |
+|--------------------|-------------|-----------|--------|
+| Raw emails | `emails.embedding` | subject + body_text (1000 chars) + sender | ✅ Live |
+| Company profiles | `customer_companies.embedding` | name + industry + domains + QB tier/revenue/AM | ✅ Live |
+| QB operations | `qb_operations.embedding` | operation + dept + machine + customer + capability_tags | ✅ Live |
 
-**One-time bootstrap cost:** ~$0.15 for all 26K emails + companies + operations
+**Independent of AI analysis pipeline** — embeds raw source data, not AI-processed fields.
 
-| What gets embedded | Table column | Used for |
-|--------------------|-------------|---------|
-| Email AI summaries + signals | `ai_email_intelligence.embedding` | Email semantic search, historical context |
-| Company profiles | `customer_companies.embedding` | Company semantic search |
-| QB operations | `qb_operations.embedding` | Product/service semantic search |
+**Migrations:** 037 (pgvector + HNSW indexes + 3 search RPC functions), 037b (reset to 768 dims), 039 (batch RPC updates)
 
-**New migration 034:** `vector` extension + HNSW indexes + `search_email_intelligence()` Supabase RPC
+**Backend (`vector_service.py`):**
+- Non-blocking: all DB ops via `asyncio.to_thread`, runs as detached `asyncio.create_task`
+- Batch embedding: 50 texts/API call, 2s delay, exponential backoff on 429
+- Batch DB writes: 25 rows/RPC call (avoids statement timeout)
+- Resilient: skips rate-limited batches + continues (no job-killing errors)
+- Configurable: `?limit=10` for testing, `?tables=emails,companies` for per-table control
+- Stop button: `POST /vector/reembed/stop` sets cancel flag checked between batches
 
-**New service `vector_service.py`:** `embed_texts()`, `embed_emails_batch()`, `embed_companies()`, `embed_operations()`, `search_emails()`, `search_companies()`, `search_operations()`, `get_company_history_context()`
+**Frontend (`vector-search.tsx`):**
+- Semantic search across emails, companies, operations with natural language
+- Embedding coverage stats panel with per-table progress bars
+- Per-table embed buttons: Embed Emails / Companies / Operations / All
+- Stop button during embedding
+- ClientSelector for multi-client support
+- 8 suggested search prompts
 
-**AI feature rebuilds:**
-- `ai_email_analyzer.py` — Group batch by company → 1 vector search per company → inject historical context into prompt
-- `ai_digest_generator.py` — Replace fixed context with hybrid: 3 parallel semantic queries + structured QB stats
-- `langchain_tools.py` — Add `semantic_search_emails` + `semantic_search_operations` tools (6 tools total in strategic digest agent)
-
-**New AI Chat Agent (`ai_agent_service.py`):** General portfolio Q&A with all 6 tools, stateless per-request, conversation history passed in
-
-**New frontend page `agent.tsx`:** `/intelligence/agent` — chat UI with pre-suggested prompts, tool call visibility, source citations
+**Planned — AI Chat Agent:**
+- `ai_agent_service.py` — general portfolio Q&A with 6 tools (4 lookup + 2 semantic search)
+- `POST /agent/chat` endpoint
+- `agent.tsx` — chat UI at `/insights/agent`
 
 ---
 
