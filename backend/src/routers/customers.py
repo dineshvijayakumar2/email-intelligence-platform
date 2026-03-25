@@ -660,3 +660,95 @@ async def get_recommendations(
     except Exception as e:
         logger.error(f"Failed to get recommendations for {company_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Customer Analytics (Phase 2) ────────────────────────────────────────────
+
+def _resolve_company_client(company_id: str) -> str:
+    """Resolve client_id from company_id. Raises 404 if not found."""
+    co_result = _supabase.table('customer_companies').select(
+        'client_id'
+    ).eq('id', company_id).limit(1).execute()
+    if not co_result.data:
+        raise HTTPException(status_code=404, detail="Company not found")
+    return co_result.data[0]['client_id']
+
+
+@router.get("/{company_id}/strike-rate")
+async def get_strike_rate(
+    company_id: str,
+    force: bool = Query(False, description="Bypass 24h cache"),
+):
+    """Quote conversion rate — company total + per-contact breakdown."""
+    try:
+        from ..services.customer_analytics_service import CustomerAnalyticsService
+        client_id = _resolve_company_client(company_id)
+        svc = CustomerAnalyticsService(_supabase, client_id)
+        result = svc.get_strike_rate(company_id, force=force)
+        result['company_id'] = company_id
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get strike rate for {company_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{company_id}/contact-capabilities")
+async def get_contact_capabilities(
+    company_id: str,
+    force: bool = Query(False, description="Bypass 24h cache"),
+):
+    """Which contacts order which capabilities — per-contact capability tags."""
+    try:
+        from ..services.customer_analytics_service import CustomerAnalyticsService
+        client_id = _resolve_company_client(company_id)
+        svc = CustomerAnalyticsService(_supabase, client_id)
+        result = svc.get_contact_capabilities(company_id, force=force)
+        result['company_id'] = company_id
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get contact capabilities for {company_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{company_id}/seasonality")
+async def get_seasonality(
+    company_id: str,
+    force: bool = Query(False, description="Bypass 24h cache"),
+):
+    """Monthly/quarterly ordering patterns from QB operations."""
+    try:
+        from ..services.customer_analytics_service import CustomerAnalyticsService
+        client_id = _resolve_company_client(company_id)
+        svc = CustomerAnalyticsService(_supabase, client_id)
+        result = svc.get_seasonality(company_id, force=force)
+        result['company_id'] = company_id
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get seasonality for {company_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{company_id}/capability-rhythm")
+async def get_capability_rhythm(
+    company_id: str,
+    force: bool = Query(False, description="Bypass 24h cache"),
+):
+    """Per-capability ordering rhythm — avg interval + overdue detection."""
+    try:
+        from ..services.customer_analytics_service import CustomerAnalyticsService
+        client_id = _resolve_company_client(company_id)
+        svc = CustomerAnalyticsService(_supabase, client_id)
+        result = svc.get_capability_rhythm(company_id, force=force)
+        result['company_id'] = company_id
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get capability rhythm for {company_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

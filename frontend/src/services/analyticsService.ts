@@ -409,6 +409,54 @@ export const companiesApi = {
       return { cross_contact_recs: [], related_product_recs: [], product_profile: {} };
     }
   },
+
+  /** GET /customers/{companyId}/strike-rate */
+  async getStrikeRate(companyId: string, force = false): Promise<any> {
+    try {
+      return await api.get<any>(
+        `/customers/${companyId}/strike-rate${force ? '?force=true' : ''}`,
+        { timeout: 15000 }
+      );
+    } catch {
+      return { company_total: { total_quotes: 0, converted: 0, strike_rate_pct: 0 }, by_contact: [], by_year: [] };
+    }
+  },
+
+  /** GET /customers/{companyId}/contact-capabilities */
+  async getContactCapabilities(companyId: string, force = false): Promise<any> {
+    try {
+      return await api.get<any>(
+        `/customers/${companyId}/contact-capabilities${force ? '?force=true' : ''}`,
+        { timeout: 15000 }
+      );
+    } catch {
+      return { contacts: [] };
+    }
+  },
+
+  /** GET /customers/{companyId}/seasonality */
+  async getSeasonality(companyId: string, force = false): Promise<any> {
+    try {
+      return await api.get<any>(
+        `/customers/${companyId}/seasonality${force ? '?force=true' : ''}`,
+        { timeout: 15000 }
+      );
+    } catch {
+      return { monthly: [], quarterly: [], peak_months: [], trough_months: [], total_orders: 0 };
+    }
+  },
+
+  /** GET /customers/{companyId}/capability-rhythm */
+  async getCapabilityRhythm(companyId: string, force = false): Promise<any> {
+    try {
+      return await api.get<any>(
+        `/customers/${companyId}/capability-rhythm${force ? '?force=true' : ''}`,
+        { timeout: 15000 }
+      );
+    } catch {
+      return { rhythms: [], alerts: [] };
+    }
+  },
 };
 
 // ============================================================================

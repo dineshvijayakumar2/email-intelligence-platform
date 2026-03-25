@@ -9,6 +9,10 @@ import { LifecycleBadge } from '../../components/analytics/LifecycleBadge';
 import { OrderHistoryTable } from '../../components/OrderHistoryTable';
 import { ProductProfileCard } from '../../components/ProductProfileCard';
 import { RecommendationsPanel } from '../../components/RecommendationsPanel';
+import StrikeRateCard from '../../components/StrikeRateCard';
+import ContactCapabilitiesCard from '../../components/ContactCapabilitiesCard';
+import SeasonalityChart from '../../components/SeasonalityChart';
+import CapabilityRhythmCard from '../../components/CapabilityRhythmCard';
 import {
   companiesApi,
   threadsApi,
@@ -260,6 +264,24 @@ export const CompanyDetail: React.FC = () => {
           </div>
         </Col>
       </Row>
+
+      {/* Customer Intelligence Analytics */}
+      {companyId && (
+        <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
+          <Col xs={24} lg={12}>
+            <StrikeRateCard companyId={companyId} />
+          </Col>
+          <Col xs={24} lg={12}>
+            <SeasonalityChart companyId={companyId} />
+          </Col>
+          <Col xs={24} lg={12}>
+            <CapabilityRhythmCard companyId={companyId} />
+          </Col>
+          <Col xs={24} lg={12}>
+            <ContactCapabilitiesCard companyId={companyId} />
+          </Col>
+        </Row>
+      )}
 
       {/* Order History */}
       <div style={{ marginTop: 16 }} className="fade-in-up stagger-4">
