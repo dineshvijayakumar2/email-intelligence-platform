@@ -290,10 +290,11 @@ def reclassify_all(supabase_client, client_id: str) -> int:
 
     logger.info(f"[Classifier] Starting reclassify_all for client {client_id} ({len(lookup)} rules loaded)")
 
-    # Fetch all operations in batches
+    # Fetch all operations in batches, classify in Python, write back in batch RPC
     total_updated = 0
     offset = 0
     batch_size = 500
+    WRITE_CHUNK = 100  # Max rows per RPC call to avoid statement timeout
 
     while True:
         result = supabase_client.table("qb_operations").select(
@@ -303,6 +304,15 @@ def reclassify_all(supabase_client, client_id: str) -> int:
         rows = result.data or []
         if not rows:
             break
+
+        # Classify all rows in this batch (pure Python, instant)
+        batch_ids = []
+        batch_tags = []
+        batch_coating = []
+        batch_sewing = []
+        batch_outsource = []
+        batch_rush = []
+        batch_row_type = []
 
         for row in rows:
             dept    = row.get("department")
@@ -320,23 +330,34 @@ def reclassify_all(supabase_client, client_id: str) -> int:
                         break
 
             tags = [match["tag"]] if match and match.get("tag") else []
-            granular_tags = (match.get("granular_tags") or []) if match else []
             flags = (match.get("flags") or []) if match else []
-            row_type = match.get("row_type") if match else None
+            row_type_val = match.get("row_type") if match else None
             am_rush = (op or "").startswith(rush_pattern)
 
+            batch_ids.append(row["id"])
+            batch_tags.append(json.dumps(tags))
+            batch_coating.append("has_coating" in flags)
+            batch_sewing.append("has_sewing" in flags)
+            batch_outsource.append("has_outsource_component" in flags)
+            batch_rush.append(am_rush)
+            batch_row_type.append(row_type_val)
+
+        # Write in chunks via batch RPC
+        for ci in range(0, len(batch_ids), WRITE_CHUNK):
+            chunk_end = ci + WRITE_CHUNK
             try:
-                supabase_client.table("qb_operations").update({
-                    "capability_tags":         tags,
-                    "has_coating":             "has_coating" in flags,
-                    "has_sewing":              "has_sewing" in flags,
-                    "has_outsource_component": "has_outsource_component" in flags,
-                    "am_rush":                 am_rush,
-                    "row_type":                row_type,
-                }).eq("id", row["id"]).execute()
-                total_updated += 1
+                supabase_client.rpc("batch_update_classifications", {
+                    "p_ids": batch_ids[ci:chunk_end],
+                    "p_capability_tags": batch_tags[ci:chunk_end],
+                    "p_has_coating": batch_coating[ci:chunk_end],
+                    "p_has_sewing": batch_sewing[ci:chunk_end],
+                    "p_has_outsource_component": batch_outsource[ci:chunk_end],
+                    "p_am_rush": batch_rush[ci:chunk_end],
+                    "p_row_type": batch_row_type[ci:chunk_end],
+                }).execute()
+                total_updated += len(batch_ids[ci:chunk_end])
             except Exception as e:
-                logger.warning(f"[Classifier] Failed to update operation {row['id']}: {e}")
+                logger.warning(f"[Classifier] Batch update failed for chunk: {e}")
 
         offset += len(rows)
         if len(rows) < batch_size:
