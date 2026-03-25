@@ -22,8 +22,8 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 EMBEDDING_MODEL = "models/gemini-embedding-001"
 EMBEDDING_DIMS = 768   # Force 768 dims (pgvector HNSW/IVFFlat max = 2000)
-EMBED_BATCH_SIZE = 100  # Google paid tier supports ~1500 RPM
-EMBED_DELAY_SECONDS = 1  # Brief pause between batches to be polite
+EMBED_BATCH_SIZE = 50   # Smaller batches to stay under token-per-minute limits
+EMBED_DELAY_SECONDS = 2  # Pause between batches (~25 req/min × 50 texts = 1250 texts/min)
 
 
 def _get_embedding_model():
@@ -81,11 +81,16 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
                     raise
 
         if not succeeded:
-            raise RuntimeError(
-                f"Embedding failed after 5 retries (rate limited). "
-                f"Embedded {len(all_embeddings)} of {len(texts)} texts before failure. "
-                f"Free tier quota may be exhausted — try again later or use a paid API key."
+            # Skip this batch instead of killing the entire job
+            logger.warning(
+                f"[Vector] Skipping batch of {len(batch)} texts after 5 retries. "
+                f"Embedded {len(all_embeddings)} of {len(texts)} so far. Will continue with next batch."
             )
+            # Pad with None so indices stay aligned — caller must handle None entries
+            all_embeddings.extend([None] * len(batch))
+            # Long cooldown before next batch
+            await asyncio.sleep(60)
+            continue
 
         # Pause between batches — longer cooldown after recovering from 429
         if i + EMBED_BATCH_SIZE < len(texts):
@@ -159,21 +164,29 @@ class VectorService:
 
             if texts:
                 embeddings = await embed_texts(texts)
-                # Write to DB in small chunks to avoid statement timeout
-                DB_CHUNK = 25
-                for ci in range(0, len(ids), DB_CHUNK):
-                    chunk_ids = ids[ci:ci + DB_CHUNK]
-                    chunk_embs = embeddings[ci:ci + DB_CHUNK]
-                    try:
-                        await self._db(lambda cids=chunk_ids, cembs=chunk_embs: self._sb.rpc(
-                            "batch_update_embeddings_emails", {
-                                "p_ids": cids,
-                                "p_embeddings": self._vecs_to_pg(cembs),
-                            }).execute())
-                        total_embedded += len(chunk_ids)
-                    except Exception as e:
-                        logger.warning(f"Batch chunk failed ({len(chunk_ids)} emails): {e}")
-                        total_skipped += len(chunk_ids)
+                # Filter out None entries (skipped due to rate limits)
+                valid = [(i, e) for i, e in zip(ids, embeddings) if e is not None]
+                if not valid:
+                    total_skipped += len(ids)
+                else:
+                    v_ids, v_embs = zip(*valid)
+                    v_ids, v_embs = list(v_ids), list(v_embs)
+                    total_skipped += len(ids) - len(v_ids)
+                    # Write to DB in small chunks to avoid statement timeout
+                    DB_CHUNK = 25
+                    for ci in range(0, len(v_ids), DB_CHUNK):
+                        chunk_ids = v_ids[ci:ci + DB_CHUNK]
+                        chunk_embs = v_embs[ci:ci + DB_CHUNK]
+                        try:
+                            await self._db(lambda cids=chunk_ids, cembs=chunk_embs: self._sb.rpc(
+                                "batch_update_embeddings_emails", {
+                                    "p_ids": cids,
+                                    "p_embeddings": self._vecs_to_pg(cembs),
+                                }).execute())
+                            total_embedded += len(chunk_ids)
+                        except Exception as e:
+                            logger.warning(f"Batch chunk failed ({len(chunk_ids)} emails): {e}")
+                            total_skipped += len(chunk_ids)
 
             offset += batch_size
             if limit and total_embedded >= limit:
