@@ -169,7 +169,9 @@ async def import_classifier_rules(
 
     elif body.csv_text:
         try:
-            reader = csv.DictReader(io.StringIO(body.csv_text.strip()))
+            # Strip BOM if present (Excel/Windows CSV exports often include UTF-8 BOM)
+            csv_clean = body.csv_text.strip().lstrip('\ufeff')
+            reader = csv.DictReader(io.StringIO(csv_clean))
             for row in reader:
                 flags_raw = row.get('Flags', '') or ''
                 flags = [f.strip() for f in flags_raw.split(',') if f.strip()]

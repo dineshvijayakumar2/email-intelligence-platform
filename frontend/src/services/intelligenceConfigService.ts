@@ -4,7 +4,7 @@
 
 import api from './apiClient';
 
-const BASE = '/api/v1/intelligence-config';
+const BASE = '/v1/intelligence-config';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
