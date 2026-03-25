@@ -1785,13 +1785,21 @@ async def search_all_semantic(
     if not client_id:
         client_id = current_user.get("client_id")
     try:
-        import asyncio
         vs = _get_vector_service()
-        emails, companies, operations = await asyncio.gather(
-            vs.search_emails(q, client_id, threshold, limit),
-            vs.search_companies(q, client_id, threshold, limit),
-            vs.search_operations(q, client_id, threshold, limit),
-        )
+
+        # Search each table independently — don't fail all if one table has no embeddings
+        emails, companies, operations = [], [], []
+        for label, search_fn, result_list in [
+            ("emails", vs.search_emails, emails),
+            ("companies", vs.search_companies, companies),
+            ("operations", vs.search_operations, operations),
+        ]:
+            try:
+                res = await search_fn(q, client_id, threshold, limit)
+                result_list.extend(res)
+            except Exception as table_err:
+                logger.warning(f"Vector search failed for {label}: {table_err}")
+
         return {
             "query": q,
             "emails": emails,
@@ -1800,6 +1808,7 @@ async def search_all_semantic(
             "total": len(emails) + len(companies) + len(operations),
         }
     except Exception as e:
+        logger.error(f"Vector search failed: {e}")
         raise HTTPException(status_code=500, detail=str(e)[:200])
 
 
