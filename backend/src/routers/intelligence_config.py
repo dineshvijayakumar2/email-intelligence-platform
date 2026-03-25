@@ -293,7 +293,10 @@ async def trigger_reclassify(
                 'completed_at': datetime.now(timezone.utc).isoformat(),
             }
 
-    background_tasks.add_task(_run)
+    # Run in a separate thread so it doesn't block the event loop or starve HTTP requests
+    import threading
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
     return {'ok': True, 'message': 'Reclassification started in background', 'client_id': client_id}
 
 

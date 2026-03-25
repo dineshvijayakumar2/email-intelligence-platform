@@ -342,7 +342,8 @@ def reclassify_all(supabase_client, client_id: str) -> int:
             batch_rush.append(am_rush)
             batch_row_type.append(row_type_val)
 
-        # Write in chunks via batch RPC
+        # Write in chunks via batch RPC — with pause to avoid starving other queries
+        import time as _time
         for ci in range(0, len(batch_ids), WRITE_CHUNK):
             chunk_end = ci + WRITE_CHUNK
             try:
@@ -358,6 +359,8 @@ def reclassify_all(supabase_client, client_id: str) -> int:
                 total_updated += len(batch_ids[ci:chunk_end])
             except Exception as e:
                 logger.warning(f"[Classifier] Batch update failed for chunk: {e}")
+            # Brief pause between chunks so other Supabase queries can get through
+            _time.sleep(0.1)
 
         offset += len(rows)
         if len(rows) < batch_size:
