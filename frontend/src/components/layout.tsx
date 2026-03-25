@@ -153,6 +153,7 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
           { key: '/manage/ai-playground', label: <Link to="/manage/ai-playground">AI Playground</Link> },
           { key: '/manage/quickbase', label: <Link to="/manage/quickbase">QB Config</Link> },
           { key: '/manage/quickbase-data', label: <Link to="/manage/quickbase-data">QB Data</Link> },
+          { key: '/manage/intelligence-config', label: <Link to="/manage/intelligence-config">Intelligence Config</Link> },
           { key: '/users', label: <Link to="/users">Users</Link> },
           { key: '/admin/data', label: <Link to="/admin/data">Data View</Link> },
           { key: '/admin/audit-logs', label: <Link to="/admin/audit-logs">Audit Logs</Link> },
