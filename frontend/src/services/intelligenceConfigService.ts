@@ -6,6 +6,14 @@ import api from './apiClient';
 
 const BASE = '/v1/intelligence-config';
 
+function qs(clientId?: string, extra?: Record<string, string>): string {
+  const params = new URLSearchParams();
+  if (clientId) params.set('client_id', clientId);
+  if (extra) Object.entries(extra).forEach(([k, v]) => { if (v) params.set(k, v); });
+  const str = params.toString();
+  return str ? `?${str}` : '';
+}
+
 // ── Types ──────────────────────────────────────────────────────────────────
 
 export interface CapabilityTag {
@@ -42,12 +50,12 @@ export interface ReclassifyStatus {
 
 // ── Capability Tags ────────────────────────────────────────────────────────
 
-export async function getCapabilityTags(): Promise<{ tags: CapabilityTag[]; version: number }> {
-  return api.get(`${BASE}/capability-tags`);
+export async function getCapabilityTags(clientId?: string): Promise<{ tags: CapabilityTag[]; version: number }> {
+  return api.get(`${BASE}/capability-tags${qs(clientId)}`);
 }
 
-export async function updateCapabilityTags(tags: CapabilityTag[]): Promise<void> {
-  return api.put(`${BASE}/capability-tags`, { tags });
+export async function updateCapabilityTags(tags: CapabilityTag[], clientId?: string): Promise<void> {
+  return api.put(`${BASE}/capability-tags${qs(clientId)}`, { tags });
 }
 
 // ── Classifier Rules ───────────────────────────────────────────────────────
@@ -57,41 +65,42 @@ export async function getClassifierRules(params: {
   page_size?: number;
   tag?: string;
   dept?: string;
+  clientId?: string;
 }): Promise<{ rules: ClassifierRule[]; total: number; page: number; page_size: number; version: number }> {
-  const qs = new URLSearchParams();
-  if (params.page)      qs.set('page', String(params.page));
-  if (params.page_size) qs.set('page_size', String(params.page_size));
-  if (params.tag)       qs.set('tag', params.tag);
-  if (params.dept)      qs.set('dept', params.dept);
-  return api.get(`${BASE}/classifier-rules?${qs}`);
+  return api.get(`${BASE}/classifier-rules${qs(params.clientId, {
+    page: params.page ? String(params.page) : '',
+    page_size: params.page_size ? String(params.page_size) : '',
+    tag: params.tag || '',
+    dept: params.dept || '',
+  })}`);
 }
 
 export async function importClassifierRules(payload: {
   rules?: ClassifierRule[];
   csv_text?: string;
   replace?: boolean;
-}): Promise<{ ok: boolean; imported: number; total_rules: number }> {
-  return api.post(`${BASE}/classifier-rules/import`, payload);
+}, clientId?: string): Promise<{ ok: boolean; imported: number; total_rules: number }> {
+  return api.post(`${BASE}/classifier-rules/import${qs(clientId)}`, payload);
 }
 
 // ── Rush Settings ──────────────────────────────────────────────────────────
 
-export async function getRushSettings(): Promise<{ settings: RushSettings; version: number }> {
-  return api.get(`${BASE}/rush-settings`);
+export async function getRushSettings(clientId?: string): Promise<{ settings: RushSettings; version: number }> {
+  return api.get(`${BASE}/rush-settings${qs(clientId)}`);
 }
 
-export async function updateRushSettings(settings: RushSettings): Promise<void> {
-  return api.put(`${BASE}/rush-settings`, settings);
+export async function updateRushSettings(settings: RushSettings, clientId?: string): Promise<void> {
+  return api.put(`${BASE}/rush-settings${qs(clientId)}`, settings);
 }
 
 // ── Reclassify ─────────────────────────────────────────────────────────────
 
-export async function triggerReclassify(): Promise<{ ok: boolean; message: string }> {
-  return api.post(`${BASE}/reclassify`, {});
+export async function triggerReclassify(clientId?: string): Promise<{ ok: boolean; message: string }> {
+  return api.post(`${BASE}/reclassify${qs(clientId)}`, {});
 }
 
-export async function getReclassifyStatus(): Promise<ReclassifyStatus> {
-  return api.get(`${BASE}/reclassify/status`);
+export async function getReclassifyStatus(clientId?: string): Promise<ReclassifyStatus> {
+  return api.get(`${BASE}/reclassify/status${qs(clientId)}`);
 }
 
 // ── Cache ──────────────────────────────────────────────────────────────────
@@ -99,14 +108,14 @@ export async function getReclassifyStatus(): Promise<ReclassifyStatus> {
 export async function getCacheStatus(params?: {
   cache_type?: string;
   page?: number;
+  clientId?: string;
 }): Promise<{ entries: any[]; page: number; page_size: number }> {
-  const qs = new URLSearchParams();
-  if (params?.cache_type) qs.set('cache_type', params.cache_type);
-  if (params?.page)       qs.set('page', String(params.page));
-  return api.get(`${BASE}/cache?${qs}`);
+  return api.get(`${BASE}/cache${qs(params?.clientId, {
+    cache_type: params?.cache_type || '',
+    page: params?.page ? String(params.page) : '',
+  })}`);
 }
 
-export async function clearCache(cacheType?: string): Promise<{ ok: boolean; deleted: number }> {
-  const qs = cacheType ? `?cache_type=${cacheType}` : '';
-  return api.delete(`${BASE}/cache${qs}`);
+export async function clearCache(cacheType?: string, clientId?: string): Promise<{ ok: boolean; deleted: number }> {
+  return api.delete(`${BASE}/cache${qs(clientId, { cache_type: cacheType || '' })}`);
 }

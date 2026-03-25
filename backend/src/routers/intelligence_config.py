@@ -38,7 +38,11 @@ def init_intelligence_config_router(supabase_client):
     _supabase = supabase_client
 
 
-def _get_client_id(user_id: str) -> str:
+def _resolve_client_id(user_id: str, explicit_client_id: str = None) -> str:
+    """Resolve client_id: use explicit param if provided, else lookup from user assignment."""
+    if explicit_client_id:
+        return explicit_client_id
+    # Check localStorage-style param from frontend
     result = _supabase.table('user_client_assignments').select(
         'client_id'
     ).eq('user_id', user_id).limit(1).execute()
@@ -74,8 +78,11 @@ def _upsert_config(client_id: str, config_type: str, config_data: dict) -> dict:
 # ── Capability Tags ───────────────────────────────────────────────────────────
 
 @router.get("/capability-tags")
-async def get_capability_tags(current_user: dict = Depends(get_current_user)):
-    client_id = _get_client_id(current_user['user_id'])
+async def get_capability_tags(
+    client_id: Optional[str] = Query(None),
+    current_user: dict = Depends(get_current_user),
+):
+    client_id = _resolve_client_id(current_user['user_id'], client_id)
 
     # Auto-seed if missing
     capability_classifier._get_client_state(_supabase, client_id)
@@ -97,9 +104,10 @@ class CapabilityTagsUpdate(BaseModel):
 @router.put("/capability-tags")
 async def update_capability_tags(
     body: CapabilityTagsUpdate,
+    client_id: Optional[str] = Query(None),
     current_user: dict = Depends(require_role('admin', 'client_manager')),
 ):
-    client_id = _get_client_id(current_user['user_id'])
+    client_id = _resolve_client_id(current_user['user_id'], client_id)
     meta = _upsert_config(client_id, 'capability_tags', {'tags': body.tags})
     return {'ok': True, **meta}
 
@@ -112,9 +120,10 @@ async def get_classifier_rules(
     page_size: int = Query(50, ge=1, le=200),
     tag: Optional[str] = Query(None),
     dept: Optional[str] = Query(None),
+    client_id: Optional[str] = Query(None),
     current_user: dict = Depends(get_current_user),
 ):
-    client_id = _get_client_id(current_user['user_id'])
+    client_id = _resolve_client_id(current_user['user_id'], client_id)
 
     # Auto-seed if missing
     capability_classifier._get_client_state(_supabase, client_id)
@@ -150,6 +159,7 @@ class RulesImport(BaseModel):
 @router.post("/classifier-rules/import")
 async def import_classifier_rules(
     body: RulesImport,
+    client_id: Optional[str] = Query(None),
     current_user: dict = Depends(require_role('admin', 'client_manager')),
 ):
     """
@@ -160,7 +170,7 @@ async def import_classifier_rules(
 
     Flags column: comma-separated flag names (has_coating, has_sewing, etc.)
     """
-    client_id = _get_client_id(current_user['user_id'])
+    client_id = _resolve_client_id(current_user['user_id'], client_id)
 
     incoming: list[dict] = []
 
@@ -223,8 +233,8 @@ async def import_classifier_rules(
 # ── Rush Settings ─────────────────────────────────────────────────────────────
 
 @router.get("/rush-settings")
-async def get_rush_settings(current_user: dict = Depends(get_current_user)):
-    client_id = _get_client_id(current_user['user_id'])
+async def get_rush_settings(client_id: Optional[str] = Query(None), current_user: dict = Depends(get_current_user)):
+    client_id = _resolve_client_id(current_user['user_id'], client_id)
     capability_classifier._get_client_state(_supabase, client_id)  # auto-seed
     cfg = _get_config(client_id, 'rush_settings')
     data = cfg['config_data'] if cfg else capability_classifier.DEFAULT_RUSH_SETTINGS
@@ -240,9 +250,10 @@ class RushSettingsUpdate(BaseModel):
 @router.put("/rush-settings")
 async def update_rush_settings(
     body: RushSettingsUpdate,
+    client_id: Optional[str] = Query(None),
     current_user: dict = Depends(require_role('admin', 'client_manager')),
 ):
-    client_id = _get_client_id(current_user['user_id'])
+    client_id = _resolve_client_id(current_user['user_id'], client_id)
     meta = _upsert_config(client_id, 'rush_settings', body.model_dump())
     return {'ok': True, **meta}
 
@@ -255,10 +266,11 @@ _reclassify_status: dict[str, dict] = {}
 @router.post("/reclassify")
 async def trigger_reclassify(
     background_tasks: BackgroundTasks,
+    client_id: Optional[str] = Query(None),
     current_user: dict = Depends(require_role('admin', 'client_manager')),
 ):
     """Re-classify all qb_operations for this client using current rules. Runs in background."""
-    client_id = _get_client_id(current_user['user_id'])
+    client_id = _resolve_client_id(current_user['user_id'], client_id)
 
     if _reclassify_status.get(client_id, {}).get('status') == 'running':
         return {'ok': False, 'message': 'Reclassify already in progress'}
@@ -286,8 +298,8 @@ async def trigger_reclassify(
 
 
 @router.get("/reclassify/status")
-async def get_reclassify_status(current_user: dict = Depends(get_current_user)):
-    client_id = _get_client_id(current_user['user_id'])
+async def get_reclassify_status(client_id: Optional[str] = Query(None), current_user: dict = Depends(get_current_user)):
+    client_id = _resolve_client_id(current_user['user_id'], client_id)
     return _reclassify_status.get(client_id, {'status': 'idle'})
 
 
@@ -298,10 +310,11 @@ async def get_cache_status(
     cache_type: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
+    client_id: Optional[str] = Query(None),
     current_user: dict = Depends(get_current_user),
 ):
     """List customer_intelligence_cache entries — shows what's computed and when."""
-    client_id = _get_client_id(current_user['user_id'])
+    client_id = _resolve_client_id(current_user['user_id'], client_id)
 
     query = _supabase.table('customer_intelligence_cache').select(
         'id, company_id, contact_id, cache_type, computed_at, customer_companies(company_name)'
@@ -323,10 +336,11 @@ async def get_cache_status(
 @router.delete("/cache")
 async def clear_cache(
     cache_type: Optional[str] = Query(None),
+    client_id: Optional[str] = Query(None),
     current_user: dict = Depends(require_role('admin', 'client_manager')),
 ):
     """Clear intelligence cache — forces recompute on next request."""
-    client_id = _get_client_id(current_user['user_id'])
+    client_id = _resolve_client_id(current_user['user_id'], client_id)
 
     query = _supabase.table('customer_intelligence_cache').delete().eq('client_id', client_id)
     if cache_type:

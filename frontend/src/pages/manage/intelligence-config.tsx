@@ -21,6 +21,7 @@ import {
   getCacheStatus, clearCache,
   type CapabilityTag, type ClassifierRule, type RushSettings, type ReclassifyStatus,
 } from '../../services/intelligenceConfigService';
+import { ClientSelector } from '../../components/analytics/ClientSelector';
 
 const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -47,17 +48,18 @@ const ROW_TYPE_COLORS: Record<string, string> = {
 // Tab 1: Capability Tags
 // ─────────────────────────────────────────────────────────────────────────────
 
-function CapabilityTagsTab() {
+function CapabilityTagsTab({ clientId }: { clientId?: string }) {
   const [tags, setTags] = useState<CapabilityTag[]>([]);
   const [version, setVersion] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getCapabilityTags()
+    setLoading(true);
+    getCapabilityTags(clientId)
       .then(r => { setTags(r.tags); setVersion(r.version); })
       .catch(() => message.error('Failed to load capability tags'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [clientId]);
 
   if (loading) return <Spin />;
 
@@ -93,7 +95,7 @@ function CapabilityTagsTab() {
 // Tab 2: Classifier Rules
 // ─────────────────────────────────────────────────────────────────────────────
 
-function ClassifierRulesTab() {
+function ClassifierRulesTab({ clientId }: { clientId?: string }) {
   const [rules, setRules] = useState<ClassifierRule[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -110,11 +112,11 @@ function ClassifierRulesTab() {
 
   const load = useCallback(() => {
     setLoading(true);
-    getClassifierRules({ page, page_size: PAGE_SIZE, tag: tagFilter || undefined, dept: deptFilter || undefined })
+    getClassifierRules({ page, page_size: PAGE_SIZE, tag: tagFilter || undefined, dept: deptFilter || undefined, clientId })
       .then(r => { setRules(r.rules); setTotal(r.total); setVersion(r.version); })
       .catch(() => message.error('Failed to load classifier rules'))
       .finally(() => setLoading(false));
-  }, [page, tagFilter, deptFilter]);
+  }, [page, tagFilter, deptFilter, clientId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -122,7 +124,7 @@ function ClassifierRulesTab() {
     if (!csvText.trim()) { message.warning('Paste CSV data first'); return; }
     setImporting(true);
     try {
-      const result = await importClassifierRules({ csv_text: csvText, replace: replaceMode });
+      const result = await importClassifierRules({ csv_text: csvText, replace: replaceMode }, clientId);
       message.success(`Imported ${result.imported} rules — ${result.total_rules} total`);
       setImportModalOpen(false);
       setCsvText('');
@@ -265,22 +267,23 @@ function ClassifierRulesTab() {
 // Tab 3: Rush Settings
 // ─────────────────────────────────────────────────────────────────────────────
 
-function RushSettingsTab() {
+function RushSettingsTab({ clientId }: { clientId?: string }) {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    getRushSettings()
+    setLoading(true);
+    getRushSettings(clientId)
       .then(r => form.setFieldsValue(r.settings))
       .catch(() => message.error('Failed to load rush settings'))
       .finally(() => setLoading(false));
-  }, [form]);
+  }, [form, clientId]);
 
   const onSave = async (values: RushSettings) => {
     setSaving(true);
     try {
-      await updateRushSettings(values);
+      await updateRushSettings(values, clientId);
       message.success('Rush settings saved');
     } catch {
       message.error('Failed to save rush settings');
@@ -337,7 +340,7 @@ function RushSettingsTab() {
 // Tab 4: Cache
 // ─────────────────────────────────────────────────────────────────────────────
 
-function CacheTab() {
+function CacheTab({ clientId }: { clientId?: string }) {
   const [entries, setEntries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [reclassifyStatus, setReclassifyStatus] = useState<ReclassifyStatus>({ status: 'idle' });
@@ -345,20 +348,20 @@ function CacheTab() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const loadEntries = () => {
-    getCacheStatus({ cache_type: 'capability_profile' })
+    getCacheStatus({ cache_type: 'capability_profile', clientId })
       .then(r => setEntries(r.entries))
       .catch(() => {})
       .finally(() => setLoading(false));
   };
 
   const loadStatus = () => {
-    getReclassifyStatus().then(setReclassifyStatus).catch(() => {});
+    getReclassifyStatus(clientId).then(setReclassifyStatus).catch(() => {});
   };
 
   useEffect(() => {
     loadEntries();
     loadStatus();
-  }, []);
+  }, [clientId]);
 
   // Poll reclassify status while running
   useEffect(() => {
@@ -374,7 +377,7 @@ function CacheTab() {
   const handleReclassify = async () => {
     setTriggering(true);
     try {
-      await triggerReclassify();
+      await triggerReclassify(clientId);
       message.success('Reclassification started');
       setReclassifyStatus({ status: 'running' });
     } catch {
@@ -386,7 +389,7 @@ function CacheTab() {
 
   const handleClearCache = async () => {
     try {
-      const r = await clearCache();
+      const r = await clearCache(undefined, clientId);
       message.success(`Cleared ${r.deleted} cache entries`);
       loadEntries();
     } catch {
@@ -477,16 +480,23 @@ function CacheTab() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function IntelligenceConfigPage() {
+  const [clientId, setClientId] = useState<string | undefined>(
+    localStorage.getItem('analytics_client_id') || undefined
+  );
+
   const tabs = [
-    { key: 'tags',       label: 'Capability Tags',    children: <CapabilityTagsTab /> },
-    { key: 'rules',      label: 'Classifier Rules',   children: <ClassifierRulesTab /> },
-    { key: 'rush',       label: 'Rush Settings',      children: <RushSettingsTab /> },
-    { key: 'cache',      label: 'Cache & Rebuild',    children: <CacheTab /> },
+    { key: 'tags',       label: 'Capability Tags',    children: <CapabilityTagsTab clientId={clientId} /> },
+    { key: 'rules',      label: 'Classifier Rules',   children: <ClassifierRulesTab clientId={clientId} /> },
+    { key: 'rush',       label: 'Rush Settings',      children: <RushSettingsTab clientId={clientId} /> },
+    { key: 'cache',      label: 'Cache & Rebuild',    children: <CacheTab clientId={clientId} /> },
   ];
 
   return (
     <div style={{ padding: '24px' }}>
-      <Title level={3} style={{ marginBottom: 4 }}>Intelligence Configuration</Title>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+        <Title level={3} style={{ margin: 0 }}>Intelligence Configuration</Title>
+        <ClientSelector value={clientId || ''} onChange={id => setClientId(id)} />
+      </div>
       <Paragraph type="secondary" style={{ marginBottom: 24 }}>
         Manage capability taxonomy, classifier rules, and computed profile cache.
         Changes to classifier rules take effect after clicking <strong>Reclassify All Operations</strong> in the Cache tab.
