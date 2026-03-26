@@ -46,11 +46,21 @@ export const CompanyDetail: React.FC = () => {
     if (!companyId) return;
     const load = async () => {
       setLoading(true);
-      const [result, emailResult, threadResult] = await Promise.all([
-        companiesApi.getDetail(companyId),
+
+      // Fetch company detail with retry — most critical call
+      let result = await companiesApi.getDetail(companyId);
+      if (!result) {
+        // Retry once after 1s (Supabase may be temporarily busy)
+        await new Promise(r => setTimeout(r, 1000));
+        result = await companiesApi.getDetail(companyId);
+      }
+
+      // Fetch email + thread counts in parallel (non-critical)
+      const [emailResult, threadResult] = await Promise.all([
         companiesApi.getEmails(companyId, 1, 0),
         threadsApi.byCompany(companyId, 100),
       ]);
+
       if (isMountedRef.current) {
         setCompany(result);
         setTotalEmails(emailResult?.total || 0);
