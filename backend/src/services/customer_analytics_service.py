@@ -454,11 +454,13 @@ class CustomerAnalyticsService:
     def _fetch_all_paginated(
         self, table: str, select: str, eq_filters: dict,
         extra_filters: list = None, page_size: int = 1000,
+        max_rows: int = 10000,
     ) -> list:
-        """Fetch all rows from a table with pagination."""
+        """Fetch rows from a table with pagination (capped at max_rows)."""
         all_rows = []
         offset = 0
-        while True:
+        while len(all_rows) < max_rows:
+            remaining = min(page_size, max_rows - len(all_rows))
             query = self._sb.table(table).select(select)
             query = query.eq('client_id', self._client_id)
             for col, val in eq_filters.items():
@@ -469,13 +471,13 @@ class CustomerAnalyticsService:
                         query = query.neq(col, val)
                     elif method == 'not_.is_':
                         query = query.not_.is_(col, val)
-            query = query.range(offset, offset + page_size - 1)
+            query = query.range(offset, offset + remaining - 1)
             result = query.execute()
             rows = result.data or []
             if not rows:
                 break
             all_rows.extend(rows)
-            if len(rows) < page_size:
+            if len(rows) < remaining:
                 break
             offset += len(rows)
         return all_rows
