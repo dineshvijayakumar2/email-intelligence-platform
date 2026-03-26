@@ -53,21 +53,21 @@ export const CompanyDetail: React.FC = () => {
       ]);
       if (isMountedRef.current) {
         setCompany(result);
-        setTotalEmails(emailResult.total || 0);
-        setTotalSent(emailResult.total_sent ?? 0);
-        setTotalReceived(emailResult.total_received ?? 0);
-        setThreads(threadResult.threads);
+        setTotalEmails(emailResult?.total || 0);
+        setTotalSent(emailResult?.total_sent ?? 0);
+        setTotalReceived(emailResult?.total_received ?? 0);
+        setThreads(threadResult?.threads || []);
         setLoading(false);
       }
       // Load supplementary data in parallel (non-blocking)
       setOrderHistoryLoading(true);
       setProductProfileLoading(true);
       companiesApi.getOrderHistory(companyId).then(d => {
-        if (isMountedRef.current) { setOrderHistory(d.items || []); setOrderHistoryLoading(false); }
-      });
+        if (isMountedRef.current) { setOrderHistory(d?.items || []); setOrderHistoryLoading(false); }
+      }).catch(() => { if (isMountedRef.current) setOrderHistoryLoading(false); });
       companiesApi.getProductProfile(companyId).then(d => {
         if (isMountedRef.current) { setProductProfile(d); setProductProfileLoading(false); }
-      });
+      }).catch(() => { if (isMountedRef.current) setProductProfileLoading(false); });
     };
     load();
   }, [companyId]);
