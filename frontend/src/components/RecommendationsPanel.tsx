@@ -35,10 +35,12 @@ export const RecommendationsPanel: React.FC<Props> = ({ companyId }) => {
 
   const load = async (force = false) => {
     setLoading(true);
-    const data = await companiesApi.getRecommendations(companyId, force);
-    setCrossContact(data.cross_contact_recs || []);
-    setRelatedProduct(data.related_product_recs || []);
-    setComputedAt(data.computed_at);
+    try {
+      const data = await companiesApi.getRecommendations(companyId, force);
+      setCrossContact(data?.cross_contact_recs || []);
+      setRelatedProduct(data?.related_product_recs || []);
+      setComputedAt(data?.computed_at);
+    } catch { /* handled */ }
     setLoading(false);
   };
 

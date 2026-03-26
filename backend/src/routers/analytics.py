@@ -1070,21 +1070,18 @@ async def get_company_analytics(company_id: str):
     """
     try:
         result = _supabase.table('customer_companies').select(
-            '''
-            id, company_name, client_id, email_domains, industry,
+            '''id, company_name, client_id, email_domains, industry,
             engagement_score, total_emails, total_inbound, total_outbound,
             first_contact_date, last_contact_date,
             contact_count, decision_maker_count,
             created_at, updated_at,
-            qb_customer_type, qb_tier, qb_total_revenue, qb_invoiced_ty, qb_growth_90d, qb_days_since_last_invoice, qb_account_manager,
-            clients(client_name)
-            '''
-        ).eq('id', company_id).single().execute()
+            qb_customer_type, qb_tier, qb_total_revenue, qb_invoiced_ty, qb_growth_90d, qb_days_since_last_invoice, qb_account_manager'''
+        ).eq('id', company_id).limit(1).execute()
 
         if not result.data:
             raise HTTPException(status_code=404, detail="Company not found")
 
-        comp = result.data
+        comp = result.data[0]
 
         # Calculate engagement status
         def calculate_engagement_status(last_contact_date):
@@ -1107,9 +1104,13 @@ async def get_company_analytics(company_id: str):
         status = calculate_engagement_status(comp.get('last_contact_date'))
 
         client_name = None
-        if comp.get('clients'):
-            client_name = comp['clients'].get('client_name')
-            del comp['clients']  # Remove nested join data before Pydantic model
+        if comp.get('client_id'):
+            try:
+                cl = _supabase.table('clients').select('client_name').eq('id', comp['client_id']).limit(1).execute()
+                if cl.data:
+                    client_name = cl.data[0].get('client_name')
+            except Exception:
+                pass
 
         return CompanyAnalytics(**comp, engagement_status=status, client_name=client_name)
 
