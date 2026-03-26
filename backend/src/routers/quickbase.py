@@ -139,10 +139,12 @@ VALID_TABLES = {'customers', 'contacts', 'quotes', 'jobs', 'sales_line_items', '
 @router.post("/sync", response_model=QBSyncResult)
 async def trigger_sync(
     client_id: str = Query(...),
-    tables: Optional[str] = Query(None, description="Comma-separated table names to sync (omit for full sync)"),
+    tables: Optional[str] = Query(None, description="Comma-separated table names to sync (omit for all)"),
+    full: bool = Query(False, description="Force full sync instead of incremental"),
     background_tasks: BackgroundTasks = None,
 ):
-    """Trigger a Quickbase sync (full or per-table). Runs in background."""
+    """Trigger a Quickbase sync. Incremental by default (only records modified since last sync).
+    Pass full=true to re-sync everything (e.g. after adding a new field mapping)."""
     tables_list: Optional[list[str]] = None
     if tables:
         tables_list = [t.strip() for t in tables.split(',') if t.strip() in VALID_TABLES]
@@ -165,7 +167,7 @@ async def trigger_sync(
         async def _run_sync():
             try:
                 syncer = QuickbaseSync(_supabase, config)
-                counts = await syncer.sync_all(tables=tables_list)
+                counts = await syncer.sync_all(tables=tables_list, full=full)
                 # Propagate QB data to existing company columns
                 await syncer.propagate_qb_data_to_companies()
                 logger.info(f"Background QB sync complete: {counts}")
@@ -174,10 +176,11 @@ async def trigger_sync(
 
         background_tasks.add_task(_run_sync)
 
+        mode = 'full' if full else 'incremental'
         label = ', '.join(tables_list) if tables_list else 'all tables'
         return QBSyncResult(
             status="started",
-            message=f"Quickbase sync started in background ({label})",
+            message=f"QB {mode} sync started in background ({label})",
         )
 
     except HTTPException:
@@ -200,7 +203,7 @@ async def get_sync_status(client_id: str = Query(...)):
 
         # Count records per table
         counts = {}
-        for table in ['qb_customers', 'qb_contacts', 'qb_quotes', 'qb_jobs', 'qb_sales_line_items']:
+        for table in ['qb_customers', 'qb_contacts', 'qb_quotes', 'qb_jobs', 'qb_sales_line_items', 'qb_operations']:
             result = _supabase.table(table).select(
                 'id', count='exact'
             ).eq('client_id', client_id).limit(0).execute()
@@ -545,11 +548,11 @@ async def rematch_qb_data(
         async def _run_rematch():
             try:
                 syncer = QuickbaseSync(_supabase, config)
-                c1 = await syncer.match_to_companies()
+                match_stats = await syncer.match_to_companies()
                 c2 = await syncer.match_to_contacts()
                 c3 = await syncer.match_customers_via_contacts()
                 c4 = await syncer.propagate_qb_data_to_companies()
-                logger.info(f"Rematch complete: {c1} companies by name, {c2} contacts by email, "
+                logger.info(f"Rematch complete: {match_stats}, {c2} contacts by email, "
                             f"{c3} companies via contacts, {c4} propagated")
             except Exception as e:
                 logger.error(f"Rematch failed: {e}")
@@ -569,9 +572,29 @@ async def rematch_qb_data(
 
 @router.get("/health")
 async def qb_health(client_id: str = Query(...)):
-    """QB data health: match rates, enrichment coverage, data quality."""
+    """QB data health: match rates, enrichment coverage, data quality.
+
+    Only returns meaningful stats for clients that have QB config.
+    The denominators use QB record counts (not SB company totals) so percentages
+    reflect how well QB records are matched, not how many SB companies exist.
+    """
     try:
-        # QB customer match rate
+        # Check if this client has QB configured at all
+        cfg = _supabase.table('qb_sync_config').select('client_id, last_sync_at').eq(
+            'client_id', client_id
+        ).limit(1).execute()
+        qb_configured = bool(cfg.data)
+
+        if not qb_configured:
+            return {
+                "qb_configured": False,
+                "qb_customers": {"total": 0, "matched": 0, "unmatched": 0, "match_rate_pct": 0},
+                "qb_contacts": {"total": 0, "matched": 0, "unmatched": 0, "match_rate_pct": 0},
+                "company_enrichment": {"total": 0, "enriched": 0, "not_enriched": 0, "coverage_pct": 0},
+                "active_companies": {"total": 0, "with_qb_data": 0, "coverage_pct": 0},
+            }
+
+        # QB customer match rate (denominator = QB customers, not SB companies)
         total_qb = _supabase.table('qb_customers').select('id', count='exact').eq('client_id', client_id).execute()
         matched_qb = _supabase.table('qb_customers').select('id', count='exact').eq('client_id', client_id).not_.is_('matched_company_id', 'null').execute()
 
@@ -579,20 +602,25 @@ async def qb_health(client_id: str = Query(...)):
         total_qb_contacts = _supabase.table('qb_contacts').select('id', count='exact').eq('client_id', client_id).execute()
         matched_qb_contacts = _supabase.table('qb_contacts').select('id', count='exact').eq('client_id', client_id).not_.is_('matched_contact_id', 'null').execute()
 
-        # Company enrichment coverage
-        total_companies = _supabase.table('customer_companies').select('id', count='exact').eq('client_id', client_id).execute()
-        enriched_companies = _supabase.table('customer_companies').select('id', count='exact').eq('client_id', client_id).not_.is_('qb_total_revenue', 'null').execute()
-
         total_c = total_qb.count or 0
         matched_c = matched_qb.count or 0
         total_ct = total_qb_contacts.count or 0
         matched_ct = matched_qb_contacts.count or 0
-        total_co = total_companies.count or 0
+
+        # SB companies with QB data vs SB companies with email activity (the meaningful ratio)
+        enriched_companies = _supabase.table('customer_companies').select('id', count='exact').eq(
+            'client_id', client_id
+        ).not_.is_('qb_total_revenue', 'null').execute()
         enriched_co = enriched_companies.count or 0
 
-        # Enriched companies with email activity (the meaningful metric)
+        active_companies = 0
         active_enriched = 0
         try:
+            ac_resp = _supabase.table('customer_companies').select('id', count='exact').eq(
+                'client_id', client_id
+            ).gt('total_emails', '0').execute()
+            active_companies = ac_resp.count or 0
+
             active_resp = _supabase.table('customer_companies').select('id', count='exact').eq(
                 'client_id', client_id
             ).not_.is_('qb_total_revenue', 'null').gt('total_emails', '0').execute()
@@ -600,20 +628,11 @@ async def qb_health(client_id: str = Query(...)):
         except Exception:
             pass
 
-        # Companies with email activity
-        active_companies = 0
-        try:
-            ac_resp = _supabase.table('customer_companies').select('id', count='exact').eq(
-                'client_id', client_id
-            ).gt('total_emails', '0').execute()
-            active_companies = ac_resp.count or 0
-        except Exception:
-            pass
-
         return {
+            "qb_configured": True,
             "qb_customers": {"total": total_c, "matched": matched_c, "unmatched": total_c - matched_c, "match_rate_pct": round(matched_c / total_c * 100, 1) if total_c else 0},
             "qb_contacts": {"total": total_ct, "matched": matched_ct, "unmatched": total_ct - matched_ct, "match_rate_pct": round(matched_ct / total_ct * 100, 1) if total_ct else 0},
-            "company_enrichment": {"total": total_co, "enriched": enriched_co, "not_enriched": total_co - enriched_co, "coverage_pct": round(enriched_co / total_co * 100, 1) if total_co else 0},
+            "company_enrichment": {"total": total_c, "enriched": enriched_co, "not_enriched": total_c - enriched_co, "coverage_pct": round(enriched_co / total_c * 100, 1) if total_c else 0},
             "active_companies": {"total": active_companies, "with_qb_data": active_enriched, "coverage_pct": round(active_enriched / active_companies * 100, 1) if active_companies else 0},
         }
     except Exception as e:
@@ -670,3 +689,203 @@ async def match_preview(client_id: str = Query(...)):
     except Exception as e:
         logger.error(f"Failed to generate match preview: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- Match candidate review endpoints ---
+
+
+@router.get("/match-candidates")
+async def list_match_candidates(
+    client_id: str = Query(...),
+    reviewed: Optional[bool] = Query(None, description="Filter by review status"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    """List fuzzy match candidates for review."""
+    try:
+        q = _supabase.table('qb_match_candidates').select(
+            'id, sb_company_id, sb_company_name, qb_record_id, qb_customer_id, '
+            'qb_name, match_score, match_method, reviewed, accepted, '
+            'reviewed_by, reviewed_at, created_at'
+        ).eq('client_id', client_id).order('match_score', desc=True)
+
+        if reviewed is not None:
+            q = q.eq('reviewed', reviewed)
+
+        result = q.range(offset, offset + limit - 1).execute()
+
+        # Also get total counts
+        total_q = _supabase.table('qb_match_candidates').select(
+            'id', count='exact'
+        ).eq('client_id', client_id)
+        if reviewed is not None:
+            total_q = total_q.eq('reviewed', reviewed)
+        total_result = total_q.execute()
+
+        return {
+            "candidates": result.data or [],
+            "total": total_result.count or 0,
+            "limit": limit,
+            "offset": offset,
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)[:200])
+
+
+@router.post("/match-candidates/{candidate_id}/review")
+async def review_match_candidate(
+    candidate_id: str,
+    accepted: bool = Query(..., description="Accept (true) or reject (false) this match"),
+    user_id: str = Query(None, description="Reviewer user ID"),
+    background_tasks: BackgroundTasks = None,
+):
+    """Accept or reject a fuzzy match candidate.
+
+    Accepted candidates are immediately promoted: qb_customers.matched_company_id is set
+    and customer_companies gets the match metadata.
+    """
+    try:
+        now = datetime.now(timezone.utc).isoformat()
+
+        # Update candidate review status
+        _supabase.table('qb_match_candidates').update({
+            'reviewed': True,
+            'accepted': accepted,
+            'reviewed_by': user_id,
+            'reviewed_at': now,
+        }).eq('id', candidate_id).execute()
+
+        # If accepted, promote the match immediately
+        if accepted:
+            candidate = _supabase.table('qb_match_candidates').select(
+                'client_id, sb_company_id, sb_company_name, qb_record_id, qb_customer_id, qb_name'
+            ).eq('id', candidate_id).limit(1).execute()
+
+            if candidate.data:
+                c = candidate.data[0]
+
+                # Set matched_company_id on qb_customers
+                _supabase.table('qb_customers').update({
+                    'matched_company_id': c['sb_company_id']
+                }).eq('client_id', c['client_id']).eq(
+                    'qb_record_id', c['qb_record_id']
+                ).execute()
+
+                # Write match metadata on customer_companies
+                _supabase.table('customer_companies').update({
+                    'qb_customer_id': c.get('qb_customer_id'),
+                    'qb_match_method': 'fuzzy',
+                    'qb_matched_at': now,
+                }).eq('id', c['sb_company_id']).execute()
+
+                # Trigger propagation in background so QB data flows immediately
+                if background_tasks:
+                    async def _propagate(client_id):
+                        try:
+                            cfg = _supabase.table('qb_sync_config').select('*').eq(
+                                'client_id', client_id
+                            ).limit(1).execute()
+                            if cfg.data:
+                                syncer = QuickbaseSync(_supabase, cfg.data[0])
+                                await syncer.propagate_qb_data_to_companies()
+                        except Exception as e:
+                            logger.error(f"Post-accept propagation failed: {e}")
+                    background_tasks.add_task(_propagate, c['client_id'])
+
+                return {
+                    "status": "accepted",
+                    "promoted": True,
+                    "qb_name": c.get('qb_name'),
+                    "sb_company_name": c.get('sb_company_name'),
+                }
+
+        return {
+            "status": "rejected" if not accepted else "accepted",
+            "promoted": False,
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)[:200])
+
+
+@router.post("/match-candidates/bulk-review")
+async def bulk_review_candidates(
+    client_id: str = Query(...),
+    candidate_ids: list[str] = Query(..., description="List of candidate IDs"),
+    accepted: bool = Query(..., description="Accept or reject all"),
+    user_id: str = Query(None),
+    background_tasks: BackgroundTasks = None,
+):
+    """Bulk accept/reject multiple fuzzy match candidates."""
+    try:
+        now = datetime.now(timezone.utc).isoformat()
+        promoted = 0
+
+        for cid in candidate_ids:
+            _supabase.table('qb_match_candidates').update({
+                'reviewed': True,
+                'accepted': accepted,
+                'reviewed_by': user_id,
+                'reviewed_at': now,
+            }).eq('id', cid).execute()
+
+            if accepted:
+                candidate = _supabase.table('qb_match_candidates').select(
+                    'client_id, sb_company_id, qb_record_id, qb_customer_id'
+                ).eq('id', cid).limit(1).execute()
+
+                if candidate.data:
+                    c = candidate.data[0]
+                    _supabase.table('qb_customers').update({
+                        'matched_company_id': c['sb_company_id']
+                    }).eq('client_id', c['client_id']).eq(
+                        'qb_record_id', c['qb_record_id']
+                    ).execute()
+
+                    _supabase.table('customer_companies').update({
+                        'qb_customer_id': c.get('qb_customer_id'),
+                        'qb_match_method': 'fuzzy',
+                        'qb_matched_at': now,
+                    }).eq('id', c['sb_company_id']).execute()
+                    promoted += 1
+
+        # Trigger propagation for all accepted
+        if accepted and promoted > 0 and background_tasks:
+            async def _propagate():
+                try:
+                    cfg = _supabase.table('qb_sync_config').select('*').eq(
+                        'client_id', client_id
+                    ).limit(1).execute()
+                    if cfg.data:
+                        syncer = QuickbaseSync(_supabase, cfg.data[0])
+                        await syncer.propagate_qb_data_to_companies()
+                except Exception as e:
+                    logger.error(f"Post-bulk-accept propagation failed: {e}")
+            background_tasks.add_task(_propagate)
+
+        return {
+            "status": "completed",
+            "reviewed": len(candidate_ids),
+            "promoted": promoted,
+            "accepted": accepted,
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)[:200])
+
+
+@router.delete("/match-candidates/clear")
+async def clear_match_candidates(
+    client_id: str = Query(...),
+    reviewed_only: bool = Query(True, description="Only clear reviewed candidates"),
+):
+    """Clear match candidates (before a re-match run)."""
+    try:
+        q = _supabase.table('qb_match_candidates').delete().eq('client_id', client_id)
+        if reviewed_only:
+            q = q.eq('reviewed', True)
+        q.execute()
+        return {"status": "cleared", "reviewed_only": reviewed_only}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)[:200])

@@ -162,13 +162,23 @@ const BASE = '/v1/intelligence-config';
 
 ### Always add ClientSelector to admin pages
 
-Any page managing per-client data needs a ClientSelector dropdown. Pass `client_id` on all API calls:
+Any page managing per-client data **must** include `<ClientSelector>` in the header for explicit selection. Never rely on implicit localStorage resolution alone — the user may not have visited an analytics page yet.
 
 ```typescript
-const [clientId, setClientId] = useState(
-    localStorage.getItem('analytics_client_id') || undefined
+import { ClientSelector } from '../../components/analytics/ClientSelector';
+
+const [clientId, setClientId] = useState<string>(
+    localStorage.getItem('analytics_client_id') || ''  // key is 'analytics_client_id', NOT 'selectedClientId'
 );
-// Pass to API calls
+
+// In JSX header:
+<ClientSelector value={clientId} onChange={setClientId} />
+
+// Guard content when no client selected:
+{!clientId && <Card>Select a client above</Card>}
+{clientId && <>...page content...</>}
+
+// Pass to all API calls:
 api.get(`/endpoint?client_id=${clientId}`);
 ```
 

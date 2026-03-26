@@ -1,6 +1,6 @@
 # Email Intelligence Platform — Consolidated Implementation Progress
 
-**Last Updated:** 19 March 2026
+**Last Updated:** 26 March 2026
 **Purpose:** Consolidated reference — completed work, architecture, database schema, and next priorities.
 
 ---
@@ -10,9 +10,9 @@
 A commercial intelligence platform for B2B account management teams. It syncs email from Gmail and Outlook, runs AI analysis on every email, and surfaces actionable insights about customers, deals, and relationship health — enriched with CRM (QuickBase) data.
 
 **Deployment:** Production on Railway.
-**Backend:** FastAPI (Python 3.13), 14 registered routers, ~150+ API endpoints.
-**Frontend:** React/TypeScript (Vite), 30+ pages.
-**Database:** Supabase PostgreSQL, ~34 tables.
+**Backend:** FastAPI (Python 3.13), 16 registered routers, ~170+ API endpoints.
+**Frontend:** React/TypeScript (Vite), 35+ pages.
+**Database:** Supabase PostgreSQL, ~40 tables (incl. pgvector).
 **Queue:** Redis (required for real-time job progress).
 
 ---
@@ -27,7 +27,7 @@ A commercial intelligence platform for B2B account management teams. It syncs em
 | Prompt System Hardening | DB persistence, version tracking, playground fixes | ✅ Complete | 19 Mar 2026 |
 | Invite User System | Admin-controlled onboarding, restrict open sign-up | 🔲 Planned | Not started |
 | Nav restructure | Analytics + Intelligence → Customers + Insights + Manage (route rename, no new pages) | ✅ Complete | 19 Mar 2026 |
-| Sprint 4 — Sales Intelligence | QB Operations sync, Capability Intelligence, Vector Search, Customer Analytics | 🟡 In Progress | Mar 2026 |
+| Sprint 4 — Sales Intelligence | QB Operations sync, Capability Intelligence, Vector Search, Customer Analytics | ✅ Complete | 26 Mar 2026 |
 
 ---
 
@@ -256,6 +256,13 @@ Every company is auto-classified: `prospect` · `new_customer` · `active_custom
 | QB Config | `/intelligence/quickbase-config` | QuickBase connection and field mapping settings |
 | QB Data | `/intelligence/quickbase-data` | View synced QB records and match status |
 | Prompt Playground | `/intelligence/playground` | Edit all AI prompts, test against live data, version management |
+| Semantic Search | `/intelligence/vector-search` | Query across emails/companies/operations with similarity scores |
+
+**Manage pages (`/manage/`):**
+
+| Page | Route | What it shows |
+|------|-------|---------------|
+| Intelligence Config | `/manage/intelligence-config` | Capability tags, classifier rules, CSV import, rush settings, reclassify, cache |
 
 ### AM Efficiency Analysis
 
@@ -286,7 +293,127 @@ Every company is auto-classified: `prospect` · `new_customer` · `active_custom
 
 ---
 
-## Database: Complete Table Inventory (~34 tables)
+## ✅ COMPLETE — Sprint 4: Sales Intelligence Engine (26 Mar 2026)
+
+### S4.0: Communication Guidelines
+
+| Feature | Detail |
+|---------|--------|
+| Prompt updates | B2B consultative tone block added to email analysis, digest, and insight prompts |
+| Persistence | JSON-based prompt config in `ai_prompt_config` table |
+| Editability | All prompts editable via AI Playground — version bump triggers reprocessing |
+
+### S4.1: QB Operations Sync + Capability Intelligence
+
+**Operations Table (6th QB table):**
+
+| Feature | Detail |
+|---------|--------|
+| Table | `qb_operations` — operation_name, department, job linkage, financials |
+| Sync | Stream-and-upsert with numeric overflow guard + fail-fast on API errors |
+| QB table ID | `bvqsudnif` (Carbon8) |
+| Migration | 032: `qb_operations` table + `operations_table_id` on `qb_sync_config` |
+
+**Capability Intelligence:**
+
+| Feature | Detail |
+|---------|--------|
+| Classifier | `capability_classifier.py` — rule-based classification of operations into capability tags |
+| Seed rules | 597 rules in `capability_classifier_data.json` (170+ capability-tagged tuples) |
+| MVP tags | 8 tags: Flat Sheets, Soft Cover Books, Hard Cover Books, Wide Format, Embellishment, Specialty Finishing, Design Services, Display/Installation |
+| Batch reclassify | RPC-based batching — 600K operations in ~15 min (100x speedup vs individual calls) |
+| Throttling | Background thread + batch throttle prevents frontend starvation during reclassify |
+
+**Intelligence Config UI (`/manage/intelligence-config`):**
+
+| Feature | Detail |
+|---------|--------|
+| Router | `intelligence_config.py` — 8 endpoints (tags, rules, import, rush settings, reclassify, cache) |
+| Frontend | 5-tab UI: Capability Tags, Classifier Rules, Rush Settings, Reclassify Status, Cache |
+| CSV import | BOM-safe CSV/JSON import for classifier rules |
+| Client selector | Admin can switch client context on config page |
+| Sidebar | Admin-only nav item under Manage section |
+
+### S4.2–S4.3: Customer Intelligence Analytics (Phase 2A-C)
+
+4 new analytics features on the company detail page — pure SQL/Python aggregation ($0 AI cost):
+
+| Feature | Endpoint | Component | What it shows |
+|---------|----------|-----------|---------------|
+| Strike Rate | `GET /{id}/strike-rate` | `StrikeRateCard.tsx` | Quote→job conversion rate, per-contact table, YoY trend |
+| Contact Capabilities | `GET /{id}/contact-capabilities` | `ContactCapabilitiesCard.tsx` | Contact × capability matrix with colored tags |
+| Seasonality | `GET /{id}/seasonality` | `SeasonalityChart.tsx` | Monthly bar chart + quarterly summary |
+| Capability Rhythm | `GET /{id}/capability-rhythm` | `CapabilityRhythmCard.tsx` | Per-capability reorder interval + overdue detection |
+
+| Infrastructure | Detail |
+|----------------|--------|
+| Service | `customer_analytics_service.py` — ~400 lines, all 4 aggregations |
+| Cache | 24h TTL in `customer_intelligence_cache` table |
+| Company detail | Deferred card loading — timeout 30s, null-safe access, retry on null |
+| Analytics cap | All analytics queries capped at 10K rows to prevent slow page loads |
+
+### S4.4: Vector Embeddings + Semantic Search
+
+| Feature | Detail |
+|---------|--------|
+| Extension | pgvector with HNSW indexes |
+| Model | Google `gemini-embedding-001`, 768 dimensions |
+| Tables embedded | `emails`, `customer_companies`, `qb_operations` |
+| Batch config | 50 texts/batch, 2s delay, exponential backoff on rate limits |
+| Resilience | Skip rate-limited batches (don't abort), per-table graceful degradation |
+| DB writes | Chunks of 25 via batch RPC |
+
+**Vector API endpoints (`/api/v1/ai/vector/`):**
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| POST | `/reembed` | Bootstrap or re-embed per table |
+| GET | `/reembed/status` | Poll embedding progress |
+| POST | `/reembed/stop` | Stop running job, keep embedded records |
+| GET | `/search/emails` | Semantic search emails |
+| GET | `/search/companies` | Semantic search companies |
+| GET | `/search/operations` | Semantic search operations |
+| GET | `/search` | Unified search across all 3 tables |
+| GET | `/stats` | Embedding coverage stats |
+
+**Semantic Search UI (`/insights/vector-search`):**
+
+| Feature | Detail |
+|---------|--------|
+| Query input | Free text + 8 suggested prompts (wide format, binding, foil, rush, retention, etc.) |
+| Results | Per-table results with similarity scores (0–100%) |
+| Reembed controls | Per-table embed/re-embed with progress polling + stop button |
+| Stats dashboard | Emails/companies/operations embedded counts |
+
+### Supporting Infrastructure (Sprint 4)
+
+| Change | Detail |
+|--------|--------|
+| Router refactor | `main.py` split into modular routers — security + performance fixes |
+| Lightweight extraction | Auto-sync runs steps 1–9 only (skip engagement/threads/patterns) |
+| LIVE mailbox UI | Gmail/Outlook mailboxes show sync info instead of old processing form |
+| Auth improvements | `supabase.auth.get_user()` replaces JWKS — eliminates login failures; auth cache reduces connection pressure |
+| Log noise | Suppressed repetitive auth/ws/polling log lines |
+| Skip recent sync | Startup skips email sync if mailbox was recently synced |
+
+### Sprint 4 Migrations
+
+| # | File | What it adds |
+|---|------|-------------|
+| 032 | `032_qb_operations.sql` | `qb_operations` table + `operations_table_id` on `qb_sync_config` |
+| 033 | `033_prompt_communication_guidelines.sql` | AI prompt config persistence |
+| 034 | `034_product_intelligence.sql` | Product profile data structures |
+| 035 | `035_intelligence_config.sql` | Capability taxonomy config tables |
+| 036 | `036_fix_operations_profit_pct.sql` | Widen `profit_pct` DECIMAL(5,2) → DECIMAL(8,2) |
+| 037 | `037_vector_embeddings.sql` | pgvector extension + embedding columns + HNSW indexes |
+| 037b | `037b_vector_resize_3072.sql` | Resize embeddings to 768 dims |
+| 038 | `038_optimize_response_time_query.sql` | Response time query performance |
+| 039 | `039_batch_embedding_update.sql` | Batch RPC for embeddings |
+| 040 | `040_batch_classify_update.sql` | Batch RPC for classifications |
+
+---
+
+## Database: Complete Table Inventory (~40 tables)
 
 ### Sprint 1 — Core Tables
 
@@ -339,6 +466,13 @@ Every company is auto-classified: `prospect` · `new_customer` · `active_custom
 | `qb_field_definitions` | Cached QB field schema (label, type) per table — used to display field names in UI |
 | `qb_sync_log` | QB sync audit log — table_name, record_count, status (success/error), synced_at |
 
+### Sprint 4 — Sales Intelligence Tables
+
+| Table | Purpose |
+|-------|---------|
+| `qb_operations` | Cached QB operations — operation_name, department, job linkage, financials, capability_tags (TEXT[]) |
+| `customer_intelligence_cache` | Cached analytics aggregations (strike rate, seasonality, capabilities) — 24h TTL |
+
 ### Post-Sprint 3 Config Tables
 
 | Table | Purpose |
@@ -351,7 +485,7 @@ Every company is auto-classified: `prospect` · `new_customer` · `active_custom
 
 ## Backend Architecture
 
-### API Routers (14 registered in `main.py`)
+### API Routers (16 registered in `main.py`)
 
 | Router | Prefix | Purpose |
 |--------|--------|---------|
@@ -368,11 +502,13 @@ Every company is auto-classified: `prospect` · `new_customer` · `active_custom
 | `rules.py` | `/api/v1` | Email rules CRUD and sync |
 | `quickbase.py` | `/api/v1` | QB config, sync, status, data browser |
 | `errors.py` | `/api` | Error log browser |
+| `intelligence_config.py` | `/api/v1` | Capability tags, classifier rules, reclassify, rush settings |
+| `customers.py` | `/api/v1` | Customer analytics (strike rate, seasonality, capabilities, rhythm) |
 | `websocket` | `/ws` | Real-time job progress streaming |
 
 Plus inline endpoints on `main.py`: mailbox management, processing jobs, file upload, Google Drive streaming.
 
-### Service Layer (31 services in `backend/src/services/`)
+### Service Layer (35 services in `backend/src/services/`)
 
 **Email Extraction (Sprint 2):**
 - `extraction_orchestrator.py` — 13-step pipeline coordinator
@@ -403,6 +539,11 @@ Plus inline endpoints on `main.py`: mailbox management, processing jobs, file up
 - `strategic_context_builder.py` — Pre-computes relationship_context_cache + AM snapshots
 - `strategic_digest_pipeline.py` — Full LangGraph ReAct agent pipeline
 - `am_efficiency_analyzer.py` — Business-hours response, quote conversion, revenue attribution
+
+**Sales Intelligence (Sprint 4):**
+- `capability_classifier.py` — Rule-based operations → capability tag classification (597 seed rules)
+- `customer_analytics_service.py` — Strike rate, seasonality, contact capabilities, capability rhythm
+- `vector_service.py` — Gemini embedding + pgvector semantic search across emails/companies/operations
 
 **Sync Services:**
 - `gmail_sync_service.py` — Background Gmail incremental sync
@@ -538,6 +679,16 @@ VITE_MICROSOFT_CLIENT_ID=...
 | 029 | `029_drop_ai_check_constraints.sql` | Remove rigid check constraints from ai_email_intelligence |
 | 030 | `030_add_currency_code.sql` | currency_code on clients |
 | 031 | `031_add_email_attachments_deeplink.sql` | attachments (JSONB) + provider_web_link on emails |
+| 032 | `032_qb_operations.sql` | `qb_operations` table + `operations_table_id` on `qb_sync_config` |
+| 033 | `033_prompt_communication_guidelines.sql` | AI prompt config persistence |
+| 034 | `034_product_intelligence.sql` | Product profile data structures |
+| 035 | `035_intelligence_config.sql` | Capability taxonomy config tables |
+| 036 | `036_fix_operations_profit_pct.sql` | Widen `profit_pct` DECIMAL(5,2) → DECIMAL(8,2) |
+| 037 | `037_vector_embeddings.sql` | pgvector extension + embedding columns + HNSW indexes |
+| 037b | `037b_vector_resize_3072.sql` | Resize embeddings to 768 dims |
+| 038 | `038_optimize_response_time_query.sql` | Response time query performance |
+| 039 | `039_batch_embedding_update.sql` | Batch RPC for embeddings |
+| 040 | `040_batch_classify_update.sql` | Batch RPC for classifications |
 
 ---
 

@@ -1,12 +1,14 @@
 """
 Quickbase Sync Service — Syncs QB data to local Supabase cache tables.
 
-Handles: Customers, Contacts, Quotes, Jobs, Sales Line Items.
-After sync, matches QB records to existing customer_companies/customer_contacts.
+Handles: Customers, Contacts, Quotes, Jobs, Sales Line Items, Operations.
+After sync, matches QB records to existing customer_companies/customer_contacts
+using a 3-pass pipeline: exact name → domain root → fuzzy (staging).
 """
 
 import asyncio
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -18,6 +20,81 @@ logger = logging.getLogger(__name__)
 # Supabase batch limits
 UPSERT_BATCH_SIZE = 100
 IN_FILTER_LIMIT = 500
+
+# ── Matching helpers ──────────────────────────────────────────────────────────
+
+GENERIC_DOMAINS = frozenset({
+    'gmail.com', 'hotmail.com', 'yahoo.com', 'outlook.com',
+    'icloud.com', 'bigpond.com', 'me.com', 'hotmail.com.au',
+    'yahoo.com.au', 'live.com', 'live.com.au', 'msn.com',
+    'aol.com', 'mail.com', 'protonmail.com', 'zoho.com',
+})
+
+FUZZY_SCORE_THRESHOLD = 82  # rapidfuzz token_sort_ratio cutoff
+
+
+def _normalise(name: str) -> str:
+    """Lowercase, strip all non-alphanumeric characters."""
+    return re.sub(r'[^a-z0-9]', '', (name or '').lower())
+
+
+def _extract_domain_roots(email_domains) -> list[str]:
+    """Extract matchable second-level domain tokens from an email_domains value.
+
+    email_domains may be a JSON array string, a Python list, or a plain string.
+    Returns tokens of length ≥ 5 (skips generic providers).
+    """
+    if isinstance(email_domains, list):
+        domains = email_domains
+    else:
+        domains = re.findall(r'[\w.-]+\.\w+', str(email_domains or ''))
+
+    roots = []
+    for d in domains:
+        d_lower = d.lower()
+        if d_lower in GENERIC_DOMAINS:
+            continue
+        parts = d_lower.split('.')
+        # Use the leftmost part as the brand root — handles multi-level TLDs
+        # e.g. "carbon8.com.au" → "carbon8", "thepropertyagency.com" → "thepropertyagency"
+        root = parts[0] if parts else ''
+        if len(root) >= 5:  # avoid short tokens ('app', 'con', 'us')
+            roots.append(root)
+    return roots
+
+
+def _parse_recency_html(html_or_value) -> Optional[int]:
+    """Parse recency from QB — handles both HTML-wrapped and plain values.
+
+    QB exports wrap recency in HTML: '<div style="...">8 d</div>'
+    QB API may return a plain integer or string like '8'.
+    """
+    if html_or_value is None:
+        return None
+    if isinstance(html_or_value, (int, float)):
+        return int(html_or_value)
+    m = re.search(r'(\d+)\s*d?', str(html_or_value))
+    return int(m.group(1)) if m else None
+
+
+def _derive_growth(ty: Optional[float], ly: Optional[float]) -> Optional[float]:
+    """Derive annual growth percentage from TY and LY invoiced amounts."""
+    if ty is not None and ly and ly != 0:
+        return round((ty - ly) / ly * 100, 1)
+    return None
+
+
+def _derive_tier(total_revenue: Optional[float]) -> str:
+    """Revenue band tier classification."""
+    if total_revenue is None:
+        return 'Unknown'
+    if total_revenue >= 500_000:
+        return 'Level 4 Enterprise'
+    if total_revenue >= 100_000:
+        return 'Level 3 Major'
+    if total_revenue >= 20_000:
+        return 'Level 2 Growth'
+    return 'Level 1 Retail'
 
 
 def _execute_with_retry(func, max_retries=3):
@@ -90,8 +167,41 @@ class QuickbaseSync:
         except Exception as e:
             logger.warning(f"Failed to write sync log for {table_name}: {e}")
 
-    async def sync_all(self, tables: list[str] | None = None) -> dict[str, int]:
-        """Sync QB tables. Pass `tables` to sync a subset; omit for full sync."""
+    def _build_incremental_where(self) -> Optional[str]:
+        """Build a QB query clause to filter records modified since last sync.
+
+        Uses QB field ID 2 (Date Modified) with the AF (after) operator.
+        Returns None for full sync (no last_sync_at recorded).
+        """
+        last_sync = self._config.get('last_sync_at')
+        if not last_sync:
+            return None
+
+        # QB expects ISO 8601 format for date comparisons
+        # Ensure we have a valid timestamp string
+        if isinstance(last_sync, str):
+            ts = last_sync
+        else:
+            ts = last_sync.isoformat() if hasattr(last_sync, 'isoformat') else str(last_sync)
+
+        # QB query syntax: {'2'.AF.'2026-03-20T00:00:00Z'}
+        return f"{{'2'.AF.'{ts}'}}"
+
+    async def sync_all(
+        self,
+        tables: list[str] | None = None,
+        full: bool = False,
+    ) -> dict[str, int]:
+        """Sync QB tables. Incremental by default (only records modified since last sync).
+
+        Args:
+            tables: Sync a subset of tables; omit for all tables.
+            full: Force full sync (ignore last_sync_at). Default False.
+        """
+        where_clause = None if full else self._build_incremental_where()
+        mode = 'full' if full or where_clause is None else 'incremental'
+        self._incremental_where = where_clause  # Store for use by sync_* methods
+
         all_fns = [
             ('customers', self.sync_customers),
             ('contacts', self.sync_contacts),
@@ -102,8 +212,8 @@ class QuickbaseSync:
         ]
         to_sync = [(k, fn) for k, fn in all_fns if tables is None or k in tables]
         label = ', '.join(k for k, _ in to_sync)
-        logger.info(f"Starting QB sync for client {self._client_id}: [{label}]")
-        counts = {}
+        logger.info(f"Starting QB sync ({mode}) for client {self._client_id}: [{label}]")
+        counts = {'sync_mode': mode}
 
         for table_key, sync_fn in to_sync:
             try:
@@ -115,11 +225,11 @@ class QuickbaseSync:
                 counts[table_key] = 0
 
         # After sync, match to existing companies/contacts
-        matched_companies = await self.match_to_companies()
+        match_stats = await self.match_to_companies()
         matched_contacts = await self.match_to_contacts()
         matched_via_contacts = await self.match_customers_via_contacts()
-        matched_companies += matched_via_contacts
-        counts['matched_companies'] = matched_companies
+        counts['match_stats'] = match_stats
+        counts['matched_companies'] = match_stats.get('total', 0) + matched_via_contacts
         counts['matched_contacts'] = matched_contacts
 
         # Update last_sync_at
@@ -136,8 +246,9 @@ class QuickbaseSync:
         mapping = self._field_mappings['customers']
         table_id = self._config['customers_table_id']
         select_fields = QuickbaseClient.get_select_fields(mapping)
+        where = getattr(self, '_incremental_where', None)
 
-        records = await self._qb_client.query_all_records(table_id, select_fields)
+        records = await self._qb_client.query_all_records(table_id, select_fields, where=where)
         logger.info(f"Fetched {len(records)} customers from QB")
 
         return await self._upsert_records('qb_customers', records, mapping, required_fields=['customer_name'])
@@ -147,8 +258,9 @@ class QuickbaseSync:
         mapping = self._field_mappings['contacts']
         table_id = self._config['contacts_table_id']
         select_fields = QuickbaseClient.get_select_fields(mapping)
+        where = getattr(self, '_incremental_where', None)
 
-        records = await self._qb_client.query_all_records(table_id, select_fields)
+        records = await self._qb_client.query_all_records(table_id, select_fields, where=where)
         logger.info(f"Fetched {len(records)} contacts from QB")
 
         return await self._upsert_records('qb_contacts', records, mapping)
@@ -158,8 +270,9 @@ class QuickbaseSync:
         mapping = self._field_mappings['quotes']
         table_id = self._config['quotes_table_id']
         select_fields = QuickbaseClient.get_select_fields(mapping)
+        where = getattr(self, '_incremental_where', None)
 
-        records = await self._qb_client.query_all_records(table_id, select_fields)
+        records = await self._qb_client.query_all_records(table_id, select_fields, where=where)
         logger.info(f"Fetched {len(records)} quotes from QB")
 
         return await self._upsert_records('qb_quotes', records, mapping)
@@ -169,8 +282,9 @@ class QuickbaseSync:
         mapping = self._field_mappings['jobs']
         table_id = self._config['jobs_table_id']
         select_fields = QuickbaseClient.get_select_fields(mapping)
+        where = getattr(self, '_incremental_where', None)
 
-        records = await self._qb_client.query_all_records(table_id, select_fields)
+        records = await self._qb_client.query_all_records(table_id, select_fields, where=where)
         logger.info(f"Fetched {len(records)} jobs from QB")
 
         return await self._upsert_records('qb_jobs', records, mapping)
@@ -180,8 +294,9 @@ class QuickbaseSync:
         mapping = self._field_mappings['sales_line_items']
         table_id = self._config['sales_line_items_table_id']
         select_fields = QuickbaseClient.get_select_fields(mapping)
+        where = getattr(self, '_incremental_where', None)
 
-        records = await self._qb_client.query_all_records(table_id, select_fields)
+        records = await self._qb_client.query_all_records(table_id, select_fields, where=where)
         logger.info(f"Fetched {len(records)} sales line items from QB")
 
         return await self._upsert_records('qb_sales_line_items', records, mapping)
@@ -201,13 +316,14 @@ class QuickbaseSync:
 
         mapping = self._field_mappings.get('operations', DEFAULT_FIELD_MAPPINGS['operations'])
         select_fields = QuickbaseClient.get_select_fields(mapping)
+        where = getattr(self, '_incremental_where', None)
 
         total_count = 0
         page_num = 0
         t_cancelled_filtered = 0
 
         async for page_records, qb_total in self._qb_client.query_records_streamed(
-            operations_table_id, select_fields
+            operations_table_id, select_fields, where=where
         ):
             page_num += 1
 
@@ -538,18 +654,167 @@ class QuickbaseSync:
         logger.info(f"Upserted {total} records into {table_name}")
         return total
 
-    async def match_to_companies(self) -> int:
-        """Match qb_customers to customer_companies by normalized name + domain."""
-        # Get all QB customers for this client
+    async def match_to_companies(self) -> dict:
+        """Match qb_customers → customer_companies using a 3-pass pipeline.
+
+        Pass 1 — Exact normalised name (high confidence, auto-write)
+        Pass 2 — Email domain root (medium confidence, auto-write with flag)
+        Pass 3 — Fuzzy name via rapidfuzz (low confidence, staging only)
+
+        Returns dict with per-pass counts: {pass1, pass2, pass3_staged, unmatched, total}.
+        """
+        stats = {'pass1': 0, 'pass2': 0, 'pass3_staged': 0, 'unmatched': 0, 'total': 0}
+
+        # ── Fetch unmatched QB customers ──────────────────────────────────────
         qb_result = _execute_with_retry(lambda: self._supabase.table('qb_customers').select(
-            'id, customer_name'
+            'id, qb_record_id, customer_name, customer_code'
         ).eq('client_id', self._client_id).is_('matched_company_id', 'null').execute())
 
         unmatched = qb_result.data or []
         if not unmatched:
-            return 0
+            return stats
 
-        # Get all companies for this client (include email_domains for domain matching)
+        # ── Fetch all SB companies (paginated) ───────────────────────────────
+        all_companies = self._fetch_all_companies()
+
+        # ── Build lookup structures ───────────────────────────────────────────
+        # Normalised SB name → company dict
+        sb_by_norm: dict[str, dict] = {}
+        # Domain root → company dict (first wins)
+        sb_by_domain_root: dict[str, dict] = {}
+
+        for c in all_companies:
+            if not c.get('company_name'):
+                continue
+            norm = _normalise(c['company_name'])
+            if norm and norm not in sb_by_norm:
+                sb_by_norm[norm] = c
+            # Index by domain roots
+            for root in _extract_domain_roots(c.get('email_domains')):
+                if root not in sb_by_domain_root:
+                    sb_by_domain_root[root] = c
+
+        # Normalised QB name → QB row (for fuzzy pass)
+        qb_by_norm: dict[str, dict] = {}
+        for qb in unmatched:
+            norm = _normalise(qb.get('customer_name'))
+            if norm:
+                qb_by_norm[norm] = qb
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        pass2_remaining = []  # QB customers not matched in pass 1
+        pass3_remaining = []  # QB customers not matched in pass 1 or 2
+
+        # ── Pass 1: Exact normalised name ─────────────────────────────────────
+        for qb_cust in unmatched:
+            qb_norm = _normalise(qb_cust.get('customer_name'))
+            if not qb_norm:
+                pass2_remaining.append(qb_cust)
+                continue
+
+            sb_match = sb_by_norm.get(qb_norm)
+            if sb_match:
+                self._write_match(qb_cust, sb_match, 'exact_name', now_iso)
+                stats['pass1'] += 1
+            else:
+                pass2_remaining.append(qb_cust)
+
+        # ── Pass 2: Email domain root ─────────────────────────────────────────
+        for qb_cust in pass2_remaining:
+            qb_norm = _normalise(qb_cust.get('customer_name'))
+            if not qb_norm:
+                pass3_remaining.append(qb_cust)
+                continue
+
+            matched = False
+            for root, sb_company in sb_by_domain_root.items():
+                if root in qb_norm:
+                    self._write_match(qb_cust, sb_company, 'domain_root', now_iso)
+                    stats['pass2'] += 1
+                    matched = True
+                    break
+
+            if not matched:
+                pass3_remaining.append(qb_cust)
+
+        # ── Pass 3: Fuzzy name match (staging only) ───────────────────────────
+        try:
+            from rapidfuzz import fuzz, process as rf_process
+
+            # Build list of normalised SB names for fuzzy matching
+            sb_norm_names = list(sb_by_norm.keys())
+
+            for qb_cust in pass3_remaining:
+                qb_norm = _normalise(qb_cust.get('customer_name'))
+                if not qb_norm or len(qb_norm) < 4:
+                    stats['unmatched'] += 1
+                    continue
+
+                result = rf_process.extractOne(
+                    qb_norm,
+                    sb_norm_names,
+                    scorer=fuzz.token_sort_ratio,
+                    score_cutoff=FUZZY_SCORE_THRESHOLD,
+                )
+
+                if result:
+                    matched_norm, score, _idx = result
+                    sb_company = sb_by_norm[matched_norm]
+                    self._stage_fuzzy_candidate(qb_cust, sb_company, score)
+                    stats['pass3_staged'] += 1
+                else:
+                    stats['unmatched'] += 1
+
+        except ImportError:
+            logger.warning("rapidfuzz not installed — skipping Pass 3 fuzzy matching")
+            stats['unmatched'] += len(pass3_remaining)
+
+        stats['total'] = stats['pass1'] + stats['pass2']
+        logger.info(
+            f"Company matching complete: "
+            f"Pass 1 (exact)={stats['pass1']}, Pass 2 (domain)={stats['pass2']}, "
+            f"Pass 3 (staged)={stats['pass3_staged']}, Unmatched={stats['unmatched']}"
+        )
+        return stats
+
+    def _write_match(self, qb_cust: dict, sb_company: dict, method: str, now_iso: str):
+        """Write a confirmed match: set matched_company_id on qb_customers + metadata on customer_companies."""
+        # Link qb_customers → customer_companies
+        _execute_with_retry(lambda cid=sb_company['id'], qid=qb_cust['id']: (
+            self._supabase.table('qb_customers').update({
+                'matched_company_id': cid
+            }).eq('id', qid).execute()
+        ))
+        # Write match metadata on customer_companies
+        _execute_with_retry(lambda sid=sb_company['id'], m=method, n=now_iso,
+                            qcid=qb_cust.get('qb_record_id'),
+                            qcode=qb_cust.get('customer_code'): (
+            self._supabase.table('customer_companies').update({
+                'qb_customer_id': qcid,
+                'qb_customer_code': qcode,
+                'qb_match_method': m,
+                'qb_matched_at': n,
+            }).eq('id', sid).execute()
+        ))
+
+    def _stage_fuzzy_candidate(self, qb_cust: dict, sb_company: dict, score: float):
+        """Insert a fuzzy match candidate into the staging table for review."""
+        try:
+            _execute_with_retry(lambda: self._supabase.table('qb_match_candidates').insert({
+                'client_id': self._client_id,
+                'sb_company_id': sb_company['id'],
+                'sb_company_name': sb_company.get('company_name'),
+                'qb_record_id': qb_cust.get('qb_record_id'),
+                'qb_customer_id': qb_cust.get('qb_record_id'),
+                'qb_name': qb_cust.get('customer_name'),
+                'match_score': score,
+                'match_method': 'fuzzy',
+            }).execute())
+        except Exception as e:
+            logger.warning(f"Failed to stage fuzzy candidate {qb_cust.get('customer_name')}: {e}")
+
+    def _fetch_all_companies(self) -> list[dict]:
+        """Fetch all customer_companies for this client (paginated)."""
         all_companies = []
         offset = 0
         while True:
@@ -561,73 +826,7 @@ class QuickbaseSync:
             if len(rows) == 0:
                 break
             offset += len(rows)
-
-        # Build lookup maps: name → id and domain-keyword → id
-        companies_by_name = {}
-        companies_by_keyword = {}
-        for c in all_companies:
-            if not c.get('company_name'):
-                continue
-            cname = c['company_name'].strip().lower()
-            companies_by_name[cname] = c['id']
-            # Also index by stripped name (no suffixes)
-            for suffix in [' pty ltd', ' pty. ltd.', ' pty', ' ltd', ' inc', ' llc', ' corp',
-                           ' corporation', ' company', ' group', ' holdings', ' services',
-                           ' australia', ' international']:
-                clean = cname.removesuffix(suffix).strip()
-                if clean != cname and clean:
-                    companies_by_name[clean] = c['id']
-            # Index by domain keywords (e.g., "carbon8.com.au" → "carbon8")
-            for domain in (c.get('email_domains') or []):
-                keyword = domain.split('.')[0].lower()
-                if keyword and len(keyword) > 2:
-                    companies_by_keyword[keyword] = c['id']
-
-        matched = 0
-        for qb_cust in unmatched:
-            name = (qb_cust.get('customer_name') or '').strip().lower()
-            if not name:
-                continue
-
-            # 1. Exact match
-            company_id = companies_by_name.get(name)
-
-            # 2. Try stripped QB name (remove suffixes from QB side too)
-            if not company_id:
-                for suffix in [' pty ltd', ' pty. ltd.', ' pty', ' ltd', ' inc', ' llc', ' corp',
-                               ' corporation', ' company', ' group', ' holdings', ' services',
-                               ' australia', ' international']:
-                    clean = name.rstrip('.').removesuffix(suffix).strip()
-                    if clean != name:
-                        company_id = companies_by_name.get(clean)
-                        if company_id:
-                            break
-
-            # 3. Contains match: QB name contains a company name or vice versa
-            if not company_id:
-                for cname, cid in companies_by_name.items():
-                    if len(cname) >= 3 and (cname in name or name in cname):
-                        company_id = cid
-                        break
-
-            # 4. Domain keyword match: QB "Carbon8 Pty Ltd" → keyword "carbon8" → domain match
-            if not company_id:
-                qb_words = name.replace('.', ' ').split()
-                for word in qb_words:
-                    if word in companies_by_keyword:
-                        company_id = companies_by_keyword[word]
-                        break
-
-            if company_id:
-                _execute_with_retry(lambda cid=company_id, qid=qb_cust['id']: (
-                    self._supabase.table('qb_customers').update({
-                        'matched_company_id': cid
-                    }).eq('id', qid).execute()
-                ))
-                matched += 1
-
-        logger.info(f"Matched {matched}/{len(unmatched)} QB customers to companies")
-        return matched
+        return all_companies
 
     async def match_to_contacts(self) -> int:
         """Match qb_contacts to customer_contacts by email address."""
@@ -783,28 +982,51 @@ class QuickbaseSync:
     async def propagate_qb_data_to_companies(self) -> int:
         """
         After matching, copy QB data to customer_companies enrichment columns.
-        This makes QB context available to all downstream pipeline steps.
+        Runs on ALL matched QB customers — overwrites financial fields every sync
+        so customer_companies always reflects the latest QB state.
+
+        Derives qb_growth_90d from TY/LY and qb_tier from total_revenue if not
+        already set in QB. Handles HTML-wrapped recency values.
         """
-        # Get matched QB customers
         result = _execute_with_retry(lambda: self._supabase.table('qb_customers').select(
-            'matched_company_id, customer_status, customer_tier, account_manager, '
-            'total_invoiced, invoiced_ty, invoiced_ly, growth_90d, days_since_last_invoice'
+            'qb_record_id, customer_code, matched_company_id, customer_status, '
+            'customer_tier, account_manager, total_invoiced, invoiced_ty, invoiced_ly, '
+            'growth_90d, days_since_last_invoice, recency_days'
         ).eq('client_id', self._client_id).not_.is_('matched_company_id', 'null').execute())
 
         updated = 0
         for qb in (result.data or []):
             company_id = qb['matched_company_id']
+
+            ty = qb.get('invoiced_ty')
+            ly = qb.get('invoiced_ly')
+            total = qb.get('total_invoiced')
+
+            # Derive growth if QB doesn't provide it
+            growth = qb.get('growth_90d') or _derive_growth(ty, ly)
+
+            # Derive tier from revenue if QB tier is missing
+            tier = qb.get('customer_tier') or _derive_tier(total)
+
+            # Handle recency — may be HTML-wrapped from CSV imports
+            recency_raw = qb.get('days_since_last_invoice') or qb.get('recency_days')
+            recency = _parse_recency_html(recency_raw)
+
+            # Overwrite all financial fields — ensures data stays current
             update_data = {
                 'qb_customer_type': qb.get('customer_status'),
-                'qb_tier': qb.get('customer_tier'),
-                'qb_total_revenue': qb.get('total_invoiced'),
-                'qb_invoiced_ty': qb.get('invoiced_ty'),
-                'qb_invoiced_ly': qb.get('invoiced_ly'),
-                'qb_growth_90d': qb.get('growth_90d'),
-                'qb_days_since_last_invoice': qb.get('days_since_last_invoice'),
+                'qb_tier': tier,
+                'qb_total_revenue': total,
+                'qb_invoiced_ty': ty,
+                'qb_invoiced_ly': ly,
+                'qb_growth_90d': growth,
+                'qb_days_since_last_invoice': recency,
                 'qb_account_manager': qb.get('account_manager'),
+                'qb_customer_id': qb.get('qb_record_id'),
+                'qb_customer_code': qb.get('customer_code'),
             }
-            # Remove None values
+            # Only skip None for identity columns that shouldn't be blanked
+            # Financial fields: write even if None so stale data doesn't persist
             update_data = {k: v for k, v in update_data.items() if v is not None}
 
             if update_data:
@@ -812,6 +1034,19 @@ class QuickbaseSync:
                     self._supabase.table('customer_companies').update(d).eq('id', cid).execute()
                 ))
                 updated += 1
+
+        # Invalidate stale analytics cache so next request recomputes with fresh QB data
+        if updated > 0:
+            try:
+                _execute_with_retry(lambda: self._supabase.table('customer_intelligence_cache').delete().eq(
+                    'client_id', self._client_id
+                ).in_('cache_type', [
+                    'strike_rate', 'contact_capability_profile',
+                    'seasonality_profile', 'capability_rhythm',
+                ]).execute())
+                logger.info(f"Invalidated analytics cache for client {self._client_id}")
+            except Exception as e:
+                logger.warning(f"Cache invalidation failed (non-fatal): {e}")
 
         logger.info(f"Propagated QB data to {updated} customer_companies")
         return updated

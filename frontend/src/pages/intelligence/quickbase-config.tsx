@@ -8,11 +8,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card, Form, Input, InputNumber, Button, Table, Tabs, AutoComplete,
-  Space, Typography, Alert, Divider, Spin, message, Tag, Tooltip, Switch, Row, Col,
+  Space, Typography, Alert, Divider, Spin, message, Tag, Tooltip, Switch, Row, Col, Dropdown,
 } from 'antd';
 import {
   PlusOutlined, DeleteOutlined, SyncOutlined, SaveOutlined, ArrowRightOutlined,
-  HolderOutlined, CheckCircleFilled,
+  HolderOutlined, CheckCircleFilled, DownOutlined,
 } from '@ant-design/icons';
 import api from '../../services/apiClient';
 import { ClientSelector } from '../../components/analytics/ClientSelector';
@@ -289,12 +289,13 @@ const QuickbaseConfigPage: React.FC = () => {
     }
   }, []);
 
-  const handleQBSync = async () => {
+  const handleQBSync = async (full = false) => {
     if (!clientId) return;
     setQbSyncing(true);
     try {
-      await api.post<any>(`/v1/quickbase/sync?client_id=${clientId}`);
-      message.success('Full sync started — data will update shortly');
+      const params = full ? `client_id=${clientId}&full=true` : `client_id=${clientId}`;
+      await api.post<any>(`/v1/quickbase/sync?${params}`);
+      message.success(full ? 'Full sync started — re-fetching all records' : 'Sync started — fetching recent changes');
       setTimeout(() => loadQBStatus(clientId), 3000);
     } catch (err: any) {
       message.error(err?.message || 'Sync failed');
@@ -826,15 +827,20 @@ const QuickbaseConfigPage: React.FC = () => {
                   Last sync: {new Date(qbStatus.last_sync_at).toLocaleString()}
                 </Text>
               )}
-              <Button
+              <Dropdown.Button
                 type="primary"
-                icon={<SyncOutlined spin={qbSyncing} />}
+                icon={<DownOutlined />}
                 loading={qbSyncing}
-                onClick={handleQBSync}
+                onClick={() => handleQBSync(false)}
                 size="small"
+                menu={{
+                  items: [
+                    { key: 'full', label: 'Full Sync (re-fetch all)', onClick: () => handleQBSync(true) },
+                  ],
+                }}
               >
-                Sync Now
-              </Button>
+                <SyncOutlined spin={qbSyncing} /> Sync
+              </Dropdown.Button>
               <Button
                 icon={<ArrowRightOutlined />}
                 loading={rematching}

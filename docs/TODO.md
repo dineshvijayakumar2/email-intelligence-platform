@@ -28,70 +28,47 @@ Design: `docs/INVITE_USER_SMTPLESS.md`
 
 ---
 
-## CURRENT FOCUS: Sprint 4 — Sales Intelligence Engine (IN PROGRESS)
+## ✅ COMPLETE: Sprint 4 — Sales Intelligence Engine (26 Mar 2026)
 
-Full plan: Claude plan file `compressed-mixing-blum.md` + `docs/PLATFORM_PROGRESS.md`
+Full plan: `docs/PLATFORM_PROGRESS.md`
 
-### Sprint 3: AI Layer + QB Integration + AM Rehaul — ✅ COMPLETE (March 15, 2026)
-- [x] Sessions 1-6: Intelligence Engine + Buckets + Digest + Frontend
-- [x] S3.1-S3.19: Platform surgery + QB integration + LangChain + Strategic Digest
-- [x] AM-centric rehaul: 6 new signals replacing old 8 buckets
-- [x] Customer lifecycle tiers (prospect, new_customer, active_customer, at_risk, dormant, champion)
-- [x] AM efficiency analyzer (business-hours response times, per-mailbox KPIs)
-- [x] QB data linkage: 4-tier company matching + email-based contact matching
-- [x] Strategic digest: LangGraph ReAct agent with 8-section output
-- [x] Frontend: Strategic Digest page, lifecycle badges, Re-bucket button
-- [x] Migration 026: AM lifecycle rehaul (timezone, lifecycle tiers, has_response_urgency)
+- [x] Nav restructure: `/analytics/*` → `/customers/*`, `/intelligence/*` → `/insights/*`, `/manage/*`
+- [x] S4.0: Communication Guidelines in prompt templates (JSON-based persistence)
+- [x] S4.1: QB Operations sync (6th table, stream-and-upsert, 650K records)
+- [x] S4.1: Capability Intelligence — 597 rules, 8 MVP tags, batch reclassify via RPC
+- [x] S4.1: Intelligence Config UI — 5-tab admin page with CSV import, reclassify, cache
+- [x] S4.2-S4.3: Customer Intelligence Analytics — strike rate, contact capabilities, seasonality, capability rhythm
+- [x] S4.4: Vector embeddings — pgvector, gemini-embedding-001, 768 dims, 3 tables
+- [x] S4.4: Semantic Search UI — per-table results with similarity scores, reembed controls
+- [x] Infrastructure: Router refactor, lightweight extraction, LIVE mailbox UI, auth improvements
+- [x] 10 database migrations (032–040)
 
-### Sprint 4: Sales Intelligence Engine — IN PROGRESS
+---
 
-#### Nav restructure — ✅ COMPLETE (19 Mar 2026)
-- [x] Routes renamed: `/analytics/*` → `/customers/*`, `/intelligence/*` → `/insights/*`, operational pages → `/manage/*`
-- [x] Layout.tsx: Analytics + Intelligence sections → Customers + Insights
-- [x] All internal navigate() calls updated across 7 page files
-- [x] Legacy redirect routes added for all old paths
+## CURRENT FOCUS: Next Priorities
 
-#### S4.0 — Communication Guidelines in Prompt Templates (prerequisite — implement first)
-- [ ] Update `_get_default_prompts()` in `prompts.py`: add Communication Guidelines block to email analysis, daily digest, strategic digest, and AI insights prompts
-- [ ] Guidelines: consultative B2B tone, outcome/risk framing, avoid fluff, treat silence/reorder/campaign signals as business intelligence
-- [ ] Bump version numbers on updated templates → existing reprocessing flow handles re-analysis
-
-#### Phase A — Backend foundation
-- [x] Migration 032: `qb_operations` table + `operations_table_id` on `qb_sync_config`
-- [ ] Migration 033: `customer_recommendations` + `product_affinities` tables
-- [ ] Migration 034: pgvector extension + embedding columns + HNSW indexes + search RPCs
-- [ ] `quickbase_sync.py`: Add `_sync_operations()` method
-- [ ] `recommendation_engine.py`: Level 1 (cross-contact gaps) + Level 2 (market basket) algorithms
-- [ ] `customers.py`: Add 3 new endpoints (`/order-history`, `/product-profile`, `/recommendations`)
-- [ ] `quickbase.py`: Add `/operations` list endpoint
-
-#### Phase B — Customer profile frontend
-- [ ] `OrderHistoryTable.tsx`: Merged quote/job/invoice timeline component
-- [ ] `ProductProfileCard.tsx`: Category breakdown bar chart
-- [ ] `RecommendationsPanel.tsx`: Two-section recommendations display
-- [ ] `company-detail.tsx`: Full redesign — 6-section customer profile
-- [ ] `analyticsService.ts`: Add 3 new API wrappers
-
-#### Phase C — Surface recommendations across platform
-- [ ] `inbox.tsx`: Add collapsible "Sales Opportunities" panel in email detail drawer
-- [ ] `ai_digest_generator.py` + `digest.tsx`: Add "Sales Opportunities" section (top 5 companies)
-- [ ] `quickbase-config.tsx`: Add Operations Table ID read-only display field
-
-#### Phase D — Vector infrastructure
-- [ ] `vector_service.py`: Embedding service + semantic search functions
-- [ ] `POST /api/v1/agent/reembed`: Bootstrap endpoint — embed all existing data
-- [ ] Run bootstrap reembed against production data
-
-#### Phase E — Rebuild AI features around vectors
+### Planned: Phase 2D — AI Insight Enrichment
 - [ ] `ai_email_analyzer.py`: Pre-batch vector context retrieval (group by company → history inject)
 - [ ] `ai_digest_generator.py`: Hybrid semantic + structured retrieval (3 parallel queries)
 - [ ] `langchain_tools.py`: Add `semantic_search_emails` + `semantic_search_operations` tools
 - [ ] Wire embed triggers: after analysis → `embed_emails_batch()`; after QB sync → `embed_operations()`
 
-#### Phase F — AI Chat Agent
-- [ ] `ai_agent_service.py`: General Q&A agent with all 6 tools
-- [ ] `ai.py` router: Add `POST /api/v1/agent/chat` + `POST /api/v1/agent/reembed`
-- [ ] `agent.tsx`: Chat UI page at `/intelligence/agent`
+### Planned: AI Chat Agent
+- [ ] `ai_agent_service.py`: General Q&A agent with all 6+ tools (including semantic search)
+- [ ] `ai.py` router: Add `POST /api/v1/agent/chat`
+- [ ] `agent.tsx`: Chat UI page at `/insights/agent`
+
+### Planned: Invite User System
+Design: `docs/INVITE_USER_SMTPLESS.md`
+- [ ] Migration: `pending_invites` table + user_profiles invite columns
+- [ ] Backend: `invites.py` router — 6 endpoints (create, validate, accept, list, resend, revoke)
+- [ ] Frontend: Remove "Create Account" from login, add InviteUserModal, invite-accept page
+- [ ] Frontend: Dashboard "Connect your email" banner for unconnected mailboxes
+
+### Planned: Recommendation Engine
+- [ ] `recommendation_engine.py`: Level 1 (cross-contact gaps) + Level 2 (market basket)
+- [ ] `RecommendationsPanel.tsx`: Two-section recommendations display
+- [ ] Surface in Smart Inbox email drawer + digest "Sales Opportunities" section
 
 ---
 

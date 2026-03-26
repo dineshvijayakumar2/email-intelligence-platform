@@ -52,6 +52,7 @@ import UsagePage from './pages/intelligence/usage';
 import PlaygroundPage from './pages/intelligence/playground';
 import QuickbaseConfigPage from './pages/intelligence/quickbase-config';
 import QuickbaseDataPage from './pages/intelligence/quickbase-data';
+import QuickbaseMatchesPage from './pages/intelligence/quickbase-matches';
 import IntelligenceConfigPage from './pages/manage/intelligence-config';
 
 // Settings
@@ -122,6 +123,7 @@ function App() {
             <Route path="/manage/ai-playground" element={<AdminRoute><Layout><PlaygroundPage /></Layout></AdminRoute>} />
             <Route path="/manage/quickbase" element={<AdminRoute><Layout><QuickbaseConfigPage /></Layout></AdminRoute>} />
             <Route path="/manage/quickbase-data" element={<AdminRoute><Layout><QuickbaseDataPage /></Layout></AdminRoute>} />
+            <Route path="/manage/quickbase-matches" element={<AdminRoute><Layout><QuickbaseMatchesPage /></Layout></AdminRoute>} />
             <Route path="/manage/intelligence-config" element={<AdminRoute><Layout><IntelligenceConfigPage /></Layout></AdminRoute>} />
             <Route path="/users" element={<AdminRoute><Layout><UsersPage /></Layout></AdminRoute>} />
             <Route path="/admin/data" element={<AdminRoute><Layout><AdminDataViewPage /></Layout></AdminRoute>} />
