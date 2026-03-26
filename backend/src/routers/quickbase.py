@@ -595,12 +595,13 @@ async def qb_health(client_id: str = Query(...)):
             }
 
         # QB customer match rate (denominator = QB customers, not SB companies)
-        total_qb = _supabase.table('qb_customers').select('id', count='exact').eq('client_id', client_id).execute()
-        matched_qb = _supabase.table('qb_customers').select('id', count='exact').eq('client_id', client_id).not_.is_('matched_company_id', 'null').execute()
+        # .limit(0) ensures only the count header is returned, not all rows
+        total_qb = _supabase.table('qb_customers').select('id', count='exact').eq('client_id', client_id).limit(0).execute()
+        matched_qb = _supabase.table('qb_customers').select('id', count='exact').eq('client_id', client_id).not_.is_('matched_company_id', 'null').limit(0).execute()
 
         # QB contact match rate
-        total_qb_contacts = _supabase.table('qb_contacts').select('id', count='exact').eq('client_id', client_id).execute()
-        matched_qb_contacts = _supabase.table('qb_contacts').select('id', count='exact').eq('client_id', client_id).not_.is_('matched_contact_id', 'null').execute()
+        total_qb_contacts = _supabase.table('qb_contacts').select('id', count='exact').eq('client_id', client_id).limit(0).execute()
+        matched_qb_contacts = _supabase.table('qb_contacts').select('id', count='exact').eq('client_id', client_id).not_.is_('matched_contact_id', 'null').limit(0).execute()
 
         total_c = total_qb.count or 0
         matched_c = matched_qb.count or 0
@@ -610,7 +611,7 @@ async def qb_health(client_id: str = Query(...)):
         # SB companies with QB data vs SB companies with email activity (the meaningful ratio)
         enriched_companies = _supabase.table('customer_companies').select('id', count='exact').eq(
             'client_id', client_id
-        ).not_.is_('qb_total_revenue', 'null').execute()
+        ).not_.is_('qb_total_revenue', 'null').limit(0).execute()
         enriched_co = enriched_companies.count or 0
 
         active_companies = 0
@@ -618,12 +619,12 @@ async def qb_health(client_id: str = Query(...)):
         try:
             ac_resp = _supabase.table('customer_companies').select('id', count='exact').eq(
                 'client_id', client_id
-            ).gt('total_emails', '0').execute()
+            ).gt('total_emails', '0').limit(0).execute()
             active_companies = ac_resp.count or 0
 
             active_resp = _supabase.table('customer_companies').select('id', count='exact').eq(
                 'client_id', client_id
-            ).not_.is_('qb_total_revenue', 'null').gt('total_emails', '0').execute()
+            ).not_.is_('qb_total_revenue', 'null').gt('total_emails', '0').limit(0).execute()
             active_enriched = active_resp.count or 0
         except Exception:
             pass
