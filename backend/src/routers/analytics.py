@@ -1109,6 +1109,7 @@ async def get_company_analytics(company_id: str):
         client_name = None
         if comp.get('clients'):
             client_name = comp['clients'].get('client_name')
+            del comp['clients']  # Remove nested join data before Pydantic model
 
         return CompanyAnalytics(**comp, engagement_status=status, client_name=client_name)
 
