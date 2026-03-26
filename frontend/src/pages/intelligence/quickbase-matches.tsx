@@ -1,16 +1,16 @@
 /**
- * QB Match Review — Review and approve/reject fuzzy match candidates.
- * Three sections: Match Health stats, Pending Review table, Reviewed History.
+ * QB Match Review — Map QB customers to SB companies via searchable selector.
+ * Fuzzy candidates are pre-suggested; user can pick any SB company or skip.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Card, Table, Button, Tag, Space, Typography, Statistic, Row, Col,
-  Spin, Tooltip, message, Popconfirm, Tabs, Badge,
+  Spin, message, Tabs, Badge, Select,
 } from 'antd';
 import {
   CheckCircleOutlined, CloseCircleOutlined, SyncOutlined,
-  ReloadOutlined, QuestionCircleOutlined, LinkOutlined,
+  ReloadOutlined, QuestionCircleOutlined, ArrowRightOutlined,
 } from '@ant-design/icons';
 import api from '../../services/apiClient';
 import { ClientSelector } from '../../components/analytics/ClientSelector';
@@ -32,6 +32,11 @@ interface MatchCandidate {
   reviewed_by: string | null;
   reviewed_at: string | null;
   created_at: string;
+}
+
+interface CompanyOption {
+  id: string;
+  company_name: string;
 }
 
 interface HealthData {
@@ -57,8 +62,17 @@ export default function QuickbaseMatchesPage() {
   const [reviewedLoading, setReviewedLoading] = useState(false);
   const [reviewedPage, setReviewedPage] = useState(1);
 
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [rematchLoading, setRematchLoading] = useState(false);
+
+  // Company options for the searchable selector (loaded once per client)
+  const [companyOptions, setCompanyOptions] = useState<CompanyOption[]>([]);
+  const companyOptionsLoaded = useRef(false);
+
+  // Per-row selection overrides: candidateId → selected sb_company_id
+  const [rowSelections, setRowSelections] = useState<Record<string, string>>({});
+  const [savingRow, setSavingRow] = useState<string | null>(null);
+
+  // ── Data loading ──────────────────────────────────────────────────────────
 
   const loadHealth = useCallback(async () => {
     if (!clientId) return;
@@ -98,41 +112,69 @@ export default function QuickbaseMatchesPage() {
     setReviewedLoading(false);
   }, [clientId, reviewedPage]);
 
+  const loadCompanies = useCallback(async () => {
+    if (!clientId || companyOptionsLoaded.current) return;
+    try {
+      const data = await api.get(
+        `/v1/quickbase/companies-lookup?client_id=${clientId}&limit=500`
+      ) as { companies: CompanyOption[] };
+      setCompanyOptions(data.companies || []);
+      companyOptionsLoaded.current = true;
+    } catch { /* silent */ }
+  }, [clientId]);
+
   useEffect(() => { loadHealth(); }, [loadHealth]);
   useEffect(() => { loadPending(); }, [loadPending]);
   useEffect(() => { loadReviewed(); }, [loadReviewed]);
+  useEffect(() => {
+    companyOptionsLoaded.current = false;
+    setCompanyOptions([]);
+    loadCompanies();
+  }, [clientId, loadCompanies]);
 
-  const handleReview = async (candidateId: string, accepted: boolean) => {
+  // Build Select options once (memoized)
+  const selectOptions = useMemo(() =>
+    companyOptions.map(c => ({ value: c.id, label: c.company_name })),
+    [companyOptions]
+  );
+
+  // ── Actions ───────────────────────────────────────────────────────────────
+
+  const handleConfirm = async (candidate: MatchCandidate) => {
+    const overrideId = rowSelections[candidate.id];
+    const targetId = overrideId || candidate.sb_company_id;
+    setSavingRow(candidate.id);
     try {
-      await api.post(
-        `/v1/quickbase/match-candidates/${candidateId}/review?accepted=${accepted}`
-      );
-      message.success(accepted ? 'Match accepted & promoted' : 'Match rejected');
-      loadPending();
-      loadReviewed();
+      const params = new URLSearchParams({ accepted: 'true' });
+      if (overrideId && overrideId !== candidate.sb_company_id) {
+        params.set('sb_company_id', overrideId);
+      }
+      await api.post(`/v1/quickbase/match-candidates/${candidate.id}/review?${params}`);
+      const targetName = overrideId
+        ? companyOptions.find(c => c.id === overrideId)?.company_name || 'selected company'
+        : candidate.sb_company_name;
+      message.success(`Linked "${candidate.qb_name}" → "${targetName}"`);
+      // Remove from local state immediately for snappy UX
+      setPendingCandidates(prev => prev.filter(c => c.id !== candidate.id));
+      setPendingTotal(prev => prev - 1);
+      setRowSelections(prev => { const n = { ...prev }; delete n[candidate.id]; return n; });
       loadHealth();
     } catch {
-      message.error('Review failed');
+      message.error('Failed to save mapping');
     }
+    setSavingRow(null);
   };
 
-  const handleBulkReview = async (accepted: boolean) => {
-    if (selectedIds.length === 0) return;
+  const handleSkip = async (candidateId: string) => {
+    setSavingRow(candidateId);
     try {
-      const params = new URLSearchParams({
-        client_id: clientId,
-        accepted: String(accepted),
-      });
-      selectedIds.forEach(id => params.append('candidate_ids', id));
-      await api.post(`/v1/quickbase/match-candidates/bulk-review?${params}`);
-      message.success(`${accepted ? 'Accepted' : 'Rejected'} ${selectedIds.length} candidates`);
-      setSelectedIds([]);
-      loadPending();
-      loadReviewed();
-      loadHealth();
+      await api.post(`/v1/quickbase/match-candidates/${candidateId}/review?accepted=false`);
+      setPendingCandidates(prev => prev.filter(c => c.id !== candidateId));
+      setPendingTotal(prev => prev - 1);
     } catch {
-      message.error('Bulk review failed');
+      message.error('Failed to skip');
     }
+    setSavingRow(null);
   };
 
   const handleRematch = async () => {
@@ -159,62 +201,70 @@ export default function QuickbaseMatchesPage() {
     return 'orange';
   };
 
+  // ── Table columns ─────────────────────────────────────────────────────────
+
   const pendingColumns = [
     {
       title: 'QB Customer',
       dataIndex: 'qb_name',
       key: 'qb_name',
-      width: 220,
+      width: 200,
       ellipsis: true,
       render: (v: string) => <Text strong>{v}</Text>,
-    },
-    {
-      title: '',
-      key: 'arrow',
-      width: 40,
-      render: () => <LinkOutlined style={{ color: '#999' }} />,
-    },
-    {
-      title: 'SB Company',
-      dataIndex: 'sb_company_name',
-      key: 'sb_company_name',
-      width: 220,
-      ellipsis: true,
-      render: (v: string) => <Text>{v}</Text>,
     },
     {
       title: 'Score',
       dataIndex: 'match_score',
       key: 'match_score',
-      width: 90,
+      width: 80,
       align: 'center' as const,
       sorter: (a: MatchCandidate, b: MatchCandidate) => a.match_score - b.match_score,
       defaultSortOrder: 'descend' as const,
-      render: (v: number) => <Tag color={scoreColor(v)}>{v?.toFixed(1)}%</Tag>,
+      render: (v: number) => <Tag color={scoreColor(v)}>{v?.toFixed(0)}%</Tag>,
     },
     {
-      title: 'Actions',
-      key: 'actions',
-      width: 180,
+      title: 'Map to SB Company',
+      key: 'sb_select',
+      width: 320,
       render: (_: any, record: MatchCandidate) => (
-        <Space>
-          <Popconfirm
-            title="Accept this match?"
-            description={`Link "${record.qb_name}" → "${record.sb_company_name}"`}
-            onConfirm={() => handleReview(record.id, true)}
-            okText="Accept"
+        <Select
+          showSearch
+          size="small"
+          style={{ width: '100%' }}
+          placeholder="Search company..."
+          value={rowSelections[record.id] || record.sb_company_id}
+          onChange={(val) => setRowSelections(prev => ({ ...prev, [record.id]: val }))}
+          options={selectOptions}
+          filterOption={(input, option) =>
+            (option?.label as string || '').toLowerCase().includes(input.toLowerCase())
+          }
+          optionFilterProp="label"
+          virtual
+        />
+      ),
+    },
+    {
+      title: '',
+      key: 'actions',
+      width: 150,
+      render: (_: any, record: MatchCandidate) => (
+        <Space size={4}>
+          <Button
+            type="primary"
+            size="small"
+            icon={<CheckCircleOutlined />}
+            loading={savingRow === record.id}
+            onClick={() => handleConfirm(record)}
           >
-            <Button type="primary" size="small" icon={<CheckCircleOutlined />}>
-              Accept
-            </Button>
-          </Popconfirm>
+            Confirm
+          </Button>
           <Button
             size="small"
-            danger
-            icon={<CloseCircleOutlined />}
-            onClick={() => handleReview(record.id, false)}
+            type="text"
+            onClick={() => handleSkip(record.id)}
+            disabled={savingRow === record.id}
           >
-            Reject
+            Skip
           </Button>
         </Space>
       ),
@@ -226,7 +276,7 @@ export default function QuickbaseMatchesPage() {
       title: 'QB Customer',
       dataIndex: 'qb_name',
       key: 'qb_name',
-      width: 220,
+      width: 200,
       ellipsis: true,
     },
     {
@@ -240,9 +290,9 @@ export default function QuickbaseMatchesPage() {
       title: 'Score',
       dataIndex: 'match_score',
       key: 'match_score',
-      width: 90,
+      width: 80,
       align: 'center' as const,
-      render: (v: number) => <Tag color={scoreColor(v)}>{v?.toFixed(1)}%</Tag>,
+      render: (v: number) => <Tag color={scoreColor(v)}>{v?.toFixed(0)}%</Tag>,
     },
     {
       title: 'Decision',
@@ -250,16 +300,18 @@ export default function QuickbaseMatchesPage() {
       key: 'accepted',
       width: 100,
       render: (v: boolean) =>
-        v ? <Tag color="success">Accepted</Tag> : <Tag color="error">Rejected</Tag>,
+        v ? <Tag color="success">Linked</Tag> : <Tag color="default">Skipped</Tag>,
     },
     {
       title: 'Reviewed',
       dataIndex: 'reviewed_at',
       key: 'reviewed_at',
-      width: 150,
+      width: 140,
       render: (v: string) => v ? new Date(v).toLocaleDateString() : '-',
     },
   ];
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div style={{ padding: '16px 24px', maxWidth: 1400, margin: '0 auto' }}>
@@ -362,27 +414,6 @@ export default function QuickbaseMatchesPage() {
             ),
             children: (
               <Card size="small">
-                {selectedIds.length > 0 && (
-                  <Space style={{ marginBottom: 12 }}>
-                    <Text>{selectedIds.length} selected</Text>
-                    <Button
-                      type="primary"
-                      size="small"
-                      icon={<CheckCircleOutlined />}
-                      onClick={() => handleBulkReview(true)}
-                    >
-                      Accept All
-                    </Button>
-                    <Button
-                      size="small"
-                      danger
-                      icon={<CloseCircleOutlined />}
-                      onClick={() => handleBulkReview(false)}
-                    >
-                      Reject All
-                    </Button>
-                  </Space>
-                )}
                 <Table
                   dataSource={pendingCandidates}
                   columns={pendingColumns}
@@ -390,10 +421,6 @@ export default function QuickbaseMatchesPage() {
                   loading={pendingLoading}
                   size="small"
                   scroll={{ x: 'max-content' }}
-                  rowSelection={{
-                    selectedRowKeys: selectedIds,
-                    onChange: (keys) => setSelectedIds(keys as string[]),
-                  }}
                   pagination={{
                     current: pendingPage,
                     pageSize: PAGE_SIZE,

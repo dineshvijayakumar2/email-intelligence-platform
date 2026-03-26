@@ -734,28 +734,55 @@ async def list_match_candidates(
         raise HTTPException(status_code=500, detail=str(e)[:200])
 
 
+@router.get("/companies-lookup")
+async def companies_lookup(
+    client_id: str = Query(...),
+    search: str = Query('', description="Search by company name"),
+    limit: int = Query(50, ge=1, le=500),
+):
+    """Fast company lookup for the match selector. Returns id + name only."""
+    try:
+        q = _supabase.table('customer_companies').select(
+            'id, company_name'
+        ).eq('client_id', client_id).order('company_name')
+
+        if search and len(search) >= 2:
+            q = q.ilike('company_name', f'%{_sanitize_search(search)}%')
+
+        result = q.limit(limit).execute()
+        return {"companies": result.data or []}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)[:200])
+
+
 @router.post("/match-candidates/{candidate_id}/review")
 async def review_match_candidate(
     candidate_id: str,
-    accepted: bool = Query(..., description="Accept (true) or reject (false) this match"),
+    accepted: bool = Query(..., description="Accept (true) or skip (false) this candidate"),
+    sb_company_id: str = Query(None, description="Override: map to this SB company instead of the suggested one"),
     user_id: str = Query(None, description="Reviewer user ID"),
     background_tasks: BackgroundTasks = None,
 ):
-    """Accept or reject a fuzzy match candidate.
+    """Confirm or skip a match candidate.
 
-    Accepted candidates are immediately promoted: qb_customers.matched_company_id is set
-    and customer_companies gets the match metadata.
+    When accepted, the QB customer is linked to the SB company. If sb_company_id is provided,
+    it overrides the fuzzy suggestion — allowing manual mapping to any SB company.
     """
     try:
         now = datetime.now(timezone.utc).isoformat()
 
         # Update candidate review status
-        _supabase.table('qb_match_candidates').update({
+        update_payload: dict = {
             'reviewed': True,
             'accepted': accepted,
             'reviewed_by': user_id,
             'reviewed_at': now,
-        }).eq('id', candidate_id).execute()
+        }
+        # If user picked a different company, update the candidate record too
+        if sb_company_id and accepted:
+            update_payload['sb_company_id'] = sb_company_id
+
+        _supabase.table('qb_match_candidates').update(update_payload).eq('id', candidate_id).execute()
 
         # If accepted, promote the match immediately
         if accepted:
@@ -765,10 +792,12 @@ async def review_match_candidate(
 
             if candidate.data:
                 c = candidate.data[0]
+                target_company_id = sb_company_id or c['sb_company_id']
+                method = 'manual' if sb_company_id else 'fuzzy'
 
                 # Set matched_company_id on qb_customers
                 _supabase.table('qb_customers').update({
-                    'matched_company_id': c['sb_company_id']
+                    'matched_company_id': target_company_id
                 }).eq('client_id', c['client_id']).eq(
                     'qb_record_id', c['qb_record_id']
                 ).execute()
@@ -776,9 +805,9 @@ async def review_match_candidate(
                 # Write match metadata on customer_companies
                 _supabase.table('customer_companies').update({
                     'qb_customer_id': c.get('qb_customer_id'),
-                    'qb_match_method': 'fuzzy',
+                    'qb_match_method': method,
                     'qb_matched_at': now,
-                }).eq('id', c['sb_company_id']).execute()
+                }).eq('id', target_company_id).execute()
 
                 # Trigger propagation in background so QB data flows immediately
                 if background_tasks:
