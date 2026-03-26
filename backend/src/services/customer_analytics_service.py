@@ -183,13 +183,13 @@ class CustomerAnalyticsService:
 
         # Fetch contacts for this company (for name resolution)
         contacts_result = self._sb.table('customer_contacts').select(
-            'id, email_address, first_name, surname'
+            'id, email_address, first_name, last_name, full_name'
         ).eq('company_id', company_id).execute()
         contacts_by_email = {}
         for c in (contacts_result.data or []):
             email = (c.get('email_address') or '').lower()
             if email:
-                name = f"{c.get('first_name', '')} {c.get('surname', '')}".strip()
+                name = c.get('full_name') or f"{c.get('first_name', '')} {c.get('last_name', '')}".strip()
                 contacts_by_email[email] = {'id': c['id'], 'name': name}
 
         # Build: {contact_email -> {capability_tag -> {count, revenue, last_date}}}
