@@ -184,7 +184,7 @@ class CustomerAnalyticsService:
         # Fetch contacts for this company (for name resolution)
         contacts_result = self._sb.table('customer_contacts').select(
             'id, email_address, first_name, last_name, full_name'
-        ).eq('company_id', company_id).execute()
+        ).eq('customer_company_id', company_id).execute()
         contacts_by_email = {}
         for c in (contacts_result.data or []):
             email = (c.get('email_address') or '').lower()
