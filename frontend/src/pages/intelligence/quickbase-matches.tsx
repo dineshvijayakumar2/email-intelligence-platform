@@ -1,16 +1,16 @@
 /**
  * QB Match Review — Map QB customers to SB companies via searchable selector.
- * Fuzzy candidates are pre-suggested; user can pick any SB company or skip.
+ * Fuzzy candidates are pre-suggested; user can type to search all SB companies (server-side).
  */
 
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Card, Table, Button, Tag, Space, Typography, Statistic, Row, Col,
-  Spin, message, Tabs, Badge, Select,
+  Spin, message, Badge, Select,
 } from 'antd';
 import {
-  CheckCircleOutlined, CloseCircleOutlined, SyncOutlined,
-  ReloadOutlined, QuestionCircleOutlined, ArrowRightOutlined,
+  CheckCircleOutlined, SyncOutlined,
+  ReloadOutlined, SearchOutlined,
 } from '@ant-design/icons';
 import api from '../../services/apiClient';
 import { ClientSelector } from '../../components/analytics/ClientSelector';
@@ -29,14 +29,6 @@ interface MatchCandidate {
   match_method: string;
   reviewed: boolean;
   accepted: boolean | null;
-  reviewed_by: string | null;
-  reviewed_at: string | null;
-  created_at: string;
-}
-
-interface CompanyOption {
-  id: string;
-  company_name: string;
 }
 
 interface HealthData {
@@ -47,29 +39,87 @@ interface HealthData {
   active_companies: { total: number; with_qb_data: number; coverage_pct: number };
 }
 
+// ── Server-side search Select for SB companies ──────────────────────────────
+
+interface CompanyOption { value: string; label: string }
+
+function CompanySearchSelect({
+  clientId,
+  defaultValue,
+  defaultLabel,
+  onChange,
+}: {
+  clientId: string;
+  defaultValue: string;
+  defaultLabel: string;
+  onChange: (id: string, name: string) => void;
+}) {
+  const [options, setOptions] = useState<CompanyOption[]>(
+    defaultValue ? [{ value: defaultValue, label: defaultLabel }] : []
+  );
+  const [searching, setSearching] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleSearch = (query: string) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!query || query.length < 2) {
+      if (defaultValue) setOptions([{ value: defaultValue, label: defaultLabel }]);
+      return;
+    }
+    debounceRef.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const data = await api.get(
+          `/v1/quickbase/companies-lookup?client_id=${clientId}&search=${encodeURIComponent(query)}&limit=30`
+        ) as { companies: { id: string; company_name: string }[] };
+        const results = (data.companies || []).map(c => ({
+          value: c.id,
+          label: c.company_name,
+        }));
+        if (defaultValue && !results.find(r => r.value === defaultValue)) {
+          results.unshift({ value: defaultValue, label: defaultLabel });
+        }
+        setOptions(results);
+      } catch { /* silent */ }
+      setSearching(false);
+    }, 300);
+  };
+
+  return (
+    <Select
+      showSearch
+      size="small"
+      style={{ width: '100%' }}
+      placeholder="Type to search companies..."
+      suffixIcon={<SearchOutlined />}
+      value={defaultValue || undefined}
+      loading={searching}
+      options={options}
+      filterOption={false}
+      onSearch={handleSearch}
+      onChange={(val) => {
+        const opt = options.find(o => o.value === val);
+        onChange(val, opt?.label || '');
+      }}
+      notFoundContent={searching ? <Spin size="small" /> : <Text type="secondary">Type 2+ chars to search</Text>}
+    />
+  );
+}
+
+// ── Main page ───────────────────────────────────────────────────────────────
+
 export default function QuickbaseMatchesPage() {
   const [clientId, setClientId] = useState<string>('');
   const [health, setHealth] = useState<HealthData | null>(null);
   const [healthLoading, setHealthLoading] = useState(false);
 
-  const [pendingCandidates, setPendingCandidates] = useState<MatchCandidate[]>([]);
-  const [pendingTotal, setPendingTotal] = useState(0);
-  const [pendingLoading, setPendingLoading] = useState(false);
-  const [pendingPage, setPendingPage] = useState(1);
-
-  const [reviewedCandidates, setReviewedCandidates] = useState<MatchCandidate[]>([]);
-  const [reviewedTotal, setReviewedTotal] = useState(0);
-  const [reviewedLoading, setReviewedLoading] = useState(false);
-  const [reviewedPage, setReviewedPage] = useState(1);
+  const [candidates, setCandidates] = useState<MatchCandidate[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
 
   const [rematchLoading, setRematchLoading] = useState(false);
-
-  // Company options for the searchable selector (loaded once per client)
-  const [companyOptions, setCompanyOptions] = useState<CompanyOption[]>([]);
-  const companyOptionsLoaded = useRef(false);
-
-  // Per-row selection overrides: candidateId → selected sb_company_id
-  const [rowSelections, setRowSelections] = useState<Record<string, string>>({});
+  const [rowSelections, setRowSelections] = useState<Record<string, { id: string; name: string }>>({});
   const [savingRow, setSavingRow] = useState<string | null>(null);
 
   // ── Data loading ──────────────────────────────────────────────────────────
@@ -84,79 +134,38 @@ export default function QuickbaseMatchesPage() {
     setHealthLoading(false);
   }, [clientId]);
 
-  const loadPending = useCallback(async () => {
+  const loadCandidates = useCallback(async () => {
     if (!clientId) return;
-    setPendingLoading(true);
+    setLoading(true);
     try {
-      const offset = (pendingPage - 1) * PAGE_SIZE;
+      const offset = (page - 1) * PAGE_SIZE;
       const data = await api.get(
         `/v1/quickbase/match-candidates?client_id=${clientId}&reviewed=false&limit=${PAGE_SIZE}&offset=${offset}`
       ) as { candidates: MatchCandidate[]; total: number };
-      setPendingCandidates(data.candidates || []);
-      setPendingTotal(data.total || 0);
+      setCandidates(data.candidates || []);
+      setTotal(data.total || 0);
     } catch { /* silent */ }
-    setPendingLoading(false);
-  }, [clientId, pendingPage]);
-
-  const loadReviewed = useCallback(async () => {
-    if (!clientId) return;
-    setReviewedLoading(true);
-    try {
-      const offset = (reviewedPage - 1) * PAGE_SIZE;
-      const data = await api.get(
-        `/v1/quickbase/match-candidates?client_id=${clientId}&reviewed=true&limit=${PAGE_SIZE}&offset=${offset}`
-      ) as { candidates: MatchCandidate[]; total: number };
-      setReviewedCandidates(data.candidates || []);
-      setReviewedTotal(data.total || 0);
-    } catch { /* silent */ }
-    setReviewedLoading(false);
-  }, [clientId, reviewedPage]);
-
-  const loadCompanies = useCallback(async () => {
-    if (!clientId || companyOptionsLoaded.current) return;
-    try {
-      const data = await api.get(
-        `/v1/quickbase/companies-lookup?client_id=${clientId}&limit=500`
-      ) as { companies: CompanyOption[] };
-      setCompanyOptions(data.companies || []);
-      companyOptionsLoaded.current = true;
-    } catch { /* silent */ }
-  }, [clientId]);
+    setLoading(false);
+  }, [clientId, page]);
 
   useEffect(() => { loadHealth(); }, [loadHealth]);
-  useEffect(() => { loadPending(); }, [loadPending]);
-  useEffect(() => { loadReviewed(); }, [loadReviewed]);
-  useEffect(() => {
-    companyOptionsLoaded.current = false;
-    setCompanyOptions([]);
-    loadCompanies();
-  }, [clientId, loadCompanies]);
-
-  // Build Select options once (memoized)
-  const selectOptions = useMemo(() =>
-    companyOptions.map(c => ({ value: c.id, label: c.company_name })),
-    [companyOptions]
-  );
+  useEffect(() => { loadCandidates(); }, [loadCandidates]);
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
   const handleConfirm = async (candidate: MatchCandidate) => {
-    const overrideId = rowSelections[candidate.id];
-    const targetId = overrideId || candidate.sb_company_id;
+    const override = rowSelections[candidate.id];
+    const targetName = override?.name || candidate.sb_company_name;
     setSavingRow(candidate.id);
     try {
       const params = new URLSearchParams({ accepted: 'true' });
-      if (overrideId && overrideId !== candidate.sb_company_id) {
-        params.set('sb_company_id', overrideId);
+      if (override && override.id !== candidate.sb_company_id) {
+        params.set('sb_company_id', override.id);
       }
       await api.post(`/v1/quickbase/match-candidates/${candidate.id}/review?${params}`);
-      const targetName = overrideId
-        ? companyOptions.find(c => c.id === overrideId)?.company_name || 'selected company'
-        : candidate.sb_company_name;
       message.success(`Linked "${candidate.qb_name}" → "${targetName}"`);
-      // Remove from local state immediately for snappy UX
-      setPendingCandidates(prev => prev.filter(c => c.id !== candidate.id));
-      setPendingTotal(prev => prev - 1);
+      setCandidates(prev => prev.filter(c => c.id !== candidate.id));
+      setTotal(prev => prev - 1);
       setRowSelections(prev => { const n = { ...prev }; delete n[candidate.id]; return n; });
       loadHealth();
     } catch {
@@ -169,8 +178,8 @@ export default function QuickbaseMatchesPage() {
     setSavingRow(candidateId);
     try {
       await api.post(`/v1/quickbase/match-candidates/${candidateId}/review?accepted=false`);
-      setPendingCandidates(prev => prev.filter(c => c.id !== candidateId));
-      setPendingTotal(prev => prev - 1);
+      setCandidates(prev => prev.filter(c => c.id !== candidateId));
+      setTotal(prev => prev - 1);
     } catch {
       message.error('Failed to skip');
     }
@@ -185,7 +194,7 @@ export default function QuickbaseMatchesPage() {
       message.success('Re-matching started in background');
       setTimeout(() => {
         loadHealth();
-        loadPending();
+        loadCandidates();
         setRematchLoading(false);
       }, 5000);
     } catch {
@@ -203,7 +212,7 @@ export default function QuickbaseMatchesPage() {
 
   // ── Table columns ─────────────────────────────────────────────────────────
 
-  const pendingColumns = [
+  const columns = [
     {
       title: 'QB Customer',
       dataIndex: 'qb_name',
@@ -227,19 +236,11 @@ export default function QuickbaseMatchesPage() {
       key: 'sb_select',
       width: 320,
       render: (_: any, record: MatchCandidate) => (
-        <Select
-          showSearch
-          size="small"
-          style={{ width: '100%' }}
-          placeholder="Search company..."
-          value={rowSelections[record.id] || record.sb_company_id}
-          onChange={(val) => setRowSelections(prev => ({ ...prev, [record.id]: val }))}
-          options={selectOptions}
-          filterOption={(input, option) =>
-            (option?.label as string || '').toLowerCase().includes(input.toLowerCase())
-          }
-          optionFilterProp="label"
-          virtual
+        <CompanySearchSelect
+          clientId={clientId}
+          defaultValue={rowSelections[record.id]?.id || record.sb_company_id}
+          defaultLabel={rowSelections[record.id]?.name || record.sb_company_name}
+          onChange={(id, name) => setRowSelections(prev => ({ ...prev, [record.id]: { id, name } }))}
         />
       ),
     },
@@ -271,46 +272,6 @@ export default function QuickbaseMatchesPage() {
     },
   ];
 
-  const reviewedColumns = [
-    {
-      title: 'QB Customer',
-      dataIndex: 'qb_name',
-      key: 'qb_name',
-      width: 200,
-      ellipsis: true,
-    },
-    {
-      title: 'SB Company',
-      dataIndex: 'sb_company_name',
-      key: 'sb_company_name',
-      width: 220,
-      ellipsis: true,
-    },
-    {
-      title: 'Score',
-      dataIndex: 'match_score',
-      key: 'match_score',
-      width: 80,
-      align: 'center' as const,
-      render: (v: number) => <Tag color={scoreColor(v)}>{v?.toFixed(0)}%</Tag>,
-    },
-    {
-      title: 'Decision',
-      dataIndex: 'accepted',
-      key: 'accepted',
-      width: 100,
-      render: (v: boolean) =>
-        v ? <Tag color="success">Linked</Tag> : <Tag color="default">Skipped</Tag>,
-    },
-    {
-      title: 'Reviewed',
-      dataIndex: 'reviewed_at',
-      key: 'reviewed_at',
-      width: 140,
-      render: (v: string) => v ? new Date(v).toLocaleDateString() : '-',
-    },
-  ];
-
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -330,7 +291,7 @@ export default function QuickbaseMatchesPage() {
           <Button
             icon={<ReloadOutlined />}
             disabled={!clientId}
-            onClick={() => { loadHealth(); loadPending(); loadReviewed(); }}
+            onClick={() => { loadHealth(); loadCandidates(); }}
           >
             Refresh
           </Button>
@@ -400,70 +361,29 @@ export default function QuickbaseMatchesPage() {
         </Row>
       </Spin>
 
-      {/* Tabs: Pending / Reviewed */}
-      <Tabs
-        defaultActiveKey="pending"
-        items={[
-          {
-            key: 'pending',
-            label: (
-              <span>
-                <QuestionCircleOutlined /> Pending Review{' '}
-                <Badge count={pendingTotal} size="small" style={{ marginLeft: 4 }} />
-              </span>
-            ),
-            children: (
-              <Card size="small">
-                <Table
-                  dataSource={pendingCandidates}
-                  columns={pendingColumns}
-                  rowKey="id"
-                  loading={pendingLoading}
-                  size="small"
-                  scroll={{ x: 'max-content' }}
-                  pagination={{
-                    current: pendingPage,
-                    pageSize: PAGE_SIZE,
-                    total: pendingTotal,
-                    onChange: setPendingPage,
-                    showTotal: (t) => `${t} candidates`,
-                    size: 'small',
-                  }}
-                />
-              </Card>
-            ),
-          },
-          {
-            key: 'reviewed',
-            label: (
-              <span>
-                <CheckCircleOutlined /> Reviewed{' '}
-                <Badge count={reviewedTotal} size="small" style={{ marginLeft: 4 }} />
-              </span>
-            ),
-            children: (
-              <Card size="small">
-                <Table
-                  dataSource={reviewedCandidates}
-                  columns={reviewedColumns}
-                  rowKey="id"
-                  loading={reviewedLoading}
-                  size="small"
-                  scroll={{ x: 'max-content' }}
-                  pagination={{
-                    current: reviewedPage,
-                    pageSize: PAGE_SIZE,
-                    total: reviewedTotal,
-                    onChange: setReviewedPage,
-                    showTotal: (t) => `${t} reviewed`,
-                    size: 'small',
-                  }}
-                />
-              </Card>
-            ),
-          },
-        ]}
-      />
+      {/* Candidates table */}
+      <Card
+        size="small"
+        title={<span>Fuzzy Match Candidates <Badge count={total} size="small" style={{ marginLeft: 8 }} /></span>}
+      >
+        <Table
+          dataSource={candidates}
+          columns={columns}
+          rowKey="id"
+          loading={loading}
+          size="small"
+          scroll={{ x: 'max-content' }}
+          pagination={{
+            current: page,
+            pageSize: PAGE_SIZE,
+            total,
+            onChange: setPage,
+            showTotal: (t) => `${t} candidates`,
+            size: 'small',
+          }}
+          locale={{ emptyText: total === 0 && !loading ? 'No fuzzy candidates — run Re-Match to generate' : undefined }}
+        />
+      </Card>
       </>}
     </div>
   );
