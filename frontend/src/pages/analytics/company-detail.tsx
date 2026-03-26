@@ -76,7 +76,7 @@ export const CompanyDetail: React.FC = () => {
         if (isMountedRef.current) { setOrderHistory(d?.items || []); setOrderHistoryLoading(false); }
       }).catch(() => { if (isMountedRef.current) setOrderHistoryLoading(false); });
       companiesApi.getProductProfile(companyId).then(d => {
-        if (isMountedRef.current) { setProductProfile(d); setProductProfileLoading(false); }
+        if (isMountedRef.current) { setProductProfile(d || { categories: [], operations: [] }); setProductProfileLoading(false); }
       }).catch(() => { if (isMountedRef.current) setProductProfileLoading(false); });
     };
     load();
@@ -261,8 +261,8 @@ export const CompanyDetail: React.FC = () => {
           <div className="glass-card" style={{ padding: 20 }}>
             <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 12 }}>Product Profile</Text>
             <ProductProfileCard
-              categories={productProfile.categories}
-              operations={productProfile.operations}
+              categories={productProfile?.categories || []}
+              operations={productProfile?.operations || []}
               loading={productProfileLoading}
             />
           </div>
@@ -270,13 +270,13 @@ export const CompanyDetail: React.FC = () => {
         <Col xs={24} lg={12}>
           <div className="glass-card" style={{ padding: 20 }}>
             <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 12 }}>Sales Opportunities</Text>
-            {companyId && <RecommendationsPanel companyId={companyId} />}
+            {companyId && !loading && company && <RecommendationsPanel companyId={companyId} />}
           </div>
         </Col>
       </Row>
 
-      {/* Customer Intelligence Analytics */}
-      {companyId && (
+      {/* Customer Intelligence Analytics — deferred until main data loads */}
+      {companyId && !loading && company && (
         <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
           <Col xs={24} lg={12}>
             <StrikeRateCard companyId={companyId} />
@@ -309,7 +309,7 @@ export const CompanyDetail: React.FC = () => {
         />
       </div>
 
-      {companyId && <AIInsightsCard entityType="company" entityId={companyId} />}
+      {companyId && !loading && company && <AIInsightsCard entityType="company" entityId={companyId} />}
     </div>
   );
 };

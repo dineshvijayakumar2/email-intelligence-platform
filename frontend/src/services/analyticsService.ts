@@ -300,7 +300,7 @@ export const companiesApi = {
   /** GET /companies/{companyId} — Single company with full analytics */
   async getDetail(companyId: string): Promise<CompanyAnalytics | null> {
     try {
-      return await api.get<CompanyAnalytics>(`${API_PREFIX}/companies/${companyId}`, { timeout: 10000 });
+      return await api.get<CompanyAnalytics>(`${API_PREFIX}/companies/${companyId}`, { timeout: 30000 });
     } catch {
       return null;
     }
