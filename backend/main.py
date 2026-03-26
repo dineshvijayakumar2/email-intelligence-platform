@@ -62,6 +62,24 @@ class SafeFormatter(logging.Formatter):
         return msg
 
 
+import re
+
+# Redact JWT tokens from log messages (WebSocket URLs, auth headers, error messages)
+_JWT_PATTERN = re.compile(r'(eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+)')
+
+class TokenRedactFilter(logging.Filter):
+    """Redact JWT tokens in log messages to prevent credential leakage."""
+    def filter(self, record):
+        if isinstance(record.msg, str) and 'eyJ' in record.msg:
+            record.msg = _JWT_PATTERN.sub(r'eyJ***REDACTED***', record.msg)
+        if record.args:
+            args = list(record.args) if isinstance(record.args, tuple) else [record.args]
+            for i, arg in enumerate(args):
+                if isinstance(arg, str) and 'eyJ' in arg:
+                    args[i] = _JWT_PATTERN.sub(r'eyJ***REDACTED***', arg)
+            record.args = tuple(args)
+        return True
+
 log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 file_handler = logging.handlers.RotatingFileHandler(
     os.path.join(log_dir, 'backend.log'), maxBytes=10*1024*1024, backupCount=5, encoding='utf-8'
@@ -69,8 +87,31 @@ file_handler = logging.handlers.RotatingFileHandler(
 file_handler.setFormatter(logging.Formatter(log_format))
 console_handler = logging.StreamHandler()
 console_handler.setFormatter(SafeFormatter(log_format))
+
+# Apply token redaction to all handlers
+token_filter = TokenRedactFilter()
+file_handler.addFilter(token_filter)
+console_handler.addFilter(token_filter)
+
 logging.basicConfig(level=logging.INFO, handlers=[file_handler, console_handler])
 logger = logging.getLogger(__name__)
+
+# Also apply to uvicorn access logger (logs WebSocket URLs with tokens)
+for uvi_logger_name in ["uvicorn.access", "uvicorn.error"]:
+    logging.getLogger(uvi_logger_name).addFilter(token_filter)
+
+# Reduce noisy log traffic — suppress repetitive auth/WebSocket/polling lines
+class QuietRoutesFilter(logging.Filter):
+    """Suppress noisy access log lines for high-frequency polling endpoints."""
+    QUIET_PATTERNS = ['/auth/me', '/ws?token=', '/reembed/status', '/reclassify/status', '/health']
+    def filter(self, record):
+        msg = record.getMessage()
+        return not any(p in msg for p in self.QUIET_PATTERNS)
+
+logging.getLogger("uvicorn.access").addFilter(QuietRoutesFilter())
+
+# Reduce WebSocket auth chatter to DEBUG
+logging.getLogger("src.websocket").setLevel(logging.WARNING)
 
 # Reduce noisy libraries
 for lib in ["httpx", "httpcore", "urllib3", "googleapiclient.discovery"]:
