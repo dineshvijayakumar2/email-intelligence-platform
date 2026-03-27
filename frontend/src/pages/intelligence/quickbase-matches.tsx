@@ -261,6 +261,7 @@ export default function QuickbaseMatchesPage() {
       key: 'sb_total_emails',
       width: 70,
       align: 'center' as const,
+      sorter: (a: MatchCandidate, b: MatchCandidate) => (a.sb_total_emails || 0) - (b.sb_total_emails || 0),
       render: (v: number, record: MatchCandidate) => v ? (
         <a href={`/emails/all?company_id=${record.sb_company_id}`} target="_blank" rel="noreferrer">
           {v}
@@ -337,7 +338,7 @@ export default function QuickbaseMatchesPage() {
       {/* Match Health Stats */}
       <Spin spinning={healthLoading}>
         <Row gutter={16} style={{ marginBottom: 20 }}>
-          <Col xs={12} sm={6}>
+          <Col xs={24} sm={8}>
             <Card size="small">
               <Statistic
                 title="QB Customers Matched"
@@ -348,7 +349,7 @@ export default function QuickbaseMatchesPage() {
               <Text type="secondary">{health?.qb_customers.match_rate_pct || 0}% match rate</Text>
             </Card>
           </Col>
-          <Col xs={12} sm={6}>
+          <Col xs={24} sm={8}>
             <Card size="small">
               <Statistic
                 title="QB Contacts Matched"
@@ -359,26 +360,15 @@ export default function QuickbaseMatchesPage() {
               <Text type="secondary">{health?.qb_contacts.match_rate_pct || 0}% match rate</Text>
             </Card>
           </Col>
-          <Col xs={12} sm={6}>
+          <Col xs={24} sm={8}>
             <Card size="small">
               <Statistic
-                title="QB → SB Enriched"
-                value={health?.company_enrichment.enriched || 0}
-                suffix={<Text type="secondary">/ {health?.company_enrichment.total || 0} QB</Text>}
-                valueStyle={{ color: '#1677ff' }}
-              />
-              <Text type="secondary">{health?.company_enrichment.coverage_pct || 0}% of QB customers linked</Text>
-            </Card>
-          </Col>
-          <Col xs={12} sm={6}>
-            <Card size="small">
-              <Statistic
-                title="Active + QB Data"
-                value={health?.active_companies.with_qb_data || 0}
-                suffix={<Text type="secondary">/ {health?.active_companies.total || 0}</Text>}
+                title="Fuzzy Candidates"
+                value={total}
+                suffix={<Text type="secondary">to review</Text>}
                 valueStyle={{ color: '#722ed1' }}
               />
-              <Text type="secondary">{health?.active_companies.coverage_pct || 0}% of active</Text>
+              <Text type="secondary">{health?.qb_customers.unmatched || 0} still unmatched</Text>
             </Card>
           </Col>
         </Row>
