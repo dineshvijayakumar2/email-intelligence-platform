@@ -191,16 +191,12 @@ export default function QuickbaseMatchesPage() {
     setRematchLoading(true);
     try {
       await api.post(`/v1/quickbase/rematch?client_id=${clientId}`);
-      message.success('Re-matching started in background');
-      setTimeout(() => {
-        loadHealth();
-        loadCandidates();
-        setRematchLoading(false);
-      }, 5000);
+      message.success('Re-matching started in background — refresh in ~10s');
     } catch {
       message.error('Rematch failed');
-      setRematchLoading(false);
     }
+    // Always clear loading after a short delay — the backend runs in background
+    setTimeout(() => setRematchLoading(false), 2000);
   };
 
   const scoreColor = (score: number) => {

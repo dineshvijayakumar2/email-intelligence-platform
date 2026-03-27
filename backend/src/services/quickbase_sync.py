@@ -749,8 +749,8 @@ class QuickbaseSync:
         try:
             from rapidfuzz import fuzz, process as rf_process
 
-            # Build list of normalised SB names for fuzzy matching
             sb_norm_names = list(sb_by_norm.keys())
+            staged_batch: list[dict] = []
 
             for qb_cust in pass3_remaining:
                 qb_norm = _normalise(qb_cust.get('customer_name'))
@@ -768,10 +768,30 @@ class QuickbaseSync:
                 if result:
                     matched_norm, score, _idx = result
                     sb_company = sb_by_norm[matched_norm]
-                    self._stage_fuzzy_candidate(qb_cust, sb_company, score)
+                    staged_batch.append({
+                        'client_id': self._client_id,
+                        'sb_company_id': sb_company['id'],
+                        'sb_company_name': sb_company.get('company_name'),
+                        'qb_record_id': qb_cust.get('qb_record_id'),
+                        'qb_customer_id': qb_cust.get('qb_record_id'),
+                        'qb_name': qb_cust.get('customer_name'),
+                        'match_score': score,
+                        'match_method': 'fuzzy',
+                    })
                     stats['pass3_staged'] += 1
                 else:
                     stats['unmatched'] += 1
+
+            # Batch insert all fuzzy candidates at once (instead of 1-by-1)
+            if staged_batch:
+                for i in range(0, len(staged_batch), UPSERT_BATCH_SIZE):
+                    batch = staged_batch[i:i + UPSERT_BATCH_SIZE]
+                    try:
+                        _execute_with_retry(lambda b=batch: self._supabase.table(
+                            'qb_match_candidates'
+                        ).insert(b).execute())
+                    except Exception as e:
+                        logger.warning(f"Failed to stage fuzzy batch {i // UPSERT_BATCH_SIZE + 1}: {e}")
 
         except ImportError:
             logger.warning("rapidfuzz not installed — skipping Pass 3 fuzzy matching")
@@ -804,22 +824,6 @@ class QuickbaseSync:
                 'qb_matched_at': n,
             }).eq('id', sid).execute()
         ))
-
-    def _stage_fuzzy_candidate(self, qb_cust: dict, sb_company: dict, score: float):
-        """Insert a fuzzy match candidate into the staging table for review."""
-        try:
-            _execute_with_retry(lambda: self._supabase.table('qb_match_candidates').insert({
-                'client_id': self._client_id,
-                'sb_company_id': sb_company['id'],
-                'sb_company_name': sb_company.get('company_name'),
-                'qb_record_id': qb_cust.get('qb_record_id'),
-                'qb_customer_id': qb_cust.get('qb_record_id'),
-                'qb_name': qb_cust.get('customer_name'),
-                'match_score': score,
-                'match_method': 'fuzzy',
-            }).execute())
-        except Exception as e:
-            logger.warning(f"Failed to stage fuzzy candidate {qb_cust.get('customer_name')}: {e}")
 
     def _fetch_all_companies(self) -> list[dict]:
         """Fetch all customer_companies for this client (paginated)."""
