@@ -980,9 +980,10 @@ class ExtractionOrchestrator:
             # Run matching (async methods called via asyncio)
             loop = asyncio.new_event_loop()
             try:
-                c1 = loop.run_until_complete(syncer.match_to_companies())
+                match_stats = loop.run_until_complete(syncer.match_to_companies())
                 c2 = loop.run_until_complete(syncer.match_to_contacts())
                 c3 = loop.run_until_complete(syncer.match_customers_via_contacts())
+                c1 = match_stats.get('total', 0) if isinstance(match_stats, dict) else match_stats
                 total = c1 + c2 + c3
                 if total > 0:
                     logger.info(f"Step 6 QB rematch: {c1} companies, {c2} contacts, {c3} via chain")
