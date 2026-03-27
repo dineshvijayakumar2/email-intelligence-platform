@@ -1255,80 +1255,131 @@ class ExtractionOrchestrator:
         """
         Step 11: Update company statistics (batch mode)
 
+        Computes per-company:
+          - contact_count (from customer_contacts)
+          - total_emails, total_inbound, total_outbound (from emails via contact chain)
+
         Returns:
             Update results
         """
         logger.info("Updating company statistics (batch mode)")
 
         try:
-            # Fetch all companies for this client (1 query)
+            from collections import Counter, defaultdict
+
+            # ── 1. Fetch all companies for this client ────────────────────────
             companies_response = (
                 self.client.table('customer_companies')
                 .select('id')
                 .eq('client_id', self.client_id)
                 .execute()
             )
-
             company_ids = [c['id'] for c in companies_response.data]
             logger.info(f"Found {len(company_ids)} companies to update")
 
             if not company_ids:
                 return {'companies_updated': 0}
 
-            # Fetch all contacts for this client (1 query)
-            contacts_response = (
-                self.client.table('customer_contacts')
-                .select('id, customer_company_id')
-                .eq('client_id', self.client_id)
-                .not_.is_('customer_company_id', 'null')
-                .execute()
-            )
+            # ── 2. Fetch all contacts → build contact_id → company_id map ────
+            all_contacts: list = []
+            offset = 0
+            while True:
+                contacts_page = (
+                    self.client.table('customer_contacts')
+                    .select('id, customer_company_id')
+                    .eq('client_id', self.client_id)
+                    .not_.is_('customer_company_id', 'null')
+                    .range(offset, offset + 999)
+                    .execute()
+                )
+                rows = contacts_page.data or []
+                all_contacts.extend(rows)
+                if len(rows) == 0:
+                    break
+                offset += len(rows)
 
-            # Count contacts per company in memory
-            from collections import Counter
+            contact_to_company: dict = {}
             company_contact_counts = Counter()
-            for contact in contacts_response.data:
-                company_id = contact.get('customer_company_id')
-                if company_id:
-                    company_contact_counts[company_id] += 1
+            for contact in all_contacts:
+                cid = contact.get('customer_company_id')
+                if cid:
+                    contact_to_company[contact['id']] = cid
+                    company_contact_counts[cid] += 1
 
-            logger.info(f"Counted contacts for {len(company_contact_counts)} companies")
+            logger.info(f"Mapped {len(contact_to_company)} contacts to {len(company_contact_counts)} companies")
 
-            # Group companies by their contact count for batch updates
-            # This minimizes HTTP requests
-            count_to_companies: Dict[int, List[str]] = {}
-            for company_id in company_ids:
-                count = company_contact_counts.get(company_id, 0)
-                if count not in count_to_companies:
-                    count_to_companies[count] = []
-                count_to_companies[count].append(company_id)
+            # ── 3. Count emails per company via contact chain ─────────────────
+            # Fetch emails linked to contacts (paginated)
+            company_email_stats: dict = defaultdict(lambda: {'total': 0, 'inbound': 0, 'outbound': 0})
+            offset = 0
+            emails_scanned = 0
+            while True:
+                emails_page = (
+                    self.client.table('emails')
+                    .select('customer_contact_id, is_outbound')
+                    .eq('mailbox_id', self.mailbox_id)
+                    .not_.is_('customer_contact_id', 'null')
+                    .range(offset, offset + 999)
+                    .execute()
+                )
+                rows = emails_page.data or []
+                if not rows:
+                    break
 
-            # Batch update companies with the same count
-            # Skip count=0 — default value, no update needed for unmatched companies
-            # Chunk to ≤200 IDs to avoid PostgREST payload size limit
+                for email in rows:
+                    contact_id = email.get('customer_contact_id')
+                    company_id = contact_to_company.get(contact_id)
+                    if company_id:
+                        company_email_stats[company_id]['total'] += 1
+                        if email.get('is_outbound'):
+                            company_email_stats[company_id]['outbound'] += 1
+                        else:
+                            company_email_stats[company_id]['inbound'] += 1
+
+                emails_scanned += len(rows)
+                offset += len(rows)
+
+            logger.info(f"Scanned {emails_scanned} emails → email stats for {len(company_email_stats)} companies")
+
+            # ── 4. Batch update companies ─────────────────────────────────────
             updated_count = 0
             timestamp = datetime.utcnow().isoformat()
-            CHUNK_SIZE = 200
+            CHUNK_SIZE = 100
 
-            for contact_count, company_ids_list in count_to_companies.items():
-                if contact_count == 0:
-                    continue
-                for chunk_start in range(0, len(company_ids_list), CHUNK_SIZE):
-                    chunk = company_ids_list[chunk_start:chunk_start + CHUNK_SIZE]
-                    try:
-                        self.client.table('customer_companies').update({
-                            'contact_count': contact_count,
-                            'updated_at': timestamp
-                        }).in_('id', chunk).execute()
-                        updated_count += len(chunk)
-                    except Exception as e:
-                        logger.error(f"Failed to update batch with count={contact_count}: {e}")
+            for i in range(0, len(company_ids), CHUNK_SIZE):
+                chunk = company_ids[i:i + CHUNK_SIZE]
+                for cid in chunk:
+                    contact_count = company_contact_counts.get(cid, 0)
+                    stats = company_email_stats.get(cid)
+                    update_data: dict = {'updated_at': timestamp}
 
-            logger.info(f"Updated statistics for {updated_count} companies in {len(count_to_companies)} batch requests")
+                    if contact_count > 0:
+                        update_data['contact_count'] = contact_count
+                    if stats:
+                        update_data['total_emails'] = stats['total']
+                        update_data['total_inbound'] = stats['inbound']
+                        update_data['total_outbound'] = stats['outbound']
+
+                    if len(update_data) > 1:  # more than just updated_at
+                        try:
+                            self.client.table('customer_companies').update(
+                                update_data
+                            ).eq('id', cid).execute()
+                            updated_count += 1
+                        except Exception as e:
+                            logger.error(f"Failed to update company {cid}: {e}")
+
+                # Throttle every chunk
+                if (i + CHUNK_SIZE) < len(company_ids):
+                    import time
+                    time.sleep(0.3)
+
+            logger.info(f"Updated statistics for {updated_count} companies")
 
             return {
                 'companies_updated': updated_count,
-                'batch_requests': len(count_to_companies)
+                'emails_scanned': emails_scanned,
+                'companies_with_emails': len(company_email_stats),
             }
 
         except Exception as e:

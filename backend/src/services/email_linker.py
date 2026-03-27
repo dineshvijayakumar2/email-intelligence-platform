@@ -212,9 +212,11 @@ class EmailLinker:
                 skipped_email_ids.append(email_id)
                 continue
 
-            # Look up company from contact's domain
-            domain = self._extract_domain(link_email)
-            company_id = self._company_cache.get(domain.lower()) if domain else None
+            # Look up company: prefer contact→company FK (reliable), fall back to domain
+            company_id = self._contact_company_cache.get(contact_id)
+            if not company_id:
+                domain = self._extract_domain(link_email)
+                company_id = self._company_cache.get(domain.lower()) if domain else None
 
             # Group by (contact_id, company_id) for batch update
             group_key = (contact_id, company_id)
@@ -390,15 +392,18 @@ class EmailLinker:
         Load customer_contacts into cache for fast lookups.
         Paginates in batches of 500 to handle >1000 contacts.
 
-        Cache structure: email (lowercase) -> contact_id
+        Builds two caches:
+          - email (lowercase) → contact_id
+          - contact_id → customer_company_id (for company linking via FK chain)
         """
         PAGE_SIZE = 500
+        self._contact_company_cache: dict = {}  # contact_id → company_id
         try:
             offset = 0
             while True:
                 response = (
                     self.client.table('customer_contacts')
-                    .select('id, email_address')
+                    .select('id, email_address, customer_company_id')
                     .eq('client_id', self.client_id)
                     .range(offset, offset + PAGE_SIZE - 1)
                     .execute()
@@ -407,12 +412,16 @@ class EmailLinker:
                 for row in batch:
                     email = row['email_address'].lower()
                     self._contact_cache[email] = row['id']
+                    # Also cache contact → company FK for reliable company linking
+                    if row.get('customer_company_id'):
+                        self._contact_company_cache[row['id']] = row['customer_company_id']
 
                 if len(batch) == 0:
                     break
                 offset += len(batch)
 
-            logger.info(f"Loaded {len(self._contact_cache)} contacts into cache")
+            logger.info(f"Loaded {len(self._contact_cache)} contacts into cache "
+                       f"({len(self._contact_company_cache)} with company links)")
 
         except Exception as e:
             logger.error(f"Failed to load contact cache: {e}")
