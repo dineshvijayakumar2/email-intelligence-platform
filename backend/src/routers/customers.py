@@ -11,6 +11,8 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 import logging
 
+IN_FILTER_LIMIT = 500  # Supabase .in_() max
+
 from ..models.customer import (
     CustomerCompanyCreate,
     CustomerCompanyUpdate,
@@ -544,19 +546,39 @@ async def get_order_history(
         if not qb_record_ids:
             return {'items': [], 'company_id': company_id}
 
-        # Fetch quotes
-        quotes_result = _supabase.table('qb_quotes').select(
-            'quote_no, date_created, category, sell_ex_tax, contact_name, contact_email, has_job, job_no'
-        ).in_('qb_customer_id', qb_record_ids).eq('client_id', client_id).execute()
+        # Fetch ALL quotes for this customer (paginated — Supabase default caps at 1000)
+        all_quotes: list[dict] = []
+        for i in range(0, len(qb_record_ids), IN_FILTER_LIMIT):
+            batch_ids = qb_record_ids[i:i + IN_FILTER_LIMIT]
+            offset = 0
+            while True:
+                quotes_page = _supabase.table('qb_quotes').select(
+                    'quote_no, date_created, category, sell_ex_tax, contact_name, contact_email, has_job, job_no'
+                ).in_('qb_customer_id', batch_ids).eq('client_id', client_id).range(offset, offset + 999).execute()
+                rows = quotes_page.data or []
+                all_quotes.extend(rows)
+                if len(rows) == 0:
+                    break
+                offset += len(rows)
 
-        # Fetch jobs
-        jobs_result = _supabase.table('qb_jobs').select(
-            'job_no, accepted_date, due_date, job_status, invoiced_margin, quote_no'
-        ).in_('qb_customer_id', qb_record_ids).eq('client_id', client_id).execute()
+        # Fetch ALL jobs for this customer (paginated)
+        all_jobs: list[dict] = []
+        for i in range(0, len(qb_record_ids), IN_FILTER_LIMIT):
+            batch_ids = qb_record_ids[i:i + IN_FILTER_LIMIT]
+            offset = 0
+            while True:
+                jobs_page = _supabase.table('qb_jobs').select(
+                    'job_no, accepted_date, due_date, job_status, invoiced_margin, quote_no'
+                ).in_('qb_customer_id', batch_ids).eq('client_id', client_id).range(offset, offset + 999).execute()
+                rows = jobs_page.data or []
+                all_jobs.extend(rows)
+                if len(rows) == 0:
+                    break
+                offset += len(rows)
 
         items = []
 
-        for q in (quotes_result.data or []):
+        for q in all_quotes:
             items.append({
                 'type': 'quote',
                 'date': q.get('date_created'),
@@ -569,7 +591,7 @@ async def get_order_history(
                 'job_no': q.get('job_no'),
             })
 
-        for j in (jobs_result.data or []):
+        for j in all_jobs:
             items.append({
                 'type': 'job',
                 'date': j.get('accepted_date'),
