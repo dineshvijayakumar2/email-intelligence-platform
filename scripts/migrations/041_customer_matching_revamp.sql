@@ -33,6 +33,10 @@ CREATE TABLE IF NOT EXISTS qb_match_candidates (
 CREATE INDEX IF NOT EXISTS idx_qmc_client_reviewed
   ON qb_match_candidates(client_id, reviewed);
 
+-- Prevent duplicate unreviewed candidates for the same QB customer
+CREATE UNIQUE INDEX IF NOT EXISTS idx_qmc_unique_unreviewed
+  ON qb_match_candidates(client_id, qb_record_id) WHERE reviewed = FALSE;
+
 -- ── 3. RPC for batch-promoting accepted fuzzy matches ────────────────────────
 CREATE OR REPLACE FUNCTION promote_accepted_matches(p_client_id UUID)
 RETURNS INTEGER

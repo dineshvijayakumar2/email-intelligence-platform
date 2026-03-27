@@ -738,6 +738,14 @@ class QuickbaseSync:
                 pass3_remaining.append(qb_cust)
 
         # ── Pass 3: Fuzzy name match (staging only) ───────────────────────────
+        # Clear stale unreviewed candidates before inserting fresh ones
+        try:
+            _execute_with_retry(lambda: self._supabase.table('qb_match_candidates').delete().eq(
+                'client_id', self._client_id
+            ).eq('reviewed', False).execute())
+        except Exception as e:
+            logger.warning(f"Failed to clear stale candidates: {e}")
+
         try:
             from rapidfuzz import fuzz, process as rf_process
 
