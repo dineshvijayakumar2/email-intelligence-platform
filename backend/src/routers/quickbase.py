@@ -809,19 +809,42 @@ async def review_match_candidate(
                     'qb_matched_at': now,
                 }).eq('id', target_company_id).execute()
 
-                # Trigger propagation in background so QB data flows immediately
-                if background_tasks:
-                    async def _propagate(client_id):
-                        try:
-                            cfg = _supabase.table('qb_sync_config').select('*').eq(
-                                'client_id', client_id
-                            ).limit(1).execute()
-                            if cfg.data:
-                                syncer = QuickbaseSync(_supabase, cfg.data[0])
-                                await syncer.propagate_qb_data_to_companies()
-                        except Exception as e:
-                            logger.error(f"Post-accept propagation failed: {e}")
-                    background_tasks.add_task(_propagate, c['client_id'])
+                # Propagate QB data for THIS one company only (not all matched)
+                try:
+                    qb_data = _supabase.table('qb_customers').select(
+                        'customer_status, customer_tier, account_manager, '
+                        'total_invoiced, invoiced_ty, invoiced_ly, growth_90d, '
+                        'days_since_last_invoice, recency_days, customer_code'
+                    ).eq('client_id', c['client_id']).eq(
+                        'qb_record_id', c['qb_record_id']
+                    ).limit(1).execute()
+
+                    if qb_data.data:
+                        qb = qb_data.data[0]
+                        from ..services.quickbase_sync import _derive_growth, _derive_tier, _parse_recency_html
+                        ty = qb.get('invoiced_ty')
+                        ly = qb.get('invoiced_ly')
+                        total = qb.get('total_invoiced')
+                        enrich = {
+                            'qb_customer_type': qb.get('customer_status'),
+                            'qb_tier': qb.get('customer_tier') or _derive_tier(total),
+                            'qb_total_revenue': total,
+                            'qb_invoiced_ty': ty,
+                            'qb_invoiced_ly': ly,
+                            'qb_growth_90d': qb.get('growth_90d') or _derive_growth(ty, ly),
+                            'qb_days_since_last_invoice': _parse_recency_html(
+                                qb.get('days_since_last_invoice') or qb.get('recency_days')
+                            ),
+                            'qb_account_manager': qb.get('account_manager'),
+                            'qb_customer_code': qb.get('customer_code'),
+                        }
+                        enrich = {k: v for k, v in enrich.items() if v is not None}
+                        if enrich:
+                            _supabase.table('customer_companies').update(enrich).eq(
+                                'id', target_company_id
+                            ).execute()
+                except Exception as e:
+                    logger.warning(f"Single-company propagation failed (non-critical): {e}")
 
                 return {
                     "status": "accepted",

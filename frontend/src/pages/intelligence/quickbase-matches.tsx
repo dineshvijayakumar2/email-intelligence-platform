@@ -167,7 +167,11 @@ export default function QuickbaseMatchesPage() {
       setCandidates(prev => prev.filter(c => c.id !== candidate.id));
       setTotal(prev => prev - 1);
       setRowSelections(prev => { const n = { ...prev }; delete n[candidate.id]; return n; });
-      loadHealth();
+      // Update matched count optimistically instead of re-fetching
+      setHealth(prev => prev ? {
+        ...prev,
+        qb_customers: { ...prev.qb_customers, matched: prev.qb_customers.matched + 1, unmatched: prev.qb_customers.unmatched - 1, match_rate_pct: prev.qb_customers.total ? Math.round((prev.qb_customers.matched + 1) / prev.qb_customers.total * 1000) / 10 : 0 },
+      } : prev);
     } catch {
       message.error('Failed to save mapping');
     }
