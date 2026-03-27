@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS qb_customers (
     invoiced_l12m DECIMAL(12,2),
     recency_days INTEGER,
     cadence_score DECIMAL(5,2),
-    growth_90d DECIMAL(5,2),
+    growth_90d DECIMAL(8,2),
     days_since_last_invoice INTEGER,
     matched_company_id UUID REFERENCES customer_companies(id) ON DELETE SET NULL,
     qb_last_modified TIMESTAMPTZ,

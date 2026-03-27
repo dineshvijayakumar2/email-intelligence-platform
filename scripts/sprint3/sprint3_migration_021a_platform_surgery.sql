@@ -10,7 +10,7 @@ ALTER TABLE customer_companies ADD COLUMN IF NOT EXISTS qb_tier TEXT;
 ALTER TABLE customer_companies ADD COLUMN IF NOT EXISTS qb_total_revenue DECIMAL(12,2);
 ALTER TABLE customer_companies ADD COLUMN IF NOT EXISTS qb_invoiced_ty DECIMAL(12,2);
 ALTER TABLE customer_companies ADD COLUMN IF NOT EXISTS qb_invoiced_ly DECIMAL(12,2);
-ALTER TABLE customer_companies ADD COLUMN IF NOT EXISTS qb_growth_90d DECIMAL(5,2);
+ALTER TABLE customer_companies ADD COLUMN IF NOT EXISTS qb_growth_90d DECIMAL(8,2);
 ALTER TABLE customer_companies ADD COLUMN IF NOT EXISTS qb_days_since_last_invoice INTEGER;
 ALTER TABLE customer_companies ADD COLUMN IF NOT EXISTS qb_account_manager TEXT;
 
