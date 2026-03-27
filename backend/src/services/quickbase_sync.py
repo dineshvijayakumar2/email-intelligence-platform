@@ -836,26 +836,29 @@ class QuickbaseSync:
         import time as _time
         total = len(matches)
         for i, (qb_cust, sb_company, method) in enumerate(matches):
+            # Snapshot values to avoid "dictionary changed size during iteration"
+            sb_id = sb_company.get('id')
+            qb_id = qb_cust.get('id')
+            qb_rec_id = qb_cust.get('qb_record_id')
+            qb_code = qb_cust.get('customer_code')
+            qb_name = qb_cust.get('customer_name')
             try:
-                # Link qb_customers → customer_companies
-                _execute_with_retry(lambda cid=sb_company['id'], qid=qb_cust['id']: (
+                _execute_with_retry(lambda _cid=sb_id, _qid=qb_id: (
                     self._supabase.table('qb_customers').update({
-                        'matched_company_id': cid
-                    }).eq('id', qid).execute()
+                        'matched_company_id': _cid
+                    }).eq('id', _qid).execute()
                 ))
-                # Write match metadata on customer_companies
-                _execute_with_retry(lambda sid=sb_company['id'], m=method, n=now_iso,
-                                    qcid=qb_cust.get('qb_record_id'),
-                                    qcode=qb_cust.get('customer_code'): (
+                _execute_with_retry(lambda _sid=sb_id, _m=method, _n=now_iso,
+                                    _qcid=qb_rec_id, _qcode=qb_code: (
                     self._supabase.table('customer_companies').update({
-                        'qb_customer_id': qcid,
-                        'qb_customer_code': qcode,
-                        'qb_match_method': m,
-                        'qb_matched_at': n,
-                    }).eq('id', sid).execute()
+                        'qb_customer_id': _qcid,
+                        'qb_customer_code': _qcode,
+                        'qb_match_method': _m,
+                        'qb_matched_at': _n,
+                    }).eq('id', _sid).execute()
                 ))
             except Exception as e:
-                logger.warning(f"Match write failed for {qb_cust.get('customer_name')}: {e}")
+                logger.warning(f"Match write failed for {qb_name}: {e}")
 
             # Throttle: pause every 50 matches to avoid connection saturation
             if (i + 1) % 50 == 0:

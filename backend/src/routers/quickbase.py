@@ -714,6 +714,7 @@ async def list_match_candidates(
             q = q.eq('reviewed', reviewed)
 
         result = q.range(offset, offset + limit - 1).execute()
+        candidates = result.data or []
 
         # Also get total counts
         total_q = _supabase.table('qb_match_candidates').select(
@@ -721,10 +722,43 @@ async def list_match_candidates(
         ).eq('client_id', client_id)
         if reviewed is not None:
             total_q = total_q.eq('reviewed', reviewed)
-        total_result = total_q.execute()
+        total_result = total_q.limit(0).execute()
+
+        # Enrich candidates with QB revenue + SB email count
+        if candidates:
+            qb_record_ids = list({c['qb_record_id'] for c in candidates if c.get('qb_record_id')})
+            sb_company_ids = list({c['sb_company_id'] for c in candidates if c.get('sb_company_id')})
+
+            # QB revenue lookup
+            qb_revenue_map: dict = {}
+            if qb_record_ids:
+                for i in range(0, len(qb_record_ids), 500):
+                    batch = qb_record_ids[i:i + 500]
+                    qb_resp = _supabase.table('qb_customers').select(
+                        'qb_record_id, total_invoiced'
+                    ).eq('client_id', client_id).in_('qb_record_id', batch).execute()
+                    for r in (qb_resp.data or []):
+                        if r.get('qb_record_id'):
+                            qb_revenue_map[r['qb_record_id']] = r.get('total_invoiced')
+
+            # SB email count lookup
+            sb_emails_map: dict = {}
+            if sb_company_ids:
+                for i in range(0, len(sb_company_ids), 500):
+                    batch = sb_company_ids[i:i + 500]
+                    sb_resp = _supabase.table('customer_companies').select(
+                        'id, total_emails'
+                    ).in_('id', batch).execute()
+                    for r in (sb_resp.data or []):
+                        if r.get('id'):
+                            sb_emails_map[r['id']] = r.get('total_emails') or 0
+
+            for c in candidates:
+                c['qb_total_revenue'] = qb_revenue_map.get(c.get('qb_record_id'))
+                c['sb_total_emails'] = sb_emails_map.get(c.get('sb_company_id'), 0)
 
         return {
-            "candidates": result.data or [],
+            "candidates": candidates,
             "total": total_result.count or 0,
             "limit": limit,
             "offset": offset,

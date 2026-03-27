@@ -29,6 +29,8 @@ interface MatchCandidate {
   match_method: string;
   reviewed: boolean;
   accepted: boolean | null;
+  qb_total_revenue?: number;
+  sb_total_emails?: number;
 }
 
 interface HealthData {
@@ -217,15 +219,24 @@ export default function QuickbaseMatchesPage() {
       title: 'QB Customer',
       dataIndex: 'qb_name',
       key: 'qb_name',
-      width: 200,
+      width: 180,
       ellipsis: true,
       render: (v: string) => <Text strong>{v}</Text>,
+    },
+    {
+      title: 'QB Revenue',
+      dataIndex: 'qb_total_revenue',
+      key: 'qb_total_revenue',
+      width: 100,
+      align: 'right' as const,
+      sorter: (a: MatchCandidate, b: MatchCandidate) => (a.qb_total_revenue || 0) - (b.qb_total_revenue || 0),
+      render: (v: number) => v != null ? <Text>${Number(v).toLocaleString()}</Text> : <Text type="secondary">-</Text>,
     },
     {
       title: 'Score',
       dataIndex: 'match_score',
       key: 'match_score',
-      width: 80,
+      width: 70,
       align: 'center' as const,
       sorter: (a: MatchCandidate, b: MatchCandidate) => a.match_score - b.match_score,
       defaultSortOrder: 'descend' as const,
@@ -234,7 +245,7 @@ export default function QuickbaseMatchesPage() {
     {
       title: 'Map to SB Company',
       key: 'sb_select',
-      width: 320,
+      width: 280,
       render: (_: any, record: MatchCandidate) => (
         <CompanySearchSelect
           clientId={clientId}
@@ -243,6 +254,18 @@ export default function QuickbaseMatchesPage() {
           onChange={(id, name) => setRowSelections(prev => ({ ...prev, [record.id]: { id, name } }))}
         />
       ),
+    },
+    {
+      title: 'Emails',
+      dataIndex: 'sb_total_emails',
+      key: 'sb_total_emails',
+      width: 70,
+      align: 'center' as const,
+      render: (v: number, record: MatchCandidate) => v ? (
+        <a href={`/emails/all?company_id=${record.sb_company_id}`} target="_blank" rel="noreferrer">
+          {v}
+        </a>
+      ) : <Text type="secondary">0</Text>,
     },
     {
       title: '',
