@@ -6,10 +6,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Card, Tabs, Table, Input, Button, Tag, Space, Typography, Statistic,
-  Row, Col, Spin, Badge, Tooltip, message,
+  Row, Col, Spin, Badge, Tooltip, message, Dropdown,
 } from 'antd';
 import {
-  ReloadOutlined, CheckCircleOutlined, CloseCircleOutlined, SyncOutlined,
+  ReloadOutlined, CheckCircleOutlined, CloseCircleOutlined, SyncOutlined, DownOutlined,
 } from '@ant-design/icons';
 import api from '../../services/apiClient';
 
@@ -231,12 +231,13 @@ const QuickbaseDataPage: React.FC = () => {
       .catch(() => {});
   }, [clientId]);
 
-  const handleQBSync = async () => {
+  const handleQBSync = async (full = false) => {
     if (!clientId) return;
     setQbSyncing(true);
     try {
-      await api.post<any>(`/v1/quickbase/sync?client_id=${clientId}`);
-      message.success('Quickbase sync started — data will update shortly');
+      const params = full ? `client_id=${clientId}&full=true` : `client_id=${clientId}`;
+      await api.post<any>(`/v1/quickbase/sync?${params}`);
+      message.success(full ? 'Full sync started — re-fetching all records' : 'Sync started — fetching recent changes');
       setTimeout(async () => {
         const s = await api.get<any>(`/v1/quickbase/sync-status?client_id=${clientId}`);
         setLastSyncAt(s?.last_sync_at || null);
@@ -411,14 +412,19 @@ const QuickbaseDataPage: React.FC = () => {
               Last sync: {new Date(lastSyncAt).toLocaleString()}
             </Text>
           )}
-          <Button
+          <Dropdown.Button
             type="primary"
-            icon={<SyncOutlined spin={qbSyncing} />}
+            icon={<DownOutlined />}
             loading={qbSyncing}
-            onClick={handleQBSync}
+            onClick={() => handleQBSync(false)}
+            menu={{
+              items: [
+                { key: 'full', label: 'Full Sync (re-fetch all)', onClick: () => handleQBSync(true) },
+              ],
+            }}
           >
-            Sync Now
-          </Button>
+            <SyncOutlined spin={qbSyncing} /> Sync
+          </Dropdown.Button>
         </Space>
       </div>
 
