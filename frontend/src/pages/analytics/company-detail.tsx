@@ -13,6 +13,7 @@ import StrikeRateCard from '../../components/StrikeRateCard';
 import ContactCapabilitiesCard from '../../components/ContactCapabilitiesCard';
 import SeasonalityChart from '../../components/SeasonalityChart';
 import CapabilityRhythmCard from '../../components/CapabilityRhythmCard';
+import QBLinkWidget from '../../components/QBLinkWidget';
 import {
   companiesApi,
   threadsApi,
@@ -185,10 +186,20 @@ export const CompanyDetail: React.FC = () => {
             </Descriptions>
           </div>
         </Col>
-        {company.qb_total_revenue != null && (
-          <Col xs={24} lg={10}>
-            <div className="glass-card" style={{ padding: 20 }}>
-              <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 12 }}>Business Data</Text>
+        <Col xs={24} lg={10}>
+          <div className="glass-card" style={{ padding: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <Text strong style={{ fontSize: 16 }}>Business Data</Text>
+              <QBLinkWidget
+                companyId={companyId!}
+                clientId={company.client_id}
+                qbCustomerId={company.qb_customer_id}
+                qbMatchMethod={company.qb_match_method}
+                qbCustomerName={company.qb_customer_code ? `${company.qb_customer_code}` : undefined}
+                onLinked={() => window.location.reload()}
+              />
+            </div>
+            {company.qb_total_revenue != null && (
               <Descriptions column={1} size="small">
                 {company.qb_customer_type && (
                   <Descriptions.Item label="Customer Type"><Tag color="blue">{company.qb_customer_type}</Tag></Descriptions.Item>
@@ -229,9 +240,12 @@ export const CompanyDetail: React.FC = () => {
                   <Descriptions.Item label="Account Manager">{company.qb_account_manager}</Descriptions.Item>
                 )}
               </Descriptions>
-            </div>
-          </Col>
-        )}
+            )}
+            {!company.qb_total_revenue && !company.qb_customer_id && (
+              <Text type="secondary" style={{ display: 'block', marginTop: 8 }}>No QB data — link a QB customer above to enrich this profile.</Text>
+            )}
+          </div>
+        </Col>
         <Col xs={24} lg={14}>
           <div className="glass-table-container" style={{ padding: 16 }}>
             <a

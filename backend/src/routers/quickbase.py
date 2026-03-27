@@ -358,16 +358,20 @@ async def get_table_fields(
 @router.get("/customers")
 async def list_qb_customers(
     client_id: str = Query(...),
+    search: str = Query('', description="Search QB customer name"),
     matched: Optional[bool] = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ):
-    """List cached QB customers with optional match filter."""
+    """List cached QB customers with optional search and match filter."""
     try:
         query = _supabase.table('qb_customers').select(
             '*, customer_companies(company_name)',
             count='exact'
         ).eq('client_id', client_id)
+
+        if search and len(search) >= 2:
+            query = query.ilike('customer_name', f'%{_sanitize_search(search)}%')
 
         if matched is True:
             query = query.not_.is_('matched_company_id', 'null')
@@ -699,16 +703,21 @@ async def match_preview(client_id: str = Query(...)):
 async def list_match_candidates(
     client_id: str = Query(...),
     reviewed: Optional[bool] = Query(None, description="Filter by review status"),
+    sort_by: str = Query('match_score', description="Column to sort by"),
+    sort_desc: bool = Query(True, description="Sort descending"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ):
     """List fuzzy match candidates for review."""
+    ALLOWED_SORTS = {'match_score', 'qb_name', 'sb_company_name', 'created_at'}
+    sort_col = sort_by if sort_by in ALLOWED_SORTS else 'match_score'
+
     try:
         q = _supabase.table('qb_match_candidates').select(
             'id, sb_company_id, sb_company_name, qb_record_id, qb_customer_id, '
             'qb_name, match_score, match_method, reviewed, accepted, '
             'reviewed_by, reviewed_at, created_at'
-        ).eq('client_id', client_id).order('match_score', desc=True)
+        ).eq('client_id', client_id).order(sort_col, desc=sort_desc)
 
         if reviewed is not None:
             q = q.eq('reviewed', reviewed)
@@ -763,6 +772,68 @@ async def list_match_candidates(
             "limit": limit,
             "offset": offset,
         }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)[:200])
+
+
+@router.post("/link-company")
+async def link_company_to_qb(
+    client_id: str = Query(...),
+    sb_company_id: str = Query(..., description="Supabase customer_companies.id"),
+    qb_record_id: str = Query(..., description="QB customers qb_record_id"),
+):
+    """Manually link an SB company to a QB customer. Sets matched_company_id on
+    qb_customers and writes match metadata + QB enrichment to customer_companies."""
+    try:
+        now = datetime.now(timezone.utc).isoformat()
+
+        # Set matched_company_id on qb_customers
+        _supabase.table('qb_customers').update({
+            'matched_company_id': sb_company_id
+        }).eq('client_id', client_id).eq('qb_record_id', qb_record_id).execute()
+
+        # Write match metadata on customer_companies
+        _supabase.table('customer_companies').update({
+            'qb_customer_id': qb_record_id,
+            'qb_match_method': 'manual',
+            'qb_matched_at': now,
+        }).eq('id', sb_company_id).execute()
+
+        # Propagate QB financial data for this one company
+        try:
+            qb_data = _supabase.table('qb_customers').select(
+                'customer_status, customer_tier, account_manager, total_invoiced, '
+                'invoiced_ty, invoiced_ly, growth_90d, days_since_last_invoice, '
+                'recency_days, customer_code'
+            ).eq('client_id', client_id).eq('qb_record_id', qb_record_id).limit(1).execute()
+
+            if qb_data.data:
+                qb = qb_data.data[0]
+                from ..services.quickbase_sync import _derive_growth, _derive_tier, _parse_recency_html
+                ty = qb.get('invoiced_ty')
+                ly = qb.get('invoiced_ly')
+                total = qb.get('total_invoiced')
+                enrich = {
+                    'qb_customer_type': qb.get('customer_status'),
+                    'qb_tier': qb.get('customer_tier') or _derive_tier(total),
+                    'qb_total_revenue': total,
+                    'qb_invoiced_ty': ty,
+                    'qb_invoiced_ly': ly,
+                    'qb_growth_90d': qb.get('growth_90d') or _derive_growth(ty, ly),
+                    'qb_days_since_last_invoice': _parse_recency_html(
+                        qb.get('days_since_last_invoice') or qb.get('recency_days')
+                    ),
+                    'qb_account_manager': qb.get('account_manager'),
+                    'qb_customer_code': qb.get('customer_code'),
+                }
+                enrich = {k: v for k, v in enrich.items() if v is not None}
+                if enrich:
+                    _supabase.table('customer_companies').update(enrich).eq('id', sb_company_id).execute()
+        except Exception as e:
+            logger.warning(f"link-company propagation failed (non-critical): {e}")
+
+        return {"status": "linked", "sb_company_id": sb_company_id, "qb_record_id": qb_record_id}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)[:200])

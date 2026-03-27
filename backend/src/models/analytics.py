@@ -258,11 +258,16 @@ class CompanyAnalytics(BaseModel):
     active_threads: Optional[int] = None
     overdue_threads: Optional[int] = None
 
-    # QB business context (Sprint 3)
+    # QB business context (Sprint 3) + matching metadata (Sprint 4)
+    qb_customer_id: Optional[str] = None
+    qb_customer_code: Optional[str] = None
+    qb_match_method: Optional[str] = None
+    qb_matched_at: Optional[datetime] = None
     qb_customer_type: Optional[str] = None
     qb_tier: Optional[str] = None
     qb_total_revenue: Optional[float] = None
     qb_invoiced_ty: Optional[float] = None
+    qb_invoiced_ly: Optional[float] = None
     qb_growth_90d: Optional[float] = None
     qb_days_since_last_invoice: Optional[int] = None
     qb_account_manager: Optional[str] = None

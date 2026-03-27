@@ -163,6 +163,11 @@ export interface CompanyAnalytics {
   decision_maker_count?: number | null;
   active_threads?: number | null;
   overdue_threads?: number | null;
+  // QB matching metadata (Sprint 4)
+  qb_customer_id?: string | null;
+  qb_customer_code?: string | null;
+  qb_match_method?: string | null;
+  qb_matched_at?: string | null;
   // QB business context (Sprint 3)
   qb_customer_type?: string | null;
   qb_tier?: string | null;

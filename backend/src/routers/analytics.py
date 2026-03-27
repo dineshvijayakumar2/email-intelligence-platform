@@ -1075,7 +1075,8 @@ async def get_company_analytics(company_id: str):
             first_contact_date, last_contact_date,
             contact_count, decision_maker_count,
             created_at, updated_at,
-            qb_customer_type, qb_tier, qb_total_revenue, qb_invoiced_ty, qb_growth_90d, qb_days_since_last_invoice, qb_account_manager'''
+            qb_customer_id, qb_customer_code, qb_match_method, qb_matched_at,
+            qb_customer_type, qb_tier, qb_total_revenue, qb_invoiced_ty, qb_invoiced_ly, qb_growth_90d, qb_days_since_last_invoice, qb_account_manager'''
         ).eq('id', company_id).limit(1).execute()
 
         if not result.data:

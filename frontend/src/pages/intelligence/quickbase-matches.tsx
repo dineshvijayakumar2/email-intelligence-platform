@@ -119,6 +119,8 @@ export default function QuickbaseMatchesPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
+  const [sortBy, setSortBy] = useState('match_score');
+  const [sortDesc, setSortDesc] = useState(true);
 
   const [rematchLoading, setRematchLoading] = useState(false);
   const [rowSelections, setRowSelections] = useState<Record<string, { id: string; name: string }>>({});
@@ -142,13 +144,13 @@ export default function QuickbaseMatchesPage() {
     try {
       const offset = (page - 1) * PAGE_SIZE;
       const data = await api.get(
-        `/v1/quickbase/match-candidates?client_id=${clientId}&reviewed=false&limit=${PAGE_SIZE}&offset=${offset}`
+        `/v1/quickbase/match-candidates?client_id=${clientId}&reviewed=false&limit=${PAGE_SIZE}&offset=${offset}&sort_by=${sortBy}&sort_desc=${sortDesc}`
       ) as { candidates: MatchCandidate[]; total: number };
       setCandidates(data.candidates || []);
       setTotal(data.total || 0);
     } catch { /* silent */ }
     setLoading(false);
-  }, [clientId, page]);
+  }, [clientId, page, sortBy, sortDesc]);
 
   useEffect(() => { loadHealth(); }, [loadHealth]);
   useEffect(() => { loadCandidates(); }, [loadCandidates]);
@@ -229,7 +231,7 @@ export default function QuickbaseMatchesPage() {
       key: 'qb_total_revenue',
       width: 100,
       align: 'right' as const,
-      sorter: (a: MatchCandidate, b: MatchCandidate) => (a.qb_total_revenue || 0) - (b.qb_total_revenue || 0),
+      sorter: true,
       render: (v: number) => v != null ? <Text>${Number(v).toLocaleString()}</Text> : <Text type="secondary">-</Text>,
     },
     {
@@ -238,7 +240,7 @@ export default function QuickbaseMatchesPage() {
       key: 'match_score',
       width: 70,
       align: 'center' as const,
-      sorter: (a: MatchCandidate, b: MatchCandidate) => a.match_score - b.match_score,
+      sorter: true,
       defaultSortOrder: 'descend' as const,
       render: (v: number) => <Tag color={scoreColor(v)}>{v?.toFixed(0)}%</Tag>,
     },
@@ -261,7 +263,7 @@ export default function QuickbaseMatchesPage() {
       key: 'sb_total_emails',
       width: 70,
       align: 'center' as const,
-      sorter: (a: MatchCandidate, b: MatchCandidate) => (a.sb_total_emails || 0) - (b.sb_total_emails || 0),
+      sorter: true,
       render: (v: number, record: MatchCandidate) => v ? (
         <a href={`/emails/all?company_id=${record.sb_company_id}`} target="_blank" rel="noreferrer">
           {v}
@@ -386,6 +388,22 @@ export default function QuickbaseMatchesPage() {
           loading={loading}
           size="small"
           scroll={{ x: 'max-content' }}
+          onChange={(_pagination, _filters, sorter: any) => {
+            if (sorter?.field) {
+              // Map frontend column keys to backend sort columns
+              const colMap: Record<string, string> = {
+                qb_name: 'qb_name',
+                match_score: 'match_score',
+                sb_company_name: 'sb_company_name',
+              };
+              const backendCol = colMap[sorter.field];
+              if (backendCol) {
+                setSortBy(backendCol);
+                setSortDesc(sorter.order === 'descend');
+                setPage(1);
+              }
+            }
+          }}
           pagination={{
             current: page,
             pageSize: PAGE_SIZE,
