@@ -715,6 +715,9 @@ class QuickbaseSync:
         pass2_remaining = []  # QB customers not matched in pass 1
         pass3_remaining = []  # QB customers not matched in pass 1 or 2
 
+        # Collect matches in memory first, then batch-write at the end
+        confirmed_matches: list[tuple[dict, dict, str]] = []  # (qb_cust, sb_company, method)
+
         # ── Pass 1: Exact normalised name ─────────────────────────────────────
         for qb_cust in unmatched:
             qb_norm = _normalise(qb_cust.get('customer_name'))
@@ -724,7 +727,7 @@ class QuickbaseSync:
 
             sb_match = sb_by_norm.get(qb_norm)
             if sb_match:
-                self._write_match(qb_cust, sb_match, 'exact_name', now_iso)
+                confirmed_matches.append((qb_cust, sb_match, 'exact_name'))
                 stats['pass1'] += 1
             else:
                 pass2_remaining.append(qb_cust)
@@ -739,13 +742,18 @@ class QuickbaseSync:
             matched = False
             for root, sb_company in sb_by_domain_root.items():
                 if root in qb_norm:
-                    self._write_match(qb_cust, sb_company, 'domain_root', now_iso)
+                    confirmed_matches.append((qb_cust, sb_company, 'domain_root'))
                     stats['pass2'] += 1
                     matched = True
                     break
 
             if not matched:
                 pass3_remaining.append(qb_cust)
+
+        # ── Batch-write Pass 1+2 matches ─────────────────────────────────────
+        if confirmed_matches:
+            logger.info(f"Writing {len(confirmed_matches)} confirmed matches (Pass 1+2) in batches")
+            self._batch_write_matches(confirmed_matches, now_iso)
 
         # ── Pass 3: Fuzzy name match (staging only) ───────────────────────────
         # Clear stale unreviewed candidates before inserting fresh ones
@@ -815,25 +823,47 @@ class QuickbaseSync:
         )
         return stats
 
-    def _write_match(self, qb_cust: dict, sb_company: dict, method: str, now_iso: str):
-        """Write a confirmed match: set matched_company_id on qb_customers + metadata on customer_companies."""
-        # Link qb_customers → customer_companies
-        _execute_with_retry(lambda cid=sb_company['id'], qid=qb_cust['id']: (
-            self._supabase.table('qb_customers').update({
-                'matched_company_id': cid
-            }).eq('id', qid).execute()
-        ))
-        # Write match metadata on customer_companies
-        _execute_with_retry(lambda sid=sb_company['id'], m=method, n=now_iso,
-                            qcid=qb_cust.get('qb_record_id'),
-                            qcode=qb_cust.get('customer_code'): (
-            self._supabase.table('customer_companies').update({
-                'qb_customer_id': qcid,
-                'qb_customer_code': qcode,
-                'qb_match_method': m,
-                'qb_matched_at': n,
-            }).eq('id', sid).execute()
-        ))
+    def _batch_write_matches(
+        self,
+        matches: list[tuple[dict, dict, str]],
+        now_iso: str,
+    ):
+        """Batch-write confirmed matches: update qb_customers + customer_companies in chunks.
+
+        Each match is (qb_cust, sb_company, method). We update one row at a time
+        but throttle to avoid connection exhaustion.
+        """
+        import time as _time
+        total = len(matches)
+        for i, (qb_cust, sb_company, method) in enumerate(matches):
+            try:
+                # Link qb_customers → customer_companies
+                _execute_with_retry(lambda cid=sb_company['id'], qid=qb_cust['id']: (
+                    self._supabase.table('qb_customers').update({
+                        'matched_company_id': cid
+                    }).eq('id', qid).execute()
+                ))
+                # Write match metadata on customer_companies
+                _execute_with_retry(lambda sid=sb_company['id'], m=method, n=now_iso,
+                                    qcid=qb_cust.get('qb_record_id'),
+                                    qcode=qb_cust.get('customer_code'): (
+                    self._supabase.table('customer_companies').update({
+                        'qb_customer_id': qcid,
+                        'qb_customer_code': qcode,
+                        'qb_match_method': m,
+                        'qb_matched_at': n,
+                    }).eq('id', sid).execute()
+                ))
+            except Exception as e:
+                logger.warning(f"Match write failed for {qb_cust.get('customer_name')}: {e}")
+
+            # Throttle: pause every 50 matches to avoid connection saturation
+            if (i + 1) % 50 == 0:
+                _time.sleep(0.5)
+                if (i + 1) % 500 == 0:
+                    logger.info(f"Match write progress: {i + 1}/{total}")
+
+        logger.info(f"Match write complete: {total} matches written")
 
     def _fetch_all_companies(self) -> list[dict]:
         """Fetch all customer_companies for this client (paginated)."""
