@@ -665,12 +665,22 @@ class QuickbaseSync:
         """
         stats = {'pass1': 0, 'pass2': 0, 'pass3_staged': 0, 'unmatched': 0, 'total': 0}
 
-        # ── Fetch unmatched QB customers ──────────────────────────────────────
-        qb_result = _execute_with_retry(lambda: self._supabase.table('qb_customers').select(
-            'id, qb_record_id, customer_name, customer_code'
-        ).eq('client_id', self._client_id).is_('matched_company_id', 'null').execute())
+        # ── Fetch ALL unmatched QB customers (paginated) ─────────────────────
+        unmatched: list[dict] = []
+        offset = 0
+        while True:
+            qb_result = _execute_with_retry(lambda o=offset: self._supabase.table('qb_customers').select(
+                'id, qb_record_id, customer_name, customer_code'
+            ).eq('client_id', self._client_id).is_(
+                'matched_company_id', 'null'
+            ).range(o, o + 999).execute())
+            rows = qb_result.data or []
+            unmatched.extend(rows)
+            if len(rows) == 0:
+                break
+            offset += len(rows)
 
-        unmatched = qb_result.data or []
+        logger.info(f"Fetched {len(unmatched)} unmatched QB customers for matching")
         if not unmatched:
             return stats
 
@@ -842,12 +852,23 @@ class QuickbaseSync:
 
     async def match_to_contacts(self) -> int:
         """Match qb_contacts to customer_contacts by email address."""
-        # Get unmatched QB contacts with emails
-        qb_result = _execute_with_retry(lambda: self._supabase.table('qb_contacts').select(
-            'id, email'
-        ).eq('client_id', self._client_id).is_('matched_contact_id', 'null').execute())
+        # Get ALL unmatched QB contacts with emails (paginated)
+        all_unmatched: list[dict] = []
+        offset = 0
+        while True:
+            qb_result = _execute_with_retry(lambda o=offset: self._supabase.table('qb_contacts').select(
+                'id, email'
+            ).eq('client_id', self._client_id).is_(
+                'matched_contact_id', 'null'
+            ).range(o, o + 999).execute())
+            rows = qb_result.data or []
+            all_unmatched.extend(rows)
+            if len(rows) == 0:
+                break
+            offset += len(rows)
 
-        unmatched = [r for r in (qb_result.data or []) if r.get('email')]
+        unmatched = [r for r in all_unmatched if r.get('email')]
+        logger.info(f"Fetched {len(unmatched)} unmatched QB contacts for matching")
         if not unmatched:
             return 0
 
@@ -899,31 +920,47 @@ class QuickbaseSync:
         # Get QB contacts that are matched but whose parent QB customer is NOT matched
         # QB contacts have a customer_id field linking to QB customers
         try:
-            # Get all matched QB contacts with their QB customer link
-            qb_contacts = _execute_with_retry(lambda: self._supabase.table('qb_contacts').select(
-                'id, matched_contact_id, qb_customer_id'
-            ).eq('client_id', self._client_id).not_.is_(
-                'matched_contact_id', 'null'
-            ).execute())
+            # Get all matched QB contacts with their QB customer link (paginated)
+            all_matched_contacts: list[dict] = []
+            offset = 0
+            while True:
+                qb_contacts_page = _execute_with_retry(lambda o=offset: self._supabase.table('qb_contacts').select(
+                    'id, matched_contact_id, qb_customer_id'
+                ).eq('client_id', self._client_id).not_.is_(
+                    'matched_contact_id', 'null'
+                ).range(o, o + 999).execute())
+                rows = qb_contacts_page.data or []
+                all_matched_contacts.extend(rows)
+                if len(rows) == 0:
+                    break
+                offset += len(rows)
 
-            if not qb_contacts.data:
+            if not all_matched_contacts:
                 return 0
 
-            # Get unmatched QB customers
-            unmatched_custs = _execute_with_retry(lambda: self._supabase.table('qb_customers').select(
-                'id, qb_record_id'
-            ).eq('client_id', self._client_id).is_(
-                'matched_company_id', 'null'
-            ).execute())
+            # Get all unmatched QB customers (paginated)
+            all_unmatched_custs: list[dict] = []
+            offset = 0
+            while True:
+                unmatched_page = _execute_with_retry(lambda o=offset: self._supabase.table('qb_customers').select(
+                    'id, qb_record_id'
+                ).eq('client_id', self._client_id).is_(
+                    'matched_company_id', 'null'
+                ).range(o, o + 999).execute())
+                rows = unmatched_page.data or []
+                all_unmatched_custs.extend(rows)
+                if len(rows) == 0:
+                    break
+                offset += len(rows)
 
-            if not unmatched_custs.data:
+            if not all_unmatched_custs:
                 return 0
 
             # Build QB record_id → QB customer id lookup (string keys to match any QB ID type)
-            qb_cust_by_record = {str(c['qb_record_id']): c['id'] for c in unmatched_custs.data if c.get('qb_record_id')}
+            qb_cust_by_record = {str(c['qb_record_id']): c['id'] for c in all_unmatched_custs if c.get('qb_record_id')}
 
             # Build contact_id → company_id lookup from customer_contacts
-            contact_ids = [c['matched_contact_id'] for c in qb_contacts.data if c.get('matched_contact_id')]
+            contact_ids = [c['matched_contact_id'] for c in all_matched_contacts if c.get('matched_contact_id')]
             if not contact_ids:
                 return 0
 
@@ -938,11 +975,11 @@ class QuickbaseSync:
                         contact_company_map[c['id']] = c['customer_company_id']
 
             # Debug: log sample data to diagnose format mismatches
-            sample_contact_ids = [c.get('qb_customer_id') for c in qb_contacts.data[:5] if c.get('qb_customer_id')]
+            sample_contact_ids = [c.get('qb_customer_id') for c in all_matched_contacts[:5] if c.get('qb_customer_id')]
             sample_record_ids = list(qb_cust_by_record.keys())[:5]
             logger.info(
-                f"Chain match debug: {len(qb_contacts.data)} matched contacts, "
-                f"{len(unmatched_custs.data)} unmatched customers, "
+                f"Chain match debug: {len(all_matched_contacts)} matched contacts, "
+                f"{len(all_unmatched_custs)} unmatched customers, "
                 f"{len(contact_company_map)} contacts with companies. "
                 f"Sample qb_customer_id on contacts: {sample_contact_ids}, "
                 f"Sample qb_record_id on customers: {sample_record_ids}"
@@ -952,7 +989,7 @@ class QuickbaseSync:
             matched = 0
             no_company = 0
             no_cust_match = 0
-            for qb_contact in qb_contacts.data:
+            for qb_contact in all_matched_contacts:
                 contact_id = qb_contact.get('matched_contact_id')
                 customer_id = qb_contact.get('qb_customer_id')
                 if not contact_id or not customer_id:
