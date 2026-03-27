@@ -231,7 +231,7 @@ export default function QuickbaseMatchesPage() {
       key: 'qb_total_revenue',
       width: 100,
       align: 'right' as const,
-      sorter: true,
+      sorter: (a: MatchCandidate, b: MatchCandidate) => (a.qb_total_revenue || 0) - (b.qb_total_revenue || 0),
       render: (v: number) => v != null ? <Text>${Number(v).toLocaleString()}</Text> : <Text type="secondary">-</Text>,
     },
     {
@@ -263,7 +263,7 @@ export default function QuickbaseMatchesPage() {
       key: 'sb_total_emails',
       width: 70,
       align: 'center' as const,
-      sorter: true,
+      sorter: (a: MatchCandidate, b: MatchCandidate) => (a.sb_total_emails || 0) - (b.sb_total_emails || 0),
       render: (v: number, record: MatchCandidate) => v ? (
         <a href={`/emails/all?company_id=${record.sb_company_id}`} target="_blank" rel="noreferrer">
           {v}
