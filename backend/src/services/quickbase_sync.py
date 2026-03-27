@@ -106,7 +106,7 @@ def _execute_with_retry(func, max_retries=3):
         except Exception as e:
             err_str = str(e)
             if attempt < max_retries - 1 and any(
-                code in err_str for code in ['525', '502', '503', '504', 'SSL', 'ConnectionError']
+                code in err_str for code in ['525', '502', '503', '504', 'SSL', 'ConnectionError', 'Resource temporarily unavailable', 'ConnectionTerminated', 'Errno 11']
             ):
                 time.sleep(2 ** attempt)
                 continue
