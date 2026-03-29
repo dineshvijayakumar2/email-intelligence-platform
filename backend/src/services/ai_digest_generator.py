@@ -649,7 +649,8 @@ Generate the {scope} digest now. Return ONLY valid JSON."""
             resp = self._execute_with_retry(
                 self.client.table("thread_status")
                 .select("id,thread_id,subject,status,is_overdue,message_count,last_message_at,"
-                        "primary_contact_email,customer_companies!thread_status_primary_company_id_fkey(company_name)")
+                        "customer_contacts!thread_status_customer_contact_id_fkey(email_address),"
+                        "customer_companies!thread_status_primary_company_id_fkey(company_name)")
                 .eq("mailbox_id", mailbox_id)
                 .neq("status", "complete")
                 .neq("status", "dropped")
@@ -696,7 +697,7 @@ Generate the {scope} digest now. Return ONLY valid JSON."""
                 "message_count": t.get("message_count", len(msgs)),
                 "last_activity": (t.get("last_message_at") or "")[:10],
                 "company": company,
-                "primary_contact": t.get("primary_contact_email", ""),
+                "primary_contact": (t.get("customer_contacts") or {}).get("email_address", ""),
                 "recent_messages": [
                     {
                         "from": m.get("sender_email", ""),
