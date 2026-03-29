@@ -983,14 +983,24 @@ class ExtractionOrchestrator:
             from .quickbase_sync import QuickbaseSync
             syncer = QuickbaseSync(self.client, qb_config.data[0])
 
-            loop = asyncio.new_event_loop()
+            # propagate_qb_data_to_companies is async — run it safely
             try:
-                propagated = loop.run_until_complete(syncer.propagate_qb_data_to_companies())
-                if propagated > 0:
-                    logger.info(f"Step 6 QB propagation: refreshed {propagated} companies")
-                return propagated
-            finally:
-                loop.close()
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # Already in an async context — create a new thread with its own loop
+                    import concurrent.futures
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                        future = pool.submit(lambda: asyncio.run(syncer.propagate_qb_data_to_companies()))
+                        propagated = future.result(timeout=120)
+                else:
+                    propagated = loop.run_until_complete(syncer.propagate_qb_data_to_companies())
+            except RuntimeError:
+                # No event loop exists
+                propagated = asyncio.run(syncer.propagate_qb_data_to_companies())
+
+            if propagated > 0:
+                logger.info(f"Step 6 QB propagation: refreshed {propagated} companies")
+            return propagated
         except Exception as e:
             logger.warning(f"Step 6 QB propagation failed (non-critical): {e}")
             return 0
