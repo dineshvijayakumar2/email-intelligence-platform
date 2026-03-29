@@ -1,6 +1,6 @@
 /**
- * QBLinkWidget — Inline widget to view/update the QB customer link on company or contact detail pages.
- * Shows current link status with a searchable QB customer selector to change/set the mapping.
+ * QBLinkWidget — Inline widget to view/update QB links on company or contact detail pages.
+ * Supports two modes: 'company' (search QB customers) and 'contact' (search QB contacts).
  */
 
 import React, { useState, useRef } from 'react';
@@ -11,25 +11,27 @@ import api from '../services/apiClient';
 const { Text } = Typography;
 
 interface Props {
-  companyId: string;           // SB customer_companies.id
+  mode: 'company' | 'contact';
+  entityId: string;              // SB customer_companies.id or customer_contacts.id
   clientId: string;
-  qbCustomerId?: string;       // Current qb_customer_id (if linked)
-  qbMatchMethod?: string;      // 'exact_name' | 'domain_root' | 'fuzzy' | 'manual'
-  qbCustomerName?: string;     // Display name of linked QB customer
-  onLinked?: () => void;       // Callback after successful link/unlink
+  qbLinkedId?: string;           // Current qb_customer_id or qb_contact matched status
+  qbMatchMethod?: string;        // 'exact_name' | 'domain_root' | 'fuzzy' | 'manual' | 'email'
+  qbDisplayName?: string;        // Display name of linked QB record
+  onLinked?: () => void;
 }
 
-interface QBOption { value: string; label: string; revenue?: number }
+interface QBOption { value: string; label: string }
 
 const methodColors: Record<string, string> = {
   exact_name: 'green',
   domain_root: 'blue',
   fuzzy: 'orange',
   manual: 'purple',
+  email: 'cyan',
 };
 
 export default function QBLinkWidget({
-  companyId, clientId, qbCustomerId, qbMatchMethod, qbCustomerName, onLinked,
+  mode, entityId, clientId, qbLinkedId, qbMatchMethod, qbDisplayName, onLinked,
 }: Props) {
   const [editing, setEditing] = useState(false);
   const [options, setOptions] = useState<QBOption[]>([]);
@@ -38,20 +40,32 @@ export default function QBLinkWidget({
   const [saving, setSaving] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const isCompany = mode === 'company';
+  const entityLabel = isCompany ? 'QB Customer' : 'QB Contact';
+
   const handleSearch = (query: string) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!query || query.length < 2) { setOptions([]); return; }
     debounceRef.current = setTimeout(async () => {
       setSearching(true);
       try {
-        const data = await api.get(
-          `/v1/quickbase/customers?client_id=${clientId}&search=${encodeURIComponent(query)}&limit=20`
-        ) as { customers: any[] };
-        setOptions((data.customers || []).map((c: any) => ({
-          value: c.qb_record_id,
-          label: `${c.customer_name}${c.total_invoiced ? ` ($${Number(c.total_invoiced).toLocaleString()})` : ''}`,
-          revenue: c.total_invoiced,
-        })));
+        if (isCompany) {
+          const data = await api.get(
+            `/v1/quickbase/customers?client_id=${clientId}&search=${encodeURIComponent(query)}&limit=20`
+          ) as { customers: any[] };
+          setOptions((data.customers || []).map((c: any) => ({
+            value: c.qb_record_id,
+            label: `${c.customer_name}${c.total_invoiced ? ` ($${Number(c.total_invoiced).toLocaleString()})` : ''}`,
+          })));
+        } else {
+          const data = await api.get(
+            `/v1/quickbase/contacts?client_id=${clientId}&search=${encodeURIComponent(query)}&limit=20`
+          ) as { contacts: any[] };
+          setOptions((data.contacts || []).map((c: any) => ({
+            value: c.qb_record_id,
+            label: `${c.first_name || ''} ${c.surname || ''}`.trim() + (c.email ? ` (${c.email})` : ''),
+          })));
+        }
       } catch { /* silent */ }
       setSearching(false);
     }, 300);
@@ -61,15 +75,18 @@ export default function QBLinkWidget({
     if (!selectedQbId) return;
     setSaving(true);
     try {
-      // Use the match candidate review endpoint pattern — link QB customer to SB company
-      // We need a direct link endpoint. For now, update customer_companies directly.
-      const params = new URLSearchParams({
-        client_id: clientId,
-        sb_company_id: companyId,
-        qb_record_id: selectedQbId,
-      });
-      await api.post(`/v1/quickbase/link-company?${params}`);
-      message.success('QB customer linked');
+      if (isCompany) {
+        const params = new URLSearchParams({
+          client_id: clientId, sb_company_id: entityId, qb_record_id: selectedQbId,
+        });
+        await api.post(`/v1/quickbase/link-company?${params}`);
+      } else {
+        const params = new URLSearchParams({
+          client_id: clientId, sb_contact_id: entityId, qb_record_id: selectedQbId,
+        });
+        await api.post(`/v1/quickbase/link-contact?${params}`);
+      }
+      message.success(`${entityLabel} linked`);
       setEditing(false);
       setSelectedQbId(null);
       onLinked?.();
@@ -82,11 +99,11 @@ export default function QBLinkWidget({
   if (!editing) {
     return (
       <Space size={4} wrap>
-        {qbCustomerId ? (
+        {qbLinkedId ? (
           <>
-            <Tooltip title={`QB ID: ${qbCustomerId} · Matched via ${qbMatchMethod || 'unknown'}`}>
+            <Tooltip title={`Matched via ${qbMatchMethod || 'unknown'}`}>
               <Tag color={methodColors[qbMatchMethod || ''] || 'default'} icon={<LinkOutlined />}>
-                QB: {qbCustomerName || qbCustomerId}
+                {qbDisplayName || qbLinkedId}
               </Tag>
             </Tooltip>
             <Button type="link" size="small" onClick={() => setEditing(true)} style={{ padding: 0, fontSize: 12 }}>
@@ -100,7 +117,7 @@ export default function QBLinkWidget({
             icon={<DisconnectOutlined />}
             onClick={() => setEditing(true)}
           >
-            Link to QB Customer
+            Link to {entityLabel}
           </Button>
         )}
       </Space>
@@ -113,7 +130,7 @@ export default function QBLinkWidget({
         showSearch
         size="small"
         style={{ width: 280 }}
-        placeholder="Search QB customer..."
+        placeholder={`Search ${entityLabel.toLowerCase()}...`}
         suffixIcon={<SearchOutlined />}
         loading={searching}
         options={options}

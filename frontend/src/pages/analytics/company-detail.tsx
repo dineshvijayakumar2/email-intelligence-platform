@@ -191,11 +191,12 @@ export const CompanyDetail: React.FC = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <Text strong style={{ fontSize: 16 }}>Business Data</Text>
               <QBLinkWidget
-                companyId={companyId!}
+                mode="company"
+                entityId={companyId!}
                 clientId={company.client_id}
-                qbCustomerId={company.qb_customer_id}
+                qbLinkedId={company.qb_customer_id}
                 qbMatchMethod={company.qb_match_method}
-                qbCustomerName={company.qb_customer_code ? `${company.qb_customer_code}` : undefined}
+                qbDisplayName={company.qb_customer_code ? `QB: ${company.qb_customer_code}` : undefined}
                 onLinked={() => window.location.reload()}
               />
             </div>

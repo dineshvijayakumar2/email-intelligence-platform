@@ -164,6 +164,7 @@ class ContactAnalytics(BaseModel):
     avg_thread_depth: Optional[float] = None
 
     # QB business context (Sprint 3)
+    qb_contact_id: Optional[str] = None
     qb_customer_type: Optional[str] = None
     qb_tier: Optional[str] = None
     qb_quotes_count: Optional[int] = None

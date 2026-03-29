@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Row, Col, Typography, Button, Tag, Descriptions, Skeleton, Table } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
+import QBLinkWidget from '../../components/QBLinkWidget';
 import { useParams, useNavigate } from 'react-router-dom';
 import { MetricCard } from '../../components/analytics/MetricCard';
 import AIInsightsCard from '../../components/AIInsightsCard';
@@ -122,13 +123,22 @@ export const ContactDetail: React.FC = () => {
             {contact.seniority_level && contact.seniority_level !== 'unknown' && <Tag>{contact.seniority_level}</Tag>}
           </Col>
         </Row>
-        {(contact.qb_customer_type || contact.qb_tier || contact.qb_quotes_count != null) && (
-          <div style={{ marginTop: 12, borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 10 }}>
+        <div style={{ marginTop: 12, borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
             {contact.qb_customer_type && <LifecycleBadge tier={contact.qb_customer_type} />}
             {contact.qb_tier && <Tag color="purple">{contact.qb_tier}</Tag>}
             {contact.qb_quotes_count != null && <Tag>{contact.qb_quotes_count} quote{contact.qb_quotes_count !== 1 ? 's' : ''}</Tag>}
           </div>
-        )}
+          <QBLinkWidget
+            mode="contact"
+            entityId={contactId!}
+            clientId={contact.client_id}
+            qbLinkedId={contact.qb_contact_id}
+            qbMatchMethod={contact.qb_contact_id ? 'email' : undefined}
+            qbDisplayName={contact.qb_contact_id ? 'QB Linked' : undefined}
+            onLinked={() => window.location.reload()}
+          />
+        </div>
       </div>
 
       {/* Stats */}

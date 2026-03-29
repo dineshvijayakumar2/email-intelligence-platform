@@ -98,6 +98,7 @@ export interface ContactAnalytics {
   avg_response_time_seconds?: number | null;
   avg_thread_depth?: number | null;
   // QB business context (Sprint 3)
+  qb_contact_id?: string | null;
   qb_customer_type?: string | null;
   qb_tier?: string | null;
   qb_quotes_count?: number | null;

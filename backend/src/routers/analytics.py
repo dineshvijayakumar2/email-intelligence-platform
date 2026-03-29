@@ -726,7 +726,18 @@ async def get_contact_analytics(contact_identifier: str):
         if c.get('customer_companies'):
             customer_company_name = c['customer_companies'].get('company_name')
 
-        return ContactAnalytics(**c, customer_company_name=customer_company_name)
+        # Check if this contact is linked to a QB contact
+        qb_contact_id = None
+        try:
+            qb_link = _supabase.table('qb_contacts').select('qb_record_id').eq(
+                'matched_contact_id', c['id']
+            ).limit(1).execute()
+            if qb_link.data:
+                qb_contact_id = qb_link.data[0].get('qb_record_id')
+        except Exception:
+            pass
+
+        return ContactAnalytics(**c, customer_company_name=customer_company_name, qb_contact_id=qb_contact_id)
 
     except HTTPException:
         raise

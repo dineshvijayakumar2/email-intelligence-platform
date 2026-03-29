@@ -839,6 +839,24 @@ async def link_company_to_qb(
         raise HTTPException(status_code=500, detail=str(e)[:200])
 
 
+@router.post("/link-contact")
+async def link_contact_to_qb(
+    client_id: str = Query(...),
+    sb_contact_id: str = Query(..., description="Supabase customer_contacts.id"),
+    qb_record_id: str = Query(..., description="QB contacts qb_record_id"),
+):
+    """Manually link an SB contact to a QB contact."""
+    try:
+        _supabase.table('qb_contacts').update({
+            'matched_contact_id': sb_contact_id
+        }).eq('client_id', client_id).eq('qb_record_id', qb_record_id).execute()
+
+        return {"status": "linked", "sb_contact_id": sb_contact_id, "qb_record_id": qb_record_id}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)[:200])
+
+
 @router.get("/companies-lookup")
 async def companies_lookup(
     client_id: str = Query(...),
