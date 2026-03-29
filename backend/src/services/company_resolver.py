@@ -139,28 +139,32 @@ class CompanyResolver:
             # Continue with empty set
 
     def _load_existing_companies(self):
-        """Load existing companies for this client"""
+        """Load ALL existing companies for this client (paginated)."""
         try:
-            response = (
-                self.client.table('customer_companies')
-                .select('id, company_name, email_domains, created_at')
-                .eq('client_id', self.client_id)
-                .execute()
-            )
+            total_rows = 0
+            offset = 0
+            while True:
+                response = (
+                    self.client.table('customer_companies')
+                    .select('id, company_name, email_domains, created_at')
+                    .eq('client_id', self.client_id)
+                    .range(offset, offset + 999)
+                    .execute()
+                )
+                rows = response.data or []
+                for row in rows:
+                    for domain in (row.get('email_domains') or []):
+                        self._existing_companies[domain.lower()] = row
+                total_rows += len(rows)
+                if len(rows) == 0:
+                    break
+                offset += len(rows)
 
-            for row in response.data:
-                # Index by each domain in email_domains JSONB array
-                email_domains = row.get('email_domains', [])
-
-                for domain in email_domains:
-                    self._existing_companies[domain.lower()] = row
-
-            logger.debug(f"Loaded {len(response.data)} existing companies "
-                        f"with {len(self._existing_companies)} domain mappings")
+            logger.info(f"Loaded {total_rows} existing companies "
+                       f"with {len(self._existing_companies)} domain mappings")
 
         except Exception as e:
             logger.error(f"Failed to load existing companies: {e}")
-            # Continue with empty dict
 
     def classify_domain(self, domain: str) -> str:
         """
@@ -441,18 +445,26 @@ class CompanyResolver:
         if len(deduplicated_companies) < len(companies):
             logger.info(f"Deduplicated {len(companies)} companies to {len(deduplicated_companies)} unique companies")
 
-        # Fetch all existing companies for this client (single query)
-        existing_response = (
-            self.client.table('customer_companies')
-            .select('id, company_name, email_domains')
-            .eq('client_id', self.client_id)
-            .execute()
-        )
+        # Fetch ALL existing companies for this client (paginated)
+        all_existing_rows: list = []
+        offset = 0
+        while True:
+            existing_page = (
+                self.client.table('customer_companies')
+                .select('id, company_name, email_domains')
+                .eq('client_id', self.client_id)
+                .range(offset, offset + 999)
+                .execute()
+            )
+            rows = existing_page.data or []
+            all_existing_rows.extend(rows)
+            if len(rows) == 0:
+                break
+            offset += len(rows)
 
-        # Build lookup: company_name → existing record
         existing_companies = {
             row['company_name'].lower(): row
-            for row in existing_response.data
+            for row in all_existing_rows
         }
 
         logger.info(f"Found {len(existing_companies)} existing companies in database")
