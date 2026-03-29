@@ -228,8 +228,10 @@ class RoleClassifier:
             # cancellations (ConnectionTerminated error_code:9) happen with big payloads
             batch_size = 20
             all_signatures = {}
+            total_ids = len(email_ids)
+            logger.info(f"Fetching signatures for {total_ids} emails (~{total_ids // batch_size} batches)")
 
-            for i in range(0, len(email_ids), batch_size):
+            for i in range(0, total_ids, batch_size):
                 batch = email_ids[i:i + batch_size]
 
                 fetched = False
@@ -258,7 +260,10 @@ class RoleClassifier:
                             for email_id in batch:
                                 all_signatures[email_id] = ''
 
-            logger.debug(f"Fetched signatures for {len(all_signatures)} emails")
+                if (i + batch_size) % 500 == 0:
+                    logger.info(f"Signature fetch progress: {i + batch_size}/{total_ids}")
+
+            logger.info(f"Fetched signatures for {len(all_signatures)} emails")
             return all_signatures
 
         except Exception as e:
