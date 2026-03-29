@@ -442,14 +442,21 @@ class QuickbaseSync:
           qb_operations.job_no → qb_quotes.job_no → qb_quotes.contact_email
         Only updates rows where contact_email is NULL.
         """
-        # Fetch ops missing contact_email
-        result = _execute_with_retry(lambda: self._supabase.table('qb_operations').select(
-            'id, job_no'
-        ).eq('client_id', self._client_id).is_('contact_email', 'null').not_.is_(
-            'job_no', 'null'
-        ).execute())
+        # Fetch ALL ops missing contact_email (paginated — can be 100K+)
+        ops: list[dict] = []
+        offset = 0
+        while True:
+            page = _execute_with_retry(lambda o=offset: self._supabase.table('qb_operations').select(
+                'id, job_no'
+            ).eq('client_id', self._client_id).is_('contact_email', 'null').not_.is_(
+                'job_no', 'null'
+            ).range(o, o + 999).execute())
+            rows = page.data or []
+            ops.extend(rows)
+            if len(rows) == 0:
+                break
+            offset += len(rows)
 
-        ops = result.data or []
         if not ops:
             return 0
 
@@ -488,14 +495,22 @@ class QuickbaseSync:
         qb_operations.job_no → qb_jobs.job_no → qb_jobs.factory_rush_level
         Only processes rows where factory_rush is currently FALSE and job_no is set.
         """
-        # Fetch ops with a job_no that haven't been checked yet (factory_rush=FALSE)
-        result = _execute_with_retry(lambda: self._supabase.table('qb_operations').select(
-            'id, job_no'
-        ).eq('client_id', self._client_id).eq('factory_rush', False).not_.is_(
-            'job_no', 'null'
-        ).execute())
+        # Fetch ALL ops needing rush check (paginated)
+        all_ops: list[dict] = []
+        offset = 0
+        while True:
+            page = _execute_with_retry(lambda o=offset: self._supabase.table('qb_operations').select(
+                'id, job_no'
+            ).eq('client_id', self._client_id).eq('factory_rush', False).not_.is_(
+                'job_no', 'null'
+            ).range(o, o + 999).execute())
+            rows = page.data or []
+            all_ops.extend(rows)
+            if len(rows) == 0:
+                break
+            offset += len(rows)
 
-        ops = result.data or []
+        ops = all_ops
         if not ops:
             return 0
 
@@ -532,24 +547,40 @@ class QuickbaseSync:
         Resolve qb_operations.matched_company_id via:
         qb_operations.qb_customer_id → qb_customers.qb_record_id → qb_customers.matched_company_id
         """
-        ops_result = _execute_with_retry(lambda: self._supabase.table('qb_operations').select(
-            'id, qb_customer_id'
-        ).eq('client_id', self._client_id).is_('matched_company_id', 'null').execute())
+        # Fetch ALL unmatched operations (paginated — can be 100K+)
+        unmatched: list[dict] = []
+        offset = 0
+        while True:
+            ops_page = _execute_with_retry(lambda o=offset: self._supabase.table('qb_operations').select(
+                'id, qb_customer_id'
+            ).eq('client_id', self._client_id).is_(
+                'matched_company_id', 'null'
+            ).range(o, o + 999).execute())
+            rows = [r for r in (ops_page.data or []) if r.get('qb_customer_id')]
+            unmatched.extend(rows)
+            if len(ops_page.data or []) == 0:
+                break
+            offset += len(ops_page.data or [])
 
-        unmatched = [r for r in (ops_result.data or []) if r.get('qb_customer_id')]
         if not unmatched:
             return 0
 
-        # Build qb_record_id → matched_company_id from already-matched qb_customers
-        cust_result = _execute_with_retry(lambda: self._supabase.table('qb_customers').select(
-            'qb_record_id, matched_company_id'
-        ).eq('client_id', self._client_id).not_.is_('matched_company_id', 'null').execute())
-
-        customer_map = {
-            r['qb_record_id']: r['matched_company_id']
-            for r in (cust_result.data or [])
-            if r.get('qb_record_id') and r.get('matched_company_id')
-        }
+        # Fetch ALL matched qb_customers (paginated)
+        customer_map: dict = {}
+        offset = 0
+        while True:
+            cust_page = _execute_with_retry(lambda o=offset: self._supabase.table('qb_customers').select(
+                'qb_record_id, matched_company_id'
+            ).eq('client_id', self._client_id).not_.is_(
+                'matched_company_id', 'null'
+            ).range(o, o + 999).execute())
+            rows = cust_page.data or []
+            for r in rows:
+                if r.get('qb_record_id') and r.get('matched_company_id'):
+                    customer_map[r['qb_record_id']] = r['matched_company_id']
+            if len(rows) == 0:
+                break
+            offset += len(rows)
 
         matched = 0
         for op in unmatched:
@@ -1070,14 +1101,25 @@ class QuickbaseSync:
         Derives qb_growth_90d from TY/LY and qb_tier from total_revenue if not
         already set in QB. Handles HTML-wrapped recency values.
         """
-        result = _execute_with_retry(lambda: self._supabase.table('qb_customers').select(
-            'qb_record_id, customer_code, matched_company_id, customer_status, '
-            'customer_tier, account_manager, total_invoiced, invoiced_ty, invoiced_ly, '
-            'growth_90d, days_since_last_invoice, recency_days'
-        ).eq('client_id', self._client_id).not_.is_('matched_company_id', 'null').execute())
+        # Fetch ALL matched QB customers (paginated)
+        all_matched: list[dict] = []
+        offset = 0
+        while True:
+            page = _execute_with_retry(lambda o=offset: self._supabase.table('qb_customers').select(
+                'qb_record_id, customer_code, matched_company_id, customer_status, '
+                'customer_tier, account_manager, total_invoiced, invoiced_ty, invoiced_ly, '
+                'growth_90d, days_since_last_invoice, recency_days'
+            ).eq('client_id', self._client_id).not_.is_(
+                'matched_company_id', 'null'
+            ).range(o, o + 999).execute())
+            rows = page.data or []
+            all_matched.extend(rows)
+            if len(rows) == 0:
+                break
+            offset += len(rows)
 
         updated = 0
-        for qb in (result.data or []):
+        for qb in all_matched:
             company_id = qb['matched_company_id']
 
             ty = qb.get('invoiced_ty')

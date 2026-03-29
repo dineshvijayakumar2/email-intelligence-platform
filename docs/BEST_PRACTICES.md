@@ -6,6 +6,41 @@ Hard-won patterns from 2 months of production operation. Follow these to avoid r
 
 ## 1. Supabase / PostgreSQL
 
+### ALWAYS paginate queries that can return >100 rows
+
+**Problem:** Supabase REST API returns a **maximum of 1000 rows** by default. Without `.range()` or `.limit()`, results are silently truncated. This has caused:
+- 90% of contacts missing company links (company_resolver loaded 1000 of 11K companies)
+- QB matching processing only 1000 of 15K customers
+- Thread status counts underreported
+- Operations enrichment incomplete (650K table, only first 1000 processed)
+
+**Rule:** Any query on a table that can grow beyond 1000 rows MUST use pagination:
+
+```python
+# WRONG — silently truncated at 1000 rows
+result = supabase.table('customer_companies').select('id, name').eq('client_id', cid).execute()
+
+# RIGHT — paginate to fetch all rows
+all_rows = []
+offset = 0
+while True:
+    page = supabase.table('customer_companies').select(
+        'id, name'
+    ).eq('client_id', cid).range(offset, offset + 999).execute()
+    rows = page.data or []
+    all_rows.extend(rows)
+    if len(rows) == 0:
+        break
+    offset += len(rows)
+```
+
+**High-risk tables (always paginate):**
+- `emails` (26K+), `customer_contacts` (20K+), `customer_companies` (11K+)
+- `qb_customers` (15K+), `qb_contacts` (29K+), `qb_operations` (650K+)
+- `qb_quotes`, `qb_jobs`, `qb_sales_line_items`, `thread_status`
+
+**Safe to skip pagination:** Single-row lookups (`.eq('id', uuid)`), count-only queries (`count='exact'` + `.limit(0)`), queries with explicit `.limit(N)` where N < 1000.
+
 ### Never do individual row updates in a loop
 
 **Problem:** Updating 600K rows one at a time = 600K REST API calls → connection pool exhausted → all other queries timeout → frontend hangs.

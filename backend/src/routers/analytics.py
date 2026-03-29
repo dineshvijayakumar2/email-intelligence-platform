@@ -1437,13 +1437,22 @@ async def count_threads_by_status(client_id: Optional[str] = Query(default=None)
         Thread counts grouped by status
     """
     try:
-        result = _supabase.table('thread_status').select('status').execute()
+        # Paginate to handle >1000 threads
+        all_threads: list = []
+        offset = 0
+        while True:
+            page = _supabase.table('thread_status').select('status').range(offset, offset + 999).execute()
+            rows = page.data or []
+            all_threads.extend(rows)
+            if len(rows) == 0:
+                break
+            offset += len(rows)
 
         # Count by status in memory
         from collections import Counter
         status_counts = Counter()
 
-        for t in result.data:
+        for t in all_threads:
             status = t.get('status', 'unknown')
             status_counts[status] += 1
 
@@ -2729,8 +2738,15 @@ async def get_data_health(client_id: Optional[str] = Query(default=None)):
                 thread_batch = _supabase.table('thread_status').select('status').in_('mailbox_id', batch).execute()
                 thread_data.extend(thread_batch.data or [])
         else:
-            thread_result = _supabase.table('thread_status').select('status').execute()
-            thread_data = thread_result.data or []
+            # Paginate fallback — no mailbox filter
+            offset = 0
+            while True:
+                page = _supabase.table('thread_status').select('status').range(offset, offset + 999).execute()
+                rows = page.data or []
+                thread_data.extend(rows)
+                if len(rows) == 0:
+                    break
+                offset += len(rows)
 
         logger.info("data-health: step 3b - counting statuses")
         from collections import Counter
