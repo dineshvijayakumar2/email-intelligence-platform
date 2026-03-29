@@ -965,7 +965,13 @@ class ExtractionOrchestrator:
         return result
 
     def _rematch_quickbase(self) -> int:
-        """Re-run QB matching after new companies/contacts are created by extraction."""
+        """Lightweight QB re-match after extraction — only propagates data for already-matched companies.
+
+        The full 3-pass matching pipeline (13K+ customers, fuzzy staging, batch writes) is too heavy
+        to run inside extraction. Use the "Run Re-Match" button on /manage/quickbase-matches for that.
+        This method only calls propagate_qb_data_to_companies() to refresh QB data on already-matched
+        companies (fast — just reads matched rows and updates enrichment columns).
+        """
         try:
             import asyncio
             qb_config = self.client.table('qb_sync_config').select('*').eq(
@@ -977,21 +983,16 @@ class ExtractionOrchestrator:
             from .quickbase_sync import QuickbaseSync
             syncer = QuickbaseSync(self.client, qb_config.data[0])
 
-            # Run matching (async methods called via asyncio)
             loop = asyncio.new_event_loop()
             try:
-                match_stats = loop.run_until_complete(syncer.match_to_companies())
-                c2 = loop.run_until_complete(syncer.match_to_contacts())
-                c3 = loop.run_until_complete(syncer.match_customers_via_contacts())
-                c1 = match_stats.get('total', 0) if isinstance(match_stats, dict) else match_stats
-                total = c1 + c2 + c3
-                if total > 0:
-                    logger.info(f"Step 6 QB rematch: {c1} companies, {c2} contacts, {c3} via chain")
-                return total
+                propagated = loop.run_until_complete(syncer.propagate_qb_data_to_companies())
+                if propagated > 0:
+                    logger.info(f"Step 6 QB propagation: refreshed {propagated} companies")
+                return propagated
             finally:
                 loop.close()
         except Exception as e:
-            logger.warning(f"Step 6 QB rematch failed (non-critical): {e}")
+            logger.warning(f"Step 6 QB propagation failed (non-critical): {e}")
             return 0
 
     def _enrich_from_quickbase(self) -> Dict:
