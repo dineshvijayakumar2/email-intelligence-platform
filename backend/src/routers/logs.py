@@ -59,9 +59,19 @@ async def get_context_names():
 
     try:
         mailboxes = {}
-        mb_result = _supabase.table('mailboxes').select('id, email_address, mailbox_type').execute()
+        mb_result = _supabase.table('mailboxes').select('id, email_address, mailbox_type, name').execute()
         for m in (mb_result.data or []):
-            label = m.get('email_address') or m.get('mailbox_type') or m['id'][:8]
+            # Prefer: custom name > email local part > mailbox_type > truncated ID
+            email = m.get('email_address') or ''
+            local_part = email.split('@')[0] if '@' in email else ''
+            domain_short = email.split('@')[1].split('.')[0] if '@' in email else ''
+            name = m.get('name') or ''
+            if name:
+                label = name
+            elif local_part:
+                label = f"{local_part}@{domain_short}" if domain_short else local_part
+            else:
+                label = m.get('mailbox_type') or m['id'][:8]
             mailboxes[m['id']] = label
 
         clients = {}
