@@ -1325,14 +1325,18 @@ class ExtractionOrchestrator:
         try:
             from collections import Counter, defaultdict
 
-            # ── 1. Fetch all companies for this client ────────────────────────
-            companies_response = (
-                self.client.table('customer_companies')
-                .select('id')
-                .eq('client_id', self.client_id)
-                .execute()
-            )
-            company_ids = [c['id'] for c in companies_response.data]
+            # ── 1. Fetch ALL companies for this client (paginated) ──────────
+            company_ids: list = []
+            offset = 0
+            while True:
+                co_page = self.client.table('customer_companies').select(
+                    'id'
+                ).eq('client_id', self.client_id).range(offset, offset + 999).execute()
+                rows = co_page.data or []
+                company_ids.extend(c['id'] for c in rows)
+                if len(rows) == 0:
+                    break
+                offset += len(rows)
             logger.info(f"Found {len(company_ids)} companies to update")
 
             if not company_ids:
@@ -1396,6 +1400,8 @@ class ExtractionOrchestrator:
 
                 emails_scanned += len(rows)
                 offset += len(rows)
+                if emails_scanned % 5000 == 0:
+                    logger.info(f"Email scan progress: {emails_scanned} scanned, {len(company_email_stats)} companies with emails")
 
             logger.info(f"Scanned {emails_scanned} emails → email stats for {len(company_email_stats)} companies")
 
@@ -1427,10 +1433,12 @@ class ExtractionOrchestrator:
                         except Exception as e:
                             logger.error(f"Failed to update company {cid}: {e}")
 
-                # Throttle every chunk
+                # Throttle + progress
                 if (i + CHUNK_SIZE) < len(company_ids):
                     import time
                     time.sleep(0.3)
+                if (i + CHUNK_SIZE) % 500 == 0 or (i + CHUNK_SIZE) >= len(company_ids):
+                    logger.info(f"Company stats update progress: {updated_count}/{len(company_ids)}")
 
             logger.info(f"Updated statistics for {updated_count} companies")
 
