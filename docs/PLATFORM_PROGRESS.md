@@ -410,6 +410,8 @@ Every company is auto-classified: `prospect` · `new_customer` · `active_custom
 | 038 | `038_optimize_response_time_query.sql` | Response time query performance |
 | 039 | `039_batch_embedding_update.sql` | Batch RPC for embeddings |
 | 040 | `040_batch_classify_update.sql` | Batch RPC for classifications |
+| 041 | `041_customer_matching_revamp.sql` | Matching revamp: `qb_customer_id`, `qb_match_method`, `qb_matched_at` on `customer_companies` + `qb_match_candidates` staging table |
+| 042 | `042_fix_growth_precision.sql` | Widen `growth_90d` DECIMAL(5,2) → DECIMAL(8,2) |
 
 ---
 
@@ -689,6 +691,8 @@ VITE_MICROSOFT_CLIENT_ID=...
 | 038 | `038_optimize_response_time_query.sql` | Response time query performance |
 | 039 | `039_batch_embedding_update.sql` | Batch RPC for embeddings |
 | 040 | `040_batch_classify_update.sql` | Batch RPC for classifications |
+| 041 | `041_customer_matching_revamp.sql` | `qb_customer_id`, `qb_customer_code`, `qb_match_method`, `qb_matched_at` on `customer_companies` + `qb_match_candidates` staging table + `promote_accepted_matches` RPC |
+| 042 | `042_fix_growth_precision.sql` | Widen `growth_90d` DECIMAL(5,2) → DECIMAL(8,2) on `qb_customers` + `customer_companies` |
 
 ---
 
