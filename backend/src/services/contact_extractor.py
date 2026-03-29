@@ -296,7 +296,7 @@ class ContactExtractor:
                 raw_batch = response.data or []
                 filtered = [e for e in raw_batch if e.get('processing_status') != 'failed']
                 all_emails.extend(filtered)
-                logger.info(f"Contact extraction page {page}/{estimated_pages}: raw={len(raw_batch)}, kept={len(filtered)}, total so far={len(all_emails)}")
+                logger.info(f"Contact extraction page {page}/{estimated_pages}: raw={len(raw_batch)}, kept={len(filtered)}, total so far={len(all_emails)}", extra={'mailbox_id': self.mailbox_id})
 
                 if len(raw_batch) == 0:
                     break

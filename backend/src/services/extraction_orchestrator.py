@@ -465,8 +465,9 @@ class ExtractionOrchestrator:
             step_function: Function to execute
         """
         self.current_step = step_num
+        _ctx = {'mailbox_id': self.mailbox_id, 'client_id': self.client_id, 'step': step_num}
 
-        logger.info(f"── Step {step_num}/{self.TOTAL_STEPS}: {description}")
+        logger.info(f"── Step {step_num}/{self.TOTAL_STEPS}: {description}", extra=_ctx)
 
         step_start = datetime.utcnow()
 
@@ -492,7 +493,7 @@ class ExtractionOrchestrator:
                 ]
                 if parts:
                     summary_str = " | " + ", ".join(parts)
-            logger.info(f"Step {step_num} done in {step_duration:.1f}s{summary_str}")
+            logger.info(f"Step {step_num} done in {step_duration:.1f}s{summary_str}", extra=_ctx)
 
         except Exception as e:
             logger.error(f"Step {step_num} failed: {e}")

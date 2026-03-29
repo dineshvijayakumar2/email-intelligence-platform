@@ -254,7 +254,7 @@ class OutlookSyncService:
         mailbox_name = mailbox.get('name', 'Unknown')
         config = mailbox.get('connection_config') or {}
 
-        logger.info(f"Starting Outlook sync for mailbox: {mailbox_name} ({mailbox_id})")
+        logger.info(f"Starting Outlook sync for mailbox: {mailbox_name}", extra={'mailbox_id': mailbox_id})
 
         try:
             await self._update_mailbox_sync_status(mailbox_id, 'syncing')
@@ -287,7 +287,7 @@ class OutlookSyncService:
                 email_count=success_count
             )
 
-            logger.info(f"Outlook sync completed for mailbox {mailbox_name}: {success_count} emails synced")
+            logger.info(f"Outlook sync completed for mailbox {mailbox_name}: {success_count} emails synced", extra={'mailbox_id': mailbox_id})
 
             # Auto-trigger Sprint 2 extraction pipeline
             await self._trigger_post_sync_extraction(mailbox_id, success_count)
@@ -302,17 +302,17 @@ class OutlookSyncService:
             )
             if is_auth_error:
                 user_msg = "Authentication expired. Please reconnect your Outlook account."
-                logger.error(f"Outlook auth expired for mailbox {mailbox_id} - user reconnection required")
+                logger.error(f"Outlook auth expired for mailbox {mailbox_name} — reconnection required", extra={'mailbox_id': mailbox_id})
                 await self._update_mailbox_sync_status(mailbox_id, 'auth_expired', error=user_msg)
             else:
-                logger.error(f"Outlook sync failed for mailbox {mailbox_id}: {e}")
+                logger.error(f"Outlook sync failed for mailbox {mailbox_name}: {e}", extra={'mailbox_id': mailbox_id})
                 logger.error(traceback.format_exc())
                 await self._update_mailbox_sync_status(mailbox_id, 'error', error=error_str)
 
     async def _trigger_post_sync_extraction(self, mailbox_id: str, emails_synced: int):
         """Auto-trigger Sprint 2 extraction pipeline after successful sync (fire-and-forget)."""
         if emails_synced == 0:
-            logger.info(f"No new emails for {mailbox_id}, skipping extraction")
+            logger.info(f"No new emails, skipping extraction", extra={'mailbox_id': mailbox_id})
             return
 
         # Fire-and-forget: don't block sync completion
