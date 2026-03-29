@@ -813,13 +813,50 @@ class ExtractionOrchestrator:
         contacts = self.step_results[2]['contacts']
         companies = self.step_results[4]['companies']
 
-        # Build email -> company_id mapping
-        email_to_company = {}
-        for company in companies:
-            for email in company.contact_emails:
-                email_to_company[email.lower()] = company.company_id
+        # Build email → company_id mapping from the database (definitive source)
+        # The in-memory company.company_id may be NULL if the upsert response didn't match
+        email_to_company: dict = {}
 
-        logger.info(f"Upserting {len(contacts)} contacts to customer_contacts table (batch mode)")
+        # First try in-memory mapping (fast)
+        for company in companies:
+            if company.company_id:
+                for email in company.contact_emails:
+                    email_to_company[email.lower()] = company.company_id
+
+        # If most are NULL, rebuild from DB (domain → company lookup)
+        null_count = sum(1 for c in companies if not c.company_id)
+        if null_count > len(companies) * 0.3:
+            logger.warning(f"{null_count}/{len(companies)} companies have NULL IDs — rebuilding from DB")
+            # Fetch all companies for this client → build domain → company_id map
+            db_companies: list = []
+            offset = 0
+            while True:
+                resp = self.client.table('customer_companies').select(
+                    'id, email_domains'
+                ).eq('client_id', self.client_id).range(offset, offset + 999).execute()
+                rows = resp.data or []
+                db_companies.extend(rows)
+                if len(rows) == 0:
+                    break
+                offset += len(rows)
+
+            domain_to_company = {}
+            for c in db_companies:
+                for d in (c.get('email_domains') or []):
+                    domain_to_company[d.lower()] = c['id']
+
+            # Map contact emails → company via domain
+            for contact in contacts:
+                email_lower = contact['email'].lower()
+                if email_lower not in email_to_company:
+                    domain = email_lower.split('@')[1] if '@' in email_lower else None
+                    if domain and domain in domain_to_company:
+                        email_to_company[email_lower] = domain_to_company[domain]
+
+            logger.info(f"Rebuilt email→company mapping: {len(email_to_company)} emails mapped to companies")
+
+        mapped_count = sum(1 for v in email_to_company.values() if v)
+        logger.info(f"Upserting {len(contacts)} contacts — {mapped_count} have company links")
 
         # First, fetch ALL existing contacts for this client (paginated)
         existing_emails = {}
