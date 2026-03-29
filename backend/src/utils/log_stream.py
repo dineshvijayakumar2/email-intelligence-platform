@@ -17,6 +17,28 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 REDIS_KEY = "log:stream"
+
+# Thread-local context: set once at the start of a pipeline, inherited by all
+# log calls within that thread (company_resolver, email_linker, etc.)
+import threading
+_thread_context = threading.local()
+
+
+def set_log_context(*, mailbox_id: str = None, client_id: str = None, job_id: str = None):
+    """Set thread-local log context. Called once at pipeline start."""
+    if mailbox_id:
+        _thread_context.mailbox_id = mailbox_id
+    if client_id:
+        _thread_context.client_id = client_id
+    if job_id:
+        _thread_context.job_id = job_id
+
+
+def clear_log_context():
+    """Clear thread-local context at pipeline end."""
+    for attr in ('mailbox_id', 'client_id', 'job_id'):
+        if hasattr(_thread_context, attr):
+            delattr(_thread_context, attr)
 MAX_ENTRIES = 500
 FLUSH_INTERVAL = 1.0  # seconds between Redis flushes
 BATCH_SIZE = 50       # max entries per flush
@@ -114,13 +136,21 @@ class LogStreamHandler(logging.Handler):
     def _format_entry(self, record: logging.LogRecord) -> dict:
         msg = record.getMessage()
 
-        # Prefer explicit context from extra={} kwargs (structured logging)
+        # 1. Prefer explicit context from extra={} kwargs (structured logging)
         mailbox_id = getattr(record, 'mailbox_id', None)
         client_id = getattr(record, 'client_id', None)
         job_id = getattr(record, 'job_id', None)
         step = getattr(record, 'step', None)
 
-        # Fallback: extract from message text (legacy log calls)
+        # 2. Fallback: thread-local context (set once at pipeline start)
+        if not mailbox_id:
+            mailbox_id = getattr(_thread_context, 'mailbox_id', None)
+        if not client_id:
+            client_id = getattr(_thread_context, 'client_id', None)
+        if not job_id:
+            job_id = getattr(_thread_context, 'job_id', None)
+
+        # 3. Last resort: extract from message text (legacy log calls)
         if not mailbox_id:
             mailbox_id = _extract(_MAILBOX_RE, msg)
         if not client_id:

@@ -311,7 +311,12 @@ class ExtractionOrchestrator:
         Returns:
             Dictionary with extraction results and statistics
         """
-        logger.info(f"Pipeline start: mailbox={self.mailbox_id}, mode={self.extraction_mode}")
+        # Set thread-local context so ALL sub-service logs inherit mailbox/client
+        from ..utils.log_stream import set_log_context, clear_log_context
+        set_log_context(mailbox_id=self.mailbox_id, client_id=self.client_id)
+
+        logger.info(f"Pipeline start: mode={self.extraction_mode}",
+                     extra={'mailbox_id': self.mailbox_id, 'client_id': self.client_id})
 
         start_time = datetime.utcnow()
 
@@ -429,8 +434,10 @@ class ExtractionOrchestrator:
             # Calculate duration
             duration = (datetime.utcnow() - start_time).total_seconds()
 
-            logger.info(f"Pipeline complete: {duration:.1f}s, {self.current_step} steps")
+            logger.info(f"Pipeline complete: {duration:.1f}s, {self.current_step} steps",
+                        extra={'mailbox_id': self.mailbox_id, 'client_id': self.client_id})
 
+            clear_log_context()
             return {
                 'success': True,
                 'job_id': self.job_id,
@@ -440,13 +447,15 @@ class ExtractionOrchestrator:
             }
 
         except Exception as e:
-            logger.error(f"Extraction pipeline failed: {e}")
+            logger.error(f"Extraction pipeline failed: {e}",
+                        extra={'mailbox_id': self.mailbox_id, 'client_id': self.client_id})
             logger.error(traceback.format_exc())
 
             # Mark job as failed
             if self.job_id:
                 self._update_job_status('failed', error=str(e))
 
+            clear_log_context()
             return {
                 'success': False,
                 'job_id': self.job_id,
