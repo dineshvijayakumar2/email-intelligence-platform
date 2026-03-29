@@ -272,6 +272,7 @@ from src.routers.ai import router as ai_router, init_ai_router
 from src.routers.rules import router as rules_router, init_rules_router
 from src.routers.quickbase import router as quickbase_router, init_quickbase_router
 from src.routers.intelligence_config import router as intelligence_config_router, init_intelligence_config_router
+from src.routers.logs import router as logs_router, init_logs_router
 from src.routers.errors import router as errors_router, init_error_router
 from src.routers.gmail import router as gmail_router, init_gmail_router
 from src.routers.outlook import router as outlook_router, init_outlook_router
@@ -368,6 +369,7 @@ app.include_router(ai_router, prefix="/api/v1")
 app.include_router(rules_router, prefix="/api/v1")
 app.include_router(quickbase_router, prefix="/api/v1")
 app.include_router(intelligence_config_router, prefix="/api/v1")
+app.include_router(logs_router, prefix="/api/v1")
 
 # Email providers
 app.include_router(gmail_router, prefix="/api")
@@ -443,6 +445,18 @@ def initialize_all_routers():
     init_rules_router(sb)
     init_quickbase_router(sb)
     init_intelligence_config_router(sb)
+
+    # Log stream: attach handler to root logger + init Redis flush thread
+    from src.utils.log_stream import get_log_stream_handler, init_log_stream
+    root_logger = logging.getLogger()
+    root_logger.addHandler(get_log_stream_handler())
+    try:
+        from src.database.redis_client import RedisClient
+        redis_for_logs = RedisClient.get_client()
+        init_log_stream(redis_for_logs)
+        init_logs_router(redis_for_logs, sb)
+    except Exception as e:
+        logger.warning(f"Log stream Redis init failed (non-critical): {e}")
 
     error_logger = get_error_logger()
     init_error_router(

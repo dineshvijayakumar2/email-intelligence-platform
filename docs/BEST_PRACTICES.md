@@ -278,3 +278,33 @@ Parent menu item and first child cannot share the same `key`:
 { key: 'customers-menu', label: 'Customers', children: [
     { key: '/customers', label: 'Companies' },
 ```
+
+---
+
+## 8. Structured Logging
+
+### Always pass context explicitly — don't reverse-engineer from message text
+
+Log calls should include structured context via `extra={}` so the log monitoring system can classify entries without parsing message strings:
+
+```python
+# Wrong — relies on regex extraction from message text
+logger.info(f"Step 6 done for mailbox {mailbox_id} client {client_id}")
+
+# Right — pass context explicitly via extra
+logger.info("Step 6 done", extra={
+    'mailbox_id': self.mailbox_id,
+    'client_id': self.client_id,
+    'step': 6,
+})
+```
+
+The `LogStreamHandler` in `src/utils/log_stream.py` reads `extra` fields first, falling back to regex extraction for legacy log calls. New code should always use `extra`.
+
+### Non-blocking log infrastructure
+
+The live log stream uses a fire-and-forget pattern:
+- `LogStreamHandler.emit()` appends to an in-memory deque — O(1), never blocks
+- A background daemon thread flushes to Redis every 1s in batches
+- Redis list is capped at 500 entries via `LTRIM`
+- Never write logs to Supabase — use Redis only (ephemeral)

@@ -54,6 +54,7 @@ import QuickbaseConfigPage from './pages/intelligence/quickbase-config';
 import QuickbaseDataPage from './pages/intelligence/quickbase-data';
 import QuickbaseMatchesPage from './pages/intelligence/quickbase-matches';
 import IntelligenceConfigPage from './pages/manage/intelligence-config';
+import LogMonitorPage from './pages/manage/log-monitor';
 
 // Settings
 import SettingsPage from './pages/settings';
@@ -125,6 +126,7 @@ function App() {
             <Route path="/manage/quickbase-data" element={<AdminRoute><Layout><QuickbaseDataPage /></Layout></AdminRoute>} />
             <Route path="/manage/quickbase-matches" element={<AdminRoute><Layout><QuickbaseMatchesPage /></Layout></AdminRoute>} />
             <Route path="/manage/intelligence-config" element={<AdminRoute><Layout><IntelligenceConfigPage /></Layout></AdminRoute>} />
+            <Route path="/manage/logs" element={<AdminRoute><Layout><LogMonitorPage /></Layout></AdminRoute>} />
             <Route path="/users" element={<AdminRoute><Layout><UsersPage /></Layout></AdminRoute>} />
             <Route path="/admin/data" element={<AdminRoute><Layout><AdminDataViewPage /></Layout></AdminRoute>} />
             <Route path="/admin/audit-logs" element={<AdminRoute><Layout><AuditLogsPage /></Layout></AdminRoute>} />
