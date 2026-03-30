@@ -363,16 +363,16 @@ class ExtractionOrchestrator:
                           lambda: self._step_resolve_companies(exclude_internal))
 
             # ============================================================
-            # STEP 5: Upsert Contacts
+            # STEP 5: Upsert Companies (BEFORE contacts so company IDs exist)
             # ============================================================
-            self._run_step(5, "Create/update customer_contacts",
-                          self._step_upsert_contacts)
+            self._run_step(5, "Create/update customer_companies",
+                          self._step_upsert_companies)
 
             # ============================================================
-            # STEP 6: Upsert Companies
+            # STEP 6: Upsert Contacts (companies already have DB IDs)
             # ============================================================
-            self._run_step(6, "Create/update customer_companies",
-                          self._step_upsert_companies)
+            self._run_step(6, "Create/update customer_contacts",
+                          self._step_upsert_contacts)
 
             # ============================================================
             # STEP 7: Classify Roles
@@ -986,12 +986,109 @@ class ExtractionOrchestrator:
 
         logger.info(f"Contact upsert complete: {created_count} created, {updated_count} updated, {len(errors)} errors")
 
+        # ── Link orphan contacts to companies by domain ─────────────────
+        orphan_linked = self._link_orphan_contacts()
+
         return {
             'total_contacts': len(contacts),
             'created': created_count,
             'updated': updated_count,
+            'orphan_linked': orphan_linked,
             'errors': errors
         }
+
+    def _link_orphan_contacts(self) -> int:
+        """Link contacts with NULL customer_company_id to companies by email domain.
+
+        Skips free email providers (gmail.com, yahoo.com, etc.) to prevent
+        bulk-linking unrelated contacts to a single catch-all company.
+        """
+        try:
+            # Load free email providers
+            free_providers: set = set()
+            try:
+                resp = self.client.table('free_email_providers').select('domain').execute()
+                free_providers = {r['domain'].lower() for r in (resp.data or [])}
+            except Exception:
+                pass
+
+            # Build domain → company_id map from existing companies
+            domain_to_company: dict = {}
+            offset = 0
+            while True:
+                resp = self.client.table('customer_companies').select(
+                    'id, email_domains'
+                ).eq('client_id', self.client_id).range(offset, offset + 999).execute()
+                rows = resp.data or []
+                for c in rows:
+                    for d in (c.get('email_domains') or []):
+                        dl = d.lower()
+                        if dl not in free_providers and dl not in domain_to_company:
+                            domain_to_company[dl] = c['id']
+                if len(rows) == 0:
+                    break
+                offset += len(rows)
+
+            # Fetch orphan contacts (NULL company_id)
+            orphans: list = []
+            offset = 0
+            while True:
+                resp = self.client.table('customer_contacts').select(
+                    'id, email_address'
+                ).eq('client_id', self.client_id).is_(
+                    'customer_company_id', 'null'
+                ).range(offset, offset + 999).execute()
+                rows = resp.data or []
+                orphans.extend(rows)
+                if len(rows) == 0:
+                    break
+                offset += len(rows)
+
+            if not orphans:
+                logger.info("No orphan contacts to link")
+                return 0
+
+            # Match orphans to companies by domain
+            to_update: list = []
+            skipped_free = 0
+            no_match = 0
+            for contact in orphans:
+                email = (contact.get('email_address') or '').lower()
+                if '@' not in email:
+                    continue
+                domain = email.split('@')[1]
+                if domain in free_providers:
+                    skipped_free += 1
+                    continue
+                company_id = domain_to_company.get(domain)
+                if company_id:
+                    to_update.append({'id': contact['id'], 'company_id': company_id})
+                else:
+                    no_match += 1
+
+            # Batch update
+            linked = 0
+            for i in range(0, len(to_update), 50):
+                batch = to_update[i:i + 50]
+                for item in batch:
+                    try:
+                        self.client.table('customer_contacts').update({
+                            'customer_company_id': item['company_id']
+                        }).eq('id', item['id']).execute()
+                        linked += 1
+                    except Exception:
+                        pass
+
+            logger.info(
+                f"Orphan contact linking: {linked} linked by domain, "
+                f"{skipped_free} skipped (free provider), {no_match} no company match, "
+                f"{len(orphans)} total orphans scanned"
+            )
+            return linked
+
+        except Exception as e:
+            logger.warning(f"Orphan contact linking failed (non-fatal): {e}")
+            return 0
 
     def _step_upsert_companies(self) -> Dict:
         """

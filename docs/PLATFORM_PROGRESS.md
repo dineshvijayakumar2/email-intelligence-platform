@@ -1,6 +1,6 @@
 # Email Intelligence Platform — Consolidated Implementation Progress
 
-**Last Updated:** 26 March 2026
+**Last Updated:** 30 March 2026
 **Purpose:** Consolidated reference — completed work, architecture, database schema, and next priorities.
 
 ---
@@ -28,6 +28,8 @@ A commercial intelligence platform for B2B account management teams. It syncs em
 | Invite User System | Admin-controlled onboarding, restrict open sign-up | 🔲 Planned | Not started |
 | Nav restructure | Analytics + Intelligence → Customers + Insights + Manage (route rename, no new pages) | ✅ Complete | 19 Mar 2026 |
 | Sprint 4 — Sales Intelligence | QB Operations sync, Capability Intelligence, Vector Search, Customer Analytics | ✅ Complete | 26 Mar 2026 |
+| Post-S4 Stability | QB matching revamp, incremental sync, match review UI, logging, DevOps | ✅ Complete | 30 Mar 2026 |
+| Contact-Company Linking Fix | Fix 69% orphan contacts, pipeline reorder, domain fallback | 🟡 In Progress | 30 Mar 2026 |
 
 ---
 
@@ -735,6 +737,61 @@ Sprint 4 additions (vector embeddings + AI Chat Agent): +~$3–8/month → well 
 
 ---
 
+## ✅ COMPLETE — Post-Sprint 4 Stability & DevOps (27–30 Mar 2026)
+
+### QB Matching Revamp
+- 3-pass matching pipeline: exact name → domain root → fuzzy staging (rapidfuzz ≥82%)
+- 7,186 matched / 15,121 QB customers (47.5% match rate)
+- Match Review page at `/manage/quickbase-matches` — confirm/skip/override fuzzy candidates
+- QBLinkWidget on company + contact detail pages for manual linking
+- Incremental sync default (fid:2 Date Modified)
+
+### Backend Stability Fixes (30 Mar 2026)
+| Fix | Detail |
+|-----|--------|
+| Event loop blocking | QB rematch/sync/propagation background tasks converted from `async def` to `def` — FastAPI runs in thread pool instead of blocking event loop |
+| QB propagation speed | Removed `time.sleep(0.5)` throttle, added company deduplication — 7K updates in minutes instead of hours |
+| Email linker timeout | Replaced `ORDER BY sent_date` with `ORDER BY id` (PK) — eliminates full-table sort. Added partial index migration 043 |
+| Pipeline resilience | Steps 9-12 (enrichment/analytics) now non-critical — failures log warning and continue instead of aborting |
+| Orphaned jobs | Cleanup now clears Redis progress + DB status on restart. Job list endpoint only reads Redis for active jobs |
+| Domain-only email linking | Email linker falls back to company domain match when contact not found — emails from unknown senders at known companies now link |
+| Company detail threads | `GET /analytics/companies/{id}` now returns `active_threads` and `overdue_threads` counts |
+
+### DevOps
+| Feature | Detail |
+|---------|--------|
+| `USE_PROD_DB` mode | Set `USE_PROD_DB=true` to run local backend against prod Supabase. Auto-disables Gmail/Outlook sync to prevent conflicts |
+| `start-platform-proddb.bat` | One-click local dev against prod database (backend + frontend) |
+| `npm run dev:proddb` | Frontend Vite mode with prod Supabase auth credentials |
+| Progress logging | All QB background tasks emit step-level + iteration progress logs with `client_id` context for live log monitor filtering |
+
+### Structured Logging (27–29 Mar 2026)
+- Thread-local `set_log_context(mailbox_id, client_id)` for all extraction sub-services
+- `client_id` context on all QB background tasks
+- Progress logging every 200-2000 iterations across all long-running loops
+- Mailbox name resolution in log monitor (shows name or email local-part instead of UUID)
+
+---
+
+## 🟡 IN PROGRESS — Contact-Company Linking Fix
+
+**Problem:** Only 6,211 out of 20,035 contacts (31%) have `customer_company_id` set. This causes empty customer profiles — no threads, no order history, no email counts.
+
+**Root Cause:** Pipeline Step 5 (upsert contacts) runs BEFORE Step 6 (upsert companies). Newly-resolved companies don't have DB IDs yet, so contact→company mapping has NULL IDs. Additionally, the batch update SQL function overwrites existing company links with NULL on re-extraction.
+
+### Planned Fixes
+| Fix | Description | Status |
+|-----|-------------|--------|
+| 1. SQL COALESCE fix | `batch_update_contact_companies` uses COALESCE to preserve existing company links when update has NULL | 🔲 Pending |
+| 2. Reorder Steps 5↔6 | Upsert companies BEFORE contacts — root cause elimination | 🔲 Pending |
+| 3. Orphan contact linking | Post-upsert scan links contacts to companies by email domain (excluding free providers) | 🔲 Pending |
+| 4. Email linker backfill | Domain fallback in Step 9 also updates contact's `customer_company_id` | 🔲 Pending |
+| 5. Data migration | One-time SQL to backfill existing 13K+ orphan contacts by domain match | 🔲 Pending |
+
+**Target:** >90% contact-company link rate (up from 31%)
+
+---
+
 ## 🟡 IN PROGRESS — Sprint 4: Sales Intelligence Engine
 
 **Goal:** Merge email engagement intelligence with production intelligence from QuickBase — showing not just who's communicating, but what they buy, what they should be buying, and what to recommend next.
@@ -754,15 +811,13 @@ Sprint 4 additions (vector embeddings + AI Chat Agent): +~$3–8/month → well 
 - ✅ Fix: Redirect routes preserve mailboxId params
 
 ### In Progress:
-- 🟡 Classifier rules fix — JSON missing 170 capability-tagged rules (only process rules loaded)
-- 🟡 Phase 2: Customer Intelligence Analytics (5 features planned)
+- 🟡 Contact-Company Linking Fix — 69% of contacts orphaned, pipeline reorder + domain backfill planned
 
 ### Planned:
-- Phase 2A: Strike rate + Contact capability tags
-- Phase 2B: Seasonality trends
-- Phase 2C: Capability ordering rhythm
+- QB Tags Integration — sync partner's 5 formula-based tag fields (blocked on field IDs)
 - Phase 2D: Enriched AI insights with precomputed analytics + vector context
 - AI Chat Agent (`/insights/agent`)
+- Invite User System (admin-controlled onboarding)
 
 **Five tracks:**
 
@@ -959,15 +1014,15 @@ For each contact: find operations the company has bought that this contact hasn'
 
 ## Key Outstanding Gaps
 
-1. **No invite-only access control** — open sign-up currently. Any user who knows the URL can register. Invite system is designed but not built.
+1. **Contact-company linking gap (69%)** — Only 31% of contacts have company links, causing empty customer profiles. Root cause identified (pipeline step ordering), fix in progress.
 
-2. **No product intelligence** — the platform shows email engagement but not what customers actually buy. Sprint 4 Operations sync + Customer Profile redesign fills this gap.
+2. **No invite-only access control** — open sign-up currently. Any user who knows the URL can register. Invite system is designed but not built.
 
-3. **No recommendation engine** — AMs have no systematic guidance on cross-sell/upsell opportunities. Sprint 4 Recommendation Engine (Level 1 + Level 2) fills this gap.
+3. **QB Tags integration blocked** — Partner's 5 formula-based tag fields need field IDs confirmed before sync can be added. Our 8-tag classifier runs as fallback.
 
-4. **No semantic search** — insights can only be found by navigating to specific pages. Sprint 4 AI Chat Agent fills this gap with natural language portfolio Q&A.
+4. **No AI Chat Agent** — Semantic search exists but conversational Q&A (`/insights/agent`) not yet built. LangChain tools ready.
 
-5. **No deep email-CRM fusion** — email engagement and CRM revenue data are in separate views. Sprint 4 Customer Profile and vector-enhanced AI analysis merge these into a single picture.
+5. **No deep email-CRM fusion in AI** — Phase 2D (vector-augmented analysis + digests) not started. Would enrich AI outputs with precomputed analytics and semantic context.
 
 ---
 

@@ -167,6 +167,7 @@ class EmailLinker:
         # Group emails by (contact_id, company_id) for batch updates
         link_groups: Dict[Tuple[Optional[str], Optional[str]], List[str]] = {}
         skipped_email_ids = []
+        contacts_to_backfill: Dict[str, str] = {}  # contact_id → company_id (domain-resolved)
         timestamp = datetime.utcnow().isoformat()
 
         for email in emails:
@@ -215,6 +216,10 @@ class EmailLinker:
                 if not company_id:
                     domain = self._extract_domain(link_email)
                     company_id = self._company_cache.get(domain.lower()) if domain else None
+                    # Track contacts whose company was resolved via domain fallback
+                    # so we can backfill customer_contacts.customer_company_id later
+                    if company_id and contact_id:
+                        contacts_to_backfill[contact_id] = company_id
             else:
                 # No contact — try company-only link via email domain
                 domain = self._extract_domain(link_email)
@@ -289,10 +294,26 @@ class EmailLinker:
         logger.info(f"Email linking complete: {linked_count} linked, "
                    f"{len(skipped_email_ids)} skipped, {len(errors)} group errors")
 
+        # Backfill contact company links for contacts resolved via domain fallback
+        backfilled = 0
+        if contacts_to_backfill:
+            for cid, comp_id in contacts_to_backfill.items():
+                try:
+                    self.client.table('customer_contacts').update({
+                        'customer_company_id': comp_id
+                    }).eq('id', cid).is_('customer_company_id', 'null').execute()
+                    backfilled += 1
+                except Exception:
+                    pass
+            if backfilled:
+                logger.info(f"Contact backfill: {backfilled}/{len(contacts_to_backfill)} "
+                           f"contacts updated with company link via domain")
+
         return {
             'total_emails': total_emails,
             'linked': linked_count,
             'skipped': len(skipped_email_ids),
+            'contact_backfilled': backfilled,
             'errors': errors,
             'groups_processed': len(link_groups)
         }
