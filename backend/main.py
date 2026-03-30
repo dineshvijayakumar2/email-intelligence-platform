@@ -35,6 +35,25 @@ else:
     if os.path.exists(fallback_env):
         load_dotenv(dotenv_path=fallback_env)
 
+# ── USE_PROD_DB mode: overlay production DB credentials onto local dev ──
+# Set USE_PROD_DB=true in your shell to run local backend against prod Supabase.
+# Sync services (Gmail/Outlook) are auto-disabled to prevent conflicts with
+# the production server. All other features (API, extraction, QB) work normally.
+USE_PROD_DB = os.getenv('USE_PROD_DB', '').lower() in ('true', '1', 'yes')
+if USE_PROD_DB and python_env != 'production':
+    prod_env_file = os.path.join(backend_dir, '.env.production')
+    if os.path.exists(prod_env_file):
+        # Only overlay Supabase credentials — keep local Redis, CORS, etc.
+        from dotenv import dotenv_values
+        prod_vars = dotenv_values(prod_env_file)
+        for key in ('SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_KEY',
+                     'SUPABASE_JWT_SECRET', 'SUPABASE_KEY'):
+            if key in prod_vars:
+                os.environ[key] = prod_vars[key]
+        # Mirror anon key as SUPABASE_KEY if not set separately
+        if 'SUPABASE_KEY' not in os.environ and 'SUPABASE_ANON_KEY' in prod_vars:
+            os.environ['SUPABASE_KEY'] = prod_vars['SUPABASE_ANON_KEY']
+
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
@@ -119,6 +138,13 @@ for lib in ["httpx", "httpcore", "urllib3", "googleapiclient.discovery"]:
 logging.getLogger("googleapiclient.discovery_cache").setLevel(logging.ERROR)
 
 logger.info(f"Running in {python_env} mode")
+if USE_PROD_DB:
+    sb_url = os.getenv('SUPABASE_URL', '')
+    logger.warning("=" * 60)
+    logger.warning("  USE_PROD_DB=true — Connected to PRODUCTION database")
+    logger.warning(f"  Supabase: {sb_url[:45]}...")
+    logger.warning("  Sync services DISABLED to prevent conflicts")
+    logger.warning("=" * 60)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 3. Volume / Download Directory
@@ -500,8 +526,11 @@ async def startup_event():
         _gmail_sync_service = get_gmail_sync_service(get_supabase())
         init_gmail_router(get_supabase(), _gmail_sync_service)
         pj_set_gmail(_gmail_sync_service)
-        await _gmail_sync_service.start()
-        logger.info("Gmail sync service started successfully")
+        if USE_PROD_DB:
+            logger.info("Gmail sync service SKIPPED (USE_PROD_DB mode — no background polling)")
+        else:
+            await _gmail_sync_service.start()
+            logger.info("Gmail sync service started successfully")
     except Exception as e:
         logger.warning(f"Failed to initialize Gmail sync service: {e}")
 
@@ -510,8 +539,11 @@ async def startup_event():
         _outlook_sync_service = get_outlook_sync_service(get_supabase())
         init_outlook_router(get_supabase(), _outlook_sync_service)
         pj_set_outlook(_outlook_sync_service)
-        await _outlook_sync_service.start()
-        logger.info("Outlook sync service started successfully")
+        if USE_PROD_DB:
+            logger.info("Outlook sync service SKIPPED (USE_PROD_DB mode — no background polling)")
+        else:
+            await _outlook_sync_service.start()
+            logger.info("Outlook sync service started successfully")
     except Exception as e:
         logger.warning(f"Failed to initialize Outlook sync service: {e}")
 
