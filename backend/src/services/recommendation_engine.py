@@ -397,10 +397,10 @@ class RecommendationEngine:
                 for k, v in sorted(group_totals.items(), key=lambda x: -x[1])
             ]
 
-            # Operation names from qb_operations
+            # Operation names + QB tags from qb_operations
             ops_result = (
                 self._supabase.table('qb_operations')
-                .select('operation_name, department')
+                .select('operation_name, department, qb_capability_tag, qb_process_tag, qb_embellishment_tag')
                 .eq('matched_company_id', company_id)
                 .eq('client_id', self._client_id)
                 .execute()
@@ -418,7 +418,33 @@ class RecommendationEngine:
                     seen.add(op['operation'])
                     unique_ops.append(op)
 
-            return {'categories': categories, 'operations': unique_ops}
+            # Aggregate QB tag breakdowns
+            cap_counts: dict = {}
+            process_set: set = set()
+            embellishment_set: set = set()
+            for r in (ops_result.data or []):
+                cap = (r.get('qb_capability_tag') or '').strip()
+                if cap:
+                    cap_counts[cap] = cap_counts.get(cap, 0) + 1
+                proc = (r.get('qb_process_tag') or '').strip()
+                if proc:
+                    process_set.add(proc)
+                emb = (r.get('qb_embellishment_tag') or '').strip()
+                if emb:
+                    embellishment_set.add(emb)
+
+            capability_breakdown = sorted(
+                [{'capability': k, 'operation_count': v} for k, v in cap_counts.items()],
+                key=lambda x: -x['operation_count']
+            )
+
+            return {
+                'categories': categories,
+                'operations': unique_ops,
+                'capability_breakdown': capability_breakdown,
+                'process_tags': sorted(process_set),
+                'embellishment_tags': sorted(embellishment_set),
+            }
 
         except Exception as e:
             logger.warning(f"product_profile computation failed for {company_id}: {e}")

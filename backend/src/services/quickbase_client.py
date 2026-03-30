@@ -113,6 +113,13 @@ DEFAULT_FIELD_MAPPINGS = {
         "26": "finishing_type",
         "27": "first_invoice_no",
         "28": "first_invoice_date",
+        # QB Formula Tags (native from QB)
+        "44": "qb_process_tag",
+        "45": "qb_capability_tag",
+        "46": "qb_machine_tier_tag",
+        "47": "qb_row_type_tag",
+        "48": "qb_blank_reason_tag",
+        "52": "qb_embellishment_tag",
     },
 }
 

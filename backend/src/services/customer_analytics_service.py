@@ -174,11 +174,11 @@ class CustomerAnalyticsService:
                 return cached
 
         # Fetch operations with capability tags and contact_email
+        # Include QB tags — they may exist even when classifier capability_tags is []
         ops = self._fetch_all_paginated(
             'qb_operations',
-            'contact_email, capability_tags, cost_plus_price, date_accepted',
+            'contact_email, capability_tags, qb_capability_tag, qb_process_tag, cost_plus_price, date_accepted',
             {'matched_company_id': company_id},
-            extra_filters=[('neq', 'capability_tags', '[]')],
         )
 
         # Fetch contacts for this company (for name resolution)
@@ -195,16 +195,36 @@ class CustomerAnalyticsService:
         # Build: {contact_email -> {capability_tag -> {count, revenue, last_date}}}
         contact_caps = defaultdict(lambda: defaultdict(lambda: {'count': 0, 'revenue': 0, 'last_date': None}))
 
+        # Also track process-level granular tags from QB
+        contact_process_caps = defaultdict(lambda: defaultdict(lambda: {'count': 0, 'revenue': 0, 'last_date': None}))
+
         for op in ops:
             email = (op.get('contact_email') or '').lower()
             if not email:
                 continue
-            tags = op.get('capability_tags') or []
+
+            # Prefer QB capability tag, fall back to classifier tags
+            qb_cap = (op.get('qb_capability_tag') or '').strip()
+            classifier_tags = op.get('capability_tags') or []
+            tags = [qb_cap] if qb_cap else (classifier_tags if classifier_tags else [])
+            if not tags:
+                continue
+
             price = float(op.get('cost_plus_price') or 0)
             date_str = op.get('date_accepted')
 
             for tag in tags:
                 entry = contact_caps[email][tag]
+                entry['count'] += 1
+                entry['revenue'] += price
+                if date_str:
+                    if not entry['last_date'] or str(date_str) > str(entry['last_date']):
+                        entry['last_date'] = str(date_str)
+
+            # Track granular process tag from QB
+            process_tag = (op.get('qb_process_tag') or '').strip()
+            if process_tag:
+                entry = contact_process_caps[email][process_tag]
                 entry['count'] += 1
                 entry['revenue'] += price
                 if date_str:
@@ -227,11 +247,19 @@ class CustomerAnalyticsService:
 
             primary = capabilities[0]['tag'] if capabilities else None
 
+            # Granular process capabilities from QB
+            process_data = contact_process_caps.get(email, {})
+            process_capabilities = sorted([
+                {'tag': tag, 'order_count': d['count'], 'total_revenue': round(d['revenue'], 2), 'last_order': d['last_date']}
+                for tag, d in process_data.items()
+            ], key=lambda x: x['order_count'], reverse=True)
+
             contacts_list.append({
                 'contact_id': contact_info.get('id'),
                 'contact_name': contact_info.get('name', email),
                 'contact_email': email,
                 'capabilities': capabilities,
+                'process_capabilities': process_capabilities,
                 'primary_capability': primary,
             })
 
@@ -254,7 +282,7 @@ class CustomerAnalyticsService:
 
         ops = self._fetch_all_paginated(
             'qb_operations',
-            'date_accepted, cost_plus_price, capability_tags',
+            'date_accepted, cost_plus_price, capability_tags, qb_capability_tag',
             {'matched_company_id': company_id},
             extra_filters=[('not_.is_', 'date_accepted', 'null')],
         )
@@ -278,11 +306,14 @@ class CustomerAnalyticsService:
                 month = d.month
                 quarter = (month - 1) // 3 + 1
                 price = float(op.get('cost_plus_price') or 0)
+                # Prefer QB capability tag over classifier tags
+                qb_cap = (op.get('qb_capability_tag') or '').strip()
                 tags = op.get('capability_tags') or []
+                has_capability = bool(qb_cap) or bool(tags)
 
                 monthly[month]['order_count'] += 1
                 monthly[month]['revenue'] += price
-                if tags:
+                if has_capability:
                     monthly[month]['capability_count'] += 1
 
                 quarterly[quarter]['order_count'] += 1
@@ -345,10 +376,9 @@ class CustomerAnalyticsService:
 
         ops = self._fetch_all_paginated(
             'qb_operations',
-            'capability_tags, date_accepted',
+            'capability_tags, qb_capability_tag, date_accepted',
             {'matched_company_id': company_id},
             extra_filters=[
-                ('neq', 'capability_tags', '[]'),
                 ('not_.is_', 'date_accepted', 'null'),
             ],
         )
@@ -358,15 +388,22 @@ class CustomerAnalyticsService:
             self._save_cache(company_id, 'capability_rhythm', result)
             return result
 
-        # Collect dates per capability tag
+        # Collect dates per capability tag — prefer QB tag, fall back to classifier
         tag_dates = defaultdict(list)
         for op in ops:
             da = op.get('date_accepted')
             if not da:
                 continue
+
+            qb_cap = (op.get('qb_capability_tag') or '').strip()
+            classifier_tags = op.get('capability_tags') or []
+            tags = [qb_cap] if qb_cap else (classifier_tags if classifier_tags else [])
+            if not tags:
+                continue
+
             try:
                 d = datetime.strptime(str(da)[:10], '%Y-%m-%d').date()
-                for tag in (op.get('capability_tags') or []):
+                for tag in tags:
                     tag_dates[tag].append(d)
             except (ValueError, TypeError):
                 continue

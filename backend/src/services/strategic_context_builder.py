@@ -104,6 +104,9 @@ class StrategicContextBuilder:
             # --- QB financial data from customer_companies + qb_quotes ---
             qb_summary = self._get_qb_financial_summary(company_id)
 
+            # --- Capability profile from QB operations ---
+            capability_profile = self._get_capability_profile(company_id)
+
             # --- Read company row for QB metadata + engagement ---
             company_resp = self._execute_with_retry(
                 self.client.table("customer_companies")
@@ -156,6 +159,7 @@ class StrategicContextBuilder:
                 "active_threads_summary": active_threads,
                 "ai_signals_summary": ai_signals,
                 "qb_financial_summary": qb_summary,
+                "capability_profile": capability_profile,
                 "computed_at": datetime.now(timezone.utc).isoformat(),
             }
 
@@ -686,6 +690,43 @@ class StrategicContextBuilder:
 
         except Exception as e:
             logger.warning(f"Failed to get QB financial summary for {company_id}: {e}")
+            return {}
+
+    def _get_capability_profile(self, company_id: str) -> Dict[str, Any]:
+        """Aggregate QB capability/process tags for a company's operations."""
+        try:
+            cap_counts: dict = {}
+            process_set: set = set()
+            offset = 0
+            while True:
+                resp = self._execute_with_retry(
+                    self.client.table("qb_operations")
+                    .select("qb_capability_tag, qb_process_tag")
+                    .eq("client_id", self.client_id)
+                    .eq("matched_company_id", company_id)
+                    .not_.is_("qb_capability_tag", "null")
+                    .range(offset, offset + 999)
+                )
+                rows = resp.data or []
+                for r in rows:
+                    cap = (r.get("qb_capability_tag") or "").strip()
+                    if cap:
+                        cap_counts[cap] = cap_counts.get(cap, 0) + 1
+                    proc = (r.get("qb_process_tag") or "").strip()
+                    if proc:
+                        process_set.add(proc)
+                if len(rows) == 0:
+                    break
+                offset += len(rows)
+
+            primary = sorted(cap_counts, key=lambda k: -cap_counts[k])
+            return {
+                "primary_capabilities": primary[:5],
+                "capability_counts": cap_counts,
+                "process_types": sorted(process_set),
+            }
+        except Exception as e:
+            logger.warning(f"Failed to get capability profile for {company_id}: {e}")
             return {}
 
     def _compute_trend(self, history: List[Dict]) -> str:

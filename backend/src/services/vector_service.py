@@ -319,7 +319,9 @@ class VectorService:
         while True:
             result = await self._db(lambda: self._sb.table("qb_operations").select(
                 "id, operation_name, department, machine, customer_name, "
-                "capability_tags, row_type, finishing_type"
+                "capability_tags, row_type, finishing_type, "
+                "qb_capability_tag, qb_process_tag, qb_machine_tier_tag, "
+                "qb_row_type_tag, qb_embellishment_tag"
             ).eq("client_id", client_id).is_("embedding", "null").range(
                 offset, offset + batch_size - 1
             ).execute())
@@ -366,7 +368,8 @@ class VectorService:
         return {"embedded": total_embedded, "elapsed_s": elapsed}
 
     def _build_operation_embed_text(self, row: dict) -> str:
-        """Build text representation of an operation for embedding."""
+        """Build text representation of an operation for embedding.
+        Prefers QB formula tags over classifier tags for richer embeddings."""
         parts = []
         if row.get("operation_name"):
             parts.append(row["operation_name"])
@@ -376,12 +379,34 @@ class VectorService:
             parts.append(f"Machine: {row['machine']}")
         if row.get("customer_name"):
             parts.append(f"Customer: {row['customer_name']}")
-        if row.get("capability_tags"):
+
+        # Prefer QB tags over classifier tags
+        qb_cap = (row.get("qb_capability_tag") or "").strip()
+        if qb_cap:
+            parts.append(f"Capability: {qb_cap}")
+        elif row.get("capability_tags"):
             tags = row["capability_tags"]
             if isinstance(tags, list) and tags:
                 parts.append(f"Capabilities: {', '.join(tags)}")
-        if row.get("row_type"):
+
+        qb_process = (row.get("qb_process_tag") or "").strip()
+        if qb_process:
+            parts.append(f"Process: {qb_process}")
+
+        qb_machine_tier = (row.get("qb_machine_tier_tag") or "").strip()
+        if qb_machine_tier:
+            parts.append(f"Technology: {qb_machine_tier}")
+
+        qb_row_type = (row.get("qb_row_type_tag") or "").strip()
+        if qb_row_type:
+            parts.append(f"Type: {qb_row_type}")
+        elif row.get("row_type"):
             parts.append(f"Type: {row['row_type']}")
+
+        qb_emb = (row.get("qb_embellishment_tag") or "").strip()
+        if qb_emb:
+            parts.append(f"Embellishment: {qb_emb}")
+
         if row.get("finishing_type"):
             parts.append(f"Finishing: {row['finishing_type']}")
         return " | ".join(parts)

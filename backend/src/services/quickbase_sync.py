@@ -386,15 +386,22 @@ class QuickbaseSync:
         return counts
 
     def _classify_operations(self) -> int:
-        """Classify all unclassified (capability_tags = []) operations using capability_classifier."""
-        import time as _time
+        """Classify unclassified operations. QB tags are primary; our classifier fills gaps.
+
+        - If qb_capability_tag is populated: use it as capability_tags (wrapped in list)
+        - If qb_capability_tag is blank: full classifier fallback
+        - Boolean flags (has_coating, has_sewing, etc.) and am_rush always come from classifier
+        - row_type: prefer qb_row_type_tag, fall back to classifier
+        """
         total = 0
+        qb_primary = 0
+        classifier_used = 0
         offset = 0
         batch_size = 500
 
         while True:
             result = _execute_with_retry(lambda o=offset: self._supabase.table('qb_operations').select(
-                'id, department, operation_name, machine'
+                'id, department, operation_name, machine, qb_capability_tag, qb_row_type_tag'
             ).eq('client_id', self._client_id).eq('capability_tags', '[]').range(
                 o, o + batch_size - 1
             ).execute())
@@ -404,6 +411,7 @@ class QuickbaseSync:
                 break
 
             for row in rows:
+                # Always run classifier for boolean flags + am_rush (QB doesn't have these)
                 result_cls = capability_classifier.classify(
                     self._supabase,
                     self._client_id,
@@ -412,16 +420,32 @@ class QuickbaseSync:
                     machine=row.get('machine'),
                     operation_name=row.get('operation_name'),
                 )
+
+                qb_cap = (row.get('qb_capability_tag') or '').strip()
+                qb_row = (row.get('qb_row_type_tag') or '').strip()
+
+                if qb_cap:
+                    # QB is source of truth for capability tag
+                    tags = [qb_cap]
+                    qb_primary += 1
+                else:
+                    # No QB tag — full classifier fallback
+                    tags = result_cls['capability_tags']
+                    if tags:
+                        classifier_used += 1
+
+                update_data = {
+                    'capability_tags':         tags,
+                    'has_coating':             result_cls['has_coating'],
+                    'has_sewing':              result_cls['has_sewing'],
+                    'has_outsource_component': result_cls['has_outsource_component'],
+                    'am_rush':                 result_cls['am_rush'],
+                    'row_type':                qb_row or result_cls['row_type'],
+                }
+
                 try:
-                    _execute_with_retry(lambda rid=row['id'], r=result_cls: (
-                        self._supabase.table('qb_operations').update({
-                            'capability_tags':         r['capability_tags'],
-                            'has_coating':             r['has_coating'],
-                            'has_sewing':              r['has_sewing'],
-                            'has_outsource_component': r['has_outsource_component'],
-                            'am_rush':                 r['am_rush'],
-                            'row_type':                r['row_type'],
-                        }).eq('id', rid).execute()
+                    _execute_with_retry(lambda rid=row['id'], ud=update_data: (
+                        self._supabase.table('qb_operations').update(ud).eq('id', rid).execute()
                     ))
                     total += 1
                 except Exception as e:
@@ -431,9 +455,11 @@ class QuickbaseSync:
             if len(rows) < batch_size:
                 break
             if offset % 5000 == 0:
-                logger.info(f"[Enrich] Classified {total} operations so far...")
+                logger.info(f"[Enrich] Classified {total} operations so far "
+                            f"(QB primary: {qb_primary}, classifier: {classifier_used})...")
 
-        logger.info(f"[Enrich] Classified {total} operations for client {self._client_id}")
+        logger.info(f"[Enrich] Classified {total} operations for client {self._client_id} "
+                    f"(QB primary: {qb_primary}, classifier fallback: {classifier_used})")
         return total
 
     def _join_contact_email(self) -> int:
