@@ -800,8 +800,10 @@ class QuickbaseSync:
 
             sb_norm_names = list(sb_by_norm.keys())
             staged_batch: list[dict] = []
+            total_pass3 = len(pass3_remaining)
+            logger.info(f"Pass 3 (fuzzy): processing {total_pass3} remaining customers against {len(sb_norm_names)} SB names")
 
-            for qb_cust in pass3_remaining:
+            for idx, qb_cust in enumerate(pass3_remaining):
                 qb_norm = _normalise(qb_cust.get('customer_name'))
                 if not qb_norm or len(qb_norm) < 4:
                     stats['unmatched'] += 1
@@ -813,6 +815,10 @@ class QuickbaseSync:
                     scorer=fuzz.token_sort_ratio,
                     score_cutoff=FUZZY_SCORE_THRESHOLD,
                 )
+
+                if (idx + 1) % 1000 == 0:
+                    logger.info(f"Pass 3 progress: {idx + 1}/{total_pass3} "
+                                f"({stats['pass3_staged']} staged so far)")
 
                 if result:
                     matched_norm, score, _idx = result
@@ -894,7 +900,7 @@ class QuickbaseSync:
             # Throttle: pause every 50 matches to avoid connection saturation
             if (i + 1) % 50 == 0:
                 _time.sleep(0.5)
-                if (i + 1) % 500 == 0:
+                if (i + 1) % 200 == 0:
                     logger.info(f"Match write progress: {i + 1}/{total}")
 
         logger.info(f"Match write complete: {total} matches written")
@@ -956,7 +962,8 @@ class QuickbaseSync:
         }
 
         matched = 0
-        for qb_contact in unmatched:
+        total_to_match = len(unmatched)
+        for idx, qb_contact in enumerate(unmatched):
             email = (qb_contact.get('email') or '').strip().lower()
             contact_id = contacts_by_email.get(email)
 
@@ -968,7 +975,11 @@ class QuickbaseSync:
                 ))
                 matched += 1
 
-        logger.info(f"Matched {matched}/{len(unmatched)} QB contacts by email")
+            if (idx + 1) % 2000 == 0:
+                logger.info(f"Contact matching progress: {idx + 1}/{total_to_match} "
+                            f"({matched} matched so far)")
+
+        logger.info(f"Matched {matched}/{total_to_match} QB contacts by email")
         return matched
 
     async def match_customers_via_contacts(self) -> int:
@@ -1053,7 +1064,8 @@ class QuickbaseSync:
             matched = 0
             no_company = 0
             no_cust_match = 0
-            for qb_contact in all_matched_contacts:
+            total_chain = len(all_matched_contacts)
+            for chain_idx, qb_contact in enumerate(all_matched_contacts):
                 contact_id = qb_contact.get('matched_contact_id')
                 customer_id = qb_contact.get('qb_customer_id')
                 if not contact_id or not customer_id:
@@ -1080,6 +1092,10 @@ class QuickbaseSync:
                         matched += 1
                     except Exception:
                         pass
+
+                if (chain_idx + 1) % 2000 == 0:
+                    logger.info(f"Chain match progress: {chain_idx + 1}/{total_chain} "
+                                f"({matched} matched so far)")
 
             logger.info(
                 f"Chain match result: {matched} matched, "
@@ -1119,7 +1135,9 @@ class QuickbaseSync:
             offset += len(rows)
 
         updated = 0
-        for qb in all_matched:
+        total_propagate = len(all_matched)
+        logger.info(f"Propagating QB data for {total_propagate} matched customers")
+        for prop_idx, qb in enumerate(all_matched):
             company_id = qb['matched_company_id']
 
             ty = qb.get('invoiced_ty')
@@ -1159,6 +1177,11 @@ class QuickbaseSync:
                 ))
                 updated += 1
 
+            if (prop_idx + 1) % 500 == 0:
+                logger.info(f"Propagation progress: {prop_idx + 1}/{total_propagate} "
+                            f"({updated} updated)")
+
+        logger.info(f"Propagation complete: {updated}/{total_propagate} companies updated")
         # Invalidate stale analytics cache so next request recomputes with fresh QB data
         if updated > 0:
             try:

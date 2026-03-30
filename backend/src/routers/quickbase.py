@@ -2,6 +2,7 @@
 Quickbase Integration Router — Sync config, trigger sync, view cached data.
 """
 
+import asyncio
 import json
 import logging
 from datetime import datetime, timezone
@@ -18,6 +19,7 @@ from ..models.quickbase import (
     QBTableSyncLog,
 )
 from ..services.quickbase_sync import QuickbaseSync
+from ..utils.log_stream import set_log_context, clear_log_context
 
 logger = logging.getLogger(__name__)
 
@@ -164,15 +166,20 @@ async def trigger_sync(
         if not config.get('is_active'):
             raise HTTPException(status_code=400, detail="QB sync is disabled for this client")
 
-        async def _run_sync():
+        def _run_sync():
+            """Run in thread pool to avoid blocking the event loop."""
+            set_log_context(client_id=client_id)
             try:
+                loop = asyncio.new_event_loop()
                 syncer = QuickbaseSync(_supabase, config)
-                counts = await syncer.sync_all(tables=tables_list, full=full)
-                # Propagate QB data to existing company columns
-                await syncer.propagate_qb_data_to_companies()
+                counts = loop.run_until_complete(syncer.sync_all(tables=tables_list, full=full))
+                loop.run_until_complete(syncer.propagate_qb_data_to_companies())
+                loop.close()
                 logger.info(f"Background QB sync complete: {counts}")
             except Exception as e:
                 logger.error(f"Background QB sync failed: {e}")
+            finally:
+                clear_log_context()
 
         background_tasks.add_task(_run_sync)
 
@@ -513,13 +520,17 @@ async def recompute_affinities(
     try:
         from ..services.recommendation_engine import RecommendationEngine
 
-        async def _run():
+        def _run():
+            """Run in thread pool to avoid blocking the event loop."""
+            set_log_context(client_id=client_id)
             try:
                 engine = RecommendationEngine(_supabase, client_id)
                 count = engine.recompute_affinities()
                 logger.info(f"Affinity recompute done: {count} pairs for client {client_id}")
             except Exception as e:
                 logger.error(f"Affinity recompute failed: {e}")
+            finally:
+                clear_log_context()
 
         if background_tasks:
             background_tasks.add_task(_run)
@@ -549,23 +560,33 @@ async def rematch_qb_data(
 
         config = cfg_result.data[0]
 
-        async def _run_rematch():
+        def _run_rematch():
+            """Run in thread pool to avoid blocking the event loop."""
+            set_log_context(client_id=client_id)
             try:
+                loop = asyncio.new_event_loop()
                 syncer = QuickbaseSync(_supabase, config)
-                match_stats = await syncer.match_to_companies()
-                c2 = await syncer.match_to_contacts()
-                c3 = await syncer.match_customers_via_contacts()
-                c4 = await syncer.propagate_qb_data_to_companies()
-                logger.info(f"Rematch complete: {match_stats}, {c2} contacts by email, "
+                logger.info("QB rematch started — Step 1/4: Match to companies")
+                match_stats = loop.run_until_complete(syncer.match_to_companies())
+                logger.info(f"QB rematch — Step 2/4: Match contacts by email")
+                c2 = loop.run_until_complete(syncer.match_to_contacts())
+                logger.info(f"QB rematch — Step 3/4: Chain-match customers via contacts")
+                c3 = loop.run_until_complete(syncer.match_customers_via_contacts())
+                logger.info(f"QB rematch — Step 4/4: Propagate QB data to companies")
+                c4 = loop.run_until_complete(syncer.propagate_qb_data_to_companies())
+                loop.close()
+                logger.info(f"QB rematch complete: {match_stats}, {c2} contacts by email, "
                             f"{c3} companies via contacts, {c4} propagated")
             except Exception as e:
                 logger.error(f"Rematch failed: {e}")
+            finally:
+                clear_log_context()
 
         if background_tasks:
             background_tasks.add_task(_run_rematch)
             return {"status": "accepted", "message": "Re-matching started in background"}
         else:
-            await _run_rematch()
+            _run_rematch()
             return {"status": "completed", "message": "Re-matching completed"}
 
     except HTTPException:
@@ -1028,16 +1049,22 @@ async def bulk_review_candidates(
 
         # Trigger propagation for all accepted
         if accepted and promoted > 0 and background_tasks:
-            async def _propagate():
+            def _propagate():
+                """Run in thread pool to avoid blocking the event loop."""
+                set_log_context(client_id=client_id)
                 try:
                     cfg = _supabase.table('qb_sync_config').select('*').eq(
                         'client_id', client_id
                     ).limit(1).execute()
                     if cfg.data:
+                        loop = asyncio.new_event_loop()
                         syncer = QuickbaseSync(_supabase, cfg.data[0])
-                        await syncer.propagate_qb_data_to_companies()
+                        loop.run_until_complete(syncer.propagate_qb_data_to_companies())
+                        loop.close()
                 except Exception as e:
                     logger.error(f"Post-bulk-accept propagation failed: {e}")
+                finally:
+                    clear_log_context()
             background_tasks.add_task(_propagate)
 
         return {
