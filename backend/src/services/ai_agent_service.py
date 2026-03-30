@@ -129,11 +129,19 @@ async def agent_chat(
         try:
             agent_result = await agent.ainvoke({"messages": messages})
             final_message = agent_result["messages"][-1]
-            raw_content = (
-                final_message.content
-                if isinstance(final_message.content, str)
-                else str(final_message.content)
-            )
+            # Extract text from content — may be str or list of content blocks
+            content = final_message.content
+            if isinstance(content, str):
+                raw_content = content
+            elif isinstance(content, list):
+                # LangChain returns [{type: 'text', text: '...'}, ...] blocks
+                raw_content = '\n'.join(
+                    block.get('text', '') if isinstance(block, dict) else str(block)
+                    for block in content
+                    if isinstance(block, dict) and block.get('type') == 'text' or isinstance(block, str)
+                )
+            else:
+                raw_content = str(content)
             break
         except Exception as _e:
             _err = str(_e).lower()
@@ -150,11 +158,17 @@ async def agent_chat(
                 *messages,
             ]
             direct_response = await llm.ainvoke(direct_messages)
-            raw_content = (
-                direct_response.content
-                if isinstance(direct_response.content, str)
-                else str(direct_response.content)
-            )
+            fb_content = direct_response.content
+            if isinstance(fb_content, str):
+                raw_content = fb_content
+            elif isinstance(fb_content, list):
+                raw_content = '\n'.join(
+                    block.get('text', '') if isinstance(block, dict) else str(block)
+                    for block in fb_content
+                    if isinstance(block, dict) and block.get('type') == 'text' or isinstance(block, str)
+                )
+            else:
+                raw_content = str(fb_content)
             agent_result = {"messages": [direct_response]}
             break
 
@@ -211,11 +225,13 @@ async def agent_chat(
         supabase_client.table("ai_usage_log").insert({
             "client_id": client_id,
             "operation": "agent_chat",
-            "model": model_config.get("model_id", "sonnet"),
+            "model": model_config.get("model", "sonnet"),
             "input_tokens": total_input_tokens,
             "output_tokens": total_output_tokens,
-            "cost_usd": cost,
-            "metadata": {"tools_used": [t.get("tool_name") for t in unique_tools]},
+            "estimated_cost_usd": cost,
+            "processing_time_ms": processing_time_ms,
+            "batch_size": 1,
+            "success": True,
         }).execute()
     except Exception as e:
         logger.warning(f"Failed to log agent usage: {e}")
