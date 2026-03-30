@@ -494,3 +494,31 @@ export async function summarizeEmail(emailId: string): Promise<string> {
     throw new Error('Failed to generate summary');
   }
 }
+
+// ============================================================================
+// H) AI CHAT AGENT
+// ============================================================================
+
+export interface AgentChatResponse {
+  response: string;
+  tools_used: { tool_name: string; tool_input?: string; tool_output_preview?: string }[];
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd: number;
+  processing_time_ms: number;
+}
+
+export async function agentChat(
+  message: string,
+  clientId: string,
+  conversationHistory: { role: string; content: string }[],
+): Promise<AgentChatResponse> {
+  const result = await api.post<AgentChatResponse>(
+    `${API_PREFIX}/agent/chat`,
+    { message, client_id: clientId, conversation_history: conversationHistory },
+    { timeout: 90000 },
+  );
+  if (!result) throw new Error('No response from agent');
+  return result;
+}

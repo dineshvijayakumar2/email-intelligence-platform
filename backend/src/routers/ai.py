@@ -1848,3 +1848,49 @@ async def get_vector_stats(
             except Exception:
                 stats[label] = {"total": 0, "embedded": 0}
     return stats
+
+
+# ============================================================================
+# AI CHAT AGENT
+# ============================================================================
+
+from pydantic import BaseModel, Field
+from typing import List
+
+
+class AgentChatRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=4000)
+    client_id: str
+    conversation_history: List[dict] = Field(default_factory=list)
+
+
+class AgentChatResponse(BaseModel):
+    response: str
+    tools_used: List[dict] = []
+    model: str = ""
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cost_usd: float = 0.0
+    processing_time_ms: int = 0
+
+
+@router.post("/agent/chat", response_model=AgentChatResponse)
+async def agent_chat(
+    data: AgentChatRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Conversational AI agent with access to company, contact, email, and operations data."""
+    try:
+        from ..services.ai_agent_service import agent_chat as _agent_chat
+
+        result = await _agent_chat(
+            supabase_client=_supabase,
+            client_id=data.client_id,
+            message=data.message,
+            conversation_history=data.conversation_history,
+        )
+        return AgentChatResponse(**result)
+
+    except Exception as e:
+        logger.error(f"Agent chat failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e)[:300])

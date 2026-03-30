@@ -41,6 +41,7 @@ import DigestPage from './pages/intelligence/digest';
 import OpportunitiesPage from './pages/intelligence/opportunities';
 import StrategicDigestPage from './pages/intelligence/strategic-digest';
 import VectorSearchPage from './pages/intelligence/vector-search';
+import AgentPage from './pages/intelligence/agent';
 
 // Manage pages
 import { ResponseTimesAnalytics } from './pages/analytics/response-times';
@@ -105,6 +106,7 @@ function App() {
             <Route path="/insights/opportunities" element={<ProtectedRoute><Layout><OpportunitiesPage /></Layout></ProtectedRoute>} />
             <Route path="/insights/strategic" element={<ProtectedRoute><Layout><StrategicDigestPage /></Layout></ProtectedRoute>} />
             <Route path="/insights/search" element={<ProtectedRoute><Layout><VectorSearchPage /></Layout></ProtectedRoute>} />
+            <Route path="/insights/agent" element={<ProtectedRoute><Layout><AgentPage /></Layout></ProtectedRoute>} />
 
             {/* Manage routes */}
             <Route path="/manage/response-times" element={<ProtectedRoute><Layout><ResponseTimesAnalytics /></Layout></ProtectedRoute>} />
