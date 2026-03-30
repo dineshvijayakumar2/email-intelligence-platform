@@ -9,6 +9,12 @@ import config from '../config.js';
 
 export type ClientStatus = 'active' | 'inactive' | 'prospect';
 
+export interface InternalDomain {
+  id: string;
+  domain: string;
+  created_at: string;
+}
+
 export interface AccountManagerSummary {
   id: string;
   name: string;
@@ -214,6 +220,34 @@ export const clientService = {
       prospect: 'blue',
     };
     return colors[status] || 'default';
+  },
+
+  // ── Internal Domains ──────────────────────────────────────────────
+
+  async listInternalDomains(clientId: string): Promise<{ domains: InternalDomain[] }> {
+    const response = await fetch(`${config.apiBaseUrl}/clients/${clientId}/internal-domains`);
+    if (!response.ok) throw new Error('Failed to fetch internal domains');
+    return response.json();
+  },
+
+  async addInternalDomain(clientId: string, domain: string): Promise<InternalDomain> {
+    const response = await fetch(
+      `${config.apiBaseUrl}/clients/${clientId}/internal-domains?domain=${encodeURIComponent(domain)}`,
+      { method: 'POST' }
+    );
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.detail || 'Failed to add domain');
+    }
+    return response.json();
+  },
+
+  async removeInternalDomain(clientId: string, domainId: string): Promise<void> {
+    const response = await fetch(
+      `${config.apiBaseUrl}/clients/${clientId}/internal-domains/${domainId}`,
+      { method: 'DELETE' }
+    );
+    if (!response.ok) throw new Error('Failed to remove domain');
   },
 };
 

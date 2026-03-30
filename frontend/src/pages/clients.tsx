@@ -31,6 +31,8 @@ import {
   HomeOutlined,
   ReloadOutlined,
   BankOutlined,
+  GlobalOutlined,
+  CloseCircleOutlined,
 } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 import {
@@ -39,6 +41,7 @@ import {
   ClientCreate,
   ClientUpdate,
   ClientStatus,
+  InternalDomain,
 } from '../services/clientService';
 
 const { Text } = Typography;
@@ -52,6 +55,11 @@ const ClientsPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [editingClient, setEditingClient] = useState<ClientSummary | null>(null);
   const [form] = Form.useForm();
+
+  // Internal domains
+  const [internalDomains, setInternalDomains] = useState<InternalDomain[]>([]);
+  const [newDomain, setNewDomain] = useState('');
+  const [domainsLoading, setDomainsLoading] = useState(false);
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<ClientStatus | undefined>();
@@ -106,6 +114,36 @@ const ClientsPage: React.FC = () => {
     }
   };
 
+  // Load internal domains for a client
+  const loadInternalDomains = async (clientId: string) => {
+    setDomainsLoading(true);
+    try {
+      const resp = await clientService.listInternalDomains(clientId);
+      setInternalDomains(resp.domains);
+    } catch { setInternalDomains([]); }
+    finally { setDomainsLoading(false); }
+  };
+
+  const handleAddDomain = async () => {
+    if (!editingClient || !newDomain.trim()) return;
+    try {
+      await clientService.addInternalDomain(editingClient.id, newDomain.trim());
+      setNewDomain('');
+      loadInternalDomains(editingClient.id);
+      message.success(`Domain "${newDomain.trim()}" added`);
+    } catch (err: any) {
+      message.error(err.message || 'Failed to add domain');
+    }
+  };
+
+  const handleRemoveDomain = async (domainId: string) => {
+    if (!editingClient) return;
+    try {
+      await clientService.removeInternalDomain(editingClient.id, domainId);
+      loadInternalDomains(editingClient.id);
+    } catch { message.error('Failed to remove domain'); }
+  };
+
   // Open edit modal
   const openEditModal = (client: ClientSummary) => {
     setEditingClient(client);
@@ -115,6 +153,7 @@ const ClientsPage: React.FC = () => {
       status: client.status,
     });
     setModalVisible(true);
+    loadInternalDomains(client.id);
   };
 
   // Table columns
@@ -431,6 +470,38 @@ const ClientsPage: React.FC = () => {
           >
             <Input.TextArea rows={3} placeholder="Additional notes..." />
           </Form.Item>
+
+          {/* Internal Domains — only show when editing */}
+          {editingClient && (
+            <div style={{ marginBottom: 24 }}>
+              <Text strong><GlobalOutlined /> Internal Domains</Text>
+              <Text type="secondary" style={{ display: 'block', fontSize: 12, marginBottom: 8 }}>
+                Email domains owned by this client (excluded from customer extraction)
+              </Text>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
+                {internalDomains.map(d => (
+                  <Tag key={d.id} closable onClose={() => handleRemoveDomain(d.id)} color="orange">
+                    {d.domain}
+                  </Tag>
+                ))}
+                {!domainsLoading && internalDomains.length === 0 && (
+                  <Text type="secondary" style={{ fontSize: 12 }}>No internal domains configured</Text>
+                )}
+              </div>
+              <Space.Compact style={{ width: '100%' }}>
+                <Input
+                  placeholder="e.g., carbon8.com.au"
+                  value={newDomain}
+                  onChange={e => setNewDomain(e.target.value)}
+                  onPressEnter={handleAddDomain}
+                  style={{ flex: 1 }}
+                />
+                <Button type="primary" onClick={handleAddDomain} disabled={!newDomain.trim()}>
+                  Add
+                </Button>
+              </Space.Compact>
+            </div>
+          )}
 
           <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
             <Space>

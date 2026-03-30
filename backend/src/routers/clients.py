@@ -408,3 +408,49 @@ async def get_client_summary(client_id: str):
     except Exception as e:
         logger.error(f"Failed to get client summary: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Internal Domains Management
+# ═══════════════════════════════════════════════════════════════════════════
+
+@router.get("/{client_id}/internal-domains")
+async def list_internal_domains(client_id: str):
+    """List all internal domains for a client."""
+    try:
+        result = _supabase.table('internal_domains').select(
+            'id, domain, created_at'
+        ).eq('client_id', client_id).order('domain').execute()
+        return {"domains": result.data or []}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{client_id}/internal-domains")
+async def add_internal_domain(client_id: str, domain: str = Query(...)):
+    """Add an internal domain for a client."""
+    domain = domain.strip().lower()
+    if not domain or '.' not in domain:
+        raise HTTPException(status_code=400, detail="Invalid domain format")
+    try:
+        result = _supabase.table('internal_domains').insert({
+            'client_id': client_id,
+            'domain': domain,
+        }).execute()
+        return result.data[0] if result.data else {"status": "created"}
+    except Exception as e:
+        if '23505' in str(e):  # unique constraint violation
+            raise HTTPException(status_code=409, detail=f"Domain '{domain}' already exists")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/{client_id}/internal-domains/{domain_id}")
+async def remove_internal_domain(client_id: str, domain_id: str):
+    """Remove an internal domain."""
+    try:
+        _supabase.table('internal_domains').delete().eq(
+            'id', domain_id
+        ).eq('client_id', client_id).execute()
+        return {"status": "deleted"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
