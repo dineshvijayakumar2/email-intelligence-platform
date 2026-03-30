@@ -135,11 +135,16 @@ async def get_processing_jobs(
         jobs = []
         for job in result.data:
             # Get real-time progress from Redis (faster than database)
-            redis_progress = get_job_progress(job['id'])
-            if redis_progress['processed'] > job.get('processed_records', 0):
-                # Redis has more recent data than database
-                job['processed_records'] = redis_progress['processed']
-                job['failed_records'] = redis_progress['failed']
+            # Only use Redis data for actively running jobs — interrupted/failed/completed
+            # jobs should use DB values (Redis may have stale "running" data)
+            db_status = job.get('status')
+            if db_status in ('running', 'pending', 'downloading'):
+                redis_progress = get_job_progress(job['id'])
+                if redis_progress['processed'] > job.get('processed_records', 0):
+                    job['processed_records'] = redis_progress['processed']
+                    job['failed_records'] = redis_progress['failed']
+            else:
+                redis_progress = {'processed': 0, 'failed': 0, 'emails_per_second': 0, 'estimated_seconds_remaining': 0}
 
             # Calculate progress safely, handling None and 0
             total = job.get('total_records') or 0
@@ -1418,7 +1423,12 @@ async def cleanup_orphaned_jobs():
                         'completed_at': datetime.now(timezone.utc).isoformat(),
                     }).eq('id', job_id).execute()
 
-                    logger.info(f"Marked job {job_id} as interrupted")
+                    # Clear stale Redis progress so frontend doesn't see
+                    # old "running" data overriding the DB "interrupted" status
+                    if _progress_manager:
+                        _progress_manager.delete_progress(job_id)
+
+                    logger.info(f"Marked job {job_id} as interrupted (DB + Redis cleared)")
                 except Exception as e:
                     logger.warning(f"Failed to update job {job_id}: {e}")
 
