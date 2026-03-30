@@ -506,7 +506,12 @@ class ExtractionOrchestrator:
 
         except Exception as e:
             logger.error(f"Step {step_num} failed: {e}")
-            raise
+            # Steps 1-8 are critical (data extraction) — must abort on failure
+            # Steps 9-12 are enrichment/analytics — log and continue
+            if step_num <= 8:
+                raise
+            logger.warning(f"Step {step_num} is non-critical — continuing pipeline")
+            self.step_results[step_num] = {'error': str(e)}
 
     def _create_job(self) -> str:
         """

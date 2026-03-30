@@ -208,15 +208,20 @@ class EmailLinker:
 
             # Look up contact
             contact_id = self._contact_cache.get(link_email)
-            if not contact_id:
-                skipped_email_ids.append(email_id)
-                continue
 
-            # Look up company: prefer contact→company FK (reliable), fall back to domain
-            company_id = self._contact_company_cache.get(contact_id)
-            if not company_id:
+            if contact_id:
+                # Contact found — look up company via FK or domain fallback
+                company_id = self._contact_company_cache.get(contact_id)
+                if not company_id:
+                    domain = self._extract_domain(link_email)
+                    company_id = self._company_cache.get(domain.lower()) if domain else None
+            else:
+                # No contact — try company-only link via email domain
                 domain = self._extract_domain(link_email)
                 company_id = self._company_cache.get(domain.lower()) if domain else None
+                if not company_id:
+                    skipped_email_ids.append(email_id)
+                    continue
 
             # Group by (contact_id, company_id) for batch update
             group_key = (contact_id, company_id)
@@ -224,9 +229,12 @@ class EmailLinker:
                 link_groups[group_key] = []
             link_groups[group_key].append(email_id)
 
+        # Count company-only links (contact_id is None in group key)
+        company_only = sum(1 for (cid, _) in link_groups if cid is None)
         logger.info(f"Grouped {total_emails - len(skipped_email_ids)} emails into "
-                   f"{len(link_groups)} unique contact/company pairs")
-        logger.info(f"Skipped {len(skipped_email_ids)} emails (no contact match)")
+                   f"{len(link_groups)} unique contact/company pairs"
+                   f" ({company_only} company-only via domain)")
+        logger.info(f"Skipped {len(skipped_email_ids)} emails (no contact or domain match)")
 
         # Batch update emails by group
         linked_count = 0
@@ -235,11 +243,12 @@ class EmailLinker:
         for group_idx, ((contact_id, company_id), email_ids_list) in enumerate(link_groups.items(), 1):
             try:
                 update_data = {
-                    'customer_contact_id': contact_id,
                     'client_id': self.client_id,
                     'updated_at': timestamp
                 }
 
+                if contact_id:
+                    update_data['customer_contact_id'] = contact_id
                 if company_id:
                     update_data['customer_company_id'] = company_id
 
@@ -366,9 +375,10 @@ class EmailLinker:
                 if not force_relink:
                     query = query.is_('customer_contact_id', 'null')
 
+                # Order by indexed PK instead of sent_date to avoid full-table sort
                 response = self._execute_with_retry(
                     query
-                    .order('sent_date', desc=False)
+                    .order('id', desc=False)
                     .range(offset, offset + PAGE_SIZE - 1)
                 )
                 raw_batch = response.data or []

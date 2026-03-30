@@ -1124,7 +1124,29 @@ async def get_company_analytics(company_id: str):
             except Exception:
                 pass
 
-        return CompanyAnalytics(**comp, engagement_status=status, client_name=client_name)
+        # Thread counts: active + overdue
+        active_threads = 0
+        overdue_threads = 0
+        try:
+            threads_result = _supabase.table('thread_status').select(
+                'id, status'
+            ).eq('customer_company_id', company_id).execute()
+            for t in (threads_result.data or []):
+                s = (t.get('status') or '').upper()
+                if s in ('ONGOING', 'AWAITING_OUR_RESPONSE', 'ACTIVE'):
+                    active_threads += 1
+                elif s == 'OVERDUE':
+                    overdue_threads += 1
+        except Exception:
+            pass
+
+        return CompanyAnalytics(
+            **comp,
+            engagement_status=status,
+            client_name=client_name,
+            active_threads=active_threads,
+            overdue_threads=overdue_threads,
+        )
 
     except HTTPException:
         raise

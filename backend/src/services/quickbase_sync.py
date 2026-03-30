@@ -865,43 +865,54 @@ class QuickbaseSync:
         matches: list[tuple[dict, dict, str]],
         now_iso: str,
     ):
-        """Batch-write confirmed matches: update qb_customers + customer_companies in chunks.
+        """Batch-write confirmed matches using upsert for speed.
 
-        Each match is (qb_cust, sb_company, method). We update one row at a time
-        but throttle to avoid connection exhaustion.
+        Each match is (qb_cust, sb_company, method). Batched into chunks of
+        UPSERT_BATCH_SIZE to avoid payload limits.
         """
-        import time as _time
         total = len(matches)
-        for i, (qb_cust, sb_company, method) in enumerate(matches):
-            # Snapshot values to avoid "dictionary changed size during iteration"
+
+        # Build upsert payloads for both tables
+        qb_rows = []
+        company_rows = []
+        for qb_cust, sb_company, method in matches:
             sb_id = sb_company.get('id')
             qb_id = qb_cust.get('id')
-            qb_rec_id = qb_cust.get('qb_record_id')
-            qb_code = qb_cust.get('customer_code')
-            qb_name = qb_cust.get('customer_name')
-            try:
-                _execute_with_retry(lambda _cid=sb_id, _qid=qb_id: (
-                    self._supabase.table('qb_customers').update({
-                        'matched_company_id': _cid
-                    }).eq('id', _qid).execute()
-                ))
-                _execute_with_retry(lambda _sid=sb_id, _m=method, _n=now_iso,
-                                    _qcid=qb_rec_id, _qcode=qb_code: (
-                    self._supabase.table('customer_companies').update({
-                        'qb_customer_id': _qcid,
-                        'qb_customer_code': _qcode,
-                        'qb_match_method': _m,
-                        'qb_matched_at': _n,
-                    }).eq('id', _sid).execute()
-                ))
-            except Exception as e:
-                logger.warning(f"Match write failed for {qb_name}: {e}")
+            qb_rows.append({
+                'id': qb_id,
+                'matched_company_id': sb_id,
+            })
+            company_rows.append({
+                'id': sb_id,
+                'qb_customer_id': qb_cust.get('qb_record_id'),
+                'qb_customer_code': qb_cust.get('customer_code'),
+                'qb_match_method': method,
+                'qb_matched_at': now_iso,
+            })
 
-            # Throttle: pause every 50 matches to avoid connection saturation
-            if (i + 1) % 50 == 0:
-                _time.sleep(0.5)
-                if (i + 1) % 200 == 0:
-                    logger.info(f"Match write progress: {i + 1}/{total}")
+        # Batch upsert qb_customers
+        for i in range(0, len(qb_rows), UPSERT_BATCH_SIZE):
+            batch = qb_rows[i:i + UPSERT_BATCH_SIZE]
+            try:
+                _execute_with_retry(lambda b=batch: self._supabase.table(
+                    'qb_customers'
+                ).upsert(b, on_conflict='id').execute())
+            except Exception as e:
+                logger.warning(f"QB customers batch upsert failed at offset {i}: {e}")
+
+        # Batch upsert customer_companies
+        for i in range(0, len(company_rows), UPSERT_BATCH_SIZE):
+            batch = company_rows[i:i + UPSERT_BATCH_SIZE]
+            batch_num = i // UPSERT_BATCH_SIZE + 1
+            try:
+                _execute_with_retry(lambda b=batch: self._supabase.table(
+                    'customer_companies'
+                ).upsert(b, on_conflict='id').execute())
+            except Exception as e:
+                logger.warning(f"Companies batch upsert failed at offset {i}: {e}")
+
+            if (i + UPSERT_BATCH_SIZE) % 500 < UPSERT_BATCH_SIZE:
+                logger.info(f"Match write progress: {min(i + UPSERT_BATCH_SIZE, total)}/{total}")
 
         logger.info(f"Match write complete: {total} matches written")
 
@@ -1134,28 +1145,23 @@ class QuickbaseSync:
                 break
             offset += len(rows)
 
-        updated = 0
         total_propagate = len(all_matched)
         logger.info(f"Propagating QB data for {total_propagate} matched customers")
-        for prop_idx, qb in enumerate(all_matched):
-            company_id = qb['matched_company_id']
 
+        # Build all update payloads in memory first (fast, no I/O)
+        upsert_rows = []
+        for qb in all_matched:
+            company_id = qb['matched_company_id']
             ty = qb.get('invoiced_ty')
             ly = qb.get('invoiced_ly')
             total = qb.get('total_invoiced')
-
-            # Derive growth if QB doesn't provide it
             growth = qb.get('growth_90d') or _derive_growth(ty, ly)
-
-            # Derive tier from revenue if QB tier is missing
             tier = qb.get('customer_tier') or _derive_tier(total)
-
-            # Handle recency — may be HTML-wrapped from CSV imports
             recency_raw = qb.get('days_since_last_invoice') or qb.get('recency_days')
             recency = _parse_recency_html(recency_raw)
 
-            # Overwrite all financial fields — ensures data stays current
-            update_data = {
+            row = {
+                'id': company_id,
                 'qb_customer_type': qb.get('customer_status'),
                 'qb_tier': tier,
                 'qb_total_revenue': total,
@@ -1167,18 +1173,39 @@ class QuickbaseSync:
                 'qb_customer_id': qb.get('qb_record_id'),
                 'qb_customer_code': qb.get('customer_code'),
             }
-            # Only skip None for identity columns that shouldn't be blanked
-            # Financial fields: write even if None so stale data doesn't persist
-            update_data = {k: v for k, v in update_data.items() if v is not None}
+            # Strip None values (keep the row compact)
+            row = {k: v for k, v in row.items() if v is not None or k == 'id'}
+            upsert_rows.append(row)
 
-            if update_data:
-                _execute_with_retry(lambda d=update_data, cid=company_id: (
-                    self._supabase.table('customer_companies').update(d).eq('id', cid).execute()
-                ))
-                updated += 1
+        # Batch upsert in chunks of 100 (instead of 6,600 individual UPDATEs)
+        updated = 0
+        batch_size = UPSERT_BATCH_SIZE
+        total_batches = (len(upsert_rows) + batch_size - 1) // batch_size
 
-            if (prop_idx + 1) % 500 == 0:
-                logger.info(f"Propagation progress: {prop_idx + 1}/{total_propagate} "
+        for batch_idx in range(0, len(upsert_rows), batch_size):
+            batch = upsert_rows[batch_idx:batch_idx + batch_size]
+            batch_num = batch_idx // batch_size + 1
+            try:
+                _execute_with_retry(lambda b=batch: self._supabase.table(
+                    'customer_companies'
+                ).upsert(b, on_conflict='id').execute())
+                updated += len(batch)
+            except Exception as e:
+                # Fall back to individual updates for this batch on upsert failure
+                logger.warning(f"Batch upsert {batch_num} failed ({e}), falling back to individual updates")
+                for row in batch:
+                    cid = row.pop('id')
+                    try:
+                        _execute_with_retry(lambda d=row, c=cid: (
+                            self._supabase.table('customer_companies').update(d).eq('id', c).execute()
+                        ))
+                        updated += 1
+                    except Exception as e2:
+                        logger.warning(f"Individual propagation failed for {cid}: {e2}")
+                    row['id'] = cid  # restore for logging
+
+            if batch_num % 10 == 0 or batch_num == total_batches:
+                logger.info(f"Propagation progress: batch {batch_num}/{total_batches} "
                             f"({updated} updated)")
 
         logger.info(f"Propagation complete: {updated}/{total_propagate} companies updated")
