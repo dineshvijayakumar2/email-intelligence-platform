@@ -435,3 +435,179 @@ def semantic_search_operations(query: str) -> str:
         lines.append(f"  Similarity: {r.get('similarity', 0):.2f}")
         lines.append("")
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Tool 7: Portfolio Summary — aggregate account health
+# ---------------------------------------------------------------------------
+
+@tool
+def portfolio_summary() -> str:
+    """Get a high-level summary of the account portfolio.
+
+    Returns total accounts, engagement breakdown, revenue summary, and
+    accounts not contacted recently. Use this to answer questions like
+    "how is our portfolio doing?" or "how many accounts are at risk?".
+
+    Returns:
+        Portfolio health summary with key metrics
+    """
+    sb = _get_client()
+    try:
+        # Fetch all companies with key metrics
+        all_companies = []
+        offset = 0
+        while True:
+            resp = sb.table('customer_companies').select(
+                'company_name, engagement_score, last_contact_date, '
+                'total_emails, contact_count, '
+                'qb_total_revenue, qb_tier, qb_growth_90d, qb_days_since_last_invoice'
+            ).range(offset, offset + 999).execute()
+            rows = resp.data or []
+            all_companies.extend(rows)
+            if len(rows) == 0:
+                break
+            offset += len(rows)
+
+        if not all_companies:
+            return "No companies found in the portfolio."
+
+        from datetime import datetime, timedelta
+        now = datetime.utcnow()
+        cutoff_90 = (now - timedelta(days=90)).isoformat()
+        cutoff_30 = (now - timedelta(days=30)).isoformat()
+
+        total = len(all_companies)
+        with_revenue = [c for c in all_companies if c.get('qb_total_revenue')]
+        total_revenue = sum(float(c.get('qb_total_revenue') or 0) for c in all_companies)
+        avg_engagement = sum(c.get('engagement_score') or 0 for c in all_companies) / max(total, 1)
+
+        # Contact recency
+        not_contacted_90d = sum(1 for c in all_companies
+                                if c.get('last_contact_date') and str(c['last_contact_date']) < cutoff_90)
+        not_contacted_30d = sum(1 for c in all_companies
+                                if c.get('last_contact_date') and str(c['last_contact_date']) < cutoff_30)
+        no_contact_date = sum(1 for c in all_companies if not c.get('last_contact_date'))
+
+        # Engagement tiers
+        high_eng = sum(1 for c in all_companies if (c.get('engagement_score') or 0) >= 70)
+        med_eng = sum(1 for c in all_companies if 30 <= (c.get('engagement_score') or 0) < 70)
+        low_eng = sum(1 for c in all_companies if (c.get('engagement_score') or 0) < 30)
+
+        lines = [
+            f"PORTFOLIO SUMMARY ({total} accounts)",
+            f"",
+            f"Revenue: ${total_revenue:,.0f} total across {len(with_revenue)} accounts with QB data",
+            f"Avg Engagement Score: {avg_engagement:.0f}/100",
+            f"",
+            f"Engagement: {high_eng} high (70+), {med_eng} medium (30-69), {low_eng} low (<30)",
+            f"",
+            f"Contact Recency:",
+            f"  Not contacted in 90+ days: {not_contacted_90d} accounts",
+            f"  Not contacted in 30+ days: {not_contacted_30d} accounts",
+            f"  No contact date recorded: {no_contact_date} accounts",
+        ]
+        return "\n".join(lines)
+
+    except Exception as e:
+        logger.error(f"portfolio_summary failed: {e}")
+        return f"Failed to get portfolio summary: {e}"
+
+
+# ---------------------------------------------------------------------------
+# Tool 8: Account Ranking — top/bottom accounts by metric
+# ---------------------------------------------------------------------------
+
+@tool
+def account_ranking(metric: str, limit: int = 10) -> str:
+    """Rank accounts by a specific metric. Returns the top N accounts.
+
+    Use this to answer questions like "top 5 customers by revenue",
+    "which accounts are most at risk", "who hasn't been contacted recently",
+    "accounts with highest engagement".
+
+    Args:
+        metric: One of: "revenue", "engagement", "growth",
+                "days_since_contact", "days_since_invoice", "email_volume"
+        limit: Number of accounts to return (default 10, max 25)
+
+    Returns:
+        Ranked list of accounts with key metrics
+    """
+    sb = _get_client()
+    limit = min(limit, 25)
+
+    # Map metric to sort column and direction
+    METRIC_MAP = {
+        'revenue': ('qb_total_revenue', True),
+        'engagement': ('engagement_score', True),
+        'growth': ('qb_growth_90d', True),
+        'days_since_contact': ('last_contact_date', False),  # oldest first
+        'days_since_invoice': ('qb_days_since_last_invoice', True),  # highest days first
+        'email_volume': ('total_emails', True),
+    }
+
+    if metric not in METRIC_MAP:
+        return f"Unknown metric '{metric}'. Use one of: {', '.join(METRIC_MAP.keys())}"
+
+    sort_col, desc = METRIC_MAP[metric]
+
+    try:
+        query = sb.table('customer_companies').select(
+            'company_name, engagement_score, total_emails, contact_count, '
+            'last_contact_date, qb_total_revenue, qb_tier, qb_growth_90d, '
+            'qb_days_since_last_invoice, qb_account_manager'
+        )
+
+        # Filter out nulls for the sorted column
+        if sort_col in ('qb_total_revenue', 'qb_growth_90d', 'qb_days_since_last_invoice'):
+            query = query.not_.is_(sort_col, 'null')
+        if sort_col == 'last_contact_date' and not desc:
+            query = query.not_.is_('last_contact_date', 'null')
+
+        query = query.order(sort_col, desc=desc).limit(limit)
+        result = query.execute()
+
+        companies = result.data or []
+        if not companies:
+            return f"No accounts found for metric '{metric}'."
+
+        from datetime import datetime
+        now = datetime.utcnow()
+
+        lines = [f"TOP {len(companies)} ACCOUNTS BY {metric.upper().replace('_', ' ')}:\n"]
+        for i, c in enumerate(companies, 1):
+            name = c.get('company_name', 'Unknown')
+            revenue = c.get('qb_total_revenue')
+            eng = c.get('engagement_score') or 0
+            tier = c.get('qb_tier') or '-'
+            growth = c.get('qb_growth_90d')
+            last_contact = c.get('last_contact_date')
+            emails = c.get('total_emails') or 0
+            am = c.get('qb_account_manager') or '-'
+
+            days_since = ''
+            if last_contact:
+                try:
+                    lcd = datetime.fromisoformat(str(last_contact).replace('Z', '+00:00')).replace(tzinfo=None)
+                    days_since = f" ({(now - lcd).days}d ago)"
+                except Exception:
+                    pass
+
+            line = f"  {i}. {name}"
+            if revenue is not None:
+                line += f" | ${float(revenue):,.0f}"
+            line += f" | Eng: {eng}"
+            if growth is not None:
+                line += f" | Growth: {float(growth):+.1f}%"
+            line += f" | {emails} emails"
+            if days_since:
+                line += f" | Last contact{days_since}"
+            line += f" | Tier: {tier} | AM: {am}"
+            lines.append(line)
+
+        return "\n".join(lines)
+
+    except Exception as e:
+        logger.error(f"account_ranking failed: {e}")
+        return f"Failed to rank accounts: {e}"

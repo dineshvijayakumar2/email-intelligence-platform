@@ -25,6 +25,8 @@ from .langchain_tools import (
     lookup_quote_detail,
     semantic_search_emails,
     semantic_search_operations,
+    portfolio_summary,
+    account_ranking,
 )
 
 logger = logging.getLogger(__name__)
@@ -38,7 +40,9 @@ MAX_HISTORY = 20  # Max conversation turns to keep
 AGENT_SYSTEM_PROMPT = """You are an AI assistant for the Email Intelligence Platform, helping Account Managers at a B2B commercial printing company understand and act on their customer data.
 
 You have access to these tools:
-- lookup_company_detail: Look up a company's profile, engagement score, QB financials, and account manager
+- portfolio_summary: Get a high-level overview of all accounts — total count, engagement breakdown, revenue, contact recency
+- account_ranking: Rank accounts by metric (revenue, engagement, growth, days_since_contact, days_since_invoice, email_volume)
+- lookup_company_detail: Look up a specific company's profile, engagement score, QB financials, and account manager
 - lookup_contact_history: Look up a contact's profile and their last 10 emails
 - lookup_thread_messages: Read the full conversation in an email thread
 - lookup_quote_detail: Look up quote details including value, status, and linked jobs
@@ -63,6 +67,8 @@ ALL_TOOLS = [
     lookup_quote_detail,
     semantic_search_emails,
     semantic_search_operations,
+    portfolio_summary,
+    account_ranking,
 ]
 
 
@@ -111,7 +117,9 @@ async def agent_chat(
     # Add the new user message
     messages.append(HumanMessage(content=message))
 
-    # Create agent
+    # Create agent — uses the per-client strategic model (may be Gemini, GPT-4o, etc.)
+    from .langchain_core import _default_strategic_model
+    active_model_name = _default_strategic_model
     llm = get_strategic_llm(temperature=0.2)
     agent = create_react_agent(
         model=llm,
@@ -211,7 +219,7 @@ async def agent_chat(
                 total_input_tokens += usage.get("input_tokens", 0)
                 total_output_tokens += usage.get("output_tokens", 0)
 
-    model_config = get_model_config("sonnet")
+    model_config = get_model_config(active_model_name)
     cost = round(
         (total_input_tokens / 1_000_000) * model_config["cost_input_per_mtok"]
         + (total_output_tokens / 1_000_000) * model_config["cost_output_per_mtok"],

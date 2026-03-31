@@ -50,6 +50,8 @@ const SUGGESTIONS = [
 ];
 
 const TOOL_ICONS: Record<string, React.ReactNode> = {
+  portfolio_summary: <BankOutlined />,
+  account_ranking: <BankOutlined />,
   lookup_company_detail: <BankOutlined />,
   lookup_contact_history: <TeamOutlined />,
   lookup_thread_messages: <MailOutlined />,
@@ -59,6 +61,8 @@ const TOOL_ICONS: Record<string, React.ReactNode> = {
 };
 
 const TOOL_LABELS: Record<string, string> = {
+  portfolio_summary: 'Portfolio summary',
+  account_ranking: 'Account ranking',
   lookup_company_detail: 'Company lookup',
   lookup_contact_history: 'Contact history',
   lookup_thread_messages: 'Thread messages',

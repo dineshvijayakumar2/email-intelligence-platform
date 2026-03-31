@@ -25,6 +25,12 @@ from langchain_anthropic import ChatAnthropic
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.language_models import BaseChatModel
 
+try:
+    from langchain_openai import ChatOpenAI
+    _openai_available = True
+except ImportError:
+    _openai_available = False
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -55,9 +61,25 @@ MODEL_CONFIGS = {
         "max_tokens": 8192,
         "label": "Gemini 2.5 Flash",
     },
+    "gpt4o-mini": {
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "cost_input_per_mtok": 0.15,
+        "cost_output_per_mtok": 0.60,
+        "max_tokens": 4096,
+        "label": "GPT-4o Mini (cheap)",
+    },
+    "gpt4o": {
+        "provider": "openai",
+        "model": "gpt-4o",
+        "cost_input_per_mtok": 2.50,
+        "cost_output_per_mtok": 10.00,
+        "max_tokens": 8192,
+        "label": "GPT-4o (strategic)",
+    },
 }
 
-ModelName = Literal["haiku", "sonnet", "gemini"]
+ModelName = Literal["haiku", "sonnet", "gemini", "gpt4o-mini", "gpt4o"]
 
 # ---------------------------------------------------------------------------
 # Default model preferences — read from env so Railway config persists across restarts
@@ -115,6 +137,20 @@ def get_llm(model_name: Optional[ModelName] = None, temperature: float = 0.0, js
         if json_mode:
             kwargs["response_mime_type"] = "application/json"
         return ChatGoogleGenerativeAI(**kwargs)
+    elif config["provider"] == "openai":
+        if not _openai_available:
+            logger.warning("langchain-openai not installed — falling back to Gemini")
+            return get_llm("gemini", temperature)
+        api_key = os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            logger.warning("OPENAI_API_KEY not set — falling back to Gemini")
+            return get_llm("gemini", temperature)
+        return ChatOpenAI(
+            model=config["model"],
+            api_key=api_key,
+            temperature=temperature,
+            max_tokens=config["max_tokens"],
+        )
     else:
         raise ValueError(f"Unknown provider: {config['provider']}")
 
@@ -143,6 +179,8 @@ def get_available_models() -> list[dict]:
             available = bool(os.environ.get("ANTHROPIC_API_KEY"))
         elif config["provider"] == "google":
             available = bool(os.environ.get("GOOGLE_GENAI_API_KEY") or os.environ.get("GEMINI_API_KEY"))
+        elif config["provider"] == "openai":
+            available = _openai_available and bool(os.environ.get("OPENAI_API_KEY"))
 
         models.append({
             "name": name,
