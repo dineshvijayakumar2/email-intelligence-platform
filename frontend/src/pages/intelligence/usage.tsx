@@ -151,7 +151,7 @@ const UsagePage: React.FC = () => {
 
   const handleApiKeysSave = async () => {
     const values = apiKeysForm.getFieldsValue();
-    if (!values.anthropic_api_key && !values.google_api_key) {
+    if (!values.anthropic_api_key && !values.google_api_key && !values.openai_api_key) {
       message.warning('Enter at least one key to update');
       return;
     }
@@ -593,17 +593,28 @@ const UsagePage: React.FC = () => {
                   {apiKeys?.google_set ? apiKeys.google_masked : 'Not set'}
                 </Text>
               </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <Text>OpenAI (GPT-4o)</Text>
+                <Text type={apiKeys?.openai_set ? 'success' : 'secondary'}>
+                  {apiKeys?.openai_set ? apiKeys.openai_masked : 'Not set'}
+                </Text>
+              </div>
             </div>
             <Form form={apiKeysForm} layout="vertical">
               <Row gutter={16}>
-                <Col span={12}>
+                <Col span={8}>
                   <Form.Item label="Anthropic API Key" name="anthropic_api_key" style={{ marginBottom: 8 }}>
                     <Input.Password placeholder="sk-ant-..." size="small" />
                   </Form.Item>
                 </Col>
-                <Col span={12}>
+                <Col span={8}>
                   <Form.Item label="Google API Key" name="google_api_key" style={{ marginBottom: 8 }}>
                     <Input.Password placeholder="AIza..." size="small" />
+                  </Form.Item>
+                </Col>
+                <Col span={8}>
+                  <Form.Item label="OpenAI API Key" name="openai_api_key" style={{ marginBottom: 8 }}>
+                    <Input.Password placeholder="sk-..." size="small" />
                   </Form.Item>
                 </Col>
               </Row>

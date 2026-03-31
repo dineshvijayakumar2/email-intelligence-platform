@@ -1440,6 +1440,16 @@ async def get_api_keys(
         google = os.environ.get("GOOGLE_GENAI_API_KEY") or os.environ.get("GEMINI_API_KEY") or ""
         google_source = "env"
 
+    db_openai = _get_client_setting('api_key_openai', client_id)
+    openai_key = ""
+    openai_source = "none"
+    if db_openai:
+        openai_key = base64.b64decode(db_openai).decode()
+        openai_source = "db"
+    elif os.environ.get("OPENAI_API_KEY"):
+        openai_key = os.environ["OPENAI_API_KEY"]
+        openai_source = "env"
+
     return {
         "anthropic_set": bool(anthropic),
         "anthropic_masked": mask(anthropic),
@@ -1447,6 +1457,9 @@ async def get_api_keys(
         "google_set": bool(google),
         "google_masked": mask(google),
         "google_source": google_source,
+        "openai_set": bool(openai_key),
+        "openai_masked": mask(openai_key),
+        "openai_source": openai_source,
     }
 
 
@@ -1472,6 +1485,12 @@ async def update_api_keys(
         _upsert_client_setting('api_key_google', encoded, client_id)
         os.environ["GOOGLE_GENAI_API_KEY"] = data["google_api_key"]
         updated.append("google")
+
+    if data.get("openai_api_key"):
+        encoded = base64.b64encode(data["openai_api_key"].encode()).decode()
+        _upsert_client_setting('api_key_openai', encoded, client_id)
+        os.environ["OPENAI_API_KEY"] = data["openai_api_key"]
+        updated.append("openai")
 
     return {"status": "ok", "updated": updated, "client_id": client_id}
 

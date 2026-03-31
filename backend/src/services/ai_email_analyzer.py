@@ -411,6 +411,8 @@ def _apply_client_model_settings(supabase_client, client_id: Optional[str]):
             os.environ["GOOGLE_GENAI_API_KEY"] = base64.b64decode(settings["api_key_google"]).decode()
         if settings.get("api_key_anthropic"):
             os.environ["ANTHROPIC_API_KEY"] = base64.b64decode(settings["api_key_anthropic"]).decode()
+        if settings.get("api_key_openai"):
+            os.environ["OPENAI_API_KEY"] = base64.b64decode(settings["api_key_openai"]).decode()
     except Exception as e:
         logger.debug(f"Could not load client settings: {e}")
 
