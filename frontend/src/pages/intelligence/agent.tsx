@@ -52,6 +52,10 @@ const SUGGESTIONS = [
 const TOOL_ICONS: Record<string, React.ReactNode> = {
   portfolio_summary: <BankOutlined />,
   account_ranking: <BankOutlined />,
+  search_emails: <MailOutlined />,
+  search_contacts: <TeamOutlined />,
+  thread_overview: <MailOutlined />,
+  company_analytics: <BankOutlined />,
   lookup_company_detail: <BankOutlined />,
   lookup_contact_history: <TeamOutlined />,
   lookup_thread_messages: <MailOutlined />,
@@ -63,11 +67,15 @@ const TOOL_ICONS: Record<string, React.ReactNode> = {
 const TOOL_LABELS: Record<string, string> = {
   portfolio_summary: 'Portfolio summary',
   account_ranking: 'Account ranking',
+  search_emails: 'Email search',
+  search_contacts: 'Contact search',
+  thread_overview: 'Thread overview',
+  company_analytics: 'Company analytics',
   lookup_company_detail: 'Company lookup',
   lookup_contact_history: 'Contact history',
   lookup_thread_messages: 'Thread messages',
   lookup_quote_detail: 'Quote detail',
-  semantic_search_emails: 'Email search',
+  semantic_search_emails: 'Semantic email search',
   semantic_search_operations: 'Operations search',
 };
 

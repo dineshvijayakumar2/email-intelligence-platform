@@ -611,3 +611,427 @@ def account_ranking(metric: str, limit: int = 10) -> str:
     except Exception as e:
         logger.error(f"account_ranking failed: {e}")
         return f"Failed to rank accounts: {e}"
+
+
+# ---------------------------------------------------------------------------
+# Tool 9: Email Search (filtered) — search by date, sender, urgency, intent
+# ---------------------------------------------------------------------------
+
+@tool
+def search_emails(query_type: str, value: str = "", limit: int = 15) -> str:
+    """Search and filter emails by various criteria.
+
+    Use this when the user asks about recent emails, urgent emails, emails
+    from a specific sender, emails about specific topics, or needs to find
+    emails by intent/urgency.
+
+    Args:
+        query_type: One of: "recent" (latest emails), "urgent" (high/critical urgency),
+                    "sender:<email>" (from specific sender), "intent:<type>" (by intent),
+                    "company:<name>" (for a company), "signal:<type>" (business signals),
+                    "unresponded" (awaiting our response)
+        value: Additional filter value (e.g., email address, company name)
+        limit: Max results (default 15, max 25)
+
+    Returns:
+        List of matching emails with subject, sender, date, urgency, intent, summary
+    """
+    sb = _get_client()
+    limit = min(limit, 25)
+
+    try:
+        # Base query: emails + AI intelligence
+        cols = ('e.id, e.subject, e.sender_email, e.sender_name, e.sent_date, '
+                'e.is_outbound, ai.intent, ai.urgency, ai.summary, ai.primary_bucket, '
+                'ai.business_signal, ai.action_type')
+
+        # We need to query emails table and join with ai_email_intelligence
+        # Since Supabase doesn't support JOINs directly, query both tables
+        if query_type == "recent":
+            resp = sb.table('emails').select(
+                'id, subject, sender_email, sender_name, sent_date, is_outbound'
+            ).order('sent_date', desc=True).limit(limit).execute()
+
+        elif query_type == "company" and value:
+            # Find company first
+            comp = sb.table('customer_companies').select('id').ilike(
+                'company_name', f'%{value}%'
+            ).limit(1).execute()
+            if not comp.data:
+                return f"Company '{value}' not found."
+            comp_id = comp.data[0]['id']
+            resp = sb.table('emails').select(
+                'id, subject, sender_email, sender_name, sent_date, is_outbound'
+            ).eq('customer_company_id', comp_id).order('sent_date', desc=True).limit(limit).execute()
+
+        elif query_type.startswith("sender"):
+            sender = value or query_type.split(":", 1)[-1] if ":" in query_type else value
+            resp = sb.table('emails').select(
+                'id, subject, sender_email, sender_name, sent_date, is_outbound'
+            ).ilike('sender_email', f'%{sender}%').order('sent_date', desc=True).limit(limit).execute()
+
+        else:
+            # For urgency/intent/signal/unresponded — query AI intelligence table
+            ai_query = sb.table('ai_email_intelligence').select(
+                'email_id, intent, urgency, summary, primary_bucket, business_signal, action_type'
+            )
+
+            if query_type == "urgent":
+                ai_query = ai_query.in_('urgency', ['critical', 'high'])
+            elif query_type.startswith("intent"):
+                intent_val = value or query_type.split(":", 1)[-1] if ":" in query_type else value
+                ai_query = ai_query.eq('intent', intent_val)
+            elif query_type.startswith("signal"):
+                signal_val = value or query_type.split(":", 1)[-1] if ":" in query_type else value
+                ai_query = ai_query.eq('business_signal', signal_val)
+            elif query_type == "unresponded":
+                ai_query = ai_query.eq('action_type', 'respond_to_inquiry')
+            else:
+                return f"Unknown query_type '{query_type}'. Use: recent, urgent, sender, intent, company, signal, unresponded"
+
+            ai_query = ai_query.order('created_at', desc=True).limit(limit)
+            ai_resp = ai_query.execute()
+            ai_data = ai_resp.data or []
+
+            if not ai_data:
+                return f"No emails found for {query_type}."
+
+            # Fetch email details for AI results
+            email_ids = [r['email_id'] for r in ai_data if r.get('email_id')]
+            if not email_ids:
+                return f"No emails found for {query_type}."
+
+            resp = sb.table('emails').select(
+                'id, subject, sender_email, sender_name, sent_date, is_outbound'
+            ).in_('id', email_ids[:25]).execute()
+
+            # Merge AI data with email data
+            email_map = {e['id']: e for e in (resp.data or [])}
+            lines = [f"Found {len(ai_data)} emails ({query_type}):\n"]
+            for ai in ai_data:
+                e = email_map.get(ai.get('email_id'), {})
+                direction = "OUT" if e.get('is_outbound') else "IN"
+                lines.append(f"  [{direction}] {e.get('subject', 'N/A')}")
+                lines.append(f"  From: {e.get('sender_name', '')} <{e.get('sender_email', 'N/A')}>")
+                lines.append(f"  Date: {str(e.get('sent_date', ''))[:16]}")
+                lines.append(f"  Urgency: {ai.get('urgency', '-')} | Intent: {ai.get('intent', '-')}")
+                lines.append(f"  Signal: {ai.get('business_signal', '-')} | Action: {ai.get('action_type', '-')}")
+                if ai.get('summary'):
+                    lines.append(f"  Summary: {ai['summary'][:150]}")
+                lines.append("")
+            return "\n".join(lines)
+
+        # Format basic email results (no AI join)
+        emails = resp.data or []
+        if not emails:
+            return f"No emails found for {query_type}."
+
+        lines = [f"Found {len(emails)} emails ({query_type}):\n"]
+        for e in emails:
+            direction = "OUT" if e.get('is_outbound') else "IN"
+            lines.append(f"  [{direction}] {e.get('subject', 'N/A')}")
+            lines.append(f"  From: {e.get('sender_name', '')} <{e.get('sender_email', 'N/A')}>")
+            lines.append(f"  Date: {str(e.get('sent_date', ''))[:16]}")
+            lines.append("")
+        return "\n".join(lines)
+
+    except Exception as e:
+        logger.error(f"search_emails failed: {e}")
+        return f"Email search failed: {e}"
+
+
+# ---------------------------------------------------------------------------
+# Tool 10: Contact Search — find contacts by role, engagement, company
+# ---------------------------------------------------------------------------
+
+@tool
+def search_contacts(filter_type: str, value: str = "", limit: int = 15) -> str:
+    """Search and filter contacts across the portfolio.
+
+    Use this to find decision makers, contacts at a company, high-engagement
+    contacts, or contacts by role/seniority.
+
+    Args:
+        filter_type: One of: "decision_makers" (c-level/vp/director),
+                     "company:<name>" (all contacts at a company),
+                     "role:<role>" (by functional_role: executive, sales, operations, etc.),
+                     "low_engagement" (engagement < 30),
+                     "inactive" (no emails in 90+ days),
+                     "all" (all contacts sorted by engagement)
+        value: Additional filter (e.g., company name)
+        limit: Max results (default 15, max 25)
+
+    Returns:
+        List of contacts with name, email, role, engagement, email counts
+    """
+    sb = _get_client()
+    limit = min(limit, 25)
+    SELECT = ('email_address, full_name, functional_role, seniority_level, '
+              'is_decision_maker, engagement_score, total_emails_sent, '
+              'total_emails_received, last_contacted_at, job_title, department')
+
+    try:
+        query = sb.table('customer_contacts').select(SELECT)
+
+        if filter_type == "decision_makers":
+            query = query.eq('is_decision_maker', True).order('engagement_score', desc=True)
+        elif filter_type.startswith("company"):
+            name = value or filter_type.split(":", 1)[-1] if ":" in filter_type else value
+            comp = sb.table('customer_companies').select('id').ilike(
+                'company_name', f'%{name}%'
+            ).limit(1).execute()
+            if not comp.data:
+                return f"Company '{name}' not found."
+            query = query.eq('customer_company_id', comp.data[0]['id']).order('engagement_score', desc=True)
+        elif filter_type.startswith("role"):
+            role = value or filter_type.split(":", 1)[-1] if ":" in filter_type else value
+            query = query.eq('functional_role', role).order('engagement_score', desc=True)
+        elif filter_type == "low_engagement":
+            query = query.lt('engagement_score', 30).order('engagement_score', desc=False)
+        elif filter_type == "inactive":
+            from datetime import datetime, timedelta
+            cutoff = (datetime.utcnow() - timedelta(days=90)).isoformat()
+            query = query.lt('last_contacted_at', cutoff).order('last_contacted_at', desc=False)
+        elif filter_type == "all":
+            query = query.order('engagement_score', desc=True)
+        else:
+            return f"Unknown filter '{filter_type}'. Use: decision_makers, company:<name>, role:<role>, low_engagement, inactive, all"
+
+        result = query.limit(limit).execute()
+        contacts = result.data or []
+
+        if not contacts:
+            return f"No contacts found for {filter_type}."
+
+        lines = [f"Found {len(contacts)} contacts ({filter_type}):\n"]
+        for c in contacts:
+            name = c.get('full_name') or c.get('email_address', 'Unknown')
+            email = c.get('email_address', '')
+            role = c.get('functional_role', '-')
+            seniority = c.get('seniority_level', '-')
+            eng = c.get('engagement_score') or 0
+            sent = c.get('total_emails_sent') or 0
+            received = c.get('total_emails_received') or 0
+            title = c.get('job_title') or ''
+            dm = " [Decision Maker]" if c.get('is_decision_maker') else ""
+
+            lines.append(f"  {name}{dm}")
+            lines.append(f"  Email: {email} | Role: {role} ({seniority})")
+            if title:
+                lines.append(f"  Title: {title}")
+            lines.append(f"  Engagement: {eng}/100 | Emails: {sent} sent, {received} received")
+            lines.append("")
+        return "\n".join(lines)
+
+    except Exception as e:
+        logger.error(f"search_contacts failed: {e}")
+        return f"Contact search failed: {e}"
+
+
+# ---------------------------------------------------------------------------
+# Tool 11: Thread Overview — overdue, active, status counts
+# ---------------------------------------------------------------------------
+
+@tool
+def thread_overview(filter_type: str = "summary", company_name: str = "") -> str:
+    """Get email thread status overview or details.
+
+    Use this to answer questions about overdue threads, response health,
+    or thread status for a specific company.
+
+    Args:
+        filter_type: One of: "summary" (counts by status), "overdue" (overdue threads),
+                     "active" (active threads), "company" (threads for a company)
+        company_name: Company name (used with "company" filter)
+
+    Returns:
+        Thread status summary or list of threads
+    """
+    sb = _get_client()
+
+    try:
+        if filter_type == "summary":
+            # Get counts by status
+            all_threads = []
+            offset = 0
+            while True:
+                resp = sb.table('thread_status').select(
+                    'status, is_overdue'
+                ).range(offset, offset + 999).execute()
+                rows = resp.data or []
+                all_threads.extend(rows)
+                if len(rows) == 0:
+                    break
+                offset += len(rows)
+
+            if not all_threads:
+                return "No thread data available."
+
+            from collections import Counter
+            status_counts = Counter(t.get('status', 'unknown') for t in all_threads)
+            overdue_count = sum(1 for t in all_threads if t.get('is_overdue'))
+
+            lines = [f"THREAD STATUS OVERVIEW ({len(all_threads)} total threads):\n"]
+            for status, count in sorted(status_counts.items(), key=lambda x: -x[1]):
+                lines.append(f"  {status}: {count}")
+            lines.append(f"\n  Overdue: {overdue_count}")
+            return "\n".join(lines)
+
+        elif filter_type == "overdue":
+            resp = sb.table('thread_status').select(
+                'subject, status, days_since_last_email, message_count, last_email_date'
+            ).eq('is_overdue', True).order('days_since_last_email', desc=True).limit(20).execute()
+
+        elif filter_type == "active":
+            resp = sb.table('thread_status').select(
+                'subject, status, days_since_last_email, message_count, last_email_date'
+            ).in_('status', ['awaiting_reply', 'outbound_pending']).order(
+                'last_email_date', desc=True
+            ).limit(20).execute()
+
+        elif filter_type == "company" and company_name:
+            comp = sb.table('customer_companies').select('id').ilike(
+                'company_name', f'%{company_name}%'
+            ).limit(1).execute()
+            if not comp.data:
+                return f"Company '{company_name}' not found."
+            resp = sb.table('thread_status').select(
+                'subject, status, days_since_last_email, message_count, last_email_date, is_overdue'
+            ).eq('customer_company_id', comp.data[0]['id']).order(
+                'last_email_date', desc=True
+            ).limit(20).execute()
+
+        else:
+            return f"Unknown filter '{filter_type}'. Use: summary, overdue, active, company"
+
+        threads = resp.data or []
+        if not threads:
+            return f"No threads found for {filter_type}."
+
+        lines = [f"Found {len(threads)} threads ({filter_type}):\n"]
+        for t in threads:
+            overdue_tag = " [OVERDUE]" if t.get('is_overdue') else ""
+            lines.append(f"  {t.get('subject', 'No subject')}{overdue_tag}")
+            lines.append(f"  Status: {t.get('status', '-')} | "
+                        f"Messages: {t.get('message_count', 0)} | "
+                        f"Days since: {t.get('days_since_last_email', '?')}")
+            lines.append("")
+        return "\n".join(lines)
+
+    except Exception as e:
+        logger.error(f"thread_overview failed: {e}")
+        return f"Thread overview failed: {e}"
+
+
+# ---------------------------------------------------------------------------
+# Tool 12: Company Analytics — strike rate, seasonality, rhythm
+# ---------------------------------------------------------------------------
+
+@tool
+def company_analytics(company_name: str, analysis: str = "all") -> str:
+    """Get deep analytics for a specific company — strike rate, seasonality,
+    ordering rhythm, and contact capabilities.
+
+    Use this when the user asks about a company's ordering patterns, quote
+    conversion rate, which contacts order what, or reorder timing.
+
+    Args:
+        company_name: Company name (partial match OK)
+        analysis: One of: "all" (everything), "strike_rate" (quote conversion),
+                  "seasonality" (monthly/quarterly patterns), "rhythm" (reorder intervals),
+                  "capabilities" (what each contact orders)
+
+    Returns:
+        Detailed analytics for the company
+    """
+    sb = _get_client()
+
+    try:
+        # Find company
+        comp = sb.table('customer_companies').select('id, client_id, company_name').ilike(
+            'company_name', f'%{company_name}%'
+        ).limit(1).execute()
+        if not comp.data:
+            return f"Company '{company_name}' not found."
+
+        company = comp.data[0]
+        comp_id = company['id']
+        client_id = company['client_id']
+
+        from .customer_analytics_service import CustomerAnalyticsService
+        service = CustomerAnalyticsService(sb, client_id)
+        lines = [f"ANALYTICS FOR {company['company_name']}:\n"]
+
+        analyses = [analysis] if analysis != "all" else ["strike_rate", "seasonality", "rhythm", "capabilities"]
+
+        for a in analyses:
+            try:
+                if a == "strike_rate":
+                    data = service.get_strike_rate(comp_id, force=False)
+                    total = data.get('company_total', {})
+                    lines.append(f"STRIKE RATE (Quote Conversion):")
+                    lines.append(f"  Total quotes: {total.get('total_quotes', 0)}")
+                    lines.append(f"  Converted to jobs: {total.get('converted', 0)}")
+                    lines.append(f"  Strike rate: {total.get('strike_rate_pct', 0):.1f}%")
+                    by_contact = data.get('by_contact', [])[:5]
+                    if by_contact:
+                        lines.append(f"  Top contacts by conversion:")
+                        for c in by_contact:
+                            lines.append(f"    {c['contact_name']}: {c['strike_rate_pct']:.0f}% ({c['converted']}/{c['total_quotes']})")
+                    lines.append("")
+
+                elif a == "seasonality":
+                    data = service.get_seasonality(comp_id, force=False)
+                    peaks = data.get('peak_months', [])
+                    troughs = data.get('trough_months', [])
+                    lines.append(f"SEASONALITY (Ordering Patterns):")
+                    lines.append(f"  Total orders: {data.get('total_orders', 0)}")
+                    if peaks:
+                        month_names = {1:'Jan',2:'Feb',3:'Mar',4:'Apr',5:'May',6:'Jun',
+                                      7:'Jul',8:'Aug',9:'Sep',10:'Oct',11:'Nov',12:'Dec'}
+                        lines.append(f"  Peak months: {', '.join(month_names.get(m,'?') for m in peaks)}")
+                    if troughs:
+                        lines.append(f"  Trough months: {', '.join(month_names.get(m,'?') for m in troughs)}")
+                    monthly = data.get('monthly', [])
+                    if monthly:
+                        lines.append(f"  Monthly breakdown:")
+                        for m in monthly:
+                            lines.append(f"    {m['month_name']}: {m['order_count']} orders, ${m['revenue']:,.0f}")
+                    lines.append("")
+
+                elif a == "rhythm":
+                    data = service.get_capability_rhythm(comp_id, force=False)
+                    rhythms = data.get('rhythms', [])
+                    alerts = data.get('alerts', [])
+                    lines.append(f"ORDERING RHYTHM (Reorder Intervals):")
+                    for r in rhythms:
+                        status_icon = {"overdue": "!!", "due_soon": "!", "on_track": "OK"}.get(r.get('status'), "?")
+                        interval = f"every {r['avg_interval_days']}d" if r.get('avg_interval_days') else "insufficient data"
+                        lines.append(f"  [{status_icon}] {r['capability']}: {interval}, "
+                                    f"last order {r.get('days_since_last', '?')}d ago "
+                                    f"({r['order_count']} orders)")
+                    if alerts:
+                        lines.append(f"  ALERTS:")
+                        for al in alerts:
+                            lines.append(f"    {al['capability']}: {al['overdue_days']}d overdue [{al['severity']}]")
+                    lines.append("")
+
+                elif a == "capabilities":
+                    data = service.get_contact_capabilities(comp_id, force=False)
+                    contacts = data.get('contacts', [])[:10]
+                    lines.append(f"CONTACT CAPABILITIES (Who orders what):")
+                    for c in contacts:
+                        caps = c.get('capabilities', [])
+                        cap_str = ', '.join(f"{cap['tag']}({cap['order_count']})" for cap in caps[:5])
+                        lines.append(f"  {c['contact_name']}: {cap_str}")
+                    lines.append("")
+
+            except Exception as e:
+                lines.append(f"  [{a}]: Failed — {str(e)[:100]}")
+                lines.append("")
+
+        return "\n".join(lines)
+
+    except Exception as e:
+        logger.error(f"company_analytics failed: {e}")
+        return f"Company analytics failed: {e}"
