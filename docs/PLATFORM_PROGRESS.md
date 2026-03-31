@@ -29,7 +29,10 @@ A commercial intelligence platform for B2B account management teams. It syncs em
 | Nav restructure | Analytics + Intelligence → Customers + Insights + Manage (route rename, no new pages) | ✅ Complete | 19 Mar 2026 |
 | Sprint 4 — Sales Intelligence | QB Operations sync, Capability Intelligence, Vector Search, Customer Analytics | ✅ Complete | 26 Mar 2026 |
 | Post-S4 Stability | QB matching revamp, incremental sync, match review UI, logging, DevOps | ✅ Complete | 30 Mar 2026 |
-| Contact-Company Linking Fix | Fix 69% orphan contacts, pipeline reorder, domain fallback | 🟡 In Progress | 30 Mar 2026 |
+| Contact-Company Linking | 5-part fix: 31% → 83.5% contact-company link rate | ✅ Complete | 30 Mar 2026 |
+| QB Formula Tags | 6 QB tag fields synced, classifier fallback, analytics upgraded | ✅ Complete | 30 Mar 2026 |
+| AI Chat Agent | 12-tool conversational agent at `/insights/agent`, multi-model | ✅ Complete | 31 Mar 2026 |
+| Invite User System | Admin-controlled onboarding, restrict open sign-up | 🔲 Planned | Not started |
 
 ---
 
@@ -773,22 +776,85 @@ Sprint 4 additions (vector embeddings + AI Chat Agent): +~$3–8/month → well 
 
 ---
 
-## 🟡 IN PROGRESS — Contact-Company Linking Fix
+## ✅ COMPLETE — Contact-Company Linking Fix (30 Mar 2026)
 
-**Problem:** Only 6,211 out of 20,035 contacts (31%) have `customer_company_id` set. This causes empty customer profiles — no threads, no order history, no email counts.
+**Problem:** Only 6,211 out of 20,035 contacts (31%) had `customer_company_id` set.
+**Result:** After fix + migration → 17,305 / 20,735 (83.5%) linked. Remaining are free email provider contacts (gmail, yahoo) correctly excluded.
 
-**Root Cause:** Pipeline Step 5 (upsert contacts) runs BEFORE Step 6 (upsert companies). Newly-resolved companies don't have DB IDs yet, so contact→company mapping has NULL IDs. Additionally, the batch update SQL function overwrites existing company links with NULL on re-extraction.
-
-### Planned Fixes
 | Fix | Description | Status |
 |-----|-------------|--------|
-| 1. SQL COALESCE fix | `batch_update_contact_companies` uses COALESCE to preserve existing company links when update has NULL | 🔲 Pending |
-| 2. Reorder Steps 5↔6 | Upsert companies BEFORE contacts — root cause elimination | 🔲 Pending |
-| 3. Orphan contact linking | Post-upsert scan links contacts to companies by email domain (excluding free providers) | 🔲 Pending |
-| 4. Email linker backfill | Domain fallback in Step 9 also updates contact's `customer_company_id` | 🔲 Pending |
-| 5. Data migration | One-time SQL to backfill existing 13K+ orphan contacts by domain match | 🔲 Pending |
+| 1. SQL COALESCE fix (044) | `batch_update_contact_companies` preserves existing company links when update has NULL | ✅ |
+| 2. Reorder Steps 5↔6 | Upsert companies BEFORE contacts — root cause elimination | ✅ |
+| 3. Orphan contact linking | Post-upsert scan links contacts to companies by email domain (excluding free providers) | ✅ |
+| 4. Email linker backfill | Domain fallback in Step 9 also updates contact's `customer_company_id` | ✅ |
+| 5. Data migration (045) | One-time backfill: 11,094 orphan contacts linked by domain match | ✅ |
 
-**Target:** >90% contact-company link rate (up from 31%)
+---
+
+## ✅ COMPLETE — QB Formula Tags Integration (30 Mar 2026)
+
+6 QB formula tag fields synced from Operations table. Our classifier becomes fallback.
+
+| Field | QB FID | Column | Values |
+|-------|--------|--------|--------|
+| Process_Tag | 44 | `qb_process_tag` | ~27 process categories |
+| Capability_Tag | 45 | `qb_capability_tag` | 8 broad capabilities (same as classifier) |
+| Machine_Tier_Tag | 46 | `qb_machine_tier_tag` | ~35 technology groups |
+| Row_Type_Tag | 47 | `qb_row_type_tag` | Operation classification |
+| Blank_Reason_Tag | 48 | `qb_blank_reason_tag` | Why untagged |
+| Embellishment_Tag | 52 | `qb_embellishment_tag` | Embellishment type |
+
+- Migration 046 adds columns + indexes
+- `_classify_operations()` uses QB `Capability_Tag` as primary, classifier as fallback
+- Analytics methods (contact capabilities, seasonality, rhythm) prefer QB tags
+- Product profile includes `capability_breakdown`, `process_tags`, `embellishment_tags`
+- Vector embeddings include QB tags for richer semantic search
+- Strategic digest context includes capability profile per company
+- **Blocked:** `MVP_tag` field not yet created in QB by partner — `Row_Type_Tag` and `Blank_Reason_Tag` will improve once added
+
+---
+
+## ✅ COMPLETE — AI Chat Agent (30–31 Mar 2026)
+
+Conversational AI assistant at `/insights/agent` with 12 tools for full portfolio intelligence.
+
+### Architecture
+- **Backend:** `ai_agent_service.py` — LangGraph ReAct agent with retry + direct LLM fallback
+- **Endpoint:** `POST /api/v1/ai/agent/chat` — auth-protected, 90s timeout
+- **Frontend:** Chat UI with conversation history, tool usage display, suggested starters
+- **Model:** Configurable per-client (Claude Sonnet, Gemini Flash, GPT-4o, GPT-4o Mini)
+- **Cost tracking:** Usage logged to `ai_usage_log` per conversation turn
+
+### 12 Agent Tools
+| Category | Tools |
+|----------|-------|
+| Portfolio | `portfolio_summary`, `account_ranking` (by revenue, engagement, growth, contact recency) |
+| Emails | `search_emails` (recent/urgent/sender/intent/company/signal/unresponded), `semantic_search_emails` |
+| Companies | `lookup_company_detail`, `company_analytics` (strike rate, seasonality, rhythm, capabilities) |
+| Contacts | `search_contacts` (decision makers, by role/engagement/company/inactive), `lookup_contact_history` |
+| Threads | `thread_overview` (summary/overdue/active/per-company), `lookup_thread_messages` |
+| Operations | `semantic_search_operations`, `lookup_quote_detail` |
+
+### Multi-Model AI Support
+| Model | Provider | Use Case |
+|-------|----------|----------|
+| Claude Haiku | Anthropic | Per-email analysis (cheap/fast) |
+| Claude Sonnet | Anthropic | Strategic analysis |
+| Gemini 2.5 Flash | Google | Free tier / budget |
+| GPT-4o | OpenAI | Strategic (alternative) |
+| GPT-4o Mini | OpenAI | Budget (alternative) |
+
+- OpenAI API key configurable via **Insights > Usage** page
+- All 3 provider keys (Anthropic, Google, OpenAI) manageable per-client
+- `langchain-openai` added to requirements
+
+---
+
+## ✅ COMPLETE — Internal Domains Management (30 Mar 2026)
+
+- 3 CRUD endpoints: `GET/POST/DELETE /clients/{id}/internal-domains`
+- Edit Client modal shows Internal Domains section with tag-style add/remove
+- Domains excluded from customer extraction (contacts from these domains won't create companies)
 
 ---
 
@@ -810,14 +876,17 @@ Sprint 4 additions (vector embeddings + AI Chat Agent): +~$3–8/month → well 
 - ✅ Fix: profit_pct column widened (DECIMAL(5,2) → DECIMAL(8,2))
 - ✅ Fix: Redirect routes preserve mailboxId params
 
-### In Progress:
-- 🟡 Contact-Company Linking Fix — 69% of contacts orphaned, pipeline reorder + domain backfill planned
+### Completed (30–31 Mar 2026):
+- ✅ Contact-Company Linking Fix — 31% → 83.5% link rate (5-part fix + migration)
+- ✅ QB Formula Tags (6 fields synced, classifier fallback, analytics upgraded)
+- ✅ AI Chat Agent (`/insights/agent`) — 12 tools, multi-model, configurable per-client
+- ✅ OpenAI model support (GPT-4o, GPT-4o Mini) + API key management
+- ✅ Internal Domains management UI on Clients page
 
 ### Planned:
-- QB Tags Integration — sync partner's 5 formula-based tag fields (blocked on field IDs)
-- Phase 2D: Enriched AI insights with precomputed analytics + vector context
-- AI Chat Agent (`/insights/agent`)
 - Invite User System (admin-controlled onboarding)
+- Embedding model configuration (UI selector for embedding provider)
+- Phase 2D: Enriched AI insights with precomputed analytics + vector context
 
 **Five tracks:**
 
@@ -1014,15 +1083,13 @@ For each contact: find operations the company has bought that this contact hasn'
 
 ## Key Outstanding Gaps
 
-1. **Contact-company linking gap (69%)** — Only 31% of contacts have company links, causing empty customer profiles. Root cause identified (pipeline step ordering), fix in progress.
+1. **No invite-only access control** — open sign-up currently. Invite system fully designed (`docs/INVITE_USER_SMTPLESS.md`) but not built.
 
-2. **No invite-only access control** — open sign-up currently. Any user who knows the URL can register. Invite system is designed but not built.
+2. **QB MVP_tag field pending** — Partner needs to add `MVP_tag` formula to QB Operations. Once added, `Row_Type_Tag` and `Blank_Reason_Tag` will improve. Other 4 tags work independently.
 
-3. **QB Tags integration blocked** — Partner's 5 formula-based tag fields need field IDs confirmed before sync can be added. Our 8-tag classifier runs as fallback.
+3. **Embedding model not configurable** — Hardcoded to Google `gemini-embedding-001`. UI selector planned.
 
-4. **No AI Chat Agent** — Semantic search exists but conversational Q&A (`/insights/agent`) not yet built. LangChain tools ready.
-
-5. **No deep email-CRM fusion in AI** — Phase 2D (vector-augmented analysis + digests) not started. Would enrich AI outputs with precomputed analytics and semantic context.
+4. **AI agent markdown rendering** — Agent responses contain markdown but frontend renders as plain text. Needs `react-markdown` or equivalent.
 
 ---
 
