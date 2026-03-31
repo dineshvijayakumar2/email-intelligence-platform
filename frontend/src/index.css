@@ -26,3 +26,16 @@ html {
 * {
   text-rendering: optimizeLegibility;
 }
+
+/* Agent chat markdown styling */
+.agent-markdown p { margin: 0 0 8px 0; }
+.agent-markdown p:last-child { margin-bottom: 0; }
+.agent-markdown ul, .agent-markdown ol { margin: 4px 0 8px 0; padding-left: 20px; }
+.agent-markdown li { margin-bottom: 2px; }
+.agent-markdown h1, .agent-markdown h2, .agent-markdown h3 { margin: 8px 0 4px 0; font-size: 1em; font-weight: 600; }
+.agent-markdown strong { font-weight: 600; }
+.agent-markdown code { background: rgba(0,0,0,0.06); padding: 1px 4px; border-radius: 3px; font-size: 0.9em; }
+.agent-markdown pre { background: rgba(0,0,0,0.06); padding: 8px; border-radius: 4px; overflow-x: auto; margin: 4px 0; }
+.agent-markdown table { border-collapse: collapse; margin: 4px 0; font-size: 0.9em; }
+.agent-markdown th, .agent-markdown td { border: 1px solid #ddd; padding: 4px 8px; }
+.agent-markdown th { background: rgba(0,0,0,0.04); font-weight: 600; }

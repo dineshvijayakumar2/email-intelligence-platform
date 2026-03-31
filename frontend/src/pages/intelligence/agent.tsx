@@ -18,8 +18,9 @@ import {
 } from '@ant-design/icons';
 import { agentChat, AgentChatResponse } from '../../services/aiService';
 import { ClientSelector } from '../../components/analytics/ClientSelector';
+import Markdown from 'react-markdown';
 
-const { Title, Text, Paragraph } = Typography;
+const { Title, Text } = Typography;
 const { TextArea } = Input;
 
 // ---------------------------------------------------------------------------
@@ -252,8 +253,8 @@ const AgentPage: React.FC = () => {
                             />
                           </div>
                         )}
-                        <div style={{ fontSize: 14, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                          {msg.content}
+                        <div style={{ fontSize: 14 }} className="agent-markdown">
+                          <Markdown>{msg.content}</Markdown>
                         </div>
                         {/* Cost footer */}
                         {msg.model && (
