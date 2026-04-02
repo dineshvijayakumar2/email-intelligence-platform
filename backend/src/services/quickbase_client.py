@@ -17,6 +17,7 @@ DEFAULT_FIELD_MAPPINGS = {
         "3": "qb_record_id",
         "6": "customer_code",
         "7": "customer_name",
+        "92": "customer_key_id",
         "9": "active",
         "16": "account_manager",
         "17": "customer_tier",
@@ -72,6 +73,14 @@ DEFAULT_FIELD_MAPPINGS = {
         "62": "pieces_ordered",
         "63": "kinds_ordered",
         "64": "total_qty_ordered",
+        "85": "has_hot_foil",
+        "86": "has_spot_uv",
+        "87": "has_special_substrate",
+        "88": "has_digital_foil",
+        "89": "has_de_emboss",
+        "90": "has_raised_ink",
+        "91": "has_laser_cut",
+        "92": "has_white_ink",
     },
     "sales_line_items": {
         "3": "qb_record_id",
@@ -121,6 +130,24 @@ DEFAULT_FIELD_MAPPINGS = {
         "48": "qb_blank_reason_tag",
         "52": "qb_embellishment_tag",
     },
+    "unique_emails": {
+        "3":  "qb_record_id",
+        "6":  "email",
+        "23": "qb_customer_id",
+        "24": "customer_name",
+        "44": "first_name",
+        "45": "last_name",
+        "46": "hide",
+        "49": "quality",
+        "50": "result",
+        "51": "free",
+        "53": "email_invalid",
+        "70": "customer_type",
+        "72": "customer_id_text",
+        "128": "embellishments_used",
+        "130": "processes_used",
+        "131": "capabilities_used",
+    },
 }
 
 
@@ -137,6 +164,15 @@ class QuickbaseClient:
             "Authorization": f"QB-USER-TOKEN {user_token}",
             "Content-Type": "application/json",
         }
+        # Reusable client with generous timeout and connection pooling
+        self._http = httpx.AsyncClient(
+            timeout=httpx.Timeout(connect=10.0, read=120.0, write=30.0, pool=30.0),
+            limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
+        )
+
+    async def close(self):
+        """Close the underlying HTTP client."""
+        await self._http.aclose()
 
     async def query_records(
         self,
@@ -146,20 +182,10 @@ class QuickbaseClient:
         sort_by: Optional[list[dict]] = None,
         skip: int = 0,
         top: int = 1000,
+        max_retries: int = 3,
     ) -> dict[str, Any]:
         """
-        Query records from a Quickbase table.
-
-        Args:
-            table_id: QB table ID (e.g., 'buzhzbv39')
-            select_fields: List of field IDs to select
-            where: QB query string (e.g., "{'7'.CT.'acme'}")
-            sort_by: Sort config (e.g., [{"fieldId": 7, "order": "ASC"}])
-            skip: Number of records to skip (pagination)
-            top: Max records to return (max 1000)
-
-        Returns:
-            QB API response with 'data' and 'metadata' keys
+        Query records from a Quickbase table with retry on transient errors.
         """
         body: dict[str, Any] = {
             "from": table_id,
@@ -175,14 +201,34 @@ class QuickbaseClient:
         if sort_by:
             body["sortBy"] = sort_by
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                f"{self.BASE_URL}/records/query",
-                headers=self.headers,
-                json=body,
-            )
-            response.raise_for_status()
-            return response.json()
+        import time as _time
+        last_err = None
+        for attempt in range(max_retries + 1):
+            try:
+                response = await self._http.post(
+                    f"{self.BASE_URL}/records/query",
+                    headers=self.headers,
+                    json=body,
+                )
+                response.raise_for_status()
+                return response.json()
+            except (httpx.TimeoutException, httpx.ConnectError, httpx.ReadError) as e:
+                last_err = e
+                if attempt < max_retries:
+                    delay = 2 ** attempt
+                    logger.warning(f"QB query retry {attempt+1}/{max_retries} (skip={skip}): {e}. Waiting {delay}s...")
+                    _time.sleep(delay)
+                    continue
+                raise
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code in (502, 503, 504, 525) and attempt < max_retries:
+                    last_err = e
+                    delay = 2 ** attempt
+                    logger.warning(f"QB query retry {attempt+1}/{max_retries} (skip={skip}): HTTP {e.response.status_code}. Waiting {delay}s...")
+                    _time.sleep(delay)
+                    continue
+                raise
+        raise last_err
 
     async def query_all_records(
         self,
@@ -267,26 +313,23 @@ class QuickbaseClient:
 
     async def get_fields(self, table_id: str) -> list[dict]:
         """Get field definitions for a table."""
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            response = await client.get(
-                f"{self.BASE_URL}/fields",
-                headers=self.headers,
-                params={"tableId": table_id},
-            )
-            response.raise_for_status()
-            return response.json()
+        response = await self._http.get(
+            f"{self.BASE_URL}/fields",
+            headers=self.headers,
+            params={"tableId": table_id},
+        )
+        response.raise_for_status()
+        return response.json()
 
     async def test_connection(self) -> bool:
         """Test if the QB connection is valid."""
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(
-                    f"{self.BASE_URL}/tables",
-                    headers=self.headers,
-                    params={"appId": "placeholder"},
-                )
-                # 200 = connected, 401 = bad token, other = error
-                return response.status_code != 401
+            response = await self._http.get(
+                f"{self.BASE_URL}/tables",
+                headers=self.headers,
+                params={"appId": "placeholder"},
+            )
+            return response.status_code != 401
         except Exception as e:
             logger.error(f"QB connection test failed: {e}")
             return False

@@ -140,6 +140,201 @@ async def trigger_extraction_job(data: ExtractionJobCreate, background_tasks: Ba
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/extraction/backfill-email-links")
+async def backfill_email_contact_links(
+    client_id: str = Query(...),
+    background_tasks: BackgroundTasks = None,  # noqa: injected by FastAPI
+):
+    """Backfill email_contact_links junction table for all mailboxes of a client.
+
+    Only runs email linking (Step 9) with junction table creation — no full extraction.
+    Processes ALL emails (force_relink=True) to capture CC/BCC recipients.
+    """
+    try:
+        # Get all mailboxes for this client
+        mailboxes = _supabase.table('mailboxes').select('id').eq(
+            'client_id', client_id
+        ).execute()
+        mailbox_ids = [m['id'] for m in (mailboxes.data or [])]
+
+        if not mailbox_ids:
+            raise HTTPException(status_code=404, detail="No mailboxes found for this client")
+
+        def _run_backfill():
+            """Process all emails in pages, creating junction links directly.
+
+            Does NOT re-run full email linking — just reads existing emails
+            and creates email_contact_links rows for all participants.
+            """
+            from ..services.email_linker import EmailLinker
+            from ..database.supabase_client import SupabaseClient
+
+            sb = SupabaseClient.get_client(use_service_key=True)
+            total_links = 0
+            PAGE_SIZE = 500
+            BATCH_SIZE = 100
+
+            for i, mb_id in enumerate(mailbox_ids, 1):
+                try:
+                    logger.info(f"Backfill junction links: mailbox {i}/{len(mailbox_ids)} ({mb_id})")
+
+                    # Init linker just for its caches
+                    linker = EmailLinker(mailbox_id=mb_id, client_id=client_id)
+                    linker._load_contact_cache()
+                    linker._load_company_cache()
+
+                    # Page through emails for this mailbox
+                    offset = 0
+                    mb_links = 0
+                    while True:
+                        try:
+                            resp = sb.table('emails').select(
+                                'id, sender_email, recipients, cc_list, bcc_list, is_outbound'
+                            ).eq('mailbox_id', mb_id).order(
+                                'sent_date', desc=False
+                            ).range(offset, offset + PAGE_SIZE - 1).execute()
+                        except Exception as e:
+                            logger.warning(f"Backfill page fetch failed at offset {offset}: {e}")
+                            break
+
+                        rows = resp.data or []
+                        if not rows:
+                            break
+
+                        # Build junction link rows
+                        batch: list[dict] = []
+                        for email in rows:
+                            eid = email['id']
+
+                            # Sender
+                            sender = email.get('sender_email')
+                            if sender:
+                                addr = sender.strip().lower()
+                                cid = linker._contact_cache.get(addr)
+                                comp = linker._contact_company_cache.get(cid) if cid else None
+                                if not comp:
+                                    domain = linker._extract_domain(addr)
+                                    comp = linker._company_cache.get(domain) if domain else None
+                                batch.append({
+                                    'email_id': eid, 'email_address': addr, 'role': 'sender',
+                                    'contact_id': cid, 'company_id': comp, 'client_id': client_id,
+                                })
+
+                            # TO, CC, BCC
+                            for role, field in [('to', 'recipients'), ('cc', 'cc_list'), ('bcc', 'bcc_list')]:
+                                for r in (email.get(field) or []):
+                                    addr = (r.get('email') if isinstance(r, dict) else r if isinstance(r, str) else None)
+                                    if not addr or '@' not in addr:
+                                        continue
+                                    addr = addr.strip().lower()
+                                    cid = linker._contact_cache.get(addr)
+                                    comp = linker._contact_company_cache.get(cid) if cid else None
+                                    if not comp:
+                                        domain = linker._extract_domain(addr)
+                                        comp = linker._company_cache.get(domain) if domain else None
+                                    batch.append({
+                                        'email_id': eid, 'email_address': addr, 'role': role,
+                                        'contact_id': cid, 'company_id': comp, 'client_id': client_id,
+                                    })
+
+                        # Deduplicate within batch (same email+address+role can appear if address listed twice)
+                        seen = set()
+                        deduped = []
+                        for row in batch:
+                            key = (row['email_id'], row['email_address'], row['role'])
+                            if key not in seen:
+                                seen.add(key)
+                                deduped.append(row)
+                        batch = deduped
+
+                        # Upsert batch
+                        for j in range(0, len(batch), BATCH_SIZE):
+                            chunk = batch[j:j + BATCH_SIZE]
+                            try:
+                                sb.table('email_contact_links').upsert(
+                                    chunk, on_conflict='email_id,email_address,role'
+                                ).execute()
+                                mb_links += len(chunk)
+                            except Exception as e:
+                                logger.warning(f"Junction upsert failed: {e}")
+
+                        offset += len(rows)
+                        if offset % 5000 == 0:
+                            logger.info(f"  Mailbox {i}: {offset} emails processed, {mb_links} links")
+
+                    total_links += mb_links
+                    logger.info(f"Mailbox {i}/{len(mailbox_ids)} complete: {mb_links} junction links")
+
+                except Exception as e:
+                    logger.error(f"Backfill failed for mailbox {mb_id}: {e}")
+
+            logger.info(f"Backfill complete: {total_links} total junction links across {len(mailbox_ids)} mailboxes")
+
+            # Update contact + company email counts from junction table
+            logger.info("Updating email counts from junction table...")
+            try:
+                result1 = sb.rpc('update_contact_email_counts_from_junction', {
+                    'p_client_id': client_id,
+                }).execute()
+                logger.info(f"Contact email counts updated: {result1.data}")
+                result2 = sb.rpc('update_company_email_counts_from_junction', {
+                    'p_client_id': client_id,
+                }).execute()
+                logger.info(f"Company email counts updated: {result2.data}")
+            except Exception as e:
+                logger.warning(f"RPC update_contact_email_counts failed, doing manual update: {e}")
+                # Fallback: manual per-contact update
+                offset = 0
+                updated = 0
+                while True:
+                    contacts_page = sb.table('customer_contacts').select(
+                        'id'
+                    ).eq('client_id', client_id).range(offset, offset + 999).execute()
+                    rows = contacts_page.data or []
+                    if not rows:
+                        break
+                    for ct in rows:
+                        try:
+                            ecl = sb.table('email_contact_links').select(
+                                'email_id'
+                            ).eq('contact_id', ct['id']).execute()
+                            email_ids = list({r['email_id'] for r in (ecl.data or [])})
+                            total = len(email_ids)
+                            if total == 0:
+                                offset += len(rows)
+                                continue
+                            sent = 0
+                            for i in range(0, len(email_ids), 500):
+                                batch = email_ids[i:i + 500]
+                                s = sb.table('emails').select('id', count='exact').in_(
+                                    'id', batch
+                                ).eq('is_outbound', True).limit(0).execute()
+                                sent += s.count or 0
+                            sb.table('customer_contacts').update({
+                                'total_emails_sent': sent,
+                                'total_emails_received': total - sent,
+                            }).eq('id', ct['id']).execute()
+                            updated += 1
+                        except Exception:
+                            pass
+                    offset += len(rows)
+                    if updated % 500 == 0 and updated > 0:
+                        logger.info(f"Contact count update progress: {updated} updated")
+                logger.info(f"Contact email counts updated: {updated} contacts")
+
+        background_tasks.add_task(_run_backfill)
+        return {
+            "status": "started",
+            "message": f"Backfilling email links for {len(mailbox_ids)} mailboxes in background",
+            "mailbox_count": len(mailbox_ids),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/extraction/jobs/{job_id}", response_model=ExtractionJobDetail)
 async def get_extraction_job(job_id: str):
     """
@@ -737,6 +932,32 @@ async def get_contact_analytics(contact_identifier: str):
         except Exception:
             pass
 
+        # Live email counts from junction table (includes CC/BCC)
+        try:
+            ecl_count = _supabase.table('email_contact_links').select(
+                'email_id', count='exact'
+            ).eq('contact_id', c['id']).limit(0).execute()
+            junction_total = ecl_count.count or 0
+
+            if junction_total > 0:
+                # Get distinct email IDs
+                ecl_resp = _supabase.table('email_contact_links').select('email_id').eq('contact_id', c['id']).execute()
+                email_ids = list({r['email_id'] for r in (ecl_resp.data or [])})
+                live_total = len(email_ids)
+
+                live_sent = 0
+                for i in range(0, len(email_ids), 500):
+                    batch = email_ids[i:i + 500]
+                    sent_resp = _supabase.table('emails').select(
+                        'id', count='exact'
+                    ).in_('id', batch).eq('is_outbound', True).limit(0).execute()
+                    live_sent += sent_resp.count or 0
+
+                c['total_emails_sent'] = live_sent
+                c['total_emails_received'] = live_total - live_sent
+        except Exception:
+            pass  # Keep stored values if junction table fails
+
         return ContactAnalytics(**c, customer_company_name=customer_company_name, qb_contact_id=qb_contact_id)
 
     except HTTPException:
@@ -748,28 +969,70 @@ async def get_contact_analytics(contact_identifier: str):
 
 @router.get("/contacts/{contact_id}/emails")
 async def get_contact_emails(contact_id: str, limit: int = 50, offset: int = 0):
-    """Get emails linked to a contact via customer_contact_id."""
+    """Get emails linked to a contact via email_contact_links junction table.
+
+    Falls back to emails.customer_contact_id if junction table not populated yet.
+    The junction table includes emails where this contact is sender, TO, CC, or BCC.
+    """
     try:
-        # Get total count + sent count (outbound)
-        count_result = _supabase.table('emails').select(
-            'id', count='exact'
-        ).eq('customer_contact_id', contact_id).execute()
-        total = count_result.count or 0
+        # Try junction table first (includes CC/BCC)
+        total = 0
+        try:
+            junction_count = _supabase.table('email_contact_links').select(
+                'email_id', count='exact'
+            ).eq('contact_id', contact_id).limit(0).execute()
+            total = junction_count.count or 0
+        except Exception:
+            pass
 
-        sent_result = _supabase.table('emails').select(
-            'id', count='exact'
-        ).eq('customer_contact_id', contact_id).eq('is_outbound', 'true').execute()
-        total_sent = sent_result.count or 0
-        total_received = total - total_sent
+        if total > 0:
+            # Get distinct email IDs from junction table
+            junction_resp = _supabase.table('email_contact_links').select(
+                'email_id'
+            ).eq('contact_id', contact_id).execute()
+            email_ids = list({r['email_id'] for r in (junction_resp.data or [])})
+            total = len(email_ids)
 
-        # Paginated data
-        result = _supabase.table('emails').select(
-            'id, subject, sender_email, sender_name, sent_date, folder_path, is_outbound'
-        ).eq('customer_contact_id', contact_id).order(
-            'sent_date', desc=True
-        ).range(offset, offset + limit - 1).execute()
+            # Count outbound
+            total_sent = 0
+            for i in range(0, len(email_ids), 500):
+                batch = email_ids[i:i + 500]
+                sent_resp = _supabase.table('emails').select(
+                    'id', count='exact'
+                ).in_('id', batch).eq('is_outbound', True).limit(0).execute()
+                total_sent += sent_resp.count or 0
+            total_received = total - total_sent
 
-        return {'emails': result.data or [], 'total': total, 'total_sent': total_sent, 'total_received': total_received}
+            # Paginated emails
+            page_ids = email_ids[offset:offset + limit] if email_ids else []
+            if page_ids:
+                result = _supabase.table('emails').select(
+                    'id, subject, sender_email, sender_name, sent_date, folder_path, is_outbound'
+                ).in_('id', page_ids).order('sent_date', desc=True).execute()
+                paginated = result.data or []
+            else:
+                paginated = []
+        else:
+            # Fallback: old FK-based query
+            count_result = _supabase.table('emails').select(
+                'id', count='exact'
+            ).eq('customer_contact_id', contact_id).execute()
+            total = count_result.count or 0
+
+            sent_result = _supabase.table('emails').select(
+                'id', count='exact'
+            ).eq('customer_contact_id', contact_id).eq('is_outbound', True).execute()
+            total_sent = sent_result.count or 0
+            total_received = total - total_sent
+
+            result = _supabase.table('emails').select(
+                'id, subject, sender_email, sender_name, sent_date, folder_path, is_outbound'
+            ).eq('customer_contact_id', contact_id).order(
+                'sent_date', desc=True
+            ).range(offset, offset + limit - 1).execute()
+            paginated = result.data or []
+
+        return {'emails': paginated, 'total': total, 'total_sent': total_sent, 'total_received': total_received}
 
     except Exception as e:
         logger.error(f"Failed to get contact emails: {e}")
@@ -1124,6 +1387,20 @@ async def get_company_analytics(company_id: str):
             except Exception:
                 pass
 
+        # Live contact count (not stale stored value)
+        try:
+            live_contacts = _supabase.table('customer_contacts').select(
+                'id', count='exact'
+            ).eq('customer_company_id', company_id).limit(0).execute()
+            comp['contact_count'] = live_contacts.count or comp.get('contact_count', 0)
+
+            dm_contacts = _supabase.table('customer_contacts').select(
+                'id', count='exact'
+            ).eq('customer_company_id', company_id).eq('is_decision_maker', True).limit(0).execute()
+            comp['decision_maker_count'] = dm_contacts.count or comp.get('decision_maker_count', 0)
+        except Exception:
+            pass
+
         # Thread counts: active + overdue
         active_threads = 0
         overdue_threads = 0
@@ -1140,12 +1417,59 @@ async def get_company_analytics(company_id: str):
         except Exception:
             pass
 
+        # QB capability tags from Unique Emails
+        # customer_companies.qb_customer_id = qb_customers.qb_record_id (field 3, e.g. "44050")
+        # qb_unique_emails.qb_customer_id = QB "Customer ID (key)" (field 92, e.g. "28035")
+        # Join through qb_customers: qb_record_id → customer_key_id → qb_unique_emails.qb_customer_id
+        qb_capabilities, qb_processes, qb_embellishments = [], [], []
+        qb_cid = comp.get('qb_customer_id')
+        if qb_cid:
+            try:
+                # Translate qb_record_id → customer_key_id (field 92) via qb_customers
+                key_resp = _supabase.table('qb_customers').select(
+                    'customer_key_id'
+                ).eq('client_id', comp['client_id']).eq(
+                    'qb_record_id', qb_cid
+                ).limit(1).execute()
+                qb_key_id = (key_resp.data[0].get('customer_key_id') or '') if key_resp.data else ''
+
+                if qb_key_id:
+                    ue_resp = _supabase.table('qb_unique_emails').select(
+                        'capabilities_used, processes_used, embellishments_used'
+                    ).eq('client_id', comp['client_id']).eq(
+                        'qb_customer_id', qb_key_id
+                    ).eq('hide', False).execute()
+                else:
+                    ue_resp = type('R', (), {'data': []})()
+                caps_set, procs_set, emb_set = set(), set(), set()
+                for r in (ue_resp.data or []):
+                    for v in (r.get('capabilities_used') or '').split('|'):
+                        v = v.strip()
+                        if v:
+                            caps_set.add(v)
+                    for v in (r.get('processes_used') or '').split('|'):
+                        v = v.strip()
+                        if v:
+                            procs_set.add(v)
+                    for v in (r.get('embellishments_used') or '').split('|'):
+                        v = v.strip()
+                        if v:
+                            emb_set.add(v)
+                qb_capabilities = sorted(caps_set)
+                qb_processes = sorted(procs_set)
+                qb_embellishments = sorted(emb_set)
+            except Exception:
+                pass
+
         return CompanyAnalytics(
             **comp,
             engagement_status=status,
             client_name=client_name,
             active_threads=active_threads,
             overdue_threads=overdue_threads,
+            qb_capabilities=qb_capabilities or None,
+            qb_processes=qb_processes or None,
+            qb_embellishments=qb_embellishments or None,
         )
 
     except HTTPException:
@@ -1157,46 +1481,68 @@ async def get_company_analytics(company_id: str):
 
 @router.get("/companies/{company_id}/emails")
 async def get_company_emails(company_id: str, limit: int = 50, offset: int = 0):
-    """Get emails linked to contacts of a company."""
+    """Get emails linked to a company via email_contact_links junction table.
+
+    Falls back to emails.customer_company_id if junction table not populated yet.
+    The junction table includes TO, CC, and BCC recipients — giving accurate counts.
+    """
     try:
-        # Get all contact IDs for this company
-        contacts_result = _supabase.table('customer_contacts').select('id').eq(
-            'customer_company_id', company_id
-        ).execute()
+        # Try junction table first (includes CC/BCC)
+        try:
+            # Get distinct email IDs linked to this company
+            junction_count = _supabase.table('email_contact_links').select(
+                'email_id', count='exact'
+            ).eq('company_id', company_id).limit(0).execute()
+            total = junction_count.count or 0
+        except Exception:
+            total = 0
 
-        contact_ids = [c['id'] for c in (contacts_result.data or [])]
-        if not contact_ids:
-            return {'emails': [], 'total': 0}
+        if total > 0:
+            # Junction table has data — use it
+            # Count sent (outbound) via join: get email_ids, then count outbound
+            junction_emails = _supabase.table('email_contact_links').select(
+                'email_id'
+            ).eq('company_id', company_id).execute()
+            email_ids = list({r['email_id'] for r in (junction_emails.data or [])})
+            total = len(email_ids)
 
-        # Get total count + sent/received across all contacts
-        total = 0
-        total_sent = 0
-        for i in range(0, len(contact_ids), 500):
-            batch = contact_ids[i:i+500]
+            total_sent = 0
+            for i in range(0, len(email_ids), 500):
+                batch = email_ids[i:i + 500]
+                sent_resp = _supabase.table('emails').select(
+                    'id', count='exact'
+                ).in_('id', batch).eq('is_outbound', True).limit(0).execute()
+                total_sent += sent_resp.count or 0
+            total_received = total - total_sent
+
+            # Fetch paginated emails
+            page_ids = email_ids[offset:offset + limit] if email_ids else []
+            if page_ids:
+                result = _supabase.table('emails').select(
+                    'id, subject, sender_email, sender_name, sent_date, folder_path, is_outbound'
+                ).in_('id', page_ids).order('sent_date', desc=True).execute()
+                paginated = result.data or []
+            else:
+                paginated = []
+        else:
+            # Fallback: direct query on emails.customer_company_id
             count_result = _supabase.table('emails').select(
                 'id', count='exact'
-            ).in_('customer_contact_id', batch).execute()
-            total += count_result.count or 0
+            ).eq('customer_company_id', company_id).limit(0).execute()
+            total = count_result.count or 0
+
             sent_result = _supabase.table('emails').select(
                 'id', count='exact'
-            ).in_('customer_contact_id', batch).eq('is_outbound', 'true').execute()
-            total_sent += sent_result.count or 0
-        total_received = total - total_sent
+            ).eq('customer_company_id', company_id).eq('is_outbound', True).limit(0).execute()
+            total_sent = sent_result.count or 0
+            total_received = total - total_sent
 
-        # Fetch paginated emails — collect from all batches, then sort & slice
-        all_emails = []
-        for i in range(0, len(contact_ids), 500):
-            batch = contact_ids[i:i+500]
             result = _supabase.table('emails').select(
                 'id, subject, sender_email, sender_name, sent_date, folder_path, is_outbound'
-            ).in_('customer_contact_id', batch).order(
+            ).eq('customer_company_id', company_id).order(
                 'sent_date', desc=True
-            ).range(0, offset + limit - 1).execute()
-            all_emails.extend(result.data or [])
-
-        # Sort combined results and apply pagination
-        all_emails.sort(key=lambda e: e.get('sent_date', ''), reverse=True)
-        paginated = all_emails[offset:offset + limit]
+            ).range(offset, offset + limit - 1).execute()
+            paginated = result.data or []
 
         return {'emails': paginated, 'total': total, 'total_sent': total_sent, 'total_received': total_received}
 

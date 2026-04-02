@@ -309,11 +309,15 @@ class EmailLinker:
                 logger.info(f"Contact backfill: {backfilled}/{len(contacts_to_backfill)} "
                            f"contacts updated with company link via domain")
 
+        # Create many-to-many links in email_contact_links for ALL participants
+        junction_count = self._create_junction_links(emails)
+
         return {
             'total_emails': total_emails,
             'linked': linked_count,
             'skipped': len(skipped_email_ids),
             'contact_backfilled': backfilled,
+            'junction_links': junction_count,
             'errors': errors,
             'groups_processed': len(link_groups)
         }
@@ -336,7 +340,7 @@ class EmailLinker:
         Returns:
             List of email records
         """
-        COLUMNS = 'id, sender_email, recipients, is_outbound, processing_status'
+        COLUMNS = 'id, sender_email, recipients, cc_list, bcc_list, is_outbound, processing_status'
         PAGE_SIZE = 500
         ID_CHUNK_SIZE = 500  # Max IDs per in_ filter to stay under URL limits
 
@@ -580,6 +584,83 @@ class EmailLinker:
 
         logger.debug(f"Linked email {email_id} to contact {contact_id}, company {company_id}")
         return True
+
+    def _create_junction_links(self, emails: List[Dict]) -> int:
+        """Create email_contact_links rows for ALL participants (sender, TO, CC, BCC).
+
+        This enables many-to-many email↔contact/company relationships so that
+        CC/BCC recipients are properly counted in per-company email stats.
+        """
+        total_links = 0
+        batch: list[dict] = []
+        BATCH_SIZE = 100
+
+        def _flush_batch():
+            nonlocal total_links
+            if not batch:
+                return
+            try:
+                self._execute_with_retry(
+                    self.client.table('email_contact_links')
+                    .upsert(batch, on_conflict='email_id,email_address,role')
+                )
+                total_links += len(batch)
+            except Exception as e:
+                logger.warning(f"Junction link batch failed ({len(batch)} rows): {e}")
+            batch.clear()
+
+        def _resolve_and_add(email_id: str, addr: str, role: str):
+            addr = addr.strip().lower()
+            if not addr or '@' not in addr:
+                return
+            contact_id = self._contact_cache.get(addr)
+            company_id = None
+            if contact_id:
+                company_id = self._contact_company_cache.get(contact_id)
+            if not company_id:
+                domain = self._extract_domain(addr)
+                company_id = self._company_cache.get(domain) if domain else None
+
+            batch.append({
+                'email_id': email_id,
+                'email_address': addr,
+                'role': role,
+                'contact_id': contact_id,
+                'company_id': company_id,
+                'client_id': self.client_id,
+            })
+            if len(batch) >= BATCH_SIZE:
+                _flush_batch()
+
+        for email in emails:
+            eid = email['id']
+
+            # Sender
+            sender = email.get('sender_email')
+            if sender:
+                _resolve_and_add(eid, sender, 'sender')
+
+            # TO recipients
+            for r in (email.get('recipients') or []):
+                addr = r.get('email') if isinstance(r, dict) else r if isinstance(r, str) else None
+                if addr:
+                    _resolve_and_add(eid, addr, 'to')
+
+            # CC recipients
+            for r in (email.get('cc_list') or []):
+                addr = r.get('email') if isinstance(r, dict) else r if isinstance(r, str) else None
+                if addr:
+                    _resolve_and_add(eid, addr, 'cc')
+
+            # BCC recipients
+            for r in (email.get('bcc_list') or []):
+                addr = r.get('email') if isinstance(r, dict) else r if isinstance(r, str) else None
+                if addr:
+                    _resolve_and_add(eid, addr, 'bcc')
+
+        _flush_batch()
+        logger.info(f"Junction links created: {total_links} links for {len(emails)} emails")
+        return total_links
 
     def _extract_domain(self, email: str) -> Optional[str]:
         """

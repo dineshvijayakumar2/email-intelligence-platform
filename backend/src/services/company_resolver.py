@@ -91,15 +91,22 @@ class CompanyResolver:
         self._free_providers: Set[str] = set()
         self._existing_companies: Dict[str, Dict] = {}  # domain -> company record
 
+        # QB unique email lookup: email → {qb_customer_id, customer_name}
+        self._qb_email_lookup: Dict[str, Dict] = {}
+        # QB customer lookup: qb_record_id → {id (UUID), customer_name, customer_code, matched_company_id}
+        self._qb_customer_lookup: Dict[str, Dict] = {}
+
         # Load reference data
         self._load_internal_domains()
         self._load_free_providers()
         self._load_existing_companies()
+        self._load_qb_unique_emails()
 
         logger.info(f"CompanyResolver initialized for client {client_id}")
         logger.info(f"Loaded {len(self._internal_domains)} internal domains, "
                    f"{len(self._free_providers)} free providers, "
-                   f"{len(self._existing_companies)} existing companies")
+                   f"{len(self._existing_companies)} existing companies, "
+                   f"{len(self._qb_email_lookup)} QB unique emails")
 
     def _load_internal_domains(self):
         """Load internal domains for this client"""
@@ -166,6 +173,99 @@ class CompanyResolver:
         except Exception as e:
             logger.error(f"Failed to load existing companies: {e}")
 
+    def _load_qb_unique_emails(self):
+        """Load QB unique emails and QB customers for email-based company resolution.
+
+        This enables the primary matching path:
+        contact email → qb_unique_emails → qb_customer_id → company
+        """
+        try:
+            # Load valid unique emails (not hidden, not invalid, has customer ID)
+            offset = 0
+            while True:
+                resp = (
+                    self.client.table('qb_unique_emails')
+                    .select('email, qb_customer_id, customer_name')
+                    .eq('client_id', self.client_id)
+                    .eq('hide', False)
+                    .eq('email_invalid', False)
+                    .not_.is_('qb_customer_id', 'null')
+                    .range(offset, offset + 999)
+                    .execute()
+                )
+                rows = resp.data or []
+                for r in rows:
+                    email = (r.get('email') or '').strip().lower()
+                    if email and r.get('qb_customer_id'):
+                        self._qb_email_lookup[email] = {
+                            'qb_customer_id': str(r['qb_customer_id']).strip(),
+                            'customer_name': r.get('customer_name'),
+                        }
+                if len(rows) == 0:
+                    break
+                offset += len(rows)
+
+            if not self._qb_email_lookup:
+                return
+
+            # Load QB customers so we can map qb_customer_id → matched SB company
+            offset = 0
+            while True:
+                resp = (
+                    self.client.table('qb_customers')
+                    .select('id, qb_record_id, customer_name, customer_code, matched_company_id')
+                    .eq('client_id', self.client_id)
+                    .range(offset, offset + 999)
+                    .execute()
+                )
+                rows = resp.data or []
+                for r in rows:
+                    rid = str(r.get('qb_record_id', '')).strip()
+                    if rid:
+                        self._qb_customer_lookup[rid] = r
+                if len(rows) == 0:
+                    break
+                offset += len(rows)
+
+            logger.info(
+                f"QB email lookup: {len(self._qb_email_lookup)} emails, "
+                f"{len(self._qb_customer_lookup)} QB customers loaded"
+            )
+        except Exception as e:
+            logger.warning(f"Failed to load QB unique emails (non-critical, domain fallback): {e}")
+
+    def resolve_company_from_qb_email(self, email: str) -> Optional[Dict]:
+        """Look up a contact email in QB unique emails to resolve company.
+
+        Returns:
+            Dict with {company_id, company_name, qb_customer_id, qb_customer_code, match_source}
+            or None if no QB match.
+        """
+        email_lower = email.strip().lower()
+        qb_info = self._qb_email_lookup.get(email_lower)
+        if not qb_info:
+            return None
+
+        qb_customer_id = qb_info['qb_customer_id']
+        # Normalise (QB IDs can be float-formatted)
+        try:
+            normalized_id = str(int(float(qb_customer_id)))
+        except (ValueError, TypeError):
+            normalized_id = qb_customer_id
+
+        qb_cust = self._qb_customer_lookup.get(normalized_id)
+        if not qb_cust:
+            return None
+
+        return {
+            'company_id': qb_cust.get('matched_company_id'),  # may be None if not yet linked
+            'company_name': qb_cust.get('customer_name') or qb_info.get('customer_name'),
+            'qb_customer_id': qb_cust.get('qb_record_id'),
+            'qb_customer_code': qb_cust.get('customer_code'),
+            'qb_customer_uuid': qb_cust.get('id'),
+            'match_source': 'qb_email_lookup',
+        }
+
     def classify_domain(self, domain: str) -> str:
         """
         Classify domain as internal, free_provider, or customer
@@ -217,7 +317,11 @@ class CompanyResolver:
         group_free_providers: bool = False
     ) -> List[ResolvedCompany]:
         """
-        Resolve contacts to companies by grouping by domain
+        Resolve contacts to companies.
+
+        Priority:
+        1. QB email lookup: contact email → qb_unique_emails → QB customer → company
+        2. Domain-based: group by domain → match/create company
 
         Args:
             contacts: List of extracted contact dictionaries
@@ -230,47 +334,111 @@ class CompanyResolver:
             List of resolved companies
         """
         logger.info(f"Resolving {len(contacts)} contacts to companies")
-        logger.info(f"Options: exclude_internal={exclude_internal}, "
-                   f"group_free_providers={group_free_providers}")
 
-        # Group contacts by domain
-        domain_groups = self._group_by_domain(contacts)
+        # ── Phase 1: QB email lookup (highest priority) ──────────────────
+        # Contacts matched here get their company from QB, not from domain
+        qb_resolved: Dict[str, Dict] = {}  # company_name → {qb_info, contacts}
+        remaining_contacts: List[Dict] = []
+        qb_matched_count = 0
 
-        logger.info(f"Grouped contacts into {len(domain_groups)} domains")
+        if self._qb_email_lookup:
+            for contact in contacts:
+                email = (contact.get('email') or '').strip().lower()
+                qb_info = self.resolve_company_from_qb_email(email) if email else None
 
-        # Resolve each domain group to a company
-        companies = []
+                if qb_info and qb_info.get('company_name'):
+                    company_name = qb_info['company_name']
+                    if company_name not in qb_resolved:
+                        qb_resolved[company_name] = {
+                            'qb_info': qb_info,
+                            'contacts': [],
+                            'domains': set(),
+                        }
+                    qb_resolved[company_name]['contacts'].append(contact)
+                    domain = (contact.get('domain') or '').lower()
+                    if domain:
+                        qb_resolved[company_name]['domains'].add(domain)
+                    qb_matched_count += 1
+                else:
+                    remaining_contacts.append(contact)
 
+            logger.info(
+                f"QB email lookup: {qb_matched_count} contacts → "
+                f"{len(qb_resolved)} companies resolved from QB"
+            )
+        else:
+            remaining_contacts = contacts
+
+        # Build ResolvedCompany objects for QB-matched contacts
+        companies: List[ResolvedCompany] = []
+        for company_name, data in qb_resolved.items():
+            qb_info = data['qb_info']
+            group_contacts = data['contacts']
+            domains = list(data['domains'])
+
+            # Use existing company_id if QB customer is already linked to an SB company
+            existing_id = qb_info.get('company_id')
+
+            company = ResolvedCompany(
+                company_id=existing_id,
+                company_name=company_name,
+                domain=domains[0] if domains else '',
+                domain_classification='customer',
+                contact_count=len(group_contacts),
+                total_emails=sum(c.get('total_emails', 0) for c in group_contacts),
+                sender_count=sum(c.get('as_sender_count', 0) for c in group_contacts),
+                recipient_count=sum(c.get('as_recipient_count', 0) for c in group_contacts),
+                email_domains=domains,
+                is_new=existing_id is None,
+                first_seen=min(
+                    (self._parse_datetime(c.get('first_seen_date', datetime.utcnow()))
+                     for c in group_contacts),
+                    default=datetime.utcnow()
+                ),
+                last_seen=max(
+                    (self._parse_datetime(c.get('last_seen_date', datetime.utcnow()))
+                     for c in group_contacts),
+                    default=datetime.utcnow()
+                ),
+                contact_emails=[c.get('email', '') for c in group_contacts],
+            )
+            # Attach QB metadata for downstream steps
+            company.qb_customer_id = qb_info.get('qb_customer_id')
+            company.qb_customer_code = qb_info.get('qb_customer_code')
+            company.qb_customer_uuid = qb_info.get('qb_customer_uuid')
+            company.qb_match_source = 'qb_email_lookup'
+            companies.append(company)
+
+        # ── Phase 2: Domain-based resolution (fallback) ──────────────────
+        logger.info(f"Domain fallback: resolving {len(remaining_contacts)} remaining contacts")
+
+        domain_groups = self._group_by_domain(remaining_contacts)
         excluded_internal_count = 0
 
         for domain, domain_contacts in domain_groups.items():
-            # Classify domain
             classification = self.classify_domain(domain)
 
-            # Skip internal domains if requested
             if classification == 'internal' and exclude_internal:
                 excluded_internal_count += len(domain_contacts)
                 continue
 
-            # Handle free providers
             if classification == 'free_provider':
                 if group_free_providers:
-                    # Add to "Individual Contacts" bucket (handled separately)
-                    # For now, skip or create individual companies
                     pass
                 else:
-                    # Create individual company per email address
                     for contact in domain_contacts:
                         company = self._create_individual_company(contact)
                         companies.append(company)
                     continue
 
-            # Regular customer domain - create company
             company = self._create_company_from_domain(domain, domain_contacts, classification)
             companies.append(company)
 
-        logger.info(f"Resolved {len(companies)} companies "
-                   f"({excluded_internal_count} internal contacts excluded)")
+        logger.info(
+            f"Resolved {len(companies)} companies total "
+            f"({qb_matched_count} via QB email, "
+            f"{excluded_internal_count} internal excluded)"
+        )
 
         return companies
 
@@ -494,6 +662,13 @@ class CompanyResolver:
                 'updated_at': timestamp
             }
 
+            # If resolved via QB email lookup, include QB match metadata
+            if getattr(company, 'qb_match_source', None) == 'qb_email_lookup':
+                company_data['qb_customer_id'] = getattr(company, 'qb_customer_id', None)
+                company_data['qb_customer_code'] = getattr(company, 'qb_customer_code', None)
+                company_data['qb_match_method'] = 'email_lookup'
+                company_data['qb_matched_at'] = timestamp
+
             if not existing:
                 company_data['created_at'] = timestamp
 
@@ -551,11 +726,28 @@ class CompanyResolver:
         logger.info(f"Company upsert complete: {created_count} created, "
                    f"{updated_count} updated, {len(errors)} errors")
 
+        # Link QB customers to the newly created/updated SB companies
+        qb_linked = 0
+        for company in deduplicated_companies:
+            qb_uuid = getattr(company, 'qb_customer_uuid', None)
+            if qb_uuid and company.company_id:
+                try:
+                    self.client.table('qb_customers').update({
+                        'matched_company_id': company.company_id
+                    }).eq('id', qb_uuid).execute()
+                    qb_linked += 1
+                except Exception as e:
+                    logger.warning(f"Failed to link QB customer {qb_uuid} → {company.company_id}: {e}")
+
+        if qb_linked:
+            logger.info(f"Linked {qb_linked} QB customers to SB companies")
+
         return {
             'total_companies': len(deduplicated_companies),
             'original_count': len(companies),
             'created': created_count,
             'updated': updated_count,
+            'qb_linked': qb_linked,
             'errors': errors
         }
 

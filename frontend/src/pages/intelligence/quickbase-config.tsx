@@ -30,6 +30,7 @@ const DEFAULT_MAPPINGS: Record<string, Record<string, string>> = {
     "9": "active", "16": "account_manager", "17": "customer_tier",
     "36": "recency_days", "59": "industry", "67": "customer_status",
     "68": "days_since_last_invoice", "101": "total_invoiced",
+    "92": "customer_key_id",
     "103": "invoiced_ty", "104": "invoiced_ly",
   },
   contacts: {
@@ -51,6 +52,10 @@ const DEFAULT_MAPPINGS: Record<string, Record<string, string>> = {
     "18": "margin_pct", "21": "factory_rush_level", "22": "due_date",
     "23": "accepted_date", "24": "job_status", "62": "pieces_ordered",
     "63": "kinds_ordered", "64": "total_qty_ordered",
+    "85": "has_hot_foil", "86": "has_spot_uv",
+    "87": "has_special_substrate", "88": "has_digital_foil",
+    "89": "has_de_emboss", "90": "has_raised_ink",
+    "91": "has_laser_cut", "92": "has_white_ink",
   },
   sales_line_items: {
     "3": "qb_record_id", "7": "invoice_id", "9": "job_am_name",
@@ -67,6 +72,16 @@ const DEFAULT_MAPPINGS: Record<string, Record<string, string>> = {
     "21": "production_status", "22": "cost_price", "23": "cost_plus_price",
     "24": "profit_amount", "25": "profit_pct", "26": "finishing_type",
     "27": "first_invoice_no", "28": "first_invoice_date",
+    "44": "qb_process_tag", "45": "qb_capability_tag",
+    "46": "qb_machine_tier_tag", "47": "qb_row_type_tag",
+    "48": "qb_blank_reason_tag", "52": "qb_embellishment_tag",
+  },
+  unique_emails: {
+    "3": "qb_record_id", "6": "email", "23": "qb_customer_id",
+    "24": "customer_name", "44": "first_name", "45": "last_name",
+    "46": "hide", "49": "quality", "50": "result", "51": "free",
+    "53": "email_invalid", "70": "customer_type", "72": "customer_id_text",
+    "128": "embellishments_used", "130": "processes_used", "131": "capabilities_used",
   },
 };
 
@@ -75,7 +90,7 @@ const DEST_COLUMNS: Record<string, string[]> = {
     'qb_record_id', 'customer_code', 'customer_name', 'active',
     'account_manager', 'customer_tier', 'recency_days', 'industry',
     'customer_status', 'days_since_last_invoice', 'total_invoiced',
-    'invoiced_ty', 'invoiced_ly',
+    'invoiced_ty', 'invoiced_ly', 'customer_key_id',
   ],
   contacts: [
     'qb_record_id', 'qb_customer_id', 'first_name', 'surname', 'phone',
@@ -92,7 +107,9 @@ const DEST_COLUMNS: Record<string, string[]> = {
     'qb_record_id', 'job_no', 'qb_customer_id', 'quote_no', 'retail_sale',
     'invoiced_margin', 'margin_pct', 'factory_rush_level', 'due_date',
     'accepted_date', 'job_status', 'pieces_ordered', 'kinds_ordered',
-    'total_qty_ordered',
+    'total_qty_ordered', 'has_hot_foil', 'has_spot_uv',
+    'has_special_substrate', 'has_digital_foil', 'has_de_emboss',
+    'has_raised_ink', 'has_laser_cut', 'has_white_ink',
   ],
   sales_line_items: [
     'qb_record_id', 'invoice_id', 'job_am_name', 'invoice_no', 'job_no',
@@ -107,6 +124,14 @@ const DEST_COLUMNS: Record<string, string[]> = {
     'profit_amount', 'profit_pct', 'finishing_type', 'first_invoice_no',
     'first_invoice_date', 'capability_tags', 'has_coating', 'has_sewing',
     'has_outsource_component', 'am_rush', 'factory_rush', 'row_type', 'contact_email',
+    'qb_process_tag', 'qb_capability_tag', 'qb_machine_tier_tag',
+    'qb_row_type_tag', 'qb_blank_reason_tag', 'qb_embellishment_tag',
+  ],
+  unique_emails: [
+    'qb_record_id', 'email', 'qb_customer_id', 'customer_name',
+    'first_name', 'last_name', 'hide', 'quality', 'result', 'free',
+    'email_invalid', 'customer_type', 'customer_id_text',
+    'embellishments_used', 'processes_used', 'capabilities_used',
   ],
 };
 
@@ -117,6 +142,7 @@ const TABLES = [
   { key: 'jobs', label: 'Jobs', configField: 'jobs_table_id' },
   { key: 'sales_line_items', label: 'Sales Line Items', configField: 'sales_line_items_table_id' },
   { key: 'operations', label: 'Operations', configField: 'operations_table_id' },
+  { key: 'unique_emails', label: 'Unique Emails', configField: 'unique_emails_table_id' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -222,6 +248,7 @@ const QuickbaseConfigPage: React.FC = () => {
         jobs_table_id: cfg.jobs_table_id,
         sales_line_items_table_id: cfg.sales_line_items_table_id,
         operations_table_id: cfg.operations_table_id,
+        unique_emails_table_id: cfg.unique_emails_table_id,
         sync_interval_hours: cfg.sync_interval_hours ?? 6,
       });
 
@@ -229,9 +256,11 @@ const QuickbaseConfigPage: React.FC = () => {
       const saved: Record<string, Record<string, string>> = cfg.field_mappings || {};
       const loaded: FieldMappings = {};
       TABLES.forEach(t => {
-        const tableMapping = saved[t.key] && Object.keys(saved[t.key]).length > 0
-          ? saved[t.key]
-          : DEFAULT_MAPPINGS[t.key] || {};
+        // Merge: defaults first, then saved overrides on top (so new default fields always show)
+        const tableMapping = {
+          ...(DEFAULT_MAPPINGS[t.key] || {}),
+          ...(saved[t.key] || {}),
+        };
         loaded[t.key] = mappingToRows(tableMapping);
       });
       setFieldMappings(loaded);
@@ -249,6 +278,7 @@ const QuickbaseConfigPage: React.FC = () => {
           jobs_table_id: 'buziry2ri',
           sales_line_items_table_id: 'bu4cwdinf',
           operations_table_id: 'bvqsudnif',
+          unique_emails_table_id: 'bvmtc5re6',
           sync_interval_hours: 6,
         });
         setFieldMappings(initDefaultMappings());
@@ -320,12 +350,14 @@ const QuickbaseConfigPage: React.FC = () => {
     }
   };
 
-  const handleTableSync = async (tableKey: string) => {
+  const handleTableSync = async (tableKey: string, full = false) => {
     if (!clientId) return;
     setTableSyncing(prev => ({ ...prev, [tableKey]: true }));
     try {
-      await api.post<any>(`/v1/quickbase/sync?client_id=${clientId}&tables=${tableKey}`);
-      message.success(`Syncing ${tableKey} — will update shortly`);
+      const params = new URLSearchParams({ client_id: clientId, tables: tableKey });
+      if (full) params.set('full', 'true');
+      await api.post<any>(`/v1/quickbase/sync?${params}`);
+      message.success(`${full ? 'Full' : 'Incremental'} sync started for ${tableKey}`);
       setTimeout(() => loadQBStatus(clientId), 3000);
     } catch (err: any) {
       message.error(err?.message || 'Sync failed');
@@ -860,6 +892,7 @@ const QuickbaseConfigPage: React.FC = () => {
               { label: 'Jobs', key: 'jobs' },
               { label: 'Sales Line Items', key: 'sales_line_items' },
               { label: 'Operations', key: 'operations' },
+              { label: 'Unique Emails', key: 'unique_emails' },
             ].map(({ label, key }) => {
               const log = qbStatus.table_logs.find(l => l.table_name === key);
               const hasError = log?.status === 'error';
@@ -893,15 +926,20 @@ const QuickbaseConfigPage: React.FC = () => {
                         Not synced yet
                       </div>
                     )}
-                    <Button
+                    <Dropdown.Button
                       size="small"
-                      icon={<SyncOutlined spin={tableSyncing[key]} />}
+                      icon={<DownOutlined />}
                       loading={tableSyncing[key]}
-                      onClick={() => handleTableSync(key)}
+                      onClick={() => handleTableSync(key, false)}
                       style={{ marginTop: 8, width: '100%', fontSize: 11 }}
+                      menu={{
+                        items: [
+                          { key: 'full', label: 'Full Sync (re-fetch all)', onClick: () => handleTableSync(key, true) },
+                        ],
+                      }}
                     >
-                      Sync
-                    </Button>
+                      <SyncOutlined spin={tableSyncing[key]} /> Sync
+                    </Dropdown.Button>
                   </div>
                 </Col>
               );

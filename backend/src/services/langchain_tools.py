@@ -939,7 +939,8 @@ def company_analytics(company_name: str, analysis: str = "all") -> str:
         company_name: Company name (partial match OK)
         analysis: One of: "all" (everything), "strike_rate" (quote conversion),
                   "seasonality" (monthly/quarterly patterns), "rhythm" (reorder intervals),
-                  "capabilities" (what each contact orders)
+                  "capabilities" (what each contact orders),
+                  "qb_tags" (QB-maintained capability/process/embellishment summary)
 
     Returns:
         Detailed analytics for the company
@@ -962,7 +963,7 @@ def company_analytics(company_name: str, analysis: str = "all") -> str:
         service = CustomerAnalyticsService(sb, client_id)
         lines = [f"ANALYTICS FOR {company['company_name']}:\n"]
 
-        analyses = [analysis] if analysis != "all" else ["strike_rate", "seasonality", "rhythm", "capabilities"]
+        analyses = [analysis] if analysis != "all" else ["strike_rate", "seasonality", "rhythm", "capabilities", "qb_tags"]
 
         for a in analyses:
             try:
@@ -1025,6 +1026,48 @@ def company_analytics(company_name: str, analysis: str = "all") -> str:
                         cap_str = ', '.join(f"{cap['tag']}({cap['order_count']})" for cap in caps[:5])
                         lines.append(f"  {c['contact_name']}: {cap_str}")
                     lines.append("")
+
+                elif a == "qb_tags":
+                    # QB-maintained capability/process/embellishment summary from Unique Emails
+                    # Translate qb_record_id → customer_key_id (field 92) for unique email lookup
+                    qb_cid_resp = sb.table('customer_companies').select('qb_customer_id').eq('id', comp_id).limit(1).execute()
+                    qb_record_id = (qb_cid_resp.data[0].get('qb_customer_id') or '') if qb_cid_resp.data else ''
+                    qb_cid = ''
+                    if qb_record_id:
+                        key_resp = sb.table('qb_customers').select('customer_key_id').eq(
+                            'client_id', client_id
+                        ).eq('qb_record_id', qb_record_id).limit(1).execute()
+                        qb_cid = (key_resp.data[0].get('customer_key_id') or '') if key_resp.data else ''
+                    if not qb_cid:
+                        lines.append("QB TAGS: Company not linked to QB customer")
+                        lines.append("")
+                    else:
+                        ue_resp = sb.table('qb_unique_emails').select(
+                            'email, capabilities_used, processes_used, embellishments_used'
+                        ).eq('client_id', client_id).eq('qb_customer_id', qb_cid).eq('hide', False).execute()
+                        all_caps, all_procs, all_emb = set(), set(), set()
+                        per_contact = []
+                        for r in (ue_resp.data or []):
+                            email = r.get('email', '')
+                            caps = [v.strip() for v in (r.get('capabilities_used') or '').split('|') if v.strip()]
+                            procs = [v.strip() for v in (r.get('processes_used') or '').split('|') if v.strip()]
+                            embs = [v.strip() for v in (r.get('embellishments_used') or '').split('|') if v.strip()]
+                            all_caps.update(caps)
+                            all_procs.update(procs)
+                            all_emb.update(embs)
+                            if caps or procs or embs:
+                                per_contact.append({'email': email, 'caps': caps, 'procs': procs, 'embs': embs})
+
+                        lines.append(f"QB TAGS (Maintained in QuickBase, {len(ue_resp.data or [])} emails):")
+                        lines.append(f"  Capabilities: {', '.join(sorted(all_caps)) or 'none'}")
+                        lines.append(f"  Processes: {', '.join(sorted(all_procs)) or 'none'}")
+                        lines.append(f"  Embellishments: {', '.join(sorted(all_emb)) or 'none'}")
+                        if per_contact:
+                            lines.append(f"  Per contact (top 5):")
+                            for pc in per_contact[:5]:
+                                tags = ', '.join(pc['caps'][:3] + pc['procs'][:2] + pc['embs'][:2])
+                                lines.append(f"    {pc['email']}: {tags}")
+                        lines.append("")
 
             except Exception as e:
                 lines.append(f"  [{a}]: Failed — {str(e)[:100]}")

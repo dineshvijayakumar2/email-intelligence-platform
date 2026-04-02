@@ -38,7 +38,7 @@ export const ContactsAnalytics: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const isMountedRef = useRef(true);
-  const [clientId, setClientId] = useState('');
+  const [clientId, setClientId] = useState(() => searchParams.get('client_id') || '');
   const [activeTab, setActiveTab] = useState(() => searchParams.get('dm') === 'true' ? 'dm' : 'all');
   const [loading, setLoading] = useState(false);
 
@@ -52,7 +52,8 @@ export const ContactsAnalytics: React.FC = () => {
   const [contactType, setContactType] = useState<string>('');
   const [sortBy, setSortBy] = useState<string>('engagement_score');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
-  const [search, setSearch] = useState<string>(() => searchParams.get('company') || '');
+  const [search, setSearch] = useState<string>('');
+  const companyIdFilter = searchParams.get('company_id') || '';
 
   // Top engaged state
   const [topEngaged, setTopEngaged] = useState<TopEngagedContact[]>([]);
@@ -80,7 +81,7 @@ export const ContactsAnalytics: React.FC = () => {
   useEffect(() => {
     if (!clientId) return;
     loadTab(activeTab);
-  }, [clientId, activeTab, contactsPage, dmsPage, minScore, dmOnly, contactType, sortBy, sortDir, search]);
+  }, [clientId, activeTab, contactsPage, dmsPage, minScore, dmOnly, contactType, sortBy, sortDir, search, companyIdFilter]);
 
   const loadTab = async (tab: string) => {
     if (!clientId) return;
@@ -89,6 +90,7 @@ export const ContactsAnalytics: React.FC = () => {
         setLoading(true);
         const allResult = await contactsApi.list({
           client_id: clientId,
+          company_id: companyIdFilter || undefined,
           limit: PAGE_SIZE,
           offset: (contactsPage - 1) * PAGE_SIZE,
           min_engagement_score: minScore > 0 ? minScore : undefined,
@@ -310,19 +312,19 @@ export const ContactsAnalytics: React.FC = () => {
     navigate(`/customers/contacts/${record.id}`);
   };
 
-  const companyDrilldown = searchParams.get('company');
+  const isCompanyDrilldown = !!companyIdFilter;
 
   return (
     <div className="glass-page-bg" style={{ padding: 24 }}>
-      {companyDrilldown && (
+      {isCompanyDrilldown && (
         <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)} style={{ marginBottom: 16 }}>
-          Back to {companyDrilldown}
+          Back
         </Button>
       )}
       <div className="fade-in-up" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <Text type="secondary">
-          {companyDrilldown
-            ? `Contacts for ${companyDrilldown}${dmOnly ? ' (Decision Makers)' : ''}`
+          {isCompanyDrilldown
+            ? `Contacts for this company${dmOnly ? ' (Decision Makers)' : ''}`
             : 'Explore contacts, engagement scores, and relationship health'}
         </Text>
         <ClientSelector value={clientId} onChange={setClientId} />

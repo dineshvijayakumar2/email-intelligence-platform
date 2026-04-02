@@ -1114,44 +1114,251 @@ class ExtractionOrchestrator:
         return result
 
     def _rematch_quickbase(self) -> int:
-        """Lightweight QB re-match after extraction — only propagates data for already-matched companies.
+        """QB email-based matching after extraction.
 
-        The full 3-pass matching pipeline (13K+ customers, fuzzy staging, batch writes) is too heavy
-        to run inside extraction. Use the "Run Re-Match" button on /manage/quickbase-matches for that.
-        This method only calls propagate_qb_data_to_companies() to refresh QB data on already-matched
-        companies (fast — just reads matched rows and updates enrichment columns).
+        Uses qb_unique_emails to link SB companies to QB customers, then matches
+        contacts by name against QB contacts for the linked customer. Finally
+        propagates QB enrichment data.
+
+        Flow:
+        1. Contact email → qb_unique_emails → qb_customer_id → link SB company
+        2. Contact name → qb_contacts (filtered by qb_customer_id) → link SB contact
+        3. Propagate QB data to enrichment columns
         """
         try:
-            import asyncio
-            qb_config = self.client.table('qb_sync_config').select('*').eq(
+            # Check if QB is configured
+            qb_config_resp = self.client.table('qb_sync_config').select('*').eq(
                 'client_id', self.client_id
             ).execute()
-            if not qb_config.data or not qb_config.data[0].get('is_active'):
+            if not qb_config_resp.data or not qb_config_resp.data[0].get('is_active'):
                 return 0
 
-            from .quickbase_sync import QuickbaseSync
-            syncer = QuickbaseSync(self.client, qb_config.data[0])
+            matched = 0
+            now_iso = datetime.utcnow().isoformat() + 'Z'
 
-            # propagate_qb_data_to_companies is async — run it safely
+            # ── Step 1: Build email → qb_customer_id lookup from qb_unique_emails ──
+            email_to_qb: dict = {}  # email → {qb_customer_id, customer_name}
+            offset = 0
+            while True:
+                ue_resp = self._execute_with_retry(
+                    self.client.table('qb_unique_emails').select(
+                        'email, qb_customer_id, customer_name'
+                    ).eq('client_id', self.client_id).eq(
+                        'hide', False
+                    ).eq(
+                        'email_invalid', False
+                    ).not_.is_(
+                        'qb_customer_id', 'null'
+                    ).range(offset, offset + 999)
+                )
+                rows = ue_resp.data or []
+                for r in rows:
+                    email = (r.get('email') or '').strip().lower()
+                    if email:
+                        email_to_qb[email] = {
+                            'qb_customer_id': str(r['qb_customer_id']).strip(),
+                            'customer_name': r.get('customer_name'),
+                        }
+                if len(rows) == 0:
+                    break
+                offset += len(rows)
+
+            if not email_to_qb:
+                logger.info("Step 6 QB email match: No unique emails available — skipping")
+                return 0
+            logger.info(f"Step 6 QB email match: {len(email_to_qb)} unique emails loaded")
+
+            # ── Step 2: Build qb_record_id → qb_customers row lookup ──
+            qb_cust_map: dict = {}  # qb_record_id → {id, customer_code}
+            offset = 0
+            while True:
+                cust_resp = self._execute_with_retry(
+                    self.client.table('qb_customers').select(
+                        'id, qb_record_id, customer_code'
+                    ).eq('client_id', self.client_id).range(offset, offset + 999)
+                )
+                rows = cust_resp.data or []
+                for r in rows:
+                    if r.get('qb_record_id'):
+                        qb_cust_map[str(r['qb_record_id'])] = r
+                if len(rows) == 0:
+                    break
+                offset += len(rows)
+
+            # ── Step 3: Get contacts touched in this extraction with company links ──
+            contacts_with_companies: list = []
+            offset = 0
+            while True:
+                ct_resp = self._execute_with_retry(
+                    self.client.table('customer_contacts').select(
+                        'id, email_address, customer_company_id, full_name, first_name, last_name'
+                    ).eq('client_id', self.client_id).not_.is_(
+                        'customer_company_id', 'null'
+                    ).range(offset, offset + 999)
+                )
+                rows = ct_resp.data or []
+                contacts_with_companies.extend(rows)
+                if len(rows) == 0:
+                    break
+                offset += len(rows)
+
+            # ── Step 4: Match companies via email lookup ──
+            # company_id → {qb_customer_id: count} (majority vote for conflicts)
+            company_votes: dict = {}
+            for ct in contacts_with_companies:
+                email = (ct.get('email_address') or '').strip().lower()
+                company_id = ct.get('customer_company_id')
+                if not email or not company_id:
+                    continue
+                qb_info = email_to_qb.get(email)
+                if not qb_info:
+                    continue
+                qb_cid = qb_info['qb_customer_id']
+                if company_id not in company_votes:
+                    company_votes[company_id] = {}
+                company_votes[company_id][qb_cid] = company_votes[company_id].get(qb_cid, 0) + 1
+
+            # Resolve: pick QB customer with most votes per company
+            company_to_qb: dict = {}  # company_id → qb_customer_id
+            for company_id, votes in company_votes.items():
+                best = max(votes, key=votes.get)
+                company_to_qb[company_id] = best
+
+            logger.info(f"Step 6 QB email match: {len(company_to_qb)} companies resolved from email lookup")
+
+            # ── Step 5: Write company matches (only for unlinked companies) ──
+            for company_id, qb_customer_id in company_to_qb.items():
+                try:
+                    normalized_id = str(int(float(qb_customer_id)))
+                except (ValueError, TypeError):
+                    normalized_id = str(qb_customer_id)
+
+                qb_cust = qb_cust_map.get(normalized_id)
+                if not qb_cust:
+                    continue
+
+                try:
+                    # Link qb_customers → company
+                    self._execute_with_retry(
+                        self.client.table('qb_customers').update({
+                            'matched_company_id': company_id
+                        }).eq('id', qb_cust['id'])
+                    )
+                    # Write match metadata on company
+                    self._execute_with_retry(
+                        self.client.table('customer_companies').update({
+                            'qb_customer_id': qb_cust.get('qb_record_id'),
+                            'qb_customer_code': qb_cust.get('customer_code'),
+                            'qb_match_method': 'email_lookup',
+                            'qb_matched_at': now_iso,
+                        }).eq('id', company_id)
+                    )
+                    matched += 1
+                except Exception as e:
+                    logger.warning(f"Step 6 QB match write failed for company {company_id}: {e}")
+
+            # ── Step 6: Match contacts by name against QB contacts ──
+            # For each matched company, find its QB contacts and match by name
+            contacts_matched = 0
+            if company_to_qb:
+                # Build qb_customer_id → list of QB contacts
+                qb_contacts_by_customer: dict = {}
+                offset = 0
+                while True:
+                    qbc_resp = self._execute_with_retry(
+                        self.client.table('qb_contacts').select(
+                            'id, qb_customer_id, first_name, surname, email'
+                        ).eq('client_id', self.client_id).is_(
+                            'matched_contact_id', 'null'
+                        ).range(offset, offset + 999)
+                    )
+                    rows = qbc_resp.data or []
+                    for r in rows:
+                        cid = str(r.get('qb_customer_id') or '').strip()
+                        if cid:
+                            if cid not in qb_contacts_by_customer:
+                                qb_contacts_by_customer[cid] = []
+                            qb_contacts_by_customer[cid].append(r)
+                    if len(rows) == 0:
+                        break
+                    offset += len(rows)
+
+                # For SB contacts in matched companies, try name-based match to QB contacts
+                for ct in contacts_with_companies:
+                    company_id = ct.get('customer_company_id')
+                    qb_customer_id = company_to_qb.get(company_id)
+                    if not qb_customer_id:
+                        continue
+
+                    try:
+                        normalized_qb_cid = str(int(float(qb_customer_id)))
+                    except (ValueError, TypeError):
+                        normalized_qb_cid = str(qb_customer_id)
+
+                    qb_contacts_for_cust = qb_contacts_by_customer.get(normalized_qb_cid, [])
+                    if not qb_contacts_for_cust:
+                        continue
+
+                    # Match by name (first+last or full_name)
+                    sb_first = (ct.get('first_name') or '').strip().lower()
+                    sb_last = (ct.get('last_name') or '').strip().lower()
+                    sb_full = (ct.get('full_name') or '').strip().lower()
+
+                    best_match = None
+                    for qbc in qb_contacts_for_cust:
+                        qb_first = (qbc.get('first_name') or '').strip().lower()
+                        qb_last = (qbc.get('surname') or '').strip().lower()
+                        # Exact first+last match
+                        if sb_first and sb_last and qb_first == sb_first and qb_last == sb_last:
+                            best_match = qbc
+                            break
+                        # Email match as fallback
+                        qb_email = (qbc.get('email') or '').strip().lower()
+                        sb_email = (ct.get('email_address') or '').strip().lower()
+                        if qb_email and sb_email and qb_email == sb_email:
+                            best_match = qbc
+                            break
+
+                    if best_match:
+                        try:
+                            self._execute_with_retry(
+                                self.client.table('qb_contacts').update({
+                                    'matched_contact_id': ct['id']
+                                }).eq('id', best_match['id'])
+                            )
+                            contacts_matched += 1
+                        except Exception:
+                            pass
+
+            logger.info(
+                f"Step 6 QB email match complete: {matched} companies linked, "
+                f"{contacts_matched} contacts matched by name"
+            )
+
+            # ── Step 7: Propagate QB data to enrichment columns ──
             try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    # Already in an async context — create a new thread with its own loop
-                    import concurrent.futures
-                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                        future = pool.submit(lambda: asyncio.run(syncer.propagate_qb_data_to_companies()))
-                        propagated = future.result(timeout=120)
-                else:
-                    propagated = loop.run_until_complete(syncer.propagate_qb_data_to_companies())
-            except RuntimeError:
-                # No event loop exists
-                propagated = asyncio.run(syncer.propagate_qb_data_to_companies())
+                import asyncio
+                from .quickbase_sync import QuickbaseSync
+                syncer = QuickbaseSync(self.client, qb_config_resp.data[0])
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        import concurrent.futures
+                        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                            future = pool.submit(lambda: asyncio.run(syncer.propagate_qb_data_to_companies()))
+                            propagated = future.result(timeout=120)
+                    else:
+                        propagated = loop.run_until_complete(syncer.propagate_qb_data_to_companies())
+                except RuntimeError:
+                    propagated = asyncio.run(syncer.propagate_qb_data_to_companies())
+                if propagated > 0:
+                    logger.info(f"Step 6 QB propagation: refreshed {propagated} companies")
+            except Exception as e:
+                logger.warning(f"Step 6 QB propagation failed (non-critical): {e}")
 
-            if propagated > 0:
-                logger.info(f"Step 6 QB propagation: refreshed {propagated} companies")
-            return propagated
+            return matched
         except Exception as e:
-            logger.warning(f"Step 6 QB propagation failed (non-critical): {e}")
+            logger.warning(f"Step 6 QB email match failed (non-critical): {e}")
             return 0
 
     def _enrich_from_quickbase(self) -> Dict:
@@ -1472,40 +1679,102 @@ class ExtractionOrchestrator:
 
             logger.info(f"Mapped {len(contact_to_company)} contacts to {len(company_contact_counts)} companies")
 
-            # ── 3. Count emails per company via contact chain ─────────────────
-            # Fetch emails linked to contacts (paginated)
+            # ── 3. Count emails per company via email_contact_links (includes CC/BCC) ──
+            # Try junction table first; fall back to old contact chain if table doesn't exist
             company_email_stats: dict = defaultdict(lambda: {'total': 0, 'inbound': 0, 'outbound': 0})
-            offset = 0
             emails_scanned = 0
-            while True:
-                emails_page = (
-                    self.client.table('emails')
-                    .select('customer_contact_id, is_outbound')
-                    .eq('mailbox_id', self.mailbox_id)
-                    .not_.is_('customer_contact_id', 'null')
-                    .range(offset, offset + 999)
-                    .execute()
-                )
-                rows = emails_page.data or []
-                if not rows:
-                    break
+            use_junction = True
 
-                for email in rows:
-                    contact_id = email.get('customer_contact_id')
-                    company_id = contact_to_company.get(contact_id)
-                    if company_id:
-                        company_email_stats[company_id]['total'] += 1
-                        if email.get('is_outbound'):
-                            company_email_stats[company_id]['outbound'] += 1
+            try:
+                # Check if junction table has data for this client
+                check = self.client.table('email_contact_links').select(
+                    'id', count='exact'
+                ).eq('client_id', self.client_id).limit(0).execute()
+                use_junction = (check.count or 0) > 0
+            except Exception:
+                use_junction = False
+
+            if use_junction:
+                logger.info("Counting emails per company via email_contact_links (includes CC/BCC)")
+                # Get distinct (email_id, company_id) pairs from junction table
+                # Then join with emails for is_outbound
+                offset = 0
+                while True:
+                    ecl_page = self._execute_with_retry(
+                        self.client.table('email_contact_links')
+                        .select('email_id, company_id')
+                        .eq('client_id', self.client_id)
+                        .not_.is_('company_id', 'null')
+                        .range(offset, offset + 999)
+                    )
+                    rows = ecl_page.data or []
+                    if not rows:
+                        break
+
+                    # Collect email IDs for this batch to look up is_outbound
+                    email_ids = list({r['email_id'] for r in rows})
+                    outbound_set = set()
+                    for i in range(0, len(email_ids), 500):
+                        batch = email_ids[i:i + 500]
+                        ob_resp = self._execute_with_retry(
+                            self.client.table('emails')
+                            .select('id, is_outbound')
+                            .in_('id', batch)
+                        )
+                        for e in (ob_resp.data or []):
+                            if e.get('is_outbound'):
+                                outbound_set.add(e['id'])
+
+                    # Count per company (deduplicate email_id per company)
+                    seen = set()
+                    for r in rows:
+                        key = (r['email_id'], r['company_id'])
+                        if key in seen:
+                            continue
+                        seen.add(key)
+                        cid = r['company_id']
+                        company_email_stats[cid]['total'] += 1
+                        if r['email_id'] in outbound_set:
+                            company_email_stats[cid]['outbound'] += 1
                         else:
-                            company_email_stats[company_id]['inbound'] += 1
+                            company_email_stats[cid]['inbound'] += 1
 
-                emails_scanned += len(rows)
-                offset += len(rows)
-                if emails_scanned % 5000 == 0:
-                    logger.info(f"Email scan progress: {emails_scanned} scanned, {len(company_email_stats)} companies with emails")
+                    emails_scanned += len(rows)
+                    offset += len(rows)
+                    if emails_scanned % 10000 == 0:
+                        logger.info(f"Junction scan progress: {emails_scanned} links, {len(company_email_stats)} companies")
+            else:
+                logger.info("Counting emails per company via contact chain (junction table empty)")
+                offset = 0
+                while True:
+                    emails_page = (
+                        self.client.table('emails')
+                        .select('customer_contact_id, is_outbound')
+                        .eq('mailbox_id', self.mailbox_id)
+                        .not_.is_('customer_contact_id', 'null')
+                        .range(offset, offset + 999)
+                        .execute()
+                    )
+                    rows = emails_page.data or []
+                    if not rows:
+                        break
 
-            logger.info(f"Scanned {emails_scanned} emails → email stats for {len(company_email_stats)} companies")
+                    for email in rows:
+                        contact_id = email.get('customer_contact_id')
+                        company_id = contact_to_company.get(contact_id)
+                        if company_id:
+                            company_email_stats[company_id]['total'] += 1
+                            if email.get('is_outbound'):
+                                company_email_stats[company_id]['outbound'] += 1
+                            else:
+                                company_email_stats[company_id]['inbound'] += 1
+
+                    emails_scanned += len(rows)
+                    offset += len(rows)
+                    if emails_scanned % 5000 == 0:
+                        logger.info(f"Email scan progress: {emails_scanned} scanned, {len(company_email_stats)} companies")
+
+            logger.info(f"Scanned {emails_scanned} entries → email stats for {len(company_email_stats)} companies")
 
             # ── 4. Batch update companies ─────────────────────────────────────
             updated_count = 0

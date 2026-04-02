@@ -114,6 +114,22 @@ const jobColumns = [
     render: (v: string) => v ? new Date(v).toLocaleDateString() : '-' },
   { title: 'Pieces', dataIndex: 'pieces_ordered', key: 'pieces_ordered', width: 80, align: 'right' as const },
   { title: 'Kinds', dataIndex: 'kinds_ordered', key: 'kinds_ordered', width: 80, align: 'right' as const },
+  { title: 'Embellishments', key: 'embellishments', width: 220,
+    render: (_: any, r: any) => {
+      const flags = [
+        { key: 'has_hot_foil', label: 'Hot Foil', color: 'red' },
+        { key: 'has_spot_uv', label: 'Spot UV', color: 'blue' },
+        { key: 'has_special_substrate', label: 'Special Sub', color: 'purple' },
+        { key: 'has_digital_foil', label: 'Digital Foil', color: 'gold' },
+        { key: 'has_de_emboss', label: 'De/Emboss', color: 'orange' },
+        { key: 'has_raised_ink', label: 'Raised Ink', color: 'cyan' },
+        { key: 'has_laser_cut', label: 'Laser Cut', color: 'volcano' },
+        { key: 'has_white_ink', label: 'White Ink', color: 'geekblue' },
+      ];
+      const active = flags.filter(f => r[f.key] && r[f.key] !== '0' && r[f.key].toLowerCase() !== 'no');
+      if (!active.length) return <Text type="secondary" style={{ fontSize: 11 }}>—</Text>;
+      return <Space size={2} wrap>{active.map(f => <Tag key={f.key} color={f.color} style={{ fontSize: 10, padding: '0 4px' }}>{f.label}</Tag>)}</Space>;
+    } },
 ];
 
 const sliColumns = [
@@ -143,9 +159,10 @@ const operationsColumns = [
   { title: 'Customer', dataIndex: 'customer_name', key: 'customer_name', width: 180, ellipsis: true },
   { title: 'AM', dataIndex: 'am_job', key: 'am_job', width: 130, ellipsis: true },
   { title: 'Capability Tags', dataIndex: 'capability_tags', key: 'capability_tags', width: 200,
-    render: (v: string[]) => {
-      if (!v || v.length === 0) return <Text type="secondary" style={{ fontSize: 11 }}>unclassified</Text>;
-      return <Space size={2} wrap>{v.map((t: string) => <Tag key={t} color="blue" style={{ fontSize: 11 }}>{t}</Tag>)}</Space>;
+    render: (v: any) => {
+      const tags = Array.isArray(v) ? v : (typeof v === 'string' && v ? v.split(',').map((s: string) => s.trim()) : []);
+      if (!tags.length) return <Text type="secondary" style={{ fontSize: 11 }}>unclassified</Text>;
+      return <Space size={2} wrap>{tags.map((t: string) => <Tag key={t} color="blue" style={{ fontSize: 11 }}>{t}</Tag>)}</Space>;
     } },
   { title: 'Row Type', dataIndex: 'row_type', key: 'row_type', width: 110,
     render: (v: string) => {
@@ -170,6 +187,41 @@ const operationsColumns = [
     render: (v: number) => v != null ? `$${Number(v).toLocaleString()}` : '-' },
   { title: 'Profit %', dataIndex: 'profit_pct', key: 'profit_pct', width: 90, align: 'right' as const,
     render: (v: number) => v != null ? `${Number(v).toFixed(1)}%` : '-' },
+  { title: 'QB Process Tag', dataIndex: 'qb_process_tag', key: 'qb_process_tag', width: 140,
+    render: (v: string) => v ? <Tag color="geekblue">{v}</Tag> : '' },
+  { title: 'QB Capability Tag', dataIndex: 'qb_capability_tag', key: 'qb_capability_tag', width: 150,
+    render: (v: string) => v ? <Tag color="blue">{v}</Tag> : '' },
+  { title: 'QB Machine Tier', dataIndex: 'qb_machine_tier_tag', key: 'qb_machine_tier_tag', width: 130,
+    render: (v: string) => v ? <Tag color="cyan">{v}</Tag> : '' },
+  { title: 'QB Row Type', dataIndex: 'qb_row_type_tag', key: 'qb_row_type_tag', width: 120,
+    render: (v: string) => v ? <Tag color="green">{v}</Tag> : '' },
+  { title: 'QB Blank Reason', dataIndex: 'qb_blank_reason_tag', key: 'qb_blank_reason_tag', width: 140,
+    render: (v: string) => v ? <Tag color="orange">{v}</Tag> : '' },
+  { title: 'QB Embellishment', dataIndex: 'qb_embellishment_tag', key: 'qb_embellishment_tag', width: 150,
+    render: (v: string) => v ? <Tag color="purple">{v}</Tag> : '' },
+];
+
+const uniqueEmailColumns = [
+  { title: 'Email', dataIndex: 'email', key: 'email', width: 250, ellipsis: true },
+  { title: 'Customer Name', dataIndex: 'customer_name', key: 'customer_name', width: 200, ellipsis: true },
+  { title: 'First Name', dataIndex: 'first_name', key: 'first_name', width: 120 },
+  { title: 'Last Name', dataIndex: 'last_name', key: 'last_name', width: 120 },
+  { title: 'QB Customer ID', dataIndex: 'qb_customer_id', key: 'qb_customer_id', width: 120 },
+  { title: 'Type', dataIndex: 'customer_type', key: 'customer_type', width: 160,
+    render: (v: string) => v ? <Tag>{v}</Tag> : '-' },
+  { title: 'Quality', dataIndex: 'quality', key: 'quality', width: 80,
+    render: (v: string) => v ? <Tag color={v === 'good' ? 'green' : v === 'risky' ? 'gold' : v === 'bad' ? 'red' : 'default'}>{v}</Tag> : '-' },
+  { title: 'Result', dataIndex: 'result', key: 'result', width: 90,
+    render: (v: string) => v ? <Tag color={v === 'ok' ? 'green' : v === 'invalid' ? 'red' : 'default'}>{v}</Tag> : '-' },
+  { title: 'Free', dataIndex: 'free', key: 'free', width: 60,
+    render: (v: any) => v ? <Tag color="orange">free</Tag> : '' },
+  { title: 'Hidden', dataIndex: 'hide', key: 'hide', width: 70,
+    render: (v: any) => v ? <CloseCircleOutlined style={{ color: '#bbb' }} /> : '' },
+  { title: 'Invalid', dataIndex: 'email_invalid', key: 'email_invalid', width: 70,
+    render: (v: any) => v ? <CloseCircleOutlined style={{ color: '#f5222d' }} /> : '' },
+  { title: 'Capabilities', dataIndex: 'capabilities_used', key: 'capabilities_used', width: 180, ellipsis: true },
+  { title: 'Processes', dataIndex: 'processes_used', key: 'processes_used', width: 180, ellipsis: true },
+  { title: 'Embellishments', dataIndex: 'embellishments_used', key: 'embellishments_used', width: 180, ellipsis: true },
 ];
 
 // ---------------------------------------------------------------------------
@@ -187,6 +239,9 @@ const QuickbaseDataPage: React.FC = () => {
   const [jobs, setJobs] = useState<PageState>(emptyPage());
   const [sli, setSli] = useState<PageState>(emptyPage());
   const [operations, setOperations] = useState<PageState>(emptyPage());
+  const [uniqueEmails, setUniqueEmails] = useState<PageState>(emptyPage());
+  const [tableSyncing, setTableSyncing] = useState<Record<string, boolean>>({});
+  const [tableLogs, setTableLogs] = useState<Record<string, { synced_at: string | null; status: string }>>({});
   const isMounted = useRef(true);
 
   useEffect(() => {
@@ -227,6 +282,13 @@ const QuickbaseDataPage: React.FC = () => {
         if (rc.jobs)           setJobs(prev => ({ ...prev, total: rc.jobs }));
         if (rc.sales_line_items) setSli(prev => ({ ...prev, total: rc.sales_line_items }));
         if (rc.operations)       setOperations(prev => ({ ...prev, total: rc.operations }));
+        if (rc.unique_emails)    setUniqueEmails(prev => ({ ...prev, total: rc.unique_emails }));
+        // Per-table last sync timestamps
+        const logs: Record<string, { synced_at: string | null; status: string }> = {};
+        for (const log of (s?.table_logs || [])) {
+          logs[log.table_name] = { synced_at: log.synced_at, status: log.status };
+        }
+        setTableLogs(logs);
       })
       .catch(() => {});
   }, [clientId]);
@@ -247,6 +309,23 @@ const QuickbaseDataPage: React.FC = () => {
     } finally {
       setQbSyncing(false);
     }
+  };
+
+  const handleTableSync = async (tableKey: string, full = false) => {
+    if (!clientId) return;
+    setTableSyncing(prev => ({ ...prev, [tableKey]: true }));
+    try {
+      const params = new URLSearchParams({ client_id: clientId, tables: tableKey });
+      if (full) params.set('full', 'true');
+      await api.post<any>(`/v1/quickbase/sync?${params}`);
+      message.success(`${full ? 'Full' : 'Incremental'} sync started for ${tableKey}`);
+    } catch (err: any) {
+      message.error(err?.message || `Sync failed for ${tableKey}`);
+    }
+    // Clear loading after a short delay (sync runs in background)
+    setTimeout(() => {
+      setTableSyncing(prev => ({ ...prev, [tableKey]: false }));
+    }, 2000);
   };
 
   // Generic fetch helper
@@ -289,6 +368,7 @@ const QuickbaseDataPage: React.FC = () => {
         case 'jobs': fetchTable('jobs', setJobs, 'jobs', 'jobs', 1, '', clientId); break;
         case 'sales_line_items': fetchTable('sli', setSli, 'sales-line-items', 'sales_line_items', 1, '', clientId); break;
         case 'operations': fetchTable('operations', setOperations, 'operations', 'operations', 1, '', clientId); break;
+        case 'unique_emails': fetchTable('unique_emails', setUniqueEmails, 'unique-emails', 'unique_emails', 1, '', clientId); break;
       }
     };
     load(activeTab);
@@ -320,7 +400,27 @@ const QuickbaseDataPage: React.FC = () => {
             onSearch={handleSearch}
           />
           <Space>
+            {tableLogs[tableKey]?.synced_at && (
+              <Tooltip title={`Status: ${tableLogs[tableKey].status}`}>
+                <Text type="secondary" style={{ fontSize: 11 }}>
+                  Last sync: {new Date(tableLogs[tableKey].synced_at!).toLocaleString()}
+                </Text>
+              </Tooltip>
+            )}
             <Text type="secondary">{state.total.toLocaleString()} records</Text>
+            <Dropdown.Button
+              size="small"
+              icon={<DownOutlined />}
+              loading={tableSyncing[tableKey]}
+              onClick={() => handleTableSync(tableKey, false)}
+              menu={{
+                items: [
+                  { key: 'full', label: 'Full Sync (re-fetch all)', onClick: () => handleTableSync(tableKey, true) },
+                ],
+              }}
+            >
+              <SyncOutlined spin={tableSyncing[tableKey]} /> Sync
+            </Dropdown.Button>
             <Button
               size="small"
               icon={<ReloadOutlined />}
@@ -390,16 +490,22 @@ const QuickbaseDataPage: React.FC = () => {
       label: <span>Operations <Badge count={operations.total} overflowCount={99999} color="#667eea" /></span>,
       children: makeTabContent(operations, setOperations, 'operations', 'operations', operationsColumns, 'operations'),
     },
+    {
+      key: 'unique_emails',
+      label: <span>Unique Emails <Badge count={uniqueEmails.total} overflowCount={99999} color="#667eea" /></span>,
+      children: makeTabContent(uniqueEmails, setUniqueEmails, 'unique-emails', 'unique_emails', uniqueEmailColumns, 'unique_emails'),
+    },
   ];
 
   // Summary stats
   const syncedCounts = [
-    { label: 'Customers', value: customers.total },
-    { label: 'Contacts', value: contacts.total },
-    { label: 'Quotes', value: quotes.total },
-    { label: 'Jobs', value: jobs.total },
-    { label: 'Sales Line Items', value: sli.total },
-    { label: 'Operations', value: operations.total },
+    { label: 'Customers', value: customers.total, key: 'customers' },
+    { label: 'Contacts', value: contacts.total, key: 'contacts' },
+    { label: 'Quotes', value: quotes.total, key: 'quotes' },
+    { label: 'Jobs', value: jobs.total, key: 'jobs' },
+    { label: 'Sales Line Items', value: sli.total, key: 'sales_line_items' },
+    { label: 'Operations', value: operations.total, key: 'operations' },
+    { label: 'Unique Emails', value: uniqueEmails.total, key: 'unique_emails' },
   ];
 
   return (
@@ -430,13 +536,23 @@ const QuickbaseDataPage: React.FC = () => {
 
       {/* Summary row */}
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        {syncedCounts.map(s => (
+        {syncedCounts.map(s => {
+          const log = tableLogs[s.key];
+          return (
           <Col key={s.label} xs={12} sm={8} md={4}>
             <Card className="glass-card" size="small">
               <Statistic title={s.label} value={s.value} />
+              {log?.synced_at ? (
+                <Text type="secondary" style={{ fontSize: 10 }}>
+                  {new Date(log.synced_at).toLocaleString()}
+                </Text>
+              ) : (
+                <Text type="secondary" style={{ fontSize: 10, opacity: 0.5 }}>Not synced</Text>
+              )}
             </Card>
           </Col>
-        ))}
+          );
+        })}
       </Row>
 
       <Card className="glass-card">

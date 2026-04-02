@@ -6,11 +6,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Card, Table, Button, Tag, Space, Typography, Statistic, Row, Col,
-  Spin, message, Badge, Select,
+  Spin, message, Badge, Select, Dropdown,
 } from 'antd';
 import {
   CheckCircleOutlined, SyncOutlined,
-  ReloadOutlined, SearchOutlined,
+  ReloadOutlined, SearchOutlined, DownOutlined,
 } from '@ant-design/icons';
 import api from '../../services/apiClient';
 import { ClientSelector } from '../../components/analytics/ClientSelector';
@@ -39,6 +39,8 @@ interface HealthData {
   qb_contacts: { total: number; matched: number; unmatched: number; match_rate_pct: number };
   company_enrichment: { total: number; enriched: number; not_enriched: number; coverage_pct: number };
   active_companies: { total: number; with_qb_data: number; coverage_pct: number };
+  qb_unique_emails?: { total: number; valid: number };
+  match_methods?: { email_lookup: number; name_based: number };
 }
 
 // ── Server-side search Select for SB companies ──────────────────────────────
@@ -194,16 +196,18 @@ export default function QuickbaseMatchesPage() {
     setSavingRow(null);
   };
 
-  const handleRematch = async () => {
+  const handleRematch = async (reset = false) => {
     if (!clientId) return;
     setRematchLoading(true);
     try {
-      await api.post(`/v1/quickbase/rematch?client_id=${clientId}`);
-      message.success('Re-matching started in background — refresh in ~10s');
+      const params = reset ? `client_id=${clientId}&reset=true` : `client_id=${clientId}`;
+      await api.post(`/v1/quickbase/rematch?${params}`);
+      message.success(reset
+        ? 'Full re-match started (clearing all matches first)'
+        : 'Re-match started (processing unmatched only)');
     } catch {
       message.error('Rematch failed');
     }
-    // Always clear loading after a short delay — the backend runs in background
     setTimeout(() => setRematchLoading(false), 2000);
   };
 
@@ -306,14 +310,19 @@ export default function QuickbaseMatchesPage() {
         <Title level={4} style={{ margin: 0 }}>QB ↔ Company Match Review</Title>
         <Space>
           <ClientSelector value={clientId} onChange={setClientId} />
-          <Button
-            icon={<SyncOutlined spin={rematchLoading} />}
-            onClick={handleRematch}
+          <Dropdown.Button
+            icon={<DownOutlined />}
+            onClick={() => handleRematch(false)}
             loading={rematchLoading}
             disabled={!clientId}
+            menu={{
+              items: [
+                { key: 'reset', label: 'Full Reset (clear all & rebuild)', onClick: () => handleRematch(true) },
+              ],
+            }}
           >
-            Run Re-Match
-          </Button>
+            <SyncOutlined spin={rematchLoading} /> Re-Match
+          </Dropdown.Button>
           <Button
             icon={<ReloadOutlined />}
             disabled={!clientId}
@@ -340,7 +349,7 @@ export default function QuickbaseMatchesPage() {
       {/* Match Health Stats */}
       <Spin spinning={healthLoading}>
         <Row gutter={16} style={{ marginBottom: 20 }}>
-          <Col xs={24} sm={8}>
+          <Col xs={24} sm={6}>
             <Card size="small">
               <Statistic
                 title="QB Customers Matched"
@@ -351,7 +360,20 @@ export default function QuickbaseMatchesPage() {
               <Text type="secondary">{health?.qb_customers.match_rate_pct || 0}% match rate</Text>
             </Card>
           </Col>
-          <Col xs={24} sm={8}>
+          <Col xs={24} sm={6}>
+            <Card size="small">
+              <Statistic
+                title="Email-Matched"
+                value={health?.match_methods?.email_lookup || 0}
+                suffix={<Text type="secondary">/ {health?.qb_customers.total || 0} QB customers</Text>}
+                valueStyle={{ color: '#1890ff' }}
+              />
+              <Text type="secondary">
+                {health?.match_methods?.name_based || 0} name-based | {health?.qb_unique_emails?.valid || 0} QB emails
+              </Text>
+            </Card>
+          </Col>
+          <Col xs={24} sm={6}>
             <Card size="small">
               <Statistic
                 title="QB Contacts Matched"
@@ -362,7 +384,7 @@ export default function QuickbaseMatchesPage() {
               <Text type="secondary">{health?.qb_contacts.match_rate_pct || 0}% match rate</Text>
             </Card>
           </Col>
-          <Col xs={24} sm={8}>
+          <Col xs={24} sm={6}>
             <Card size="small">
               <Statistic
                 title="Fuzzy Candidates"

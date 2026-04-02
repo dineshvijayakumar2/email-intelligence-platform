@@ -5,6 +5,7 @@ Quickbase Integration Router — Sync config, trigger sync, view cached data.
 import asyncio
 import json
 import logging
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -31,6 +32,36 @@ def _sanitize_search(term: str) -> str:
 router = APIRouter(prefix="/quickbase", tags=["quickbase"])
 
 _supabase = None
+
+
+def _create_sync_supabase():
+    """Create a dedicated Supabase client for sync/rematch background tasks.
+
+    This prevents long-running sync operations from saturating the shared
+    connection pool used by frontend API requests.
+    """
+    from supabase import create_client
+    url = os.getenv('SUPABASE_URL')
+    key = os.getenv('SUPABASE_SERVICE_KEY') or os.getenv('SUPABASE_KEY')
+    if not url or not key:
+        logger.warning("Cannot create dedicated sync client — falling back to shared client")
+        return _supabase
+    return create_client(url, key)
+
+
+import threading
+
+# Per-client sync state: tracks running syncs and cancellation flags
+_sync_state: dict[str, dict] = {}  # client_id → {'running': bool, 'cancel': threading.Event}
+_sync_state_lock = threading.Lock()
+
+
+def _get_sync_state(client_id: str) -> dict:
+    """Get or create sync state for a client."""
+    with _sync_state_lock:
+        if client_id not in _sync_state:
+            _sync_state[client_id] = {'running': False, 'cancel': threading.Event()}
+        return _sync_state[client_id]
 
 
 def init_quickbase_router(supabase_client):
@@ -75,6 +106,7 @@ async def get_config(client_id: str = Query(...)):
             jobs_table_id=cfg['jobs_table_id'],
             sales_line_items_table_id=cfg['sales_line_items_table_id'],
             operations_table_id=cfg.get('operations_table_id', 'bvqsudnif'),
+            unique_emails_table_id=cfg.get('unique_emails_table_id', 'bvmtc5re6'),
             field_mappings=cfg.get('field_mappings'),
             sync_interval_hours=cfg.get('sync_interval_hours', 6),
             last_sync_at=cfg.get('last_sync_at'),
@@ -102,6 +134,7 @@ async def upsert_config(client_id: str = Query(...), config: QBSyncConfigCreate 
             'jobs_table_id': config.jobs_table_id,
             'sales_line_items_table_id': config.sales_line_items_table_id,
             'operations_table_id': config.operations_table_id or 'bvqsudnif',
+            'unique_emails_table_id': config.unique_emails_table_id or 'bvmtc5re6',
             'field_mappings': config.field_mappings or {},
             'sync_interval_hours': config.sync_interval_hours,
             'is_active': True,
@@ -135,7 +168,7 @@ async def upsert_config(client_id: str = Query(...), config: QBSyncConfigCreate 
 
 # --- Sync endpoints ---
 
-VALID_TABLES = {'customers', 'contacts', 'quotes', 'jobs', 'sales_line_items', 'operations'}
+VALID_TABLES = {'customers', 'contacts', 'quotes', 'jobs', 'sales_line_items', 'operations', 'unique_emails'}
 
 
 @router.post("/sync", response_model=QBSyncResult)
@@ -166,19 +199,37 @@ async def trigger_sync(
         if not config.get('is_active'):
             raise HTTPException(status_code=400, detail="QB sync is disabled for this client")
 
+        state = _get_sync_state(client_id)
+        if state['running']:
+            # Cancel the existing sync and start a new one
+            logger.info(f"Cancelling existing sync for client {client_id}")
+            state['cancel'].set()
+            # Brief wait for the old task to notice the flag
+            import time; time.sleep(0.5)
+
+        state['cancel'].clear()
+        state['running'] = True
+        cancel_event = state['cancel']
+
         def _run_sync():
-            """Run in thread pool to avoid blocking the event loop."""
+            """Run in thread pool with a dedicated Supabase client."""
             set_log_context(client_id=client_id)
             try:
+                sync_sb = _create_sync_supabase()
                 loop = asyncio.new_event_loop()
-                syncer = QuickbaseSync(_supabase, config)
+                syncer = QuickbaseSync(sync_sb, config, cancel_event=cancel_event)
                 counts = loop.run_until_complete(syncer.sync_all(tables=tables_list, full=full))
-                loop.run_until_complete(syncer.propagate_qb_data_to_companies())
+                if not cancel_event.is_set():
+                    loop.run_until_complete(syncer.propagate_qb_data_to_companies())
                 loop.close()
-                logger.info(f"Background QB sync complete: {counts}")
+                if cancel_event.is_set():
+                    logger.info(f"QB sync cancelled for client {client_id}")
+                else:
+                    logger.info(f"Background QB sync complete: {counts}")
             except Exception as e:
                 logger.error(f"Background QB sync failed: {e}")
             finally:
+                state['running'] = False
                 clear_log_context()
 
         background_tasks.add_task(_run_sync)
@@ -197,6 +248,16 @@ async def trigger_sync(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/sync/cancel")
+async def cancel_sync(client_id: str = Query(...)):
+    """Cancel a running QB sync for this client."""
+    state = _get_sync_state(client_id)
+    if not state['running']:
+        return {"status": "ok", "message": "No sync is running"}
+    state['cancel'].set()
+    return {"status": "ok", "message": "Cancel signal sent — sync will stop after current batch"}
+
+
 @router.get("/sync-status", response_model=QBSyncStatus)
 async def get_sync_status(client_id: str = Query(...)):
     """Get sync status and record counts for a client."""
@@ -208,34 +269,41 @@ async def get_sync_status(client_id: str = Query(...)):
         if not cfg_result.data:
             raise HTTPException(status_code=404, detail="No QB config found")
 
-        # Count records per table
+        # Count records per table (gracefully skip tables not yet created)
         counts = {}
-        for table in ['qb_customers', 'qb_contacts', 'qb_quotes', 'qb_jobs', 'qb_sales_line_items', 'qb_operations']:
-            result = _supabase.table(table).select(
-                'id', count='exact'
-            ).eq('client_id', client_id).limit(0).execute()
-            counts[table.replace('qb_', '')] = result.count or 0
+        for table in ['qb_customers', 'qb_contacts', 'qb_quotes', 'qb_jobs', 'qb_sales_line_items', 'qb_operations', 'qb_unique_emails']:
+            try:
+                result = _supabase.table(table).select(
+                    'id', count='exact'
+                ).eq('client_id', client_id).limit(0).execute()
+                counts[table.replace('qb_', '')] = result.count or 0
+            except Exception:
+                counts[table.replace('qb_', '')] = 0
 
-        # Fetch latest sync log entry per table — gracefully skips if table not yet created
+        # Fetch latest sync log entry per table — one query per table for reliability
         table_logs: list[QBTableSyncLog] = []
         try:
-            log_result = _supabase.table('qb_sync_log').select(
-                'table_name, table_id, record_count, synced_at, status, error_message'
-            ).eq('client_id', client_id).order('synced_at', desc=True).limit(50).execute()
-
-            seen: set[str] = set()
-            for row in (log_result.data or []):
-                tn = row['table_name']
-                if tn not in seen:
-                    seen.add(tn)
-                    table_logs.append(QBTableSyncLog(
-                        table_name=tn,
-                        table_id=row.get('table_id'),
-                        record_count=row.get('record_count', 0),
-                        synced_at=row.get('synced_at'),
-                        status=row.get('status', 'success'),
-                        error_message=row.get('error_message'),
-                    ))
+            all_table_names = ['customers', 'contacts', 'quotes', 'jobs',
+                               'sales_line_items', 'operations', 'unique_emails']
+            for tn in all_table_names:
+                try:
+                    log_result = _supabase.table('qb_sync_log').select(
+                        'table_name, table_id, record_count, synced_at, status, error_message'
+                    ).eq('client_id', client_id).eq(
+                        'table_name', tn
+                    ).order('synced_at', desc=True).limit(1).execute()
+                    if log_result.data:
+                        row = log_result.data[0]
+                        table_logs.append(QBTableSyncLog(
+                            table_name=row['table_name'],
+                            table_id=row.get('table_id'),
+                            record_count=row.get('record_count', 0),
+                            synced_at=row.get('synced_at'),
+                            status=row.get('status', 'success'),
+                            error_message=row.get('error_message'),
+                        ))
+                except Exception:
+                    pass
         except Exception as log_err:
             logger.warning(f"qb_sync_log not available (run migration 023): {log_err}")
 
@@ -273,6 +341,7 @@ async def get_table_fields(
         'jobs': 'jobs_table_id',
         'sales_line_items': 'sales_line_items_table_id',
         'operations': 'operations_table_id',
+        'unique_emails': 'unique_emails_table_id',
     }
     if table not in table_map:
         raise HTTPException(status_code=400, detail=f"Unknown table: {table}")
@@ -508,6 +577,26 @@ async def list_qb_operations(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/unique-emails")
+async def list_qb_unique_emails(
+    client_id: str = Query(...),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    search: Optional[str] = Query(default=None),
+):
+    """List cached QB unique emails."""
+    try:
+        query = _supabase.table('qb_unique_emails').select('*', count='exact').eq('client_id', client_id)
+        if search:
+            s = _sanitize_search(search)
+            query = query.or_(f"email.ilike.%{s}%,customer_name.ilike.%{s}%,first_name.ilike.%{s}%,last_name.ilike.%{s}%")
+        result = query.order('email').range(offset, offset + limit - 1).execute()
+        return {"unique_emails": result.data or [], "total": result.count or 0}
+    except Exception as e:
+        logger.error(f"Failed to list QB unique emails: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/recommendations/recompute-affinities")
 async def recompute_affinities(
     client_id: str = Query(...),
@@ -547,10 +636,14 @@ async def recompute_affinities(
 @router.post("/rematch")
 async def rematch_qb_data(
     client_id: str = Query(...),
+    reset: bool = Query(False, description="Clear all existing matches before re-matching"),
     background_tasks: BackgroundTasks = None,
 ):
     """Re-run QB matching + propagation without re-syncing from QuickBase API.
-    Useful after extraction adds new companies/contacts that can now match."""
+
+    Default: processes only unmatched records (safe to interrupt and resume).
+    Pass reset=true to clear all matches and rebuild from scratch.
+    """
     try:
         cfg_result = _supabase.table('qb_sync_config').select('*').eq(
             'client_id', client_id
@@ -559,32 +652,87 @@ async def rematch_qb_data(
             raise HTTPException(status_code=404, detail="No QB config found")
 
         config = cfg_result.data[0]
+        do_reset = reset
+
+        state = _get_sync_state(client_id)
+        if state['running']:
+            state['cancel'].set()
+            import time; time.sleep(0.5)
+        state['cancel'].clear()
+        state['running'] = True
+        cancel_event = state['cancel']
 
         def _run_rematch():
-            """Run in thread pool to avoid blocking the event loop."""
+            """Run in thread pool with a dedicated Supabase client."""
             set_log_context(client_id=client_id)
             try:
+                sync_sb = _create_sync_supabase()
                 loop = asyncio.new_event_loop()
-                syncer = QuickbaseSync(_supabase, config)
-                logger.info("QB rematch started — Step 1/4: Match to companies")
+                syncer = QuickbaseSync(sync_sb, config, cancel_event=cancel_event)
+
+                # Step 0: Sync unique emails (get fresh data from QB)
+                logger.info("QB rematch — Step 0: Sync unique emails from QB")
+                loop.run_until_complete(syncer.sync_unique_emails())
+
+                # Step 1: Optionally clear existing matches
+                if do_reset:
+                    logger.info("QB rematch — Step 1: Clearing ALL existing matches (reset=true)")
+                    sync_sb.table('qb_customers').update({
+                        'matched_company_id': None
+                    }).eq('client_id', client_id).not_.is_('matched_company_id', 'null').execute()
+                    sync_sb.table('customer_companies').update({
+                        'qb_customer_id': None,
+                        'qb_customer_code': None,
+                        'qb_match_method': None,
+                        'qb_matched_at': None,
+                    }).eq('client_id', client_id).not_.is_('qb_match_method', 'null').execute()
+                else:
+                    logger.info("QB rematch — Step 1: Skipped (incremental mode, processing unmatched only)")
+
+                if cancel_event.is_set():
+                    logger.info("QB rematch cancelled"); return
+
+                # Step 2: Email-based matching (Pass 0 — highest priority)
+                logger.info("QB rematch — Step 2: Email-based matching via unique emails")
+                e1 = loop.run_until_complete(syncer.match_companies_via_unique_emails())
+
+                if cancel_event.is_set():
+                    logger.info("QB rematch cancelled after email matching"); return
+
+                # Step 3: Name-based matching (Pass 1-3 for remaining unmatched)
+                logger.info("QB rematch — Step 3: Name-based matching (exact + domain + fuzzy)")
                 match_stats = loop.run_until_complete(syncer.match_to_companies())
-                logger.info(f"QB rematch — Step 2/4: Match contacts by email")
+
+                if cancel_event.is_set():
+                    logger.info("QB rematch cancelled after name matching"); return
+
+                # Step 4: Contact email matching
+                logger.info("QB rematch — Step 4: Match contacts by email")
                 c2 = loop.run_until_complete(syncer.match_to_contacts())
-                logger.info(f"QB rematch — Step 3/4: Chain-match customers via contacts")
+
+                # Step 5: Chain-match via contacts
+                logger.info("QB rematch — Step 5: Chain-match customers via contacts")
                 c3 = loop.run_until_complete(syncer.match_customers_via_contacts())
-                logger.info(f"QB rematch — Step 4/4: Propagate QB data to companies")
+
+                # Step 6: Propagate QB data
+                logger.info("QB rematch — Step 6: Propagate QB data to companies")
                 c4 = loop.run_until_complete(syncer.propagate_qb_data_to_companies())
                 loop.close()
-                logger.info(f"QB rematch complete: {match_stats}, {c2} contacts by email, "
-                            f"{c3} companies via contacts, {c4} propagated")
+
+                logger.info(
+                    f"QB rematch complete: email_lookup={e1}, name_based={match_stats}, "
+                    f"{c2} contacts, {c3} chain-matched, {c4} propagated"
+                )
             except Exception as e:
                 logger.error(f"Rematch failed: {e}")
             finally:
+                state['running'] = False
                 clear_log_context()
 
         if background_tasks:
             background_tasks.add_task(_run_rematch)
-            return {"status": "accepted", "message": "Re-matching started in background"}
+            mode = "reset" if do_reset else "incremental"
+            return {"status": "accepted", "message": f"Re-matching started ({mode} mode)"}
         else:
             _run_rematch()
             return {"status": "completed", "message": "Re-matching completed"}
@@ -617,6 +765,8 @@ async def qb_health(client_id: str = Query(...)):
                 "qb_contacts": {"total": 0, "matched": 0, "unmatched": 0, "match_rate_pct": 0},
                 "company_enrichment": {"total": 0, "enriched": 0, "not_enriched": 0, "coverage_pct": 0},
                 "active_companies": {"total": 0, "with_qb_data": 0, "coverage_pct": 0},
+                "qb_unique_emails": {"total": 0, "valid": 0},
+                "match_methods": {"email_lookup": 0, "name_based": 0},
             }
 
         # QB customer match rate (denominator = QB customers, not SB companies)
@@ -632,6 +782,34 @@ async def qb_health(client_id: str = Query(...)):
         matched_c = matched_qb.count or 0
         total_ct = total_qb_contacts.count or 0
         matched_ct = matched_qb_contacts.count or 0
+
+        # Match method counts (from customer_companies.qb_match_method)
+        email_matched_resp = _supabase.table('customer_companies').select(
+            'id', count='exact'
+        ).eq('client_id', client_id).eq('qb_match_method', 'email_lookup').limit(0).execute()
+        email_matched_count = email_matched_resp.count or 0
+
+        name_matched_resp = _supabase.table('customer_companies').select(
+            'id', count='exact'
+        ).eq('client_id', client_id).not_.is_(
+            'qb_match_method', 'null'
+        ).neq('qb_match_method', 'email_lookup').limit(0).execute()
+        name_matched_count = name_matched_resp.count or 0
+
+        # QB unique emails stats (gracefully handle table not yet created)
+        total_ue = 0
+        valid_ue = 0
+        try:
+            total_ue_resp = _supabase.table('qb_unique_emails').select(
+                'id', count='exact'
+            ).eq('client_id', client_id).limit(0).execute()
+            valid_ue_resp = _supabase.table('qb_unique_emails').select(
+                'id', count='exact'
+            ).eq('client_id', client_id).eq('hide', False).eq('email_invalid', False).limit(0).execute()
+            total_ue = total_ue_resp.count or 0
+            valid_ue = valid_ue_resp.count or 0
+        except Exception:
+            pass
 
         # SB companies with QB data vs SB companies with email activity (the meaningful ratio)
         enriched_companies = _supabase.table('customer_companies').select('id', count='exact').eq(
@@ -660,6 +838,8 @@ async def qb_health(client_id: str = Query(...)):
             "qb_contacts": {"total": total_ct, "matched": matched_ct, "unmatched": total_ct - matched_ct, "match_rate_pct": round(matched_ct / total_ct * 100, 1) if total_ct else 0},
             "company_enrichment": {"total": total_c, "enriched": enriched_co, "not_enriched": total_c - enriched_co, "coverage_pct": round(enriched_co / total_c * 100, 1) if total_c else 0},
             "active_companies": {"total": active_companies, "with_qb_data": active_enriched, "coverage_pct": round(active_enriched / active_companies * 100, 1) if active_companies else 0},
+            "qb_unique_emails": {"total": total_ue, "valid": valid_ue},
+            "match_methods": {"email_lookup": email_matched_count, "name_based": name_matched_count},
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)[:200])

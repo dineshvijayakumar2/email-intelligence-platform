@@ -273,6 +273,11 @@ class CompanyAnalytics(BaseModel):
     qb_days_since_last_invoice: Optional[int] = None
     qb_account_manager: Optional[str] = None
 
+    # QB capability/tag summary (from Unique Emails)
+    qb_capabilities: Optional[List[str]] = None
+    qb_processes: Optional[List[str]] = None
+    qb_embellishments: Optional[List[str]] = None
+
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

@@ -116,15 +116,17 @@ def _execute_with_retry(func, max_retries=3):
 class QuickbaseSync:
     """Orchestrates syncing Quickbase data to local Supabase cache."""
 
-    def __init__(self, supabase_client, qb_config: dict):
+    def __init__(self, supabase_client, qb_config: dict, cancel_event=None):
         """
         Args:
             supabase_client: Initialized Supabase client
             qb_config: Row from qb_sync_config table
+            cancel_event: Optional threading.Event — set to signal cancellation
         """
         self._supabase = supabase_client
         self._config = qb_config
         self._client_id = qb_config['client_id']
+        self._cancel = cancel_event
 
         # Merge default field mappings with any client-specific overrides
         stored_mappings = qb_config.get('field_mappings') or {}
@@ -140,6 +142,11 @@ class QuickbaseSync:
             user_token=qb_config['user_token_encrypted'],  # TODO: decrypt in production
         )
 
+    @property
+    def cancelled(self) -> bool:
+        """Check if cancellation has been requested."""
+        return self._cancel is not None and self._cancel.is_set()
+
     # Maps logical table name → qb_sync_config field holding the QB table ID
     _TABLE_ID_CONFIG_FIELD = {
         'customers':        'customers_table_id',
@@ -148,6 +155,7 @@ class QuickbaseSync:
         'jobs':             'jobs_table_id',
         'sales_line_items': 'sales_line_items_table_id',
         'operations':       'operations_table_id',
+        'unique_emails':    'unique_emails_table_id',
     }
 
     def _write_sync_log(self, table_name: str, record_count: int, status: str = 'success', error_message: str = None):
@@ -167,18 +175,41 @@ class QuickbaseSync:
         except Exception as e:
             logger.warning(f"Failed to write sync log for {table_name}: {e}")
 
-    def _build_incremental_where(self) -> Optional[str]:
+    def _build_incremental_where(self, table_key: str | None = None) -> Optional[str]:
         """Build a QB query clause to filter records modified since last sync.
 
         Uses QB field ID 2 (Date Modified) with the AF (after) operator.
-        Returns None for full sync (no last_sync_at recorded).
+        Returns None for full sync (no last sync recorded).
+
+        When table_key is provided, looks up the per-table last sync time from
+        qb_sync_log first, falling back to the global last_sync_at. This ensures
+        syncing a single table doesn't advance the timestamp for other tables.
         """
-        last_sync = self._config.get('last_sync_at')
+        last_sync = None
+
+        # Per-table timestamp from qb_sync_log (most recent successful sync)
+        if table_key:
+            try:
+                log_result = _execute_with_retry(lambda tk=table_key: self._supabase.table('qb_sync_log').select(
+                    'synced_at'
+                ).eq('client_id', self._client_id).eq(
+                    'table_name', tk
+                ).eq('status', 'success').order(
+                    'synced_at', desc=True
+                ).limit(1).execute())
+                if log_result.data:
+                    last_sync = log_result.data[0]['synced_at']
+            except Exception:
+                pass
+
+        # Fall back to global last_sync_at
+        if not last_sync:
+            last_sync = self._config.get('last_sync_at')
+
         if not last_sync:
             return None
 
         # QB expects ISO 8601 format for date comparisons
-        # Ensure we have a valid timestamp string
         if isinstance(last_sync, str):
             ts = last_sync
         else:
@@ -198,9 +229,8 @@ class QuickbaseSync:
             tables: Sync a subset of tables; omit for all tables.
             full: Force full sync (ignore last_sync_at). Default False.
         """
-        where_clause = None if full else self._build_incremental_where()
-        mode = 'full' if full or where_clause is None else 'incremental'
-        self._incremental_where = where_clause  # Store for use by sync_* methods
+        self._full_sync = full
+        mode = 'full' if full else 'incremental'
 
         all_fns = [
             ('customers', self.sync_customers),
@@ -209,6 +239,7 @@ class QuickbaseSync:
             ('jobs', self.sync_jobs),
             ('sales_line_items', self.sync_sales_line_items),
             ('operations', self.sync_operations),
+            ('unique_emails', self.sync_unique_emails),
         ]
         to_sync = [(k, fn) for k, fn in all_fns if tables is None or k in tables]
         label = ', '.join(k for k, _ in to_sync)
@@ -216,20 +247,42 @@ class QuickbaseSync:
         counts = {'sync_mode': mode}
 
         for table_key, sync_fn in to_sync:
+            if self.cancelled:
+                logger.info(f"QB sync cancelled before {table_key}")
+                break
             try:
                 counts[table_key] = await sync_fn()
-                self._write_sync_log(table_key, counts[table_key])
+                # operations writes its own log before enrichment (so restart won't re-fetch 600K+)
+                if table_key != 'operations':
+                    self._write_sync_log(table_key, counts[table_key])
             except Exception as e:
                 logger.error(f"QB sync failed for table {table_key}: {e}")
-                self._write_sync_log(table_key, 0, status='error', error_message=str(e))
+                if table_key != 'operations':
+                    self._write_sync_log(table_key, 0, status='error', error_message=str(e))
                 counts[table_key] = 0
 
+        # Post-sync operations enrichment (runs after log is saved)
+        if counts.get('operations', 0) > 0:
+            try:
+                await self._post_sync_operations()
+            except Exception as e:
+                logger.error(f"Operations post-sync enrichment failed: {e}")
+
         # After sync, match to existing companies/contacts
+        # Pass 0: Email-based matching via QB Unique Emails (highest priority)
+        email_match_stats = await self.match_companies_via_unique_emails()
+        counts['email_match_stats'] = email_match_stats
+
+        # Pass 1-3: Name-based matching for remaining unmatched QB customers
         match_stats = await self.match_to_companies()
         matched_contacts = await self.match_to_contacts()
         matched_via_contacts = await self.match_customers_via_contacts()
         counts['match_stats'] = match_stats
-        counts['matched_companies'] = match_stats.get('total', 0) + matched_via_contacts
+        counts['matched_companies'] = (
+            email_match_stats.get('matched', 0)
+            + match_stats.get('total', 0)
+            + matched_via_contacts
+        )
         counts['matched_contacts'] = matched_contacts
 
         # Update last_sync_at
@@ -241,116 +294,153 @@ class QuickbaseSync:
         logger.info(f"QB sync complete for client {self._client_id}: {counts}")
         return counts
 
-    async def sync_customers(self) -> int:
-        """Sync QB Customers table → qb_customers."""
-        mapping = self._field_mappings['customers']
-        table_id = self._config['customers_table_id']
-        select_fields = QuickbaseClient.get_select_fields(mapping)
-        where = getattr(self, '_incremental_where', None)
+    async def _sync_table_streamed(
+        self,
+        table_name: str,
+        table_key: str,
+        mapping: dict[str, str],
+        required_fields: list[str] | None = None,
+        page_filter=None,
+    ) -> int:
+        """Generic streamed sync: fetch from QB page-by-page and upsert each page immediately.
 
-        records = await self._qb_client.query_all_records(table_id, select_fields, where=where)
-        logger.info(f"Fetched {len(records)} customers from QB")
-
-        return await self._upsert_records('qb_customers', records, mapping, required_fields=['customer_name'])
-
-    async def sync_contacts(self) -> int:
-        """Sync QB Contacts table → qb_contacts."""
-        mapping = self._field_mappings['contacts']
-        table_id = self._config['contacts_table_id']
-        select_fields = QuickbaseClient.get_select_fields(mapping)
-        where = getattr(self, '_incremental_where', None)
-
-        records = await self._qb_client.query_all_records(table_id, select_fields, where=where)
-        logger.info(f"Fetched {len(records)} contacts from QB")
-
-        return await self._upsert_records('qb_contacts', records, mapping)
-
-    async def sync_quotes(self) -> int:
-        """Sync QB Quotes table → qb_quotes."""
-        mapping = self._field_mappings['quotes']
-        table_id = self._config['quotes_table_id']
-        select_fields = QuickbaseClient.get_select_fields(mapping)
-        where = getattr(self, '_incremental_where', None)
-
-        records = await self._qb_client.query_all_records(table_id, select_fields, where=where)
-        logger.info(f"Fetched {len(records)} quotes from QB")
-
-        return await self._upsert_records('qb_quotes', records, mapping)
-
-    async def sync_jobs(self) -> int:
-        """Sync QB Jobs table → qb_jobs."""
-        mapping = self._field_mappings['jobs']
-        table_id = self._config['jobs_table_id']
-        select_fields = QuickbaseClient.get_select_fields(mapping)
-        where = getattr(self, '_incremental_where', None)
-
-        records = await self._qb_client.query_all_records(table_id, select_fields, where=where)
-        logger.info(f"Fetched {len(records)} jobs from QB")
-
-        return await self._upsert_records('qb_jobs', records, mapping)
-
-    async def sync_sales_line_items(self) -> int:
-        """Sync QB Sales Line Items table → qb_sales_line_items."""
-        mapping = self._field_mappings['sales_line_items']
-        table_id = self._config['sales_line_items_table_id']
-        select_fields = QuickbaseClient.get_select_fields(mapping)
-        where = getattr(self, '_incremental_where', None)
-
-        records = await self._qb_client.query_all_records(table_id, select_fields, where=where)
-        logger.info(f"Fetched {len(records)} sales line items from QB")
-
-        return await self._upsert_records('qb_sales_line_items', records, mapping)
-
-    async def sync_operations(self) -> int:
-        """Sync QB Operations table → qb_operations. Skips if operations_table_id not configured.
-
-        Uses page-by-page streaming: each 1,000-record QB page is upserted immediately
-        rather than buffering the entire table (~650K rows) in memory before writing.
-        This means a schema/constraint error surfaces on the first page instead of
-        after fetching all records.
+        Args:
+            table_name: Supabase destination table (e.g. 'qb_customers')
+            table_key: Config key for the QB table ID (e.g. 'customers_table_id')
+            mapping: Field ID → column name mapping
+            required_fields: Columns that must be non-NULL (rows without them are skipped)
+            page_filter: Optional callable(page_records) → filtered_records, applied per page
         """
-        operations_table_id = self._config.get('operations_table_id')
-        if not operations_table_id:
-            logger.info("operations_table_id not set in QB config — skipping operations sync")
+        table_id = self._config.get(table_key)
+        if not table_id:
+            logger.info(f"{table_key} not set — skipping {table_name} sync")
             return 0
 
-        mapping = self._field_mappings.get('operations', DEFAULT_FIELD_MAPPINGS['operations'])
         select_fields = QuickbaseClient.get_select_fields(mapping)
-        where = getattr(self, '_incremental_where', None)
+        # Resolve the logical table name from the config key (e.g. 'customers_table_id' → 'customers')
+        logical_name = table_key.replace('_table_id', '')
+        where = None if getattr(self, '_full_sync', False) else self._build_incremental_where(logical_name)
 
         total_count = 0
         page_num = 0
-        t_cancelled_filtered = 0
 
         async for page_records, qb_total in self._qb_client.query_records_streamed(
-            operations_table_id, select_fields, where=where
+            table_id, select_fields, where=where
         ):
+            if self.cancelled:
+                logger.info(f"{table_name} sync cancelled after {page_num} pages ({total_count} upserted)")
+                break
+
             page_num += 1
 
-            # Filter T-Cancelled in Python so status changes after initial sync
-            # correctly update the stored production_status (field 21).
-            before = len(page_records)
-            page_records = [
+            if page_filter:
+                page_records = page_filter(page_records)
+
+            logger.info(
+                f"{table_name} page {page_num}: upserting {len(page_records)} records "
+                f"(QB total: {qb_total})"
+            )
+            page_count = await self._upsert_records(
+                table_name, page_records, mapping, required_fields=required_fields,
+            )
+            total_count += page_count
+
+        logger.info(f"{table_name} sync complete: {total_count} upserted across {page_num} pages")
+        return total_count
+
+    async def sync_customers(self) -> int:
+        """Sync QB Customers table → qb_customers."""
+        return await self._sync_table_streamed(
+            'qb_customers', 'customers_table_id',
+            self._field_mappings['customers'],
+            required_fields=['customer_name'],
+        )
+
+    async def sync_contacts(self) -> int:
+        """Sync QB Contacts table → qb_contacts."""
+        return await self._sync_table_streamed(
+            'qb_contacts', 'contacts_table_id',
+            self._field_mappings['contacts'],
+        )
+
+    async def sync_quotes(self) -> int:
+        """Sync QB Quotes table → qb_quotes."""
+        return await self._sync_table_streamed(
+            'qb_quotes', 'quotes_table_id',
+            self._field_mappings['quotes'],
+        )
+
+    async def sync_jobs(self) -> int:
+        """Sync QB Jobs table → qb_jobs."""
+        return await self._sync_table_streamed(
+            'qb_jobs', 'jobs_table_id',
+            self._field_mappings['jobs'],
+        )
+
+    async def sync_sales_line_items(self) -> int:
+        """Sync QB Sales Line Items table → qb_sales_line_items."""
+        return await self._sync_table_streamed(
+            'qb_sales_line_items', 'sales_line_items_table_id',
+            self._field_mappings['sales_line_items'],
+        )
+
+    async def sync_operations(self) -> int:
+        """Sync QB Operations table → qb_operations."""
+        def _filter_t_cancelled(page_records):
+            return [
                 r for r in page_records
                 if (r.get('21') or {}).get('value') != 'T-Cancelled'
             ]
-            t_cancelled_filtered += before - len(page_records)
 
-            logger.info(
-                f"Operations page {page_num}: upserting {len(page_records)} records "
-                f"(QB total: {qb_total}, T-Cancelled filtered so far: {t_cancelled_filtered})"
-            )
-            page_count = await self._upsert_records('qb_operations', page_records, mapping)
-            total_count += page_count
-
-        logger.info(
-            f"Operations sync complete: {total_count} upserted, "
-            f"{t_cancelled_filtered} T-Cancelled filtered across {page_num} pages"
+        count = await self._sync_table_streamed(
+            'qb_operations', 'operations_table_id',
+            self._field_mappings.get('operations', DEFAULT_FIELD_MAPPINGS['operations']),
+            page_filter=_filter_t_cancelled,
         )
-        if total_count:
-            await self.match_operations_to_companies()
-            await self.enrich_operations()
-        return total_count
+        # Write sync log immediately after upsert — before enrichment.
+        # This ensures the timestamp is saved even if enrichment is interrupted,
+        # so the next incremental sync won't re-fetch all 600K+ records.
+        if count:
+            self._write_sync_log('operations', count)
+        return count
+
+    async def _post_sync_operations(self):
+        """Post-sync enrichment for operations — called by sync_all after the sync log is written."""
+        if self.cancelled:
+            return
+        await self.match_operations_to_companies()
+        await self.enrich_operations()
+
+    async def sync_unique_emails(self) -> int:
+        """Sync QB Unique Emails table → qb_unique_emails."""
+        mapping = self._field_mappings.get('unique_emails', DEFAULT_FIELD_MAPPINGS.get('unique_emails', {}))
+        if not mapping:
+            logger.warning("No field mappings for unique_emails — skipping")
+            return 0
+
+        # QB formula checkboxes may return 1/0 or "true"/"false" — coerce per page
+        bool_fields = {'hide', 'email_invalid', 'free'}
+        bool_fid_map = {v: k for k, v in mapping.items() if v in bool_fields}
+
+        def _coerce_booleans(page_records):
+            for record in page_records:
+                for col_name, fid in bool_fid_map.items():
+                    field_data = record.get(fid)
+                    if isinstance(field_data, dict):
+                        v = field_data.get('value')
+                        if v is not None and not isinstance(v, bool):
+                            if isinstance(v, (int, float)):
+                                field_data['value'] = bool(v)
+                            elif isinstance(v, str):
+                                field_data['value'] = v.lower() in ('true', '1', 'yes')
+            return page_records
+
+        return await self._sync_table_streamed(
+            'qb_unique_emails', 'unique_emails_table_id',
+            mapping,
+            required_fields=['email'],
+            page_filter=_coerce_booleans,
+        )
 
     async def enrich_operations(self) -> dict:
         """
@@ -571,7 +661,10 @@ class QuickbaseSync:
     async def match_operations_to_companies(self) -> int:
         """
         Resolve qb_operations.matched_company_id via:
-        qb_operations.qb_customer_id → qb_customers.qb_record_id → qb_customers.matched_company_id
+        qb_operations.qb_customer_id → qb_customers.customer_key_id → qb_customers.matched_company_id
+
+        Note: qb_operations.qb_customer_id stores the Customer ID (key) value (field 92),
+        NOT the Record ID# (field 3). Must join on customer_key_id.
         """
         # Fetch ALL unmatched operations (paginated — can be 100K+)
         unmatched: list[dict] = []
@@ -592,25 +685,27 @@ class QuickbaseSync:
             return 0
 
         # Fetch ALL matched qb_customers (paginated)
-        customer_map: dict = {}
+        # Use customer_key_id (field 92) for joining — this is what child tables reference
+        customer_map: dict = {}  # customer_key_id → matched_company_id
         offset = 0
         while True:
             cust_page = _execute_with_retry(lambda o=offset: self._supabase.table('qb_customers').select(
-                'qb_record_id, matched_company_id'
+                'customer_key_id, matched_company_id'
             ).eq('client_id', self._client_id).not_.is_(
                 'matched_company_id', 'null'
             ).range(o, o + 999).execute())
             rows = cust_page.data or []
             for r in rows:
-                if r.get('qb_record_id') and r.get('matched_company_id'):
-                    customer_map[r['qb_record_id']] = r['matched_company_id']
+                key_id = r.get('customer_key_id') or ''
+                if key_id and r.get('matched_company_id'):
+                    customer_map[str(key_id)] = r['matched_company_id']
             if len(rows) == 0:
                 break
             offset += len(rows)
 
         matched = 0
         for op in unmatched:
-            company_id = customer_map.get(op['qb_customer_id'])
+            company_id = customer_map.get(str(op['qb_customer_id']))
             if company_id:
                 _execute_with_retry(lambda cid=company_id, oid=op['id']: (
                     self._supabase.table('qb_operations').update({
@@ -648,10 +743,10 @@ class QuickbaseSync:
                 elif isinstance(v, str):
                     # Strip null bytes — Postgres text columns reject \u0000
                     mapped[k] = v.replace('\x00', '')
-                # Numeric overflow guard: values outside ±9,999,999 would overflow any
-                # DECIMAL(≤8, x) column. Set to None rather than hard-erroring the batch.
+                # Numeric overflow guard: DECIMAL(8,2) columns max at ±999,999.99.
+                # Null out values that would cause a "numeric field overflow" error.
                 if isinstance(mapped[k], (int, float)) and not isinstance(mapped[k], bool):
-                    if abs(mapped[k]) > 9_999_999:
+                    if abs(mapped[k]) >= 1_000_000:
                         logger.debug(f"Nullifying {k}={mapped[k]} — numeric overflow guard")
                         mapped[k] = None
             # Skip rows missing any required (NOT NULL) field
@@ -710,6 +805,164 @@ class QuickbaseSync:
         total = await asyncio.to_thread(_do_upsert)
         logger.info(f"Upserted {total} records into {table_name}")
         return total
+
+    async def match_companies_via_unique_emails(self) -> dict:
+        """Pass 0: Match QB customers to SB companies via QB Unique Emails.
+
+        Chain: customer_contacts.email_address → qb_unique_emails.email
+               → qb_unique_emails.qb_customer_id → link to company via contact's customer_company_id
+
+        This is the highest-confidence match method because it's email-based.
+        Auto-writes matches (100% confidence).
+        """
+        stats = {
+            'matched': 0,
+            'skipped_no_company': 0,
+            'skipped_no_qb_customer': 0,
+            'multi_customer_conflicts': 0,
+            'total_emails_checked': 0,
+        }
+
+        # Step 1: Fetch ALL valid QB unique emails (paginated)
+        all_qb_emails: list[dict] = []
+        offset = 0
+        while True:
+            page = _execute_with_retry(lambda o=offset: self._supabase.table('qb_unique_emails').select(
+                'email, qb_customer_id'
+            ).eq('client_id', self._client_id).eq(
+                'hide', False
+            ).eq(
+                'email_invalid', False
+            ).not_.is_(
+                'qb_customer_id', 'null'
+            ).range(o, o + 999).execute())
+            rows = page.data or []
+            all_qb_emails.extend(rows)
+            if len(rows) == 0:
+                break
+            offset += len(rows)
+
+        if not all_qb_emails:
+            logger.info("No valid QB unique emails found for email-based matching")
+            return stats
+
+        # Build email → qb_customer_id lookup (lowercased)
+        email_to_qb_customer: dict[str, str] = {}
+        for ue in all_qb_emails:
+            email = (ue.get('email') or '').strip().lower()
+            qb_cid = ue.get('qb_customer_id')
+            if email and qb_cid:
+                email_to_qb_customer[email] = str(qb_cid).strip()
+
+        logger.info(f"Built email→QB customer lookup: {len(email_to_qb_customer)} valid entries")
+
+        # Step 2: Fetch ALL SB contacts with their company links (paginated)
+        all_contacts: list[dict] = []
+        offset = 0
+        while True:
+            page = _execute_with_retry(lambda o=offset: self._supabase.table('customer_contacts').select(
+                'email_address, customer_company_id'
+            ).eq('client_id', self._client_id).not_.is_(
+                'customer_company_id', 'null'
+            ).range(o, o + 999).execute())
+            rows = page.data or []
+            all_contacts.extend(rows)
+            if len(rows) == 0:
+                break
+            offset += len(rows)
+
+        logger.info(f"Fetched {len(all_contacts)} SB contacts with companies for email matching")
+
+        # Step 3: For each contact email, look up in QB unique emails
+        # Build: company_id → {qb_customer_id: contact_count} (to detect conflicts)
+        company_to_qb_customers: dict[str, dict[str, int]] = {}
+
+        for contact in all_contacts:
+            email = (contact.get('email_address') or '').strip().lower()
+            company_id = contact.get('customer_company_id')
+            if not email or not company_id:
+                continue
+
+            stats['total_emails_checked'] += 1
+            qb_customer_id = email_to_qb_customer.get(email)
+
+            if not qb_customer_id:
+                continue
+
+            if company_id not in company_to_qb_customers:
+                company_to_qb_customers[company_id] = {}
+            counts_map = company_to_qb_customers[company_id]
+            counts_map[qb_customer_id] = counts_map.get(qb_customer_id, 0) + 1
+
+        # Step 4: Resolve conflicts — majority vote (most contacts wins)
+        company_to_best_qb: dict[str, str] = {}
+        for company_id, qb_map in company_to_qb_customers.items():
+            if len(qb_map) == 1:
+                company_to_best_qb[company_id] = next(iter(qb_map))
+            else:
+                stats['multi_customer_conflicts'] += 1
+                best_qb = max(qb_map, key=qb_map.get)
+                company_to_best_qb[company_id] = best_qb
+                logger.debug(
+                    f"Company {company_id} has {len(qb_map)} QB customer matches, "
+                    f"picking {best_qb} ({qb_map[best_qb]} contacts)"
+                )
+
+        logger.info(
+            f"Email lookup resolved {len(company_to_best_qb)} company→QB customer links "
+            f"({stats['multi_customer_conflicts']} had conflicts)"
+        )
+
+        if not company_to_best_qb:
+            return stats
+
+        # Step 5: Build qb_record_id → qb_customers row lookup (need UUID + code)
+        qb_customer_map: dict[str, dict] = {}
+        offset = 0
+        while True:
+            page = _execute_with_retry(lambda o=offset: self._supabase.table('qb_customers').select(
+                'id, qb_record_id, customer_code'
+            ).eq('client_id', self._client_id).range(o, o + 999).execute())
+            rows = page.data or []
+            for r in rows:
+                rid = r.get('qb_record_id')
+                if rid:
+                    qb_customer_map[str(rid)] = r
+            if len(rows) == 0:
+                break
+            offset += len(rows)
+
+        # Step 6: Build batch payloads and write via RPC
+        now_iso = datetime.now(timezone.utc).isoformat()
+
+        matches_payload: list[dict] = []
+        for company_id, qb_customer_id in company_to_best_qb.items():
+            try:
+                normalized_id = str(int(float(qb_customer_id)))
+            except (ValueError, TypeError):
+                normalized_id = str(qb_customer_id)
+
+            qb_cust = qb_customer_map.get(normalized_id)
+            if not qb_cust:
+                stats['skipped_no_qb_customer'] += 1
+                continue
+
+            matches_payload.append({
+                'company_id': company_id,
+                'qb_customer_uuid': qb_cust['id'],
+                'qb_record_id': qb_cust.get('qb_record_id'),
+                'qb_customer_code': qb_cust.get('customer_code'),
+                'match_method': 'email_lookup',
+            })
+
+        stats['matched'] = await self._rpc_batch_write_matches(matches_payload, now_iso)
+
+        logger.info(
+            f"Email-lookup matching complete: {stats['matched']} matched, "
+            f"{stats['skipped_no_qb_customer']} skipped (QB customer not in cache), "
+            f"{stats['multi_customer_conflicts']} conflicts resolved by majority vote"
+        )
+        return stats
 
     async def match_to_companies(self) -> dict:
         """Match qb_customers → customer_companies using a 3-pass pipeline.
@@ -810,7 +1063,7 @@ class QuickbaseSync:
         # ── Batch-write Pass 1+2 matches ─────────────────────────────────────
         if confirmed_matches:
             logger.info(f"Writing {len(confirmed_matches)} confirmed matches (Pass 1+2) in batches")
-            self._batch_write_matches(confirmed_matches, now_iso)
+            await self._batch_write_matches(confirmed_matches, now_iso)
 
         # ── Pass 3: Fuzzy name match (staging only) ───────────────────────────
         # Clear stale unreviewed candidates before inserting fresh ones
@@ -886,44 +1139,113 @@ class QuickbaseSync:
         )
         return stats
 
-    def _batch_write_matches(
+    async def _batch_write_matches(
         self,
         matches: list[tuple[dict, dict, str]],
         now_iso: str,
     ):
-        """Batch-write confirmed matches: update qb_customers + customer_companies.
+        """Batch-write confirmed matches via RPC.
 
-        Each match is (qb_cust, sb_company, method). Individual updates
-        (upsert can't work — NOT NULL columns like client_id would be missing).
+        Each match is (qb_cust, sb_company, method). Converts to RPC payload format.
+        """
+        payload = []
+        for qb_cust, sb_company, method in matches:
+            payload.append({
+                'company_id': sb_company.get('id'),
+                'qb_customer_uuid': qb_cust.get('id'),
+                'qb_record_id': qb_cust.get('qb_record_id'),
+                'qb_customer_code': qb_cust.get('customer_code'),
+                'match_method': method,
+            })
+
+        written = await self._rpc_batch_write_matches(payload, now_iso)
+        logger.info(f"Match write complete: {written}/{len(matches)} matches written")
+
+    async def _rpc_batch_write_matches(
+        self,
+        matches: list[dict],
+        now_iso: str,
+        batch_size: int = 500,
+    ) -> int:
+        """Write matches via the batch_write_qb_matches RPC function.
+
+        Each match dict: {company_id, qb_customer_uuid, qb_record_id, qb_customer_code, match_method}
+        Falls back to individual updates if RPC is not available (migration not run).
         """
         total = len(matches)
-        for i, (qb_cust, sb_company, method) in enumerate(matches):
-            sb_id = sb_company.get('id')
-            qb_id = qb_cust.get('id')
-            qb_name = qb_cust.get('customer_name')
-            try:
-                _execute_with_retry(lambda _cid=sb_id, _qid=qb_id: (
-                    self._supabase.table('qb_customers').update({
-                        'matched_company_id': _cid
-                    }).eq('id', _qid).execute()
-                ))
-                _execute_with_retry(lambda _sid=sb_id, _m=method, _n=now_iso,
-                                    _qcid=qb_cust.get('qb_record_id'),
-                                    _qcode=qb_cust.get('customer_code'): (
-                    self._supabase.table('customer_companies').update({
-                        'qb_customer_id': _qcid,
-                        'qb_customer_code': _qcode,
-                        'qb_match_method': _m,
-                        'qb_matched_at': _n,
-                    }).eq('id', _sid).execute()
-                ))
-            except Exception as e:
-                logger.warning(f"Match write failed for {qb_name}: {e}")
+        if not total:
+            return 0
 
-            if (i + 1) % 200 == 0:
-                logger.info(f"Match write progress: {i + 1}/{total}")
+        written = 0
 
-        logger.info(f"Match write complete: {total} matches written")
+        # Try RPC batch write first (single DB round-trip per batch)
+        try:
+            for i in range(0, total, batch_size):
+                if self.cancelled:
+                    logger.info(f"Batch match write cancelled at {i}/{total}")
+                    break
+
+                batch = matches[i:i + batch_size]
+                result = _execute_with_retry(lambda b=batch, n=now_iso: (
+                    self._supabase.rpc('batch_write_qb_matches', {
+                        'p_client_id': self._client_id,
+                        'p_matches': b,
+                        'p_now': n,
+                    }).execute()
+                ))
+                batch_written = result.data if isinstance(result.data, int) else len(batch)
+                written += batch_written
+                logger.info(f"RPC batch match write: {i + len(batch)}/{total} ({written} written)")
+
+            return written
+
+        except Exception as rpc_err:
+            logger.warning(f"RPC batch_write_qb_matches failed, falling back to individual writes: {rpc_err}")
+
+        # Fallback: individual updates (slower but works without migration 050)
+        import time as _time
+
+        def _do_individual():
+            nonlocal written
+            for i, m in enumerate(matches):
+                if self._cancel and self._cancel.is_set():
+                    break
+                try:
+                    _execute_with_retry(lambda m=m: (
+                        self._supabase.table('qb_customers').update({
+                            'matched_company_id': m['company_id']
+                        }).eq('id', m['qb_customer_uuid']).execute()
+                    ))
+                    # Only write match metadata if not already email_lookup (higher confidence)
+                    if m['match_method'] == 'email_lookup':
+                        _execute_with_retry(lambda m=m: (
+                            self._supabase.table('customer_companies').update({
+                                'qb_customer_id': m['qb_record_id'],
+                                'qb_customer_code': m['qb_customer_code'],
+                                'qb_match_method': m['match_method'],
+                                'qb_matched_at': now_iso,
+                            }).eq('id', m['company_id']).execute()
+                        ))
+                    else:
+                        # Name-based: only set if not already linked
+                        _execute_with_retry(lambda m=m: (
+                            self._supabase.table('customer_companies').update({
+                                'qb_customer_id': m['qb_record_id'],
+                                'qb_customer_code': m['qb_customer_code'],
+                                'qb_match_method': m['match_method'],
+                                'qb_matched_at': now_iso,
+                            }).eq('id', m['company_id']).is_('qb_match_method', 'null').execute()
+                        ))
+                    written += 1
+                except Exception as e:
+                    logger.warning(f"Individual match write failed: {e}")
+
+                if (i + 1) % 500 == 0:
+                    logger.info(f"Fallback match write: {i + 1}/{total} ({written} written)")
+                    _time.sleep(0.3)
+
+        await asyncio.to_thread(_do_individual)
+        return written
 
     def _fetch_all_companies(self) -> list[dict]:
         """Fetch all customer_companies for this client (paginated)."""
@@ -1038,7 +1360,7 @@ class QuickbaseSync:
             offset = 0
             while True:
                 unmatched_page = _execute_with_retry(lambda o=offset: self._supabase.table('qb_customers').select(
-                    'id, qb_record_id'
+                    'id, qb_record_id, customer_key_id'
                 ).eq('client_id', self._client_id).is_(
                     'matched_company_id', 'null'
                 ).range(o, o + 999).execute())
@@ -1051,8 +1373,9 @@ class QuickbaseSync:
             if not all_unmatched_custs:
                 return 0
 
-            # Build QB record_id → QB customer id lookup (string keys to match any QB ID type)
-            qb_cust_by_record = {str(c['qb_record_id']): c['id'] for c in all_unmatched_custs if c.get('qb_record_id')}
+            # Build customer_key_id → QB customer UUID lookup
+            # qb_contacts.qb_customer_id stores the Customer ID (key) = field 92, NOT Record ID#
+            qb_cust_by_key = {str(c['customer_key_id']): c['id'] for c in all_unmatched_custs if c.get('customer_key_id')}
 
             # Build contact_id → company_id lookup from customer_contacts
             contact_ids = [c['matched_contact_id'] for c in all_matched_contacts if c.get('matched_contact_id')]
@@ -1071,13 +1394,13 @@ class QuickbaseSync:
 
             # Debug: log sample data to diagnose format mismatches
             sample_contact_ids = [c.get('qb_customer_id') for c in all_matched_contacts[:5] if c.get('qb_customer_id')]
-            sample_record_ids = list(qb_cust_by_record.keys())[:5]
+            sample_key_ids = list(qb_cust_by_key.keys())[:5]
             logger.info(
                 f"Chain match debug: {len(all_matched_contacts)} matched contacts, "
                 f"{len(all_unmatched_custs)} unmatched customers, "
                 f"{len(contact_company_map)} contacts with companies. "
                 f"Sample qb_customer_id on contacts: {sample_contact_ids}, "
-                f"Sample qb_record_id on customers: {sample_record_ids}"
+                f"Sample customer_key_id on customers: {sample_key_ids}"
             )
 
             # Now match: QB contact → customer_contact → company
@@ -1096,8 +1419,12 @@ class QuickbaseSync:
                     no_company += 1
                     continue
 
-                # Normalise to string — dict keys are already str
-                qb_cust_id = qb_cust_by_record.get(str(int(float(customer_id))))
+                # Look up by customer_key_id (field 92), not record_id (field 3)
+                try:
+                    normalized_key = str(int(float(customer_id)))
+                except (ValueError, TypeError):
+                    normalized_key = str(customer_id)
+                qb_cust_id = qb_cust_by_key.get(normalized_key)
                 if not qb_cust_id:
                     no_cust_match += 1
                     continue
@@ -1183,26 +1510,53 @@ class QuickbaseSync:
                 'qb_customer_code': qb.get('customer_code'),
             }
 
-        # Individual updates but without throttle (runs in background thread)
-        updated = 0
         items = list(by_company.items())
         total_unique = len(items)
         logger.info(f"Propagating to {total_unique} unique companies (deduped from {total_propagate})")
 
-        for idx, (cid, data) in enumerate(items):
-            data = {k: v for k, v in data.items() if v is not None}
-            if data:
-                try:
-                    _execute_with_retry(lambda d=data, c=cid: (
-                        self._supabase.table('customer_companies').update(d).eq('id', c).execute()
-                    ))
-                    updated += 1
-                except Exception as e:
-                    logger.warning(f"Propagation failed for {cid}: {e}")
+        # Build batch payload — stringify numeric values for the RPC's TEXT parameters
+        batch_payload: list[dict] = []
+        for cid, data in items:
+            row = {'company_id': cid}
+            for k, v in data.items():
+                if v is not None:
+                    row[k] = str(v) if isinstance(v, (int, float)) else v
+            batch_payload.append(row)
 
-            if (idx + 1) % 500 == 0 or (idx + 1) == total_unique:
-                logger.info(f"Propagation progress: {idx + 1}/{total_unique} "
-                            f"({updated} updated)")
+        # Try RPC batch propagation (single DB call per 500 companies)
+        updated = 0
+        batch_size = 500
+        try:
+            for i in range(0, len(batch_payload), batch_size):
+                if self.cancelled:
+                    logger.info(f"Propagation cancelled at {i}/{len(batch_payload)}")
+                    break
+                batch = batch_payload[i:i + batch_size]
+                result = _execute_with_retry(lambda b=batch: (
+                    self._supabase.rpc('batch_propagate_qb_data', {
+                        'p_client_id': self._client_id,
+                        'p_data': b,
+                    }).execute()
+                ))
+                batch_updated = result.data if isinstance(result.data, int) else len(batch)
+                updated += batch_updated
+                logger.info(f"Propagation progress: {i + len(batch)}/{len(batch_payload)} ({updated} updated)")
+
+        except Exception as rpc_err:
+            logger.warning(f"RPC batch_propagate_qb_data failed, falling back to individual: {rpc_err}")
+            # Fallback: individual updates
+            for idx, (cid, data) in enumerate(items):
+                data = {k: v for k, v in data.items() if v is not None}
+                if data:
+                    try:
+                        _execute_with_retry(lambda d=data, c=cid: (
+                            self._supabase.table('customer_companies').update(d).eq('id', c).execute()
+                        ))
+                        updated += 1
+                    except Exception as e:
+                        logger.warning(f"Propagation failed for {cid}: {e}")
+                if (idx + 1) % 500 == 0:
+                    logger.info(f"Fallback propagation: {idx + 1}/{total_unique} ({updated} updated)")
 
         logger.info(f"Propagation complete: {updated}/{total_propagate} companies updated")
         # Invalidate stale analytics cache so next request recomputes with fresh QB data

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Row, Col, Typography, Button, Tag, Descriptions, Skeleton, Table, Collapse } from 'antd';
+import { Row, Col, Typography, Button, Tag, Descriptions, Skeleton, Table, Collapse, Space } from 'antd';
 import { ArrowLeftOutlined, ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import { MetricCard } from '../../components/analytics/MetricCard';
@@ -56,17 +56,16 @@ export const CompanyDetail: React.FC = () => {
         result = await companiesApi.getDetail(companyId);
       }
 
-      // Fetch email + thread counts in parallel (non-critical)
-      const [emailResult, threadResult] = await Promise.all([
-        companiesApi.getEmails(companyId, 1, 0),
-        threadsApi.byCompany(companyId, 100),
-      ]);
+      // Fetch thread data (non-critical)
+      const threadResult = await threadsApi.byCompany(companyId, 100);
 
       if (isMountedRef.current) {
         setCompany(result);
-        setTotalEmails(emailResult?.total || 0);
-        setTotalSent(emailResult?.total_sent ?? 0);
-        setTotalReceived(emailResult?.total_received ?? 0);
+        // Use company aggregate stats (from extraction Step 11) as the single source of truth
+        // for counts. The email endpoint is only used for the paginated email list.
+        setTotalEmails(result?.total_emails || 0);
+        setTotalSent(result?.total_outbound || 0);
+        setTotalReceived(result?.total_inbound || 0);
         setThreads(threadResult?.threads || []);
         setLoading(false);
       }
@@ -128,7 +127,6 @@ export const CompanyDetail: React.FC = () => {
   }
 
   const statusCfg = engagementStatusConfig[company.engagement_status || 'unknown'];
-  const companyParam = encodeURIComponent(company.company_name);
 
   return (
     <div className="glass-page-bg" style={{ padding: 24 }}>
@@ -154,20 +152,20 @@ export const CompanyDetail: React.FC = () => {
           <MetricCard
             title="Total Emails"
             value={totalEmails}
-            onClick={() => navigate(`/emails?company_id=${companyId}&name=${companyParam}`)}
+            onClick={() => navigate(`/emails?company_id=${companyId}`)}
           />
         </Col>
         <Col xs={12} sm={6}>
-          <MetricCard title="Contacts" value={company.contact_count} onClick={() => navigate(`/customers/contacts?company=${companyParam}`)} />
+          <MetricCard title="Contacts" value={company.contact_count} onClick={() => navigate(`/customers/contacts?company_id=${companyId}&client_id=${company.client_id}`)} />
         </Col>
         <Col xs={12} sm={6}>
-          <MetricCard title="Decision Makers" value={company.decision_maker_count} onClick={() => navigate(`/customers/contacts?company=${companyParam}&dm=true`)} />
+          <MetricCard title="Decision Makers" value={company.decision_maker_count} onClick={() => navigate(`/customers/contacts?company_id=${companyId}&client_id=${company.client_id}&dm=true`)} />
         </Col>
         <Col xs={12} sm={6}>
           <MetricCard
             title="Active Threads"
             value={company.active_threads}
-            onClick={() => navigate(`/customers/threads?company_id=${companyId}&name=${companyParam}`)}
+            onClick={() => navigate(`/customers/threads?company_id=${companyId}`)}
           />
         </Col>
       </Row>
@@ -240,6 +238,27 @@ export const CompanyDetail: React.FC = () => {
                 {company.qb_account_manager && (
                   <Descriptions.Item label="Account Manager">{company.qb_account_manager}</Descriptions.Item>
                 )}
+                {company.qb_capabilities?.length > 0 && (
+                  <Descriptions.Item label="Capabilities">
+                    <Space size={[4, 4]} wrap>
+                      {company.qb_capabilities.map((c: string) => <Tag key={c} color="blue">{c}</Tag>)}
+                    </Space>
+                  </Descriptions.Item>
+                )}
+                {company.qb_processes?.length > 0 && (
+                  <Descriptions.Item label="Processes">
+                    <Space size={[4, 4]} wrap>
+                      {company.qb_processes.map((p: string) => <Tag key={p} color="cyan">{p}</Tag>)}
+                    </Space>
+                  </Descriptions.Item>
+                )}
+                {company.qb_embellishments?.length > 0 && (
+                  <Descriptions.Item label="Embellishments">
+                    <Space size={[4, 4]} wrap>
+                      {company.qb_embellishments.map((e: string) => <Tag key={e} color="purple">{e}</Tag>)}
+                    </Space>
+                  </Descriptions.Item>
+                )}
               </Descriptions>
             )}
             {!company.qb_total_revenue && !company.qb_customer_id && (
@@ -250,7 +269,7 @@ export const CompanyDetail: React.FC = () => {
         <Col xs={24} lg={14}>
           <div className="glass-table-container" style={{ padding: 16 }}>
             <a
-              onClick={() => navigate(`/customers/threads?company_id=${companyId}&name=${companyParam}`)}
+              onClick={() => navigate(`/customers/threads?company_id=${companyId}`)}
               style={{ fontSize: 16, fontWeight: 600, display: 'block', marginBottom: 12, color: '#667eea', cursor: 'pointer' }}
             >
               Threads ({threads.length})

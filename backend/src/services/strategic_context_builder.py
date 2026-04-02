@@ -693,8 +693,13 @@ class StrategicContextBuilder:
             return {}
 
     def _get_capability_profile(self, company_id: str) -> Dict[str, Any]:
-        """Aggregate QB capability/process tags for a company's operations."""
+        """Aggregate QB capability/process/embellishment data from two sources:
+
+        1. qb_operations — per-operation tags (granular order history)
+        2. qb_unique_emails — QB-maintained rollups per email/customer (authoritative summary)
+        """
         try:
+            # ── Source 1: Operations-based tags (order history) ──
             cap_counts: dict = {}
             process_set: set = set()
             offset = 0
@@ -720,10 +725,63 @@ class StrategicContextBuilder:
                 offset += len(rows)
 
             primary = sorted(cap_counts, key=lambda k: -cap_counts[k])
+
+            # ── Source 2: QB Unique Emails rollup (QB-maintained summary) ──
+            # Get the QB customer ID for this company
+            qb_capabilities = set()
+            qb_processes = set()
+            qb_embellishments = set()
+            try:
+                # Translate qb_record_id → customer_key_id (field 92) for unique email lookup
+                company_resp = self._execute_with_retry(
+                    self.client.table("customer_companies")
+                    .select("qb_customer_id")
+                    .eq("id", company_id)
+                    .limit(1)
+                )
+                qb_record_id = (company_resp.data[0].get("qb_customer_id") or "") if company_resp.data else ""
+                qb_key_id = ""
+                if qb_record_id:
+                    key_resp = self._execute_with_retry(
+                        self.client.table("qb_customers")
+                        .select("customer_key_id")
+                        .eq("client_id", self.client_id)
+                        .eq("qb_record_id", qb_record_id)
+                        .limit(1)
+                    )
+                    qb_key_id = (key_resp.data[0].get("customer_key_id") or "") if key_resp.data else ""
+
+                if qb_key_id:
+                    ue_resp = self._execute_with_retry(
+                        self.client.table("qb_unique_emails")
+                        .select("capabilities_used, processes_used, embellishments_used")
+                        .eq("client_id", self.client_id)
+                        .eq("qb_customer_id", qb_key_id)
+                        .eq("hide", False)
+                    )
+                    for r in (ue_resp.data or []):
+                        for val in (r.get("capabilities_used") or "").split("|"):
+                            val = val.strip()
+                            if val:
+                                qb_capabilities.add(val)
+                        for val in (r.get("processes_used") or "").split("|"):
+                            val = val.strip()
+                            if val:
+                                qb_processes.add(val)
+                        for val in (r.get("embellishments_used") or "").split("|"):
+                            val = val.strip()
+                            if val:
+                                qb_embellishments.add(val)
+            except Exception as e:
+                logger.debug(f"QB unique email capability lookup skipped: {e}")
+
             return {
                 "primary_capabilities": primary[:5],
                 "capability_counts": cap_counts,
                 "process_types": sorted(process_set),
+                "qb_capabilities": sorted(qb_capabilities),
+                "qb_processes": sorted(qb_processes),
+                "qb_embellishments": sorted(qb_embellishments),
             }
         except Exception as e:
             logger.warning(f"Failed to get capability profile for {company_id}: {e}")

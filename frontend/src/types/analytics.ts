@@ -178,6 +178,10 @@ export interface CompanyAnalytics {
   qb_growth_90d?: number | null;
   qb_days_since_last_invoice?: number | null;
   qb_account_manager?: string | null;
+  // QB capability tags (from Unique Emails)
+  qb_capabilities?: string[] | null;
+  qb_processes?: string[] | null;
+  qb_embellishments?: string[] | null;
   created_at?: string | null;
   updated_at?: string | null;
 }

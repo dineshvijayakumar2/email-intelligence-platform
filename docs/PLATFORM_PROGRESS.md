@@ -1,6 +1,6 @@
 # Email Intelligence Platform — Consolidated Implementation Progress
 
-**Last Updated:** 30 March 2026
+**Last Updated:** 1 April 2026
 **Purpose:** Consolidated reference — completed work, architecture, database schema, and next priorities.
 
 ---
@@ -32,6 +32,7 @@ A commercial intelligence platform for B2B account management teams. It syncs em
 | Contact-Company Linking | 5-part fix: 31% → 83.5% contact-company link rate | ✅ Complete | 30 Mar 2026 |
 | QB Formula Tags | 6 QB tag fields synced, classifier fallback, analytics upgraded | ✅ Complete | 30 Mar 2026 |
 | AI Chat Agent | 12-tool conversational agent at `/insights/agent`, multi-model | ✅ Complete | 31 Mar 2026 |
+| QB Email-Based Matching | Unique Emails sync, email-first matching, extraction integration | ✅ Complete | 1 Apr 2026 |
 | Invite User System | Admin-controlled onboarding, restrict open sign-up | 🔲 Planned | Not started |
 
 ---
@@ -810,7 +811,7 @@ Sprint 4 additions (vector embeddings + AI Chat Agent): +~$3–8/month → well 
 - Product profile includes `capability_breakdown`, `process_tags`, `embellishment_tags`
 - Vector embeddings include QB tags for richer semantic search
 - Strategic digest context includes capability profile per company
-- **Blocked:** `MVP_tag` field not yet created in QB by partner — `Row_Type_Tag` and `Blank_Reason_Tag` will improve once added
+- **Blocked:** `MVP_tag` field not yet created in QB — `Row_Type_Tag` and `Blank_Reason_Tag` will improve once added
 
 ---
 
@@ -883,8 +884,22 @@ Conversational AI assistant at `/insights/agent` with 12 tools for full portfoli
 - ✅ OpenAI model support (GPT-4o, GPT-4o Mini) + API key management
 - ✅ Internal Domains management UI on Clients page
 
+### Completed (1 Apr 2026):
+- ✅ QB Email-Based Matching — complete revamp (see section below)
+- ✅ Jobs embellishment fields (8 "Has X?" fields synced from QB)
+- ✅ Unique Emails tag fields (capabilities_used, processes_used, embellishments_used)
+- ✅ Streamed sync for all 7 QB tables (consistent page-by-page, was buffered for 6/7)
+- ✅ Per-table incremental timestamps (each table tracks its own last sync)
+- ✅ Dedicated Supabase client for sync (no frontend blocking)
+- ✅ Sync cancellation + auto-cancel on re-trigger
+- ✅ Resumable re-match (incremental by default, optional full reset)
+- ✅ RPC batch match writing (migration 050 — 500x fewer HTTP calls)
+- ✅ Per-table sync buttons on QB Data + Config pages (incremental + full)
+- ✅ QB httpx client: connection pooling, 120s read timeout, built-in retry
+
 ### Planned:
 - Invite User System (admin-controlled onboarding)
+- Email vectorisation during extraction
 - Embedding model configuration (UI selector for embedding provider)
 - Phase 2D: Enriched AI insights with precomputed analytics + vector context
 
@@ -1081,15 +1096,72 @@ For each contact: find operations the company has bought that this contact hasn'
 
 ---
 
+## ✅ COMPLETE — QB Email-Based Matching (1 Apr 2026)
+
+Complete revamp of the QB↔SB customer matching system. Previously name-based (~44% match rate), now email-first via QB "Unique Emails" table.
+
+### Architecture
+
+**Matching priority (Pass 0 → Pass 3):**
+1. **Pass 0 — Email lookup (primary):** SB contact email → `qb_unique_emails` → `qb_customer_id` → link SB company. Auto-write, 100% confidence.
+2. **Pass 1 — Exact name:** Normalised QB customer name = SB company name.
+3. **Pass 2 — Domain root:** SB company email domain root found in QB customer name.
+4. **Pass 3 — Fuzzy (staging):** RapidFuzz token_sort_ratio ≥82% → staged for human review.
+
+**Match rate improvement:** 44% → 56%+ (8,441/15,121 QB customers matched, 3,000+ via email lookup).
+
+### New Tables & Migrations
+
+| Migration | Purpose |
+|-----------|---------|
+| 047 | `qb_unique_emails` cache table + `unique_emails_table_id` on `qb_sync_config` |
+| 048 | 8 "Has X?" embellishment columns on `qb_jobs` |
+| 049 | `capabilities_used`, `processes_used`, `embellishments_used` on `qb_unique_emails` |
+| 050 | `batch_write_qb_matches()` RPC — bulk writes N matches in 2 SQL statements |
+
+### Extraction Pipeline Integration
+
+The `CompanyResolver` (Step 4) now resolves companies in two phases:
+1. **Phase 1 — QB email lookup:** Contact email → `qb_unique_emails` → QB customer name → company. QB metadata (`qb_customer_id`, `qb_match_method='email_lookup'`) written during upsert.
+2. **Phase 2 — Domain fallback:** Remaining contacts resolved by email domain (existing logic).
+
+Contact name matching against QB contacts runs in Step 6 (`_rematch_quickbase`).
+
+### Sync Infrastructure Improvements
+
+- All 7 QB tables use streamed (page-by-page) sync via `_sync_table_streamed()`
+- Per-table incremental timestamps from `qb_sync_log` (not global `last_sync_at`)
+- Operations sync log written before enrichment (restart-safe)
+- Dedicated Supabase client for background sync/rematch (no frontend blocking)
+- QB httpx client: persistent connection pool, 120s read timeout, 3-retry with backoff
+- Sync cancellation via threading.Event, auto-cancel on re-trigger
+- Re-match: incremental by default (only unmatched), optional `?reset=true` for full rebuild
+
+### Key Files Changed
+
+| File | Change |
+|------|--------|
+| `backend/src/services/quickbase_sync.py` | Streamed sync, email matching, RPC batch writes, cancellation |
+| `backend/src/services/quickbase_client.py` | Unique emails field mappings, connection pooling, retry |
+| `backend/src/services/company_resolver.py` | QB email lookup in Phase 1 of company resolution |
+| `backend/src/services/extraction_orchestrator.py` | Email-based QB matching + contact name matching in Step 6 |
+| `backend/src/routers/quickbase.py` | Dedicated sync client, cancel endpoint, health stats, per-table sync logs |
+| `backend/src/models/quickbase.py` | `unique_emails_table_id` on config models |
+| `frontend/src/pages/intelligence/quickbase-data.tsx` | Unique Emails tab, per-table sync buttons + timestamps, tag columns |
+| `frontend/src/pages/intelligence/quickbase-matches.tsx` | Email-matched stats card, incremental/reset Re-Match dropdown |
+| `frontend/src/pages/intelligence/quickbase-config.tsx` | Unique Emails table config, per-table sync dropdowns, merged field mappings |
+
+---
+
 ## Key Outstanding Gaps
 
 1. **No invite-only access control** — open sign-up currently. Invite system fully designed (`docs/INVITE_USER_SMTPLESS.md`) but not built.
 
-2. **QB MVP_tag field pending** — Partner needs to add `MVP_tag` formula to QB Operations. Once added, `Row_Type_Tag` and `Blank_Reason_Tag` will improve. Other 4 tags work independently.
+2. **Email vectorisation during extraction** — New emails are not automatically vectorised. Needs integration into extraction pipeline (post-Step 9).
 
 3. **Embedding model not configurable** — Hardcoded to Google `gemini-embedding-001`. UI selector planned.
 
-4. **AI agent markdown rendering** — Agent responses contain markdown but frontend renders as plain text. Needs `react-markdown` or equivalent.
+4. **QB tag data → analytics/AI** — Capabilities, processes, embellishments now synced on unique emails; need to wire into customer profiling, AI agent tools, and digest generation.
 
 ---
 
