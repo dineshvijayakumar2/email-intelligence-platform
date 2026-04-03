@@ -66,77 +66,130 @@ class ThreadTracker:
     DROPPED_DAYS = 30  # Thread is "dropped" if no activity > 30 days
     MIN_DEPTH_FOR_COMPLETE = 2  # Minimum exchanges to consider complete
 
-    def __init__(self, mailbox_id: str, client_id: str):
+    def __init__(self, mailbox_id: str = None, client_id: str = None):
         """
-        Initialize thread tracker
+        Initialize thread tracker.
+
+        Can operate in two modes:
+        - Client-wide (client_id only): evaluates threads across ALL mailboxes for a client.
+          This is the correct mode — threads span mailboxes when multiple people are involved.
+        - Per-mailbox (mailbox_id + client_id): legacy mode, evaluates one mailbox only.
 
         Args:
-            mailbox_id: Mailbox UUID to track threads for
+            mailbox_id: Optional mailbox UUID (legacy per-mailbox mode)
             client_id: Client UUID for filtering
         """
         self.mailbox_id = mailbox_id
         self.client_id = client_id
         self.client = SupabaseClient.get_client(use_service_key=True)
 
-        logger.info(f"ThreadTracker initialized for mailbox {mailbox_id}")
+        if not client_id and mailbox_id:
+            # Auto-fetch client_id from mailbox
+            resp = self.client.table('mailboxes').select('client_id').eq('id', mailbox_id).limit(1).execute()
+            if resp.data:
+                self.client_id = resp.data[0]['client_id']
+
+        mode = 'client-wide' if not mailbox_id else f'mailbox {mailbox_id}'
+        logger.info(f"ThreadTracker initialized ({mode}, client {self.client_id})")
 
     def evaluate_threads(self, limit: Optional[int] = None) -> List[ThreadStatus]:
         """
-        Evaluate status of all email threads
+        Evaluate status of all email threads.
 
-        Args:
-            limit: Optional limit for testing
-
-        Returns:
-            List of ThreadStatus objects
+        Preloads junction table data into memory for fast company/contact resolution,
+        then evaluates threads and saves in batches (no 91K buffer).
         """
         logger.info("Starting thread evaluation")
+
+        # Preload junction table data: email_id → {contact_id, company_id}
+        self._preload_junction_cache()
 
         # Fetch all threads
         threads = self._fetch_threads(limit=limit)
         total_threads = len(threads)
 
-        logger.info(f"Evaluating {total_threads} threads")
+        logger.info(f"Evaluating and saving {total_threads} threads")
 
-        thread_statuses = []
-        processed_count = 0
-
-        MAX_THREAD_SIZE = 200  # Skip oversized thread groups (bad provider_thread_id)
+        MAX_THREAD_SIZE = 200
         skipped_large = 0
+        processed_count = 0
+        saved_count = 0
+        batch_buffer: list = []
+        SAVE_BATCH_SIZE = 500
+        status_counts: dict = {}
 
         for thread_id, emails in threads.items():
             if len(emails) > MAX_THREAD_SIZE:
                 skipped_large += 1
-                logger.warning(
-                    f"Skipping oversized thread {thread_id[:30]}... "
-                    f"({len(emails)} emails — likely provider grouping issue, "
-                    f"subject: {emails[0].get('subject', '?')[:50]})"
-                )
                 continue
 
-            # Sort emails by sent_date
             emails.sort(key=lambda e: e['sent_date'])
-
-            # Evaluate thread status
             status = self._evaluate_thread_status(thread_id, emails)
-            thread_statuses.append(status)
-
-            processed_count += 1
-            if processed_count % 100 == 0:
-                logger.info(f"Evaluated {processed_count}/{total_threads} threads")
-
-        # Log status breakdown
-        status_counts = {}
-        for status in thread_statuses:
+            batch_buffer.append(status)
             status_counts[status.status] = status_counts.get(status.status, 0) + 1
 
-        logger.info(f"Thread evaluation complete. Status breakdown: {status_counts}")
+            processed_count += 1
 
-        return thread_statuses
+            # Save in batches during evaluation (don't buffer 91K in memory)
+            if len(batch_buffer) >= SAVE_BATCH_SIZE:
+                result = self.save_thread_statuses(batch_buffer)
+                saved_count += result.get('created_count', 0)
+                batch_buffer = []
+                logger.info(f"Evaluated {processed_count}/{total_threads}, saved {saved_count}")
+
+        # Save remaining
+        if batch_buffer:
+            result = self.save_thread_statuses(batch_buffer)
+            saved_count += result.get('created_count', 0)
+
+        if skipped_large:
+            logger.warning(f"Skipped {skipped_large} oversized threads (>{MAX_THREAD_SIZE} emails)")
+
+        logger.info(f"Thread evaluation complete: {saved_count} saved. Status breakdown: {status_counts}")
+
+        return []  # Already saved — no need to return full list
+
+    def _preload_junction_cache(self):
+        """Preload email_contact_links into memory for fast company/contact resolution.
+
+        Builds: self._junction_cache: dict[email_id] → list of {contact_id, company_id}
+        """
+        self._junction_cache: Dict[str, List[Dict]] = {}
+        try:
+            offset = 0
+            total = 0
+            while True:
+                resp = self.client.table('email_contact_links').select(
+                    'email_id, contact_id, company_id'
+                ).eq('client_id', self.client_id).range(offset, offset + 999).execute()
+                rows = resp.data or []
+                if not rows:
+                    break
+                for r in rows:
+                    eid = r.get('email_id')
+                    if eid:
+                        if eid not in self._junction_cache:
+                            self._junction_cache[eid] = []
+                        self._junction_cache[eid].append({
+                            'contact_id': r.get('contact_id'),
+                            'company_id': r.get('company_id'),
+                        })
+                total += len(rows)
+                offset += len(rows)
+                if total % 50000 == 0:
+                    logger.info(f"Junction cache loading: {total} links loaded")
+
+            logger.info(f"Junction cache loaded: {total} links for {len(self._junction_cache)} emails")
+        except Exception as e:
+            logger.warning(f"Failed to preload junction cache (will use email FK fallback): {e}")
+            self._junction_cache = {}
 
     def _fetch_threads(self, limit: Optional[int] = None) -> Dict[str, List[Dict]]:
         """
-        Fetch all emails grouped by thread_id, paginating in batches of 500.
+        Fetch all emails grouped by thread_id.
+
+        In client-wide mode, fetches per-mailbox (using indexed mailbox_id) then merges.
+        This avoids timeout on unindexed client_id scans across 261K+ emails.
 
         Args:
             limit: Optional limit for testing
@@ -144,64 +197,144 @@ class ThreadTracker:
         Returns:
             Dict mapping thread_id to list of email dicts
         """
-        PAGE_SIZE = 500
-        COLUMNS = ('id, thread_id, subject, sent_date, is_outbound, '
+        PAGE_SIZE = 200  # Smaller pages to avoid timeout on large mailboxes
+        COLUMNS = ('id, thread_id, canonical_thread_id, subject, subject_normalized, sent_date, is_outbound, '
                    'customer_contact_id, customer_company_id, processing_status, folder_path')
-        # Folders to exclude from thread analysis
         EXCLUDED_FOLDERS = {'trash', 'junk', 'spam', 'deleted items', 'deleted',
                             'junk email', 'junk e-mail', 'drafts', 'draft'}
+
+        threads: Dict[str, List[Dict]] = {}
+        total_emails = 0
+
+        # Determine which mailboxes to process
+        if self.client_id and not self.mailbox_id:
+            # Client-wide: get all mailbox IDs, process each
+            mb_resp = self.client.table('mailboxes').select('id').eq(
+                'client_id', self.client_id
+            ).execute()
+            mailbox_ids = [m['id'] for m in (mb_resp.data or [])]
+        else:
+            mailbox_ids = [self.mailbox_id]
+
         try:
-            all_emails = []
-            offset = 0
+            for mb_idx, mb_id in enumerate(mailbox_ids):
+                offset = 0
+                mb_count = 0
 
-            while True:
-                query = (
-                    self.client.table('emails')
-                    .select(COLUMNS)
-                    .eq('mailbox_id', self.mailbox_id)
-                    .not_.is_('thread_id', 'null')
-                    .neq('thread_id', '')
-                    .order('sent_date', desc=False)
-                )
+                while True:
+                    import time as _time
+                    try:
+                        response = (
+                            self.client.table('emails')
+                            .select(COLUMNS)
+                            .eq('mailbox_id', mb_id)
+                            .order('sent_date', desc=False)
+                            .range(offset, offset + PAGE_SIZE - 1)
+                            .execute()
+                        )
+                    except Exception as fetch_err:
+                        logger.warning(f"Thread fetch retry at offset {offset}: {fetch_err}")
+                        _time.sleep(2)
+                        try:
+                            response = (
+                                self.client.table('emails')
+                                .select(COLUMNS)
+                                .eq('mailbox_id', mb_id)
+                                .order('sent_date', desc=False)
+                                .range(offset, offset + PAGE_SIZE - 1)
+                                .execute()
+                            )
+                        except Exception:
+                            logger.error(f"Thread fetch failed at offset {offset}, skipping rest of mailbox")
+                            break
+                    batch = response.data or []
+                    if not batch:
+                        break
 
-                if limit and limit <= PAGE_SIZE:
-                    query = query.limit(limit)
-                    response = query.execute()
-                    all_emails = [e for e in (response.data or [])
-                                  if e.get('processing_status') != 'failed'
-                                  and (e.get('folder_path') or '').lower() not in EXCLUDED_FOLDERS]
-                    break
+                    for e in batch:
+                        if e.get('processing_status') == 'failed':
+                            continue
+                        if (e.get('folder_path') or '').lower() in EXCLUDED_FOLDERS:
+                            continue
+                        # Prefer canonical_thread_id (cross-mailbox resolved), fall back to thread_id
+                        tid = e.get('canonical_thread_id') or e.get('thread_id')
+                        if not tid:
+                            continue
+                        if not tid:
+                            continue
+                        if tid not in threads:
+                            threads[tid] = []
+                        threads[tid].append(e)
+                        mb_count += 1
 
-                response = query.range(offset, offset + PAGE_SIZE - 1).execute()
-                batch = response.data or []
-                filtered = [e for e in batch
-                            if e.get('processing_status') != 'failed'
-                            and (e.get('folder_path') or '').lower() not in EXCLUDED_FOLDERS]
-                all_emails.extend(filtered)
+                    offset += len(batch)
 
-                if len(batch) == 0:
-                    break
-                offset += len(batch)
+                    if limit and sum(len(v) for v in threads.values()) >= limit:
+                        break
 
-                if limit and len(all_emails) >= limit:
-                    all_emails = all_emails[:limit]
-                    break
+                total_emails += mb_count
+                if len(mailbox_ids) > 1:
+                    logger.info(f"Mailbox {mb_idx + 1}/{len(mailbox_ids)}: "
+                                f"{mb_count} emails, {len(threads)} threads so far")
 
-            # Group by thread_id
-            threads = {}
-            for email in all_emails:
-                thread_id = email['thread_id']
-                if thread_id not in threads:
-                    threads[thread_id] = []
-                threads[thread_id].append(email)
+            # Sort each thread's emails by sent_date
+            for tid in threads:
+                threads[tid].sort(key=lambda e: e.get('sent_date', ''))
 
-            logger.info(f"Fetched {len(all_emails)} emails in {len(threads)} threads")
+            logger.info(f"Fetched {total_emails} emails in {len(threads)} threads "
+                        f"across {len(mailbox_ids)} mailboxes")
 
             return threads
 
         except Exception as e:
             logger.error(f"Failed to fetch threads: {e}")
             raise
+
+    def _merge_threads_by_subject(self, threads: Dict[str, List[Dict]]) -> Dict[str, List[Dict]]:
+        """Merge threads that share the same subject_normalized.
+
+        When the same conversation exists in multiple mailboxes, each mailbox may
+        assign a different thread_id (different provider_thread_id or heuristic).
+        Merging by normalized subject consolidates them into one logical thread.
+
+        Only merges threads with ≤50 emails each (avoids merging unrelated bulk subjects).
+        """
+        # Group thread_ids by subject_normalized
+        subject_to_tids: Dict[str, List[str]] = {}
+        for tid, emails in threads.items():
+            # Use subject_normalized from first email, or normalize the subject
+            subj = (emails[0].get('subject_normalized') or '').strip().lower()
+            if not subj or len(subj) < 5:
+                continue
+            if subj not in subject_to_tids:
+                subject_to_tids[subj] = []
+            subject_to_tids[subj].append(tid)
+
+        # Merge groups with >1 thread_id
+        merged_count = 0
+        for subj, tids in subject_to_tids.items():
+            if len(tids) <= 1:
+                continue
+            # Don't merge if total emails would be too large (unrelated generic subjects)
+            total_emails = sum(len(threads[t]) for t in tids if t in threads)
+            if total_emails > 200:
+                continue
+
+            # Pick the thread_id with the most emails as the canonical one
+            canonical = max(tids, key=lambda t: len(threads.get(t, [])))
+            for tid in tids:
+                if tid != canonical and tid in threads:
+                    threads[canonical].extend(threads[tid])
+                    del threads[tid]
+                    merged_count += 1
+
+            # Re-sort merged thread
+            threads[canonical].sort(key=lambda e: e.get('sent_date', ''))
+
+        if merged_count:
+            logger.info(f"Merged {merged_count} duplicate threads by subject → {len(threads)} unique threads")
+
+        return threads
 
     def _evaluate_thread_status(self, thread_id: str, emails: List[Dict]) -> ThreadStatus:
         """
@@ -294,29 +427,40 @@ class ThreadTracker:
 
     def _get_primary_entities(self, emails: List[Dict]) -> Tuple[Optional[str], Optional[str]]:
         """
-        Get primary contact and company for thread (most frequent)
+        Get primary contact and company for thread (most frequent).
 
-        Args:
-            emails: List of emails in thread
-
-        Returns:
-            Tuple of (primary_contact_id, primary_company_id)
+        Uses preloaded junction cache for fast in-memory lookup (includes CC/BCC),
+        falling back to emails.customer_company_id if cache is empty.
         """
-        # Count frequency of contacts and companies
-        contact_counts = {}
-        company_counts = {}
+        contact_counts: dict = {}
+        company_counts: dict = {}
+        junction_cache = getattr(self, '_junction_cache', {})
 
+        # Try preloaded junction cache first
+        junction_used = False
         for email in emails:
-            contact_id = email.get('customer_contact_id')
-            company_id = email.get('customer_company_id')
+            eid = email.get('id')
+            links = junction_cache.get(eid, []) if eid else []
+            for link in links:
+                cid = link.get('contact_id')
+                comp = link.get('company_id')
+                if cid:
+                    contact_counts[cid] = contact_counts.get(cid, 0) + 1
+                if comp:
+                    company_counts[comp] = company_counts.get(comp, 0) + 1
+            if links:
+                junction_used = True
 
-            if contact_id:
-                contact_counts[contact_id] = contact_counts.get(contact_id, 0) + 1
+        # Fallback: use emails.customer_contact_id / customer_company_id
+        if not junction_used:
+            for email in emails:
+                contact_id = email.get('customer_contact_id')
+                company_id = email.get('customer_company_id')
+                if contact_id:
+                    contact_counts[contact_id] = contact_counts.get(contact_id, 0) + 1
+                if company_id:
+                    company_counts[company_id] = company_counts.get(company_id, 0) + 1
 
-            if company_id:
-                company_counts[company_id] = company_counts.get(company_id, 0) + 1
-
-        # Get most frequent
         primary_contact_id = max(contact_counts, key=contact_counts.get) if contact_counts else None
         primary_company_id = max(company_counts, key=company_counts.get) if company_counts else None
 
@@ -386,24 +530,18 @@ class ThreadTracker:
         records = []
         timestamp = datetime.utcnow().isoformat()
 
-        # Map tracker statuses to DB CHECK constraint values
-        STATUS_TO_DB = {
-            'ongoing': 'stale',           # active → stale (closest match)
-            'awaiting_response': 'awaiting_reply',
-            'awaiting_our_response': 'outbound_pending',
-            'complete': 'complete',
-            'overdue': 'overdue',
-            'dropped': 'dropped',
-        }
+        # Status values are written directly — CHECK constraint (migration 020)
+        # allows: complete, awaiting_reply, overdue, dropped, outbound_pending, stale,
+        #         ongoing, awaiting_response, awaiting_our_response
 
         for status in thread_statuses:
-            db_status = STATUS_TO_DB.get(status.status, status.status)
             record = {
                 'thread_id': status.thread_id,
-                'mailbox_id': self.mailbox_id,
+                'canonical_thread_id': status.thread_id,  # Same as thread_id when using canonical resolution
+                'mailbox_id': self.mailbox_id,  # NULL in client-wide mode
                 'subject': status.subject,
                 'message_count': status.message_count,
-                'status': db_status,
+                'status': status.status,
                 'last_email_id': status.last_email_id,
                 'last_email_date': status.last_email_date.isoformat(),
                 'last_message_at': status.last_email_date.isoformat(),

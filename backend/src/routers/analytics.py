@@ -140,6 +140,100 @@ async def trigger_extraction_job(data: ExtractionJobCreate, background_tasks: Ba
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/extraction/resolve-threads")
+async def resolve_canonical_threads(
+    client_id: str = Query(...),
+    mailbox_id: Optional[str] = Query(None, description="Resolve a single mailbox only (for retry)"),
+    skip_recompute: bool = Query(False, description="Skip thread_status recompute after resolution"),
+    background_tasks: BackgroundTasks = None,
+):
+    """Resolve canonical thread IDs using Message-ID chain + subject heuristics.
+
+    Step 1: Resolve canonical_thread_id on emails (all mailboxes or single if mailbox_id specified)
+    Step 2: Recompute thread_status from canonical threads (unless skip_recompute=true)
+    """
+    try:
+        def _run():
+            from ..services.canonical_thread_resolver import CanonicalThreadResolver
+            from ..services.thread_tracker import ThreadTracker
+
+            logger.info(f"Starting canonical thread resolution for client {client_id}"
+                        f"{f' mailbox {mailbox_id}' if mailbox_id else ' (all mailboxes)'}")
+            resolver = CanonicalThreadResolver(client_id=client_id, mailbox_id=mailbox_id)
+            stats = resolver.resolve_all()
+            logger.info(f"Thread resolution stats: {stats}")
+
+            if not skip_recompute:
+                logger.info("Recomputing thread statuses from canonical threads...")
+                # Clear existing thread_status
+                mailboxes = _supabase.table('mailboxes').select('id').eq(
+                    'client_id', client_id
+                ).execute()
+                for m in (mailboxes.data or []):
+                    _supabase.table('thread_status').delete().eq('mailbox_id', m['id']).execute()
+                _supabase.table('thread_status').delete().is_('mailbox_id', 'null').execute()
+
+                tracker = ThreadTracker(client_id=client_id)
+                tracker.evaluate_threads()
+                logger.info("Thread resolution + recompute complete")
+            else:
+                logger.info("Skipping thread_status recompute (skip_recompute=true)")
+
+        background_tasks.add_task(_run)
+        mode = f"mailbox {mailbox_id}" if mailbox_id else "all mailboxes"
+        return {"status": "started", "message": f"Resolving threads for {mode} in background"}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/extraction/recompute-threads")
+async def recompute_threads(
+    client_id: str = Query(...),
+    background_tasks: BackgroundTasks = None,
+):
+    """Recompute thread statuses for a client (across all mailboxes).
+
+    Runs only the thread tracking step — no full extraction.
+    Clears ALL existing thread_status rows for this client and rebuilds from scratch.
+    Threads span mailboxes (a conversation involving multiple people/mailboxes = one thread).
+    Uses email_contact_links for accurate company resolution (includes CC/BCC).
+    """
+    try:
+        def _run_recompute():
+            from ..services.thread_tracker import ThreadTracker
+
+            logger.info(f"Recompute threads: clearing existing for client {client_id}")
+
+            # Clear ALL thread_status for this client (via mailbox IDs + NULL mailbox_id)
+            mailboxes = _supabase.table('mailboxes').select('id').eq(
+                'client_id', client_id
+            ).execute()
+            for m in (mailboxes.data or []):
+                _supabase.table('thread_status').delete().eq('mailbox_id', m['id']).execute()
+            # Also clear any client-wide threads (mailbox_id IS NULL)
+            _supabase.table('thread_status').delete().is_('mailbox_id', 'null').not_.is_(
+                'customer_company_id', 'null'
+            ).execute()
+
+            logger.info("Evaluating threads across all mailboxes (client-wide)")
+            tracker = ThreadTracker(client_id=client_id)
+            tracker.evaluate_threads()  # Evaluates and saves in batches internally
+
+            logger.info(f"Thread recompute complete for client {client_id}")
+
+        background_tasks.add_task(_run_recompute)
+        return {
+            "status": "started",
+            "message": f"Recomputing threads client-wide in background",
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/extraction/backfill-email-links")
 async def backfill_email_contact_links(
     client_id: str = Query(...),
@@ -1013,24 +1107,10 @@ async def get_contact_emails(contact_id: str, limit: int = 50, offset: int = 0):
             else:
                 paginated = []
         else:
-            # Fallback: old FK-based query
-            count_result = _supabase.table('emails').select(
-                'id', count='exact'
-            ).eq('customer_contact_id', contact_id).execute()
-            total = count_result.count or 0
-
-            sent_result = _supabase.table('emails').select(
-                'id', count='exact'
-            ).eq('customer_contact_id', contact_id).eq('is_outbound', True).execute()
-            total_sent = sent_result.count or 0
-            total_received = total - total_sent
-
-            result = _supabase.table('emails').select(
-                'id, subject, sender_email, sender_name, sent_date, folder_path, is_outbound'
-            ).eq('customer_contact_id', contact_id).order(
-                'sent_date', desc=True
-            ).range(offset, offset + limit - 1).execute()
-            paginated = result.data or []
+            total = 0
+            total_sent = 0
+            total_received = 0
+            paginated = []
 
         return {'emails': paginated, 'total': total, 'total_sent': total_sent, 'total_received': total_received}
 
@@ -1409,10 +1489,11 @@ async def get_company_analytics(company_id: str):
                 'id, status'
             ).eq('customer_company_id', company_id).execute()
             for t in (threads_result.data or []):
-                s = (t.get('status') or '').upper()
-                if s in ('ONGOING', 'AWAITING_OUR_RESPONSE', 'ACTIVE'):
+                s = (t.get('status') or '').lower()
+                if s in ('ongoing', 'awaiting_response', 'awaiting_our_response',
+                         'outbound_pending', 'awaiting_reply'):
                     active_threads += 1
-                elif s == 'OVERDUE':
+                elif s == 'overdue':
                     overdue_threads += 1
         except Exception:
             pass
@@ -1525,24 +1606,10 @@ async def get_company_emails(company_id: str, limit: int = 50, offset: int = 0):
             else:
                 paginated = []
         else:
-            # Fallback: direct query on emails.customer_company_id
-            count_result = _supabase.table('emails').select(
-                'id', count='exact'
-            ).eq('customer_company_id', company_id).limit(0).execute()
-            total = count_result.count or 0
-
-            sent_result = _supabase.table('emails').select(
-                'id', count='exact'
-            ).eq('customer_company_id', company_id).eq('is_outbound', True).limit(0).execute()
-            total_sent = sent_result.count or 0
-            total_received = total - total_sent
-
-            result = _supabase.table('emails').select(
-                'id, subject, sender_email, sender_name, sent_date, folder_path, is_outbound'
-            ).eq('customer_company_id', company_id).order(
-                'sent_date', desc=True
-            ).range(offset, offset + limit - 1).execute()
-            paginated = result.data or []
+            total = 0
+            total_sent = 0
+            total_received = 0
+            paginated = []
 
         return {'emails': paginated, 'total': total, 'total_sent': total_sent, 'total_received': total_received}
 
@@ -1601,7 +1668,7 @@ async def list_thread_statuses(
     try:
         query = _supabase.table('thread_status').select(
             '''
-            thread_id, subject, customer_contact_id, customer_company_id,
+            thread_id, canonical_thread_id, subject, customer_contact_id, customer_company_id,
             status, message_count, last_message_at, last_sender_is_outbound, days_since_last_email,
             mailbox_id, qb_customer_type, qb_customer_tier, created_at
             '''
@@ -1613,9 +1680,10 @@ async def list_thread_statuses(
             mailbox_result = _supabase.table('mailboxes').select('id').eq('client_id', client_id).execute()
             mailbox_ids = [m['id'] for m in (mailbox_result.data or [])]
             if mailbox_ids:
-                query = query.in_('mailbox_id', mailbox_ids[:500])
+                # Include both mailbox-specific and client-wide (NULL mailbox_id) threads
+                mb_filter = ','.join(f"mailbox_id.eq.{mid}" for mid in mailbox_ids[:100])
+                query = query.or_(f"{mb_filter},mailbox_id.is.null")
             else:
-                # No mailboxes for client → return empty
                 return ThreadStatusListResponse(threads=[], total=0)
         elif mailbox_id:
             query = query.eq('mailbox_id', mailbox_id)
@@ -1670,7 +1738,7 @@ async def list_thread_statuses(
         threads = []
         for t in result.data:
             thread_data = {
-                'thread_id': t.get('thread_id'),
+                'thread_id': t.get('canonical_thread_id') or t.get('thread_id'),
                 'subject': t.get('subject'),
                 'contact_id': t.get('customer_contact_id'),
                 'company_id': t.get('customer_company_id'),
@@ -1883,7 +1951,7 @@ async def get_contact_threads(
         for t in result.data:
             # Map database column names to model field names
             thread_data = {
-                'thread_id': t.get('thread_id'),
+                'thread_id': t.get('canonical_thread_id') or t.get('thread_id'),
                 'subject': t.get('subject'),
                 'contact_id': t.get('customer_contact_id'),
                 'company_id': t.get('customer_company_id'),
@@ -1939,7 +2007,7 @@ async def get_company_threads(
         threads = []
         for t in result.data:
             thread_data = {
-                'thread_id': t.get('thread_id'),
+                'thread_id': t.get('canonical_thread_id') or t.get('thread_id'),
                 'subject': t.get('subject'),
                 'contact_id': t.get('customer_contact_id'),
                 'company_id': t.get('customer_company_id'),
@@ -1980,24 +2048,31 @@ async def get_thread_detail(
 ):
     """Get thread detail with all emails in the thread."""
     try:
-        # Get thread_status record
+        # Get thread_status record — try canonical_thread_id first, fall back to thread_id
         ts_result = _supabase.table('thread_status').select(
             '''
-            thread_id, subject, customer_contact_id, customer_company_id,
+            thread_id, canonical_thread_id, subject, customer_contact_id, customer_company_id,
             status, message_count, last_message_at, days_since_last_email,
             thread_depth, created_at
             '''
-        ).eq('thread_id', thread_id).execute()
+        ).or_(f"thread_id.eq.{thread_id},canonical_thread_id.eq.{thread_id}").limit(1).execute()
 
         if not ts_result.data:
             raise HTTPException(status_code=404, detail="Thread not found")
 
         ts = ts_result.data[0]
 
-        # Fetch emails in this thread
+        # Fetch emails by canonical_thread_id (cross-mailbox), fall back to thread_id
+        canonical_id = ts.get('canonical_thread_id') or thread_id
         emails_result = _supabase.table('emails').select(
             'id, subject, sender_email, sender_name, recipients, sent_date, is_outbound, body_text, folder_path'
-        ).eq('thread_id', thread_id).order('sent_date', desc=False).limit(limit).execute()
+        ).eq('canonical_thread_id', canonical_id).order('sent_date', desc=False).limit(limit).execute()
+
+        # Fallback if no emails found by canonical_thread_id
+        if not emails_result.data:
+            emails_result = _supabase.table('emails').select(
+                'id, subject, sender_email, sender_name, recipients, sent_date, is_outbound, body_text, folder_path'
+            ).eq('thread_id', thread_id).order('sent_date', desc=False).limit(limit).execute()
 
         thread_emails = []
         for e in (emails_result.data or []):

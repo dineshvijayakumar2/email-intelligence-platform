@@ -396,6 +396,11 @@ class ExtractionOrchestrator:
             self._run_step(9, "Link emails to contacts/companies",
                           lambda: self._step_link_emails(force_relink))
 
+            # Assign canonical_thread_id to new emails + update affected threads
+            # Runs in both full and lightweight mode
+            self._assign_canonical_threads()
+            self._update_affected_threads()
+
             if lightweight:
                 # Lightweight mode: skip heavy analytics steps (10-12)
                 logger.info("Lightweight mode: skipping steps 10-12 (engagement, stats, report)")
@@ -1112,6 +1117,185 @@ class ExtractionOrchestrator:
         result['qb_contacts_enriched'] = qb_enriched.get('contacts', 0)
 
         return result
+
+    def _assign_canonical_threads(self):
+        """Assign canonical_thread_id to emails that don't have one yet.
+
+        Lightweight — only processes new emails (canonical_thread_id IS NULL).
+        Uses In-Reply-To / References headers to find existing canonical threads,
+        or creates new ones via subject+participant matching.
+        Runs in both full and lightweight extraction modes.
+        """
+        try:
+            # Count emails without canonical_thread_id in this mailbox
+            count_resp = self._execute_with_retry(
+                self.client.table('emails').select('id', count='exact')
+                .eq('mailbox_id', self.mailbox_id)
+                .is_('canonical_thread_id', 'null')
+                .not_.is_('thread_id', 'null')
+            )
+            unresolved = count_resp.count or 0
+
+            if unresolved == 0:
+                logger.info("All emails have canonical_thread_id — skipping")
+                return
+
+            logger.info(f"Assigning canonical_thread_id to {unresolved} new emails")
+
+            from .canonical_thread_resolver import CanonicalThreadResolver
+            resolver = CanonicalThreadResolver(
+                client_id=self.client_id,
+                mailbox_id=self.mailbox_id,
+            )
+
+            # Pre-seed the resolver's Message-ID index from existing resolved emails
+            # so new emails can find their parent threads
+            offset = 0
+            while True:
+                resp = self._execute_with_retry(
+                    self.client.table('emails').select(
+                        'internet_message_id, canonical_thread_id'
+                    ).eq('mailbox_id', self.mailbox_id)
+                    .not_.is_('canonical_thread_id', 'null')
+                    .not_.is_('internet_message_id', 'null')
+                    .range(offset, offset + 999)
+                )
+                rows = resp.data or []
+                if not rows:
+                    break
+                for r in rows:
+                    mid = (r.get('internet_message_id') or '').strip().strip('<>')
+                    cid = r.get('canonical_thread_id')
+                    if mid and mid != '__none__' and cid:
+                        resolver._msg_id_to_canonical[mid] = cid
+                offset += len(rows)
+
+            logger.info(f"Pre-seeded Message-ID index with {len(resolver._msg_id_to_canonical)} entries")
+
+            # Also seed from other mailboxes (cross-mailbox resolution)
+            other_mb_resp = self.client.table('mailboxes').select('id').eq(
+                'client_id', self.client_id
+            ).neq('id', self.mailbox_id).execute()
+            for mb in (other_mb_resp.data or []):
+                mb_offset = 0
+                while True:
+                    resp = self._execute_with_retry(
+                        self.client.table('emails').select(
+                            'internet_message_id, canonical_thread_id'
+                        ).eq('mailbox_id', mb['id'])
+                        .not_.is_('canonical_thread_id', 'null')
+                        .not_.is_('internet_message_id', 'null')
+                        .range(mb_offset, mb_offset + 999)
+                    )
+                    rows = resp.data or []
+                    if not rows:
+                        break
+                    for r in rows:
+                        mid = (r.get('internet_message_id') or '').strip().strip('<>')
+                        cid = r.get('canonical_thread_id')
+                        if mid and mid != '__none__' and cid:
+                            resolver._msg_id_to_canonical[mid] = cid
+                    mb_offset += len(rows)
+
+            logger.info(f"Cross-mailbox index: {len(resolver._msg_id_to_canonical)} total Message-IDs")
+
+            # Now resolve only unresolved emails
+            resolver.resolve_all()
+
+            logger.info("Canonical thread assignment complete for new emails")
+
+        except Exception as e:
+            logger.warning(f"Canonical thread assignment failed (non-critical): {e}")
+
+    def _update_affected_threads(self):
+        """Incrementally update thread_status for threads that received new emails.
+
+        Instead of recomputing all 70K+ threads, only re-evaluates threads where
+        emails were recently added (based on extraction lookback window).
+        Runs in both full and lightweight mode.
+        """
+        try:
+            from .thread_tracker import ThreadTracker
+            from datetime import timedelta
+
+            # Find canonical_thread_ids of recently modified emails in this mailbox
+            lookback = datetime.utcnow() - timedelta(days=max(self.lookback_days, 7))
+            lookback_iso = lookback.isoformat() + 'Z'
+
+            affected_threads: set = set()
+            offset = 0
+            while True:
+                resp = self._execute_with_retry(
+                    self.client.table('emails').select('canonical_thread_id')
+                    .eq('mailbox_id', self.mailbox_id)
+                    .not_.is_('canonical_thread_id', 'null')
+                    .gte('sent_date', lookback_iso)
+                    .range(offset, offset + 999)
+                )
+                rows = resp.data or []
+                if not rows:
+                    break
+                for r in rows:
+                    cid = r.get('canonical_thread_id')
+                    if cid:
+                        affected_threads.add(cid)
+                offset += len(rows)
+
+            if not affected_threads:
+                logger.info("No affected threads to update")
+                return
+
+            logger.info(f"Updating {len(affected_threads)} affected threads")
+
+            # Fetch all emails for these threads (across all mailboxes)
+            threads: dict = {}
+            thread_list = list(affected_threads)
+
+            for i in range(0, len(thread_list), 50):
+                batch_tids = thread_list[i:i + 50]
+                offset = 0
+                while True:
+                    resp = self._execute_with_retry(
+                        self.client.table('emails').select(
+                            'id, canonical_thread_id, subject, sent_date, is_outbound, '
+                            'customer_contact_id, customer_company_id'
+                        ).in_('canonical_thread_id', batch_tids)
+                        .order('sent_date', desc=False)
+                        .range(offset, offset + 999)
+                    )
+                    rows = resp.data or []
+                    if not rows:
+                        break
+                    for e in rows:
+                        tid = e.get('canonical_thread_id')
+                        if tid:
+                            if tid not in threads:
+                                threads[tid] = []
+                            threads[tid].append(e)
+                    offset += len(rows)
+
+            if not threads:
+                return
+
+            # Evaluate and save using the thread tracker (reuses junction cache if loaded)
+            tracker = ThreadTracker(client_id=self.client_id)
+            tracker._junction_cache = {}  # Skip junction preload for incremental
+            # Use email FK fallback since we're not preloading full cache
+
+            statuses = []
+            for tid, emails in threads.items():
+                emails.sort(key=lambda e: e.get('sent_date', ''))
+                if len(emails) > 200:
+                    continue
+                status = tracker._evaluate_thread_status(tid, emails)
+                statuses.append(status)
+
+            if statuses:
+                result = tracker.save_thread_statuses(statuses)
+                logger.info(f"Updated {result.get('created_count', 0)} thread statuses (incremental)")
+
+        except Exception as e:
+            logger.warning(f"Incremental thread update failed (non-critical): {e}")
 
     def _rematch_quickbase(self) -> int:
         """QB email-based matching after extraction.
