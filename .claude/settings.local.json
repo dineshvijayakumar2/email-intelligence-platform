@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc --noEmit)",
+      "Bash(wc -l \"/c/Users/Dinesh Vijayakumar/Documents/Projects/Newbound/email-intelligence-platform/backend/src/services\"/*.py)",
+      "Bash(xargs grep:*)"
+    ]
+  }
+}

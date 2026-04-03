@@ -17,7 +17,7 @@ FROM (
         SELECT split_part(ct2.email_address, '@', 2) AS domain
     ) d
     JOIN customer_companies cc ON cc.client_id = ct2.client_id
-    CROSS JOIN LATERAL unnest(cc.email_domains) AS ed(domain_val)
+    CROSS JOIN LATERAL jsonb_array_elements_text(cc.email_domains) AS ed(domain_val)
     WHERE ct2.customer_company_id IS NULL
       AND ct2.email_address LIKE '%@%'
       AND lower(ed.domain_val) = lower(d.domain)

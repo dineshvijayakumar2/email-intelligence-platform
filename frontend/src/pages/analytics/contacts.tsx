@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Typography, Tabs, Tag, Space, Slider, Switch, Select, Alert, Input, Button } from 'antd';
+import { Typography, Tabs, Tag, Space, Switch, Input, Button } from 'antd';
 import type { TableProps } from 'antd';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeftOutlined } from '@ant-design/icons';
@@ -10,49 +10,33 @@ import { LifecycleBadge } from '../../components/analytics/LifecycleBadge';
 import {
   contactsApi,
   formatRelativeTime,
-  contactTypeConfig,
 } from '../../services/analyticsService';
 import type {
   ContactAnalytics,
   TopEngagedContact,
   AtRiskContact,
-  ContactTypeGrouping,
-  ContactType,
 } from '../../types/analytics';
 import { formatCurrency } from '../../utils/numberFormat';
 
 const { Text } = Typography;
 const PAGE_SIZE = 20;
 
-const CONTACT_TYPE_OPTIONS = [
-  { value: '', label: 'All Types' },
-  { value: 'person', label: 'Person' },
-  { value: 'automated', label: 'Automated' },
-  { value: 'shared', label: 'Shared' },
-  { value: 'mailing_list', label: 'Mailing List' },
-  { value: 'internal', label: 'Internal' },
-  { value: 'unknown', label: 'Unknown' },
-];
-
 export const ContactsAnalytics: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const isMountedRef = useRef(true);
   const [clientId, setClientId] = useState(() => searchParams.get('client_id') || '');
-  const [activeTab, setActiveTab] = useState(() => searchParams.get('dm') === 'true' ? 'dm' : 'all');
+  const [activeTab, setActiveTab] = useState('all');
   const [loading, setLoading] = useState(false);
 
   // All contacts state
   const [contacts, setContacts] = useState<ContactAnalytics[]>([]);
   const [contactsTotal, setContactsTotal] = useState(0);
   const [contactsPage, setContactsPage] = useState(1);
-  const [minScore, setMinScore] = useState<number>(0);
-  const [sliderScore, setSliderScore] = useState<number>(0);
-  const [dmOnly, setDmOnly] = useState(() => searchParams.get('dm') === 'true');
-  const [contactType, setContactType] = useState<string>('');
   const [sortBy, setSortBy] = useState<string>('engagement_score');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [search, setSearch] = useState<string>('');
+  const [qbLinked, setQbLinked] = useState(false);
   const companyIdFilter = searchParams.get('company_id') || '';
 
   // Top engaged state
@@ -63,16 +47,6 @@ export const ContactsAnalytics: React.FC = () => {
   const [atRisk, setAtRisk] = useState<AtRiskContact[]>([]);
   const [atRiskLoading, setAtRiskLoading] = useState(false);
 
-  // Decision makers state
-  const [dms, setDms] = useState<ContactAnalytics[]>([]);
-  const [dmsTotal, setDmsTotal] = useState(0);
-  const [dmsPage, setDmsPage] = useState(1);
-  const [dmsLoading, setDmsLoading] = useState(false);
-
-  // By type state
-  const [typeGroups, setTypeGroups] = useState<ContactTypeGrouping[]>([]);
-  const [typeLoading, setTypeLoading] = useState(false);
-
   useEffect(() => {
     isMountedRef.current = true;
     return () => { isMountedRef.current = false; };
@@ -81,7 +55,7 @@ export const ContactsAnalytics: React.FC = () => {
   useEffect(() => {
     if (!clientId) return;
     loadTab(activeTab);
-  }, [clientId, activeTab, contactsPage, dmsPage, minScore, dmOnly, contactType, sortBy, sortDir, search, companyIdFilter]);
+  }, [clientId, activeTab, contactsPage, sortBy, sortDir, search, companyIdFilter, qbLinked]);
 
   const loadTab = async (tab: string) => {
     if (!clientId) return;
@@ -93,9 +67,7 @@ export const ContactsAnalytics: React.FC = () => {
           company_id: companyIdFilter || undefined,
           limit: PAGE_SIZE,
           offset: (contactsPage - 1) * PAGE_SIZE,
-          min_engagement_score: minScore > 0 ? minScore : undefined,
-          is_decision_maker: dmOnly ? true : undefined,
-          contact_type: contactType ? (contactType as ContactType) : undefined,
+          qb_linked: qbLinked || undefined,
           sort_by: sortBy,
           sort_dir: sortDir,
           search: search || undefined,
@@ -115,16 +87,6 @@ export const ContactsAnalytics: React.FC = () => {
         setAtRiskLoading(true);
         const riskResult = await contactsApi.atRisk(clientId);
         if (isMountedRef.current) { setAtRisk(riskResult); setAtRiskLoading(false); }
-        break;
-      case 'dm':
-        setDmsLoading(true);
-        const dmResult = await contactsApi.decisionMakers(clientId, PAGE_SIZE, (dmsPage - 1) * PAGE_SIZE);
-        if (isMountedRef.current) { setDms(dmResult.contacts); setDmsTotal(dmResult.total); setDmsLoading(false); }
-        break;
-      case 'type':
-        setTypeLoading(true);
-        const typeResult = await contactsApi.byType(clientId);
-        if (isMountedRef.current) { setTypeGroups(typeResult); setTypeLoading(false); }
         break;
     }
   };
@@ -171,17 +133,7 @@ export const ContactsAnalytics: React.FC = () => {
       render: (v: string) => v || <Text type="secondary">-</Text>,
     },
     {
-      title: 'Type',
-      dataIndex: 'contact_type',
-      key: 'type',
-      width: 110,
-      render: (v: ContactType) => {
-        const cfg = contactTypeConfig[v] || contactTypeConfig.unknown;
-        return <Tag color={cfg.color}>{cfg.label}</Tag>;
-      },
-    },
-    {
-      title: 'QB Type',
+      title: 'Customer Type',
       dataIndex: 'qb_customer_type',
       key: 'qb_customer_type',
       width: 120,
@@ -215,7 +167,7 @@ export const ContactsAnalytics: React.FC = () => {
       sorter: true,
       sortOrder: getSortOrder('total_emails_sent'),
       render: (v: number, r: ContactAnalytics) => (
-        <a onClick={(e) => { e.stopPropagation(); navigate(`/emails?contact_id=${r.id}&name=${encodeURIComponent(r.full_name || r.email_address)}`); }} style={{ color: '#667eea' }}>
+        <a onClick={(e) => { e.stopPropagation(); navigate(`/emails?contact_id=${r.id}`); }} style={{ color: '#667eea' }}>
           {v || 0}
         </a>
       ),
@@ -228,7 +180,7 @@ export const ContactsAnalytics: React.FC = () => {
       sorter: true,
       sortOrder: getSortOrder('total_emails_received'),
       render: (v: number, r: ContactAnalytics) => (
-        <a onClick={(e) => { e.stopPropagation(); navigate(`/emails?contact_id=${r.id}&name=${encodeURIComponent(r.full_name || r.email_address)}`); }} style={{ color: '#667eea' }}>
+        <a onClick={(e) => { e.stopPropagation(); navigate(`/emails?contact_id=${r.id}`); }} style={{ color: '#667eea' }}>
           {v || 0}
         </a>
       ),
@@ -294,20 +246,6 @@ export const ContactsAnalytics: React.FC = () => {
     { title: 'Last Contact', dataIndex: 'last_contacted_at', key: 'last', width: 110, render: (v: string) => formatRelativeTime(v) },
   ];
 
-  const typeColumns = [
-    {
-      title: 'Type',
-      dataIndex: 'contact_type',
-      key: 'type',
-      render: (v: ContactType) => {
-        const cfg = contactTypeConfig[v] || contactTypeConfig.unknown;
-        return <Tag color={cfg.color}>{cfg.label}</Tag>;
-      },
-    },
-    { title: 'Count', dataIndex: 'count', key: 'count', width: 100 },
-    { title: 'Avg Score', dataIndex: 'avg_engagement_score', key: 'score', width: 100, render: (v: number) => <EngagementBadge score={v} /> },
-  ];
-
   const handleRowClick = (record: any) => {
     navigate(`/customers/contacts/${record.id}`);
   };
@@ -324,7 +262,7 @@ export const ContactsAnalytics: React.FC = () => {
       <div className="fade-in-up" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <Text type="secondary">
           {isCompanyDrilldown
-            ? `Contacts for this company${dmOnly ? ' (Decision Makers)' : ''}`
+            ? 'Contacts for this company'
             : 'Explore contacts, engagement scores, and relationship health'}
         </Text>
         <ClientSelector value={clientId} onChange={setClientId} />
@@ -334,7 +272,7 @@ export const ContactsAnalytics: React.FC = () => {
         <Tabs activeKey={activeTab} onChange={setActiveTab} items={[
           {
             key: 'all',
-            label: `All Contacts (${contactsTotal})`,
+            label: `All Contacts (${contactsTotal})${qbLinked ? ' — QB Linked' : ''}`,
             children: (
               <>
                 <Space style={{ marginBottom: 16 }} wrap>
@@ -346,18 +284,8 @@ export const ContactsAnalytics: React.FC = () => {
                     style={{ width: 240 }}
                     size="small"
                   />
-                  <Text>Type:</Text>
-                  <Select
-                    value={contactType}
-                    onChange={v => { setContactType(v); setContactsPage(1); }}
-                    options={CONTACT_TYPE_OPTIONS}
-                    style={{ width: 140 }}
-                    size="small"
-                  />
-                  <Text>Min Score:</Text>
-                  <Slider value={sliderScore} onChange={setSliderScore} onChangeComplete={v => { setMinScore(v); setSliderScore(v); setContactsPage(1); }} min={0} max={100} style={{ width: 120 }} />
-                  <Text>Decision Makers:</Text>
-                  <Switch checked={dmOnly} onChange={v => { setDmOnly(v); setContactsPage(1); }} size="small" />
+                  <Text>QB Linked:</Text>
+                  <Switch checked={qbLinked} onChange={v => { setQbLinked(v); setContactsPage(1); }} size="small" />
                 </Space>
                 <AnalyticsTable<ContactAnalytics>
                   columns={allColumns}
@@ -399,48 +327,6 @@ export const ContactsAnalytics: React.FC = () => {
                 loading={atRiskLoading}
                 onRowClick={handleRowClick}
                 rowKey="id"
-              />
-            ),
-          },
-          {
-            key: 'dm',
-            label: `Decision Makers (${dmsTotal})`,
-            children: (
-              <>
-                {dmsTotal === 0 && !dmsLoading && clientId && (
-                  <Alert
-                    type="info"
-                    showIcon
-                    style={{ marginBottom: 16 }}
-                    message="No decision makers detected"
-                    description="Decision makers are contacts with C-level, VP, or Director titles. These are auto-detected from email signatures and job titles during extraction. If your contacts don't have professional titles in their email data, this section will be empty."
-                  />
-                )}
-                <AnalyticsTable<ContactAnalytics>
-                  columns={allColumns}
-                  data={dms}
-                  total={dmsTotal}
-                  loading={dmsLoading}
-                  pageSize={PAGE_SIZE}
-                  currentPage={dmsPage}
-                  onPageChange={(p) => setDmsPage(p)}
-                  onRowClick={handleRowClick}
-                  rowKey="id"
-                  emptyText="No decision makers found. Decision makers are auto-detected from job titles (C-level, VP, Director)."
-                />
-              </>
-            ),
-          },
-          {
-            key: 'type',
-            label: 'By Type',
-            children: (
-              <AnalyticsTable<ContactTypeGrouping>
-                columns={typeColumns}
-                data={typeGroups}
-                total={typeGroups.length}
-                loading={typeLoading}
-                rowKey="contact_type"
               />
             ),
           },

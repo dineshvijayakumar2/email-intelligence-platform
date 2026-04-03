@@ -652,27 +652,14 @@ async def list_contact_analytics(
     contact_type: Optional[ContactType] = Query(default=None),
     is_decision_maker: Optional[bool] = Query(default=None),
     min_engagement_score: Optional[float] = Query(default=None, ge=0, le=100),
+    qb_linked: Optional[bool] = Query(default=None, description="Filter contacts linked to QB customers"),
     search: Optional[str] = Query(default=None, description="Search by name, email, or company"),
     sort_by: Optional[str] = Query(default=None, description="Sort column"),
     sort_dir: str = Query(default="desc", description="asc or desc"),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0)
 ):
-    """
-    List contacts with analytics data.
-
-    Args:
-        client_id: Filter by client
-        company_id: Filter by company
-        contact_type: Filter by contact type
-        is_decision_maker: Filter decision makers only
-        min_engagement_score: Minimum engagement score
-        limit: Maximum number of results
-        offset: Offset for pagination
-
-    Returns:
-        List of contacts with analytics
-    """
+    """List contacts with analytics data."""
     try:
         query = _supabase.table('customer_contacts').select(
             '''
@@ -699,6 +686,8 @@ async def list_contact_analytics(
             query = query.eq('is_decision_maker', 'true' if is_decision_maker else 'false')
         if min_engagement_score is not None:
             query = query.gte('engagement_score', int(min_engagement_score))
+        if qb_linked is True:
+            query = query.not_.is_('qb_customer_type', 'null')
         if search and search.strip():
             term = _sanitize_search_term(search.strip())
             query = query.or_(f"full_name.ilike.%{term}%,email_address.ilike.%{term}%,company_name.ilike.%{term}%")
@@ -730,6 +719,8 @@ async def list_contact_analytics(
             count_query = count_query.eq('is_decision_maker', 'true' if is_decision_maker else 'false')
         if min_engagement_score is not None:
             count_query = count_query.gte('engagement_score', int(min_engagement_score))
+        if qb_linked is True:
+            count_query = count_query.not_.is_('qb_customer_type', 'null')
         if search and search.strip():
             term = _sanitize_search_term(search.strip())
             count_query = count_query.or_(f"full_name.ilike.%{term}%,email_address.ilike.%{term}%,company_name.ilike.%{term}%")
@@ -1128,26 +1119,14 @@ async def list_company_analytics(
     client_id: Optional[str] = Query(default=None),
     engagement_status: Optional[EngagementStatus] = Query(default=None),
     min_engagement_score: Optional[float] = Query(default=None, ge=0, le=100),
+    qb_matched: Optional[bool] = Query(default=None, description="Filter companies matched to QB customers"),
     search: Optional[str] = Query(default=None, description="Search by company name or industry"),
     sort_by: Optional[str] = Query(default=None, description="Sort column"),
     sort_dir: str = Query(default="desc", description="asc or desc"),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0)
 ):
-    """
-    List companies with analytics data.
-
-    Args:
-        client_id: Filter by client
-        engagement_status: Filter by engagement status
-        min_engagement_score: Minimum engagement score
-        search: Search by company name or industry
-        limit: Maximum number of results
-        offset: Offset for pagination
-
-    Returns:
-        List of companies with analytics
-    """
+    """List companies with analytics data."""
     try:
         query = _supabase.table('customer_companies').select(
             '''
@@ -1156,7 +1135,7 @@ async def list_company_analytics(
             first_contact_date, last_contact_date,
             contact_count, decision_maker_count,
             created_at, updated_at,
-            qb_customer_type, qb_tier, qb_total_revenue, qb_invoiced_ty, qb_growth_90d, qb_days_since_last_invoice, qb_account_manager,
+            qb_customer_id, qb_match_method, qb_customer_type, qb_tier, qb_total_revenue, qb_invoiced_ty, qb_invoiced_ly, qb_growth_90d, qb_days_since_last_invoice, qb_account_manager,
             clients(client_name)
             '''
         )
@@ -1165,6 +1144,8 @@ async def list_company_analytics(
             query = query.eq('client_id', client_id)
         if min_engagement_score is not None:
             query = query.gte('engagement_score', int(min_engagement_score))
+        if qb_matched is True:
+            query = query.not_.is_('qb_customer_id', 'null')
         if search and search.strip():
             term = _sanitize_search_term(search.strip())
             query = query.or_(f"company_name.ilike.%{term}%,industry.ilike.%{term}%")
@@ -1213,8 +1194,12 @@ async def list_company_analytics(
         count_query = _supabase.table('customer_companies').select('id', count='exact')
         if client_id:
             count_query = count_query.eq('client_id', client_id)
+        if engagement_status:
+            count_query = count_query.eq('engagement_status', engagement_status.value if hasattr(engagement_status, 'value') else engagement_status)
         if min_engagement_score is not None:
             count_query = count_query.gte('engagement_score', int(min_engagement_score))
+        if qb_matched is True:
+            count_query = count_query.not_.is_('qb_customer_id', 'null')
         if search and search.strip():
             term = _sanitize_search_term(search.strip())
             count_query = count_query.or_(f"company_name.ilike.%{term}%,industry.ilike.%{term}%")
@@ -2004,8 +1989,22 @@ async def get_company_threads(
         if company_result.data:
             company_name = company_result.data[0].get('company_name')
 
+        # Batch-fetch contacts (avoid N+1 queries)
+        contact_ids = list(set(t['customer_contact_id'] for t in result.data if t.get('customer_contact_id')))
+        contact_map = {}
+        if contact_ids:
+            try:
+                for i in range(0, len(contact_ids), 500):
+                    batch = contact_ids[i:i + 500]
+                    cr = _supabase.table('customer_contacts').select('id, email_address, full_name').in_('id', batch).execute()
+                    for c in (cr.data or []):
+                        contact_map[c['id']] = c
+            except Exception:
+                pass
+
         threads = []
         for t in result.data:
+            contact = contact_map.get(t.get('customer_contact_id'), {})
             thread_data = {
                 'thread_id': t.get('canonical_thread_id') or t.get('thread_id'),
                 'subject': t.get('subject'),
@@ -2017,22 +2016,13 @@ async def get_company_threads(
                 'last_sender_type': 'outbound' if t.get('last_sender_is_outbound') else 'inbound',
                 'days_since_last_message': t.get('days_since_last_email', 0),
                 'created_at': t.get('created_at'),
-                'company_name': company_name
+                'company_name': company_name,
+                'contact_email': contact.get('email_address'),
+                'contact_name': contact.get('full_name'),
             }
-            # Enrich with contact info
-            if t.get('customer_contact_id'):
-                contact_result = _supabase.table('customer_contacts').select(
-                    'email_address, full_name'
-                ).eq('id', t['customer_contact_id']).execute()
-                if contact_result.data:
-                    thread_data['contact_email'] = contact_result.data[0].get('email_address')
-                    thread_data['contact_name'] = contact_result.data[0].get('full_name')
             threads.append(ThreadStatusSummary(**thread_data))
 
-        count_result = _supabase.table('thread_status').select(
-            'thread_id', count='exact'
-        ).eq('customer_company_id', company_id).execute()
-        total = count_result.count if count_result.count else len(count_result.data)
+        total = len(result.data)  # Use actual count from query
 
         return ThreadStatusListResponse(threads=threads, total=total)
 

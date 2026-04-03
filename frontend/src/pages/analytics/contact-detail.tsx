@@ -82,8 +82,8 @@ export const ContactDetail: React.FC = () => {
         return <Tag color={cfg.color}>{cfg.label}</Tag>;
       },
     },
-    { title: 'Messages', dataIndex: 'total_messages', key: 'msgs', width: 90 },
-    { title: 'Last Message', dataIndex: 'last_message_date', key: 'last', width: 110, render: (v: string) => formatRelativeTime(v) },
+    { title: 'Emails', dataIndex: 'total_messages', key: 'msgs', width: 90 },
+    { title: 'Last Email', dataIndex: 'last_message_date', key: 'last', width: 110, render: (v: string) => formatRelativeTime(v) },
   ];
 
   if (loading) {

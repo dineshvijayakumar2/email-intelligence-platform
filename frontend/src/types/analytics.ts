@@ -451,6 +451,7 @@ export interface ContactFilterParams extends PaginationParams {
   contact_type?: ContactType;
   is_decision_maker?: boolean;
   min_engagement_score?: number;
+  qb_linked?: boolean;
   search?: string;
 }
 
@@ -458,6 +459,7 @@ export interface CompanyFilterParams extends PaginationParams {
   client_id?: string;
   engagement_status?: EngagementStatus;
   min_engagement_score?: number;
+  qb_matched?: boolean;
   search?: string;
 }
 

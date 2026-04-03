@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Typography, Tabs, Tag, Space, Select, Slider, Input } from 'antd';
+import { Typography, Tabs, Tag, Space, Switch, Input } from 'antd';
 import type { TableProps } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { ClientSelector } from '../../components/analytics/ClientSelector';
 import { AnalyticsTable } from '../../components/analytics/AnalyticsTable';
 import { EngagementBadge } from '../../components/analytics/EngagementBadge';
-import { LifecycleBadge } from '../../components/analytics/LifecycleBadge';
 import {
   companiesApi,
   formatRelativeTime,
@@ -23,14 +22,6 @@ import type {
 const { Text } = Typography;
 const PAGE_SIZE = 20;
 
-const STATUS_OPTIONS = [
-  { value: '', label: 'All Statuses' },
-  { value: 'active', label: 'Active' },
-  { value: 'quiet', label: 'Quiet' },
-  { value: 'at_risk', label: 'At Risk' },
-  { value: 'unknown', label: 'No Activity' },
-];
-
 export const CompaniesAnalytics: React.FC = () => {
   const navigate = useNavigate();
   const isMountedRef = useRef(true);
@@ -41,10 +32,8 @@ export const CompaniesAnalytics: React.FC = () => {
   const [companies, setCompanies] = useState<CompanyAnalytics[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [engagementStatus, setEngagementStatus] = useState<string>('');
-  const [minScore, setMinScore] = useState<number>(0);
-  const [sliderScore, setSliderScore] = useState<number>(0);
   const [search, setSearch] = useState<string>('');
+  const [qbMatched, setQbMatched] = useState(false);
   const [sortBy, setSortBy] = useState<string>('engagement_score');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
@@ -62,7 +51,7 @@ export const CompaniesAnalytics: React.FC = () => {
   useEffect(() => {
     if (!clientId) return;
     loadTab(activeTab);
-  }, [clientId, activeTab, page, engagementStatus, minScore, search, sortBy, sortDir]);
+  }, [clientId, activeTab, page, search, qbMatched, sortBy, sortDir]);
 
   const loadTab = async (tab: string) => {
     if (!clientId) return;
@@ -73,8 +62,7 @@ export const CompaniesAnalytics: React.FC = () => {
           client_id: clientId,
           limit: PAGE_SIZE,
           offset: (page - 1) * PAGE_SIZE,
-          engagement_status: engagementStatus ? (engagementStatus as EngagementStatus) : undefined,
-          min_engagement_score: minScore > 0 ? minScore : undefined,
+          qb_matched: qbMatched || undefined,
           search: search || undefined,
           sort_by: sortBy,
           sort_dir: sortDir,
@@ -123,108 +111,89 @@ export const CompaniesAnalytics: React.FC = () => {
       title: 'Company',
       dataIndex: 'company_name',
       key: 'company_name',
+      width: 200,
+      ellipsis: true,
       sorter: true,
       sortOrder: getSortOrder('company_name'),
     },
     {
-      title: 'Tier', dataIndex: 'qb_tier', key: 'qb_tier', width: 60,
+      title: 'Tier', dataIndex: 'qb_tier', key: 'qb_tier', width: 55,
       sorter: true,
       sortOrder: getSortOrder('qb_tier'),
       filters: [
-        { text: 'A', value: 'A' }, { text: 'B', value: 'B' },
-        { text: 'C', value: 'C' }, { text: 'None', value: '' },
+        { text: 'L1 Retail', value: 'Level 1' },
+        { text: 'L2 Growth', value: 'Level 2' },
+        { text: 'L3 Major', value: 'Level 3' },
+        { text: 'L4 Enterprise', value: 'Level 4' },
+        { text: 'L8 Trade', value: 'Level 8' },
+        { text: 'No Tier', value: '__none__' },
       ],
-      onFilter: (value: any, record: any) => value === '' ? !record.qb_tier : record.qb_tier === value,
+      onFilter: (value: any, record: any) => value === '__none__' ? !record.qb_tier : (record.qb_tier || '').includes(value),
       render: (v: string | null) => {
         if (!v) return null;
-        const colors: Record<string, string> = { A: 'green', B: 'blue', C: 'orange' };
-        return <Tag color={colors[v] || 'default'}>{v}</Tag>;
+        const m = v.match(/Level\s*(\d)/i);
+        const short = m ? `L${m[1]}` : v.slice(0, 4);
+        const colors: Record<string, string> = { L1: 'default', L2: 'blue', L3: 'green', L4: 'gold', L8: 'cyan' };
+        return <Tag color={colors[short] || 'default'}>{short}</Tag>;
       },
     },
     {
-      title: 'Revenue TY', dataIndex: 'qb_total_revenue', key: 'qb_total_revenue', width: 110,
+      title: 'Revenue', dataIndex: 'qb_total_revenue', key: 'qb_total_revenue', width: 100, align: 'right' as const,
       sorter: true,
       sortOrder: getSortOrder('qb_total_revenue'),
-      render: (v: number | null) => formatCurrency(v),
+      render: (v: number | null) => v != null ? `$${Number(v).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '-',
     },
     {
-      title: 'Growth', dataIndex: 'qb_growth_90d', key: 'qb_growth_90d', width: 90,
+      title: 'AM', dataIndex: 'qb_account_manager', key: 'qb_account_manager', width: 110, ellipsis: true,
       sorter: true,
-      sortOrder: getSortOrder('qb_growth_90d'),
-      render: (v: number | null) => {
-        if (v == null) return '-';
-        const color = v >= 0 ? 'green' : 'red';
-        return <Text style={{ color }}>{v >= 0 ? '+' : ''}{v.toFixed(1)}%</Text>;
-      },
-    },
-    {
-      title: 'Type', dataIndex: 'qb_customer_type', key: 'qb_customer_type', width: 120,
-      sorter: true,
-      sortOrder: getSortOrder('qb_customer_type'),
-      render: (v: string | null) => <LifecycleBadge tier={v} />,
-    },
-    {
-      title: 'Status', dataIndex: 'engagement_status', key: 'status', width: 100,
+      sortOrder: getSortOrder('qb_account_manager'),
       filters: [
-        { text: 'Active', value: 'active' }, { text: 'Quiet', value: 'quiet' },
-        { text: 'At Risk', value: 'at_risk' }, { text: 'No Activity', value: 'unknown' },
+        { text: 'Colin Brown', value: 'Colin Brown' },
+        { text: 'Dan Sutherland', value: 'Dan Sutherland' },
+        { text: 'Daniel Hall', value: 'Daniel Hall' },
+        { text: 'Ehab Kamel', value: 'Ehab Kamel' },
+        { text: 'Jacky Chan', value: 'Jacky Chan' },
+        { text: 'Kalani Evans', value: 'Kalani Evans' },
+        { text: 'Kenneth Beck-Pedersen', value: 'Kenneth Beck-Pedersen' },
+        { text: 'Linda D\'Arcy', value: 'Linda D\'Arcy' },
+        { text: 'Mary Serratore-Howe', value: 'Mary Serratore-Howe' },
+        { text: 'Nathan Brown', value: 'Nathan Brown' },
+        { text: 'Nic Doyle', value: 'Nic Doyle' },
+        { text: 'Peter Musarra', value: 'Peter Musarra' },
+        { text: 'Prince Claudio', value: 'Prince Claudio' },
+        { text: 'The Carbon8 Team', value: 'The Carbon8 Team' },
       ],
-      onFilter: (value: any, record: any) => record.engagement_status === value,
-      render: (v: EngagementStatus) => { const cfg = engagementStatusConfig[v] || engagementStatusConfig.unknown; return <Tag color={cfg.color}>{cfg.label}</Tag>; },
+      onFilter: (value: any, record: any) => record.qb_account_manager === value,
+      render: (v: string | null) => v || '-',
     },
     {
-      title: 'Score',
-      dataIndex: 'engagement_score',
-      key: 'engagement_score',
-      width: 120,
+      title: 'Score', dataIndex: 'engagement_score', key: 'engagement_score', width: 100,
       sorter: true,
       sortOrder: getSortOrder('engagement_score'),
       render: (v: number) => <EngagementBadge score={v} />,
     },
     {
-      title: 'Emails',
-      dataIndex: 'total_emails',
-      key: 'total_emails',
-      width: 80,
+      title: 'Emails', dataIndex: 'total_emails', key: 'total_emails', width: 70, align: 'right' as const,
       sorter: true,
       sortOrder: getSortOrder('total_emails'),
       render: (v: number, r: CompanyAnalytics) => (
-        <a onClick={(e) => { e.stopPropagation(); navigate(`/emails?company_id=${r.id}&name=${encodeURIComponent(r.company_name)}`); }} style={{ color: '#667eea' }}>
+        <a onClick={(e) => { e.stopPropagation(); navigate(`/emails?company_id=${r.id}`); }} style={{ color: '#667eea' }}>
           {v || 0}
         </a>
       ),
     },
     {
-      title: 'Contacts',
-      dataIndex: 'contact_count',
-      key: 'contact_count',
-      width: 80,
+      title: 'Contacts', dataIndex: 'contact_count', key: 'contact_count', width: 75, align: 'right' as const,
       sorter: true,
       sortOrder: getSortOrder('contact_count'),
       render: (v: number, r: CompanyAnalytics) => (
-        <a onClick={(e) => { e.stopPropagation(); navigate(`/customers/contacts?company=${encodeURIComponent(r.company_name)}`); }} style={{ color: '#667eea' }}>
+        <a onClick={(e) => { e.stopPropagation(); navigate(`/customers/contacts?company_id=${r.id}&client_id=${clientId}`); }} style={{ color: '#667eea' }}>
           {v ?? 0}
         </a>
       ),
     },
     {
-      title: 'DMs',
-      dataIndex: 'decision_maker_count',
-      key: 'decision_maker_count',
-      width: 60,
-      sorter: true,
-      sortOrder: getSortOrder('decision_maker_count'),
-      render: (v: number, r: CompanyAnalytics) => (
-        <a onClick={(e) => { e.stopPropagation(); navigate(`/customers/contacts?company=${encodeURIComponent(r.company_name)}&dm=true`); }} style={{ color: '#667eea' }}>
-          {v ?? 0}
-        </a>
-      ),
-    },
-    {
-      title: 'Last Contact',
-      dataIndex: 'last_contact_date',
-      key: 'last_contact_date',
-      width: 110,
+      title: 'Last Contact', dataIndex: 'last_contact_date', key: 'last_contact_date', width: 100,
       sorter: true,
       sortOrder: getSortOrder('last_contact_date'),
       render: (v: string) => formatRelativeTime(v),
@@ -277,7 +246,7 @@ export const CompaniesAnalytics: React.FC = () => {
         <Tabs activeKey={activeTab} onChange={setActiveTab} items={[
           {
             key: 'all',
-            label: `All Companies (${total})`,
+            label: `All Companies (${total})${qbMatched ? ' — QB Matched' : ''}`,
             children: (
               <>
                 <Space style={{ marginBottom: 16 }} wrap>
@@ -288,16 +257,8 @@ export const CompaniesAnalytics: React.FC = () => {
                     style={{ width: 240 }}
                     size="small"
                   />
-                  <Text>Status:</Text>
-                  <Select
-                    value={engagementStatus}
-                    onChange={v => { setEngagementStatus(v); setPage(1); }}
-                    options={STATUS_OPTIONS}
-                    style={{ width: 140 }}
-                    size="small"
-                  />
-                  <Text>Min Score:</Text>
-                  <Slider value={sliderScore} onChange={setSliderScore} onChangeComplete={v => { setMinScore(v); setSliderScore(v); setPage(1); }} min={0} max={100} style={{ width: 120 }} />
+                  <Text>QB Matched:</Text>
+                  <Switch checked={qbMatched} onChange={v => { setQbMatched(v); setPage(1); }} size="small" />
                 </Space>
                 <AnalyticsTable<CompanyAnalytics>
                   columns={allColumns}

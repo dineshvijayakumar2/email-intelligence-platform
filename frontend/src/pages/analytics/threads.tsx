@@ -57,9 +57,9 @@ export const ThreadAnalytics: React.FC = () => {
         try {
           let result;
           if (drilldownContactId) {
-            result = await threadsApi.byContact(drilldownContactId, 200);
+            result = await threadsApi.byContact(drilldownContactId, 500);
           } else {
-            result = await threadsApi.byCompany(drilldownCompanyId!, 200);
+            result = await threadsApi.byCompany(drilldownCompanyId!, 500);
           }
           let filtered = result.threads || [];
           // Apply client-side filters to drilldown results
@@ -173,7 +173,7 @@ export const ThreadAnalytics: React.FC = () => {
       render: (v: ThreadStatus) => { const cfg = threadStatusConfig[v] || { label: v, color: 'default' }; return <Tag color={cfg.color}>{cfg.label}</Tag>; },
     },
     {
-      title: 'Messages',
+      title: 'Emails',
       dataIndex: 'total_messages',
       key: 'message_count',
       width: 90,
@@ -181,7 +181,7 @@ export const ThreadAnalytics: React.FC = () => {
       sortOrder: isDrilldownMode ? undefined : getSortOrder('message_count'),
     },
     {
-      title: 'Last Message',
+      title: 'Last Email',
       dataIndex: 'last_message_date',
       key: 'last_message_at',
       width: 110,

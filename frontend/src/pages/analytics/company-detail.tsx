@@ -56,17 +56,16 @@ export const CompanyDetail: React.FC = () => {
         result = await companiesApi.getDetail(companyId);
       }
 
-      // Fetch thread data (non-critical)
-      const threadResult = await threadsApi.byCompany(companyId, 100);
+      // Fetch thread data — get enough to show recent + compute counts
+      const threadResult = await threadsApi.byCompany(companyId, 500);
+      const allThreads = threadResult?.threads || [];
 
       if (isMountedRef.current) {
         setCompany(result);
-        // Use company aggregate stats (from extraction Step 11) as the single source of truth
-        // for counts. The email endpoint is only used for the paginated email list.
         setTotalEmails(result?.total_emails || 0);
         setTotalSent(result?.total_outbound || 0);
         setTotalReceived(result?.total_inbound || 0);
-        setThreads(threadResult?.threads || []);
+        setThreads(allThreads);
         setLoading(false);
       }
       // Load supplementary data in parallel (non-blocking)
@@ -104,8 +103,8 @@ export const CompanyDetail: React.FC = () => {
       },
     },
     { title: 'Contact', key: 'contact', render: (_: any, r: ThreadStatusSummary) => r.contact_name || r.contact_email || '-' },
-    { title: 'Messages', dataIndex: 'total_messages', key: 'msgs', width: 90 },
-    { title: 'Last Message', dataIndex: 'last_message_date', key: 'last', width: 110, render: (v: string) => formatRelativeTime(v) },
+    { title: 'Emails', dataIndex: 'total_messages', key: 'msgs', width: 90 },
+    { title: 'Last Email', dataIndex: 'last_message_date', key: 'last', width: 110, render: (v: string) => formatRelativeTime(v) },
   ];
 
   if (loading) {
@@ -159,32 +158,24 @@ export const CompanyDetail: React.FC = () => {
           <MetricCard title="Contacts" value={company.contact_count} onClick={() => navigate(`/customers/contacts?company_id=${companyId}&client_id=${company.client_id}`)} />
         </Col>
         <Col xs={12} sm={6}>
-          <MetricCard title="Decision Makers" value={company.decision_maker_count} onClick={() => navigate(`/customers/contacts?company_id=${companyId}&client_id=${company.client_id}&dm=true`)} />
+          <MetricCard
+            title="Threads"
+            value={threads.length}
+            onClick={() => navigate(`/customers/threads?company_id=${companyId}`)}
+          />
         </Col>
         <Col xs={12} sm={6}>
           <MetricCard
-            title="Active Threads"
-            value={company.active_threads}
+            title="Overdue"
+            value={threads.filter(t => t.status === 'overdue').length}
             onClick={() => navigate(`/customers/threads?company_id=${companyId}`)}
           />
         </Col>
       </Row>
 
+      {/* Business Data + Communication Summary */}
       <Row gutter={[16, 16]} style={{ marginTop: 16 }} className="fade-in-up stagger-2">
-        <Col xs={24} lg={10}>
-          <div className="glass-card" style={{ padding: 20 }}>
-            <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 12 }}>Details</Text>
-            <Descriptions column={1} size="small">
-              <Descriptions.Item label="First Contact">{formatRelativeTime(company.first_contact_date)}</Descriptions.Item>
-              <Descriptions.Item label="Last Contact">{formatRelativeTime(company.last_contact_date)}</Descriptions.Item>
-              <Descriptions.Item label="Inbound Emails">{totalReceived}</Descriptions.Item>
-              <Descriptions.Item label="Outbound Emails">{totalSent}</Descriptions.Item>
-              <Descriptions.Item label="Overdue Threads">{company.overdue_threads || 0}</Descriptions.Item>
-              <Descriptions.Item label="Client">{company.client_name || '-'}</Descriptions.Item>
-            </Descriptions>
-          </div>
-        </Col>
-        <Col xs={24} lg={10}>
+        <Col xs={24} lg={12}>
           <div className="glass-card" style={{ padding: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <Text strong style={{ fontSize: 16 }}>Business Data</Text>
@@ -198,137 +189,133 @@ export const CompanyDetail: React.FC = () => {
                 onLinked={() => window.location.reload()}
               />
             </div>
-            {company.qb_total_revenue != null && (
-              <Descriptions column={1} size="small">
-                {company.qb_customer_type && (
-                  <Descriptions.Item label="Customer Type"><Tag color="blue">{company.qb_customer_type}</Tag></Descriptions.Item>
-                )}
-                {company.qb_tier && (
-                  <Descriptions.Item label="Tier"><Tag color="purple">{company.qb_tier}</Tag></Descriptions.Item>
-                )}
-                <Descriptions.Item label="Revenue">
-                  {formatCurrency(company.qb_total_revenue ?? 0)}
+            <Descriptions column={2} size="small">
+              {company.qb_tier && (
+                <Descriptions.Item label="Tier"><Tag color="purple">{company.qb_tier}</Tag></Descriptions.Item>
+              )}
+              {company.qb_account_manager && (
+                <Descriptions.Item label="Account Manager">{company.qb_account_manager}</Descriptions.Item>
+              )}
+              {company.qb_total_revenue != null && (
+                <Descriptions.Item label="Revenue">{formatCurrency(company.qb_total_revenue)}</Descriptions.Item>
+              )}
+              {company.qb_days_since_last_invoice != null && (
+                <Descriptions.Item label="Days Since Order">{company.qb_days_since_last_invoice}</Descriptions.Item>
+              )}
+              {company.qb_invoiced_ty != null && (
+                <Descriptions.Item label="This Year">
+                  {formatCurrency(company.qb_invoiced_ty)}
+                  {company.qb_invoiced_ly != null && company.qb_invoiced_ty > company.qb_invoiced_ly && (
+                    <ArrowUpOutlined style={{ color: '#52c41a', marginLeft: 6 }} />
+                  )}
+                  {company.qb_invoiced_ly != null && company.qb_invoiced_ty < company.qb_invoiced_ly && (
+                    <ArrowDownOutlined style={{ color: '#ff4d4f', marginLeft: 6 }} />
+                  )}
                 </Descriptions.Item>
-                {company.qb_invoiced_ty != null && (
-                  <Descriptions.Item label="This Year">
-                    {formatCurrency(company.qb_invoiced_ty)}
-                  </Descriptions.Item>
-                )}
-                {company.qb_invoiced_ly != null && (
-                  <Descriptions.Item label="Last Year">
-                    {formatCurrency(company.qb_invoiced_ly)}
-                    {company.qb_invoiced_ty != null && company.qb_invoiced_ty > company.qb_invoiced_ly && (
-                      <ArrowUpOutlined style={{ color: '#52c41a', marginLeft: 6 }} />
-                    )}
-                    {company.qb_invoiced_ty != null && company.qb_invoiced_ty < company.qb_invoiced_ly && (
-                      <ArrowDownOutlined style={{ color: '#ff4d4f', marginLeft: 6 }} />
-                    )}
-                  </Descriptions.Item>
-                )}
-                {company.qb_growth_90d != null && (
-                  <Descriptions.Item label="Growth 90d">
-                    <span style={{ color: company.qb_growth_90d >= 0 ? '#52c41a' : '#ff4d4f' }}>
-                      {company.qb_growth_90d >= 0 ? '+' : ''}{(company.qb_growth_90d * 100).toFixed(1)}%
-                    </span>
-                  </Descriptions.Item>
-                )}
-                {company.qb_days_since_last_invoice != null && (
-                  <Descriptions.Item label="Days Since Order">{company.qb_days_since_last_invoice}</Descriptions.Item>
-                )}
-                {company.qb_account_manager && (
-                  <Descriptions.Item label="Account Manager">{company.qb_account_manager}</Descriptions.Item>
-                )}
+              )}
+              {company.qb_invoiced_ly != null && (
+                <Descriptions.Item label="Last Year">{formatCurrency(company.qb_invoiced_ly)}</Descriptions.Item>
+              )}
+            </Descriptions>
+            {(company.qb_capabilities?.length > 0 || company.qb_processes?.length > 0 || company.qb_embellishments?.length > 0) && (
+              <div style={{ marginTop: 12 }}>
                 {company.qb_capabilities?.length > 0 && (
-                  <Descriptions.Item label="Capabilities">
+                  <div style={{ marginBottom: 6 }}>
+                    <Text type="secondary" style={{ fontSize: 12 }}>Capabilities: </Text>
                     <Space size={[4, 4]} wrap>
-                      {company.qb_capabilities.map((c: string) => <Tag key={c} color="blue">{c}</Tag>)}
+                      {company.qb_capabilities.map((c: string) => <Tag key={c} color="blue" style={{ fontSize: 11 }}>{c}</Tag>)}
                     </Space>
-                  </Descriptions.Item>
+                  </div>
                 )}
                 {company.qb_processes?.length > 0 && (
-                  <Descriptions.Item label="Processes">
+                  <div style={{ marginBottom: 6 }}>
+                    <Text type="secondary" style={{ fontSize: 12 }}>Processes: </Text>
                     <Space size={[4, 4]} wrap>
-                      {company.qb_processes.map((p: string) => <Tag key={p} color="cyan">{p}</Tag>)}
+                      {company.qb_processes.map((p: string) => <Tag key={p} color="cyan" style={{ fontSize: 11 }}>{p}</Tag>)}
                     </Space>
-                  </Descriptions.Item>
+                  </div>
                 )}
                 {company.qb_embellishments?.length > 0 && (
-                  <Descriptions.Item label="Embellishments">
+                  <div>
+                    <Text type="secondary" style={{ fontSize: 12 }}>Embellishments: </Text>
                     <Space size={[4, 4]} wrap>
-                      {company.qb_embellishments.map((e: string) => <Tag key={e} color="purple">{e}</Tag>)}
+                      {company.qb_embellishments.map((e: string) => <Tag key={e} color="purple" style={{ fontSize: 11 }}>{e}</Tag>)}
                     </Space>
-                  </Descriptions.Item>
+                  </div>
                 )}
-              </Descriptions>
+              </div>
             )}
             {!company.qb_total_revenue && !company.qb_customer_id && (
-              <Text type="secondary" style={{ display: 'block', marginTop: 8 }}>No QB data — link a QB customer above to enrich this profile.</Text>
+              <Text type="secondary">No QB data — link a QB customer to enrich this profile.</Text>
             )}
           </div>
         </Col>
-        <Col xs={24} lg={14}>
+        <Col xs={24} lg={12}>
+          <div className="glass-card" style={{ padding: 20 }}>
+            <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 12 }}>Communication</Text>
+            <Descriptions column={2} size="small">
+              <Descriptions.Item label="First Contact">{formatRelativeTime(company.first_contact_date)}</Descriptions.Item>
+              <Descriptions.Item label="Last Contact">{formatRelativeTime(company.last_contact_date)}</Descriptions.Item>
+              <Descriptions.Item label="Inbound">{totalReceived}</Descriptions.Item>
+              <Descriptions.Item label="Outbound">{totalSent}</Descriptions.Item>
+              <Descriptions.Item label="Client">{company.client_name || '-'}</Descriptions.Item>
+            </Descriptions>
+          </div>
+        </Col>
+      </Row>
+
+      {/* Active Threads */}
+      {threads.filter(t => !['dropped', 'complete'].includes(t.status)).length > 0 && (
+        <div style={{ marginTop: 16 }} className="fade-in-up stagger-3">
           <div className="glass-table-container" style={{ padding: 16 }}>
             <a
               onClick={() => navigate(`/customers/threads?company_id=${companyId}`)}
               style={{ fontSize: 16, fontWeight: 600, display: 'block', marginBottom: 12, color: '#667eea', cursor: 'pointer' }}
             >
-              Threads ({threads.length})
+              Active Threads ({threads.filter(t => !['dropped', 'complete'].includes(t.status)).length})
+              <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>{threads.length} total</Text>
             </a>
             <Table
               columns={threadColumns}
-              dataSource={threads}
+              dataSource={threads.filter(t => !['dropped', 'complete'].includes(t.status))}
               rowKey="thread_id"
               size="small"
-              pagination={threads.length > 10 ? { pageSize: 10 } : false}
+              pagination={{ pageSize: 10, size: 'small' }}
               onRow={(record) => ({
                 onClick: () => handleThreadClick(record),
                 style: { cursor: 'pointer' },
               })}
             />
           </div>
-        </Col>
-      </Row>
+        </div>
+      )}
 
-      {/* Product Profile + Recommendations */}
-      <Row gutter={[16, 16]} style={{ marginTop: 16 }} className="fade-in-up stagger-3">
-        <Col xs={24} lg={12}>
-          <div className="glass-card" style={{ padding: 20 }}>
-            <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 12 }}>Product Profile</Text>
-            <ProductProfileCard
-              categories={productProfile?.categories || []}
-              operations={productProfile?.operations || []}
-              loading={productProfileLoading}
-            />
-          </div>
-        </Col>
-        <Col xs={24} lg={12}>
-          <div className="glass-card" style={{ padding: 20 }}>
-            <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 12 }}>Sales Opportunities</Text>
-            {companyId && !loading && company && <RecommendationsPanel companyId={companyId} />}
-          </div>
-        </Col>
-      </Row>
+      {companyId && !loading && company && <AIInsightsCard entityType="company" entityId={companyId} />}
 
-      {/* Customer Intelligence Analytics — deferred until main data loads */}
+      {/* Customer Intelligence */}
       {companyId && !loading && company && (
         <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
+          <Col xs={24} lg={12}><StrikeRateCard companyId={companyId} /></Col>
+          <Col xs={24} lg={12}><SeasonalityChart companyId={companyId} /></Col>
+          <Col xs={24} lg={12}><CapabilityRhythmCard companyId={companyId} /></Col>
+          <Col xs={24} lg={12}><ContactCapabilitiesCard companyId={companyId} /></Col>
           <Col xs={24} lg={12}>
-            <StrikeRateCard companyId={companyId} />
+            <div className="glass-card" style={{ padding: 20 }}>
+              <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 12 }}>Product Profile</Text>
+              <ProductProfileCard categories={productProfile?.categories || []} operations={productProfile?.operations || []} loading={productProfileLoading} />
+            </div>
           </Col>
           <Col xs={24} lg={12}>
-            <SeasonalityChart companyId={companyId} />
-          </Col>
-          <Col xs={24} lg={12}>
-            <CapabilityRhythmCard companyId={companyId} />
-          </Col>
-          <Col xs={24} lg={12}>
-            <ContactCapabilitiesCard companyId={companyId} />
+            <div className="glass-card" style={{ padding: 20 }}>
+              <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 12 }}>Sales Opportunities</Text>
+              <RecommendationsPanel companyId={companyId} />
+            </div>
           </Col>
         </Row>
       )}
 
       {/* Order History */}
-      <div style={{ marginTop: 16 }} className="fade-in-up stagger-4">
+      <div style={{ marginTop: 16 }}>
         <Collapse
           ghost
           items={[{
@@ -342,8 +329,6 @@ export const CompanyDetail: React.FC = () => {
           }]}
         />
       </div>
-
-      {companyId && !loading && company && <AIInsightsCard entityType="company" entityId={companyId} />}
     </div>
   );
 };
