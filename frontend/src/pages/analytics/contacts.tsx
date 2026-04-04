@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import { Typography, Tabs, Tag, Space, Switch, Input, Button } from 'antd';
-import type { TableProps } from 'antd';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { ClientSelector } from '../../components/analytics/ClientSelector';
@@ -8,9 +7,11 @@ import { AnalyticsTable } from '../../components/analytics/AnalyticsTable';
 import { EngagementBadge } from '../../components/analytics/EngagementBadge';
 import { LifecycleBadge } from '../../components/analytics/LifecycleBadge';
 import {
-  contactsApi,
-  formatRelativeTime,
-} from '../../services/analyticsService';
+  useContacts,
+  useTopEngagedContacts,
+  useAtRiskContacts,
+} from '../../hooks/queries';
+import { formatRelativeTime } from '../../services/analyticsService';
 import type {
   ContactAnalytics,
   TopEngagedContact,
@@ -24,14 +25,10 @@ const PAGE_SIZE = 20;
 export const ContactsAnalytics: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const isMountedRef = useRef(true);
   const [clientId, setClientId] = useState(() => searchParams.get('client_id') || localStorage.getItem('analytics_client_id') || '');
   const [activeTab, setActiveTab] = useState('all');
-  const [loading, setLoading] = useState(false);
 
-  // All contacts state
-  const [contacts, setContacts] = useState<ContactAnalytics[]>([]);
-  const [contactsTotal, setContactsTotal] = useState(0);
+  // Filter state
   const [contactsPage, setContactsPage] = useState(1);
   const [sortBy, setSortBy] = useState<string>('engagement_score');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -39,64 +36,32 @@ export const ContactsAnalytics: React.FC = () => {
   const [qbLinked, setQbLinked] = useState(false);
   const companyIdFilter = searchParams.get('company_id') || '';
 
-  // Top engaged state
-  const [topEngaged, setTopEngaged] = useState<TopEngagedContact[]>([]);
-  const [topLoading, setTopLoading] = useState(false);
+  // Data queries
+  const contactsQuery = useContacts({
+    client_id: clientId,
+    company_id: companyIdFilter || undefined,
+    limit: PAGE_SIZE,
+    offset: (contactsPage - 1) * PAGE_SIZE,
+    qb_linked: qbLinked || undefined,
+    sort_by: sortBy,
+    sort_dir: sortDir,
+    search: search || undefined,
+  });
 
-  // At risk state
-  const [atRisk, setAtRisk] = useState<AtRiskContact[]>([]);
-  const [atRiskLoading, setAtRiskLoading] = useState(false);
+  const topQuery = useTopEngagedContacts(clientId);
+  const atRiskQuery = useAtRiskContacts(clientId);
 
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => { isMountedRef.current = false; };
-  }, []);
-
-  useEffect(() => {
-    if (!clientId) return;
-    loadTab(activeTab);
-  }, [clientId, activeTab, contactsPage, sortBy, sortDir, search, companyIdFilter, qbLinked]);
-
-  const loadTab = async (tab: string) => {
-    if (!clientId) return;
-    switch (tab) {
-      case 'all':
-        setLoading(true);
-        const allResult = await contactsApi.list({
-          client_id: clientId,
-          company_id: companyIdFilter || undefined,
-          limit: PAGE_SIZE,
-          offset: (contactsPage - 1) * PAGE_SIZE,
-          qb_linked: qbLinked || undefined,
-          sort_by: sortBy,
-          sort_dir: sortDir,
-          search: search || undefined,
-        });
-        if (isMountedRef.current) {
-          setContacts(allResult.contacts);
-          setContactsTotal(allResult.total);
-          setLoading(false);
-        }
-        break;
-      case 'top':
-        setTopLoading(true);
-        const topResult = await contactsApi.topEngaged(clientId, 50);
-        if (isMountedRef.current) { setTopEngaged(topResult); setTopLoading(false); }
-        break;
-      case 'atrisk':
-        setAtRiskLoading(true);
-        const riskResult = await contactsApi.atRisk(clientId);
-        if (isMountedRef.current) { setAtRisk(riskResult); setAtRiskLoading(false); }
-        break;
-    }
-  };
+  // Derived data
+  const contacts = contactsQuery.data?.contacts || [];
+  const contactsTotal = contactsQuery.data?.total || 0;
+  const loading = contactsQuery.isLoading;
 
   const getSortOrder = (field: string): 'ascend' | 'descend' | null => {
     if (sortBy !== field) return null;
     return sortDir === 'asc' ? 'ascend' : 'descend';
   };
 
-  const handleTableChange: TableProps<ContactAnalytics>['onChange'] = (_pagination, _filters, sorter) => {
+  const handleTableChange = (_pagination: any, _filters: any, sorter: any) => {
     if (!sorter || Array.isArray(sorter)) return;
     const field = (sorter.columnKey ?? sorter.field) as string | undefined;
     if (field && sorter.order) {
@@ -284,16 +249,9 @@ export const ContactsAnalytics: React.FC = () => {
                     style={{ width: 240 }}
                     size="small"
                   />
-                  <Text>QB Linked:</Text>
                   <Switch checked={qbLinked} onChange={v => { setQbLinked(v); setContactsPage(1); }} size="small" />
+                  <Text type="secondary" style={{ fontSize: 12 }}>QB Linked</Text>
                 </Space>
-                {(qbLinked || search) && (
-                  <div style={{ marginBottom: 10 }}>
-                    <Text type="secondary" style={{ fontSize: 12 }}>Filters: </Text>
-                    {qbLinked && <Tag color="blue" style={{ fontSize: 11 }}>QB Linked</Tag>}
-                    {search && <Tag color="blue" style={{ fontSize: 11 }}>Search: "{search}"</Tag>}
-                  </div>
-                )}
                 <AnalyticsTable<ContactAnalytics>
                   columns={allColumns}
                   data={contacts}
@@ -315,9 +273,9 @@ export const ContactsAnalytics: React.FC = () => {
             children: (
               <AnalyticsTable<TopEngagedContact>
                 columns={topColumns}
-                data={topEngaged}
-                total={topEngaged.length}
-                loading={topLoading}
+                data={topQuery.data || []}
+                total={(topQuery.data || []).length}
+                loading={topQuery.isLoading}
                 onRowClick={handleRowClick}
                 rowKey="id"
               />
@@ -329,9 +287,9 @@ export const ContactsAnalytics: React.FC = () => {
             children: (
               <AnalyticsTable<AtRiskContact>
                 columns={atRiskColumns}
-                data={atRisk}
-                total={atRisk.length}
-                loading={atRiskLoading}
+                data={atRiskQuery.data || []}
+                total={(atRiskQuery.data || []).length}
+                loading={atRiskQuery.isLoading}
                 onRowClick={handleRowClick}
                 rowKey="id"
               />
