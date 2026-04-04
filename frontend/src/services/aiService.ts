@@ -522,3 +522,83 @@ export async function agentChat(
   if (!result) throw new Error('No response from agent');
   return result;
 }
+
+/**
+ * Streaming agent chat via Server-Sent Events.
+ * Returns an async generator yielding events as they arrive.
+ */
+export async function agentChatStream(
+  message: string,
+  clientId: string,
+  conversationHistory: { role: string; content: string }[],
+  onToken: (content: string) => void,
+  onToolStart?: (tool: string, input: string) => void,
+  onToolEnd?: (tool: string, output: string) => void,
+  onDone?: (response: string, toolsUsed: string[], processingTimeMs: number) => void,
+  onError?: (detail: string) => void,
+): Promise<void> {
+  const { getAccessToken } = await import('../lib/supabase');
+  const token = await getAccessToken();
+  const apiBaseUrl = (await import('../config')).default.apiBaseUrl;
+
+  const response = await fetch(`${apiBaseUrl}${API_PREFIX}/agent/chat/stream`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      message,
+      client_id: clientId,
+      conversation_history: conversationHistory,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Stream failed: ${response.status}`);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('No response body');
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';  // Keep incomplete line in buffer
+
+    let eventType = '';
+    for (const line of lines) {
+      if (line.startsWith('event: ')) {
+        eventType = line.slice(7).trim();
+      } else if (line.startsWith('data: ') && eventType) {
+        try {
+          const data = JSON.parse(line.slice(6));
+          switch (eventType) {
+            case 'token':
+              onToken(data.content || '');
+              break;
+            case 'tool_start':
+              onToolStart?.(data.tool, data.input);
+              break;
+            case 'tool_end':
+              onToolEnd?.(data.tool, data.output);
+              break;
+            case 'done':
+              onDone?.(data.response, data.tools_used || [], data.processing_time_ms || 0);
+              break;
+            case 'error':
+              onError?.(data.detail || 'Unknown error');
+              break;
+          }
+        } catch { /* ignore parse errors */ }
+        eventType = '';
+      }
+    }
+  }
+}

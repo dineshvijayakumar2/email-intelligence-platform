@@ -8,7 +8,8 @@ Pattern: global _supabase, init_ai_router(supabase_client) function.
 Router prefix: /ai, tags: ["ai-intelligence"]
 """
 
-from fastapi import APIRouter, HTTPException, Query, BackgroundTasks, Depends
+from fastapi import APIRouter, HTTPException, Query, BackgroundTasks, Depends, Request
+from fastapi.responses import StreamingResponse
 from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
 import asyncio
@@ -1913,3 +1914,108 @@ async def agent_chat(
     except Exception as e:
         logger.error(f"Agent chat failed: {e}")
         raise HTTPException(status_code=500, detail=str(e)[:300])
+
+
+@router.post("/agent/chat/stream")
+async def agent_chat_stream(
+    data: AgentChatRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Streaming AI agent chat via Server-Sent Events.
+
+    Streams token-by-token as the LLM generates, plus tool call events.
+    Client consumes via EventSource or fetch + ReadableStream.
+
+    Event types:
+      - token: {content: "partial text"}
+      - tool_start: {tool: "tool_name", input: "..."}
+      - tool_end: {tool: "tool_name", output: "..."}
+      - done: {response: "full text", tools_used: [...], model: "...", ...}
+      - error: {detail: "..."}
+    """
+    import json
+
+    async def event_generator():
+        try:
+            from ..services.ai_agent_service import (
+                ALL_TOOLS, AGENT_SYSTEM_PROMPT, PROMPT_KEY_AGENT_CHAT, MAX_HISTORY,
+            )
+            from ..services.langchain_tools import init_langchain_tools
+            from ..services.langchain_core import get_strategic_llm
+            from langgraph.prebuilt import create_react_agent
+            from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+
+            t0 = _time.time()
+
+            init_langchain_tools(_supabase)
+
+            from ..services.ai_email_analyzer import _apply_client_model_settings
+            _apply_client_model_settings(_supabase, data.client_id)
+
+            from ..services.ai_prompt_loader import get_prompt
+            system_prompt = get_prompt(_supabase, PROMPT_KEY_AGENT_CHAT,
+                                       AGENT_SYSTEM_PROMPT, data.client_id)
+
+            messages = []
+            history = data.conversation_history[-MAX_HISTORY:] if len(data.conversation_history) > MAX_HISTORY else data.conversation_history
+            for entry in history:
+                role = entry.get("role", "user")
+                content = entry.get("content", "")
+                if role == "user":
+                    messages.append(HumanMessage(content=content))
+                elif role == "assistant":
+                    messages.append(AIMessage(content=content))
+            messages.append(HumanMessage(content=data.message))
+
+            llm = get_strategic_llm(temperature=0.2)
+            agent = create_react_agent(
+                model=llm,
+                tools=ALL_TOOLS,
+                prompt=system_prompt,
+            )
+
+            full_response = ""
+            tools_used = []
+
+            async for event in agent.astream_events(
+                {"messages": messages},
+                version="v2",
+            ):
+                kind = event.get("event", "")
+                event_data = event.get("data", {})
+
+                if kind == "on_chat_model_stream":
+                    chunk = event_data.get("chunk")
+                    if chunk and hasattr(chunk, "content"):
+                        content = chunk.content
+                        if isinstance(content, str) and content:
+                            full_response += content
+                            yield f"event: token\ndata: {json.dumps({'content': content})}\n\n"
+
+                elif kind == "on_tool_start":
+                    tool_name = event.get("name", "")
+                    tool_input = str(event_data.get("input", ""))[:200]
+                    tools_used.append(tool_name)
+                    yield f"event: tool_start\ndata: {json.dumps({'tool': tool_name, 'input': tool_input})}\n\n"
+
+                elif kind == "on_tool_end":
+                    tool_name = event.get("name", "")
+                    tool_output = str(event_data.get("output", ""))[:500]
+                    yield f"event: tool_end\ndata: {json.dumps({'tool': tool_name, 'output': tool_output})}\n\n"
+
+            elapsed_ms = int((_time.time() - t0) * 1000)
+            yield f"event: done\ndata: {json.dumps({'response': full_response, 'tools_used': tools_used, 'processing_time_ms': elapsed_ms})}\n\n"
+
+        except Exception as e:
+            logger.error(f"Agent stream failed: {e}")
+            yield f"event: error\ndata: {json.dumps({'detail': str(e)[:300]})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )

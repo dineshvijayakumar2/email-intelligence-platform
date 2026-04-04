@@ -16,7 +16,7 @@ import {
   SearchOutlined, BankOutlined, MailOutlined, FileTextOutlined,
   ToolOutlined, TeamOutlined,
 } from '@ant-design/icons';
-import { agentChat, AgentChatResponse } from '../../services/aiService';
+import { agentChatStream, type AgentChatResponse } from '../../services/aiService';
 import { ClientSelector } from '../../components/analytics/ClientSelector';
 import Markdown from 'react-markdown';
 
@@ -114,29 +114,82 @@ const AgentPage: React.FC = () => {
     setInput('');
     setLoading(true);
 
+    // Add a placeholder assistant message that will be updated as tokens stream in
+    const placeholderId = Date.now();
+    const placeholder: ChatMessage = {
+      role: 'assistant',
+      content: '',
+      tools_used: [],
+      timestamp: placeholderId,
+    };
+    setMessages(prev => [...prev, placeholder]);
+
     try {
-      // Build conversation history (excluding the new message)
       const history = messages.map(m => ({ role: m.role, content: m.content }));
 
-      const result = await agentChat(msg, clientId, history);
-
-      const assistantMessage: ChatMessage = {
-        role: 'assistant',
-        content: result.response,
-        tools_used: result.tools_used,
-        model: result.model,
-        cost_usd: result.cost_usd,
-        processing_time_ms: result.processing_time_ms,
-        timestamp: Date.now(),
-      };
-      setMessages(prev => [...prev, assistantMessage]);
+      await agentChatStream(
+        msg,
+        clientId,
+        history,
+        // onToken — append each chunk to the placeholder message
+        (content) => {
+          setMessages(prev => prev.map(m =>
+            m.timestamp === placeholderId
+              ? { ...m, content: m.content + content }
+              : m
+          ));
+        },
+        // onToolStart
+        (tool) => {
+          setMessages(prev => prev.map(m =>
+            m.timestamp === placeholderId
+              ? { ...m, tools_used: [...(m.tools_used || []), { tool_name: tool }] }
+              : m
+          ));
+        },
+        // onToolEnd — update the last tool entry with output
+        (tool, output) => {
+          setMessages(prev => prev.map(m => {
+            if (m.timestamp !== placeholderId) return m;
+            const tools = [...(m.tools_used || [])];
+            // Find last matching tool (reverse search)
+            for (let i = tools.length - 1; i >= 0; i--) {
+              if (tools[i].tool_name === tool) {
+                tools[i] = { ...tools[i], tool_output_preview: output };
+                break;
+              }
+            }
+            return { ...m, tools_used: tools };
+          }));
+        },
+        // onDone
+        (response, toolsUsed, processingTimeMs) => {
+          setMessages(prev => prev.map(m =>
+            m.timestamp === placeholderId
+              ? {
+                  ...m,
+                  content: response || m.content,
+                  tools_used: toolsUsed.map(t => ({ tool_name: t })),
+                  processing_time_ms: processingTimeMs,
+                }
+              : m
+          ));
+        },
+        // onError
+        (detail) => {
+          setMessages(prev => prev.map(m =>
+            m.timestamp === placeholderId
+              ? { ...m, content: `Sorry, I encountered an error: ${detail}` }
+              : m
+          ));
+        },
+      );
     } catch (err: any) {
-      const errorMessage: ChatMessage = {
-        role: 'assistant',
-        content: `Sorry, I encountered an error: ${err.message || 'Please try again.'}`,
-        timestamp: Date.now(),
-      };
-      setMessages(prev => [...prev, errorMessage]);
+      setMessages(prev => prev.map(m =>
+        m.timestamp === placeholderId
+          ? { ...m, content: `Sorry, I encountered an error: ${err.message || 'Please try again.'}` }
+          : m
+      ));
     } finally {
       setLoading(false);
     }
