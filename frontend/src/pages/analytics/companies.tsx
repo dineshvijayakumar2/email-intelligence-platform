@@ -1,16 +1,17 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Typography, Tabs, Tag, Space, Switch, Input, Select } from 'antd';
-import type { TableProps } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { ClientSelector } from '../../components/analytics/ClientSelector';
 import { AnalyticsTable } from '../../components/analytics/AnalyticsTable';
 import { EngagementBadge } from '../../components/analytics/EngagementBadge';
-import api from '../../services/apiClient';
 import {
-  companiesApi,
-  formatRelativeTime,
-  engagementStatusConfig,
-} from '../../services/analyticsService';
+  useCompanies,
+  useTopEngagedCompanies,
+  useAtRiskCompanies,
+  useCompanyEngagementGroups,
+  useCompanyFilterOptions,
+} from '../../hooks/queries';
+import { formatRelativeTime, engagementStatusConfig } from '../../services/analyticsService';
 import { formatCurrency } from '../../utils/numberFormat';
 import type {
   CompanyAnalytics,
@@ -25,13 +26,10 @@ const PAGE_SIZE = 20;
 
 export const CompaniesAnalytics: React.FC = () => {
   const navigate = useNavigate();
-  const isMountedRef = useRef(true);
   const [clientId, setClientId] = useState(() => localStorage.getItem('analytics_client_id') || '');
   const [activeTab, setActiveTab] = useState('all');
-  const [loading, setLoading] = useState(false);
 
-  const [companies, setCompanies] = useState<CompanyAnalytics[]>([]);
-  const [total, setTotal] = useState(0);
+  // Filter state
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [qbMatched, setQbMatched] = useState(false);
@@ -40,87 +38,55 @@ export const CompaniesAnalytics: React.FC = () => {
   const [sortBy, setSortBy] = useState<string>('engagement_score');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
-  // Dynamic filter options from backend
-  const [tierOptions, setTierOptions] = useState<{ value: string; label: string }[]>([]);
-  const [amOptions, setAmOptions] = useState<{ value: string; label: string }[]>([]);
+  // Data queries — TanStack Query handles caching, dedup, and background refetch
+  const companiesQuery = useCompanies({
+    client_id: clientId,
+    limit: PAGE_SIZE,
+    offset: (page - 1) * PAGE_SIZE,
+    qb_matched: qbMatched || undefined,
+    qb_tier: tierFilter || undefined,
+    qb_account_manager: amFilter || undefined,
+    search: search || undefined,
+    sort_by: sortBy,
+    sort_dir: sortDir,
+  });
 
-  const [topEngaged, setTopEngaged] = useState<TopEngagedCompany[]>([]);
-  const [topLoading, setTopLoading] = useState(false);
-  const [atRisk, setAtRisk] = useState<AtRiskCompany[]>([]);
-  const [atRiskLoading, setAtRiskLoading] = useState(false);
-  const [statusGroups, setStatusGroups] = useState<EngagementStatusGrouping[]>([]);
-  const [statusLoading, setStatusLoading] = useState(false);
+  const topQuery = useTopEngagedCompanies(clientId);
+  const atRiskQuery = useAtRiskCompanies(clientId);
+  const statusQuery = useCompanyEngagementGroups(clientId);
+  const filterOptionsQuery = useCompanyFilterOptions(clientId);
 
-  useEffect(() => { isMountedRef.current = true; return () => { isMountedRef.current = false; }; }, []);
+  // Derive filter dropdown options from backend data
+  const tierOptions = useMemo(() => {
+    const tiers = filterOptionsQuery.data?.tiers || [];
+    return [
+      { value: '', label: 'All Tiers' },
+      ...tiers.map(t => {
+        const m = t.match(/Level\s*(\d)/i);
+        return { value: t, label: m ? `L${m[1]} — ${t.replace(/Level\s*\d\s*[-–]?\s*/, '')}` : t };
+      }),
+    ];
+  }, [filterOptionsQuery.data]);
 
-  // Fetch filter options when client changes
-  useEffect(() => {
-    if (!clientId) return;
-    api.get<{ tiers: string[]; account_managers: string[] }>(
-      `/v1/analytics/companies/filter-options?client_id=${clientId}`
-    ).then(data => {
-      if (!isMountedRef.current) return;
-      setTierOptions([
-        { value: '', label: 'All Tiers' },
-        ...(data?.tiers || []).map(t => {
-          const m = t.match(/Level\s*(\d)/i);
-          return { value: t, label: m ? `L${m[1]} — ${t.replace(/Level\s*\d\s*[-–]?\s*/, '')}` : t };
-        }),
-      ]);
-      setAmOptions([
-        { value: '', label: 'All AMs' },
-        ...(data?.account_managers || []).map(am => ({ value: am, label: am })),
-      ]);
-    }).catch(() => {});
-  }, [clientId]);
+  const amOptions = useMemo(() => {
+    const ams = filterOptionsQuery.data?.account_managers || [];
+    return [
+      { value: '', label: 'All AMs' },
+      ...ams.map(am => ({ value: am, label: am })),
+    ];
+  }, [filterOptionsQuery.data]);
 
-  useEffect(() => {
-    if (!clientId) return;
-    loadTab(activeTab);
-  }, [clientId, activeTab, page, search, qbMatched, tierFilter, amFilter, sortBy, sortDir]);
-
-  const loadTab = async (tab: string) => {
-    if (!clientId) return;
-    switch (tab) {
-      case 'all':
-        setLoading(true);
-        const allResult = await companiesApi.list({
-          client_id: clientId,
-          limit: PAGE_SIZE,
-          offset: (page - 1) * PAGE_SIZE,
-          qb_matched: qbMatched || undefined,
-          qb_tier: tierFilter || undefined,
-          qb_account_manager: amFilter || undefined,
-          search: search || undefined,
-          sort_by: sortBy,
-          sort_dir: sortDir,
-        });
-        if (isMountedRef.current) { setCompanies(allResult.companies); setTotal(allResult.total); setLoading(false); }
-        break;
-      case 'top':
-        setTopLoading(true);
-        const topResult = await companiesApi.topEngaged(clientId, 50);
-        if (isMountedRef.current) { setTopEngaged(topResult); setTopLoading(false); }
-        break;
-      case 'atrisk':
-        setAtRiskLoading(true);
-        const riskResult = await companiesApi.atRisk(clientId);
-        if (isMountedRef.current) { setAtRisk(riskResult); setAtRiskLoading(false); }
-        break;
-      case 'status':
-        setStatusLoading(true);
-        const statusResult = await companiesApi.byEngagement(clientId);
-        if (isMountedRef.current) { setStatusGroups(statusResult); setStatusLoading(false); }
-        break;
-    }
-  };
+  // Derived data
+  const companies = companiesQuery.data?.companies || [];
+  const total = companiesQuery.data?.total || 0;
+  const loading = companiesQuery.isLoading;
 
   const getSortOrder = (field: string): 'ascend' | 'descend' | null => {
     if (sortBy !== field) return null;
     return sortDir === 'asc' ? 'ascend' : 'descend';
   };
 
-  const handleTableChange: TableProps<CompanyAnalytics>['onChange'] = (_pagination, _filters, sorter) => {
+  const handleTableChange = (_pagination: any, _filters: any, sorter: any) => {
     if (!sorter || Array.isArray(sorter)) return;
     const field = (sorter.columnKey ?? sorter.field) as string | undefined;
     if (field && sorter.order) {
@@ -285,9 +251,45 @@ export const CompaniesAnalytics: React.FC = () => {
               </>
             ),
           },
-          { key: 'top', label: 'Top Engaged', children: <AnalyticsTable columns={topColumns} data={topEngaged} total={topEngaged.length} loading={topLoading} onRowClick={(r) => navigate(`/customers/${r.id}`)} /> },
-          { key: 'atrisk', label: 'At Risk', children: <AnalyticsTable columns={atRiskColumns} data={atRisk} total={atRisk.length} loading={atRiskLoading} onRowClick={(r) => navigate(`/customers/${r.id}`)} /> },
-          { key: 'status', label: 'By Engagement', children: <AnalyticsTable columns={statusColumns} data={statusGroups} total={statusGroups.length} loading={statusLoading} rowKey="engagement_status" /> },
+          {
+            key: 'top',
+            label: 'Top Engaged',
+            children: (
+              <AnalyticsTable
+                columns={topColumns}
+                data={topQuery.data || []}
+                total={(topQuery.data || []).length}
+                loading={topQuery.isLoading}
+                onRowClick={(r) => navigate(`/customers/${r.id}`)}
+              />
+            ),
+          },
+          {
+            key: 'atrisk',
+            label: 'At Risk',
+            children: (
+              <AnalyticsTable
+                columns={atRiskColumns}
+                data={atRiskQuery.data || []}
+                total={(atRiskQuery.data || []).length}
+                loading={atRiskQuery.isLoading}
+                onRowClick={(r) => navigate(`/customers/${r.id}`)}
+              />
+            ),
+          },
+          {
+            key: 'status',
+            label: 'By Engagement',
+            children: (
+              <AnalyticsTable
+                columns={statusColumns}
+                data={statusQuery.data || []}
+                total={(statusQuery.data || []).length}
+                loading={statusQuery.isLoading}
+                rowKey="engagement_status"
+              />
+            ),
+          },
         ]} />
       </div>
     </div>

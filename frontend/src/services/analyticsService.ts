@@ -51,42 +51,9 @@ import type {
 
 const API_PREFIX = '/v1/analytics';
 
-// ============================================================================
-// CACHE INFRASTRUCTURE
-// ============================================================================
-
-interface CacheEntry<T> {
-  data: T;
-  timestamp: number;
-}
-
-const CACHE_TTL_SHORT = 30_000;   // 30s for lists/dashboard
-const CACHE_TTL_LONG = 60_000;    // 60s for aggregations
-
-const cache: Record<string, CacheEntry<any>> = {};
-
-function getCached<T>(key: string, ttl: number): T | null {
-  const entry = cache[key];
-  if (entry && (Date.now() - entry.timestamp) < ttl) {
-    return entry.data as T;
-  }
-  return null;
-}
-
-function setCache<T>(key: string, data: T): void {
-  cache[key] = { data, timestamp: Date.now() };
-}
-
-// In-flight dedup map
-const inFlight: Record<string, Promise<any>> = {};
-
-async function dedupedFetch<T>(key: string, fetcher: () => Promise<T>): Promise<T> {
-  if (inFlight[key]) {
-    return inFlight[key] as Promise<T>;
-  }
-  inFlight[key] = fetcher().finally(() => { delete inFlight[key]; });
-  return inFlight[key] as Promise<T>;
-}
+// ==========================================================================
+// QUERY HELPERS (cache + dedup handled by TanStack Query)
+// ==========================================================================
 
 function buildQuery(params: Record<string, any>): string {
   const parts: string[] = [];
@@ -126,11 +93,8 @@ export const extractionApi = {
   /** GET /extraction/jobs — List extraction jobs */
   async listJobs(params: ExtractionJobFilterParams = {}): Promise<ExtractionJobListResponse> {
     const qs = buildQuery(params);
-    const key = `extraction-jobs${qs}`;
     try {
-      const result = await dedupedFetch(key, () =>
-        api.get<ExtractionJobListResponse>(`${API_PREFIX}/extraction/jobs${qs}`, { timeout: 10000 })
-      );
+      const result = await api.get<ExtractionJobListResponse>(`${API_PREFIX}/extraction/jobs${qs}`, { timeout: 10000 });
       return result || { jobs: [], total: 0 };
     } catch {
       return { jobs: [], total: 0 };
@@ -165,15 +129,9 @@ export const contactsApi = {
   /** GET /contacts — Paginated contacts with engagement analytics */
   async list(params: ContactFilterParams = {}): Promise<ContactAnalyticsListResponse> {
     const qs = buildQuery(params);
-    const key = `contacts${qs}`;
-    const cached = getCached<ContactAnalyticsListResponse>(key, CACHE_TTL_SHORT);
-    if (cached) return cached;
     try {
-      const result = await dedupedFetch(key, () =>
-        api.get<ContactAnalyticsListResponse>(`${API_PREFIX}/contacts${qs}`, { timeout: 10000 })
-      );
+      const result = await api.get<ContactAnalyticsListResponse>(`${API_PREFIX}/contacts${qs}`, { timeout: 10000 });
       const data = result || { contacts: [], total: 0 };
-      setCache(key, data);
       return data;
     } catch {
       return { contacts: [], total: 0 };
@@ -204,16 +162,9 @@ export const contactsApi = {
   /** GET /contacts/top-engaged — Top engaged contacts */
   async topEngaged(clientId?: string, limit: number = 10): Promise<TopEngagedContact[]> {
     const qs = buildQuery({ client_id: clientId, limit });
-    const key = `contacts-top${qs}`;
-    const cached = getCached<TopEngagedContact[]>(key, CACHE_TTL_LONG);
-    if (cached) return cached;
     try {
-      const result = await dedupedFetch(key, () =>
-        api.get<TopEngagedContact[]>(`${API_PREFIX}/contacts/top-engaged${qs}`, { timeout: 10000 })
-      );
-      const data = result || [];
-      setCache(key, data);
-      return data;
+      const result = await api.get<TopEngagedContact[]>(`${API_PREFIX}/contacts/top-engaged${qs}`, { timeout: 10000 });
+      return result || [];
     } catch {
       return [];
     }
@@ -222,16 +173,9 @@ export const contactsApi = {
   /** GET /contacts/at-risk — At-risk contacts */
   async atRisk(clientId?: string, daysThreshold: number = 60, limit: number = 50): Promise<AtRiskContact[]> {
     const qs = buildQuery({ client_id: clientId, days_threshold: daysThreshold, limit });
-    const key = `contacts-atrisk${qs}`;
-    const cached = getCached<AtRiskContact[]>(key, CACHE_TTL_LONG);
-    if (cached) return cached;
     try {
-      const result = await dedupedFetch(key, () =>
-        api.get<AtRiskContact[]>(`${API_PREFIX}/contacts/at-risk${qs}`, { timeout: 10000 })
-      );
-      const data = result || [];
-      setCache(key, data);
-      return data;
+      const result = await api.get<AtRiskContact[]>(`${API_PREFIX}/contacts/at-risk${qs}`, { timeout: 10000 });
+      return result || [];
     } catch {
       return [];
     }
@@ -240,15 +184,9 @@ export const contactsApi = {
   /** GET /contacts/decision-makers — Decision maker contacts */
   async decisionMakers(clientId?: string, limit: number = 100, offset: number = 0): Promise<ContactAnalyticsListResponse> {
     const qs = buildQuery({ client_id: clientId, limit, offset });
-    const key = `contacts-dm${qs}`;
-    const cached = getCached<ContactAnalyticsListResponse>(key, CACHE_TTL_SHORT);
-    if (cached) return cached;
     try {
-      const result = await dedupedFetch(key, () =>
-        api.get<ContactAnalyticsListResponse>(`${API_PREFIX}/contacts/decision-makers${qs}`, { timeout: 10000 })
-      );
+      const result = await api.get<ContactAnalyticsListResponse>(`${API_PREFIX}/contacts/decision-makers${qs}`, { timeout: 10000 });
       const data = result || { contacts: [], total: 0 };
-      setCache(key, data);
       return data;
     } catch {
       return { contacts: [], total: 0 };
@@ -258,16 +196,9 @@ export const contactsApi = {
   /** GET /contacts/by-type — Contacts grouped by type */
   async byType(clientId?: string): Promise<ContactTypeGrouping[]> {
     const qs = buildQuery({ client_id: clientId });
-    const key = `contacts-bytype${qs}`;
-    const cached = getCached<ContactTypeGrouping[]>(key, CACHE_TTL_LONG);
-    if (cached) return cached;
     try {
-      const result = await dedupedFetch(key, () =>
-        api.get<ContactTypeGrouping[]>(`${API_PREFIX}/contacts/by-type${qs}`, { timeout: 10000 })
-      );
-      const data = result || [];
-      setCache(key, data);
-      return data;
+      const result = await api.get<ContactTypeGrouping[]>(`${API_PREFIX}/contacts/by-type${qs}`, { timeout: 10000 });
+      return result || [];
     } catch {
       return [];
     }
@@ -282,15 +213,9 @@ export const companiesApi = {
   /** GET /companies — Paginated companies with analytics */
   async list(params: CompanyFilterParams = {}): Promise<CompanyAnalyticsListResponse> {
     const qs = buildQuery(params);
-    const key = `companies${qs}`;
-    const cached = getCached<CompanyAnalyticsListResponse>(key, CACHE_TTL_SHORT);
-    if (cached) return cached;
     try {
-      const result = await dedupedFetch(key, () =>
-        api.get<CompanyAnalyticsListResponse>(`${API_PREFIX}/companies${qs}`, { timeout: 10000 })
-      );
+      const result = await api.get<CompanyAnalyticsListResponse>(`${API_PREFIX}/companies${qs}`, { timeout: 10000 });
       const data = result || { companies: [], total: 0 };
-      setCache(key, data);
       return data;
     } catch {
       return { companies: [], total: 0 };
@@ -321,16 +246,9 @@ export const companiesApi = {
   /** GET /companies/top-engaged — Top engaged companies */
   async topEngaged(clientId?: string, limit: number = 10): Promise<TopEngagedCompany[]> {
     const qs = buildQuery({ client_id: clientId, limit });
-    const key = `companies-top${qs}`;
-    const cached = getCached<TopEngagedCompany[]>(key, CACHE_TTL_LONG);
-    if (cached) return cached;
     try {
-      const result = await dedupedFetch(key, () =>
-        api.get<TopEngagedCompany[]>(`${API_PREFIX}/companies/top-engaged${qs}`, { timeout: 10000 })
-      );
-      const data = result || [];
-      setCache(key, data);
-      return data;
+      const result = await api.get<TopEngagedCompany[]>(`${API_PREFIX}/companies/top-engaged${qs}`, { timeout: 10000 });
+      return result || [];
     } catch {
       return [];
     }
@@ -339,16 +257,9 @@ export const companiesApi = {
   /** GET /companies/at-risk — At-risk companies */
   async atRisk(clientId?: string, daysThreshold: number = 90, limit: number = 50): Promise<AtRiskCompany[]> {
     const qs = buildQuery({ client_id: clientId, days_threshold: daysThreshold, limit });
-    const key = `companies-atrisk${qs}`;
-    const cached = getCached<AtRiskCompany[]>(key, CACHE_TTL_LONG);
-    if (cached) return cached;
     try {
-      const result = await dedupedFetch(key, () =>
-        api.get<AtRiskCompany[]>(`${API_PREFIX}/companies/at-risk${qs}`, { timeout: 10000 })
-      );
-      const data = result || [];
-      setCache(key, data);
-      return data;
+      const result = await api.get<AtRiskCompany[]>(`${API_PREFIX}/companies/at-risk${qs}`, { timeout: 10000 });
+      return result || [];
     } catch {
       return [];
     }
@@ -357,16 +268,9 @@ export const companiesApi = {
   /** GET /companies/by-engagement — Companies by engagement status */
   async byEngagement(clientId?: string): Promise<EngagementStatusGrouping[]> {
     const qs = buildQuery({ client_id: clientId });
-    const key = `companies-byeng${qs}`;
-    const cached = getCached<EngagementStatusGrouping[]>(key, CACHE_TTL_LONG);
-    if (cached) return cached;
     try {
-      const result = await dedupedFetch(key, () =>
-        api.get<EngagementStatusGrouping[]>(`${API_PREFIX}/companies/by-engagement${qs}`, { timeout: 10000 })
-      );
-      const data = result || [];
-      setCache(key, data);
-      return data;
+      const result = await api.get<EngagementStatusGrouping[]>(`${API_PREFIX}/companies/by-engagement${qs}`, { timeout: 10000 });
+      return result || [];
     } catch {
       return [];
     }
@@ -467,15 +371,9 @@ export const threadsApi = {
   /** GET /threads/status — Paginated thread statuses */
   async list(params: ThreadFilterParams = {}): Promise<ThreadStatusListResponse> {
     const qs = buildQuery(params);
-    const key = `threads${qs}`;
-    const cached = getCached<ThreadStatusListResponse>(key, CACHE_TTL_SHORT);
-    if (cached) return cached;
     try {
-      const result = await dedupedFetch(key, () =>
-        api.get<ThreadStatusListResponse>(`${API_PREFIX}/threads/status${qs}`, { timeout: 10000 })
-      );
+      const result = await api.get<ThreadStatusListResponse>(`${API_PREFIX}/threads/status${qs}`, { timeout: 10000 });
       const data = result || { threads: [], total: 0 };
-      setCache(key, data);
       return data;
     } catch {
       return { threads: [], total: 0 };
@@ -485,16 +383,9 @@ export const threadsApi = {
   /** GET /threads/overdue — Overdue threads */
   async overdue(clientId?: string, limit: number = 50): Promise<OverdueThread[]> {
     const qs = buildQuery({ client_id: clientId, limit });
-    const key = `threads-overdue${qs}`;
-    const cached = getCached<OverdueThread[]>(key, CACHE_TTL_SHORT);
-    if (cached) return cached;
     try {
-      const result = await dedupedFetch(key, () =>
-        api.get<OverdueThread[]>(`${API_PREFIX}/threads/overdue${qs}`, { timeout: 10000 })
-      );
-      const data = result || [];
-      setCache(key, data);
-      return data;
+      const result = await api.get<OverdueThread[]>(`${API_PREFIX}/threads/overdue${qs}`, { timeout: 10000 });
+      return result || [];
     } catch {
       return [];
     }
@@ -503,16 +394,9 @@ export const threadsApi = {
   /** GET /threads/by-status — Count threads by status */
   async byStatus(clientId?: string): Promise<ThreadStatusCount[]> {
     const qs = buildQuery({ client_id: clientId });
-    const key = `threads-bystatus${qs}`;
-    const cached = getCached<ThreadStatusCount[]>(key, CACHE_TTL_LONG);
-    if (cached) return cached;
     try {
-      const result = await dedupedFetch(key, () =>
-        api.get<ThreadStatusCount[]>(`${API_PREFIX}/threads/by-status${qs}`, { timeout: 10000 })
-      );
-      const data = result || [];
-      setCache(key, data);
-      return data;
+      const result = await api.get<ThreadStatusCount[]>(`${API_PREFIX}/threads/by-status${qs}`, { timeout: 10000 });
+      return result || [];
     } catch {
       return [];
     }
@@ -564,15 +448,9 @@ export const responseTimesApi = {
   /** GET /response-times — Paginated response time metrics */
   async list(params: PaginationParams & { client_id?: string; contact_id?: string } = {}): Promise<ResponseTimeListResponse> {
     const qs = buildQuery(params);
-    const key = `rt${qs}`;
-    const cached = getCached<ResponseTimeListResponse>(key, CACHE_TTL_SHORT);
-    if (cached) return cached;
     try {
-      const result = await dedupedFetch(key, () =>
-        api.get<ResponseTimeListResponse>(`${API_PREFIX}/response-times${qs}`, { timeout: 10000 })
-      );
+      const result = await api.get<ResponseTimeListResponse>(`${API_PREFIX}/response-times${qs}`, { timeout: 10000 });
       const data = result || { metrics: [], total: 0 };
-      setCache(key, data);
       return data;
     } catch {
       return { metrics: [], total: 0 };
@@ -582,14 +460,8 @@ export const responseTimesApi = {
   /** GET /response-times/stats — Aggregate statistics */
   async stats(clientId?: string, contactId?: string): Promise<ResponseTimeStats | null> {
     const qs = buildQuery({ client_id: clientId, contact_id: contactId });
-    const key = `rt-stats${qs}`;
-    const cached = getCached<ResponseTimeStats>(key, CACHE_TTL_LONG);
-    if (cached) return cached;
     try {
-      const result = await dedupedFetch(key, () =>
-        api.get<ResponseTimeStats>(`${API_PREFIX}/response-times/stats${qs}`, { timeout: 10000 })
-      );
-      if (result) setCache(key, result);
+      const result = await api.get<ResponseTimeStats>(`${API_PREFIX}/response-times/stats${qs}`, { timeout: 10000 });
       return result;
     } catch {
       return null;
@@ -599,16 +471,9 @@ export const responseTimesApi = {
   /** GET /response-times/slowest — Slowest responders */
   async slowest(clientId?: string, limit: number = 20): Promise<SlowestResponder[]> {
     const qs = buildQuery({ client_id: clientId, limit });
-    const key = `rt-slowest${qs}`;
-    const cached = getCached<SlowestResponder[]>(key, CACHE_TTL_LONG);
-    if (cached) return cached;
     try {
-      const result = await dedupedFetch(key, () =>
-        api.get<SlowestResponder[]>(`${API_PREFIX}/response-times/slowest${qs}`, { timeout: 10000 })
-      );
-      const data = result || [];
-      setCache(key, data);
-      return data;
+      const result = await api.get<SlowestResponder[]>(`${API_PREFIX}/response-times/slowest${qs}`, { timeout: 10000 });
+      return result || [];
     } catch {
       return [];
     }
@@ -636,16 +501,9 @@ export const patternsApi = {
   /** GET /patterns/initiation — Thread initiation patterns (requires client_id) */
   async initiation(clientId: string, limit: number = 100): Promise<InitiationPattern[]> {
     const qs = buildQuery({ client_id: clientId, limit });
-    const key = `patterns-init${qs}`;
-    const cached = getCached<InitiationPattern[]>(key, CACHE_TTL_LONG);
-    if (cached) return cached;
     try {
-      const result = await dedupedFetch(key, () =>
-        api.get<InitiationPattern[]>(`${API_PREFIX}/patterns/initiation${qs}`, { timeout: 10000 })
-      );
-      const data = result || [];
-      setCache(key, data);
-      return data;
+      const result = await api.get<InitiationPattern[]>(`${API_PREFIX}/patterns/initiation${qs}`, { timeout: 10000 });
+      return result || [];
     } catch {
       return [];
     }
@@ -654,16 +512,9 @@ export const patternsApi = {
   /** GET /patterns/frequency — Communication frequency */
   async frequency(clientId?: string, limit: number = 100): Promise<FrequencyPattern[]> {
     const qs = buildQuery({ client_id: clientId, limit });
-    const key = `patterns-freq${qs}`;
-    const cached = getCached<FrequencyPattern[]>(key, CACHE_TTL_LONG);
-    if (cached) return cached;
     try {
-      const result = await dedupedFetch(key, () =>
-        api.get<FrequencyPattern[]>(`${API_PREFIX}/patterns/frequency${qs}`, { timeout: 10000 })
-      );
-      const data = result || [];
-      setCache(key, data);
-      return data;
+      const result = await api.get<FrequencyPattern[]>(`${API_PREFIX}/patterns/frequency${qs}`, { timeout: 10000 });
+      return result || [];
     } catch {
       return [];
     }
@@ -672,16 +523,9 @@ export const patternsApi = {
   /** GET /patterns/engagement-trends — Engagement trends over time */
   async engagementTrends(clientId?: string, limit: number = 100): Promise<EngagementTrend[]> {
     const qs = buildQuery({ client_id: clientId, limit });
-    const key = `trends:${qs}`;
-    const cached = getCached<EngagementTrend[]>(key, CACHE_TTL_LONG);
-    if (cached) return cached;
     try {
-      const result = await dedupedFetch(key, () =>
-        api.get<EngagementTrend[]>(`${API_PREFIX}/patterns/engagement-trends${qs}`, { timeout: 15000 })
-      );
-      const data = result || [];
-      setCache(key, data);
-      return data;
+      const result = await api.get<EngagementTrend[]>(`${API_PREFIX}/patterns/engagement-trends${qs}`, { timeout: 15000 });
+      return result || [];
     } catch {
       return [];
     }
@@ -705,14 +549,8 @@ export const dashboardAnalyticsApi = {
   /** GET /dashboard — Complete dashboard summary (requires client_id) */
   async getSummary(clientId: string, periodDays?: number): Promise<DashboardSummary | null> {
     const qs = buildQuery({ client_id: clientId, period_days: periodDays });
-    const key = `dashboard${qs}`;
-    const cached = getCached<DashboardSummary>(key, CACHE_TTL_SHORT);
-    if (cached) return cached;
     try {
-      const result = await dedupedFetch(key, () =>
-        api.get<DashboardSummary>(`${API_PREFIX}/dashboard${qs}`, { timeout: 15000 })
-      );
-      if (result) setCache(key, result);
+      const result = await api.get<DashboardSummary>(`${API_PREFIX}/dashboard${qs}`, { timeout: 15000 });
       return result;
     } catch {
       return null;
@@ -721,12 +559,8 @@ export const dashboardAnalyticsApi = {
 
   /** GET /summary/{clientId} — Client-specific summary */
   async getClientSummary(clientId: string): Promise<ClientSummary | null> {
-    const key = `client-summary-${clientId}`;
-    const cached = getCached<ClientSummary>(key, CACHE_TTL_SHORT);
-    if (cached) return cached;
     try {
       const result = await api.get<ClientSummary>(`${API_PREFIX}/summary/${clientId}`, { timeout: 10000 });
-      if (result) setCache(key, result);
       return result;
     } catch {
       return null;
@@ -735,12 +569,12 @@ export const dashboardAnalyticsApi = {
 };
 
 // ============================================================================
-// CACHE MANAGEMENT
+// CACHE MANAGEMENT (handled by TanStack Query — see queryClient.invalidateQueries)
 // ============================================================================
 
-/** Clear all analytics caches (call after mutations like extraction run) */
+/** @deprecated Use queryClient.invalidateQueries() instead */
 export function clearAnalyticsCache(): void {
-  Object.keys(cache).forEach(key => delete cache[key]);
+  // No-op: cache is now managed by TanStack Query
 }
 
 // ============================================================================

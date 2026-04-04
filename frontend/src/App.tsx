@@ -1,5 +1,17 @@
 import React from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,        // 30s before refetch (replaces CACHE_TTL_SHORT)
+      gcTime: 5 * 60_000,       // 5min garbage collection
+      retry: 2,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 /** Redirect old parameterized routes (e.g. /errors/:mailboxId → /manage/errors/:mailboxId) */
 const RedirectWithParams: React.FC<{ to: string }> = ({ to }) => {
@@ -70,6 +82,7 @@ import './App.css';
 
 function App() {
   return (
+    <QueryClientProvider client={queryClient}>
     <BrowserRouter>
       <ConfigProvider theme={antTheme}>
         <AuthProvider>
@@ -168,6 +181,7 @@ function App() {
         </AuthProvider>
       </ConfigProvider>
     </BrowserRouter>
+    </QueryClientProvider>
   );
 }
 
