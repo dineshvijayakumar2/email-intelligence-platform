@@ -284,6 +284,10 @@ class ThreadTracker:
             logger.info(f"Fetched {total_emails} emails in {len(threads)} threads "
                         f"across {len(mailbox_ids)} mailboxes")
 
+            # Merge threads with same subject (canonical resolution may create duplicates
+            # when emails from different mailboxes get different canonical_thread_ids)
+            threads = self._merge_threads_by_subject(threads)
+
             return threads
 
         except Exception as e:
