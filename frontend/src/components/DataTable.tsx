@@ -62,7 +62,13 @@ export function DataTable<T>({
         >
           <thead>
             {table.getHeaderGroups().map(headerGroup => (
-              <tr key={headerGroup.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+              <tr
+                key={headerGroup.id}
+                style={{
+                  borderBottom: '1px solid var(--ant-color-border, #f0f0f0)',
+                  background: 'var(--ant-color-bg-container-secondary, rgba(0,0,0,0.02))',
+                }}
+              >
                 {headerGroup.headers.map(header => {
                   const canSort = header.column.getCanSort();
                   const sorted = header.column.getIsSorted();
@@ -73,9 +79,9 @@ export function DataTable<T>({
                       style={{
                         padding: '10px 12px',
                         textAlign: (header.column.columnDef.meta as any)?.align || 'left',
-                        fontWeight: 500,
+                        fontWeight: 600,
                         fontSize: 13,
-                        color: 'rgba(255,255,255,0.65)',
+                        color: 'var(--ant-color-text-secondary, rgba(0,0,0,0.65))',
                         cursor: canSort ? 'pointer' : 'default',
                         userSelect: canSort ? 'none' : undefined,
                         width: header.column.columnDef.size || undefined,
@@ -86,8 +92,8 @@ export function DataTable<T>({
                     >
                       {flexRender(header.column.columnDef.header, header.getContext())}
                       {canSort && (
-                        <span style={{ marginLeft: 4, opacity: sorted ? 1 : 0.3 }}>
-                          {sorted === 'asc' ? '↑' : sorted === 'desc' ? '↓' : '↕'}
+                        <span style={{ marginLeft: 4, opacity: sorted ? 1 : 0.3, fontSize: 11 }}>
+                          {sorted === 'asc' ? '▲' : sorted === 'desc' ? '▼' : '⇅'}
                         </span>
                       )}
                     </th>
@@ -102,11 +108,11 @@ export function DataTable<T>({
                 key={row.id}
                 onClick={onRowClick ? () => onRowClick(row.original) : undefined}
                 style={{
-                  borderBottom: '1px solid rgba(255,255,255,0.04)',
+                  borderBottom: '1px solid var(--ant-color-border-secondary, #f5f5f5)',
                   cursor: onRowClick ? 'pointer' : 'default',
                   transition: 'background 0.15s',
                 }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.03)'; }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--ant-color-bg-text-hover, rgba(0,0,0,0.04))'; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
               >
                 {row.getVisibleCells().map(cell => (
