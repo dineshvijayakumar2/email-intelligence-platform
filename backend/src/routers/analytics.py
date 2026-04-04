@@ -2094,17 +2094,29 @@ async def get_thread_detail(
 
         ts = ts_result.data[0]
 
-        # Fetch emails by canonical_thread_id (cross-mailbox), fall back to thread_id
+        # Fetch emails by canonical_thread_id (cross-mailbox)
         canonical_id = ts.get('canonical_thread_id') or thread_id
-        emails_result = _supabase.table('emails').select(
-            'id, subject, sender_email, sender_name, recipients, sent_date, is_outbound, body_text, folder_path'
-        ).eq('canonical_thread_id', canonical_id).order('sent_date', desc=False).limit(limit).execute()
+        original_thread_id = ts.get('thread_id')
+        COLS = 'id, subject, sender_email, sender_name, recipients, sent_date, is_outbound, body_text, folder_path'
 
-        # Fallback if no emails found by canonical_thread_id
-        if not emails_result.data:
-            emails_result = _supabase.table('emails').select(
-                'id, subject, sender_email, sender_name, recipients, sent_date, is_outbound, body_text, folder_path'
-            ).eq('thread_id', thread_id).order('sent_date', desc=False).limit(limit).execute()
+        emails_result = _supabase.table('emails').select(COLS).eq(
+            'canonical_thread_id', canonical_id
+        ).order('sent_date', desc=False).limit(limit).execute()
+
+        # Also fetch by original thread_id (emails not yet canonical-resolved)
+        # and merge, deduplicating by email ID
+        seen_ids = {e['id'] for e in (emails_result.data or [])}
+        if original_thread_id:
+            fallback = _supabase.table('emails').select(COLS).eq(
+                'thread_id', original_thread_id
+            ).order('sent_date', desc=False).limit(limit).execute()
+            for e in (fallback.data or []):
+                if e['id'] not in seen_ids:
+                    emails_result.data.append(e)
+                    seen_ids.add(e['id'])
+            # Re-sort merged results
+            if emails_result.data:
+                emails_result.data.sort(key=lambda e: e.get('sent_date', ''))
 
         thread_emails = []
         for e in (emails_result.data or []):
