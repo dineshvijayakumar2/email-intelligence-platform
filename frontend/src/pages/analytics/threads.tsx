@@ -2,9 +2,16 @@ import React, { useState, useMemo } from 'react';
 import { Typography, Tag, Space, Select, Button, Input } from 'antd';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { LeftOutlined } from '@ant-design/icons';
+import {
+  useReactTable,
+  getCoreRowModel,
+  createColumnHelper,
+  type SortingState,
+} from '@tanstack/react-table';
 import { ClientSelector } from '../../components/analytics/ClientSelector';
 import { MailboxSelector } from '../../components/MailboxSelector';
 import { AnalyticsTable } from '../../components/analytics/AnalyticsTable';
+import { DataTable } from '../../components/DataTable';
 import {
   useThreads,
   useThreadsByCompany,
@@ -15,6 +22,7 @@ import type { ThreadStatusSummary, ThreadStatus } from '../../types/analytics';
 
 const { Text } = Typography;
 const PAGE_SIZE = 20;
+const col = createColumnHelper<ThreadStatusSummary>();
 
 const THREAD_STATUS_OPTIONS = [
   { value: '', label: 'All Statuses' },
@@ -31,7 +39,6 @@ export const ThreadAnalytics: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  // Drilldown mode
   const drilldownContactId = searchParams.get('contact_id');
   const drilldownCompanyId = searchParams.get('company_id');
   const drilldownLabel = searchParams.get('name') || '';
@@ -42,44 +49,39 @@ export const ThreadAnalytics: React.FC = () => {
   const mailboxId = mailboxIds[0] || '';
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<string>(() => searchParams.get('status') || '');
-  const [search, setSearch] = useState<string>('');
-  const [sortBy, setSortBy] = useState<string>('last_message_at');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [search, setSearch] = useState('');
+  const [sorting, setSorting] = useState<SortingState>([{ id: 'last_message_at', desc: true }]);
 
-  // Data queries — separate hooks for drilldown vs normal mode
-  const companyThreadsQuery = useThreadsByCompany(
-    isDrilldownMode && drilldownCompanyId ? drilldownCompanyId : undefined
-  );
-  const contactThreadsQuery = useThreadsByContact(
-    isDrilldownMode && drilldownContactId ? drilldownContactId : undefined
-  );
-  const normalThreadsQuery = useThreads(
-    !isDrilldownMode ? {
-      client_id: clientId,
-      mailbox_id: mailboxId || undefined,
-      limit: PAGE_SIZE,
-      offset: (page - 1) * PAGE_SIZE,
-      status: statusFilter || undefined,
-      search: search || undefined,
-      sort_by: sortBy,
-      sort_dir: sortDir,
-    } : { client_id: '' }  // disabled when in drilldown
-  );
+  const sortBy = sorting[0]?.id || 'last_message_at';
+  const sortDir = sorting[0]?.desc ? 'desc' : 'asc';
 
-  // Derive data based on mode
+  // Drilldown queries
+  const companyThreadsQuery = useThreadsByCompany(isDrilldownMode && drilldownCompanyId ? drilldownCompanyId : undefined);
+  const contactThreadsQuery = useThreadsByContact(isDrilldownMode && drilldownContactId ? drilldownContactId : undefined);
+
+  // Normal mode query
+  const normalThreadsQuery = useThreads(!isDrilldownMode ? {
+    client_id: clientId,
+    mailbox_id: mailboxId || undefined,
+    limit: PAGE_SIZE,
+    offset: (page - 1) * PAGE_SIZE,
+    status: statusFilter || undefined,
+    search: search || undefined,
+    sort_by: sortBy,
+    sort_dir: sortDir,
+  } : { client_id: '' });
+
+  // Drilldown: client-side filter
   const drilldownRaw = drilldownContactId
     ? contactThreadsQuery.data?.threads || []
     : companyThreadsQuery.data?.threads || [];
 
-  // Apply client-side filters to drilldown results
   const drilldownFiltered = useMemo(() => {
     let filtered = drilldownRaw;
     if (statusFilter) {
       const statusMap: Record<string, string[]> = {
         'active': ['ongoing', 'awaiting_our_response'],
-        'overdue': ['overdue'],
-        'complete': ['complete'],
-        'dropped': ['dropped'],
+        'overdue': ['overdue'], 'complete': ['complete'], 'dropped': ['dropped'],
       };
       const allowed = statusMap[statusFilter] || [statusFilter];
       filtered = filtered.filter(t => allowed.includes(t.status));
@@ -102,55 +104,82 @@ export const ThreadAnalytics: React.FC = () => {
     navigate(`/emails?thread_id=${encodeURIComponent(record.thread_id)}&name=${name}`);
   };
 
-  const getSortOrder = (field: string): 'ascend' | 'descend' | null => {
-    if (sortBy !== field) return null;
-    return sortDir === 'asc' ? 'ascend' : 'descend';
-  };
+  // TanStack Table columns for normal mode
+  const tanstackColumns = useMemo(() => [
+    col.accessor('subject', {
+      header: 'Subject',
+      cell: info => {
+        const r = info.row.original;
+        return (
+          <a onClick={(e) => { e.stopPropagation(); handleThreadClick(r); }} style={{ color: '#667eea' }}>
+            {info.getValue() || <Text type="secondary" style={{ fontSize: 12 }}>{r.thread_id?.slice(0, 16)}...</Text>}
+          </a>
+        );
+      },
+    }),
+    col.accessor('contact_name', {
+      header: 'Contact',
+      cell: info => info.getValue() || info.row.original.contact_email || '-',
+    }),
+    col.accessor('company_name', {
+      header: 'Company',
+      cell: info => info.getValue() || '-',
+    }),
+    col.accessor('status', {
+      header: 'Status',
+      size: 150,
+      cell: info => {
+        const v = info.getValue() as ThreadStatus;
+        const cfg = threadStatusConfig[v] || { label: v, color: 'default' };
+        return <Tag color={cfg.color}>{cfg.label}</Tag>;
+      },
+    }),
+    col.accessor('total_messages', {
+      header: 'Emails',
+      size: 90,
+    }),
+    col.accessor('last_message_date', {
+      header: 'Last Email',
+      size: 110,
+      cell: info => formatRelativeTime(info.getValue()),
+    }),
+    col.accessor('days_since_last_message', {
+      header: 'Days',
+      size: 70,
+      id: 'days_since_last_email',
+    }),
+  ], [navigate]);
 
-  const handleTableChange = (_pagination: any, _filters: any, sorter: any) => {
-    if (!sorter || Array.isArray(sorter)) return;
-    if (sorter.field && sorter.order) {
-      const field = (sorter.columnKey ?? sorter.field) as string;
-      setSortBy(field);
-      setSortDir(sorter.order === 'ascend' ? 'asc' : 'desc');
+  const table = useReactTable({
+    data: threads,
+    columns: tanstackColumns,
+    state: { sorting },
+    onSortingChange: (updater) => {
+      setSorting(typeof updater === 'function' ? updater(sorting) : updater);
       setPage(1);
-    } else if (!sorter.order) {
-      setSortBy('last_message_at');
-      setSortDir('desc');
-      setPage(1);
-    }
-  };
+    },
+    getCoreRowModel: getCoreRowModel(),
+    manualSorting: true,
+    enableSortingRemoval: false,
+  });
 
-  const columns = [
-    {
-      title: 'Subject', dataIndex: 'subject', key: 'subject', ellipsis: true,
-      sorter: !isDrilldownMode, sortOrder: isDrilldownMode ? undefined : getSortOrder('subject'),
+  // Drilldown: Ant Design columns (simpler, no server-side sort)
+  const drilldownColumns = [
+    { title: 'Subject', dataIndex: 'subject', key: 'subject', ellipsis: true,
       render: (v: string, r: ThreadStatusSummary) => (
-        <a onClick={(e) => { e.stopPropagation(); handleThreadClick(r); }} style={{ color: '#667eea' }}>
-          {v || <Text type="secondary" style={{ fontSize: 12 }}>{r.thread_id?.slice(0, 16)}...</Text>}
+        <a onClick={(e: any) => { e.stopPropagation(); handleThreadClick(r); }} style={{ color: '#667eea' }}>
+          {v || r.thread_id?.slice(0, 16) + '...'}
         </a>
       ),
     },
     { title: 'Contact', key: 'contact', render: (_: any, r: ThreadStatusSummary) => r.contact_name || r.contact_email || '-' },
     { title: 'Company', dataIndex: 'company_name', key: 'company', render: (v: string) => v || '-' },
-    {
-      title: 'Status', dataIndex: 'status', key: 'status', width: 150,
-      sorter: !isDrilldownMode, sortOrder: isDrilldownMode ? undefined : getSortOrder('status'),
+    { title: 'Status', dataIndex: 'status', key: 'status', width: 150,
       render: (v: ThreadStatus) => { const cfg = threadStatusConfig[v] || { label: v, color: 'default' }; return <Tag color={cfg.color}>{cfg.label}</Tag>; },
     },
-    {
-      title: 'Emails', dataIndex: 'total_messages', key: 'message_count', width: 90,
-      sorter: !isDrilldownMode, sortOrder: isDrilldownMode ? undefined : getSortOrder('message_count'),
-    },
-    {
-      title: 'Last Email', dataIndex: 'last_message_date', key: 'last_message_at', width: 110,
-      sorter: !isDrilldownMode, sortOrder: isDrilldownMode ? undefined : getSortOrder('last_message_at'),
-      render: (v: string) => formatRelativeTime(v),
-    },
-    {
-      title: 'Days', dataIndex: 'days_since_last_message', key: 'days_since_last_email', width: 70,
-      sorter: !isDrilldownMode, sortOrder: isDrilldownMode ? undefined : getSortOrder('days_since_last_email'),
-    },
+    { title: 'Emails', dataIndex: 'total_messages', key: 'msgs', width: 90 },
+    { title: 'Last Email', dataIndex: 'last_message_date', key: 'last', width: 110, render: (v: string) => formatRelativeTime(v) },
+    { title: 'Days', dataIndex: 'days_since_last_message', key: 'days', width: 70 },
   ];
 
   if (isDrilldownMode) {
@@ -162,23 +191,11 @@ export const ThreadAnalytics: React.FC = () => {
           <Tag color="purple">{threadsTotal} thread{threadsTotal !== 1 ? 's' : ''}</Tag>
         </div>
         <Space style={{ marginBottom: 12 }} wrap>
-          <Input.Search
-            placeholder="Search subject..."
-            allowClear
-            onSearch={(v) => setSearch(v)}
-            style={{ width: 240 }}
-            size="small"
-          />
-          <Select
-            value={statusFilter}
-            onChange={v => setStatusFilter(v)}
-            options={THREAD_STATUS_OPTIONS}
-            style={{ width: 240 }}
-            size="small"
-          />
+          <Input.Search placeholder="Search subject..." allowClear onSearch={v => setSearch(v)} style={{ width: 240 }} size="small" />
+          <Select value={statusFilter} onChange={v => setStatusFilter(v)} options={THREAD_STATUS_OPTIONS} style={{ width: 240 }} size="small" />
         </Space>
         <AnalyticsTable<ThreadStatusSummary>
-          columns={columns}
+          columns={drilldownColumns}
           data={threads}
           total={threadsTotal}
           loading={loading}
@@ -203,31 +220,16 @@ export const ThreadAnalytics: React.FC = () => {
       </div>
       <div className="fade-in-up stagger-1">
         <Space style={{ marginBottom: 16 }} wrap>
-          <Input.Search
-            placeholder="Search thread subject..."
-            allowClear
-            onSearch={(v) => { setSearch(v); setPage(1); }}
-            style={{ width: 240 }}
-            size="small"
-          />
-          <Select
-            value={statusFilter}
-            onChange={v => { setStatusFilter(v); setPage(1); }}
-            options={THREAD_STATUS_OPTIONS}
-            style={{ width: 240 }}
-            size="small"
-          />
+          <Input.Search placeholder="Search thread subject..." allowClear onSearch={(v) => { setSearch(v); setPage(1); }} style={{ width: 240 }} size="small" />
+          <Select value={statusFilter} onChange={v => { setStatusFilter(v); setPage(1); }} options={THREAD_STATUS_OPTIONS} style={{ width: 240 }} size="small" />
         </Space>
-        <AnalyticsTable<ThreadStatusSummary>
-          columns={columns}
-          data={threads}
+        <DataTable<ThreadStatusSummary>
+          table={table}
           total={threadsTotal}
           loading={loading}
           pageSize={PAGE_SIZE}
           currentPage={page}
           onPageChange={setPage}
-          onChange={handleTableChange}
-          rowKey="thread_id"
           onRowClick={handleThreadClick}
         />
       </div>

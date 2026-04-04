@@ -1,8 +1,15 @@
 import React, { useState, useMemo } from 'react';
 import { Typography, Tabs, Tag, Space, Switch, Input, Select } from 'antd';
 import { useNavigate } from 'react-router-dom';
+import {
+  useReactTable,
+  getCoreRowModel,
+  createColumnHelper,
+  type SortingState,
+} from '@tanstack/react-table';
 import { ClientSelector } from '../../components/analytics/ClientSelector';
 import { AnalyticsTable } from '../../components/analytics/AnalyticsTable';
+import { DataTable } from '../../components/DataTable';
 import { EngagementBadge } from '../../components/analytics/EngagementBadge';
 import {
   useCompanies,
@@ -23,22 +30,25 @@ import type {
 
 const { Text } = Typography;
 const PAGE_SIZE = 20;
+const col = createColumnHelper<CompanyAnalytics>();
 
 export const CompaniesAnalytics: React.FC = () => {
   const navigate = useNavigate();
   const [clientId, setClientId] = useState(() => localStorage.getItem('analytics_client_id') || '');
   const [activeTab, setActiveTab] = useState('all');
 
-  // Filter state
+  // Filter + pagination state
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [qbMatched, setQbMatched] = useState(false);
   const [tierFilter, setTierFilter] = useState('');
   const [amFilter, setAmFilter] = useState('');
-  const [sortBy, setSortBy] = useState<string>('engagement_score');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [sorting, setSorting] = useState<SortingState>([{ id: 'engagement_score', desc: true }]);
 
-  // Data queries — TanStack Query handles caching, dedup, and background refetch
+  const sortBy = sorting[0]?.id || 'engagement_score';
+  const sortDir = sorting[0]?.desc ? 'desc' : 'asc';
+
+  // Data queries
   const companiesQuery = useCompanies({
     client_id: clientId,
     limit: PAGE_SIZE,
@@ -56,7 +66,7 @@ export const CompaniesAnalytics: React.FC = () => {
   const statusQuery = useCompanyEngagementGroups(clientId);
   const filterOptionsQuery = useCompanyFilterOptions(clientId);
 
-  // Derive filter dropdown options from backend data
+  // Dynamic filter options
   const tierOptions = useMemo(() => {
     const tiers = filterOptionsQuery.data?.tiers || [];
     return [
@@ -70,90 +80,95 @@ export const CompaniesAnalytics: React.FC = () => {
 
   const amOptions = useMemo(() => {
     const ams = filterOptionsQuery.data?.account_managers || [];
-    return [
-      { value: '', label: 'All AMs' },
-      ...ams.map(am => ({ value: am, label: am })),
-    ];
+    return [{ value: '', label: 'All AMs' }, ...ams.map(am => ({ value: am, label: am }))];
   }, [filterOptionsQuery.data]);
 
-  // Derived data
   const companies = companiesQuery.data?.companies || [];
   const total = companiesQuery.data?.total || 0;
-  const loading = companiesQuery.isLoading;
 
-  const getSortOrder = (field: string): 'ascend' | 'descend' | null => {
-    if (sortBy !== field) return null;
-    return sortDir === 'asc' ? 'ascend' : 'descend';
-  };
-
-  const handleTableChange = (_pagination: any, _filters: any, sorter: any) => {
-    if (!sorter || Array.isArray(sorter)) return;
-    const field = (sorter.columnKey ?? sorter.field) as string | undefined;
-    if (field && sorter.order) {
-      setSortBy(field);
-      setSortDir(sorter.order === 'ascend' ? 'asc' : 'desc');
-      setPage(1);
-    } else if (!sorter.order) {
-      setSortBy('engagement_score');
-      setSortDir('desc');
-      setPage(1);
-    }
-  };
-
-  const hasFilters = qbMatched || !!tierFilter || !!amFilter || !!search;
-
-  const allColumns = [
-    {
-      title: 'Company', dataIndex: 'company_name', key: 'company_name', width: 200, ellipsis: true,
-      sorter: true, sortOrder: getSortOrder('company_name'),
-    },
-    {
-      title: 'Tier', dataIndex: 'qb_tier', key: 'qb_tier', width: 55,
-      sorter: true, sortOrder: getSortOrder('qb_tier'),
-      render: (v: string | null) => {
+  // TanStack Table column definitions
+  const columns = useMemo(() => [
+    col.accessor('company_name', {
+      header: 'Company',
+      size: 200,
+      cell: info => <Text ellipsis={{ tooltip: info.getValue() }}>{info.getValue()}</Text>,
+    }),
+    col.accessor('qb_tier', {
+      header: 'Tier',
+      size: 55,
+      cell: info => {
+        const v = info.getValue();
         if (!v) return null;
         const m = v.match(/Level\s*(\d)/i);
         const short = m ? `L${m[1]}` : v.slice(0, 4);
         const colors: Record<string, string> = { L1: 'default', L2: 'blue', L3: 'green', L4: 'gold', L8: 'cyan' };
         return <Tag color={colors[short] || 'default'}>{short}</Tag>;
       },
-    },
-    {
-      title: 'Revenue', dataIndex: 'qb_total_revenue', key: 'qb_total_revenue', width: 100, align: 'right' as const,
-      sorter: true, sortOrder: getSortOrder('qb_total_revenue'),
-      render: (v: number | null) => v != null ? `$${Number(v).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '-',
-    },
-    {
-      title: 'AM', dataIndex: 'qb_account_manager', key: 'qb_account_manager', width: 110, ellipsis: true,
-      sorter: true, sortOrder: getSortOrder('qb_account_manager'),
-      render: (v: string | null) => v || '-',
-    },
-    {
-      title: 'Score', dataIndex: 'engagement_score', key: 'engagement_score', width: 100,
-      sorter: true, sortOrder: getSortOrder('engagement_score'),
-      render: (v: number) => <EngagementBadge score={v} />,
-    },
-    {
-      title: 'Emails', dataIndex: 'total_emails', key: 'total_emails', width: 70, align: 'right' as const,
-      sorter: true, sortOrder: getSortOrder('total_emails'),
-      render: (v: number, r: CompanyAnalytics) => (
-        <a onClick={(e) => { e.stopPropagation(); navigate(`/emails?company_id=${r.id}`); }} style={{ color: '#667eea' }}>{v || 0}</a>
+    }),
+    col.accessor('qb_total_revenue', {
+      header: 'Revenue',
+      size: 100,
+      meta: { align: 'right' },
+      cell: info => {
+        const v = info.getValue();
+        return v != null ? `$${Number(v).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '-';
+      },
+    }),
+    col.accessor('qb_account_manager', {
+      header: 'AM',
+      size: 110,
+      cell: info => info.getValue() || '-',
+    }),
+    col.accessor('engagement_score', {
+      header: 'Score',
+      size: 100,
+      cell: info => <EngagementBadge score={info.getValue() ?? 0} />,
+    }),
+    col.accessor('total_emails', {
+      header: 'Emails',
+      size: 70,
+      meta: { align: 'right' },
+      cell: info => (
+        <a onClick={(e) => { e.stopPropagation(); navigate(`/emails?company_id=${info.row.original.id}`); }} style={{ color: '#667eea' }}>
+          {info.getValue() || 0}
+        </a>
       ),
-    },
-    {
-      title: 'Contacts', dataIndex: 'contact_count', key: 'contact_count', width: 75, align: 'right' as const,
-      sorter: true, sortOrder: getSortOrder('contact_count'),
-      render: (v: number, r: CompanyAnalytics) => (
-        <a onClick={(e) => { e.stopPropagation(); navigate(`/customers/contacts?company_id=${r.id}&client_id=${clientId}`); }} style={{ color: '#667eea' }}>{v ?? 0}</a>
+    }),
+    col.accessor('contact_count', {
+      header: 'Contacts',
+      size: 75,
+      meta: { align: 'right' },
+      cell: info => (
+        <a onClick={(e) => { e.stopPropagation(); navigate(`/customers/contacts?company_id=${info.row.original.id}&client_id=${clientId}`); }} style={{ color: '#667eea' }}>
+          {info.getValue() ?? 0}
+        </a>
       ),
-    },
-    {
-      title: 'Last Contact', dataIndex: 'last_contact_date', key: 'last_contact_date', width: 100,
-      sorter: true, sortOrder: getSortOrder('last_contact_date'),
-      render: (v: string) => formatRelativeTime(v),
-    },
-  ];
+    }),
+    col.accessor('last_contact_date', {
+      header: 'Last Contact',
+      size: 100,
+      cell: info => formatRelativeTime(info.getValue()),
+    }),
+  ], [clientId, navigate]);
 
+  // TanStack Table instance — manualSorting since sort is server-side
+  const table = useReactTable({
+    data: companies,
+    columns,
+    state: { sorting },
+    onSortingChange: (updater) => {
+      const next = typeof updater === 'function' ? updater(sorting) : updater;
+      setSorting(next);
+      setPage(1);
+    },
+    getCoreRowModel: getCoreRowModel(),
+    manualSorting: true,
+    enableSortingRemoval: false,
+  });
+
+  const hasFilters = qbMatched || !!tierFilter || !!amFilter || !!search;
+
+  // Tabs that still use AnalyticsTable (Ant Design) — only the "All" tab uses TanStack Table
   const topColumns = [
     { title: 'Company', dataIndex: 'company_name', key: 'name' },
     { title: 'Score', dataIndex: 'engagement_score', key: 'score', width: 120, render: (v: number) => <EngagementBadge score={v} /> },
@@ -236,17 +251,14 @@ export const CompaniesAnalytics: React.FC = () => {
                     </a>
                   )}
                 </Space>
-                <AnalyticsTable<CompanyAnalytics>
-                  columns={allColumns}
-                  data={companies}
+                <DataTable<CompanyAnalytics>
+                  table={table}
                   total={total}
-                  loading={loading}
+                  loading={companiesQuery.isLoading}
                   pageSize={PAGE_SIZE}
                   currentPage={page}
                   onPageChange={setPage}
                   onRowClick={(r) => navigate(`/customers/${r.id}`)}
-                  onChange={handleTableChange}
-                  rowKey="id"
                 />
               </>
             ),

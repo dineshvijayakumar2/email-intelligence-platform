@@ -1,9 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Typography, Tabs, Tag, Space, Switch, Input, Button } from 'antd';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeftOutlined } from '@ant-design/icons';
+import {
+  useReactTable,
+  getCoreRowModel,
+  createColumnHelper,
+  type SortingState,
+} from '@tanstack/react-table';
 import { ClientSelector } from '../../components/analytics/ClientSelector';
 import { AnalyticsTable } from '../../components/analytics/AnalyticsTable';
+import { DataTable } from '../../components/DataTable';
 import { EngagementBadge } from '../../components/analytics/EngagementBadge';
 import { LifecycleBadge } from '../../components/analytics/LifecycleBadge';
 import {
@@ -21,6 +28,7 @@ import { formatCurrency } from '../../utils/numberFormat';
 
 const { Text } = Typography;
 const PAGE_SIZE = 20;
+const col = createColumnHelper<ContactAnalytics>();
 
 export const ContactsAnalytics: React.FC = () => {
   const navigate = useNavigate();
@@ -28,15 +36,15 @@ export const ContactsAnalytics: React.FC = () => {
   const [clientId, setClientId] = useState(() => searchParams.get('client_id') || localStorage.getItem('analytics_client_id') || '');
   const [activeTab, setActiveTab] = useState('all');
 
-  // Filter state
   const [contactsPage, setContactsPage] = useState(1);
-  const [sortBy, setSortBy] = useState<string>('engagement_score');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
-  const [search, setSearch] = useState<string>('');
+  const [sorting, setSorting] = useState<SortingState>([{ id: 'engagement_score', desc: true }]);
+  const [search, setSearch] = useState('');
   const [qbLinked, setQbLinked] = useState(false);
   const companyIdFilter = searchParams.get('company_id') || '';
 
-  // Data queries
+  const sortBy = sorting[0]?.id || 'engagement_score';
+  const sortDir = sorting[0]?.desc ? 'desc' : 'asc';
+
   const contactsQuery = useContacts({
     client_id: clientId,
     company_id: companyIdFilter || undefined,
@@ -51,120 +59,93 @@ export const ContactsAnalytics: React.FC = () => {
   const topQuery = useTopEngagedContacts(clientId);
   const atRiskQuery = useAtRiskContacts(clientId);
 
-  // Derived data
   const contacts = contactsQuery.data?.contacts || [];
   const contactsTotal = contactsQuery.data?.total || 0;
-  const loading = contactsQuery.isLoading;
 
-  const getSortOrder = (field: string): 'ascend' | 'descend' | null => {
-    if (sortBy !== field) return null;
-    return sortDir === 'asc' ? 'ascend' : 'descend';
-  };
-
-  const handleTableChange = (_pagination: any, _filters: any, sorter: any) => {
-    if (!sorter || Array.isArray(sorter)) return;
-    const field = (sorter.columnKey ?? sorter.field) as string | undefined;
-    if (field && sorter.order) {
-      setSortBy(field);
-      setSortDir(sorter.order === 'ascend' ? 'asc' : 'desc');
-      setContactsPage(1);
-    } else if (!sorter.order) {
-      setSortBy('engagement_score');
-      setSortDir('desc');
-      setContactsPage(1);
-    }
-  };
-
-  const allColumns = [
-    {
-      title: 'Contact',
-      key: 'full_name',
-      dataIndex: 'full_name',
-      sorter: true,
-      sortOrder: getSortOrder('full_name'),
-      render: (_: any, r: ContactAnalytics) => (
-        <div>
-          <Text strong>{r.full_name || r.email_address}</Text>
-          {r.full_name && <div><Text type="secondary" style={{ fontSize: 12 }}>{r.email_address}</Text></div>}
-        </div>
-      ),
-    },
-    {
-      title: 'Company',
-      dataIndex: 'company_name',
-      key: 'company_name',
-      sorter: true,
-      sortOrder: getSortOrder('company_name'),
-      render: (v: string) => v || <Text type="secondary">-</Text>,
-    },
-    {
-      title: 'Customer Type',
-      dataIndex: 'qb_customer_type',
-      key: 'qb_customer_type',
-      width: 120,
-      render: (v: string | null) => <LifecycleBadge tier={v} />,
-    },
-    {
-      title: 'Tier',
-      dataIndex: 'qb_tier',
-      key: 'qb_tier',
-      width: 70,
-      render: (v: string | null) => {
+  const columns = useMemo(() => [
+    col.accessor('full_name', {
+      header: 'Contact',
+      size: 200,
+      cell: info => {
+        const r = info.row.original;
+        return (
+          <div>
+            <Text strong>{r.full_name || r.email_address}</Text>
+            {r.full_name && <div><Text type="secondary" style={{ fontSize: 12 }}>{r.email_address}</Text></div>}
+          </div>
+        );
+      },
+    }),
+    col.accessor('company_name', {
+      header: 'Company',
+      cell: info => info.getValue() || <Text type="secondary">-</Text>,
+    }),
+    col.accessor('qb_customer_type', {
+      header: 'Customer Type',
+      size: 120,
+      enableSorting: false,
+      cell: info => <LifecycleBadge tier={info.getValue()} />,
+    }),
+    col.accessor('qb_tier', {
+      header: 'Tier',
+      size: 70,
+      enableSorting: false,
+      cell: info => {
+        const v = info.getValue();
         if (!v) return null;
         const colorMap: Record<string, string> = { A: 'green', B: 'blue', C: 'orange' };
         return <Tag color={colorMap[v] || 'default'}>{v}</Tag>;
       },
-    },
-    {
-      title: 'Score',
-      dataIndex: 'engagement_score',
-      key: 'engagement_score',
-      width: 140,
-      sorter: true,
-      sortOrder: getSortOrder('engagement_score'),
-      render: (v: number) => <EngagementBadge score={v} showBar size="small" />,
-    },
-    {
-      title: 'Sent',
-      dataIndex: 'total_emails_sent',
-      key: 'total_emails_sent',
-      width: 70,
-      sorter: true,
-      sortOrder: getSortOrder('total_emails_sent'),
-      render: (v: number, r: ContactAnalytics) => (
-        <a onClick={(e) => { e.stopPropagation(); navigate(`/emails?contact_id=${r.id}`); }} style={{ color: '#667eea' }}>
-          {v || 0}
+    }),
+    col.accessor('engagement_score', {
+      header: 'Score',
+      size: 140,
+      cell: info => <EngagementBadge score={info.getValue() ?? 0} showBar size="small" />,
+    }),
+    col.accessor('total_emails_sent', {
+      header: 'Sent',
+      size: 70,
+      meta: { align: 'right' },
+      cell: info => (
+        <a onClick={(e) => { e.stopPropagation(); navigate(`/emails?contact_id=${info.row.original.id}`); }} style={{ color: '#667eea' }}>
+          {info.getValue() || 0}
         </a>
       ),
-    },
-    {
-      title: 'Received',
-      dataIndex: 'total_emails_received',
-      key: 'total_emails_received',
-      width: 80,
-      sorter: true,
-      sortOrder: getSortOrder('total_emails_received'),
-      render: (v: number, r: ContactAnalytics) => (
-        <a onClick={(e) => { e.stopPropagation(); navigate(`/emails?contact_id=${r.id}`); }} style={{ color: '#667eea' }}>
-          {v || 0}
+    }),
+    col.accessor('total_emails_received', {
+      header: 'Received',
+      size: 80,
+      meta: { align: 'right' },
+      cell: info => (
+        <a onClick={(e) => { e.stopPropagation(); navigate(`/emails?contact_id=${info.row.original.id}`); }} style={{ color: '#667eea' }}>
+          {info.getValue() || 0}
         </a>
       ),
-    },
-    {
-      title: 'Last Contact',
-      dataIndex: 'last_contacted_at',
-      key: 'last_contacted_at',
-      width: 110,
-      sorter: true,
-      sortOrder: getSortOrder('last_contacted_at'),
-      render: (v: string) => formatRelativeTime(v),
-    },
-  ];
+    }),
+    col.accessor('last_contacted_at', {
+      header: 'Last Contact',
+      size: 110,
+      cell: info => formatRelativeTime(info.getValue()),
+    }),
+  ], [navigate]);
 
+  const table = useReactTable({
+    data: contacts,
+    columns,
+    state: { sorting },
+    onSortingChange: (updater) => {
+      setSorting(typeof updater === 'function' ? updater(sorting) : updater);
+      setContactsPage(1);
+    },
+    getCoreRowModel: getCoreRowModel(),
+    manualSorting: true,
+    enableSortingRemoval: false,
+  });
+
+  // Top Engaged / At Risk tabs still use AnalyticsTable (Ant Design)
   const topColumns = [
     {
-      title: 'Contact',
-      key: 'name',
+      title: 'Contact', key: 'name',
       render: (_: any, r: TopEngagedContact) => (
         <div>
           <Text strong>{r.full_name || r.email_address}</Text>
@@ -179,8 +160,7 @@ export const ContactsAnalytics: React.FC = () => {
 
   const atRiskColumns = [
     {
-      title: 'Contact',
-      key: 'name',
+      title: 'Contact', key: 'name',
       render: (_: any, r: AtRiskContact) => (
         <div>
           <Text strong>{r.full_name || r.email_address}</Text>
@@ -189,50 +169,26 @@ export const ContactsAnalytics: React.FC = () => {
       ),
     },
     { title: 'Days Silent', dataIndex: 'days_since_contact', key: 'days', width: 100, render: (v: number) => <Tag color={v > 90 ? 'red' : 'orange'}>{v}d</Tag> },
-    {
-      title: 'Tier',
-      dataIndex: 'qb_tier',
-      key: 'qb_tier',
-      width: 70,
-      render: (v: string | null) => {
-        if (!v) return null;
-        const colorMap: Record<string, string> = { A: 'green', B: 'blue', C: 'orange' };
-        return <Tag color={colorMap[v] || 'default'}>{v}</Tag>;
-      },
-    },
-    {
-      title: 'Revenue',
-      dataIndex: 'qb_total_revenue',
-      key: 'qb_total_revenue',
-      width: 110,
-      render: (v: number | null) => formatCurrency(v, 'AUD', 2),
-    },
+    { title: 'Tier', dataIndex: 'qb_tier', key: 'qb_tier', width: 70, render: (v: string | null) => { if (!v) return null; const colorMap: Record<string, string> = { A: 'green', B: 'blue', C: 'orange' }; return <Tag color={colorMap[v] || 'default'}>{v}</Tag>; } },
+    { title: 'Revenue', dataIndex: 'qb_total_revenue', key: 'qb_total_revenue', width: 110, render: (v: number | null) => formatCurrency(v, 'AUD', 2) },
     { title: 'Score', dataIndex: 'engagement_score', key: 'score', width: 120, render: (v: number) => <EngagementBadge score={v} /> },
     { title: 'Last Contact', dataIndex: 'last_contacted_at', key: 'last', width: 110, render: (v: string) => formatRelativeTime(v) },
   ];
 
-  const handleRowClick = (record: any) => {
-    navigate(`/customers/contacts/${record.id}`);
-  };
-
+  const handleRowClick = (record: ContactAnalytics) => navigate(`/customers/contacts/${record.id}`);
   const isCompanyDrilldown = !!companyIdFilter;
 
   return (
     <div className="glass-page-bg" style={{ padding: 24 }}>
       {isCompanyDrilldown && (
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)} style={{ marginBottom: 16 }}>
-          Back
-        </Button>
+        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)} style={{ marginBottom: 16 }}>Back</Button>
       )}
       <div className="fade-in-up" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <Text type="secondary">
-          {isCompanyDrilldown
-            ? 'Contacts for this company'
-            : 'Explore contacts, engagement scores, and relationship health'}
+          {isCompanyDrilldown ? 'Contacts for this company' : 'Explore contacts, engagement scores, and relationship health'}
         </Text>
         <ClientSelector value={clientId} onChange={setClientId} />
       </div>
-
       <div className="fade-in-up stagger-1">
         <Tabs activeKey={activeTab} onChange={setActiveTab} items={[
           {
@@ -241,59 +197,29 @@ export const ContactsAnalytics: React.FC = () => {
             children: (
               <>
                 <Space style={{ marginBottom: 12 }} wrap>
-                  <Input.Search
-                    placeholder="Search name, email, company..."
-                    allowClear
-                    defaultValue={search}
-                    onSearch={(v) => { setSearch(v); setContactsPage(1); }}
-                    style={{ width: 240 }}
-                    size="small"
-                  />
+                  <Input.Search placeholder="Search name, email, company..." allowClear defaultValue={search} onSearch={(v) => { setSearch(v); setContactsPage(1); }} style={{ width: 240 }} size="small" />
                   <Switch checked={qbLinked} onChange={v => { setQbLinked(v); setContactsPage(1); }} size="small" />
                   <Text type="secondary" style={{ fontSize: 12 }}>QB Linked</Text>
                 </Space>
-                <AnalyticsTable<ContactAnalytics>
-                  columns={allColumns}
-                  data={contacts}
+                <DataTable<ContactAnalytics>
+                  table={table}
                   total={contactsTotal}
-                  loading={loading}
+                  loading={contactsQuery.isLoading}
                   pageSize={PAGE_SIZE}
                   currentPage={contactsPage}
-                  onPageChange={(p) => setContactsPage(p)}
+                  onPageChange={setContactsPage}
                   onRowClick={handleRowClick}
-                  onChange={handleTableChange}
-                  rowKey="id"
                 />
               </>
             ),
           },
           {
-            key: 'top',
-            label: 'Top Engaged',
-            children: (
-              <AnalyticsTable<TopEngagedContact>
-                columns={topColumns}
-                data={topQuery.data || []}
-                total={(topQuery.data || []).length}
-                loading={topQuery.isLoading}
-                onRowClick={handleRowClick}
-                rowKey="id"
-              />
-            ),
+            key: 'top', label: 'Top Engaged',
+            children: <AnalyticsTable<TopEngagedContact> columns={topColumns} data={topQuery.data || []} total={(topQuery.data || []).length} loading={topQuery.isLoading} onRowClick={(r) => navigate(`/customers/contacts/${r.id}`)} rowKey="id" />,
           },
           {
-            key: 'atrisk',
-            label: 'At Risk',
-            children: (
-              <AnalyticsTable<AtRiskContact>
-                columns={atRiskColumns}
-                data={atRiskQuery.data || []}
-                total={(atRiskQuery.data || []).length}
-                loading={atRiskQuery.isLoading}
-                onRowClick={handleRowClick}
-                rowKey="id"
-              />
-            ),
+            key: 'atrisk', label: 'At Risk',
+            children: <AnalyticsTable<AtRiskContact> columns={atRiskColumns} data={atRiskQuery.data || []} total={(atRiskQuery.data || []).length} loading={atRiskQuery.isLoading} onRowClick={(r) => navigate(`/customers/contacts/${r.id}`)} rowKey="id" />,
           },
         ]} />
       </div>
