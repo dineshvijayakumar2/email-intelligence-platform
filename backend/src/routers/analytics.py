@@ -2097,26 +2097,54 @@ async def get_thread_detail(
         # Fetch emails by canonical_thread_id (cross-mailbox)
         canonical_id = ts.get('canonical_thread_id') or thread_id
         original_thread_id = ts.get('thread_id')
+        subject = ts.get('subject', '')
         COLS = 'id, subject, sender_email, sender_name, recipients, sent_date, is_outbound, body_text, folder_path'
 
-        emails_result = _supabase.table('emails').select(COLS).eq(
+        all_emails: list = []
+        seen_ids: set = set()
+
+        # Source 1: canonical_thread_id match
+        r1 = _supabase.table('emails').select(COLS).eq(
             'canonical_thread_id', canonical_id
         ).order('sent_date', desc=False).limit(limit).execute()
+        for e in (r1.data or []):
+            if e['id'] not in seen_ids:
+                all_emails.append(e)
+                seen_ids.add(e['id'])
 
-        # Also fetch by original thread_id (emails not yet canonical-resolved)
-        # and merge, deduplicating by email ID
-        seen_ids = {e['id'] for e in (emails_result.data or [])}
-        if original_thread_id:
-            fallback = _supabase.table('emails').select(COLS).eq(
+        # Source 2: original thread_id match (emails not yet canonical-resolved)
+        if original_thread_id and original_thread_id != canonical_id:
+            r2 = _supabase.table('emails').select(COLS).eq(
                 'thread_id', original_thread_id
             ).order('sent_date', desc=False).limit(limit).execute()
-            for e in (fallback.data or []):
+            for e in (r2.data or []):
                 if e['id'] not in seen_ids:
-                    emails_result.data.append(e)
+                    all_emails.append(e)
                     seen_ids.add(e['id'])
-            # Re-sort merged results
-            if emails_result.data:
-                emails_result.data.sort(key=lambda e: e.get('sent_date', ''))
+
+        # Source 3: thread_id = canonical_id (thread tracker stored canonical UUID as thread_id)
+        if not all_emails:
+            r3 = _supabase.table('emails').select(COLS).eq(
+                'thread_id', canonical_id
+            ).order('sent_date', desc=False).limit(limit).execute()
+            for e in (r3.data or []):
+                if e['id'] not in seen_ids:
+                    all_emails.append(e)
+                    seen_ids.add(e['id'])
+
+        # Source 4: subject match fallback (last resort — for threads where IDs don't match)
+        if not all_emails and subject and len(subject) >= 10:
+            r4 = _supabase.table('emails').select(COLS).ilike(
+                'subject', f'%{subject[:80]}%'
+            ).order('sent_date', desc=False).limit(limit).execute()
+            for e in (r4.data or []):
+                if e['id'] not in seen_ids:
+                    all_emails.append(e)
+                    seen_ids.add(e['id'])
+
+        # Sort merged results
+        all_emails.sort(key=lambda e: e.get('sent_date', ''))
+        emails_result = type('R', (), {'data': all_emails})()
 
         thread_emails = []
         for e in (emails_result.data or []):
