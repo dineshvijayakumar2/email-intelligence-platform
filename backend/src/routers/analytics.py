@@ -1114,12 +1114,46 @@ async def get_contact_emails(contact_id: str, limit: int = 50, offset: int = 0):
 # COMPANY ANALYTICS ENDPOINTS (5 endpoints)
 # ============================================================================
 
+@router.get("/companies/filter-options")
+async def get_company_filter_options(client_id: str = Query(...)):
+    """Get distinct values for company filter dropdowns (Tier, Account Manager)."""
+    try:
+        tiers = set()
+        ams = set()
+        offset = 0
+        while True:
+            resp = _supabase.table('customer_companies').select(
+                'qb_tier, qb_account_manager'
+            ).eq('client_id', client_id).not_.is_(
+                'qb_customer_id', 'null'
+            ).range(offset, offset + 999).execute()
+            rows = resp.data or []
+            if not rows:
+                break
+            for r in rows:
+                if r.get('qb_tier'):
+                    tiers.add(r['qb_tier'])
+                if r.get('qb_account_manager'):
+                    ams.add(r['qb_account_manager'])
+            offset += len(rows)
+
+        return {
+            'tiers': sorted(tiers),
+            'account_managers': sorted(ams),
+        }
+    except Exception as e:
+        logger.error(f"Failed to get filter options: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/companies", response_model=CompanyAnalyticsListResponse)
 async def list_company_analytics(
     client_id: Optional[str] = Query(default=None),
     engagement_status: Optional[EngagementStatus] = Query(default=None),
     min_engagement_score: Optional[float] = Query(default=None, ge=0, le=100),
     qb_matched: Optional[bool] = Query(default=None, description="Filter companies matched to QB customers"),
+    qb_tier: Optional[str] = Query(default=None, description="Filter by QB tier (e.g. 'Level 1')"),
+    qb_account_manager: Optional[str] = Query(default=None, description="Filter by account manager name"),
     search: Optional[str] = Query(default=None, description="Search by company name or industry"),
     sort_by: Optional[str] = Query(default=None, description="Sort column"),
     sort_dir: str = Query(default="desc", description="asc or desc"),
@@ -1146,6 +1180,10 @@ async def list_company_analytics(
             query = query.gte('engagement_score', int(min_engagement_score))
         if qb_matched is True:
             query = query.not_.is_('qb_customer_id', 'null')
+        if qb_tier:
+            query = query.ilike('qb_tier', f'{qb_tier}%')
+        if qb_account_manager:
+            query = query.eq('qb_account_manager', qb_account_manager)
         if search and search.strip():
             term = _sanitize_search_term(search.strip())
             query = query.or_(f"company_name.ilike.%{term}%,industry.ilike.%{term}%")
@@ -1200,6 +1238,10 @@ async def list_company_analytics(
             count_query = count_query.gte('engagement_score', int(min_engagement_score))
         if qb_matched is True:
             count_query = count_query.not_.is_('qb_customer_id', 'null')
+        if qb_tier:
+            count_query = count_query.ilike('qb_tier', f'{qb_tier}%')
+        if qb_account_manager:
+            count_query = count_query.eq('qb_account_manager', qb_account_manager)
         if search and search.strip():
             term = _sanitize_search_term(search.strip())
             count_query = count_query.or_(f"company_name.ilike.%{term}%,industry.ilike.%{term}%")

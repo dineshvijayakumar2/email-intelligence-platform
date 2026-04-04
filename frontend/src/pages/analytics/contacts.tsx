@@ -25,7 +25,7 @@ export const ContactsAnalytics: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const isMountedRef = useRef(true);
-  const [clientId, setClientId] = useState(() => searchParams.get('client_id') || '');
+  const [clientId, setClientId] = useState(() => searchParams.get('client_id') || localStorage.getItem('analytics_client_id') || '');
   const [activeTab, setActiveTab] = useState('all');
   const [loading, setLoading] = useState(false);
 
@@ -272,10 +272,10 @@ export const ContactsAnalytics: React.FC = () => {
         <Tabs activeKey={activeTab} onChange={setActiveTab} items={[
           {
             key: 'all',
-            label: `All Contacts (${contactsTotal})${qbLinked ? ' — QB Linked' : ''}`,
+            label: `All Contacts (${contactsTotal})`,
             children: (
               <>
-                <Space style={{ marginBottom: 16 }} wrap>
+                <Space style={{ marginBottom: 12 }} wrap>
                   <Input.Search
                     placeholder="Search name, email, company..."
                     allowClear
@@ -287,6 +287,13 @@ export const ContactsAnalytics: React.FC = () => {
                   <Text>QB Linked:</Text>
                   <Switch checked={qbLinked} onChange={v => { setQbLinked(v); setContactsPage(1); }} size="small" />
                 </Space>
+                {(qbLinked || search) && (
+                  <div style={{ marginBottom: 10 }}>
+                    <Text type="secondary" style={{ fontSize: 12 }}>Filters: </Text>
+                    {qbLinked && <Tag color="blue" style={{ fontSize: 11 }}>QB Linked</Tag>}
+                    {search && <Tag color="blue" style={{ fontSize: 11 }}>Search: "{search}"</Tag>}
+                  </div>
+                )}
                 <AnalyticsTable<ContactAnalytics>
                   columns={allColumns}
                   data={contacts}

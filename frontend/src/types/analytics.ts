@@ -460,6 +460,8 @@ export interface CompanyFilterParams extends PaginationParams {
   engagement_status?: EngagementStatus;
   min_engagement_score?: number;
   qb_matched?: boolean;
+  qb_tier?: string;
+  qb_account_manager?: string;
   search?: string;
 }
 
