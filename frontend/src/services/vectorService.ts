@@ -107,6 +107,8 @@ export async function stopReembed(clientId?: string): Promise<{ status: string }
 
 export async function backfillSearchText(batchSize = 10000): Promise<{ updated: number; done: boolean }> {
   return api.post<{ updated: number; batch_size: number; done: boolean }>(
-    `/v1/ai/vector/backfill-search-text?batch_size=${batchSize}`
+    `/v1/ai/vector/backfill-search-text?batch_size=${batchSize}`,
+    undefined,
+    { timeout: 120000 },
   );
 }
