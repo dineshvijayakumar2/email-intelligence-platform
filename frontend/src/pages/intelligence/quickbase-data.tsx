@@ -293,6 +293,35 @@ const QuickbaseDataPage: React.FC = () => {
       .catch(() => {});
   }, [clientId]);
 
+  // Refresh sync status + table counts from backend
+  const refreshSyncStatus = async () => {
+    if (!clientId) return;
+    try {
+      const s = await api.get<any>(`/v1/quickbase/sync-status?client_id=${clientId}`);
+      setLastSyncAt(s?.last_sync_at || null);
+      const rc: Record<string, number> = s?.record_counts || {};
+      if (rc.customers)        setCustomers(prev => ({ ...prev, total: rc.customers }));
+      if (rc.contacts)         setContacts(prev => ({ ...prev, total: rc.contacts }));
+      if (rc.quotes)           setQuotes(prev => ({ ...prev, total: rc.quotes }));
+      if (rc.jobs)             setJobs(prev => ({ ...prev, total: rc.jobs }));
+      if (rc.sales_line_items) setSli(prev => ({ ...prev, total: rc.sales_line_items }));
+      if (rc.operations)       setOperations(prev => ({ ...prev, total: rc.operations }));
+      if (rc.unique_emails)    setUniqueEmails(prev => ({ ...prev, total: rc.unique_emails }));
+      const logs: Record<string, { synced_at: string | null; status: string }> = {};
+      for (const log of (s?.table_logs || [])) {
+        logs[log.table_name] = { synced_at: log.synced_at, status: log.status };
+      }
+      setTableLogs(logs);
+    } catch { /* silent */ }
+  };
+
+  // Auto-refresh after sync — poll 3 times (5s, 15s, 30s)
+  const scheduleRefresh = () => {
+    setTimeout(refreshSyncStatus, 5000);
+    setTimeout(refreshSyncStatus, 15000);
+    setTimeout(refreshSyncStatus, 30000);
+  };
+
   const handleQBSync = async (full = false) => {
     if (!clientId) return;
     setQbSyncing(true);
@@ -300,10 +329,7 @@ const QuickbaseDataPage: React.FC = () => {
       const params = full ? `client_id=${clientId}&full=true` : `client_id=${clientId}`;
       await api.post<any>(`/v1/quickbase/sync?${params}`);
       message.success(full ? 'Full sync started — re-fetching all records' : 'Sync started — fetching recent changes');
-      setTimeout(async () => {
-        const s = await api.get<any>(`/v1/quickbase/sync-status?client_id=${clientId}`);
-        setLastSyncAt(s?.last_sync_at || null);
-      }, 3000);
+      scheduleRefresh();
     } catch (err: any) {
       message.error(err?.message || 'Sync failed');
     } finally {
@@ -319,10 +345,10 @@ const QuickbaseDataPage: React.FC = () => {
       if (full) params.set('full', 'true');
       await api.post<any>(`/v1/quickbase/sync?${params}`);
       message.success(`${full ? 'Full' : 'Incremental'} sync started for ${tableKey}`);
+      scheduleRefresh();
     } catch (err: any) {
       message.error(err?.message || `Sync failed for ${tableKey}`);
     }
-    // Clear loading after a short delay (sync runs in background)
     setTimeout(() => {
       setTableSyncing(prev => ({ ...prev, [tableKey]: false }));
     }, 2000);
