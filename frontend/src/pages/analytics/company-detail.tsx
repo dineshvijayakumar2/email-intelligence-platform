@@ -156,6 +156,7 @@ export const CompanyDetail: React.FC = () => {
                   )}
                   {company.qb_invoiced_ly != null && <Descriptions.Item label="Last Year">{formatCurrency(company.qb_invoiced_ly)}</Descriptions.Item>}
                   {company.qb_days_since_last_invoice != null && <Descriptions.Item label="Days Since Order">{company.qb_days_since_last_invoice}</Descriptions.Item>}
+                  <Descriptions.Item label="Orders">{orderHistory.filter(o => o.status !== 'Cancelled').length}</Descriptions.Item>
                 </Descriptions>
                 {(company.qb_capabilities?.length > 0 || company.qb_processes?.length > 0 || company.qb_embellishments?.length > 0) && (
                   <div style={{ marginTop: 8 }}>
