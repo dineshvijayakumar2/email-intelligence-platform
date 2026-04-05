@@ -297,6 +297,11 @@ class AIInsightsEngine:
     def _generate_insight(self, system_prompt: str, context: str, entity_type: str, entity_id: str) -> Optional[dict]:
         """Call LLM and parse JSON response."""
         try:
+            # Apply client model settings so we use the configured model (not hardcoded default)
+            if self._supabase and self._client_id:
+                from .ai_email_analyzer import _apply_client_model_settings
+                _apply_client_model_settings(self._supabase, self._client_id)
+
             llm = get_cheap_llm(temperature=0.1)
 
             messages = [
