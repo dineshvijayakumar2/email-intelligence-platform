@@ -33,11 +33,10 @@ CREATE TRIGGER trg_emails_search_text
 -- 4. Backfill existing rows — RUN SEPARATELY in batches of 10K to avoid timeout.
 --    The RPC below processes one batch per call. Run repeatedly until it returns 0.
 
+-- Returns TABLE so PostgREST can expose it properly (scalar returns are problematic)
 CREATE OR REPLACE FUNCTION backfill_search_text(p_batch_size int DEFAULT 10000)
-RETURNS int
+RETURNS TABLE(updated_count int)
 LANGUAGE plpgsql AS $$
-DECLARE
-    updated int;
 BEGIN
     WITH batch AS (
         SELECT id FROM emails
@@ -53,8 +52,8 @@ BEGIN
     FROM batch
     WHERE e.id = batch.id;
 
-    GET DIAGNOSTICS updated = ROW_COUNT;
-    RETURN updated;
+    GET DIAGNOSTICS updated_count = ROW_COUNT;
+    RETURN NEXT;
 END;
 $$;
 
