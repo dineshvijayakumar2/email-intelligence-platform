@@ -206,9 +206,10 @@ const VectorSearchPage: React.FC = () => {
     try {
       while (!backfillCancelRef.current) {
         const resp = await vectorApi.backfillSearchText(2000);
-        totalUpdated += resp.updated;
+        if (!resp) break;
+        totalUpdated += resp.updated || 0;
         setBackfillTotal(totalUpdated);
-        if (resp.done) {
+        if (resp.done || resp.updated === 0) {
           message.success(`Search index built: ${totalUpdated.toLocaleString()} emails indexed`);
           break;
         }
