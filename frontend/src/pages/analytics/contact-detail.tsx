@@ -92,8 +92,21 @@ export const ContactDetail: React.FC = () => {
         <Row align="middle" gutter={16}>
           <Col flex="auto">
             <Title level={4} style={{ margin: 0 }}>{contact.full_name || contact.email_address}</Title>
-            {contact.full_name && <Text type="secondary">{contact.email_address}</Text>}
-            {contact.qb_quotes_count != null && <Tag style={{ marginLeft: 8 }}>{contact.qb_quotes_count} quotes</Tag>}
+            {contact.full_name && <div><Text type="secondary">{contact.email_address}</Text></div>}
+            <div style={{ marginTop: 4 }}>
+              {(contact.customer_company_name || contact.company_name) && (
+                <a
+                  onClick={() => contact.customer_company_id && navigate(`/customers/${contact.customer_company_id}`)}
+                  style={{ color: '#667eea', cursor: contact.customer_company_id ? 'pointer' : 'default', marginRight: 8 }}
+                >
+                  {contact.customer_company_name || contact.company_name}
+                </a>
+              )}
+              {contact.job_title && <Tag>{contact.job_title}</Tag>}
+              {contact.qb_customer_type && <LifecycleBadge tier={contact.qb_customer_type} />}
+              {contact.qb_tier && <Tag color="purple" style={{ marginLeft: 4 }}>{contact.qb_tier}</Tag>}
+              {contact.qb_quotes_count != null && contact.qb_quotes_count > 0 && <Tag style={{ marginLeft: 4 }}>{contact.qb_quotes_count} quotes</Tag>}
+            </div>
           </Col>
           <Col>
             <EngagementBadge score={contact.engagement_score} showBar />
