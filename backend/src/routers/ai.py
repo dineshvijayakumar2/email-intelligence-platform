@@ -1964,6 +1964,12 @@ async def get_vector_stats(
     if not client_id:
         client_id = current_user.get("client_id")
 
+    logger.info(f"Vector stats requested for client_id={client_id}")
+
+    if not client_id:
+        logger.warning("Vector stats: no client_id available")
+        return {"emails": {"total": 0, "embedded": 0}, "companies": {"total": 0, "embedded": 0}, "operations": {"total": 0, "embedded": 0}}
+
     stats = {}
     for table, label in [
         ("emails", "emails"),
@@ -1981,15 +1987,19 @@ async def get_vector_stats(
                 "total": total.count or 0,
                 "embedded": embedded.count or 0,
             }
-        except Exception:
-            # embedding column may not exist yet — report 0/0
+        except Exception as e:
+            logger.warning(f"Vector stats primary query failed for {table}: {e}")
+            # embedding column may not exist yet — report total only
             try:
                 total = _supabase.table(table).select(
                     "id", count="exact"
                 ).eq("client_id", client_id).execute()
                 stats[label] = {"total": total.count or 0, "embedded": 0}
-            except Exception:
+            except Exception as e2:
+                logger.warning(f"Vector stats fallback also failed for {table}: {e2}")
                 stats[label] = {"total": 0, "embedded": 0}
+
+    logger.info(f"Vector stats result: {stats}")
     return stats
 
 
