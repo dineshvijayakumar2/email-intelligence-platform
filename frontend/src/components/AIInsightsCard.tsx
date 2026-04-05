@@ -114,9 +114,15 @@ const AIInsightsCard: React.FC<AIInsightsCardProps> = ({ entityType, entityId, c
     setError(null);
     try {
       const result = await insightsApi[entityType](entityId, false, clientId) as any;
+      if (!result) {
+        setError('Request timed out — the AI model may be slow. Try again.');
+        return;
+      }
       const data: AIInsight = result?.insight ?? result?.data?.insight ?? result;
       if (data?.error) {
         setError(data.error);
+      } else if (!data || (!data.health_summary && !data.engagement_summary && !data.thread_summary)) {
+        setError('AI returned an empty response. Try again.');
       } else {
         setInsight(data);
       }

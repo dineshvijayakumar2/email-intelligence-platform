@@ -60,17 +60,17 @@ export const amPerformanceApi = {
 export const insightsApi = {
   company: async (companyId: string, force = false, clientId?: string) => {
     const qs = `force=${force}${clientId ? `&client_id=${clientId}` : ''}`;
-    return api.get<{ insight: AIInsight }>(`${API_PREFIX}/insights/company/${companyId}?${qs}`);
+    return api.get<{ insight: AIInsight }>(`${API_PREFIX}/insights/company/${companyId}?${qs}`, { timeout: 60000 });
   },
 
   contact: async (contactId: string, force = false, clientId?: string) => {
     const qs = `force=${force}${clientId ? `&client_id=${clientId}` : ''}`;
-    return api.get<{ insight: AIInsight }>(`${API_PREFIX}/insights/contact/${contactId}?${qs}`);
+    return api.get<{ insight: AIInsight }>(`${API_PREFIX}/insights/contact/${contactId}?${qs}`, { timeout: 60000 });
   },
 
   thread: async (threadId: string, force = false, clientId?: string) => {
     const qs = `force=${force}${clientId ? `&client_id=${clientId}` : ''}`;
-    return api.get<{ insight: AIInsight }>(`${API_PREFIX}/insights/thread/${threadId}?${qs}`);
+    return api.get<{ insight: AIInsight }>(`${API_PREFIX}/insights/thread/${threadId}?${qs}`, { timeout: 60000 });
   },
 };
 
