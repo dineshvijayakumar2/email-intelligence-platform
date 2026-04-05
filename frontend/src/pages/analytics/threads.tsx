@@ -135,10 +135,12 @@ export const ThreadAnalytics: React.FC = () => {
       },
     }),
     col.accessor('total_messages', {
+      id: 'message_count',
       header: 'Emails',
       size: 90,
     }),
     col.accessor('last_message_date', {
+      id: 'last_message_at',
       header: 'Last Email',
       size: 110,
       cell: info => formatRelativeTime(info.getValue()),

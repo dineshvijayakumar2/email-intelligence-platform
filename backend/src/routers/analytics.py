@@ -1229,24 +1229,27 @@ async def list_company_analytics(
             ))
 
         # Get total count
-        count_query = _supabase.table('customer_companies').select('id', count='exact')
-        if client_id:
-            count_query = count_query.eq('client_id', client_id)
+        # engagement_status is computed in Python (not a DB column), so when
+        # that filter is active the DB count is unreliable — use len(companies).
         if engagement_status:
-            count_query = count_query.eq('engagement_status', engagement_status.value if hasattr(engagement_status, 'value') else engagement_status)
-        if min_engagement_score is not None:
-            count_query = count_query.gte('engagement_score', int(min_engagement_score))
-        if qb_matched is True:
-            count_query = count_query.not_.is_('qb_customer_id', 'null')
-        if qb_tier:
-            count_query = count_query.ilike('qb_tier', f'{qb_tier}%')
-        if qb_account_manager:
-            count_query = count_query.eq('qb_account_manager', qb_account_manager)
-        if search and search.strip():
-            term = _sanitize_search_term(search.strip())
-            count_query = count_query.or_(f"company_name.ilike.%{term}%,industry.ilike.%{term}%")
-        count_result = count_query.execute()
-        total = count_result.count if count_result.count else len(count_result.data)
+            total = len(companies)
+        else:
+            count_query = _supabase.table('customer_companies').select('id', count='exact')
+            if client_id:
+                count_query = count_query.eq('client_id', client_id)
+            if min_engagement_score is not None:
+                count_query = count_query.gte('engagement_score', int(min_engagement_score))
+            if qb_matched is True:
+                count_query = count_query.not_.is_('qb_customer_id', 'null')
+            if qb_tier:
+                count_query = count_query.ilike('qb_tier', f'{qb_tier}%')
+            if qb_account_manager:
+                count_query = count_query.eq('qb_account_manager', qb_account_manager)
+            if search and search.strip():
+                term = _sanitize_search_term(search.strip())
+                count_query = count_query.or_(f"company_name.ilike.%{term}%,industry.ilike.%{term}%")
+            count_result = count_query.execute()
+            total = count_result.count if count_result.count else len(count_result.data)
 
         return CompanyAnalyticsListResponse(companies=companies, total=total)
 
