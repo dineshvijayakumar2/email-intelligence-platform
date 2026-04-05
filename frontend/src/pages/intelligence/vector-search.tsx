@@ -5,7 +5,7 @@
  * Sprint 4 S4.4 — /insights/search
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Card, Input, Tabs, Table, Tag, Space, Typography, Button, Row, Col,
   Statistic, Progress, Alert, message, Collapse, Badge, Spin,
@@ -192,6 +192,37 @@ const VectorSearchPage: React.FC = () => {
     }
   };
 
+  // Full-text search backfill
+  const [backfillRunning, setBackfillRunning] = useState(false);
+  const [backfillTotal, setBackfillTotal] = useState(0);
+  const backfillCancelRef = useRef(false);
+
+  const handleBackfillSearchText = async () => {
+    setBackfillRunning(true);
+    setBackfillTotal(0);
+    backfillCancelRef.current = false;
+    let totalUpdated = 0;
+
+    try {
+      while (!backfillCancelRef.current) {
+        const resp = await vectorApi.backfillSearchText(10000);
+        totalUpdated += resp.updated;
+        setBackfillTotal(totalUpdated);
+        if (resp.done) {
+          message.success(`Search index built: ${totalUpdated.toLocaleString()} emails indexed`);
+          break;
+        }
+      }
+      if (backfillCancelRef.current) {
+        message.info(`Backfill stopped — ${totalUpdated.toLocaleString()} emails indexed so far`);
+      }
+    } catch (err: any) {
+      message.error(err?.message || 'Search text backfill failed');
+    } finally {
+      setBackfillRunning(false);
+    }
+  };
+
   const hasEmbeddings = stats && (
     stats.emails.embedded > 0 || stats.companies.embedded > 0 || stats.operations.embedded > 0
   );
@@ -375,6 +406,15 @@ const VectorSearchPage: React.FC = () => {
                       </>
                     )}
                     <Button icon={<ReloadOutlined />} onClick={loadStats}>Refresh Stats</Button>
+                    {backfillRunning ? (
+                      <Button danger icon={<SyncOutlined spin />} onClick={() => { backfillCancelRef.current = true; }}>
+                        Stop Indexing ({backfillTotal.toLocaleString()})
+                      </Button>
+                    ) : (
+                      <Button icon={<SearchOutlined />} onClick={handleBackfillSearchText}>
+                        Build Search Index
+                      </Button>
+                    )}
                     {reembedStatus?.status === 'complete' && reembedStatus.result && (
                       <Text type="success">
                         <CheckCircleOutlined /> {reembedStatus.result.total_embedded} embedded

@@ -104,3 +104,9 @@ export async function stopReembed(clientId?: string): Promise<{ status: string }
   const params = clientId ? `?client_id=${clientId}` : '';
   return api.post<any>(`/v1/ai/vector/reembed/stop${params}`);
 }
+
+export async function backfillSearchText(batchSize = 10000): Promise<{ updated: number; done: boolean }> {
+  return api.post<{ updated: number; batch_size: number; done: boolean }>(
+    `/v1/ai/vector/backfill-search-text?batch_size=${batchSize}`
+  );
+}
