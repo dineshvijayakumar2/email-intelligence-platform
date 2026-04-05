@@ -525,7 +525,7 @@ async def refresh_engagement_metrics(company_id: str):
 @router.get("/{company_id}/order-history")
 async def get_order_history(
     company_id: str,
-    limit: int = Query(50, ge=1, le=200),
+    limit: int = Query(200, ge=1, le=500),
 ):
     """
     Merged timeline of quotes + jobs for a company, sorted by date descending.

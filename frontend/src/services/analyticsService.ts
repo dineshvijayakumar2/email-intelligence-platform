@@ -279,7 +279,7 @@ export const companiesApi = {
   // Sprint 4: Sales Intelligence endpoints (on /customers router, no /v1 prefix)
 
   /** GET /customers/{companyId}/order-history */
-  async getOrderHistory(companyId: string, limit = 50): Promise<{ items: any[]; total: number }> {
+  async getOrderHistory(companyId: string, limit = 200): Promise<{ items: any[]; total: number }> {
     try {
       return await api.get<{ items: any[]; total: number }>(
         `/customers/${companyId}/order-history?limit=${limit}`,
