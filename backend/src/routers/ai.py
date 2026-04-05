@@ -1893,7 +1893,7 @@ async def backfill_search_text(
                 logger.warning(f"Backfill chunk {i} failed: {chunk_err}")
 
         logger.info(f"search_text backfill: {updated}/{len(ids)} rows")
-        return {"updated": updated, "batch_size": batch_size, "done": len(ids) < batch_size}
+        return {"updated": updated, "batch_size": batch_size, "done": updated == 0}
     except Exception as e:
         logger.error(f"search_text backfill failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e)[:300])
