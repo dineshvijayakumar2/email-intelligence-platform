@@ -59,6 +59,24 @@ export function useCompanyEngagementGroups(clientId: string) {
   });
 }
 
+export function useOrderHistory(companyId: string | undefined) {
+  return useQuery<{ items: any[]; total: number }>({
+    queryKey: ['order-history', companyId],
+    queryFn: () => companiesApi.getOrderHistory(companyId!),
+    enabled: !!companyId,
+    staleTime: 60_000,
+  });
+}
+
+export function useProductProfile(companyId: string | undefined) {
+  return useQuery<{ categories: any[]; operations: any[] }>({
+    queryKey: ['product-profile', companyId],
+    queryFn: () => companiesApi.getProductProfile(companyId!),
+    enabled: !!companyId,
+    staleTime: 60_000,
+  });
+}
+
 export function useCompanyFilterOptions(clientId: string) {
   return useQuery<{ tiers: string[]; account_managers: string[] }>({
     queryKey: ['company-filter-options', clientId],

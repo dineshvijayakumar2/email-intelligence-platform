@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React from 'react';
 import { Row, Col, Typography, Button, Tag, Descriptions, Skeleton, Table, Collapse, Space } from 'antd';
 import { ArrowLeftOutlined, ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -14,14 +14,14 @@ import ContactCapabilitiesCard from '../../components/ContactCapabilitiesCard';
 import SeasonalityChart from '../../components/SeasonalityChart';
 import CapabilityRhythmCard from '../../components/CapabilityRhythmCard';
 import QBLinkWidget from '../../components/QBLinkWidget';
+import { useCompanyDetail, useOrderHistory, useProductProfile } from '../../hooks/queries';
+import { useThreadsByCompany } from '../../hooks/queries';
 import {
-  companiesApi,
-  threadsApi,
   formatRelativeTime,
   engagementStatusConfig,
   threadStatusConfig,
 } from '../../services/analyticsService';
-import type { CompanyAnalytics, ThreadStatusSummary } from '../../types/analytics';
+import type { ThreadStatusSummary, ThreadStatus } from '../../types/analytics';
 import { formatCurrency } from '../../utils/numberFormat';
 
 const { Title, Text } = Typography;
@@ -29,57 +29,17 @@ const { Title, Text } = Typography;
 export const CompanyDetail: React.FC = () => {
   const { companyId } = useParams<{ companyId: string }>();
   const navigate = useNavigate();
-  const isMountedRef = useRef(true);
-  const [company, setCompany] = useState<CompanyAnalytics | null>(null);
-  const [threads, setThreads] = useState<ThreadStatusSummary[]>([]);
-  const [totalEmails, setTotalEmails] = useState(0);
-  const [totalSent, setTotalSent] = useState(0);
-  const [totalReceived, setTotalReceived] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [orderHistory, setOrderHistory] = useState<any[]>([]);
-  const [orderHistoryLoading, setOrderHistoryLoading] = useState(false);
-  const [productProfile, setProductProfile] = useState<{ categories: any[]; operations: any[] }>({ categories: [], operations: [] });
-  const [productProfileLoading, setProductProfileLoading] = useState(false);
 
-  useEffect(() => { isMountedRef.current = true; return () => { isMountedRef.current = false; }; }, []);
+  // All data via TanStack Query — no manual useState/useEffect
+  const companyQuery = useCompanyDetail(companyId);
+  const threadsQuery = useThreadsByCompany(companyId);
+  const orderHistoryQuery = useOrderHistory(companyId);
+  const productProfileQuery = useProductProfile(companyId);
 
-  useEffect(() => {
-    if (!companyId) return;
-    const load = async () => {
-      setLoading(true);
-
-      // Fetch company detail with retry — most critical call
-      let result = await companiesApi.getDetail(companyId);
-      if (!result) {
-        // Retry once after 1s (Supabase may be temporarily busy)
-        await new Promise(r => setTimeout(r, 1000));
-        result = await companiesApi.getDetail(companyId);
-      }
-
-      // Fetch thread data — get enough to show recent + compute counts
-      const threadResult = await threadsApi.byCompany(companyId, 500);
-      const allThreads = threadResult?.threads || [];
-
-      if (isMountedRef.current) {
-        setCompany(result);
-        setTotalEmails(result?.total_emails || 0);
-        setTotalSent(result?.total_outbound || 0);
-        setTotalReceived(result?.total_inbound || 0);
-        setThreads(allThreads);
-        setLoading(false);
-      }
-      // Load supplementary data in parallel (non-blocking)
-      setOrderHistoryLoading(true);
-      setProductProfileLoading(true);
-      companiesApi.getOrderHistory(companyId).then(d => {
-        if (isMountedRef.current) { setOrderHistory(d?.items || []); setOrderHistoryLoading(false); }
-      }).catch(() => { if (isMountedRef.current) setOrderHistoryLoading(false); });
-      companiesApi.getProductProfile(companyId).then(d => {
-        if (isMountedRef.current) { setProductProfile(d || { categories: [], operations: [] }); setProductProfileLoading(false); }
-      }).catch(() => { if (isMountedRef.current) setProductProfileLoading(false); });
-    };
-    load();
-  }, [companyId]);
+  const company = companyQuery.data;
+  const threads = threadsQuery.data?.threads || [];
+  const orderHistory = orderHistoryQuery.data?.items || [];
+  const productProfile = productProfileQuery.data || { categories: [], operations: [] };
 
   const handleThreadClick = (record: ThreadStatusSummary) => {
     const name = encodeURIComponent(record.subject || record.thread_id?.slice(0, 20) || 'Thread');
@@ -107,7 +67,7 @@ export const CompanyDetail: React.FC = () => {
     { title: 'Last Email', dataIndex: 'last_message_date', key: 'last', width: 110, render: (v: string) => formatRelativeTime(v) },
   ];
 
-  if (loading) {
+  if (companyQuery.isLoading) {
     return (
       <div className="glass-page-bg" style={{ padding: 24 }}>
         <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/customers')} style={{ marginBottom: 16 }}>Back</Button>
@@ -126,6 +86,7 @@ export const CompanyDetail: React.FC = () => {
   }
 
   const statusCfg = engagementStatusConfig[company.engagement_status || 'unknown'];
+  const activeThreads = threads.filter(t => !['dropped', 'complete'].includes(t.status));
 
   return (
     <div className="glass-page-bg" style={{ padding: 24 }}>
@@ -148,32 +109,20 @@ export const CompanyDetail: React.FC = () => {
 
       <Row gutter={[16, 16]} className="fade-in-up stagger-1">
         <Col xs={12} sm={6}>
-          <MetricCard
-            title="Total Emails"
-            value={totalEmails}
-            onClick={() => navigate(`/emails?company_id=${companyId}`)}
-          />
+          <MetricCard title="Total Emails" value={company.total_emails || 0} onClick={() => navigate(`/emails?company_id=${companyId}`)} />
         </Col>
         <Col xs={12} sm={6}>
           <MetricCard title="Contacts" value={company.contact_count} onClick={() => navigate(`/customers/contacts?company_id=${companyId}&client_id=${company.client_id}`)} />
         </Col>
         <Col xs={12} sm={6}>
-          <MetricCard
-            title="Threads"
-            value={threads.length}
-            onClick={() => navigate(`/customers/threads?company_id=${companyId}`)}
-          />
+          <MetricCard title="Threads" value={threads.length} onClick={() => navigate(`/customers/threads?company_id=${companyId}`)} />
         </Col>
         <Col xs={12} sm={6}>
-          <MetricCard
-            title="Overdue"
-            value={threads.filter(t => t.status === 'overdue').length}
-            onClick={() => navigate(`/customers/threads?company_id=${companyId}`)}
-          />
+          <MetricCard title="Overdue" value={threads.filter(t => t.status === 'overdue').length} onClick={() => navigate(`/customers/threads?company_id=${companyId}`)} />
         </Col>
       </Row>
 
-      {/* Business Data + Communication Summary */}
+      {/* Business Data + Communication */}
       <Row gutter={[16, 16]} style={{ marginTop: 16 }} className="fade-in-up stagger-2">
         <Col xs={24} lg={12}>
           <div className="glass-card" style={{ padding: 20 }}>
@@ -205,12 +154,8 @@ export const CompanyDetail: React.FC = () => {
               {company.qb_invoiced_ty != null && (
                 <Descriptions.Item label="This Year">
                   {formatCurrency(company.qb_invoiced_ty)}
-                  {company.qb_invoiced_ly != null && company.qb_invoiced_ty > company.qb_invoiced_ly && (
-                    <ArrowUpOutlined style={{ color: '#52c41a', marginLeft: 6 }} />
-                  )}
-                  {company.qb_invoiced_ly != null && company.qb_invoiced_ty < company.qb_invoiced_ly && (
-                    <ArrowDownOutlined style={{ color: '#ff4d4f', marginLeft: 6 }} />
-                  )}
+                  {company.qb_invoiced_ly != null && company.qb_invoiced_ty > company.qb_invoiced_ly && <ArrowUpOutlined style={{ color: '#52c41a', marginLeft: 6 }} />}
+                  {company.qb_invoiced_ly != null && company.qb_invoiced_ty < company.qb_invoiced_ly && <ArrowDownOutlined style={{ color: '#ff4d4f', marginLeft: 6 }} />}
                 </Descriptions.Item>
               )}
               {company.qb_invoiced_ly != null && (
@@ -222,25 +167,19 @@ export const CompanyDetail: React.FC = () => {
                 {company.qb_capabilities?.length > 0 && (
                   <div style={{ marginBottom: 6 }}>
                     <Text type="secondary" style={{ fontSize: 12 }}>Capabilities: </Text>
-                    <Space size={[4, 4]} wrap>
-                      {company.qb_capabilities.map((c: string) => <Tag key={c} color="blue" style={{ fontSize: 11 }}>{c}</Tag>)}
-                    </Space>
+                    <Space size={[4, 4]} wrap>{company.qb_capabilities.map((c: string) => <Tag key={c} color="blue" style={{ fontSize: 11 }}>{c}</Tag>)}</Space>
                   </div>
                 )}
                 {company.qb_processes?.length > 0 && (
                   <div style={{ marginBottom: 6 }}>
                     <Text type="secondary" style={{ fontSize: 12 }}>Processes: </Text>
-                    <Space size={[4, 4]} wrap>
-                      {company.qb_processes.map((p: string) => <Tag key={p} color="cyan" style={{ fontSize: 11 }}>{p}</Tag>)}
-                    </Space>
+                    <Space size={[4, 4]} wrap>{company.qb_processes.map((p: string) => <Tag key={p} color="cyan" style={{ fontSize: 11 }}>{p}</Tag>)}</Space>
                   </div>
                 )}
                 {company.qb_embellishments?.length > 0 && (
                   <div>
                     <Text type="secondary" style={{ fontSize: 12 }}>Embellishments: </Text>
-                    <Space size={[4, 4]} wrap>
-                      {company.qb_embellishments.map((e: string) => <Tag key={e} color="purple" style={{ fontSize: 11 }}>{e}</Tag>)}
-                    </Space>
+                    <Space size={[4, 4]} wrap>{company.qb_embellishments.map((e: string) => <Tag key={e} color="purple" style={{ fontSize: 11 }}>{e}</Tag>)}</Space>
                   </div>
                 )}
               </div>
@@ -256,8 +195,8 @@ export const CompanyDetail: React.FC = () => {
             <Descriptions column={2} size="small">
               <Descriptions.Item label="First Contact">{formatRelativeTime(company.first_contact_date)}</Descriptions.Item>
               <Descriptions.Item label="Last Contact">{formatRelativeTime(company.last_contact_date)}</Descriptions.Item>
-              <Descriptions.Item label="Inbound">{totalReceived}</Descriptions.Item>
-              <Descriptions.Item label="Outbound">{totalSent}</Descriptions.Item>
+              <Descriptions.Item label="Inbound">{company.total_inbound || 0}</Descriptions.Item>
+              <Descriptions.Item label="Outbound">{company.total_outbound || 0}</Descriptions.Item>
               <Descriptions.Item label="Client">{company.client_name || '-'}</Descriptions.Item>
             </Descriptions>
           </div>
@@ -265,35 +204,30 @@ export const CompanyDetail: React.FC = () => {
       </Row>
 
       {/* Active Threads */}
-      {threads.filter(t => !['dropped', 'complete'].includes(t.status)).length > 0 && (
+      {activeThreads.length > 0 && (
         <div style={{ marginTop: 16 }} className="fade-in-up stagger-3">
           <div className="glass-table-container" style={{ padding: 16 }}>
-            <a
-              onClick={() => navigate(`/customers/threads?company_id=${companyId}`)}
-              style={{ fontSize: 16, fontWeight: 600, display: 'block', marginBottom: 12, color: '#667eea', cursor: 'pointer' }}
-            >
-              Active Threads ({threads.filter(t => !['dropped', 'complete'].includes(t.status)).length})
+            <a onClick={() => navigate(`/customers/threads?company_id=${companyId}`)}
+              style={{ fontSize: 16, fontWeight: 600, display: 'block', marginBottom: 12, color: '#667eea', cursor: 'pointer' }}>
+              Active Threads ({activeThreads.length})
               <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>{threads.length} total</Text>
             </a>
             <Table
               columns={threadColumns}
-              dataSource={threads.filter(t => !['dropped', 'complete'].includes(t.status))}
+              dataSource={activeThreads}
               rowKey="thread_id"
               size="small"
               pagination={{ pageSize: 10, size: 'small' }}
-              onRow={(record) => ({
-                onClick: () => handleThreadClick(record),
-                style: { cursor: 'pointer' },
-              })}
+              onRow={(record) => ({ onClick: () => handleThreadClick(record), style: { cursor: 'pointer' } })}
             />
           </div>
         </div>
       )}
 
-      {companyId && !loading && company && <AIInsightsCard entityType="company" entityId={companyId} />}
+      {companyId && company && <AIInsightsCard entityType="company" entityId={companyId} />}
 
       {/* Customer Intelligence */}
-      {companyId && !loading && company && (
+      {companyId && company && (
         <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
           <Col xs={24} lg={12}><StrikeRateCard companyId={companyId} /></Col>
           <Col xs={24} lg={12}><SeasonalityChart companyId={companyId} /></Col>
@@ -302,7 +236,7 @@ export const CompanyDetail: React.FC = () => {
           <Col xs={24} lg={12}>
             <div className="glass-card" style={{ padding: 20 }}>
               <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 12 }}>Product Profile</Text>
-              <ProductProfileCard categories={productProfile?.categories || []} operations={productProfile?.operations || []} loading={productProfileLoading} />
+              <ProductProfileCard categories={productProfile.categories} operations={productProfile.operations} loading={productProfileQuery.isLoading} />
             </div>
           </Col>
           <Col xs={24} lg={12}>
@@ -323,7 +257,7 @@ export const CompanyDetail: React.FC = () => {
             label: <Text strong style={{ fontSize: 15 }}>Order History ({orderHistory.length})</Text>,
             children: (
               <div className="glass-table-container" style={{ padding: 8 }}>
-                <OrderHistoryTable items={orderHistory} loading={orderHistoryLoading} />
+                <OrderHistoryTable items={orderHistory} loading={orderHistoryQuery.isLoading} />
               </div>
             ),
           }]}

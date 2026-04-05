@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React from 'react';
 import { Row, Col, Typography, Button, Tag, Descriptions, Skeleton, Table } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import QBLinkWidget from '../../components/QBLinkWidget';
@@ -7,59 +7,37 @@ import { MetricCard } from '../../components/analytics/MetricCard';
 import AIInsightsCard from '../../components/AIInsightsCard';
 import { EngagementBadge } from '../../components/analytics/EngagementBadge';
 import { LifecycleBadge } from '../../components/analytics/LifecycleBadge';
+import { useContactDetail } from '../../hooks/queries';
+import { useThreadsByContact } from '../../hooks/queries';
+import { useQuery } from '@tanstack/react-query';
 import {
-  contactsApi,
-  threadsApi,
   patternsApi,
   formatRelativeTime,
   formatResponseTime,
   formatRatio,
   threadStatusConfig,
 } from '../../services/analyticsService';
-import type { ContactAnalytics, ThreadStatusSummary, CommunicationPattern } from '../../types/analytics';
+import type { ThreadStatusSummary, CommunicationPattern } from '../../types/analytics';
 
 const { Title, Text } = Typography;
 
 export const ContactDetail: React.FC = () => {
   const { contactId } = useParams<{ contactId: string }>();
   const navigate = useNavigate();
-  const isMountedRef = useRef(true);
-  const [contact, setContact] = useState<ContactAnalytics | null>(null);
-  const [threads, setThreads] = useState<ThreadStatusSummary[]>([]);
-  const [pattern, setPattern] = useState<CommunicationPattern | null>(null);
-  const [totalEmails, setTotalEmails] = useState(0);
-  const [totalSent, setTotalSent] = useState(0);
-  const [totalReceived, setTotalReceived] = useState(0);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => { isMountedRef.current = false; };
-  }, []);
+  // All data via TanStack Query
+  const contactQuery = useContactDetail(contactId);
+  const threadsQuery = useThreadsByContact(contactId);
+  const patternQuery = useQuery<CommunicationPattern | null>({
+    queryKey: ['contact-pattern', contactId],
+    queryFn: () => patternsApi.byContact(contactId!),
+    enabled: !!contactId,
+    staleTime: 60_000,
+  });
 
-  useEffect(() => {
-    if (!contactId) return;
-    loadAll();
-  }, [contactId]);
-
-  const loadAll = async () => {
-    setLoading(true);
-    const [c, t, p, e] = await Promise.all([
-      contactsApi.getDetail(contactId!),
-      threadsApi.byContact(contactId!),
-      patternsApi.byContact(contactId!),
-      contactsApi.getEmails(contactId!, 1, 0),  // fetch just total count
-    ]);
-    if (isMountedRef.current) {
-      setContact(c);
-      setThreads(t.threads);
-      setPattern(p);
-      setTotalEmails(e.total || 0);
-      setTotalSent(e.total_sent ?? 0);
-      setTotalReceived(e.total_received ?? 0);
-      setLoading(false);
-    }
-  };
+  const contact = contactQuery.data;
+  const threads = threadsQuery.data?.threads || [];
+  const pattern = patternQuery.data;
 
   const handleThreadClick = (record: ThreadStatusSummary) => {
     const name = encodeURIComponent(record.subject || record.thread_id?.slice(0, 20) || 'Thread');
@@ -86,11 +64,11 @@ export const ContactDetail: React.FC = () => {
     { title: 'Last Email', dataIndex: 'last_message_date', key: 'last', width: 110, render: (v: string) => formatRelativeTime(v) },
   ];
 
-  if (loading) {
+  if (contactQuery.isLoading) {
     return (
       <div className="glass-page-bg" style={{ padding: 24 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/customers/contacts')} style={{ marginBottom: 16 }}>Back</Button>
-        <Skeleton active paragraph={{ rows: 12 }} />
+        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)} style={{ marginBottom: 16 }}>Back to Contacts</Button>
+        <Skeleton active paragraph={{ rows: 8 }} />
       </div>
     );
   }
@@ -98,104 +76,99 @@ export const ContactDetail: React.FC = () => {
   if (!contact) {
     return (
       <div className="glass-page-bg" style={{ padding: 24 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/customers/contacts')} style={{ marginBottom: 16 }}>Back</Button>
+        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)} style={{ marginBottom: 16 }}>Back to Contacts</Button>
         <Text type="secondary">Contact not found</Text>
       </div>
     );
   }
 
+  const totalEmails = (contact.total_emails_sent || 0) + (contact.total_emails_received || 0);
+
   return (
     <div className="glass-page-bg" style={{ padding: 24 }}>
-      <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/customers/contacts')} style={{ marginBottom: 16 }}>Back to Contacts</Button>
+      <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)} style={{ marginBottom: 16 }}>Back to Contacts</Button>
 
-      {/* Header */}
       <div className="glass-card fade-in-up" style={{ padding: 20, marginBottom: 16 }}>
         <Row align="middle" gutter={16}>
           <Col flex="auto">
             <Title level={4} style={{ margin: 0 }}>{contact.full_name || contact.email_address}</Title>
-            <Text type="secondary">{contact.email_address}</Text>
-            {contact.job_title && <div><Text>{contact.job_title}</Text></div>}
-            {contact.company_name && <div><Text type="secondary">{contact.company_name}</Text></div>}
+            {contact.full_name && <Text type="secondary">{contact.email_address}</Text>}
+            {contact.qb_quotes_count != null && <Tag style={{ marginLeft: 8 }}>{contact.qb_quotes_count} quotes</Tag>}
           </Col>
           <Col>
             <EngagementBadge score={contact.engagement_score} showBar />
-            {contact.is_decision_maker && <Tag color="gold" style={{ marginLeft: 8 }}>Decision Maker</Tag>}
-            {contact.seniority_level && contact.seniority_level !== 'unknown' && <Tag>{contact.seniority_level}</Tag>}
+            <QBLinkWidget
+              mode="contact"
+              entityId={contactId!}
+              clientId={contact.client_id}
+              qbLinkedId={contact.qb_contact_id}
+              qbDisplayName={contact.qb_contact_id ? `QB Contact` : undefined}
+              onLinked={() => window.location.reload()}
+            />
           </Col>
         </Row>
-        <div style={{ marginTop: 12, borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            {contact.qb_customer_type && <LifecycleBadge tier={contact.qb_customer_type} />}
-            {contact.qb_tier && <Tag color="purple">{contact.qb_tier}</Tag>}
-            {contact.qb_quotes_count != null && <Tag>{contact.qb_quotes_count} quote{contact.qb_quotes_count !== 1 ? 's' : ''}</Tag>}
-          </div>
-          <QBLinkWidget
-            mode="contact"
-            entityId={contactId!}
-            clientId={contact.client_id}
-            qbLinkedId={contact.qb_contact_id}
-            qbMatchMethod={contact.qb_contact_id ? 'email' : undefined}
-            qbDisplayName={contact.qb_contact_id ? 'QB Linked' : undefined}
-            onLinked={() => window.location.reload()}
-          />
-        </div>
       </div>
 
-      {/* Stats */}
       <Row gutter={[16, 16]} className="fade-in-up stagger-1">
-        <Col xs={12} sm={6}>
-          <MetricCard
-            title="Total Emails"
-            value={totalEmails}
-            onClick={() => navigate(`/emails?contact_id=${contactId}&name=${encodeURIComponent(contact.full_name || contact.email_address)}`)}
-          />
-        </Col>
-        <Col xs={12} sm={6}><MetricCard title="Initiation Ratio" value={formatRatio(pattern?.thread_initiation_ratio)} /></Col>
-        <Col xs={12} sm={6}><MetricCard title="Our Reply Rate" value={formatRatio(pattern?.reply_rate)} /></Col>
-        <Col xs={12} sm={6}><MetricCard title="Our Avg Response" value={formatResponseTime(pattern?.avg_response_time_hours)} /></Col>
-        <Col xs={12} sm={6}><MetricCard title="Their Avg Response" value={formatResponseTime(pattern?.their_avg_response_time_hours)} /></Col>
+        <Col xs={12} sm={6}><MetricCard title="Total Emails" value={totalEmails} onClick={() => navigate(`/emails?contact_id=${contactId}`)} /></Col>
+        <Col xs={12} sm={6}><MetricCard title="Initiation Ratio" value={contact.initiation_ratio != null ? formatRatio(contact.initiation_ratio) : 'N/A'} /></Col>
+        <Col xs={12} sm={6}><MetricCard title="Our Reply Rate" value={contact.reply_rate != null ? formatRatio(contact.reply_rate) : 'N/A'} /></Col>
+        <Col xs={12} sm={6}><MetricCard title="Our Avg Response" value={formatResponseTime(contact.avg_response_time_seconds)} /></Col>
       </Row>
 
-      {/* Details */}
       <Row gutter={[16, 16]} style={{ marginTop: 16 }} className="fade-in-up stagger-2">
-        <Col xs={24} lg={10}>
+        <Col xs={24} sm={10}>
           <div className="glass-card" style={{ padding: 20 }}>
             <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 12 }}>Details</Text>
             <Descriptions column={1} size="small">
               <Descriptions.Item label="First Contact">{formatRelativeTime(contact.first_contacted_at)}</Descriptions.Item>
               <Descriptions.Item label="Last Contact">{formatRelativeTime(contact.last_contacted_at)}</Descriptions.Item>
-              <Descriptions.Item label="Emails Sent">{totalSent}</Descriptions.Item>
-              <Descriptions.Item label="Emails Received">{totalReceived}</Descriptions.Item>
+              <Descriptions.Item label="Emails Sent">{contact.total_emails_sent || 0}</Descriptions.Item>
+              <Descriptions.Item label="Emails Received">{contact.total_emails_received || 0}</Descriptions.Item>
               <Descriptions.Item label="Threads">{pattern?.total_threads ?? 'N/A'}</Descriptions.Item>
-              <Descriptions.Item label="Avg Thread Depth">{contact.avg_thread_depth?.toFixed(1) ?? 'N/A'}</Descriptions.Item>
-              <Descriptions.Item label="Emails/Week">{pattern?.emails_per_week?.toFixed(1) ?? 'N/A'}</Descriptions.Item>
+              <Descriptions.Item label="Avg Thread Depth">{pattern?.avg_thread_depth != null ? Number(pattern.avg_thread_depth).toFixed(1) : 'N/A'}</Descriptions.Item>
+              <Descriptions.Item label="Emails/Week">{pattern?.emails_per_week != null ? Number(pattern.emails_per_week).toFixed(1) : 'N/A'}</Descriptions.Item>
             </Descriptions>
           </div>
         </Col>
-        <Col xs={24} lg={14}>
-          <div className="glass-table-container" style={{ padding: 16 }}>
-            <a
-              onClick={() => navigate(`/customers/threads?contact_id=${contactId}&name=${encodeURIComponent(contact.full_name || contact.email_address)}`)}
-              style={{ fontSize: 16, fontWeight: 600, display: 'block', marginBottom: 12, color: '#667eea', cursor: 'pointer' }}
-            >
-              Threads ({threads.length})
-            </a>
-            <Table
-              columns={threadColumns}
-              dataSource={threads}
-              rowKey="thread_id"
-              size="small"
-              pagination={threads.length > 10 ? { pageSize: 10 } : false}
-              onRow={(record) => ({
-                onClick: () => handleThreadClick(record),
-                style: { cursor: 'pointer' },
-              })}
-            />
-          </div>
+        <Col xs={24} sm={14}>
+          {threads.length > 0 && (
+            <div className="glass-table-container" style={{ padding: 16 }}>
+              <a onClick={() => navigate(`/customers/threads?contact_id=${contactId}`)}
+                style={{ fontSize: 16, fontWeight: 600, display: 'block', marginBottom: 12, color: '#667eea', cursor: 'pointer' }}>
+                Threads ({threads.length})
+              </a>
+              <Table
+                columns={threadColumns}
+                dataSource={threads.slice(0, 50)}
+                rowKey="thread_id"
+                size="small"
+                pagination={threads.length > 10 ? { pageSize: 10, size: 'small' } : false}
+                onRow={(record) => ({ onClick: () => handleThreadClick(record), style: { cursor: 'pointer' } })}
+              />
+            </div>
+          )}
         </Col>
       </Row>
 
-      {contactId && <AIInsightsCard entityType="contact" entityId={contactId} />}
+      {contact.qb_customer_type && (
+        <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
+          <Col xs={24} sm={8}>
+            <div className="glass-card" style={{ padding: 16 }}>
+              <Text type="secondary">Their Avg Response</Text>
+              <div style={{ fontSize: 20, fontWeight: 600 }}>{pattern?.their_avg_response_time_hours != null ? `${Number(pattern.their_avg_response_time_hours).toFixed(1)}h` : 'N/A'}</div>
+            </div>
+          </Col>
+          <Col xs={24} sm={8}>
+            <div className="glass-card" style={{ padding: 16 }}>
+              <LifecycleBadge tier={contact.qb_customer_type} />
+              {contact.qb_tier && <Tag color="purple" style={{ marginLeft: 8 }}>{contact.qb_tier}</Tag>}
+            </div>
+          </Col>
+        </Row>
+      )}
+
+      {contactId && contact && <AIInsightsCard entityType="contact" entityId={contactId} />}
     </div>
   );
 };
