@@ -365,25 +365,26 @@ class RecommendationEngine:
         names (from qb_operations) for the company.
         """
         try:
-            # Resolve QB customer record ID for this company
+            # Resolve QB customer key ID (field 92) for this company
+            # Note: qb_sales_line_items.qb_customer_id uses Customer ID (key), NOT Record ID#
             cust_result = (
                 self._supabase.table('qb_customers')
-                .select('qb_record_id')
+                .select('customer_key_id')
                 .eq('matched_company_id', company_id)
                 .eq('client_id', self._client_id)
                 .limit(1)
                 .execute()
             )
-            if not cust_result.data:
+            if not cust_result.data or not cust_result.data[0].get('customer_key_id'):
                 return {'categories': [], 'operations': []}
 
-            qb_record_id = cust_result.data[0]['qb_record_id']
+            qb_key_id = cust_result.data[0]['customer_key_id']
 
             # Sales line items → revenue by product_group
             sli_result = (
                 self._supabase.table('qb_sales_line_items')
                 .select('product_group, total')
-                .eq('qb_customer_id', qb_record_id)
+                .eq('qb_customer_id', qb_key_id)
                 .eq('client_id', self._client_id)
                 .execute()
             )
