@@ -349,9 +349,19 @@ class CustomerAnalyticsService:
                     'revenue': round(data['revenue'], 2),
                 })
 
-        # Peak/trough detection (>1.3x avg = peak, <0.7x avg = trough)
-        peak_months = [m['month'] for m in monthly_list if m['order_count'] > avg_count * 1.3]
-        trough_months = [m['month'] for m in monthly_list if m['order_count'] < avg_count * 0.7 and m['order_count'] > 0]
+        # Peak/trough detection using standard deviation
+        # More robust than fixed multiplier — accounts for actual data spread
+        counts = [m['order_count'] for m in monthly_list if m['order_count'] > 0]
+        if len(counts) >= 3:
+            import statistics
+            mean = statistics.mean(counts)
+            stdev = statistics.stdev(counts) if len(counts) > 1 else 0
+            threshold = max(stdev * 0.5, mean * 0.15)  # At least 15% above/below mean
+            peak_months = [m['month'] for m in monthly_list if m['order_count'] > mean + threshold]
+            trough_months = [m['month'] for m in monthly_list if 0 < m['order_count'] < mean - threshold]
+        else:
+            peak_months = []
+            trough_months = []
 
         quarterly_list = sorted([
             {
@@ -512,7 +522,7 @@ class CustomerAnalyticsService:
     def _fetch_all_paginated(
         self, table: str, select: str, eq_filters: dict,
         extra_filters: list = None, page_size: int = 1000,
-        max_rows: int = 10000,
+        max_rows: int = 50000,
     ) -> list:
         """Fetch rows from a table with pagination (capped at max_rows)."""
         all_rows = []
