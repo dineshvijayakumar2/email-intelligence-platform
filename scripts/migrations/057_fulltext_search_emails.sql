@@ -1,6 +1,8 @@
 -- Migration 057: Full-text search infrastructure for hybrid retrieval (Phase 2)
 -- Adds a tsvector column + GIN index to emails for BM25-style keyword search.
 -- Prerequisite for the hybrid retriever (vector + keyword + RRF fusion).
+--
+-- RUN STEPS 1-3 and 5 first (instant). Then run step 4 separately in batches.
 
 -- 1. Generated tsvector column — weighted: subject (A) > body_text (B)
 ALTER TABLE emails ADD COLUMN IF NOT EXISTS search_text tsvector;
@@ -11,6 +13,7 @@ CREATE INDEX IF NOT EXISTS idx_emails_search_text
     WHERE search_text IS NOT NULL;
 
 -- 3. Trigger to auto-populate search_text on INSERT/UPDATE
+--    New emails get search_text automatically — only existing rows need backfill.
 CREATE OR REPLACE FUNCTION emails_search_text_trigger() RETURNS trigger AS $$
 BEGIN
     NEW.search_text :=
@@ -27,13 +30,37 @@ CREATE TRIGGER trg_emails_search_text
     ON emails FOR EACH ROW
     EXECUTE FUNCTION emails_search_text_trigger();
 
--- 4. Backfill existing rows (run once — may take a few minutes on large tables)
-UPDATE emails
-SET search_text =
-    setweight(to_tsvector('english', COALESCE(subject, '')), 'A') ||
-    setweight(to_tsvector('english', COALESCE(LEFT(body_text, 5000), '')), 'B') ||
-    setweight(to_tsvector('english', COALESCE(sender_name, '')), 'C')
-WHERE search_text IS NULL;
+-- 4. Backfill existing rows — RUN SEPARATELY in batches of 10K to avoid timeout.
+--    The RPC below processes one batch per call. Run repeatedly until it returns 0.
+
+CREATE OR REPLACE FUNCTION backfill_search_text(p_batch_size int DEFAULT 10000)
+RETURNS int
+LANGUAGE plpgsql AS $$
+DECLARE
+    updated int;
+BEGIN
+    WITH batch AS (
+        SELECT id FROM emails
+        WHERE search_text IS NULL
+        LIMIT p_batch_size
+        FOR UPDATE SKIP LOCKED
+    )
+    UPDATE emails e
+    SET search_text =
+        setweight(to_tsvector('english', COALESCE(e.subject, '')), 'A') ||
+        setweight(to_tsvector('english', COALESCE(LEFT(e.body_text, 5000), '')), 'B') ||
+        setweight(to_tsvector('english', COALESCE(e.sender_name, '')), 'C')
+    FROM batch
+    WHERE e.id = batch.id;
+
+    GET DIAGNOSTICS updated = ROW_COUNT;
+    RETURN updated;
+END;
+$$;
+
+-- To backfill, call this RPC repeatedly until it returns 0:
+--   SELECT backfill_search_text(10000);  -- processes 10K rows per call
+--   SELECT backfill_search_text(10000);  -- repeat until returns 0
 
 -- 5. Keyword search RPC — returns BM25-ranked results using ts_rank_cd
 CREATE OR REPLACE FUNCTION keyword_search_emails(
@@ -57,7 +84,6 @@ AS $$
 DECLARE
     tsq tsquery;
 BEGIN
-    -- Build tsquery: split words, join with & for AND semantics
     tsq := websearch_to_tsquery('english', p_query);
 
     RETURN QUERY

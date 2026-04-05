@@ -1859,6 +1859,22 @@ async def stop_reembed(
     return {"status": "stopping"}
 
 
+@router.post("/vector/backfill-search-text")
+async def backfill_search_text(
+    batch_size: int = Query(default=10000, ge=1000, le=50000),
+    current_user: dict = Depends(require_role("admin")),
+):
+    """Backfill tsvector search_text on emails in batches. Call repeatedly until returns 0."""
+    try:
+        result = _supabase.rpc("backfill_search_text", {"p_batch_size": batch_size}).execute()
+        updated = result.data if isinstance(result.data, int) else 0
+        logger.info(f"search_text backfill: {updated} rows updated (batch_size={batch_size})")
+        return {"updated": updated, "batch_size": batch_size, "done": updated == 0}
+    except Exception as e:
+        logger.error(f"search_text backfill failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e)[:300])
+
+
 @router.get("/vector/search/emails")
 async def search_emails_semantic(
     q: str = Query(..., min_length=3, description="Search query"),
