@@ -1867,11 +1867,19 @@ async def backfill_search_text(
     """Backfill tsvector search_text on emails in batches. Call repeatedly until returns 0."""
     try:
         result = _supabase.rpc("backfill_search_text", {"p_batch_size": batch_size}).execute()
-        updated = result.data if isinstance(result.data, int) else 0
+        # PostgREST returns scalar as the data directly, or wrapped in a list
+        data = result.data
+        if isinstance(data, list) and len(data) > 0:
+            updated = data[0] if isinstance(data[0], int) else 0
+        elif isinstance(data, int):
+            updated = data
+        else:
+            updated = 0
+            logger.warning(f"Unexpected backfill response type: {type(data)} = {data}")
         logger.info(f"search_text backfill: {updated} rows updated (batch_size={batch_size})")
         return {"updated": updated, "batch_size": batch_size, "done": updated == 0}
     except Exception as e:
-        logger.error(f"search_text backfill failed: {e}")
+        logger.error(f"search_text backfill failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e)[:300])
 
 
