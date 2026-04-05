@@ -292,6 +292,9 @@ class QuickbaseSync:
             'updated_at': datetime.now(timezone.utc).isoformat(),
         }).eq('client_id', self._client_id).execute())
 
+        # Auto-embed new/updated records so they're immediately searchable
+        await self._post_sync_embeddings(counts)
+
         logger.info(f"QB sync complete for client {self._client_id}: {counts}")
         return counts
 
@@ -411,6 +414,37 @@ class QuickbaseSync:
             return
         await self.match_operations_to_companies()
         await self.enrich_operations()
+
+    async def _post_sync_embeddings(self, counts: dict):
+        """Auto-embed new/updated records after sync so they're searchable immediately.
+
+        Runs on un-embedded records only (WHERE embedding IS NULL).
+        Non-critical — failures are logged but don't affect sync result.
+        """
+        try:
+            from .vector_service import VectorService
+            vs = VectorService(self._supabase)
+
+            if counts.get('customers', 0) > 0 or counts.get('contacts', 0) > 0:
+                try:
+                    result = await vs.embed_companies(self._client_id, limit=500)
+                    embedded = result.get('embedded', 0)
+                    if embedded > 0:
+                        logger.info(f"Auto-embedded {embedded} companies after QB sync")
+                except Exception as e:
+                    logger.warning(f"Company embedding after sync failed: {e}")
+
+            if counts.get('operations', 0) > 0:
+                try:
+                    result = await vs.embed_operations(self._client_id, batch_size=100, limit=1000)
+                    embedded = result.get('embedded', 0)
+                    if embedded > 0:
+                        logger.info(f"Auto-embedded {embedded} operations after QB sync")
+                except Exception as e:
+                    logger.warning(f"Operations embedding after sync failed: {e}")
+
+        except Exception as e:
+            logger.warning(f"Post-sync embedding failed (non-critical): {e}")
 
     async def sync_unique_emails(self) -> int:
         """Sync QB Unique Emails table → qb_unique_emails."""

@@ -439,6 +439,9 @@ class ExtractionOrchestrator:
                 self._run_step(13, "Finalize extraction job",
                               self._step_complete_job)
 
+            # Embed newly extracted emails (runs on un-embedded records only)
+            self._embed_new_emails()
+
             # Calculate duration
             duration = (datetime.utcnow() - start_time).total_seconds()
 
@@ -1147,6 +1150,38 @@ class ExtractionOrchestrator:
 
         except Exception as e:
             logger.warning(f"Email count refresh failed (non-critical): {e}")
+
+    def _embed_new_emails(self):
+        """Vectorize newly extracted emails that don't have embeddings yet.
+
+        Runs at the end of the extraction pipeline so new emails are immediately
+        searchable via semantic search. Non-blocking — failures don't affect the
+        extraction result.
+        """
+        try:
+            import asyncio
+            from .vector_service import VectorService
+            vs = VectorService(self.client)
+            # Limit to 500 per extraction run to avoid long-running embedding jobs
+            result = asyncio.get_event_loop().run_until_complete(
+                vs.embed_emails_batch(self.client_id, batch_size=200, limit=500)
+            )
+            embedded = result.get('embedded', 0)
+            if embedded > 0:
+                logger.info(f"Auto-embedded {embedded} new emails for client {self.client_id}")
+        except RuntimeError:
+            # No event loop or already running — schedule as a fire-and-forget task
+            try:
+                import asyncio
+                from .vector_service import VectorService
+                vs = VectorService(self.client)
+                loop = asyncio.get_event_loop()
+                loop.create_task(vs.embed_emails_batch(self.client_id, batch_size=200, limit=500))
+                logger.info("Scheduled async email embedding task")
+            except Exception as e2:
+                logger.warning(f"Could not schedule email embedding: {e2}")
+        except Exception as e:
+            logger.warning(f"Auto-embed emails failed (non-critical): {e}")
 
     def _assign_canonical_threads(self):
         """Assign canonical_thread_id to emails that don't have one yet.
