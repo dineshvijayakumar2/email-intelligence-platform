@@ -532,15 +532,16 @@ async def get_order_history(
     Used by the Order History section of the Customer Profile page.
     """
     try:
-        # Resolve QB customer record IDs for this company
+        # Resolve QB customer key IDs for this company
+        # Note: qb_quotes/qb_jobs use Customer ID (key) field 92, NOT Record ID# field 3
         cust_result = _supabase.table('qb_customers').select(
-            'qb_record_id, client_id'
+            'qb_record_id, customer_key_id, client_id'
         ).eq('matched_company_id', company_id).execute()
 
         if not cust_result.data:
             return {'items': [], 'company_id': company_id}
 
-        qb_record_ids = [r['qb_record_id'] for r in cust_result.data if r.get('qb_record_id')]
+        qb_record_ids = [r['customer_key_id'] for r in cust_result.data if r.get('customer_key_id')]
         client_id = cust_result.data[0]['client_id']
 
         if not qb_record_ids:
