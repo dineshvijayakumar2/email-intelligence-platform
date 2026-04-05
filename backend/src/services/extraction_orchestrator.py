@@ -401,6 +401,9 @@ class ExtractionOrchestrator:
             self._assign_canonical_threads()
             self._update_affected_threads()
 
+            # Update email counts on contacts + companies from junction table
+            self._refresh_email_counts()
+
             if lightweight:
                 # Lightweight mode: skip heavy analytics steps (10-12)
                 logger.info("Lightweight mode: skipping steps 10-12 (engagement, stats, report)")
@@ -1117,6 +1120,33 @@ class ExtractionOrchestrator:
         result['qb_contacts_enriched'] = qb_enriched.get('contacts', 0)
 
         return result
+
+    def _refresh_email_counts(self):
+        """Update email counts on contacts + companies from junction table.
+
+        Calls the RPCs that recompute total_emails_sent/received on contacts
+        and total_emails/inbound/outbound/first_contact/last_contact on companies.
+        Runs after every extraction so counts stay current with CC/BCC data.
+        """
+        try:
+            try:
+                result = self.client.rpc('update_contact_email_counts_from_junction', {
+                    'p_client_id': self.client_id,
+                }).execute()
+                logger.info(f"Contact email counts refreshed: {result.data}")
+            except Exception as e:
+                logger.warning(f"Contact count refresh failed (non-critical): {e}")
+
+            try:
+                result = self.client.rpc('update_company_email_counts_from_junction', {
+                    'p_client_id': self.client_id,
+                }).execute()
+                logger.info(f"Company email counts refreshed: {result.data}")
+            except Exception as e:
+                logger.warning(f"Company count refresh failed (non-critical): {e}")
+
+        except Exception as e:
+            logger.warning(f"Email count refresh failed (non-critical): {e}")
 
     def _assign_canonical_threads(self):
         """Assign canonical_thread_id to emails that don't have one yet.
