@@ -205,7 +205,7 @@ const VectorSearchPage: React.FC = () => {
 
     try {
       while (!backfillCancelRef.current) {
-        const resp = await vectorApi.backfillSearchText(10000);
+        const resp = await vectorApi.backfillSearchText(500);
         totalUpdated += resp.updated;
         setBackfillTotal(totalUpdated);
         if (resp.done) {
