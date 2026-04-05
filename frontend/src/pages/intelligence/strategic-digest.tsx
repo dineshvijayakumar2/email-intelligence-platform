@@ -16,7 +16,7 @@ import {
   ReloadOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { strategicDigestApi } from '../../services/strategicDigestService';
+import { strategicDigestApi, streamDigestGeneration } from '../../services/strategicDigestService';
 import type { StrategicDigest, PeriodType, LifecycleTier } from '../../types/strategic-digest';
 import { LIFECYCLE_CONFIG, SIGNAL_CONFIG } from '../../types/strategic-digest';
 import { ClientSelector } from '../../components/analytics/ClientSelector';
@@ -74,6 +74,7 @@ export default function StrategicDigestPage() {
   const [error, setError] = useState('');
   const [progress, setProgress] = useState<{ pct: number; message: string; phase: string } | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadDigest = useCallback(async () => {
@@ -174,31 +175,71 @@ export default function StrategicDigestPage() {
     setCancelling(false);
     setProgress({ pct: 0, phase: 'starting', message: 'Initialising…' });
     stopPolling();
+    abortRef.current?.abort();
+    abortRef.current = new AbortController();
 
     try {
-      await strategicDigestApi.generate(clientId, periodType);
+      await streamDigestGeneration(
+        clientId,
+        periodType,
+        {
+          onProgress: (phase, pct, message) => {
+            if (!isMountedRef.current) return;
+            setProgress({ phase, pct, message });
+          },
+          onComplete: (digestData) => {
+            if (!isMountedRef.current) return;
+            setDigest(digestData);
+            setGenerating(false);
+            setProgress(null);
+          },
+          onError: (detail) => {
+            if (!isMountedRef.current) return;
+            setError(detail);
+            setGenerating(false);
+            setProgress(null);
+          },
+          onCancelled: () => {
+            if (!isMountedRef.current) return;
+            setGenerating(false);
+            setProgress(null);
+            setCancelling(false);
+          },
+        },
+        abortRef.current.signal,
+      );
     } catch (err: any) {
-      if (isMountedRef.current) {
-        setError(err?.message || 'Failed to start generation');
+      if (err?.name === 'AbortError') return;
+      if (!isMountedRef.current) return;
+      // SSE failed — fall back to polling approach
+      console.warn('SSE streaming failed, falling back to polling:', err?.message);
+      try {
+        await strategicDigestApi.generate(clientId, periodType);
+        startPolling();
+      } catch (fallbackErr: any) {
+        setError(fallbackErr?.message || 'Failed to start generation');
         setGenerating(false);
         setProgress(null);
       }
-      return;
     }
-
-    startPolling();
   };
 
   const handleCancel = async () => {
     if (!clientId || cancelling) return;
     setCancelling(true);
+    // Abort the SSE connection (triggers server-side cancellation)
+    abortRef.current?.abort();
+    // Also signal via API in case the SSE already disconnected
     try {
       await strategicDigestApi.cancel(clientId);
-    } catch { /* ignore — poll will detect cancelled phase */ }
+    } catch { /* ignore */ }
   };
 
-  // Clean up poll on unmount
-  useEffect(() => () => stopPolling(), []);
+  // Clean up on unmount
+  useEffect(() => () => {
+    stopPolling();
+    abortRef.current?.abort();
+  }, []);
 
   // AM Efficiency columns (v2 — mailbox-based)
   const amColumns = [

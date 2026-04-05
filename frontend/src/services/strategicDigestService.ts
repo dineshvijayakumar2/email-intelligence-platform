@@ -43,6 +43,89 @@ export const strategicDigestApi = {
   },
 };
 
+/**
+ * Stream digest generation via SSE.
+ * Replaces the generate-then-poll pattern with a single streaming connection.
+ */
+export async function streamDigestGeneration(
+  clientId: string,
+  periodType: PeriodType = 'monthly',
+  callbacks: {
+    onProgress: (phase: string, pct: number, message: string) => void;
+    onComplete: (digest: StrategicDigest | null) => void;
+    onError: (detail: string) => void;
+    onCancelled?: () => void;
+  },
+  signal?: AbortSignal,
+): Promise<void> {
+  const { getAccessToken } = await import('../lib/supabase');
+  const token = await getAccessToken();
+  const { default: config } = await import('../config');
+
+  const params = new URLSearchParams({ period_type: periodType });
+  const response = await fetch(
+    `${config.apiBaseUrl}${API_PREFIX}/strategic-digest/${clientId}/stream?${params}`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      signal,
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(`Stream failed: ${response.status}`);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('No response body');
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const chunks = buffer.split('\n\n');
+    buffer = chunks.pop() || '';
+
+    for (const chunk of chunks) {
+      if (!chunk.trim() || chunk.trim().startsWith(':')) continue;
+
+      let eventType = '';
+      let dataStr = '';
+      for (const line of chunk.split('\n')) {
+        if (line.startsWith('event: ')) eventType = line.slice(7).trim();
+        else if (line.startsWith('data: ')) dataStr = line.slice(6);
+      }
+
+      if (!eventType || !dataStr) continue;
+
+      try {
+        const data = JSON.parse(dataStr);
+        switch (eventType) {
+          case 'progress':
+            callbacks.onProgress(data.phase, data.pct, data.message);
+            break;
+          case 'complete':
+            callbacks.onComplete(data.digest ?? null);
+            break;
+          case 'error':
+            callbacks.onError(data.detail || 'Generation failed');
+            break;
+          case 'cancelled':
+            callbacks.onCancelled?.();
+            break;
+        }
+      } catch { /* skip malformed */ }
+    }
+  }
+}
+
 // --- AM Performance ---
 
 export const amPerformanceApi = {

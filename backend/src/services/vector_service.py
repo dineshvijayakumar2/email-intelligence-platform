@@ -416,29 +416,41 @@ class VectorService:
     async def search_emails(
         self, query: str, client_id: str | None = None,
         threshold: float = 0.65, limit: int = 10,
+        date_from: str | None = None, date_to: str | None = None,
     ) -> list[dict]:
-        """Semantic search over emails."""
+        """Semantic search over emails, optionally bounded by date range."""
         query_emb = await embed_query(query)
-        result = await self._db(lambda: self._sb.rpc("search_emails", {
+        params: dict = {
             "query_embedding": query_emb,
             "match_threshold": threshold,
             "match_count": limit,
             "p_client_id": client_id,
-        }).execute())
+        }
+        if date_from:
+            params["p_date_from"] = date_from
+        if date_to:
+            params["p_date_to"] = date_to
+        result = await self._db(lambda: self._sb.rpc("search_emails", params).execute())
         return result.data or []
 
     async def search_companies(
         self, query: str, client_id: str | None = None,
         threshold: float = 0.65, limit: int = 10,
+        date_from: str | None = None, date_to: str | None = None,
     ) -> list[dict]:
-        """Semantic search over companies."""
+        """Semantic search over companies, optionally bounded by date range."""
         query_emb = await embed_query(query)
-        result = await self._db(lambda: self._sb.rpc("search_companies", {
+        params: dict = {
             "query_embedding": query_emb,
             "match_threshold": threshold,
             "match_count": limit,
             "p_client_id": client_id,
-        }).execute())
+        }
+        if date_from:
+            params["p_date_from"] = date_from
+        if date_to:
+            params["p_date_to"] = date_to
+        result = await self._db(lambda: self._sb.rpc("search_companies", params).execute())
         return result.data or []
 
     async def search_operations(

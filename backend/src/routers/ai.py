@@ -1237,6 +1237,120 @@ async def cancel_digest_generation(client_id: str):
     return {"status": "ok", "message": "Cancellation requested"}
 
 
+@router.post("/strategic-digest/{client_id}/stream")
+async def stream_digest_generation(
+    client_id: str,
+    request: Request,
+    period_type: str = Query(default="monthly"),
+    period_start: Optional[str] = Query(default=None),
+    period_end: Optional[str] = Query(default=None),
+):
+    """
+    Generate a strategic digest with real-time SSE progress events.
+    Replaces the generate + poll pattern with a single streaming connection.
+
+    Events:
+        event: progress  — {phase, pct, message}
+        event: complete  — {digest: {...}}
+        event: error     — {detail: "..."}
+        event: cancelled — {}
+    """
+    import json as _json
+    from ..services.strategic_digest_pipeline import StrategicDigestPipeline
+    from datetime import date as date_type
+
+    today = date_type.today()
+    try:
+        end_date = date_type.fromisoformat(period_end) if period_end else today
+        start_date = date_type.fromisoformat(period_start) if period_start else (today - timedelta(days=30))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid date format: {e}")
+
+    # Apply client model settings
+    try:
+        from ..services.ai_email_analyzer import _apply_client_model_settings
+        _apply_client_model_settings(_supabase, client_id)
+    except Exception:
+        pass
+
+    pipeline = StrategicDigestPipeline(_supabase, client_id)
+    queue: asyncio.Queue = asyncio.Queue()
+    cancelled = False
+
+    def _on_progress(phase: str, current: int, total: int, message: str = ""):
+        pct = round(current / total * 100) if total else 0
+        msg = message or f"{phase.replace('_', ' ').title()} ({current}/{total})"
+        # Also update in-memory store so the polling endpoint stays in sync
+        _digest_progress[client_id] = {
+            "phase": phase, "current": current, "total": total, "pct": pct, "message": msg,
+        }
+        queue.put_nowait({"event": "progress", "phase": phase, "pct": pct, "message": msg})
+
+    def _cancel_check() -> bool:
+        return cancelled or _digest_cancel.get(client_id, False)
+
+    async def _run_pipeline():
+        nonlocal cancelled
+        try:
+            await pipeline.generate(
+                period_type=period_type,
+                period_start=start_date,
+                period_end=end_date,
+                on_progress=_on_progress,
+                cancel_check=_cancel_check,
+            )
+            if _cancel_check():
+                _digest_progress[client_id] = {"phase": "cancelled", "pct": 0, "message": "Cancelled"}
+                queue.put_nowait({"event": "cancelled"})
+            else:
+                # Fetch the freshly generated digest
+                try:
+                    resp = _supabase.table("ai_strategic_digests").select("*").eq(
+                        "client_id", client_id
+                    ).order("created_at", desc=True).limit(1).execute()
+                    digest_data = resp.data[0] if resp.data else None
+                except Exception:
+                    digest_data = None
+                _digest_progress[client_id] = {"phase": "completed", "pct": 100, "message": "Done"}
+                queue.put_nowait({"event": "complete", "digest": digest_data})
+        except Exception as e:
+            _digest_progress[client_id] = {"phase": "failed", "pct": 0, "message": str(e)[:200]}
+            queue.put_nowait({"event": "error", "detail": str(e)[:300]})
+            logger.error(f"Streaming digest generation failed: {e}")
+        finally:
+            queue.put_nowait(None)  # sentinel
+
+    async def _generator():
+        nonlocal cancelled
+        _digest_cancel[client_id] = False
+        task = asyncio.create_task(_run_pipeline())
+        try:
+            while True:
+                if await request.is_disconnected():
+                    cancelled = True
+                    _digest_cancel[client_id] = True
+                    break
+                try:
+                    item = await asyncio.wait_for(queue.get(), timeout=2.0)
+                except asyncio.TimeoutError:
+                    yield ": keepalive\n\n"
+                    continue
+                if item is None:
+                    break
+                event_type = item.pop("event")
+                yield f"event: {event_type}\ndata: {_json.dumps(item)}\n\n"
+        finally:
+            if not task.done():
+                cancelled = True
+                _digest_cancel[client_id] = True
+
+    return StreamingResponse(
+        _generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"},
+    )
+
+
 @router.get("/strategic-digest/{client_id}/history")
 async def get_strategic_digest_history(
     client_id: str,
