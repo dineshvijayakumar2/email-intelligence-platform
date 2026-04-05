@@ -261,8 +261,9 @@ class QuickbaseSync:
                     self._write_sync_log(table_key, 0, status='error', error_message=str(e))
                 counts[table_key] = 0
 
-        # Post-sync operations enrichment (runs after log is saved)
-        if counts.get('operations', 0) > 0:
+        # Post-sync operations enrichment — always run if operations was synced
+        # (even with 0 new records, unmatched operations from previous syncs need matching)
+        if 'operations' in counts:
             try:
                 await self._post_sync_operations()
             except Exception as e:
