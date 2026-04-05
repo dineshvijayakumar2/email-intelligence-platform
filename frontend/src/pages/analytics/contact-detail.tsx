@@ -181,7 +181,7 @@ export const ContactDetail: React.FC = () => {
         </Row>
       )}
 
-      {contactId && contact && <AIInsightsCard entityType="contact" entityId={contactId} />}
+      {contactId && contact && <AIInsightsCard entityType="contact" entityId={contactId} clientId={contact.client_id} />}
     </div>
   );
 };

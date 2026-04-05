@@ -5,7 +5,7 @@
  * Admin-level controls for budget caps, kill switches, and feature toggles.
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState } from 'react';
 import {
   Card, Row, Col, Statistic, Switch, InputNumber, Button, Table, Select,
   Tag, Space, Progress, Alert, Divider, Tooltip, Badge, Typography,
@@ -17,34 +17,26 @@ import {
   ClockCircleOutlined, CheckCircleOutlined, CloseCircleOutlined,
   ExclamationCircleOutlined, SyncOutlined,
 } from '@ant-design/icons';
-import { usageApi, controlsApi, invalidateCache, intelligenceApi } from '../../services/aiService';
+import { controlsApi, intelligenceApi } from '../../services/aiService';
+import { modelsApi } from '../../services/strategicDigestService';
 import { MailboxSelector } from '../../components/MailboxSelector';
 import { ClientSelector } from '../../components/analytics/ClientSelector';
-import { modelsApi } from '../../services/strategicDigestService';
 import api from '../../services/apiClient';
 import { formatTime } from '../../utils/dateUtils';
+import {
+  useAICosts, useAIMonitoring, useAIControls, useAIRecentLogs,
+  useAIModels, useAIApiKeys, useClientAISettings,
+} from '../../hooks/queries';
 import type { UsageSummary, MonitoringStats, AIControlSettings, UsageLogEntry } from '../../types/ai';
 import type { AIModel } from '../../types/strategic-digest';
 
 const { Title, Text } = Typography;
 
 const UsagePage: React.FC = () => {
-  const isMountedRef = useRef(true);
-  const [loading, setLoading] = useState(true);
-  const [costs, setCosts] = useState<UsageSummary | null>(null);
-  const [monitoring, setMonitoring] = useState<MonitoringStats | null>(null);
-  const [controls, setControls] = useState<AIControlSettings | null>(null);
-  const [models, setModels] = useState<AIModel[]>([]);
-  const [cheapModel, setCheapModel] = useState('haiku');
-  const [strategicModel, setStrategicModel] = useState('sonnet');
-  const [apiKeys, setApiKeys] = useState<any>(null);
+  const [clientId, setClientId] = useState(() => localStorage.getItem('analytics_client_id') || '');
+  const [autoRefresh, setAutoRefresh] = useState(true);
   const [apiKeysForm] = Form.useForm();
   const [apiKeysSaving, setApiKeysSaving] = useState(false);
-  const [recentLogs, setRecentLogs] = useState<UsageLogEntry[]>([]);
-  const [autoRefresh, setAutoRefresh] = useState(true);
-
-  // Client selector for prompt config
-  const [clientId, setClientId] = useState('');
 
   // Re-analyze state
   const [reanalyzeMailbox, setReanalyzeMailbox] = useState<string[]>([]);
@@ -53,86 +45,44 @@ const UsagePage: React.FC = () => {
   const [reanalyzeIncludeFailed, setReanalyzeIncludeFailed] = useState(false);
   const [reanalyzeLoading, setReanalyzeLoading] = useState(false);
 
-  // Load data — called explicitly, not via useCallback dependency chain
-  const loadData = async (silent = false) => {
-    if (!silent) setLoading(true);
-    try {
-      const cid = clientId || undefined;
-      const [costsData, monData, ctrlData, logsData, modelsData, keysData] = await Promise.all([
-        usageApi.getCosts(cid, 30),
-        usageApi.getMonitoring(cid),
-        controlsApi.get(),
-        usageApi.getRecent(30),
-        modelsApi.getAvailable().catch(() => ({ models: [] })),
-        api.get<any>(`/v1/ai/api-keys${cid ? `?client_id=${cid}` : ''}`).catch(() => null),
-      ]);
-      if (!isMountedRef.current) return;
-      setCosts(costsData);
-      setMonitoring(monData);
-      setControls(ctrlData);
-      setRecentLogs(logsData.items);
-      if (modelsData?.models?.length) setModels(modelsData.models);
+  // All data via TanStack Query — auto-refresh every 60s when enabled
+  const costsQuery = useAICosts(clientId, 30);
+  const monitoringQuery = useAIMonitoring(clientId);
+  const controlsQuery = useAIControls();
+  const logsQuery = useAIRecentLogs(30);
+  const modelsQuery = useAIModels();
+  const apiKeysQuery = useAIApiKeys(clientId);
+  const clientSettingsQuery = useClientAISettings(clientId);
 
-      // Model dropdowns: prefer client's DB values, fall back to global controls
-      let clientCheap = ctrlData?.cheap_model || 'haiku';
-      let clientStrategic = ctrlData?.strategic_model || 'sonnet';
-      if (cid) {
-        try {
-          const settingsResp = await api.get<any[]>(`/v1/ai/client-settings?client_id=${cid}`);
-          if (settingsResp) {
-            const settingsMap: Record<string, string> = {};
-            for (const row of settingsResp) {
-              settingsMap[row.key] = row.value;
-            }
-            if (settingsMap['ai_cheap_model']) clientCheap = settingsMap['ai_cheap_model'];
-            if (settingsMap['ai_strategic_model']) clientStrategic = settingsMap['ai_strategic_model'];
-          }
-        } catch { /* fall back to global */ }
-      }
-      setCheapModel(clientCheap);
-      setStrategicModel(clientStrategic);
+  const costs = costsQuery.data || null;
+  const monitoring = monitoringQuery.data || null;
+  const controls = controlsQuery.data || null;
+  const recentLogs = logsQuery.data?.items || [];
+  const models = modelsQuery.data?.models || [];
+  const apiKeys = apiKeysQuery.data || null;
+  const loading = costsQuery.isLoading;
 
-      if (keysData) setApiKeys(keysData);
-    } catch (err) {
-      console.error('Failed to load usage data:', err);
-    } finally {
-      if (!silent && isMountedRef.current) setLoading(false);
-    }
+  // Derive model selections from client settings → controls → defaults
+  const clientSettings = clientSettingsQuery.data || {};
+  const cheapModel = clientSettings['ai_cheap_model'] || controls?.cheap_model || 'haiku';
+  const strategicModel = clientSettings['ai_strategic_model'] || controls?.strategic_model || 'sonnet';
+
+  // Manual refresh handler
+  const loadData = () => {
+    costsQuery.refetch();
+    monitoringQuery.refetch();
+    controlsQuery.refetch();
+    logsQuery.refetch();
+    apiKeysQuery.refetch();
+    clientSettingsQuery.refetch();
   };
-
-  // Mount / unmount
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => { isMountedRef.current = false; };
-  }, []);
-
-  // Load when clientId changes — clear old data immediately for skeleton feedback
-  useEffect(() => {
-    if (!clientId) return;
-    setCosts(null);
-    setMonitoring(null);
-    setControls(null);
-    setRecentLogs([]);
-    setApiKeys(null);
-    loadData();
-  }, [clientId]);
-
-  // Auto-refresh every 60s (silent — no loading spinner)
-  useEffect(() => {
-    if (!autoRefresh || !clientId) return;
-    const interval = setInterval(() => {
-      invalidateCache('usage');
-      loadData(true);
-    }, 60000);
-    return () => clearInterval(interval);
-  }, [autoRefresh, clientId]);
 
   // Control update handler
   const handleControlChange = async (key: string, value: any) => {
     try {
       const result = await controlsApi.update({ [key]: value });
       if (result?.settings) {
-        setControls(result.settings);
+        controlsQuery.refetch();
         message.success(`Updated ${key.replace(/_/g, ' ')}`);
       }
     } catch {
@@ -144,7 +94,6 @@ const UsagePage: React.FC = () => {
     const result = await controlsApi.resetSessionSpend();
     if (result) {
       message.success(`Session spend reset (was $${result.previous_spend_usd})`);
-      invalidateCache('usage');
       loadData();
     }
   };
@@ -160,10 +109,7 @@ const UsagePage: React.FC = () => {
       const result = await api.put<any>('/v1/ai/api-keys', { ...values, client_id: clientId || undefined });
       message.success(`Keys updated: ${result.updated?.join(', ')}`);
       apiKeysForm.resetFields();
-      // Refresh key status
-      const cid = clientId || undefined;
-      const keysData = await api.get<any>(`/v1/ai/api-keys${cid ? `?client_id=${cid}` : ''}`).catch(() => null);
-      if (keysData) setApiKeys(keysData);
+      apiKeysQuery.refetch();
     } catch (err: any) {
       message.error(err?.message || 'Failed to update keys');
     } finally {
@@ -195,8 +141,7 @@ const UsagePage: React.FC = () => {
     const newStrategic = type === 'strategic' ? value : strategicModel;
     try {
       await modelsApi.updateDefaults(newCheap, newStrategic, clientId || undefined);
-      if (type === 'cheap') setCheapModel(value);
-      else setStrategicModel(value);
+      clientSettingsQuery.refetch();
       message.success(`${type === 'cheap' ? 'Fast' : 'Strategic'} model set to ${value}`);
     } catch (err) {
       message.error('Failed to update model');
@@ -285,7 +230,7 @@ const UsagePage: React.FC = () => {
             unCheckedChildren="OFF"
             size="small"
           />
-          <Button icon={<ReloadOutlined />} onClick={() => { invalidateCache('usage'); loadData(); }}>
+          <Button icon={<ReloadOutlined />} onClick={loadData}>
             Refresh
           </Button>
         </Space>

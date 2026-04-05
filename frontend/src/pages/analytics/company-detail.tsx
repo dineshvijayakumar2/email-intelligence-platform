@@ -194,7 +194,7 @@ export const CompanyDetail: React.FC = () => {
         </div>
       )}
 
-      {companyId && company && <AIInsightsCard entityType="company" entityId={companyId} />}
+      {companyId && company && <AIInsightsCard entityType="company" entityId={companyId} clientId={company.client_id} />}
 
       {/* Customer Intelligence */}
       {companyId && company && (
