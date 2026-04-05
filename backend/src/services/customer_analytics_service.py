@@ -205,8 +205,15 @@ class CustomerAnalyticsService:
 
             # Prefer QB capability tag, fall back to classifier tags
             qb_cap = (op.get('qb_capability_tag') or '').strip()
-            classifier_tags = op.get('capability_tags') or []
-            tags = [qb_cap] if qb_cap else (classifier_tags if classifier_tags else [])
+            raw_tags = op.get('capability_tags') or []
+            if isinstance(raw_tags, str):
+                import json as _json
+                try:
+                    raw_tags = _json.loads(raw_tags)
+                except (ValueError, TypeError):
+                    raw_tags = [t.strip() for t in raw_tags.split(',') if t.strip()]
+            classifier_tags = raw_tags if isinstance(raw_tags, list) else []
+            tags = [qb_cap] if qb_cap else [t for t in classifier_tags if t and len(t) > 1]
             if not tags:
                 continue
 
@@ -308,8 +315,14 @@ class CustomerAnalyticsService:
                 price = float(op.get('cost_plus_price') or 0)
                 # Prefer QB capability tag over classifier tags
                 qb_cap = (op.get('qb_capability_tag') or '').strip()
-                tags = op.get('capability_tags') or []
-                has_capability = bool(qb_cap) or bool(tags)
+                raw_tags = op.get('capability_tags') or []
+                if isinstance(raw_tags, str):
+                    import json as _json
+                    try:
+                        raw_tags = _json.loads(raw_tags)
+                    except (ValueError, TypeError):
+                        raw_tags = []
+                has_capability = bool(qb_cap) or bool(raw_tags)
 
                 monthly[month]['order_count'] += 1
                 monthly[month]['revenue'] += price
@@ -396,15 +409,23 @@ class CustomerAnalyticsService:
                 continue
 
             qb_cap = (op.get('qb_capability_tag') or '').strip()
-            classifier_tags = op.get('capability_tags') or []
-            tags = [qb_cap] if qb_cap else (classifier_tags if classifier_tags else [])
+            raw_tags = op.get('capability_tags') or []
+            if isinstance(raw_tags, str):
+                import json as _json
+                try:
+                    raw_tags = _json.loads(raw_tags)
+                except (ValueError, TypeError):
+                    raw_tags = [t.strip() for t in raw_tags.split(',') if t.strip()]
+            classifier_tags = raw_tags if isinstance(raw_tags, list) else []
+            tags = [qb_cap] if qb_cap else [t for t in classifier_tags if t and len(t) > 1]
             if not tags:
                 continue
 
             try:
                 d = datetime.strptime(str(da)[:10], '%Y-%m-%d').date()
                 for tag in tags:
-                    tag_dates[tag].append(d)
+                    if len(tag.strip()) > 1:  # Skip stray characters like '[', ']'
+                        tag_dates[tag.strip()].append(d)
             except (ValueError, TypeError):
                 continue
 
