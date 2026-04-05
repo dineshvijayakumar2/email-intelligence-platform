@@ -229,7 +229,7 @@ const uniqueEmailColumns = [
 // ---------------------------------------------------------------------------
 
 const QuickbaseDataPage: React.FC = () => {
-  const [clientId, setClientId] = useState<string | null>(null);
+  const [clientId, setClientId] = useState<string | null>(() => localStorage.getItem('analytics_client_id'));
   const [activeTab, setActiveTab] = useState('customers');
   const [qbSyncing, setQbSyncing] = useState(false);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
