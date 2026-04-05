@@ -104,6 +104,35 @@ const ThreadInsight: React.FC<{ insight: AIInsight }> = ({ insight }) => (
   </Space>
 );
 
+/** Fallback: render any key-value pairs from the insight when typed fields don't match */
+const SKIP_KEYS = new Set(['_entity_type', '_entity_id', '_generated_at', '_model', '_ai_insight', 'error']);
+
+const GenericInsight: React.FC<{ insight: Record<string, any> }> = ({ insight }) => (
+  <Space direction="vertical" style={{ width: '100%' }} size="small">
+    {Object.entries(insight)
+      .filter(([k]) => !SKIP_KEYS.has(k))
+      .map(([key, value]) => {
+        const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        if (Array.isArray(value)) {
+          return <BulletList key={key} items={value.map(String)} header={label} />;
+        }
+        if (typeof value === 'string') {
+          // Long strings as paragraphs, short as tag
+          if (value.length > 80) return <div key={key}><Text strong>{label}: </Text><Paragraph style={{ marginBottom: 4 }}>{value}</Paragraph></div>;
+          return <div key={key}><Text strong>{label}: </Text><Tag>{value}</Tag></div>;
+        }
+        if (typeof value === 'number') {
+          return <div key={key}><Text strong>{label}: </Text><Tag color="blue">{value}</Tag></div>;
+        }
+        return null;
+      })}
+  </Space>
+);
+
+/** Check if any typed insight field is present */
+const hasTypedFields = (data: any): boolean =>
+  !!(data?.health_summary || data?.engagement_summary || data?.thread_summary);
+
 const AIInsightsCard: React.FC<AIInsightsCardProps> = ({ entityType, entityId, clientId }) => {
   const [insight, setInsight] = useState<AIInsight | null>(null);
   const [loading, setLoading] = useState(false);
@@ -121,8 +150,6 @@ const AIInsightsCard: React.FC<AIInsightsCardProps> = ({ entityType, entityId, c
       const data: AIInsight = result?.insight ?? result?.data?.insight ?? result;
       if (data?.error) {
         setError(data.error);
-      } else if (!data || (!data.health_summary && !data.engagement_summary && !data.thread_summary)) {
-        setError('AI returned an empty response. Try again.');
       } else {
         setInsight(data);
       }
@@ -164,9 +191,15 @@ const AIInsightsCard: React.FC<AIInsightsCardProps> = ({ entityType, entityId, c
 
       {insight && !loading && (
         <>
-          {entityType === 'company' && <CompanyInsight insight={insight} />}
-          {entityType === 'contact' && <ContactInsight insight={insight} />}
-          {entityType === 'thread' && <ThreadInsight insight={insight} />}
+          {hasTypedFields(insight) ? (
+            <>
+              {entityType === 'company' && <CompanyInsight insight={insight} />}
+              {entityType === 'contact' && <ContactInsight insight={insight} />}
+              {entityType === 'thread' && <ThreadInsight insight={insight} />}
+            </>
+          ) : (
+            <GenericInsight insight={insight as any} />
+          )}
           <div style={{ marginTop: 12, textAlign: 'right' }}>
             <Button size="small" onClick={handleAnalyze} loading={loading}>Refresh</Button>
           </div>

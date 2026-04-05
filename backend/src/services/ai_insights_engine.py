@@ -310,7 +310,18 @@ class AIInsightsEngine:
             ]
 
             response = llm.invoke(messages)
-            content = response.content
+            raw_content = response.content
+
+            # Handle list-type content (some models return content parts)
+            if isinstance(raw_content, list):
+                content = " ".join(
+                    p.get("text", str(p)) if isinstance(p, dict) else str(p)
+                    for p in raw_content
+                )
+            else:
+                content = str(raw_content)
+
+            logger.debug(f"AI insight raw response for {entity_type}/{entity_id}: {content[:500]}")
 
             # Parse JSON from response
             if "```json" in content:
@@ -319,6 +330,7 @@ class AIInsightsEngine:
                 content = content.split("```")[1].split("```")[0]
 
             result = json.loads(content.strip())
+            logger.info(f"AI insight keys for {entity_type}/{entity_id}: {list(result.keys())}")
             result["_entity_type"] = entity_type
             result["_entity_id"] = entity_id
             result["_generated_at"] = datetime.now(timezone.utc).isoformat()
