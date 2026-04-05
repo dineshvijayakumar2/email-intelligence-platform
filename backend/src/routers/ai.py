@@ -1274,7 +1274,7 @@ async def stream_digest_generation(
         pass
 
     pipeline = StrategicDigestPipeline(_supabase, client_id)
-    queue: asyncio.Queue = asyncio.Queue()
+    queue: asyncio.Queue = asyncio.Queue(maxsize=100)
     cancelled = False
 
     def _on_progress(phase: str, current: int, total: int, message: str = ""):
@@ -1284,7 +1284,10 @@ async def stream_digest_generation(
         _digest_progress[client_id] = {
             "phase": phase, "current": current, "total": total, "pct": pct, "message": msg,
         }
-        queue.put_nowait({"event": "progress", "phase": phase, "pct": pct, "message": msg})
+        try:
+            queue.put_nowait({"event": "progress", "phase": phase, "pct": pct, "message": msg})
+        except asyncio.QueueFull:
+            pass  # Drop stale progress events if consumer disconnected
 
     def _cancel_check() -> bool:
         return cancelled or _digest_cancel.get(client_id, False)
@@ -1343,6 +1346,12 @@ async def stream_digest_generation(
             if not task.done():
                 cancelled = True
                 _digest_cancel[client_id] = True
+            # Drain remaining queue items to unblock pipeline callbacks
+            while not queue.empty():
+                try:
+                    queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    break
 
     return StreamingResponse(
         _generator(),

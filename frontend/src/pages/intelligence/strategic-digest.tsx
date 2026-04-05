@@ -211,9 +211,11 @@ export default function StrategicDigestPage() {
     } catch (err: any) {
       if (err?.name === 'AbortError') return;
       if (!isMountedRef.current) return;
-      // SSE failed — fall back to polling approach
+      // SSE failed mid-stream — cancel the in-flight job first to prevent
+      // a double-job if it was already running, then fall back to polling.
       console.warn('SSE streaming failed, falling back to polling:', err?.message);
       try {
+        await strategicDigestApi.cancel(clientId).catch(() => {});
         await strategicDigestApi.generate(clientId, periodType);
         startPolling();
       } catch (fallbackErr: any) {
