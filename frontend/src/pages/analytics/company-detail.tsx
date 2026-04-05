@@ -70,7 +70,7 @@ export const CompanyDetail: React.FC = () => {
   if (companyQuery.isLoading) {
     return (
       <div className="glass-page-bg" style={{ padding: 24 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/customers')} style={{ marginBottom: 16 }}>Back</Button>
+        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/customers')} style={{ marginBottom: 12 }}>Back</Button>
         <Skeleton active paragraph={{ rows: 10 }} />
       </div>
     );
@@ -79,7 +79,7 @@ export const CompanyDetail: React.FC = () => {
   if (!company) {
     return (
       <div className="glass-page-bg" style={{ padding: 24 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/customers')} style={{ marginBottom: 16 }}>Back</Button>
+        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/customers')} style={{ marginBottom: 12 }}>Back</Button>
         <Text type="secondary">Company not found</Text>
       </div>
     );
@@ -90,9 +90,9 @@ export const CompanyDetail: React.FC = () => {
 
   return (
     <div className="glass-page-bg" style={{ padding: 24 }}>
-      <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/customers')} style={{ marginBottom: 16 }}>Back to Companies</Button>
+      <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/customers')} style={{ marginBottom: 12 }}>Back to Companies</Button>
 
-      <div className="glass-card fade-in-up" style={{ padding: 20, marginBottom: 16 }}>
+      <div className="glass-card fade-in-up" style={{ padding: 16, marginBottom: 12 }}>
         <Row align="middle" gutter={16}>
           <Col flex="auto">
             <Title level={4} style={{ margin: 0 }}>{company.company_name}</Title>
@@ -107,27 +107,30 @@ export const CompanyDetail: React.FC = () => {
         </Row>
       </div>
 
-      <Row gutter={[16, 16]} className="fade-in-up stagger-1">
-        <Col xs={12} sm={6}>
-          <MetricCard title="Total Emails" value={company.total_emails || 0} onClick={() => navigate(`/emails?company_id=${companyId}`)} />
+      {/* Compact summary row: metrics + business data + communication */}
+      <Row gutter={[12, 12]} className="fade-in-up stagger-1">
+        {/* Left: Key metrics */}
+        <Col xs={24} md={6}>
+          <div className="glass-card" style={{ padding: 14 }}>
+            <Row gutter={[8, 8]}>
+              <Col span={12}><MetricCard title="Emails" value={company.total_emails || 0} onClick={() => navigate(`/emails?company_id=${companyId}`)} /></Col>
+              <Col span={12}><MetricCard title="Contacts" value={company.contact_count} onClick={() => navigate(`/customers/contacts?company_id=${companyId}&client_id=${company.client_id}`)} /></Col>
+              <Col span={12}><MetricCard title="Threads" value={threads.length} onClick={() => navigate(`/customers/threads?company_id=${companyId}`)} /></Col>
+              <Col span={12}><MetricCard title="Overdue" value={threads.filter(t => t.status === 'overdue').length} onClick={() => navigate(`/customers/threads?company_id=${companyId}`)} /></Col>
+            </Row>
+            <Descriptions column={1} size="small" style={{ marginTop: 8 }}>
+              <Descriptions.Item label="First Contact">{formatRelativeTime(company.first_contact_date)}</Descriptions.Item>
+              <Descriptions.Item label="Last Contact">{formatRelativeTime(company.last_contact_date)}</Descriptions.Item>
+              <Descriptions.Item label="In / Out">{company.total_inbound || 0} / {company.total_outbound || 0}</Descriptions.Item>
+            </Descriptions>
+          </div>
         </Col>
-        <Col xs={12} sm={6}>
-          <MetricCard title="Contacts" value={company.contact_count} onClick={() => navigate(`/customers/contacts?company_id=${companyId}&client_id=${company.client_id}`)} />
-        </Col>
-        <Col xs={12} sm={6}>
-          <MetricCard title="Threads" value={threads.length} onClick={() => navigate(`/customers/threads?company_id=${companyId}`)} />
-        </Col>
-        <Col xs={12} sm={6}>
-          <MetricCard title="Overdue" value={threads.filter(t => t.status === 'overdue').length} onClick={() => navigate(`/customers/threads?company_id=${companyId}`)} />
-        </Col>
-      </Row>
 
-      {/* Business Data + Communication */}
-      <Row gutter={[16, 16]} style={{ marginTop: 16 }} className="fade-in-up stagger-2">
-        <Col xs={24} lg={12}>
-          <div className="glass-card" style={{ padding: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <Text strong style={{ fontSize: 16 }}>Business Data</Text>
+        {/* Right: Business data */}
+        <Col xs={24} md={18}>
+          <div className="glass-card" style={{ padding: 14 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <Text strong>Business Data</Text>
               <QBLinkWidget
                 mode="company"
                 entityId={companyId!}
@@ -138,74 +141,40 @@ export const CompanyDetail: React.FC = () => {
                 onLinked={() => window.location.reload()}
               />
             </div>
-            <Descriptions column={2} size="small">
-              {company.qb_tier && (
-                <Descriptions.Item label="Tier"><Tag color="purple">{company.qb_tier}</Tag></Descriptions.Item>
-              )}
-              {company.qb_account_manager && (
-                <Descriptions.Item label="Account Manager">{company.qb_account_manager}</Descriptions.Item>
-              )}
-              {company.qb_total_revenue != null && (
-                <Descriptions.Item label="Revenue">{formatCurrency(company.qb_total_revenue)}</Descriptions.Item>
-              )}
-              {company.qb_days_since_last_invoice != null && (
-                <Descriptions.Item label="Days Since Order">{company.qb_days_since_last_invoice}</Descriptions.Item>
-              )}
-              {company.qb_invoiced_ty != null && (
-                <Descriptions.Item label="This Year">
-                  {formatCurrency(company.qb_invoiced_ty)}
-                  {company.qb_invoiced_ly != null && company.qb_invoiced_ty > company.qb_invoiced_ly && <ArrowUpOutlined style={{ color: '#52c41a', marginLeft: 6 }} />}
-                  {company.qb_invoiced_ly != null && company.qb_invoiced_ty < company.qb_invoiced_ly && <ArrowDownOutlined style={{ color: '#ff4d4f', marginLeft: 6 }} />}
-                </Descriptions.Item>
-              )}
-              {company.qb_invoiced_ly != null && (
-                <Descriptions.Item label="Last Year">{formatCurrency(company.qb_invoiced_ly)}</Descriptions.Item>
-              )}
-            </Descriptions>
-            {(company.qb_capabilities?.length > 0 || company.qb_processes?.length > 0 || company.qb_embellishments?.length > 0) && (
-              <div style={{ marginTop: 12 }}>
-                {company.qb_capabilities?.length > 0 && (
-                  <div style={{ marginBottom: 6 }}>
-                    <Text type="secondary" style={{ fontSize: 12 }}>Capabilities: </Text>
-                    <Space size={[4, 4]} wrap>{company.qb_capabilities.map((c: string) => <Tag key={c} color="blue" style={{ fontSize: 11 }}>{c}</Tag>)}</Space>
+            {company.qb_total_revenue != null ? (
+              <>
+                <Descriptions column={3} size="small">
+                  {company.qb_tier && <Descriptions.Item label="Tier"><Tag color="purple">{company.qb_tier}</Tag></Descriptions.Item>}
+                  {company.qb_account_manager && <Descriptions.Item label="AM">{company.qb_account_manager}</Descriptions.Item>}
+                  <Descriptions.Item label="Revenue">{formatCurrency(company.qb_total_revenue)}</Descriptions.Item>
+                  {company.qb_invoiced_ty != null && (
+                    <Descriptions.Item label="This Year">
+                      {formatCurrency(company.qb_invoiced_ty)}
+                      {company.qb_invoiced_ly != null && company.qb_invoiced_ty > company.qb_invoiced_ly && <ArrowUpOutlined style={{ color: '#52c41a', marginLeft: 4 }} />}
+                      {company.qb_invoiced_ly != null && company.qb_invoiced_ty < company.qb_invoiced_ly && <ArrowDownOutlined style={{ color: '#ff4d4f', marginLeft: 4 }} />}
+                    </Descriptions.Item>
+                  )}
+                  {company.qb_invoiced_ly != null && <Descriptions.Item label="Last Year">{formatCurrency(company.qb_invoiced_ly)}</Descriptions.Item>}
+                  {company.qb_days_since_last_invoice != null && <Descriptions.Item label="Days Since Order">{company.qb_days_since_last_invoice}</Descriptions.Item>}
+                </Descriptions>
+                {(company.qb_capabilities?.length > 0 || company.qb_processes?.length > 0 || company.qb_embellishments?.length > 0) && (
+                  <div style={{ marginTop: 8 }}>
+                    {company.qb_capabilities?.length > 0 && <div style={{ marginBottom: 4 }}><Text type="secondary" style={{ fontSize: 11 }}>Capabilities: </Text><Space size={[3, 3]} wrap>{company.qb_capabilities.map((c: string) => <Tag key={c} color="blue" style={{ fontSize: 10 }}>{c}</Tag>)}</Space></div>}
+                    {company.qb_processes?.length > 0 && <div style={{ marginBottom: 4 }}><Text type="secondary" style={{ fontSize: 11 }}>Processes: </Text><Space size={[3, 3]} wrap>{company.qb_processes.map((p: string) => <Tag key={p} color="cyan" style={{ fontSize: 10 }}>{p}</Tag>)}</Space></div>}
+                    {company.qb_embellishments?.length > 0 && <div><Text type="secondary" style={{ fontSize: 11 }}>Embellishments: </Text><Space size={[3, 3]} wrap>{company.qb_embellishments.map((e: string) => <Tag key={e} color="purple" style={{ fontSize: 10 }}>{e}</Tag>)}</Space></div>}
                   </div>
                 )}
-                {company.qb_processes?.length > 0 && (
-                  <div style={{ marginBottom: 6 }}>
-                    <Text type="secondary" style={{ fontSize: 12 }}>Processes: </Text>
-                    <Space size={[4, 4]} wrap>{company.qb_processes.map((p: string) => <Tag key={p} color="cyan" style={{ fontSize: 11 }}>{p}</Tag>)}</Space>
-                  </div>
-                )}
-                {company.qb_embellishments?.length > 0 && (
-                  <div>
-                    <Text type="secondary" style={{ fontSize: 12 }}>Embellishments: </Text>
-                    <Space size={[4, 4]} wrap>{company.qb_embellishments.map((e: string) => <Tag key={e} color="purple" style={{ fontSize: 11 }}>{e}</Tag>)}</Space>
-                  </div>
-                )}
-              </div>
-            )}
-            {!company.qb_total_revenue && !company.qb_customer_id && (
+              </>
+            ) : (
               <Text type="secondary">No QB data — link a QB customer to enrich this profile.</Text>
             )}
-          </div>
-        </Col>
-        <Col xs={24} lg={12}>
-          <div className="glass-card" style={{ padding: 20 }}>
-            <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 12 }}>Communication</Text>
-            <Descriptions column={2} size="small">
-              <Descriptions.Item label="First Contact">{formatRelativeTime(company.first_contact_date)}</Descriptions.Item>
-              <Descriptions.Item label="Last Contact">{formatRelativeTime(company.last_contact_date)}</Descriptions.Item>
-              <Descriptions.Item label="Inbound">{company.total_inbound || 0}</Descriptions.Item>
-              <Descriptions.Item label="Outbound">{company.total_outbound || 0}</Descriptions.Item>
-              <Descriptions.Item label="Client">{company.client_name || '-'}</Descriptions.Item>
-            </Descriptions>
           </div>
         </Col>
       </Row>
 
       {/* Active Threads */}
       {activeThreads.length > 0 && (
-        <div style={{ marginTop: 16 }} className="fade-in-up stagger-3">
+        <div style={{ marginTop: 12 }} className="fade-in-up stagger-3">
           <div className="glass-table-container" style={{ padding: 16 }}>
             <a onClick={() => navigate(`/customers/threads?company_id=${companyId}`)}
               style={{ fontSize: 16, fontWeight: 600, display: 'block', marginBottom: 12, color: '#667eea', cursor: 'pointer' }}>
@@ -228,19 +197,19 @@ export const CompanyDetail: React.FC = () => {
 
       {/* Customer Intelligence */}
       {companyId && company && (
-        <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
+        <Row gutter={[16, 16]} style={{ marginTop: 12 }}>
           <Col xs={24} lg={12}><StrikeRateCard companyId={companyId} /></Col>
           <Col xs={24} lg={12}><SeasonalityChart companyId={companyId} /></Col>
           <Col xs={24} lg={12}><CapabilityRhythmCard companyId={companyId} /></Col>
           <Col xs={24} lg={12}><ContactCapabilitiesCard companyId={companyId} /></Col>
           <Col xs={24} lg={12}>
-            <div className="glass-card" style={{ padding: 20 }}>
+            <div className="glass-card" style={{ padding: 16 }}>
               <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 12 }}>Product Profile</Text>
               <ProductProfileCard categories={productProfile.categories} operations={productProfile.operations} loading={productProfileQuery.isLoading} />
             </div>
           </Col>
           <Col xs={24} lg={12}>
-            <div className="glass-card" style={{ padding: 20 }}>
+            <div className="glass-card" style={{ padding: 16 }}>
               <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 12 }}>Sales Opportunities</Text>
               <RecommendationsPanel companyId={companyId} />
             </div>
@@ -249,7 +218,7 @@ export const CompanyDetail: React.FC = () => {
       )}
 
       {/* Order History */}
-      <div style={{ marginTop: 16 }}>
+      <div style={{ marginTop: 12 }}>
         <Collapse
           ghost
           items={[{
