@@ -281,27 +281,50 @@ async def get_sync_status(client_id: str = Query(...)):
                 counts[table.replace('qb_', '')] = 0
 
         # Fetch latest sync log entry per table — one query per table for reliability
+        # Falls back to MAX(synced_at) from the actual cache table if no log entry exists
         table_logs: list[QBTableSyncLog] = []
+        table_name_to_cache = {
+            'customers': 'qb_customers', 'contacts': 'qb_contacts',
+            'quotes': 'qb_quotes', 'jobs': 'qb_jobs',
+            'sales_line_items': 'qb_sales_line_items',
+            'operations': 'qb_operations', 'unique_emails': 'qb_unique_emails',
+        }
         try:
-            all_table_names = ['customers', 'contacts', 'quotes', 'jobs',
-                               'sales_line_items', 'operations', 'unique_emails']
-            for tn in all_table_names:
+            for tn, cache_table in table_name_to_cache.items():
                 try:
                     log_result = _supabase.table('qb_sync_log').select(
                         'table_name, table_id, record_count, synced_at, status, error_message'
                     ).eq('client_id', client_id).eq(
                         'table_name', tn
                     ).order('synced_at', desc=True).limit(1).execute()
+
                     if log_result.data:
                         row = log_result.data[0]
                         table_logs.append(QBTableSyncLog(
                             table_name=row['table_name'],
                             table_id=row.get('table_id'),
-                            record_count=row.get('record_count', 0),
+                            record_count=counts.get(tn, 0),
                             synced_at=row.get('synced_at'),
                             status=row.get('status', 'success'),
                             error_message=row.get('error_message'),
                         ))
+                    else:
+                        # No log entry — fall back to most recent synced_at from the cache table
+                        try:
+                            fallback = _supabase.table(cache_table).select(
+                                'synced_at'
+                            ).eq('client_id', client_id).order(
+                                'synced_at', desc=True
+                            ).limit(1).execute()
+                            if fallback.data and fallback.data[0].get('synced_at'):
+                                table_logs.append(QBTableSyncLog(
+                                    table_name=tn,
+                                    record_count=counts.get(tn, 0),
+                                    synced_at=fallback.data[0]['synced_at'],
+                                    status='success',
+                                ))
+                        except Exception:
+                            pass
                 except Exception:
                     pass
         except Exception as log_err:

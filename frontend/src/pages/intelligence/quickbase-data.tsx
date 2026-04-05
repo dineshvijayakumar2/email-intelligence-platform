@@ -546,6 +546,8 @@ const QuickbaseDataPage: React.FC = () => {
                 <Text type="secondary" style={{ fontSize: 10 }}>
                   {new Date(log.synced_at).toLocaleString()}
                 </Text>
+              ) : s.value > 0 ? (
+                <Text type="secondary" style={{ fontSize: 10, opacity: 0.5 }}>Sync log unavailable</Text>
               ) : (
                 <Text type="secondary" style={{ fontSize: 10, opacity: 0.5 }}>Not synced</Text>
               )}
