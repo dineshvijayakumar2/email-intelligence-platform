@@ -1,6 +1,6 @@
 # Email Intelligence Platform — Consolidated Implementation Progress
 
-**Last Updated:** 1 April 2026
+**Last Updated:** 5 April 2026
 **Purpose:** Consolidated reference — completed work, architecture, database schema, and next priorities.
 
 ---
@@ -33,6 +33,9 @@ A commercial intelligence platform for B2B account management teams. It syncs em
 | QB Formula Tags | 6 QB tag fields synced, classifier fallback, analytics upgraded | ✅ Complete | 30 Mar 2026 |
 | AI Chat Agent | 12-tool conversational agent at `/insights/agent`, multi-model | ✅ Complete | 31 Mar 2026 |
 | QB Email-Based Matching | Unique Emails sync, email-first matching, extraction integration | ✅ Complete | 1 Apr 2026 |
+| CC/BCC Email Linking | Junction table, all-recipient linking, company/contact count RPCs | ✅ Complete | 1 Apr 2026 |
+| Canonical Thread Resolution | 4-tier signal stack, cross-mailbox merging, thread_status overhaul | ✅ Complete | 3-5 Apr 2026 |
+| Frontend Stabilisation | TanStack Query + Table, SSE streaming, terminology cleanup | ✅ Complete | 5 Apr 2026 |
 | Invite User System | Admin-controlled onboarding, restrict open sign-up | 🔲 Planned | Not started |
 
 ---
@@ -1150,6 +1153,89 @@ Contact name matching against QB contacts runs in Step 6 (`_rematch_quickbase`).
 | `frontend/src/pages/intelligence/quickbase-data.tsx` | Unique Emails tab, per-table sync buttons + timestamps, tag columns |
 | `frontend/src/pages/intelligence/quickbase-matches.tsx` | Email-matched stats card, incremental/reset Re-Match dropdown |
 | `frontend/src/pages/intelligence/quickbase-config.tsx` | Unique Emails table config, per-table sync dropdowns, merged field mappings |
+
+---
+
+## ✅ COMPLETE — CC/BCC Email Linking (1 Apr 2026)
+
+Previously emails were linked to only one contact (the primary TO recipient). Now all participants (sender, TO, CC, BCC) are captured.
+
+- **`email_contact_links` junction table** — many-to-many email↔contact/company with role (sender/to/cc/bcc)
+- **441K+ junction links** across 261K emails — includes 53K CC'd emails
+- **Backfill endpoint** — `/extraction/backfill-email-links` processes all mailboxes, populates junction table
+- **Company/contact email counts** — RPCs `update_company_email_counts_from_junction` + `update_contact_email_counts_from_junction` refresh stored counts from junction data
+- **Auto-refresh** — counts updated automatically after every extraction (lightweight + full)
+- **Email endpoints** — `/contacts/{id}/emails` and `/companies/{id}/emails` query junction table (includes CC/BCC)
+- Migrations: 053 (junction table), 054 (count RPCs)
+
+## ✅ COMPLETE — Canonical Thread Resolution (3-5 Apr 2026)
+
+Complete overhaul of email thread tracking. Previously threads were per-mailbox using provider thread IDs, causing duplicates when the same conversation existed in multiple mailboxes.
+
+### Architecture
+
+**4-Tier Signal Stack** (priority order):
+1. **In-Reply-To → Message-ID** — definitive cross-mailbox match (31K matches)
+2. **References header chain** — walk to earliest ancestor (6K matches)
+3. **Subject + participant scoring** — heuristic with overlap ratio (88K matches)
+4. **New thread** — no match found (90K new threads)
+
+**Thread Status States:**
+
+| Status | Definition | Action Required |
+|--------|-----------|-----------------|
+| `ongoing` | Active conversation, last email within 3 days | Monitor |
+| `awaiting_response` | We sent last, waiting for contact reply | Follow up if stale |
+| `awaiting_our_response` | Contact sent last, we need to reply | Respond |
+| `overdue` | Waiting >7 days for response | Urgent attention |
+| `dropped` | No activity >30 days | Consider re-engagement |
+| `complete` | Natural end with sufficient back-and-forth | Archive |
+
+**Results:** 52,821 unique threads from 135K emails across 6 mailboxes. 7,247 duplicates merged by subject normalization.
+
+### Key Files
+- `backend/src/services/canonical_thread_resolver.py` — 4-tier resolution engine
+- `backend/src/services/thread_tracker.py` — Thread evaluation + status + subject merge
+- Migration 055 — `canonical_thread_id`, `thread_match_method`, `thread_match_confidence` on emails
+
+### Automatic Maintenance
+New emails automatically get:
+1. `canonical_thread_id` assigned (via `_assign_canonical_threads` in extraction)
+2. Affected threads re-evaluated (via `_update_affected_threads`)
+3. Contact + company email counts refreshed (via `_refresh_email_counts`)
+No manual recompute needed for ongoing operation.
+
+## ✅ COMPLETE — Frontend Stabilisation (5 Apr 2026)
+
+Surgical upgrades to the existing React + Vite + Ant Design frontend — no migration to Next.js.
+
+### TanStack Query (Upgrade 1)
+- Replaced manual cache layer in `analyticsService.ts` (getCached/setCache/dedupedFetch stripped)
+- `QueryClientProvider` in App.tsx with 30s staleTime, 5min gcTime
+- Query hooks: `useCompanies`, `useContacts`, `useThreads`, `useFilterOptions`, etc.
+- `keepPreviousData` for smooth pagination transitions
+- Companies, contacts, threads pages migrated to hooks
+
+### TanStack Table (Upgrade 2)
+- `DataTable` component: TanStack Table + Ant Design Pagination/Skeleton
+- `manualSorting: true` — SortingState drives server-side sort_by/sort_dir
+- Column definitions via type-safe `createColumnHelper<T>()`
+- Companies, contacts, threads "All" tabs use TanStack Table
+- Secondary tabs (Top Engaged, At Risk) keep AnalyticsTable (Ant Design)
+
+### SSE Streaming (Upgrade 3)
+- Backend: `POST /ai/agent/chat/stream` with `StreamingResponse` + LangGraph `astream_events`
+- Frontend: `agentChatStream()` with fetch + ReadableStream consumer
+- Events: `token`, `tool_start`, `tool_end`, `done`, `error`
+- Agent page shows tokens live as LLM generates, tools displayed in real-time
+- Digest streaming deferred to post-launch
+
+### UI Cleanup
+- Terminology: "Messages" → "Emails" in all thread tables
+- Contacts page: 3 tabs (removed Decision Makers, By Type), QB Linked filter
+- Companies page: dynamic Tier/AM filters from backend, QB Matched toggle, Company column width fixed
+- Thread tables: removed QB Type/Tier columns (low utility)
+- All filter counts server-side (no client-side count mismatch)
 
 ---
 
