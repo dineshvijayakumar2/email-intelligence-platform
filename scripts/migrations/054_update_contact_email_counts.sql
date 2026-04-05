@@ -33,40 +33,48 @@ BEGIN
 END;
 $$;
 
--- 2. Update company email counts
+-- 2. Update company email counts (processes in batches to avoid statement timeout)
 CREATE OR REPLACE FUNCTION update_company_email_counts_from_junction(p_client_id UUID)
 RETURNS INTEGER
 LANGUAGE plpgsql AS $$
 DECLARE
+    company_rec RECORD;
     updated INTEGER := 0;
+    total_count INTEGER;
+    outbound_count INTEGER;
+    contact_cnt INTEGER;
+    first_dt TIMESTAMPTZ;
+    last_dt TIMESTAMPTZ;
 BEGIN
-    WITH company_counts AS (
+    FOR company_rec IN
+        SELECT DISTINCT company_id FROM email_contact_links
+        WHERE client_id = p_client_id AND company_id IS NOT NULL
+    LOOP
         SELECT
-            ecl.company_id,
-            COUNT(DISTINCT ecl.email_id) AS total_emails,
-            COUNT(DISTINCT ecl.email_id) FILTER (WHERE e.is_outbound = true) AS outbound,
-            COUNT(DISTINCT ecl.email_id) FILTER (WHERE e.is_outbound = false OR e.is_outbound IS NULL) AS inbound,
-            COUNT(DISTINCT ecl.contact_id) AS contact_count,
-            MIN(e.sent_date) AS first_contact,
-            MAX(e.sent_date) AS last_contact
+            COUNT(DISTINCT ecl.email_id),
+            COUNT(DISTINCT ecl.email_id) FILTER (WHERE e.is_outbound = true),
+            COUNT(DISTINCT ecl.contact_id),
+            MIN(e.sent_date),
+            MAX(e.sent_date)
+        INTO total_count, outbound_count, contact_cnt, first_dt, last_dt
         FROM email_contact_links ecl
         JOIN emails e ON e.id = ecl.email_id
-        WHERE ecl.client_id = p_client_id
-          AND ecl.company_id IS NOT NULL
-        GROUP BY ecl.company_id
-    )
-    UPDATE customer_companies cc
-    SET total_emails = cc2.total_emails,
-        total_outbound = cc2.outbound,
-        total_inbound = cc2.inbound,
-        contact_count = cc2.contact_count,
-        first_contact_date = cc2.first_contact,
-        last_contact_date = cc2.last_contact
-    FROM company_counts cc2
-    WHERE cc.id = cc2.company_id
-      AND cc.client_id = p_client_id;
+        WHERE ecl.company_id = company_rec.company_id
+          AND ecl.client_id = p_client_id;
 
-    GET DIAGNOSTICS updated = ROW_COUNT;
+        UPDATE customer_companies
+        SET total_emails = total_count,
+            total_outbound = outbound_count,
+            total_inbound = total_count - outbound_count,
+            contact_count = contact_cnt,
+            first_contact_date = first_dt,
+            last_contact_date = last_dt
+        WHERE id = company_rec.company_id
+          AND client_id = p_client_id;
+
+        updated := updated + 1;
+    END LOOP;
+
     RETURN updated;
 END;
 $$;

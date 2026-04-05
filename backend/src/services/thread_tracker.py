@@ -303,11 +303,25 @@ class ThreadTracker:
 
         Only merges threads with ≤50 emails each (avoids merging unrelated bulk subjects).
         """
-        # Group thread_ids by subject_normalized
+        import re
+        PREFIX_RE = re.compile(r'^(?:\s*(?:Re|Fwd|Fw|AW|SV|TR|RES|Rif)\s*:\s*)+', re.IGNORECASE)
+
+        def normalize(s: str) -> str:
+            if not s:
+                return ''
+            return ' '.join(PREFIX_RE.sub('', s).strip().lower().split())
+
+        # Group thread_ids by normalized subject
         subject_to_tids: Dict[str, List[str]] = {}
         for tid, emails in threads.items():
-            # Use subject_normalized from first email, or normalize the subject
-            subj = (emails[0].get('subject_normalized') or '').strip().lower()
+            # Try subject_normalized first, then normalize the raw subject
+            subj = ''
+            for e in emails:
+                subj = (e.get('subject_normalized') or '').strip().lower()
+                if subj:
+                    break
+            if not subj:
+                subj = normalize(emails[0].get('subject', ''))
             if not subj or len(subj) < 5:
                 continue
             if subj not in subject_to_tids:
