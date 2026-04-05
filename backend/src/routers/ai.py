@@ -1861,22 +1861,39 @@ async def stop_reembed(
 
 @router.post("/vector/backfill-search-text")
 async def backfill_search_text(
-    batch_size: int = Query(default=10000, ge=1000, le=50000),
+    batch_size: int = Query(default=500, ge=100, le=5000),
     current_user: dict = Depends(require_role("admin")),
 ):
-    """Backfill tsvector search_text on emails in batches. Call repeatedly until returns 0."""
+    """Backfill tsvector search_text on emails in small batches to stay under statement timeout."""
     try:
-        result = _supabase.rpc("backfill_search_text", {"p_batch_size": batch_size}).execute()
-        # Function returns TABLE(updated_count int) — PostgREST wraps as [{"updated_count": N}]
-        data = result.data
-        if isinstance(data, list) and data:
-            updated = data[0].get("updated_count", 0) if isinstance(data[0], dict) else (data[0] if isinstance(data[0], int) else 0)
-        elif isinstance(data, int):
-            updated = data
-        else:
-            updated = 0
-        logger.info(f"search_text backfill: {updated} rows (batch_size={batch_size})")
-        return {"updated": updated, "batch_size": batch_size, "done": updated == 0}
+        # Find emails missing search_text
+        batch = _supabase.table("emails").select("id").is_(
+            "search_text", "null"
+        ).limit(batch_size).execute()
+        ids = [r["id"] for r in (batch.data or [])]
+
+        if not ids:
+            return {"updated": 0, "batch_size": batch_size, "done": True}
+
+        # Process in small chunks via RPC to stay under Supabase statement timeout
+        updated = 0
+        chunk_size = 100
+        for i in range(0, len(ids), chunk_size):
+            chunk = ids[i:i + chunk_size]
+            try:
+                result = _supabase.rpc("backfill_search_text_by_ids", {
+                    "p_ids": chunk,
+                }).execute()
+                data = result.data
+                if isinstance(data, list) and data and isinstance(data[0], dict):
+                    updated += data[0].get("updated_count", len(chunk))
+                else:
+                    updated += len(chunk)
+            except Exception as chunk_err:
+                logger.warning(f"Backfill chunk {i} failed: {chunk_err}")
+
+        logger.info(f"search_text backfill: {updated}/{len(ids)} rows")
+        return {"updated": updated, "batch_size": batch_size, "done": len(ids) < batch_size}
     except Exception as e:
         logger.error(f"search_text backfill failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e)[:300])

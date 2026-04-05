@@ -33,33 +33,23 @@ CREATE TRIGGER trg_emails_search_text
 -- 4. Backfill existing rows — RUN SEPARATELY in batches of 10K to avoid timeout.
 --    The RPC below processes one batch per call. Run repeatedly until it returns 0.
 
--- Returns TABLE so PostgREST can expose it properly (scalar returns are problematic)
-CREATE OR REPLACE FUNCTION backfill_search_text(p_batch_size int DEFAULT 10000)
+-- ID-based backfill — Python finds the IDs, this RPC updates them in small chunks.
+-- Avoids statement timeout by keeping each call to ~100 rows.
+CREATE OR REPLACE FUNCTION backfill_search_text_by_ids(p_ids uuid[])
 RETURNS TABLE(updated_count int)
 LANGUAGE plpgsql AS $$
 BEGIN
-    WITH batch AS (
-        SELECT id FROM emails
-        WHERE search_text IS NULL
-        LIMIT p_batch_size
-        FOR UPDATE SKIP LOCKED
-    )
     UPDATE emails e
     SET search_text =
         setweight(to_tsvector('english', COALESCE(e.subject, '')), 'A') ||
         setweight(to_tsvector('english', COALESCE(LEFT(e.body_text, 5000), '')), 'B') ||
         setweight(to_tsvector('english', COALESCE(e.sender_name, '')), 'C')
-    FROM batch
-    WHERE e.id = batch.id;
+    WHERE e.id = ANY(p_ids);
 
     GET DIAGNOSTICS updated_count = ROW_COUNT;
     RETURN NEXT;
 END;
 $$;
-
--- To backfill, call this RPC repeatedly until it returns 0:
---   SELECT backfill_search_text(10000);  -- processes 10K rows per call
---   SELECT backfill_search_text(10000);  -- repeat until returns 0
 
 -- 5. Keyword search RPC — returns BM25-ranked results using ts_rank_cd
 CREATE OR REPLACE FUNCTION keyword_search_emails(
