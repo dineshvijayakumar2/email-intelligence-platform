@@ -1,45 +1,45 @@
 # Ant Design → shadcn/ui Migration Tracker
 
-## Status: In Progress
+## Status: In Progress — 24 migrated / 44 remaining
 
-### Fully Migrated (zero antd)
-- [x] `src/components/layout.tsx`
-- [x] `src/components/DataTable.tsx`
-- [x] `src/components/AIInsightsCard.tsx`
-- [x] `src/components/StrikeRateCard.tsx`
-- [x] `src/components/SeasonalityChart.tsx`
-- [x] `src/components/CapabilityRhythmCard.tsx`
-- [x] `src/components/ContactCapabilitiesCard.tsx`
-- [x] `src/components/ProductProfileCard.tsx`
-- [x] `src/components/RecommendationsPanel.tsx`
-- [x] `src/components/OrderHistoryTable.tsx`
-- [x] `src/components/analytics/EngagementBadge.tsx`
-- [x] `src/components/analytics/LifecycleBadge.tsx`
-- [x] `src/components/analytics/ClientSelector.tsx`
-- [x] `src/pages/dashboard.tsx`
-- [x] `src/pages/analytics/companies.tsx`
-- [x] `src/pages/analytics/company-detail.tsx`
-- [x] `src/pages/analytics/contacts.tsx`
-- [x] `src/pages/analytics/contact-detail.tsx`
-- [x] `src/pages/analytics/threads.tsx`
-- [x] `src/pages/intelligence/vector-search.tsx`
+### Fully Migrated (zero antd) ✅
+- [x] `src/components/layout.tsx` — Phase 2
+- [x] `src/components/DataTable.tsx` — Phase 4
+- [x] `src/components/AIInsightsCard.tsx` — Phase 4 (auto-trigger on load)
+- [x] `src/components/StrikeRateCard.tsx` — Phase 4
+- [x] `src/components/SeasonalityChart.tsx` — Phase 4
+- [x] `src/components/CapabilityRhythmCard.tsx` — Phase 4
+- [x] `src/components/ContactCapabilitiesCard.tsx` — Phase 4
+- [x] `src/components/ProductProfileCard.tsx` — Phase 4
+- [x] `src/components/RecommendationsPanel.tsx` — Phase 4
+- [x] `src/components/OrderHistoryTable.tsx` — Phase 4
+- [x] `src/components/analytics/EngagementBadge.tsx` — Phase 4
+- [x] `src/components/analytics/LifecycleBadge.tsx` — Phase 4
+- [x] `src/components/analytics/ClientSelector.tsx` — Phase 4
+- [x] `src/pages/dashboard.tsx` — Phase 3
+- [x] `src/pages/analytics/companies.tsx` — Phase 5
+- [x] `src/pages/analytics/company-detail.tsx` — Phase 5
+- [x] `src/pages/analytics/contacts.tsx` — Phase 5
+- [x] `src/pages/analytics/contact-detail.tsx` — Phase 5
+- [x] `src/pages/analytics/threads.tsx` — Phase 5
+- [x] `src/pages/intelligence/vector-search.tsx` — Phase 5
+- [x] `src/pages/oauth-callback.tsx` — Tier 1
+- [x] `src/pages/extraction.tsx` — Tier 1
+- [x] `src/contexts/ClientContext.tsx` — new (global client selector)
+- [x] `src/lib/risk-variants.ts` — new (global risk pattern)
 
-### Still Using antd (46 files)
-
-**Tier 1 — Form/settings pages (bulk migrate):**
+### Tier 1 — Form/settings pages (bulk migrate)
 - [ ] `src/pages/settings.tsx`
 - [ ] `src/pages/users.tsx`
 - [ ] `src/pages/clients.tsx`
 - [ ] `src/pages/login.tsx`
 - [ ] `src/pages/reset-password.tsx`
-- [ ] `src/pages/oauth-callback.tsx`
-- [ ] `src/pages/extraction.tsx`
 - [ ] `src/pages/audit-logs.tsx`
 - [ ] `src/pages/admin-data.tsx`
 - [ ] `src/pages/manage/intelligence-config.tsx`
 - [ ] `src/pages/manage/log-monitor.tsx`
 
-**Tier 2 — Data views (DataTable already done):**
+### Tier 2 — Data views (DataTable already done)
 - [ ] `src/pages/intelligence/quickbase-data.tsx`
 - [ ] `src/pages/intelligence/quickbase-matches.tsx`
 - [ ] `src/pages/intelligence/quickbase-config.tsx`
@@ -53,17 +53,17 @@
 - [ ] `src/pages/analytics/patterns.tsx`
 - [ ] `src/pages/analytics/response-times.tsx`
 
-**Tier 3 — Complex interaction pages (careful migration):**
+### Tier 3 — Complex interaction pages (careful migration)
 - [ ] `src/pages/emails.tsx` (700+ lines — split first)
-- [ ] `src/pages/intelligence/agent.tsx` (SSE streaming)
+- [ ] `src/pages/intelligence/agent.tsx` (SSE streaming — preserve EventSource logic)
 - [ ] `src/pages/intelligence/inbox.tsx`
 - [ ] `src/pages/intelligence/digest.tsx`
 - [ ] `src/pages/intelligence/strategic-digest.tsx`
 - [ ] `src/pages/intelligence/opportunities.tsx`
-- [ ] `src/pages/mailboxes.tsx` (1107 lines)
+- [ ] `src/pages/mailboxes.tsx` (1107 lines — split first)
 - [ ] `src/pages/mailbox-process.tsx`
 
-**Shared components still using antd:**
+### Shared components still using antd
 - [ ] `src/components/EmailDetailPanel.tsx`
 - [ ] `src/components/MailboxSelector.tsx`
 - [ ] `src/components/QBLinkWidget.tsx`
@@ -81,14 +81,25 @@
 - [ ] `src/components/analytics/EngagementTrendChart.tsx`
 - [ ] `src/components/analytics/MetricCard.tsx`
 
-**Config/theme (delete in Phase 9):**
-- [ ] `src/App.tsx` — remove ConfigProvider
+### Config/theme (delete in Phase 9)
+- [ ] `src/App.tsx` — remove ConfigProvider + antTheme
 - [ ] `src/theme/glassTheme.ts` — delete
 - [ ] `src/styles/glass.css` — delete
 
-## Design Decisions
-- **Chart library:** Recharts (already in 4 files, stays)
-- **Semantic tokens:** destructive/warning/success/risk with subtle variants
-- **Risk pattern:** `getRiskClass()` from `lib/risk-variants.ts`
-- **cn():** Used in every component for class merging
-- **StatusBadge:** Customized with semantic token colors, not raw Tailwind
+---
+
+## Design Decisions (locked in)
+- **Chart library:** Recharts (4 files, stays). No Nivo. Tremor for BarList only.
+- **Semantic tokens:** `destructive`/`warning`/`success`/`risk` with `subtle` bg variants
+- **Risk pattern:** `getRiskClass()` from `lib/risk-variants.ts` — single source of truth
+- **cn():** Used in every component for Tailwind class merging
+- **StatusBadge:** CVA variants using semantic token colors, not raw Tailwind
+- **Global client:** `useClient()` context replaces per-page ClientSelector
+- **Toast:** Sonner via `lib/toast.ts` replaces antd `message.*`
+- **Icons:** Lucide React via `lib/icons.ts` replaces `@ant-design/icons`
+
+## Migration Rules
+- Every migrated page: **zero** `from 'antd'` imports — confirm before committing
+- Never use raw Tailwind colors (`bg-red-500`) — use semantic tokens (`bg-destructive`)
+- All forms: native HTML inputs during migration, react-hook-form + zod post-cleanup
+- Preserve all business logic, SSE streaming, TanStack Query hooks — only swap UI layer
