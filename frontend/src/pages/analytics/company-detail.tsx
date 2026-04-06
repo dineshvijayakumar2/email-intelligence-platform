@@ -90,15 +90,16 @@ export const CompanyDetail: React.FC = () => {
 
   return (
     <div className="glass-page-bg" style={{ padding: 24 }}>
-      <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/customers')} style={{ marginBottom: 12 }}>Back to Companies</Button>
-
-      <div className="glass-card fade-in-up" style={{ padding: 16, marginBottom: 12 }}>
-        <Row align="middle" gutter={16}>
+      <div className="glass-card fade-in-up" style={{ padding: '10px 16px', marginBottom: 12 }}>
+        <Row align="middle" gutter={12}>
+          <Col>
+            <Button icon={<ArrowLeftOutlined />} type="text" size="small" onClick={() => navigate('/customers')} />
+          </Col>
           <Col flex="auto">
-            <Title level={4} style={{ margin: 0 }}>{company.company_name}</Title>
-            {company.industry && <Tag>{company.industry}</Tag>}
+            <Title level={4} style={{ margin: 0, display: 'inline' }}>{company.company_name}</Title>
+            {company.industry && <Tag style={{ marginLeft: 8 }}>{company.industry}</Tag>}
             <LifecycleBadge tier={company.qb_customer_type} />
-            {company.email_domains?.length && <Text type="secondary"> ({company.email_domains.join(', ')})</Text>}
+            {company.email_domains?.length && <Text type="secondary" style={{ marginLeft: 6, fontSize: 12 }}>({company.email_domains.join(', ')})</Text>}
           </Col>
           <Col>
             <EngagementBadge score={company.engagement_score} showBar />

@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Tag, Spin, Typography, Space, Button, Row, Col, Statistic } from 'antd';
+import { Card, Tag, Spin, Typography, Space, Button, Table, Row, Col } from 'antd';
 import { ReloadOutlined, CalendarOutlined, ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons';
 import { companiesApi } from '../services/analyticsService';
 
 const { Text } = Typography;
+const MONTHS = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-interface Props {
-  companyId: string;
-}
+interface Props { companyId: string; }
 
 const SeasonalityChart: React.FC<Props> = ({ companyId }) => {
   const [data, setData] = useState<any>(null);
@@ -22,116 +21,88 @@ const SeasonalityChart: React.FC<Props> = ({ companyId }) => {
 
   useEffect(() => { load(); }, [companyId]);
 
-  if (loading) return <Card className="glass-card" title="Seasonality"><Spin /></Card>;
+  if (loading) return <Card className="glass-card" size="small" title={<Space size={6}><CalendarOutlined />Seasonality</Space>}><Spin size="small" /></Card>;
   if (!data?.monthly?.length) {
-    return (
-      <Card className="glass-card" title="Seasonality">
-        <Text type="secondary">No ordering history with dates available</Text>
-      </Card>
-    );
+    return <Card className="glass-card" size="small" title={<Space size={6}><CalendarOutlined />Seasonality</Space>}>
+      <Text type="secondary" style={{ fontSize: 12 }}>No ordering history</Text>
+    </Card>;
   }
 
-  const maxCount = Math.max(...data.monthly.map((m: any) => m.order_count));
+  const peakSet = new Set(data.peak_months || []);
+  const troughSet = new Set(data.trough_months || []);
+
+  const monthlyColumns = [
+    {
+      title: 'Month', dataIndex: 'month', key: 'month', width: 70,
+      render: (v: number) => {
+        const isPeak = peakSet.has(v);
+        const isTrough = troughSet.has(v);
+        return (
+          <Space size={4}>
+            <Text style={{ fontSize: 12 }}>{MONTHS[v]}</Text>
+            {isPeak && <ArrowUpOutlined style={{ color: '#52c41a', fontSize: 10 }} />}
+            {isTrough && <ArrowDownOutlined style={{ color: '#999', fontSize: 10 }} />}
+          </Space>
+        );
+      },
+    },
+    {
+      title: 'Orders', dataIndex: 'order_count', key: 'orders', width: 65, align: 'right' as const,
+      render: (v: number) => <Text style={{ fontSize: 12 }}>{v}</Text>,
+    },
+    {
+      title: 'Revenue', dataIndex: 'revenue', key: 'revenue', align: 'right' as const,
+      render: (v: number) => <Text style={{ fontSize: 12 }}>${Number(v).toLocaleString()}</Text>,
+    },
+  ];
+
+  const quarterlyColumns = [
+    { title: 'Quarter', dataIndex: 'quarter', key: 'quarter', width: 70,
+      render: (v: number) => <Text style={{ fontSize: 12 }}>Q{v}</Text> },
+    { title: 'Orders', dataIndex: 'order_count', key: 'orders', width: 65, align: 'right' as const,
+      render: (v: number) => <Text style={{ fontSize: 12 }}>{v}</Text> },
+    { title: 'Revenue', dataIndex: 'revenue', key: 'revenue', align: 'right' as const,
+      render: (v: number) => <Text style={{ fontSize: 12 }}>${Number(v).toLocaleString()}</Text> },
+  ];
 
   return (
     <Card
-      className="glass-card"
-      title={<Space><CalendarOutlined />Seasonality</Space>}
-      extra={<Button size="small" icon={<ReloadOutlined />} onClick={() => load(true)}>Refresh</Button>}
+      className="glass-card" size="small"
+      title={<Space size={6}><CalendarOutlined />Seasonality <Text type="secondary" style={{ fontSize: 12, fontWeight: 400 }}>{data.total_orders} orders</Text></Space>}
+      extra={<Button size="small" type="text" icon={<ReloadOutlined />} onClick={() => load(true)} />}
     >
-      <Row gutter={[16, 8]} style={{ marginBottom: 16 }}>
-        <Col xs={8}>
-          <Statistic title="Total Orders" value={data.total_orders} />
+      <Row gutter={[12, 12]}>
+        {/* Monthly grid */}
+        <Col xs={24} md={14}>
+          <Table
+            dataSource={data.monthly}
+            columns={monthlyColumns}
+            rowKey="month"
+            size="small"
+            pagination={false}
+            showHeader={true}
+          />
         </Col>
-        <Col xs={8}>
-          <div>
-            <Text type="secondary" style={{ fontSize: 12 }}>Peak Months</Text>
-            <div style={{ marginTop: 4 }}>
-              {data.peak_months?.length > 0 ? (
-                <Space size={4} wrap>
-                  {data.peak_months.map((m: number) => (
-                    <Tag key={m} color="green" icon={<ArrowUpOutlined />} style={{ fontSize: 11 }}>
-                      {['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][m]}
-                    </Tag>
-                  ))}
-                </Space>
-              ) : <Text type="secondary" style={{ fontSize: 11 }}>Even distribution</Text>}
-            </div>
-          </div>
-        </Col>
-        <Col xs={8}>
-          <div>
-            <Text type="secondary" style={{ fontSize: 12 }}>Quiet Months</Text>
-            <div style={{ marginTop: 4 }}>
-              {data.trough_months?.length > 0 ? (
-                <Space size={4} wrap>
-                  {data.trough_months.map((m: number) => (
-                    <Tag key={m} color="default" icon={<ArrowDownOutlined />} style={{ fontSize: 11 }}>
-                      {['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][m]}
-                    </Tag>
-                  ))}
-                </Space>
-              ) : <Text type="secondary" style={{ fontSize: 11 }}>—</Text>}
-            </div>
-          </div>
-        </Col>
-      </Row>
 
-      {/* Simple bar chart */}
-      <div style={{ display: 'flex', gap: 3, alignItems: 'flex-end', height: 100, marginBottom: 8 }}>
-        {data.monthly.map((m: any) => {
-          const height = maxCount > 0 ? (m.order_count / maxCount) * 100 : 0;
-          const isPeak = data.peak_months?.includes(m.month);
-          const isTrough = data.trough_months?.includes(m.month);
-          return (
-            <div
-              key={m.month}
-              style={{
-                flex: 1,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: 2,
-              }}
-              title={`${m.month_name}: ${m.order_count} orders, $${Number(m.revenue).toLocaleString()}`}
-            >
-              <Text style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)' }}>{m.order_count}</Text>
-              <div
-                style={{
-                  width: '100%',
-                  height: `${Math.max(height, 2)}%`,
-                  backgroundColor: isPeak ? '#52c41a' : isTrough ? 'rgba(255,255,255,0.15)' : '#667eea',
-                  borderRadius: 3,
-                  transition: 'height 0.3s',
-                }}
-              />
-              <Text style={{ fontSize: 9, color: 'rgba(255,255,255,0.5)' }}>
-                {m.month_name?.substring(0, 3)}
+        {/* Quarterly grid */}
+        {data.quarterly?.length > 0 && (
+          <Col xs={24} md={10}>
+            <Table
+              dataSource={data.quarterly}
+              columns={quarterlyColumns}
+              rowKey="quarter"
+              size="small"
+              pagination={false}
+              showHeader={true}
+            />
+            {data.date_range && (
+              <Text type="secondary" style={{ fontSize: 10, display: 'block', marginTop: 4 }}>
+                Data: {data.date_range.earliest} to {data.date_range.latest}
               </Text>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Quarterly summary */}
-      {data.quarterly?.length > 0 && (
-        <div style={{ marginTop: 12 }}>
-          <Space wrap>
-            {data.quarterly.map((q: any) => (
-              <Tag key={q.quarter} style={{ fontSize: 11 }}>
-                Q{q.quarter}: {q.order_count} orders (${Number(q.revenue).toLocaleString()})
-              </Tag>
-            ))}
-          </Space>
-        </div>
-      )}
-
-      {data.computed_at && (
-        <Text type="secondary" style={{ fontSize: 11, marginTop: 8, display: 'block' }}>
-          Computed: {new Date(data.computed_at).toLocaleString()}
-          {data.date_range && ` | Data: ${data.date_range.earliest} to ${data.date_range.latest}`}
-        </Text>
-      )}
+            )}
+          </Col>
+        )}
+      </Row>
     </Card>
   );
 };

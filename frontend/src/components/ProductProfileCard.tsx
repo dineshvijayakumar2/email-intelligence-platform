@@ -1,5 +1,5 @@
 import React from 'react';
-import { Typography, Tag, Empty, Skeleton, Space, Row, Col } from 'antd';
+import { Typography, Tag, Empty, Skeleton, Space, Row, Col, Table } from 'antd';
 import { formatCurrency } from '../utils/numberFormat';
 
 const { Text } = Typography;
@@ -33,69 +33,103 @@ export const ProductProfileCard: React.FC<Props> = ({
     return <Empty description="No product data — QB sync needed" image={Empty.PRESENTED_IMAGE_SIMPLE} />;
   }
 
-  // Max revenue for bar width calculation
-  const maxRevenue = hasCategories ? Math.max(...categories.map(c => c.revenue)) : 0;
+  // Group operations by department for a count table
+  const deptCounts: { department: string; count: number }[] = [];
+  const deptMap: Record<string, number> = {};
+  operations.forEach(op => {
+    const dept = op.department || 'Other';
+    deptMap[dept] = (deptMap[dept] || 0) + 1;
+  });
+  Object.entries(deptMap).sort((a, b) => b[1] - a[1]).forEach(([dept, count]) => {
+    deptCounts.push({ department: dept, count });
+  });
 
   return (
-    <div>
-      {/* Revenue by Category — inline bar */}
+    <Row gutter={[12, 12]}>
+      {/* Revenue by Category */}
       {hasCategories && (
-        <div style={{ marginBottom: 12 }}>
-          <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 6 }}>Revenue by Category</Text>
-          {categories.map(c => (
-            <div key={c.category} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-              <Text style={{ fontSize: 12, width: 160, flexShrink: 0 }} ellipsis>{c.category}</Text>
-              <div style={{ flex: 1, height: 14, background: 'rgba(102,126,234,0.08)', borderRadius: 3 }}>
-                <div style={{
-                  width: `${maxRevenue > 0 ? (c.revenue / maxRevenue) * 100 : 0}%`,
-                  height: '100%', borderRadius: 3,
-                  background: 'linear-gradient(90deg, #667eea, #764ba2)',
-                  minWidth: 2,
-                }} />
-              </div>
-              <Text strong style={{ fontSize: 11, flexShrink: 0, width: 70, textAlign: 'right' }}>
-                {formatCurrency(c.revenue)}
-              </Text>
-            </div>
-          ))}
-        </div>
+        <Col xs={24} md={hasCapabilities ? 12 : 24}>
+          <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 4 }}>Revenue by Category</Text>
+          <Table
+            dataSource={categories}
+            rowKey="category"
+            size="small"
+            pagination={false}
+            showHeader={false}
+            columns={[
+              { dataIndex: 'category', render: (v: string) => <Text style={{ fontSize: 12 }}>{v}</Text> },
+              { dataIndex: 'revenue', align: 'right' as const, width: 100,
+                render: (v: number) => <Text strong style={{ fontSize: 12 }}>{formatCurrency(v)}</Text> },
+            ]}
+          />
+        </Col>
       )}
 
-      {/* Capability breakdown — always show all */}
+      {/* Capabilities with operation counts */}
       {hasCapabilities && (
-        <div style={{ marginBottom: 8 }}>
+        <Col xs={24} md={hasCategories ? 12 : 24}>
           <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 4 }}>
             Capabilities ({capability_breakdown!.reduce((s, c) => s + c.operation_count, 0)} operations)
           </Text>
-          <Space size={[4, 4]} wrap>
-            {capability_breakdown!.map(c => (
-              <Tag key={c.capability} color="blue" style={{ fontSize: 11, margin: 0 }}>
-                {c.capability} ({c.operation_count})
-              </Tag>
-            ))}
-          </Space>
-        </div>
+          <Table
+            dataSource={capability_breakdown}
+            rowKey="capability"
+            size="small"
+            pagination={false}
+            showHeader={false}
+            columns={[
+              { dataIndex: 'capability', render: (v: string) => <Tag color="blue" style={{ fontSize: 11, margin: 0 }}>{v}</Tag> },
+              { dataIndex: 'operation_count', align: 'right' as const, width: 60,
+                render: (v: number) => <Text type="secondary" style={{ fontSize: 12 }}>{v}</Text> },
+            ]}
+          />
+        </Col>
       )}
 
-      {/* Processes — always show all */}
+      {/* Operations by Department */}
+      {deptCounts.length > 0 && (
+        <Col xs={24} md={8}>
+          <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 4 }}>
+            Operations by Department ({operations.length})
+          </Text>
+          <Table
+            dataSource={deptCounts}
+            rowKey="department"
+            size="small"
+            pagination={false}
+            showHeader={false}
+            columns={[
+              { dataIndex: 'department', render: (v: string) => <Text style={{ fontSize: 12 }}>{v}</Text> },
+              { dataIndex: 'count', align: 'right' as const, width: 50,
+                render: (v: number) => <Text type="secondary" style={{ fontSize: 12 }}>{v}</Text> },
+            ]}
+          />
+        </Col>
+      )}
+
+      {/* Processes */}
       {hasProcesses && (
-        <div style={{ marginBottom: 8 }}>
-          <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 4 }}>Processes</Text>
+        <Col xs={24} md={8}>
+          <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 4 }}>
+            Processes ({process_tags!.length})
+          </Text>
           <Space size={[4, 4]} wrap>
             {process_tags!.map(t => <Tag key={t} color="cyan" style={{ fontSize: 11, margin: 0 }}>{t}</Tag>)}
           </Space>
-        </div>
+        </Col>
       )}
 
-      {/* Embellishments — always show all */}
+      {/* Embellishments */}
       {hasEmbellishments && (
-        <div style={{ marginBottom: 8 }}>
-          <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 4 }}>Embellishments</Text>
+        <Col xs={24} md={8}>
+          <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 4 }}>
+            Embellishments ({embellishment_tags!.length})
+          </Text>
           <Space size={[4, 4]} wrap>
             {embellishment_tags!.map(t => <Tag key={t} color="purple" style={{ fontSize: 11, margin: 0 }}>{t}</Tag>)}
           </Space>
-        </div>
+        </Col>
       )}
-    </div>
+    </Row>
   );
 };
