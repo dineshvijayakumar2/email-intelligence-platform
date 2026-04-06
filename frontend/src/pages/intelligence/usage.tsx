@@ -777,18 +777,31 @@ const EmbeddingManagement: React.FC<{ clientId: string }> = ({ clientId }) => {
     }
   }, [clientId]);
 
-  // Only load stats when clientId is available
+  // Load stats + check for in-progress embedding when clientId is available
   useEffect(() => {
-    if (clientId) loadStats();
+    if (!clientId) return;
+    loadStats();
+    // Check if embedding is already running (survives page navigation)
+    vectorApi.getReembedStatus(clientId).then(status => {
+      if (status?.status === 'running') {
+        setReembedStatus(status);
+      }
+    }).catch(() => {});
   }, [clientId, loadStats]);
 
-  // Poll reembed status
+  // Poll reembed status + live stats refresh while embedding is running
   useEffect(() => {
     if (reembedStatus?.status !== 'running') return;
+    let pollCount = 0;
     const interval = setInterval(async () => {
       try {
         const status = await vectorApi.getReembedStatus(clientId);
         setReembedStatus(status);
+        pollCount++;
+        // Refresh stats every 5 polls (~15s) for live count updates
+        if (pollCount % 5 === 0 && clientId) {
+          vectorApi.getVectorStats(clientId).then(s => setStats(s)).catch(() => {});
+        }
         if (status.status !== 'running') {
           clearInterval(interval);
           loadStats();
