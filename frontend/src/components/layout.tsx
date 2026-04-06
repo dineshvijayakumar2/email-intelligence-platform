@@ -16,6 +16,7 @@ import {
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { StatusBadge } from '@/components/ui/status-badge';
+import { useClient } from '../contexts/ClientContext';
 
 // Role config
 const roleConfig: Record<string, { label: string; variant: 'warning' | 'info' | 'success' }> = {
@@ -90,6 +91,7 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { profile, signOut, isAdmin } = useAuth();
+  const { clientId, setClientId, clients, clientName } = useClient();
   const [isMobile, setIsMobile] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
 
@@ -284,13 +286,16 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
                 </Avatar>
                 {!isMobile && (
                   <>
-                    <span className="text-sm font-medium text-slate-700">{profile?.name || 'User'}</span>
+                    <div className="text-left">
+                      <span className="text-sm font-medium text-slate-700 block leading-tight">{profile?.name || 'User'}</span>
+                      {clientName && <span className="text-[10px] text-slate-400 block leading-tight">{clientName}</span>}
+                    </div>
                     <ChevronDown className="h-3 w-3 text-slate-400" />
                   </>
                 )}
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuContent align="end" className="w-64">
               <DropdownMenuLabel>
                 <p className="text-sm font-medium">{profile?.name}</p>
                 <p className="text-xs text-muted-foreground">{profile?.email}</p>
@@ -304,6 +309,22 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
                   </div>
                 )}
               </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {/* Client switcher */}
+              {clients.length > 0 && (
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-slate-400 font-medium pb-0">Client</DropdownMenuLabel>
+                  <div className="px-2 py-1.5">
+                    <select
+                      value={clientId}
+                      onChange={e => setClientId(e.target.value)}
+                      className="w-full h-7 px-2 text-xs rounded border border-slate-200 bg-white focus:outline-none focus:ring-1 focus:ring-primary/20"
+                    >
+                      {clients.map(c => <option key={c.id} value={c.id}>{c.client_name}</option>)}
+                    </select>
+                  </div>
+                </DropdownMenuGroup>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleSignOut} className="text-red-600 focus:text-red-600">
                 <LogOut className="h-4 w-4 mr-2" />

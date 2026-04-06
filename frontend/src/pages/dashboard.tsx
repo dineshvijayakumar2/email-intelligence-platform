@@ -10,6 +10,7 @@ import {
 import { bucketApi } from '../services/aiService';
 import type { BucketSummary, ActionItem } from '../types/ai';
 import { useAuth } from '../contexts/AuthContext';
+import { useClient } from '../contexts/ClientContext';
 import { cn } from '@/lib/utils';
 import { PageShell } from '@/components/ui/page-shell';
 import { KPICard, KPIStrip } from '@/components/ui/kpi-card';

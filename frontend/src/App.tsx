@@ -23,6 +23,7 @@ import { ConfigProvider } from 'antd';
 // Auth
 import { AuthProvider } from './contexts/AuthContext';
 import { WebSocketProvider } from './contexts/WebSocketContext';
+import { ClientProvider } from './contexts/ClientContext';
 import { ProtectedRoute, AdminRoute } from './components/ProtectedRoute';
 import { LoginPage } from './pages/login';
 import { ResetPasswordPage } from './pages/reset-password';
@@ -86,6 +87,7 @@ function App() {
     <BrowserRouter>
       <ConfigProvider theme={antTheme}>
         <AuthProvider>
+          <ClientProvider>
           <WebSocketProvider>
           <Routes>
             {/* Public routes */}
@@ -178,6 +180,7 @@ function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           </WebSocketProvider>
+          </ClientProvider>
         </AuthProvider>
       </ConfigProvider>
     </BrowserRouter>

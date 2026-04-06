@@ -6,8 +6,8 @@ import {
   createColumnHelper,
   type SortingState,
 } from '@tanstack/react-table';
-import { ClientSelector } from '../../components/analytics/ClientSelector';
 import { DataTable } from '../../components/DataTable';
+import { useClient } from '../../contexts/ClientContext';
 import { EngagementBadge } from '../../components/analytics/EngagementBadge';
 import { LifecycleBadge } from '../../components/analytics/LifecycleBadge';
 import {
@@ -25,7 +25,7 @@ const col = createColumnHelper<ContactAnalytics>();
 export const ContactsAnalytics: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [clientId, setClientId] = useState(() => searchParams.get('client_id') || localStorage.getItem('analytics_client_id') || '');
+  const { clientId } = useClient();
 
   const [contactsPage, setContactsPage] = useState(1);
   const [sorting, setSorting] = useState<SortingState>([{ id: 'engagement_score', desc: true }]);
@@ -150,7 +150,7 @@ export const ContactsAnalytics: React.FC = () => {
       <PageHeader
         title="Contacts"
         description={isCompanyDrilldown ? 'Contacts for this company' : 'Explore contacts, engagement scores, and relationship health'}
-        actions={<ClientSelector value={clientId} onChange={setClientId} />}
+        actions={null}
       />
 
       {/* Filter bar */}

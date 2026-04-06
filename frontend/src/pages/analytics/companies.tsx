@@ -6,8 +6,8 @@ import {
   createColumnHelper,
   type SortingState,
 } from '@tanstack/react-table';
-import { ClientSelector } from '../../components/analytics/ClientSelector';
 import { DataTable } from '../../components/DataTable';
+import { useClient } from '../../contexts/ClientContext';
 import { EngagementBadge } from '../../components/analytics/EngagementBadge';
 import {
   useCompanies,
@@ -24,7 +24,7 @@ const col = createColumnHelper<CompanyAnalytics>();
 
 export const CompaniesAnalytics: React.FC = () => {
   const navigate = useNavigate();
-  const [clientId, setClientId] = useState(() => localStorage.getItem('analytics_client_id') || '');
+  const { clientId } = useClient();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -160,7 +160,7 @@ export const CompaniesAnalytics: React.FC = () => {
       <PageHeader
         title="Companies"
         description="Explore company engagement, relationship health, and risk indicators"
-        actions={<ClientSelector value={clientId} onChange={setClientId} />}
+        actions={null}
       />
 
       {/* Filter bar */}
