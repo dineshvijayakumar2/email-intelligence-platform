@@ -1855,8 +1855,14 @@ async def stop_reembed(
         return {"status": "not_running"}
 
     _reembed_cancel[client_id] = True
+    # Clear progress immediately so the next status poll sees "idle"
+    # The background task will finish on its own — embedded records are kept.
+    _reembed_progress[client_id] = {
+        "status": "stopped",
+        "stopped_at": _time.time(),
+    }
     logger.info(f"[Vector] Stop requested for reembed job {client_id}")
-    return {"status": "stopping"}
+    return {"status": "stopped"}
 
 
 @router.post("/vector/backfill-search-text")

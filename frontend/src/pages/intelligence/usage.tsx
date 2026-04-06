@@ -784,8 +784,9 @@ const EmbeddingManagement: React.FC<{ clientId: string }> = ({ clientId }) => {
     // Check if embedding is already running (survives page navigation)
     vectorApi.getReembedStatus(clientId).then(status => {
       if (status?.status === 'running') {
-        setReembedStatus(status);
+        setReembedStatus(status); // Starts polling
       }
+      // Don't set stopped/complete/error — let user see the embed buttons
     }).catch(() => {});
   }, [clientId, loadStats]);
 
