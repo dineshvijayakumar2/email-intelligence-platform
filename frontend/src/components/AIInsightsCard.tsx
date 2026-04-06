@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { insightsApi } from '../services/strategicDigestService';
 import type { AIInsight } from '../types/strategic-digest';
 import { cn } from '@/lib/utils';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { ContentSkeleton } from '@/components/ui/empty-state';
-import { Bot, RefreshCw } from 'lucide-react';
+import { Bot, RefreshCw, Sparkles } from 'lucide-react';
 
 interface AIInsightsCardProps {
   entityType: 'company' | 'contact' | 'thread';
@@ -31,8 +31,7 @@ const BulletList: React.FC<{ items?: string[]; header: string }> = ({ items, hea
       <ul className="space-y-1">
         {items.map((item, i) => (
           <li key={i} className="text-sm text-slate-700 flex gap-2">
-            <span className="text-slate-300 shrink-0">•</span>
-            {item}
+            <span className="text-slate-300 shrink-0">•</span>{item}
           </li>
         ))}
       </ul>
@@ -96,7 +95,6 @@ const AIInsightsCard: React.FC<AIInsightsCardProps> = ({ entityType, entityId, c
   const [insight, setInsight] = useState<AIInsight | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [autoTriggered, setAutoTriggered] = useState(false);
 
   const handleAnalyze = async () => {
     setLoading(true);
@@ -114,14 +112,7 @@ const AIInsightsCard: React.FC<AIInsightsCardProps> = ({ entityType, entityId, c
     }
   };
 
-  // Auto-trigger on mount (UI fix #4 — no empty state with button)
-  useEffect(() => {
-    if (!autoTriggered && entityId && clientId) {
-      setAutoTriggered(true);
-      handleAnalyze();
-    }
-  }, [entityId, clientId]);
-
+  // No auto-trigger — on-demand only to avoid unnecessary cost
   return (
     <div className="rounded-lg border bg-white shadow-sm mt-4 overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b">
@@ -129,10 +120,16 @@ const AIInsightsCard: React.FC<AIInsightsCardProps> = ({ entityType, entityId, c
           <Bot className="h-4 w-4 text-primary" />
           <h3 className="text-sm font-bold text-slate-900">AI Insights</h3>
         </div>
-        {insight && (
+        {insight ? (
           <button onClick={handleAnalyze} disabled={loading}
             className="inline-flex items-center gap-1 text-xs text-primary hover:underline disabled:opacity-50">
             <RefreshCw className={cn('h-3 w-3', loading && 'animate-spin')} /> Refresh
+          </button>
+        ) : (
+          <button onClick={handleAnalyze} disabled={loading}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-primary rounded-md hover:bg-primary-dark disabled:opacity-50 transition-colors">
+            {loading ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+            {loading ? 'Analyzing...' : 'Summarize this page'}
           </button>
         )}
       </div>
@@ -149,6 +146,9 @@ const AIInsightsCard: React.FC<AIInsightsCardProps> = ({ entityType, entityId, c
           ) : (
             <GenericInsight insight={insight as any} />
           )
+        )}
+        {!insight && !loading && !error && (
+          <p className="text-xs text-slate-400">Click "Summarize this page" to generate AI-powered insights based on threads, business data, and communication patterns.</p>
         )}
       </div>
     </div>
