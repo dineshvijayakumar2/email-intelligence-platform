@@ -129,8 +129,9 @@ export const EmailList: React.FC = () => {
   const analyticsContactId = searchParams.get('contact_id');
   const analyticsCompanyId = searchParams.get('company_id');
   const analyticsThreadId = searchParams.get('thread_id');
+  const analyticsEmailId = searchParams.get('email_id');
   const analyticsLabel = searchParams.get('name') || 'Contact';
-  const isAnalyticsMode = !!(analyticsContactId || analyticsCompanyId || analyticsThreadId);
+  const isAnalyticsMode = !!(analyticsContactId || analyticsCompanyId || analyticsThreadId || analyticsEmailId);
 
   // State
   const [emails, setEmails] = useState<Email[]>([]);
@@ -263,7 +264,19 @@ export const EmailList: React.FC = () => {
     if (!isAnalyticsMode) return;
     setLoading(true);
     try {
-      if (analyticsThreadId) {
+      if (analyticsEmailId) {
+        // Single email preview: load just this email and show detail panel
+        const fullEmail = await emailService.getEmail(analyticsEmailId);
+        if (fullEmail) {
+          setEmails([fullEmail as Email]);
+          setTotalCount(1);
+          setSelectedEmail(fullEmail as Email);
+          setSelectedEmailId(analyticsEmailId);
+        } else {
+          setEmails([]);
+          setTotalCount(0);
+        }
+      } else if (analyticsThreadId) {
         // Thread drilldown: load all emails in the thread
         const detail = await threadsApi.getDetail(analyticsThreadId);
         if (detail?.emails) {
@@ -303,12 +316,12 @@ export const EmailList: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [isAnalyticsMode, analyticsContactId, analyticsCompanyId, analyticsThreadId, emails.length, pageSize]);
+  }, [isAnalyticsMode, analyticsContactId, analyticsCompanyId, analyticsThreadId, analyticsEmailId, emails.length, pageSize]);
 
   useEffect(() => {
     if (!isAnalyticsMode) return;
     loadAnalyticsEmails(false);
-  }, [isAnalyticsMode, analyticsContactId, analyticsCompanyId, analyticsThreadId]);
+  }, [isAnalyticsMode, analyticsContactId, analyticsCompanyId, analyticsThreadId, analyticsEmailId]);
 
   // Load folders for a specific mailbox (dynamic) - uses cached mailboxIdMap
   const loadFoldersForMailbox = useCallback(async (mailboxName: string) => {
