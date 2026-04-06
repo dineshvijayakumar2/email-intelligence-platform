@@ -39,7 +39,7 @@ export const CompanyDetail: React.FC = () => {
   const company = companyQuery.data;
   const threads = threadsQuery.data?.threads || [];
   const orderHistory = orderHistoryQuery.data?.items || [];
-  const productProfile = productProfileQuery.data || { categories: [], operations: [] };
+  const productProfile = productProfileQuery.data || { categories: [], operations: [], capability_breakdown: [], process_tags: [], embellishment_tags: [] };
 
   const handleThreadClick = (record: ThreadStatusSummary) => {
     const name = encodeURIComponent(record.subject || record.thread_id?.slice(0, 20) || 'Thread');
@@ -206,7 +206,14 @@ export const CompanyDetail: React.FC = () => {
           <Col xs={24} lg={12}>
             <div className="glass-card" style={{ padding: 16 }}>
               <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 12 }}>Product Profile</Text>
-              <ProductProfileCard categories={productProfile.categories} operations={productProfile.operations} loading={productProfileQuery.isLoading} />
+              <ProductProfileCard
+                categories={productProfile.categories}
+                operations={productProfile.operations}
+                capability_breakdown={productProfile.capability_breakdown}
+                process_tags={productProfile.process_tags}
+                embellishment_tags={productProfile.embellishment_tags}
+                loading={productProfileQuery.isLoading}
+              />
             </div>
           </Col>
           <Col xs={24} lg={12}>

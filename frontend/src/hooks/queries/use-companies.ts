@@ -69,7 +69,7 @@ export function useOrderHistory(companyId: string | undefined) {
 }
 
 export function useProductProfile(companyId: string | undefined) {
-  return useQuery<{ categories: any[]; operations: any[] }>({
+  return useQuery<{ categories: any[]; operations: any[]; capability_breakdown?: any[]; process_tags?: string[]; embellishment_tags?: string[] }>({
     queryKey: ['product-profile', companyId],
     queryFn: () => companiesApi.getProductProfile(companyId!),
     enabled: !!companyId,
