@@ -1,74 +1,23 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import {
-  Table, Typography, Tag, Input, Select, DatePicker, Button, Row, Col,
-  Card, Statistic, Space, Tooltip, message, Dropdown,
-} from 'antd';
-import {
-  SearchOutlined, ReloadOutlined, DownloadOutlined, FileTextOutlined,
-  UserOutlined, ClockCircleOutlined, ThunderboltOutlined,
-} from '@ant-design/icons';
-import type { ColumnsType, TablePaginationConfig } from 'antd/es/table';
-import dayjs from 'dayjs';
 import api from '../services/apiClient';
 import { formatDateTime } from '../utils/dateUtils';
+import { PageShell, PageHeader } from '@/components/ui/page-shell';
+import { KPICard, KPIStrip } from '@/components/ui/kpi-card';
+import { ContentSkeleton } from '@/components/ui/empty-state';
+import { cn } from '@/lib/utils';
+import { toast } from '@/lib/toast';
+import { Search, RefreshCw, Download, X, ChevronLeft, ChevronRight, Clock, Zap, FileText, User } from 'lucide-react';
 
-const { Text } = Typography;
-const { RangePicker } = DatePicker;
-
-// Types
 interface AuditLogEntry {
-  id: string;
-  user_id: string | null;
-  user_email: string | null;
-  action: string;
-  resource_type: string;
-  resource_id: string | null;
-  details: Record<string, unknown> | null;
-  ip_address: string | null;
-  created_at: string;
+  id: string; user_id: string | null; user_email: string | null;
+  action: string; resource_type: string; resource_id: string | null;
+  details: Record<string, unknown> | null; ip_address: string | null; created_at: string;
 }
-
-interface AuditLogResponse {
-  data: AuditLogEntry[];
-  total: number;
-  page: number;
-  page_size: number;
-}
-
+interface AuditLogResponse { data: AuditLogEntry[]; total: number; page: number; page_size: number; }
 interface AuditLogStats {
-  total_entries: number;
-  actions: { name: string; count: number }[];
-  resource_types: { name: string; count: number }[];
-  active_users: { email: string; count: number }[];
+  total_entries: number; actions: { name: string; count: number }[];
+  resource_types: { name: string; count: number }[]; active_users: { email: string; count: number }[];
 }
-
-// Action → color/label mapping
-const ACTION_COLORS: Record<string, string> = {
-  login: 'blue',
-  settings_change: 'cyan',
-  role_change: 'gold',
-  user_activate: 'green',
-  user_deactivate: 'red',
-  mailbox_create: 'green',
-  mailbox_delete: 'red',
-  sync: 'geekblue',
-  analyze: 'purple',
-  extract: 'volcano',
-  digest_generate: 'magenta',
-  client_assign: 'orange',
-  client_unassign: 'orange',
-  user_invite: 'lime',
-};
-
-const RESOURCE_COLORS: Record<string, string> = {
-  mailbox: 'blue',
-  user: 'gold',
-  settings: 'cyan',
-  ai_analysis: 'purple',
-  extraction_job: 'volcano',
-  client: 'orange',
-  digest: 'magenta',
-};
 
 const AuditLogsPage: React.FC = () => {
   const isMountedRef = useRef(true);
@@ -76,22 +25,14 @@ const AuditLogsPage: React.FC = () => {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(50);
-
-  // Filters
-  const [actionFilter, setActionFilter] = useState<string | undefined>();
-  const [resourceFilter, setResourceFilter] = useState<string | undefined>();
+  const pageSize = 50;
+  const [actionFilter, setActionFilter] = useState('');
+  const [resourceFilter, setResourceFilter] = useState('');
   const [searchText, setSearchText] = useState('');
-  const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null);
-
-  // Stats
   const [stats, setStats] = useState<AuditLogStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
 
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => { isMountedRef.current = false; };
-  }, []);
+  useEffect(() => { isMountedRef.current = true; return () => { isMountedRef.current = false; }; }, []);
 
   const fetchLogs = useCallback(async () => {
     setLoading(true);
@@ -100,280 +41,140 @@ const AuditLogsPage: React.FC = () => {
       if (actionFilter) params.action = actionFilter;
       if (resourceFilter) params.resource_type = resourceFilter;
       if (searchText) params.search = searchText;
-      if (dateRange?.[0]) params.date_from = dateRange[0].format('YYYY-MM-DD');
-      if (dateRange?.[1]) params.date_to = dateRange[1].format('YYYY-MM-DD');
-
-      const qs = new URLSearchParams(
-        Object.entries(params).map(([k, v]) => [k, String(v)])
-      ).toString();
-
+      const qs = new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)])).toString();
       const result = await api.get<AuditLogResponse>(`/auth/audit-logs?${qs}`);
-      if (isMountedRef.current) {
-        setData(result.data);
-        setTotal(result.total);
-      }
-    } catch {
-      // silent
-    } finally {
-      if (isMountedRef.current) setLoading(false);
-    }
-  }, [page, pageSize, actionFilter, resourceFilter, searchText, dateRange]);
+      if (isMountedRef.current) { setData(result.data); setTotal(result.total); }
+    } catch {} finally { if (isMountedRef.current) setLoading(false); }
+  }, [page, actionFilter, resourceFilter, searchText]);
 
   const fetchStats = useCallback(async () => {
     setStatsLoading(true);
-    try {
-      const result = await api.get<AuditLogStats>('/auth/audit-logs/stats?days=30');
-      if (isMountedRef.current) setStats(result);
-    } catch {
-      // silent
-    } finally {
-      if (isMountedRef.current) setStatsLoading(false);
-    }
+    try { const r = await api.get<AuditLogStats>('/auth/audit-logs/stats?days=30'); if (isMountedRef.current) setStats(r); }
+    catch {} finally { if (isMountedRef.current) setStatsLoading(false); }
   }, []);
 
   useEffect(() => { fetchLogs(); }, [fetchLogs]);
   useEffect(() => { fetchStats(); }, [fetchStats]);
 
-  // Derive filter options from stats
-  const actionOptions = useMemo(() =>
-    (stats?.actions || []).map(a => ({ value: a.name, label: `${a.name.replace(/_/g, ' ')} (${a.count})` })),
-    [stats]
-  );
-  const resourceOptions = useMemo(() =>
-    (stats?.resource_types || []).map(r => ({ value: r.name, label: `${r.name.replace(/_/g, ' ')} (${r.count})` })),
-    [stats]
-  );
+  const actionOptions = useMemo(() => (stats?.actions || []).map(a => ({ value: a.name, label: `${a.name.replace(/_/g, ' ')} (${a.count})` })), [stats]);
+  const resourceOptions = useMemo(() => (stats?.resource_types || []).map(r => ({ value: r.name, label: `${r.name.replace(/_/g, ' ')} (${r.count})` })), [stats]);
 
-  // Export helpers
-  const exportData = useCallback((format: 'csv' | 'json') => {
-    if (!data.length) { message.warning('No data to export'); return; }
-
-    if (format === 'json') {
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `audit_logs_${new Date().toISOString().split('T')[0]}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      message.success(`Exported ${data.length} entries as JSON`);
-      return;
-    }
-
-    // CSV
-    const cols = ['created_at', 'action', 'resource_type', 'resource_id', 'user_email', 'details', 'ip_address'];
-    const header = cols.join(',');
-    const rows = data.map(row =>
-      cols.map(col => {
-        const val = row[col as keyof AuditLogEntry];
-        if (val === null || val === undefined) return '';
-        const str = typeof val === 'object' ? JSON.stringify(val) : String(val);
-        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-          return `"${str.replace(/"/g, '""')}"`;
-        }
-        return str;
-      }).join(',')
-    );
-    const csv = [header, ...rows].join('\n');
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `audit_logs_${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    message.success(`Exported ${data.length} entries as CSV`);
-  }, [data]);
-
-  const columns: ColumnsType<AuditLogEntry> = [
-    {
-      title: 'Time', dataIndex: 'created_at', key: 'time', width: 180,
-      render: (v: string) => (
-        <Tooltip title={v}>
-          <Text style={{ fontSize: 12 }}>{formatDateTime(v)}</Text>
-        </Tooltip>
-      ),
-    },
-    {
-      title: 'Action', dataIndex: 'action', key: 'action', width: 150,
-      render: (v: string) => <Tag color={ACTION_COLORS[v] || 'default'}>{v.replace(/_/g, ' ')}</Tag>,
-    },
-    {
-      title: 'Resource', dataIndex: 'resource_type', key: 'resource_type', width: 130,
-      render: (v: string) => <Tag color={RESOURCE_COLORS[v] || 'default'}>{v.replace(/_/g, ' ')}</Tag>,
-    },
-    {
-      title: 'Resource ID', dataIndex: 'resource_id', key: 'resource_id', width: 160, ellipsis: true,
-      render: (v: string | null) => v ? <Text copyable style={{ fontSize: 12 }}>{v.slice(0, 12)}...</Text> : '—',
-    },
-    {
-      title: 'User', dataIndex: 'user_email', key: 'user_email', width: 200, ellipsis: true,
-      render: (v: string | null) => v || <Text type="secondary">system</Text>,
-    },
-    {
-      title: 'Details', dataIndex: 'details', key: 'details', ellipsis: true,
-      render: (v: Record<string, unknown> | null) =>
-        v && Object.keys(v).length > 0
-          ? <Tooltip title={<pre style={{ margin: 0, fontSize: 11, maxHeight: 300, overflow: 'auto' }}>{JSON.stringify(v, null, 2)}</pre>}>
-              <Text style={{ fontSize: 12 }}>{JSON.stringify(v).slice(0, 80)}{JSON.stringify(v).length > 80 ? '...' : ''}</Text>
-            </Tooltip>
-          : '—',
-    },
-  ];
-
-  const handleTableChange = (pagination: TablePaginationConfig) => {
-    setPage(pagination.current || 1);
-    setPageSize(pagination.pageSize || 50);
+  const exportCSV = () => {
+    if (!data.length) { toast.warning('No data'); return; }
+    const cols = ['created_at', 'action', 'resource_type', 'resource_id', 'user_email', 'details'];
+    const rows = data.map(row => cols.map(col => { const v = row[col as keyof AuditLogEntry]; return v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v); }).join(','));
+    const blob = new Blob(['\uFEFF' + [cols.join(','), ...rows].join('\n')], { type: 'text/csv' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `audit_logs_${new Date().toISOString().split('T')[0]}.csv`; a.click();
+    toast.success(`Exported ${data.length} entries`);
   };
 
-  const handleReset = () => {
-    setActionFilter(undefined);
-    setResourceFilter(undefined);
-    setSearchText('');
-    setDateRange(null);
-    setPage(1);
-  };
-
-  const exportMenuItems = [
-    { key: 'csv', icon: <FileTextOutlined />, label: 'Export as CSV', onClick: () => exportData('csv') },
-    { key: 'json', icon: <FileTextOutlined />, label: 'Export as JSON', onClick: () => exportData('json') },
-  ];
+  const hasFilters = !!actionFilter || !!resourceFilter || !!searchText;
+  const totalPages = Math.ceil(total / pageSize);
 
   return (
-    <div className="glass-page-bg" style={{ padding: 24 }}>
-      {/* Summary Stats */}
-      <Row gutter={[16, 16]} className="fade-in-up">
-        <Col xs={12} sm={6}>
-          <Card size="small" className="glass-card">
-            <Statistic
-              title="Total (30d)"
-              value={stats?.total_entries ?? 0}
-              prefix={<ClockCircleOutlined />}
-              loading={statsLoading}
-            />
-          </Card>
-        </Col>
-        <Col xs={12} sm={6}>
-          <Card size="small" className="glass-card">
-            <Statistic
-              title="Action Types"
-              value={stats?.actions?.length ?? 0}
-              prefix={<ThunderboltOutlined />}
-              loading={statsLoading}
-            />
-          </Card>
-        </Col>
-        <Col xs={12} sm={6}>
-          <Card size="small" className="glass-card">
-            <Statistic
-              title="Resource Types"
-              value={stats?.resource_types?.length ?? 0}
-              prefix={<FileTextOutlined />}
-              loading={statsLoading}
-            />
-          </Card>
-        </Col>
-        <Col xs={12} sm={6}>
-          <Card size="small" className="glass-card">
-            <Statistic
-              title="Active Users"
-              value={stats?.active_users?.length ?? 0}
-              prefix={<UserOutlined />}
-              loading={statsLoading}
-            />
-          </Card>
-        </Col>
-      </Row>
+    <PageShell>
+      <PageHeader title="Audit Logs" description="Security and activity audit trail" />
+
+      {/* Stats */}
+      <KPIStrip className="mb-4">
+        <KPICard title="Total (30d)" value={stats?.total_entries ?? 0} loading={statsLoading} />
+        <KPICard title="Action Types" value={stats?.actions?.length ?? 0} loading={statsLoading} />
+        <KPICard title="Resource Types" value={stats?.resource_types?.length ?? 0} loading={statsLoading} />
+        <KPICard title="Active Users" value={stats?.active_users?.length ?? 0} loading={statsLoading} />
+      </KPIStrip>
 
       {/* Filters */}
-      <div className="glass-card fade-in-up stagger-1" style={{ padding: 16, marginTop: 16 }}>
-        <Row gutter={[12, 12]} align="middle">
-          <Col xs={24} sm={6}>
-            <Input
-              placeholder="Search..."
-              prefix={<SearchOutlined />}
-              value={searchText}
-              onChange={e => { setSearchText(e.target.value); setPage(1); }}
-              allowClear
-            />
-          </Col>
-          <Col xs={12} sm={4}>
-            <Select
-              placeholder="Action"
-              value={actionFilter}
-              onChange={v => { setActionFilter(v); setPage(1); }}
-              options={actionOptions}
-              allowClear
-              style={{ width: '100%' }}
-            />
-          </Col>
-          <Col xs={12} sm={4}>
-            <Select
-              placeholder="Resource"
-              value={resourceFilter}
-              onChange={v => { setResourceFilter(v); setPage(1); }}
-              options={resourceOptions}
-              allowClear
-              style={{ width: '100%' }}
-            />
-          </Col>
-          <Col xs={24} sm={6}>
-            <RangePicker
-              value={dateRange as [dayjs.Dayjs, dayjs.Dayjs] | null}
-              onChange={(dates) => { setDateRange(dates as [dayjs.Dayjs | null, dayjs.Dayjs | null] | null); setPage(1); }}
-              style={{ width: '100%' }}
-            />
-          </Col>
-          <Col xs={24} sm={4}>
-            <Space>
-              <Button icon={<ReloadOutlined />} onClick={() => { fetchLogs(); fetchStats(); }}>
-                Refresh
-              </Button>
-              <Button onClick={handleReset}>Reset</Button>
-              <Dropdown menu={{ items: exportMenuItems }} placement="bottomRight">
-                <Button icon={<DownloadOutlined />}>Export</Button>
-              </Dropdown>
-            </Space>
-          </Col>
-        </Row>
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+          <input type="text" placeholder="Search..." value={searchText}
+            onChange={e => { setSearchText(e.target.value); setPage(1); }}
+            className="h-8 pl-8 pr-3 text-sm rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 w-48" />
+        </div>
+        <select value={actionFilter} onChange={e => { setActionFilter(e.target.value); setPage(1); }}
+          className="h-8 px-2 text-sm rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20">
+          <option value="">All Actions</option>
+          {actionOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+        <select value={resourceFilter} onChange={e => { setResourceFilter(e.target.value); setPage(1); }}
+          className="h-8 px-2 text-sm rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20">
+          <option value="">All Resources</option>
+          {resourceOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+        {hasFilters && (
+          <button onClick={() => { setActionFilter(''); setResourceFilter(''); setSearchText(''); setPage(1); }}
+            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"><X className="h-3 w-3" />Clear</button>
+        )}
+        <div className="ml-auto flex items-center gap-2">
+          <button onClick={() => { fetchLogs(); fetchStats(); }} className="h-8 px-3 text-sm rounded-md border border-slate-200 hover:bg-slate-50 inline-flex items-center gap-1.5">
+            <RefreshCw className="h-3.5 w-3.5" />Refresh
+          </button>
+          <button onClick={exportCSV} className="h-8 px-3 text-sm rounded-md border border-slate-200 hover:bg-slate-50 inline-flex items-center gap-1.5">
+            <Download className="h-3.5 w-3.5" />Export
+          </button>
+        </div>
       </div>
 
       {/* Table */}
-      <div className="glass-table-container fade-in-up stagger-2" style={{ padding: 16, marginTop: 16 }}>
-        <Table
-          columns={columns}
-          dataSource={data}
-          rowKey="id"
-          size="small"
-          loading={loading}
-          pagination={{
-            current: page,
-            pageSize,
-            total,
-            showSizeChanger: true,
-            pageSizeOptions: ['25', '50', '100', '200'],
-            showTotal: (t, range) => `${range[0]}-${range[1]} of ${t}`,
-          }}
-          onChange={handleTableChange}
-          scroll={{ x: 1000 }}
-        />
+      <div className="rounded-lg border bg-white shadow-sm overflow-hidden">
+        {loading && data.length === 0 ? <ContentSkeleton rows={8} /> : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-slate-50/50">
+                  <th className="px-3 py-2 text-left text-xs font-bold uppercase tracking-wider text-slate-600 w-40">Time</th>
+                  <th className="px-3 py-2 text-left text-xs font-bold uppercase tracking-wider text-slate-600 w-32">Action</th>
+                  <th className="px-3 py-2 text-left text-xs font-bold uppercase tracking-wider text-slate-600 w-28">Resource</th>
+                  <th className="px-3 py-2 text-left text-xs font-bold uppercase tracking-wider text-slate-600 w-36">Resource ID</th>
+                  <th className="px-3 py-2 text-left text-xs font-bold uppercase tracking-wider text-slate-600 w-44">User</th>
+                  <th className="px-3 py-2 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Details</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {data.map(row => (
+                  <tr key={row.id} className="hover:bg-slate-50/50">
+                    <td className="px-3 py-2 text-xs text-slate-500">{formatDateTime(row.created_at)}</td>
+                    <td className="px-3 py-2 text-xs text-slate-700">{row.action.replace(/_/g, ' ')}</td>
+                    <td className="px-3 py-2 text-xs text-slate-500">{row.resource_type?.replace(/_/g, ' ') || '—'}</td>
+                    <td className="px-3 py-2 text-xs font-mono text-slate-400 truncate max-w-[140px]">{row.resource_id?.slice(0, 12) || '—'}</td>
+                    <td className="px-3 py-2 text-xs text-slate-600">{row.user_email || 'system'}</td>
+                    <td className="px-3 py-2 text-xs text-slate-400 truncate max-w-[200px]" title={row.details ? JSON.stringify(row.details) : undefined}>
+                      {row.details && Object.keys(row.details).length > 0 ? JSON.stringify(row.details).slice(0, 80) : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {total > pageSize && (
+          <div className="flex items-center justify-between px-4 py-3 border-t bg-slate-50/30">
+            <span className="text-xs text-slate-500">{total.toLocaleString()} entries</span>
+            <div className="flex items-center gap-1">
+              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1} className="p-1.5 rounded hover:bg-slate-100 disabled:opacity-30"><ChevronLeft className="h-4 w-4" /></button>
+              <span className="text-xs text-slate-600 px-2 tabular-nums">{page} / {totalPages}</span>
+              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages} className="p-1.5 rounded hover:bg-slate-100 disabled:opacity-30"><ChevronRight className="h-4 w-4" /></button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Top users sidebar */}
+      {/* Active users */}
       {stats && stats.active_users.length > 0 && (
-        <div className="glass-card fade-in-up stagger-3" style={{ padding: 16, marginTop: 16 }}>
-          <Text strong style={{ display: 'block', marginBottom: 8 }}>Most Active Users (30d)</Text>
-          <Space wrap>
+        <div className="rounded-lg border bg-white shadow-sm p-4 mt-4">
+          <h3 className="text-sm font-bold text-slate-900 mb-2">Most Active Users (30d)</h3>
+          <div className="flex flex-wrap gap-1.5">
             {stats.active_users.map(u => (
-              <Tag key={u.email} icon={<UserOutlined />} color="blue" style={{ cursor: 'pointer' }}
-                onClick={() => { setSearchText(u.email); setPage(1); }}>
-                {u.email.split('@')[0]} ({u.count})
-              </Tag>
+              <button key={u.email} onClick={() => { setSearchText(u.email); setPage(1); }}
+                className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">
+                <User className="h-3 w-3" />{u.email.split('@')[0]} ({u.count})
+              </button>
             ))}
-          </Space>
+          </div>
         </div>
       )}
-    </div>
+    </PageShell>
   );
 };
 
