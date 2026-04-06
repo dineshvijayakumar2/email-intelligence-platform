@@ -7,7 +7,7 @@ import AIInsightsCard from '../../components/AIInsightsCard';
 import { EngagementBadge } from '../../components/analytics/EngagementBadge';
 import { LifecycleBadge } from '../../components/analytics/LifecycleBadge';
 import { OrderHistoryTable } from '../../components/OrderHistoryTable';
-import { ProductProfileCard } from '../../components/ProductProfileCard';
+import { ProductProfileCards } from '../../components/ProductProfileCard';
 import { RecommendationsPanel } from '../../components/RecommendationsPanel';
 import StrikeRateCard from '../../components/StrikeRateCard';
 import ContactCapabilitiesCard from '../../components/ContactCapabilitiesCard';
@@ -201,22 +201,17 @@ export const CompanyDetail: React.FC = () => {
           <Col xs={24} lg={12}><SeasonalityChart companyId={companyId} /></Col>
           <Col xs={24} lg={12}><CapabilityRhythmCard companyId={companyId} /></Col>
           <Col xs={24} lg={12}><ContactCapabilitiesCard companyId={companyId} /></Col>
-          <Col xs={24}>
-            <div className="glass-card" style={{ padding: 16 }}>
-              <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 12 }}>Product Profile</Text>
-              <ProductProfileCard
-                categories={productProfile.categories}
-                operations={productProfile.operations}
-                capability_breakdown={productProfile.capability_breakdown}
-                process_tags={productProfile.process_tags}
-                embellishment_tags={productProfile.embellishment_tags}
-                loading={productProfileQuery.isLoading}
-              />
-            </div>
-          </Col>
-          <Col xs={24}>
-            <div className="glass-card" style={{ padding: 16 }}>
-              <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 12 }}>Sales Opportunities</Text>
+          <ProductProfileCards
+            categories={productProfile.categories}
+            operations={productProfile.operations}
+            capability_breakdown={productProfile.capability_breakdown}
+            process_tags={productProfile.process_tags}
+            embellishment_tags={productProfile.embellishment_tags}
+            loading={productProfileQuery.isLoading}
+          />
+          <Col xs={24} lg={12}>
+            <div className="glass-card" style={{ padding: 12 }}>
+              <Text strong style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>Sales Opportunities</Text>
               <RecommendationsPanel companyId={companyId} />
             </div>
           </Col>

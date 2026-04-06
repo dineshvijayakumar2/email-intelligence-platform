@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Tag, Spin, Typography, Space, Button, Table, Row, Col } from 'antd';
+import { Card, Tag, Spin, Typography, Space, Button, Table } from 'antd';
 import { ReloadOutlined, CalendarOutlined, ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons';
 import { companiesApi } from '../services/analyticsService';
 
@@ -21,9 +21,9 @@ const SeasonalityChart: React.FC<Props> = ({ companyId }) => {
 
   useEffect(() => { load(); }, [companyId]);
 
-  if (loading) return <Card className="glass-card" size="small" title={<Space size={6}><CalendarOutlined />Seasonality</Space>}><Spin size="small" /></Card>;
+  if (loading) return <Card className="glass-card" size="small" title={<Text strong style={{ fontSize: 13 }}>Seasonality</Text>}><Spin size="small" /></Card>;
   if (!data?.monthly?.length) {
-    return <Card className="glass-card" size="small" title={<Space size={6}><CalendarOutlined />Seasonality</Space>}>
+    return <Card className="glass-card" size="small" title={<Text strong style={{ fontSize: 13 }}>Seasonality</Text>}>
       <Text type="secondary" style={{ fontSize: 12 }}>No ordering history</Text>
     </Card>;
   }
@@ -31,78 +31,46 @@ const SeasonalityChart: React.FC<Props> = ({ companyId }) => {
   const peakSet = new Set(data.peak_months || []);
   const troughSet = new Set(data.trough_months || []);
 
-  const monthlyColumns = [
-    {
-      title: 'Month', dataIndex: 'month', key: 'month', width: 70,
-      render: (v: number) => {
-        const isPeak = peakSet.has(v);
-        const isTrough = troughSet.has(v);
-        return (
-          <Space size={4}>
-            <Text style={{ fontSize: 12 }}>{MONTHS[v]}</Text>
-            {isPeak && <ArrowUpOutlined style={{ color: '#52c41a', fontSize: 10 }} />}
-            {isTrough && <ArrowDownOutlined style={{ color: '#999', fontSize: 10 }} />}
-          </Space>
-        );
-      },
-    },
-    {
-      title: 'Orders', dataIndex: 'order_count', key: 'orders', width: 65, align: 'right' as const,
-      render: (v: number) => <Text style={{ fontSize: 12 }}>{v}</Text>,
-    },
-    {
-      title: 'Revenue', dataIndex: 'revenue', key: 'revenue', align: 'right' as const,
-      render: (v: number) => <Text style={{ fontSize: 12 }}>${Number(v).toLocaleString()}</Text>,
-    },
-  ];
-
-  const quarterlyColumns = [
-    { title: 'Quarter', dataIndex: 'quarter', key: 'quarter', width: 70,
-      render: (v: number) => <Text style={{ fontSize: 12 }}>Q{v}</Text> },
-    { title: 'Orders', dataIndex: 'order_count', key: 'orders', width: 65, align: 'right' as const,
-      render: (v: number) => <Text style={{ fontSize: 12 }}>{v}</Text> },
-    { title: 'Revenue', dataIndex: 'revenue', key: 'revenue', align: 'right' as const,
-      render: (v: number) => <Text style={{ fontSize: 12 }}>${Number(v).toLocaleString()}</Text> },
-  ];
-
   return (
     <Card
       className="glass-card" size="small"
-      title={<Space size={6}><CalendarOutlined />Seasonality <Text type="secondary" style={{ fontSize: 12, fontWeight: 400 }}>{data.total_orders} orders</Text></Space>}
+      title={<Text strong style={{ fontSize: 13 }}>Seasonality <Text type="secondary" style={{ fontSize: 11, fontWeight: 400 }}>{data.total_orders} orders</Text></Text>}
       extra={<Button size="small" type="text" icon={<ReloadOutlined />} onClick={() => load(true)} />}
+      bodyStyle={{ padding: 0 }}
     >
-      <Row gutter={[12, 12]}>
-        {/* Monthly grid */}
-        <Col xs={24} md={14}>
-          <Table
-            dataSource={data.monthly}
-            columns={monthlyColumns}
-            rowKey="month"
-            size="small"
-            pagination={false}
-            showHeader={true}
-          />
-        </Col>
-
-        {/* Quarterly grid */}
-        {data.quarterly?.length > 0 && (
-          <Col xs={24} md={10}>
-            <Table
-              dataSource={data.quarterly}
-              columns={quarterlyColumns}
-              rowKey="quarter"
-              size="small"
-              pagination={false}
-              showHeader={true}
-            />
-            {data.date_range && (
-              <Text type="secondary" style={{ fontSize: 10, display: 'block', marginTop: 4 }}>
-                Data: {data.date_range.earliest} to {data.date_range.latest}
-              </Text>
-            )}
-          </Col>
-        )}
-      </Row>
+      <Table
+        dataSource={data.monthly}
+        rowKey="month"
+        size="small"
+        pagination={false}
+        columns={[
+          {
+            title: 'Month', dataIndex: 'month', width: 80,
+            render: (v: number) => (
+              <Space size={4}>
+                <Text style={{ fontSize: 12 }}>{MONTHS[v]}</Text>
+                {peakSet.has(v) && <ArrowUpOutlined style={{ color: '#52c41a', fontSize: 10 }} />}
+                {troughSet.has(v) && <ArrowDownOutlined style={{ color: '#999', fontSize: 10 }} />}
+              </Space>
+            ),
+          },
+          { title: 'Orders', dataIndex: 'order_count', width: 65, align: 'right' as const,
+            render: (v: number) => <Text style={{ fontSize: 12 }}>{v}</Text> },
+          { title: 'Revenue', dataIndex: 'revenue', align: 'right' as const,
+            render: (v: number) => <Text style={{ fontSize: 12 }}>${Number(v).toLocaleString()}</Text> },
+        ]}
+        summary={() => data.quarterly?.length > 0 ? (
+          <Table.Summary fixed>
+            {data.quarterly.map((q: any) => (
+              <Table.Summary.Row key={q.quarter}>
+                <Table.Summary.Cell index={0}><Text strong style={{ fontSize: 12 }}>Q{q.quarter}</Text></Table.Summary.Cell>
+                <Table.Summary.Cell index={1} align="right"><Text strong style={{ fontSize: 12 }}>{q.order_count}</Text></Table.Summary.Cell>
+                <Table.Summary.Cell index={2} align="right"><Text strong style={{ fontSize: 12 }}>${Number(q.revenue).toLocaleString()}</Text></Table.Summary.Cell>
+              </Table.Summary.Row>
+            ))}
+          </Table.Summary>
+        ) : undefined}
+      />
     </Card>
   );
 };
