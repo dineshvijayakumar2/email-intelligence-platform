@@ -309,11 +309,12 @@ export const EmailList: React.FC = () => {
     } catch { message.error('Failed to load email'); } finally { setDetailLoading(false); }
   }, []);
 
-  // URL emailId → detail panel
+  // URL emailId → detail panel (only in standard mode — analytics mode manages its own detail)
   useEffect(() => {
+    if (isAnalyticsMode) return;
     if (emailId && emailId !== selectedEmailId) loadEmailDetails(emailId);
     else if (!emailId && selectedEmailId) { setSelectedEmail(null); setSelectedEmailId(null); }
-  }, [emailId, selectedEmailId, loadEmailDetails]);
+  }, [emailId, selectedEmailId, loadEmailDetails, isAnalyticsMode]);
 
   // Analytics mode: load emails
   useEffect(() => {
