@@ -454,6 +454,27 @@ async def get_table_fields(
 
 # --- Data browsing endpoints ---
 
+# Default sort per table — no hardcoded column whitelist.
+# Any column name is accepted; PostgREST returns 400 for invalid ones (caught in try/except).
+_QB_DEFAULT_SORT = {
+    'customers': ('customer_name', False),
+    'contacts': ('surname', False),
+    'quotes': ('date_created', True),
+    'jobs': ('accepted_date', True),
+    'sales_line_items': ('inv_date', True),
+    'operations': ('date_accepted', True),
+    'unique_emails': ('email', False),
+}
+
+
+def _qb_sort(table_key: str, sort_by: Optional[str], sort_dir: Optional[str]):
+    """Resolve sort column and direction. Accepts any column — invalid ones fall back to default."""
+    default_col, default_desc = _QB_DEFAULT_SORT.get(table_key, ('id', False))
+    col = sort_by.strip() if sort_by and sort_by.strip() else default_col
+    desc = (sort_dir or ('desc' if default_desc else 'asc')).lower() != 'asc'
+    return col, desc
+
+
 @router.get("/customers")
 async def list_qb_customers(
     client_id: str = Query(...),
@@ -461,6 +482,8 @@ async def list_qb_customers(
     matched: Optional[bool] = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
+    sort_by: Optional[str] = Query(default=None),
+    sort_dir: Optional[str] = Query(default=None),
 ):
     """List cached QB customers with optional search and match filter."""
     try:
@@ -477,7 +500,8 @@ async def list_qb_customers(
         elif matched is False:
             query = query.is_('matched_company_id', 'null')
 
-        result = query.order('customer_name').range(offset, offset + limit - 1).execute()
+        col, desc = _qb_sort('customers', sort_by, sort_dir)
+        result = query.order(col, desc=desc).range(offset, offset + limit - 1).execute()
 
         customers = []
         for row in (result.data or []):
@@ -501,6 +525,8 @@ async def list_qb_contacts(
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     search: Optional[str] = Query(default=None),
+    sort_by: Optional[str] = Query(default=None),
+    sort_dir: Optional[str] = Query(default=None),
 ):
     """List cached QB contacts."""
     try:
@@ -508,7 +534,8 @@ async def list_qb_contacts(
         if search:
             s = _sanitize_search(search)
             query = query.or_(f"first_name.ilike.%{s}%,surname.ilike.%{s}%,email.ilike.%{s}%")
-        result = query.order('surname').range(offset, offset + limit - 1).execute()
+        col, desc = _qb_sort('contacts', sort_by, sort_dir)
+        result = query.order(col, desc=desc).range(offset, offset + limit - 1).execute()
         return {"contacts": result.data or [], "total": result.count or 0}
     except Exception as e:
         logger.error(f"Failed to list QB contacts: {e}")
@@ -521,6 +548,8 @@ async def list_qb_quotes(
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     search: Optional[str] = Query(default=None),
+    sort_by: Optional[str] = Query(default=None),
+    sort_dir: Optional[str] = Query(default=None),
 ):
     """List cached QB quotes."""
     try:
@@ -528,7 +557,8 @@ async def list_qb_quotes(
         if search:
             s = _sanitize_search(search)
             query = query.or_(f"quote_no.ilike.%{s}%,contact_name.ilike.%{s}%")
-        result = query.order('date_created', desc=True).range(offset, offset + limit - 1).execute()
+        col, desc = _qb_sort('quotes', sort_by, sort_dir)
+        result = query.order(col, desc=desc).range(offset, offset + limit - 1).execute()
         return {"quotes": result.data or [], "total": result.count or 0}
     except Exception as e:
         logger.error(f"Failed to list QB quotes: {e}")
@@ -541,6 +571,8 @@ async def list_qb_jobs(
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     search: Optional[str] = Query(default=None),
+    sort_by: Optional[str] = Query(default=None),
+    sort_dir: Optional[str] = Query(default=None),
 ):
     """List cached QB jobs."""
     try:
@@ -548,7 +580,8 @@ async def list_qb_jobs(
         if search:
             s = _sanitize_search(search)
             query = query.or_(f"job_no.ilike.%{s}%,job_status.ilike.%{s}%")
-        result = query.order('accepted_date', desc=True).range(offset, offset + limit - 1).execute()
+        col, desc = _qb_sort('jobs', sort_by, sort_dir)
+        result = query.order(col, desc=desc).range(offset, offset + limit - 1).execute()
         return {"jobs": result.data or [], "total": result.count or 0}
     except Exception as e:
         logger.error(f"Failed to list QB jobs: {e}")
@@ -561,6 +594,8 @@ async def list_qb_sales_line_items(
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     search: Optional[str] = Query(default=None),
+    sort_by: Optional[str] = Query(default=None),
+    sort_dir: Optional[str] = Query(default=None),
 ):
     """List cached QB sales line items."""
     try:
@@ -568,7 +603,8 @@ async def list_qb_sales_line_items(
         if search:
             s = _sanitize_search(search)
             query = query.or_(f"customer_name.ilike.%{s}%,job_no.ilike.%{s}%,invoice_no.ilike.%{s}%")
-        result = query.order('inv_date', desc=True).range(offset, offset + limit - 1).execute()
+        col, desc = _qb_sort('sales_line_items', sort_by, sort_dir)
+        result = query.order(col, desc=desc).range(offset, offset + limit - 1).execute()
         return {"sales_line_items": result.data or [], "total": result.count or 0}
     except Exception as e:
         logger.error(f"Failed to list QB sales line items: {e}")
@@ -582,6 +618,8 @@ async def list_qb_operations(
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     search: Optional[str] = Query(default=None),
+    sort_by: Optional[str] = Query(default=None),
+    sort_dir: Optional[str] = Query(default=None),
 ):
     """List cached QB operations (product/service detail per job)."""
     try:
@@ -593,7 +631,8 @@ async def list_qb_operations(
             query = query.or_(
                 f"operation_name.ilike.%{s}%,department.ilike.%{s}%,customer_name.ilike.%{s}%"
             )
-        result = query.order('date_accepted', desc=True).range(offset, offset + limit - 1).execute()
+        col, desc = _qb_sort('operations', sort_by, sort_dir)
+        result = query.order(col, desc=desc).range(offset, offset + limit - 1).execute()
         return {"operations": result.data or [], "total": result.count or 0}
     except Exception as e:
         logger.error(f"Failed to list QB operations: {e}")
@@ -606,6 +645,8 @@ async def list_qb_unique_emails(
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     search: Optional[str] = Query(default=None),
+    sort_by: Optional[str] = Query(default=None),
+    sort_dir: Optional[str] = Query(default=None),
 ):
     """List cached QB unique emails."""
     try:
@@ -613,7 +654,8 @@ async def list_qb_unique_emails(
         if search:
             s = _sanitize_search(search)
             query = query.or_(f"email.ilike.%{s}%,customer_name.ilike.%{s}%,first_name.ilike.%{s}%,last_name.ilike.%{s}%")
-        result = query.order('email').range(offset, offset + limit - 1).execute()
+        col, desc = _qb_sort('unique_emails', sort_by, sort_dir)
+        result = query.order(col, desc=desc).range(offset, offset + limit - 1).execute()
         return {"unique_emails": result.data or [], "total": result.count or 0}
     except Exception as e:
         logger.error(f"Failed to list QB unique emails: {e}")
