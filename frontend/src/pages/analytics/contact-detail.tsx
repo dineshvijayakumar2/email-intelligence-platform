@@ -4,7 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import AIInsightsCard from '../../components/AIInsightsCard';
 import { EngagementBadge } from '../../components/analytics/EngagementBadge';
 import { LifecycleBadge } from '../../components/analytics/LifecycleBadge';
-import { useContactDetail } from '../../hooks/queries';
+import { useContactDetail, useCompanyDetail } from '../../hooks/queries';
 import { useThreadsByContact } from '../../hooks/queries';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -19,7 +19,8 @@ import { PageShell } from '@/components/ui/page-shell';
 import { KPICard } from '@/components/ui/kpi-card';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { ContentSkeleton } from '@/components/ui/empty-state';
-import { ArrowLeft } from 'lucide-react';
+import { formatCurrency } from '../../utils/numberFormat';
+import { ArrowLeft, ArrowRight, Building2 } from 'lucide-react';
 
 export const ContactDetail: React.FC = () => {
   const { contactId } = useParams<{ contactId: string }>();
@@ -37,6 +38,10 @@ export const ContactDetail: React.FC = () => {
   const contact = contactQuery.data;
   const threads = threadsQuery.data?.threads || [];
   const pattern = patternQuery.data;
+
+  // Load linked company data for context
+  const companyQuery = useCompanyDetail(contact?.customer_company_id || undefined);
+  const company = companyQuery.data;
 
   if (contactQuery.isLoading) {
     return <PageShell><ContentSkeleton rows={6} /></PageShell>;
@@ -158,6 +163,31 @@ export const ContactDetail: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Company Context — shows linked company's business data */}
+      {company && company.qb_total_revenue != null && (
+        <div className="rounded-lg border bg-white shadow-sm p-4 mb-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Building2 className="h-4 w-4 text-primary" />
+              <h2 className="text-sm font-bold text-slate-900">Company Context</h2>
+            </div>
+            <button onClick={() => navigate(`/customers/${contact.customer_company_id}`)}
+              className="text-xs text-primary hover:underline inline-flex items-center gap-1">
+              {company.company_name} <ArrowRight className="h-3 w-3" />
+            </button>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-2 text-sm">
+            {company.qb_tier && <div><span className="text-slate-500">Tier</span><div className="font-medium">{company.qb_tier}</div></div>}
+            {company.qb_account_manager && <div><span className="text-slate-500">AM</span><div className="font-medium">{company.qb_account_manager}</div></div>}
+            <div><span className="text-slate-500">Revenue</span><div className="font-semibold tabular-nums">{formatCurrency(company.qb_total_revenue)}</div></div>
+            {company.qb_invoiced_ty != null && <div><span className="text-slate-500">This Year</span><div className="font-medium tabular-nums">{formatCurrency(company.qb_invoiced_ty)}</div></div>}
+            {company.qb_days_since_last_invoice != null && <div><span className="text-slate-500">Days Since Order</span><div className="font-medium tabular-nums">{company.qb_days_since_last_invoice}</div></div>}
+            <div><span className="text-slate-500">Company Emails</span><div className="tabular-nums">{company.total_emails || 0}</div></div>
+            <div><span className="text-slate-500">Company Contacts</span><div className="tabular-nums">{company.contact_count || 0}</div></div>
+          </div>
+        </div>
+      )}
 
       {/* AI Insights */}
       {contactId && contact && <AIInsightsCard entityType="contact" entityId={contactId} clientId={contact.client_id} />}
