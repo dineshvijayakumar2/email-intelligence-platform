@@ -828,6 +828,9 @@ const EmbeddingManagement: React.FC<{ clientId: string }> = ({ clientId }) => {
     try {
       await vectorApi.stopReembed(clientId);
       message.info('Stopping — already embedded records are kept');
+      // Immediately update UI — don't wait for the background task to finish
+      setReembedStatus(prev => prev ? { ...prev, status: 'stopped' } : null);
+      loadStats();
     } catch (err: any) {
       message.error(err?.message || 'Failed to stop');
     }
