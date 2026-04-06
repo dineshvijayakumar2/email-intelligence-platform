@@ -1,9 +1,6 @@
 import React from 'react';
-import { Row, Col, Typography, Button, Tag, Descriptions, Skeleton, Table } from 'antd';
-import { ArrowLeftOutlined } from '@ant-design/icons';
 import QBLinkWidget from '../../components/QBLinkWidget';
 import { useParams, useNavigate } from 'react-router-dom';
-import { MetricCard } from '../../components/analytics/MetricCard';
 import AIInsightsCard from '../../components/AIInsightsCard';
 import { EngagementBadge } from '../../components/analytics/EngagementBadge';
 import { LifecycleBadge } from '../../components/analytics/LifecycleBadge';
@@ -18,14 +15,16 @@ import {
   threadStatusConfig,
 } from '../../services/analyticsService';
 import type { ThreadStatusSummary, CommunicationPattern } from '../../types/analytics';
-
-const { Title, Text } = Typography;
+import { PageShell } from '@/components/ui/page-shell';
+import { KPICard } from '@/components/ui/kpi-card';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { ContentSkeleton } from '@/components/ui/empty-state';
+import { ArrowLeft } from 'lucide-react';
 
 export const ContactDetail: React.FC = () => {
   const { contactId } = useParams<{ contactId: string }>();
   const navigate = useNavigate();
 
-  // All data via TanStack Query
   const contactQuery = useContactDetail(contactId);
   const threadsQuery = useThreadsByContact(contactId);
   const patternQuery = useQuery<CommunicationPattern | null>({
@@ -39,149 +38,129 @@ export const ContactDetail: React.FC = () => {
   const threads = threadsQuery.data?.threads || [];
   const pattern = patternQuery.data;
 
-  const handleThreadClick = (record: ThreadStatusSummary) => {
-    const name = encodeURIComponent(record.subject || record.thread_id?.slice(0, 20) || 'Thread');
-    navigate(`/emails?thread_id=${encodeURIComponent(record.thread_id)}&name=${name}`);
-  };
-
-  const threadColumns = [
-    {
-      title: 'Subject', dataIndex: 'subject', key: 'subject', ellipsis: true,
-      render: (v: string, r: ThreadStatusSummary) => (
-        <a onClick={(e) => { e.stopPropagation(); handleThreadClick(r); }} style={{ color: '#667eea' }}>
-          {v || r.thread_id?.slice(0, 16) + '...'}
-        </a>
-      ),
-    },
-    {
-      title: 'Status', dataIndex: 'status', key: 'status', width: 140,
-      render: (v: string) => {
-        const cfg = threadStatusConfig[v] || { label: v, color: 'default' };
-        return <Tag color={cfg.color}>{cfg.label}</Tag>;
-      },
-    },
-    { title: 'Emails', dataIndex: 'total_messages', key: 'msgs', width: 90 },
-    { title: 'Last Email', dataIndex: 'last_message_date', key: 'last', width: 110, render: (v: string) => formatRelativeTime(v) },
-  ];
-
   if (contactQuery.isLoading) {
-    return (
-      <div className="glass-page-bg" style={{ padding: 24 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)} style={{ marginBottom: 16 }}>Back to Contacts</Button>
-        <Skeleton active paragraph={{ rows: 8 }} />
-      </div>
-    );
+    return <PageShell><ContentSkeleton rows={6} /></PageShell>;
   }
 
   if (!contact) {
     return (
-      <div className="glass-page-bg" style={{ padding: 24 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)} style={{ marginBottom: 16 }}>Back to Contacts</Button>
-        <Text type="secondary">Contact not found</Text>
-      </div>
+      <PageShell>
+        <button onClick={() => navigate(-1)} className="inline-flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900 mb-4">
+          <ArrowLeft className="h-4 w-4" /> Back
+        </button>
+        <p className="text-slate-500">Contact not found</p>
+      </PageShell>
     );
   }
 
   const totalEmails = (contact.total_emails_sent || 0) + (contact.total_emails_received || 0);
 
   return (
-    <div className="glass-page-bg" style={{ padding: 24 }}>
-      <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)} style={{ marginBottom: 16 }}>Back to Contacts</Button>
-
-      <div className="glass-card fade-in-up" style={{ padding: 20, marginBottom: 16 }}>
-        <Row align="middle" gutter={16}>
-          <Col flex="auto">
-            <Title level={4} style={{ margin: 0 }}>{contact.full_name || contact.email_address}</Title>
-            {contact.full_name && <div><Text type="secondary">{contact.email_address}</Text></div>}
-            <div style={{ marginTop: 4 }}>
+    <PageShell>
+      {/* Header */}
+      <div className="rounded-lg border bg-white shadow-sm p-4 mb-4">
+        <div className="flex items-center gap-3">
+          <button onClick={() => navigate(-1)} className="p-1 rounded hover:bg-slate-100">
+            <ArrowLeft className="h-4 w-4 text-slate-500" />
+          </button>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-lg font-semibold text-slate-900">{contact.full_name || contact.email_address}</h1>
+            {contact.full_name && <p className="text-sm text-slate-400">{contact.email_address}</p>}
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
               {(contact.customer_company_name || contact.company_name) && (
-                <a
+                <button
                   onClick={() => contact.customer_company_id && navigate(`/customers/${contact.customer_company_id}`)}
-                  style={{ color: '#667eea', cursor: contact.customer_company_id ? 'pointer' : 'default', marginRight: 8 }}
+                  className="text-sm text-primary hover:underline"
                 >
                   {contact.customer_company_name || contact.company_name}
-                </a>
+                </button>
               )}
-              {contact.job_title && <Tag>{contact.job_title}</Tag>}
+              {contact.job_title && <StatusBadge variant="neutral" size="sm">{contact.job_title}</StatusBadge>}
               {contact.qb_customer_type && <LifecycleBadge tier={contact.qb_customer_type} />}
-              {contact.qb_tier && <Tag color="purple" style={{ marginLeft: 4 }}>{contact.qb_tier}</Tag>}
-              {contact.qb_quotes_count != null && contact.qb_quotes_count > 0 && <Tag style={{ marginLeft: 4 }}>{contact.qb_quotes_count} quotes</Tag>}
+              {contact.qb_tier && <StatusBadge variant="purple" size="sm">{contact.qb_tier}</StatusBadge>}
+              {contact.qb_quotes_count != null && contact.qb_quotes_count > 0 && (
+                <StatusBadge variant="info" size="sm">{contact.qb_quotes_count} quotes</StatusBadge>
+              )}
             </div>
-          </Col>
-          <Col>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
             <EngagementBadge score={contact.engagement_score} showBar />
             <QBLinkWidget
-              mode="contact"
-              entityId={contactId!}
-              clientId={contact.client_id}
+              mode="contact" entityId={contactId!} clientId={contact.client_id}
               qbLinkedId={contact.qb_contact_id}
               qbDisplayName={contact.qb_contact_id ? `QB Contact` : undefined}
               onLinked={() => window.location.reload()}
             />
-          </Col>
-        </Row>
+          </div>
+        </div>
       </div>
 
-      <Row gutter={[16, 16]} className="fade-in-up stagger-1">
-        <Col xs={12} sm={6}><MetricCard title="Total Emails" value={totalEmails} onClick={() => navigate(`/emails?contact_id=${contactId}`)} /></Col>
-        <Col xs={12} sm={6}><MetricCard title="Initiation Ratio" value={contact.initiation_ratio != null ? formatRatio(contact.initiation_ratio) : 'N/A'} /></Col>
-        <Col xs={12} sm={6}><MetricCard title="Our Reply Rate" value={contact.reply_rate != null ? formatRatio(contact.reply_rate) : 'N/A'} /></Col>
-        <Col xs={12} sm={6}><MetricCard title="Our Avg Response" value={formatResponseTime(contact.avg_response_time_seconds)} /></Col>
-      </Row>
+      {/* KPI strip */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        <KPICard title="Total Emails" value={totalEmails} onClick={() => navigate(`/emails?contact_id=${contactId}`)}
+          subtitle={`${contact.total_emails_sent || 0} sent / ${contact.total_emails_received || 0} received`} />
+        <KPICard title="Initiation Ratio" value={contact.initiation_ratio != null ? formatRatio(contact.initiation_ratio) : 'N/A'} />
+        <KPICard title="Our Reply Rate" value={contact.reply_rate != null ? formatRatio(contact.reply_rate) : 'N/A'} />
+        <KPICard title="Avg Response" value={formatResponseTime(contact.avg_response_time_seconds)} />
+      </div>
 
-      <Row gutter={[16, 16]} style={{ marginTop: 16 }} className="fade-in-up stagger-2">
-        <Col xs={24} sm={10}>
-          <div className="glass-card" style={{ padding: 20 }}>
-            <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 12 }}>Details</Text>
-            <Descriptions column={1} size="small">
-              <Descriptions.Item label="First Contact">{formatRelativeTime(contact.first_contacted_at)}</Descriptions.Item>
-              <Descriptions.Item label="Last Contact">{formatRelativeTime(contact.last_contacted_at)}</Descriptions.Item>
-              <Descriptions.Item label="Emails Sent">{contact.total_emails_sent || 0}</Descriptions.Item>
-              <Descriptions.Item label="Emails Received">{contact.total_emails_received || 0}</Descriptions.Item>
-              <Descriptions.Item label="Threads">{pattern?.total_threads ?? 'N/A'}</Descriptions.Item>
-              <Descriptions.Item label="Avg Thread Depth">{pattern?.avg_thread_depth != null ? Number(pattern.avg_thread_depth).toFixed(1) : 'N/A'}</Descriptions.Item>
-              <Descriptions.Item label="Emails/Week">{pattern?.emails_per_week != null ? Number(pattern.emails_per_week).toFixed(1) : 'N/A'}</Descriptions.Item>
-            </Descriptions>
+      {/* Details + Threads */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 mb-4">
+        {/* Details */}
+        <div className="lg:col-span-2 rounded-lg border bg-white shadow-sm p-4">
+          <h2 className="text-sm font-semibold text-slate-900 mb-3">Details</h2>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between"><span className="text-slate-500">First Contact</span><span>{formatRelativeTime(contact.first_contacted_at)}</span></div>
+            <div className="flex justify-between"><span className="text-slate-500">Last Contact</span><span>{formatRelativeTime(contact.last_contacted_at)}</span></div>
+            <div className="flex justify-between"><span className="text-slate-500">Emails Sent</span><span className="tabular-nums">{contact.total_emails_sent || 0}</span></div>
+            <div className="flex justify-between"><span className="text-slate-500">Emails Received</span><span className="tabular-nums">{contact.total_emails_received || 0}</span></div>
+            <div className="flex justify-between"><span className="text-slate-500">Threads</span><span className="tabular-nums">{pattern?.total_threads ?? 'N/A'}</span></div>
+            <div className="flex justify-between"><span className="text-slate-500">Avg Thread Depth</span><span className="tabular-nums">{pattern?.avg_thread_depth != null ? Number(pattern.avg_thread_depth).toFixed(1) : 'N/A'}</span></div>
+            <div className="flex justify-between"><span className="text-slate-500">Emails/Week</span><span className="tabular-nums">{pattern?.emails_per_week != null ? Number(pattern.emails_per_week).toFixed(1) : 'N/A'}</span></div>
+            {pattern?.their_avg_response_time_hours != null && (
+              <div className="flex justify-between"><span className="text-slate-500">Their Avg Response</span><span className="tabular-nums">{Number(pattern.their_avg_response_time_hours).toFixed(1)}h</span></div>
+            )}
           </div>
-        </Col>
-        <Col xs={24} sm={14}>
+        </div>
+
+        {/* Threads */}
+        <div className="lg:col-span-3">
           {threads.length > 0 && (
-            <div className="glass-table-container" style={{ padding: 16 }}>
-              <a onClick={() => navigate(`/customers/threads?contact_id=${contactId}`)}
-                style={{ fontSize: 16, fontWeight: 600, display: 'block', marginBottom: 12, color: '#667eea', cursor: 'pointer' }}>
-                Threads ({threads.length})
-              </a>
-              <Table
-                columns={threadColumns}
-                dataSource={threads.slice(0, 50)}
-                rowKey="thread_id"
-                size="small"
-                pagination={threads.length > 10 ? { pageSize: 10, size: 'small' } : false}
-                onRow={(record) => ({ onClick: () => handleThreadClick(record), style: { cursor: 'pointer' } })}
-              />
+            <div className="rounded-lg border bg-white shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b">
+                <button onClick={() => navigate(`/customers/threads?contact_id=${contactId}`)}
+                  className="text-sm font-semibold text-primary hover:underline">
+                  Threads ({threads.length})
+                </button>
+              </div>
+              <div className="divide-y max-h-[400px] overflow-y-auto">
+                {threads.slice(0, 50).map(t => {
+                  const cfg = threadStatusConfig[t.status] || { label: t.status };
+                  const variant = t.status === 'overdue' ? 'danger' : t.status === 'awaiting_our_response' ? 'warning' : t.status === 'ongoing' ? 'info' : 'neutral';
+                  return (
+                    <div key={t.thread_id}
+                      className="flex items-center gap-3 px-4 py-2 hover:bg-slate-50 cursor-pointer transition-colors"
+                      onClick={() => {
+                        const name = encodeURIComponent(t.subject || t.thread_id?.slice(0, 20) || 'Thread');
+                        navigate(`/emails?thread_id=${encodeURIComponent(t.thread_id)}&name=${name}`);
+                      }}>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm text-slate-800 truncate block">{t.subject || t.thread_id?.slice(0, 16)}</span>
+                      </div>
+                      <StatusBadge variant={variant as any} size="sm">{cfg.label}</StatusBadge>
+                      <span className="text-xs text-slate-500 tabular-nums w-6 text-right">{t.total_messages}</span>
+                      <span className="text-xs text-slate-400 w-14 text-right">{formatRelativeTime(t.last_message_date)}</span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
-        </Col>
-      </Row>
+        </div>
+      </div>
 
-      {contact.qb_customer_type && (
-        <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
-          <Col xs={24} sm={8}>
-            <div className="glass-card" style={{ padding: 16 }}>
-              <Text type="secondary">Their Avg Response</Text>
-              <div style={{ fontSize: 20, fontWeight: 600 }}>{pattern?.their_avg_response_time_hours != null ? `${Number(pattern.their_avg_response_time_hours).toFixed(1)}h` : 'N/A'}</div>
-            </div>
-          </Col>
-          <Col xs={24} sm={8}>
-            <div className="glass-card" style={{ padding: 16 }}>
-              <LifecycleBadge tier={contact.qb_customer_type} />
-              {contact.qb_tier && <Tag color="purple" style={{ marginLeft: 8 }}>{contact.qb_tier}</Tag>}
-            </div>
-          </Col>
-        </Row>
-      )}
-
+      {/* AI Insights */}
       {contactId && contact && <AIInsightsCard entityType="contact" entityId={contactId} clientId={contact.client_id} />}
-    </div>
+    </PageShell>
   );
 };

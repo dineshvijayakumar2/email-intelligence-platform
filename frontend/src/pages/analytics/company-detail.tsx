@@ -1,8 +1,5 @@
-import React from 'react';
-import { Row, Col, Typography, Button, Tag, Descriptions, Skeleton, Table, Collapse, Space } from 'antd';
-import { ArrowLeftOutlined, ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons';
+import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { MetricCard } from '../../components/analytics/MetricCard';
 import AIInsightsCard from '../../components/AIInsightsCard';
 import { EngagementBadge } from '../../components/analytics/EngagementBadge';
 import { LifecycleBadge } from '../../components/analytics/LifecycleBadge';
@@ -16,21 +13,21 @@ import CapabilityRhythmCard from '../../components/CapabilityRhythmCard';
 import QBLinkWidget from '../../components/QBLinkWidget';
 import { useCompanyDetail, useOrderHistory, useProductProfile } from '../../hooks/queries';
 import { useThreadsByCompany } from '../../hooks/queries';
-import {
-  formatRelativeTime,
-  engagementStatusConfig,
-  threadStatusConfig,
-} from '../../services/analyticsService';
-import type { ThreadStatusSummary, ThreadStatus } from '../../types/analytics';
+import { formatRelativeTime, threadStatusConfig } from '../../services/analyticsService';
+import type { ThreadStatusSummary } from '../../types/analytics';
 import { formatCurrency } from '../../utils/numberFormat';
-
-const { Title, Text } = Typography;
+import { PageShell } from '@/components/ui/page-shell';
+import { KPICard } from '@/components/ui/kpi-card';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { ContentSkeleton } from '@/components/ui/empty-state';
+import { cn } from '@/lib/utils';
+import { ArrowLeft, ArrowUp, ArrowDown, ChevronDown, ChevronRight } from 'lucide-react';
 
 export const CompanyDetail: React.FC = () => {
   const { companyId } = useParams<{ companyId: string }>();
   const navigate = useNavigate();
+  const [showOrderHistory, setShowOrderHistory] = useState(false);
 
-  // All data via TanStack Query — no manual useState/useEffect
   const companyQuery = useCompanyDetail(companyId);
   const threadsQuery = useThreadsByCompany(companyId);
   const orderHistoryQuery = useOrderHistory(companyId);
@@ -41,166 +38,154 @@ export const CompanyDetail: React.FC = () => {
   const orderHistory = orderHistoryQuery.data?.items || [];
   const productProfile = productProfileQuery.data || { categories: [], operations: [], capability_breakdown: [], process_tags: [], embellishment_tags: [] };
 
-  const handleThreadClick = (record: ThreadStatusSummary) => {
-    const name = encodeURIComponent(record.subject || record.thread_id?.slice(0, 20) || 'Thread');
-    navigate(`/emails?thread_id=${encodeURIComponent(record.thread_id)}&name=${name}`);
-  };
-
-  const threadColumns = [
-    {
-      title: 'Subject', dataIndex: 'subject', key: 'subject', ellipsis: true,
-      render: (v: string, r: ThreadStatusSummary) => (
-        <a onClick={(e) => { e.stopPropagation(); handleThreadClick(r); }} style={{ color: '#667eea' }}>
-          {v || r.thread_id?.slice(0, 16) + '...'}
-        </a>
-      ),
-    },
-    {
-      title: 'Status', dataIndex: 'status', key: 'status', width: 140,
-      render: (v: string) => {
-        const cfg = threadStatusConfig[v] || { label: v, color: 'default' };
-        return <Tag color={cfg.color}>{cfg.label}</Tag>;
-      },
-    },
-    { title: 'Contact', key: 'contact', render: (_: any, r: ThreadStatusSummary) => r.contact_name || r.contact_email || '-' },
-    { title: 'Emails', dataIndex: 'total_messages', key: 'msgs', width: 90 },
-    { title: 'Last Email', dataIndex: 'last_message_date', key: 'last', width: 110, render: (v: string) => formatRelativeTime(v) },
-  ];
-
   if (companyQuery.isLoading) {
-    return (
-      <div className="glass-page-bg" style={{ padding: 24 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/customers')} style={{ marginBottom: 12 }}>Back</Button>
-        <Skeleton active paragraph={{ rows: 10 }} />
-      </div>
-    );
+    return <PageShell><ContentSkeleton rows={8} /></PageShell>;
   }
 
   if (!company) {
     return (
-      <div className="glass-page-bg" style={{ padding: 24 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/customers')} style={{ marginBottom: 12 }}>Back</Button>
-        <Text type="secondary">Company not found</Text>
-      </div>
+      <PageShell>
+        <button onClick={() => navigate('/customers')} className="inline-flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900 mb-4">
+          <ArrowLeft className="h-4 w-4" /> Back
+        </button>
+        <p className="text-slate-500">Company not found</p>
+      </PageShell>
     );
   }
 
-  const statusCfg = engagementStatusConfig[company.engagement_status || 'unknown'];
   const activeThreads = threads.filter(t => !['dropped', 'complete'].includes(t.status));
+  const isAtRisk = company.engagement_status === 'at_risk' || (company.engagement_status as string) === 'churning';
 
   return (
-    <div className="glass-page-bg" style={{ padding: 24 }}>
-      <div className="glass-card fade-in-up" style={{ padding: '10px 16px', marginBottom: 12 }}>
-        <Row align="middle" gutter={12}>
-          <Col>
-            <Button icon={<ArrowLeftOutlined />} type="text" size="small" onClick={() => navigate('/customers')} />
-          </Col>
-          <Col flex="auto">
-            <Title level={4} style={{ margin: 0, display: 'inline' }}>{company.company_name}</Title>
-            {company.industry && <Tag style={{ marginLeft: 8 }}>{company.industry}</Tag>}
-            <LifecycleBadge tier={company.qb_customer_type} />
-            {company.email_domains?.length && <Text type="secondary" style={{ marginLeft: 6, fontSize: 12 }}>({company.email_domains.join(', ')})</Text>}
-          </Col>
-          <Col>
-            <EngagementBadge score={company.engagement_score} showBar />
-            <Tag color={statusCfg.color} style={{ marginLeft: 8 }}>{statusCfg.label}</Tag>
-          </Col>
-        </Row>
-      </div>
-
-      {/* Compact summary row: metrics + business data + communication */}
-      <Row gutter={[12, 12]} className="fade-in-up stagger-1">
-        {/* Left: Key metrics */}
-        <Col xs={24} md={6}>
-          <div className="glass-card" style={{ padding: 14 }}>
-            <Row gutter={[8, 8]}>
-              <Col span={12}><MetricCard title="Emails" value={company.total_emails || 0} onClick={() => navigate(`/emails?company_id=${companyId}`)} /></Col>
-              <Col span={12}><MetricCard title="Contacts" value={company.contact_count} onClick={() => navigate(`/customers/contacts?company_id=${companyId}&client_id=${company.client_id}`)} /></Col>
-              <Col span={12}><MetricCard title="Threads" value={threads.length} onClick={() => navigate(`/customers/threads?company_id=${companyId}`)} /></Col>
-              <Col span={12}><MetricCard title="Overdue" value={threads.filter(t => t.status === 'overdue').length} onClick={() => navigate(`/customers/threads?company_id=${companyId}`)} /></Col>
-            </Row>
-            <Descriptions column={1} size="small" style={{ marginTop: 8 }}>
-              <Descriptions.Item label="First Contact">{formatRelativeTime(company.first_contact_date)}</Descriptions.Item>
-              <Descriptions.Item label="Last Contact">{formatRelativeTime(company.last_contact_date)}</Descriptions.Item>
-              <Descriptions.Item label="In / Out">{company.total_inbound || 0} / {company.total_outbound || 0}</Descriptions.Item>
-            </Descriptions>
-          </div>
-        </Col>
-
-        {/* Right: Business data */}
-        <Col xs={24} md={18}>
-          <div className="glass-card" style={{ padding: 14 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <Text strong>Business Data</Text>
-              <QBLinkWidget
-                mode="company"
-                entityId={companyId!}
-                clientId={company.client_id}
-                qbLinkedId={company.qb_customer_id}
-                qbMatchMethod={company.qb_match_method}
-                qbDisplayName={company.qb_customer_code ? `QB: ${company.qb_customer_code}` : undefined}
-                onLinked={() => window.location.reload()}
-              />
+    <PageShell>
+      {/* Header card */}
+      <div className={cn(
+        'rounded-lg border bg-white shadow-sm p-4 mb-4',
+        isAtRisk && 'border-l-4 border-l-destructive bg-red-50/30',
+      )}>
+        <div className="flex items-center gap-3">
+          <button onClick={() => navigate('/customers')} className="p-1 rounded hover:bg-slate-100">
+            <ArrowLeft className="h-4 w-4 text-slate-500" />
+          </button>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-lg font-semibold text-slate-900">{company.company_name}</h1>
+              {company.industry && <StatusBadge variant="neutral" size="sm">{company.industry}</StatusBadge>}
+              <LifecycleBadge tier={company.qb_customer_type} />
             </div>
-            {company.qb_total_revenue != null ? (
-              <>
-                <Descriptions column={3} size="small">
-                  {company.qb_customer_type && <Descriptions.Item label="Type"><Tag>{company.qb_customer_type}</Tag></Descriptions.Item>}
-                  {company.qb_tier && <Descriptions.Item label="Tier"><Tag color="purple">{company.qb_tier}</Tag></Descriptions.Item>}
-                  {company.qb_account_manager && <Descriptions.Item label="AM">{company.qb_account_manager}</Descriptions.Item>}
-                  {company.industry && <Descriptions.Item label="Industry">{company.industry}</Descriptions.Item>}
-                  <Descriptions.Item label="Revenue">{formatCurrency(company.qb_total_revenue)}</Descriptions.Item>
-                  {company.qb_invoiced_ty != null && (
-                    <Descriptions.Item label="This Year">
-                      {formatCurrency(company.qb_invoiced_ty)}
-                      {company.qb_invoiced_ly != null && company.qb_invoiced_ty > company.qb_invoiced_ly && <ArrowUpOutlined style={{ color: '#52c41a', marginLeft: 4 }} />}
-                      {company.qb_invoiced_ly != null && company.qb_invoiced_ty < company.qb_invoiced_ly && <ArrowDownOutlined style={{ color: '#ff4d4f', marginLeft: 4 }} />}
-                    </Descriptions.Item>
-                  )}
-                  {company.qb_invoiced_ly != null && <Descriptions.Item label="Last Year">{formatCurrency(company.qb_invoiced_ly)}</Descriptions.Item>}
-                  {company.qb_growth_90d != null && <Descriptions.Item label="Growth 90d">{company.qb_growth_90d > 0 ? '+' : ''}{Number(company.qb_growth_90d).toFixed(1)}%</Descriptions.Item>}
-                  {company.qb_days_since_last_invoice != null && <Descriptions.Item label="Days Since Order">{company.qb_days_since_last_invoice}</Descriptions.Item>}
-                  <Descriptions.Item label="Orders">{orderHistory.filter(o => o.status !== 'Cancelled').length}</Descriptions.Item>
-                  {company.decision_maker_count > 0 && <Descriptions.Item label="Decision Makers">{company.decision_maker_count}</Descriptions.Item>}
-                </Descriptions>
-              </>
-            ) : (
-              <Text type="secondary">No QB data — link a QB customer to enrich this profile.</Text>
+            {company.email_domains?.length > 0 && (
+              <p className="text-xs text-slate-400 mt-0.5">{company.email_domains.join(', ')}</p>
             )}
           </div>
-        </Col>
-      </Row>
+          <div className="flex items-center gap-2 shrink-0">
+            <EngagementBadge score={company.engagement_score} showBar />
+            {isAtRisk && <StatusBadge variant="danger">At Risk</StatusBadge>}
+          </div>
+        </div>
+      </div>
+
+      {/* KPI strip + Business Data */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-4">
+        <KPICard title="Emails" value={company.total_emails || 0} onClick={() => navigate(`/emails?company_id=${companyId}`)}
+          subtitle={`${company.total_inbound || 0} in / ${company.total_outbound || 0} out`} />
+        <KPICard title="Contacts" value={company.contact_count} onClick={() => navigate(`/customers/contacts?company_id=${companyId}&client_id=${company.client_id}`)}
+          subtitle={company.decision_maker_count > 0 ? `${company.decision_maker_count} decision makers` : undefined} />
+        <KPICard title="Threads" value={threads.length} onClick={() => navigate(`/customers/threads?company_id=${companyId}`)}
+          subtitle={activeThreads.length > 0 ? `${activeThreads.length} active` : 'None active'} />
+        <KPICard title="Overdue" value={threads.filter(t => t.status === 'overdue').length}
+          danger={threads.filter(t => t.status === 'overdue').length > 0} />
+      </div>
+
+      {/* Business Data */}
+      <div className="rounded-lg border bg-white shadow-sm p-4 mb-4">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-slate-900">Business Data</h2>
+          <QBLinkWidget
+            mode="company" entityId={companyId!} clientId={company.client_id}
+            qbLinkedId={company.qb_customer_id} qbMatchMethod={company.qb_match_method}
+            qbDisplayName={company.qb_customer_code ? `QB: ${company.qb_customer_code}` : undefined}
+            onLinked={() => window.location.reload()}
+          />
+        </div>
+        {company.qb_total_revenue != null ? (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-2 text-sm">
+            {company.qb_customer_type && <div><span className="text-slate-500">Type</span><div className="font-medium">{company.qb_customer_type}</div></div>}
+            {company.qb_tier && <div><span className="text-slate-500">Tier</span><div><StatusBadge variant="purple" size="sm">{company.qb_tier}</StatusBadge></div></div>}
+            {company.qb_account_manager && <div><span className="text-slate-500">AM</span><div className="font-medium">{company.qb_account_manager}</div></div>}
+            {company.industry && <div><span className="text-slate-500">Industry</span><div className="font-medium">{company.industry}</div></div>}
+            <div><span className="text-slate-500">Revenue</span><div className="font-semibold tabular-nums">{formatCurrency(company.qb_total_revenue)}</div></div>
+            {company.qb_invoiced_ty != null && (
+              <div>
+                <span className="text-slate-500">This Year</span>
+                <div className="font-medium tabular-nums inline-flex items-center gap-1">
+                  {formatCurrency(company.qb_invoiced_ty)}
+                  {company.qb_invoiced_ly != null && company.qb_invoiced_ty > company.qb_invoiced_ly && <ArrowUp className="h-3 w-3 text-success" />}
+                  {company.qb_invoiced_ly != null && company.qb_invoiced_ty < company.qb_invoiced_ly && <ArrowDown className="h-3 w-3 text-destructive" />}
+                </div>
+              </div>
+            )}
+            {company.qb_invoiced_ly != null && <div><span className="text-slate-500">Last Year</span><div className="font-medium tabular-nums">{formatCurrency(company.qb_invoiced_ly)}</div></div>}
+            {company.qb_growth_90d != null && (
+              <div><span className="text-slate-500">Growth 90d</span>
+                <div className={cn('font-medium tabular-nums', company.qb_growth_90d > 0 ? 'text-success' : company.qb_growth_90d < 0 ? 'text-destructive' : '')}>
+                  {company.qb_growth_90d > 0 ? '+' : ''}{Number(company.qb_growth_90d).toFixed(1)}%
+                </div>
+              </div>
+            )}
+            {company.qb_days_since_last_invoice != null && <div><span className="text-slate-500">Days Since Order</span><div className="font-medium tabular-nums">{company.qb_days_since_last_invoice}</div></div>}
+            <div><span className="text-slate-500">Orders</span><div className="font-medium tabular-nums">{orderHistory.filter(o => o.status !== 'Cancelled').length}</div></div>
+            <div><span className="text-slate-500">First Contact</span><div className="text-xs text-slate-600">{formatRelativeTime(company.first_contact_date)}</div></div>
+            <div><span className="text-slate-500">Last Contact</span><div className="text-xs text-slate-600">{formatRelativeTime(company.last_contact_date)}</div></div>
+          </div>
+        ) : (
+          <p className="text-sm text-slate-400">No QB data — link a QB customer to enrich this profile.</p>
+        )}
+      </div>
 
       {/* Active Threads */}
       {activeThreads.length > 0 && (
-        <div style={{ marginTop: 12 }} className="fade-in-up stagger-3">
-          <div className="glass-table-container" style={{ padding: 16 }}>
-            <a onClick={() => navigate(`/customers/threads?company_id=${companyId}`)}
-              style={{ fontSize: 16, fontWeight: 600, display: 'block', marginBottom: 12, color: '#667eea', cursor: 'pointer' }}>
+        <div className="rounded-lg border bg-white shadow-sm overflow-hidden mb-4">
+          <div className="flex items-center justify-between px-4 py-3 border-b">
+            <button onClick={() => navigate(`/customers/threads?company_id=${companyId}`)}
+              className="text-sm font-semibold text-primary hover:underline">
               Active Threads ({activeThreads.length})
-              <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>{threads.length} total</Text>
-            </a>
-            <Table
-              columns={threadColumns}
-              dataSource={activeThreads}
-              rowKey="thread_id"
-              size="small"
-              pagination={{ pageSize: 10, size: 'small' }}
-              onRow={(record) => ({ onClick: () => handleThreadClick(record), style: { cursor: 'pointer' } })}
-            />
+              <span className="text-xs text-slate-400 font-normal ml-2">{threads.length} total</span>
+            </button>
+          </div>
+          <div className="divide-y">
+            {activeThreads.slice(0, 10).map(t => {
+              const cfg = threadStatusConfig[t.status] || { label: t.status, color: 'default' };
+              const statusVariant = t.status === 'overdue' ? 'danger' : t.status === 'awaiting_our_response' ? 'warning' : t.status === 'ongoing' ? 'info' : 'neutral';
+              return (
+                <div key={t.thread_id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 cursor-pointer transition-colors"
+                  onClick={() => {
+                    const name = encodeURIComponent(t.subject || t.thread_id?.slice(0, 20) || 'Thread');
+                    navigate(`/emails?thread_id=${encodeURIComponent(t.thread_id)}&name=${name}`);
+                  }}>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm text-slate-800 truncate block">{t.subject || t.thread_id?.slice(0, 16)}</span>
+                    <span className="text-xs text-slate-400">{t.contact_name || t.contact_email || '—'}</span>
+                  </div>
+                  <StatusBadge variant={statusVariant as any} size="sm">{cfg.label}</StatusBadge>
+                  <span className="text-xs text-slate-500 tabular-nums w-8 text-right">{t.total_messages}</span>
+                  <span className="text-xs text-slate-400 w-16 text-right">{formatRelativeTime(t.last_message_date)}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
 
+      {/* AI Insights — still uses antd internally (migrated in Phase 4) */}
       {companyId && company && <AIInsightsCard entityType="company" entityId={companyId} clientId={company.client_id} />}
 
-      {/* Customer Intelligence */}
+      {/* Intelligence cards grid — these still use antd internally */}
       {companyId && company && (
-        <Row gutter={[16, 16]} style={{ marginTop: 12 }}>
-          <Col xs={24} lg={12}><StrikeRateCard companyId={companyId} /></Col>
-          <Col xs={24} lg={12}><SeasonalityChart companyId={companyId} /></Col>
-          <Col xs={24} lg={12}><CapabilityRhythmCard companyId={companyId} /></Col>
-          <Col xs={24} lg={12}><ContactCapabilitiesCard companyId={companyId} /></Col>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+          <StrikeRateCard companyId={companyId} />
+          <SeasonalityChart companyId={companyId} />
+          <CapabilityRhythmCard companyId={companyId} />
+          <ContactCapabilitiesCard companyId={companyId} />
           <ProductProfileCards
             categories={productProfile.categories}
             operations={productProfile.operations}
@@ -209,30 +194,28 @@ export const CompanyDetail: React.FC = () => {
             embellishment_tags={productProfile.embellishment_tags}
             loading={productProfileQuery.isLoading}
           />
-          <Col xs={24} lg={12}>
-            <div className="glass-card" style={{ padding: 12 }}>
-              <Text strong style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>Sales Opportunities</Text>
-              <RecommendationsPanel companyId={companyId} />
-            </div>
-          </Col>
-        </Row>
+          <div className="rounded-lg border bg-white shadow-sm p-4">
+            <h3 className="text-sm font-semibold text-slate-900 mb-3">Sales Opportunities</h3>
+            <RecommendationsPanel companyId={companyId} />
+          </div>
+        </div>
       )}
 
-      {/* Order History */}
-      <div style={{ marginTop: 12 }}>
-        <Collapse
-          ghost
-          items={[{
-            key: 'order-history',
-            label: <Text strong style={{ fontSize: 15 }}>Order History ({orderHistory.length})</Text>,
-            children: (
-              <div className="glass-table-container" style={{ padding: 8 }}>
-                <OrderHistoryTable items={orderHistory} loading={orderHistoryQuery.isLoading} />
-              </div>
-            ),
-          }]}
-        />
+      {/* Order History — collapsible */}
+      <div className="mt-4">
+        <button
+          onClick={() => setShowOrderHistory(!showOrderHistory)}
+          className="flex items-center gap-2 text-sm font-semibold text-slate-700 hover:text-slate-900 mb-2"
+        >
+          {showOrderHistory ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          Order History ({orderHistory.length})
+        </button>
+        {showOrderHistory && (
+          <div className="rounded-lg border bg-white shadow-sm p-3">
+            <OrderHistoryTable items={orderHistory} loading={orderHistoryQuery.isLoading} />
+          </div>
+        )}
       </div>
-    </div>
+    </PageShell>
   );
 };
