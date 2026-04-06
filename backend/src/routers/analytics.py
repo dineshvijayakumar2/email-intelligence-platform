@@ -2028,14 +2028,25 @@ async def get_company_threads(
             'last_message_at', desc=True
         ).range(offset, offset + limit - 1).execute()
 
-        # Dedup by canonical_thread_id — keep the most recent entry per thread
+        # Dedup pass 1: by canonical_thread_id
+        # Dedup pass 2: by normalized subject (catches cross-mailbox duplicates with different canonical IDs)
         seen_threads: dict = {}
+        seen_subjects: dict = {}  # normalized_subject → canonical key
         for t in (result.data or []):
             key = t.get('canonical_thread_id') or t.get('thread_id')
+            # Normalize subject for secondary dedup
+            subj_norm = (t.get('subject') or '').strip().lower()
+
+            # Check if we already have a thread with the same subject
+            if subj_norm and subj_norm in seen_subjects:
+                key = seen_subjects[subj_norm]  # merge into existing
+
             if key not in seen_threads:
                 seen_threads[key] = t
+                if subj_norm:
+                    seen_subjects[subj_norm] = key
             else:
-                # Merge: keep higher message_count, most recent date, aggregate contacts
+                # Merge: keep higher message_count, most recent date
                 existing = seen_threads[key]
                 existing['message_count'] = max(
                     existing.get('message_count') or 0,
