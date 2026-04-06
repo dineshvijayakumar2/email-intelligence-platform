@@ -78,6 +78,42 @@ export async function searchAll(
 }
 
 // ---------------------------------------------------------------------------
+// Hybrid search (vector + keyword + temporal + RRF)
+// ---------------------------------------------------------------------------
+
+export interface HybridResult {
+  id: string;
+  source_type: 'email' | 'company' | 'operation';
+  score: number;
+  title: string;
+  snippet: string;
+  metadata: Record<string, any>;
+  vector_score: number;
+  keyword_score: number;
+  recency_score: number;
+}
+
+export interface HybridSearchResponse {
+  query: string;
+  cleaned_query: string;
+  date_from: string | null;
+  date_to: string | null;
+  results: HybridResult[];
+  total: number;
+  total_vector_hits: number;
+  total_keyword_hits: number;
+}
+
+export async function hybridSearch(
+  q: string, clientId?: string, sources?: string[], limit = 20, threshold = 0.55,
+): Promise<HybridSearchResponse> {
+  const params = new URLSearchParams({ q, threshold: String(threshold), limit: String(limit) });
+  if (clientId) params.set('client_id', clientId);
+  if (sources?.length) params.set('sources', sources.join(','));
+  return api.get<HybridSearchResponse>(`/v1/ai/vector/hybrid-search?${params}`, { timeout: 30000 });
+}
+
+// ---------------------------------------------------------------------------
 // Embedding management
 // ---------------------------------------------------------------------------
 

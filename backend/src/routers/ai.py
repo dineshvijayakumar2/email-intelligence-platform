@@ -1995,6 +1995,60 @@ async def search_all_semantic(
         raise HTTPException(status_code=500, detail=str(e)[:200])
 
 
+@router.get("/vector/hybrid-search")
+async def hybrid_search(
+    q: str = Query(..., min_length=3, description="Natural language search query"),
+    client_id: Optional[str] = Query(None),
+    sources: Optional[str] = Query(None, description="Comma-separated: emails,companies,operations"),
+    limit: int = Query(20, ge=1, le=100),
+    threshold: float = Query(0.55, ge=0.0, le=1.0),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Hybrid search with vector + keyword + temporal parsing + RRF fusion.
+    Understands natural language dates like "last quarter", "since January".
+    """
+    if not client_id:
+        client_id = current_user.get("client_id")
+    try:
+        from ..services.hybrid_retriever import HybridRetriever
+        retriever = HybridRetriever(_supabase)
+        source_list = [s.strip() for s in sources.split(",")] if sources else None
+        response = await retriever.retrieve(
+            query=q,
+            client_id=client_id,
+            sources=source_list,
+            limit=limit,
+            vector_threshold=threshold,
+        )
+        return {
+            "query": response.query,
+            "cleaned_query": response.cleaned_query,
+            "date_from": response.date_from,
+            "date_to": response.date_to,
+            "results": [
+                {
+                    "id": r.id,
+                    "source_type": r.source_type,
+                    "score": round(r.score, 4),
+                    "title": r.title,
+                    "snippet": r.snippet,
+                    "metadata": r.metadata,
+                    "vector_score": round(r.vector_score, 3),
+                    "keyword_score": round(r.keyword_score, 3),
+                    "recency_score": round(r.recency_score, 3),
+                }
+                for r in response.results
+            ],
+            "total": len(response.results),
+            "total_vector_hits": response.total_vector_hits,
+            "total_keyword_hits": response.total_keyword_hits,
+        }
+    except Exception as e:
+        logger.error(f"Hybrid search failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e)[:300])
+
+
 @router.get("/vector/stats")
 async def get_vector_stats(
     client_id: Optional[str] = Query(None),

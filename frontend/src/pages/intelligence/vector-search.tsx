@@ -1,79 +1,36 @@
 /**
- * Vector Search Page — Semantic search across emails, companies, and operations.
- * Also includes embedding management (stats, reembed trigger).
- *
- * Sprint 4 S4.4 — /insights/search
+ * Semantic Search Page — Hybrid search with vector + keyword + temporal parsing.
+ * Uses TanStack Table for results with sorting, filtering, source-type tabs.
+ * Embedding management (stats, reembed, backfill) in collapsible panel.
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
-  Card, Input, Tabs, Table, Tag, Space, Typography, Button, Row, Col,
+  Card, Input, Tag, Space, Typography, Button, Row, Col,
   Statistic, Progress, Alert, message, Collapse, Badge, Spin,
+  Select, Tooltip,
 } from 'antd';
 import {
   SearchOutlined, ThunderboltOutlined, ReloadOutlined,
   MailOutlined, BankOutlined, ToolOutlined,
-  CheckCircleOutlined, SyncOutlined,
+  CheckCircleOutlined, SyncOutlined, ClockCircleOutlined,
+  FilterOutlined,
 } from '@ant-design/icons';
+import {
+  useReactTable,
+  getCoreRowModel,
+  createColumnHelper,
+  type SortingState,
+} from '@tanstack/react-table';
+import { DataTable } from '../../components/DataTable';
 import * as vectorApi from '../../services/vectorService';
+import type { HybridResult } from '../../services/vectorService';
 import { ClientSelector } from '../../components/analytics/ClientSelector';
+import { useNavigate } from 'react-router-dom';
 
 const { Title, Text, Paragraph } = Typography;
 const { Search } = Input;
-
-// ---------------------------------------------------------------------------
-// Column definitions
-// ---------------------------------------------------------------------------
-
-const emailColumns = [
-  { title: 'Subject', dataIndex: 'subject', key: 'subject', width: 320, ellipsis: true },
-  { title: 'From', dataIndex: 'sender_name', key: 'sender', width: 180, ellipsis: true,
-    render: (v: string, r: any) => v || r.sender_email || '—' },
-  { title: 'Direction', dataIndex: 'is_outbound', key: 'direction', width: 90,
-    render: (v: boolean) => v ? <Tag color="blue">Outbound</Tag> : <Tag color="green">Inbound</Tag> },
-  { title: 'Date', dataIndex: 'sent_date', key: 'sent_date', width: 110,
-    render: (v: string) => v ? new Date(v).toLocaleDateString() : '—' },
-  { title: 'Similarity', dataIndex: 'similarity', key: 'similarity', width: 90, align: 'right' as const,
-    render: (v: number) => v != null ? (
-      <Text strong style={{ color: v > 0.8 ? '#52c41a' : v > 0.7 ? '#faad14' : undefined }}>
-        {(v * 100).toFixed(0)}%
-      </Text>
-    ) : '—' },
-];
-
-const companyColumns = [
-  { title: 'Company', dataIndex: 'company_name', key: 'company_name', width: 220, ellipsis: true },
-  { title: 'Industry', dataIndex: 'industry', key: 'industry', width: 160, ellipsis: true },
-  { title: 'Tier', dataIndex: 'qb_tier', key: 'tier', width: 80,
-    render: (v: string) => v ? <Tag>{v}</Tag> : '—' },
-  { title: 'Revenue', dataIndex: 'qb_total_revenue', key: 'revenue', width: 120, align: 'right' as const,
-    render: (v: number) => v != null ? `$${Number(v).toLocaleString()}` : '—' },
-  { title: 'Similarity', dataIndex: 'similarity', key: 'similarity', width: 90, align: 'right' as const,
-    render: (v: number) => v != null ? (
-      <Text strong style={{ color: v > 0.8 ? '#52c41a' : v > 0.7 ? '#faad14' : undefined }}>
-        {(v * 100).toFixed(0)}%
-      </Text>
-    ) : '—' },
-];
-
-const operationColumns = [
-  { title: 'Operation', dataIndex: 'operation_name', key: 'operation_name', width: 220, ellipsis: true },
-  { title: 'Department', dataIndex: 'department', key: 'department', width: 130,
-    render: (v: string) => v ? <Tag>{v}</Tag> : '—' },
-  { title: 'Machine', dataIndex: 'machine', key: 'machine', width: 160, ellipsis: true },
-  { title: 'Customer', dataIndex: 'customer_name', key: 'customer_name', width: 180, ellipsis: true },
-  { title: 'Capabilities', dataIndex: 'capability_tags', key: 'tags', width: 200,
-    render: (v: string[]) => {
-      if (!v || v.length === 0) return <Text type="secondary" style={{ fontSize: 11 }}>—</Text>;
-      return <Space size={2} wrap>{v.map((t: string) => <Tag key={t} color="blue" style={{ fontSize: 11 }}>{t}</Tag>)}</Space>;
-    } },
-  { title: 'Similarity', dataIndex: 'similarity', key: 'similarity', width: 90, align: 'right' as const,
-    render: (v: number) => v != null ? (
-      <Text strong style={{ color: v > 0.8 ? '#52c41a' : v > 0.7 ? '#faad14' : undefined }}>
-        {(v * 100).toFixed(0)}%
-      </Text>
-    ) : '—' },
-];
+const col = createColumnHelper<HybridResult>();
 
 // ---------------------------------------------------------------------------
 // Suggested prompts
@@ -84,21 +41,42 @@ const SUGGESTED_PROMPTS = [
   'delayed delivery complaint',
   'soft cover book binding',
   'embellishment foil stamping',
-  'packaging design services',
   'quote follow-up overdue',
+  'what happened last quarter',
   'rush job urgent turnaround',
   'high value customer retention risk',
 ];
+
+const SOURCE_OPTIONS = [
+  { value: '', label: 'All Sources' },
+  { value: 'email', label: 'Emails' },
+  { value: 'company', label: 'Companies' },
+  { value: 'operation', label: 'Operations' },
+];
+
+const SOURCE_ICONS: Record<string, React.ReactNode> = {
+  email: <MailOutlined style={{ color: '#667eea' }} />,
+  company: <BankOutlined style={{ color: '#52c41a' }} />,
+  operation: <ToolOutlined style={{ color: '#faad14' }} />,
+};
+
+const SOURCE_COLORS: Record<string, string> = {
+  email: 'blue',
+  company: 'green',
+  operation: 'gold',
+};
 
 // ---------------------------------------------------------------------------
 // Page component
 // ---------------------------------------------------------------------------
 
 const VectorSearchPage: React.FC = () => {
+  const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
-  const [results, setResults] = useState<vectorApi.UnifiedSearchResult | null>(null);
-  const [activeTab, setActiveTab] = useState('all');
+  const [response, setResponse] = useState<vectorApi.HybridSearchResponse | null>(null);
+  const [sourceFilter, setSourceFilter] = useState('');
+  const [sorting, setSorting] = useState<SortingState>([{ id: 'score', desc: true }]);
   const [clientId, setClientId] = useState<string | undefined>(
     localStorage.getItem('analytics_client_id') || undefined
   );
@@ -108,10 +86,15 @@ const VectorSearchPage: React.FC = () => {
   const [statsLoading, setStatsLoading] = useState(false);
   const [reembedStatus, setReembedStatus] = useState<vectorApi.ReembedStatus | null>(null);
 
+  // Full-text search backfill
+  const [backfillRunning, setBackfillRunning] = useState(false);
+  const [backfillTotal, setBackfillTotal] = useState(0);
+  const backfillCancelRef = useRef(false);
+
   // Load stats on mount and when client changes
   useEffect(() => {
     loadStats();
-    setResults(null);
+    setResponse(null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId]);
 
@@ -120,14 +103,12 @@ const VectorSearchPage: React.FC = () => {
     try {
       const s = await vectorApi.getVectorStats(clientId);
       setStats(s);
-    } catch {
-      // Keep previous stats if available — don't wipe on transient failure
-    } finally {
+    } catch { /* keep previous */ } finally {
       setStatsLoading(false);
     }
   }, [clientId]);
 
-  // Poll reembed status when running
+  // Poll reembed status
   useEffect(() => {
     if (reembedStatus?.status !== 'running') return;
     const interval = setInterval(async () => {
@@ -138,7 +119,7 @@ const VectorSearchPage: React.FC = () => {
           clearInterval(interval);
           loadStats();
           if (status.status === 'complete') {
-            message.success(`Embedding complete: ${status.result?.total_embedded} records embedded`);
+            message.success(`Embedding complete: ${status.result?.total_embedded} records`);
           } else if (status.status === 'error') {
             message.error(`Embedding failed: ${status.error}`);
           }
@@ -148,6 +129,7 @@ const VectorSearchPage: React.FC = () => {
     return () => clearInterval(interval);
   }, [reembedStatus?.status, clientId, loadStats]);
 
+  // Search handler — uses hybrid search
   const handleSearch = async (q: string) => {
     if (!q || q.trim().length < 3) {
       message.warning('Query must be at least 3 characters');
@@ -156,10 +138,10 @@ const VectorSearchPage: React.FC = () => {
     setSearching(true);
     setQuery(q);
     try {
-      const r = await vectorApi.searchAll(q, clientId, 0.6, 10);
-      setResults(r);
+      const r = await vectorApi.hybridSearch(q, clientId, undefined, 50, 0.5);
+      setResponse(r);
       if (r.total === 0) {
-        message.info('No results found. Try a different query or lower the similarity threshold.');
+        message.info('No results found. Try a different query.');
       }
     } catch (err: any) {
       message.error(err?.message || 'Search failed');
@@ -174,8 +156,7 @@ const VectorSearchPage: React.FC = () => {
       if (resp.status === 'already_running') {
         message.info('Embedding already in progress');
       } else {
-        const label = tables ? tables.join(' + ') : 'all tables';
-        message.success(`Embedding ${label} in background`);
+        message.success(`Embedding ${tables ? tables.join(' + ') : 'all tables'} in background`);
       }
       setReembedStatus({ status: 'running', started_at: Date.now() / 1000 });
     } catch (err: any) {
@@ -192,17 +173,11 @@ const VectorSearchPage: React.FC = () => {
     }
   };
 
-  // Full-text search backfill
-  const [backfillRunning, setBackfillRunning] = useState(false);
-  const [backfillTotal, setBackfillTotal] = useState(0);
-  const backfillCancelRef = useRef(false);
-
   const handleBackfillSearchText = async () => {
     setBackfillRunning(true);
     setBackfillTotal(0);
     backfillCancelRef.current = false;
     let totalUpdated = 0;
-
     try {
       while (!backfillCancelRef.current) {
         const resp = await vectorApi.backfillSearchText(2000);
@@ -215,7 +190,7 @@ const VectorSearchPage: React.FC = () => {
         }
       }
       if (backfillCancelRef.current) {
-        message.info(`Backfill stopped — ${totalUpdated.toLocaleString()} emails indexed so far`);
+        message.info(`Backfill stopped — ${totalUpdated.toLocaleString()} indexed so far`);
       }
     } catch (err: any) {
       message.error(err?.message || 'Search text backfill failed');
@@ -224,65 +199,139 @@ const VectorSearchPage: React.FC = () => {
     }
   };
 
+  // Filtered results
+  const filteredResults = useMemo(() => {
+    if (!response) return [];
+    if (!sourceFilter) return response.results;
+    return response.results.filter(r => r.source_type === sourceFilter);
+  }, [response, sourceFilter]);
+
+  // Row click handler
+  const handleRowClick = (result: HybridResult) => {
+    if (result.source_type === 'company') {
+      navigate(`/customers/${result.id}`);
+    } else if (result.source_type === 'email') {
+      navigate(`/emails?email_id=${result.id}`);
+    }
+  };
+
+  // TanStack Table columns
+  const columns = useMemo(() => [
+    col.accessor('source_type', {
+      header: 'Source',
+      size: 90,
+      cell: info => {
+        const t = info.getValue();
+        return (
+          <Tag color={SOURCE_COLORS[t] || 'default'} style={{ margin: 0 }}>
+            {SOURCE_ICONS[t]} {t === 'email' ? 'Email' : t === 'company' ? 'Company' : 'Operation'}
+          </Tag>
+        );
+      },
+    }),
+    col.accessor('title', {
+      header: 'Title',
+      size: 320,
+      cell: info => {
+        const r = info.row.original;
+        const clickable = r.source_type === 'company' || r.source_type === 'email';
+        return (
+          <div>
+            <Text
+              strong
+              ellipsis={{ tooltip: info.getValue() }}
+              style={clickable ? { color: '#667eea', cursor: 'pointer' } : undefined}
+              onClick={clickable ? (e) => { e.stopPropagation(); handleRowClick(r); } : undefined}
+            >
+              {info.getValue()}
+            </Text>
+            <div><Text type="secondary" style={{ fontSize: 11 }}>{r.snippet}</Text></div>
+          </div>
+        );
+      },
+    }),
+    col.accessor('score', {
+      header: 'Score',
+      size: 80,
+      cell: info => {
+        const v = info.getValue();
+        const pct = Math.min(v * 10000, 100);  // RRF scores are small — normalize for display
+        return (
+          <Tooltip title={`Vector: ${info.row.original.vector_score} | Keyword: ${info.row.original.keyword_score} | Recency: ${info.row.original.recency_score}`}>
+            <Progress
+              percent={Math.round(pct)}
+              size="small"
+              strokeColor={pct > 70 ? '#52c41a' : pct > 40 ? '#faad14' : '#667eea'}
+              format={p => `${p}`}
+              style={{ width: 60 }}
+            />
+          </Tooltip>
+        );
+      },
+    }),
+    col.accessor(r => r.metadata?.sent_date || r.metadata?.last_contact_date, {
+      id: 'date',
+      header: 'Date',
+      size: 100,
+      cell: info => {
+        const v = info.getValue();
+        return v ? new Date(v).toLocaleDateString() : '-';
+      },
+    }),
+    col.accessor('vector_score', {
+      header: 'Vector',
+      size: 70,
+      cell: info => {
+        const v = info.getValue();
+        return v > 0 ? (
+          <Text style={{ color: v > 0.8 ? '#52c41a' : v > 0.7 ? '#faad14' : undefined, fontSize: 12 }}>
+            {(v * 100).toFixed(0)}%
+          </Text>
+        ) : <Text type="secondary" style={{ fontSize: 12 }}>-</Text>;
+      },
+    }),
+    col.accessor('keyword_score', {
+      header: 'Keyword',
+      size: 70,
+      cell: info => {
+        const v = info.getValue();
+        return v > 0 ? (
+          <Text style={{ color: '#667eea', fontSize: 12 }}>{v.toFixed(2)}</Text>
+        ) : <Text type="secondary" style={{ fontSize: 12 }}>-</Text>;
+      },
+    }),
+    col.accessor('recency_score', {
+      header: 'Recency',
+      size: 70,
+      cell: info => {
+        const v = info.getValue();
+        return v < 1 ? (
+          <Text style={{ fontSize: 12 }}>{(v * 100).toFixed(0)}%</Text>
+        ) : <Text type="secondary" style={{ fontSize: 12 }}>-</Text>;
+      },
+    }),
+  ], [navigate]);
+
+  const table = useReactTable({
+    data: filteredResults,
+    columns,
+    state: { sorting },
+    onSortingChange: setSorting,
+    getCoreRowModel: getCoreRowModel(),
+    manualSorting: false, // client-side sort on already-fetched results
+  });
+
   const hasEmbeddings = stats && (
     stats.emails.embedded > 0 || stats.companies.embedded > 0 || stats.operations.embedded > 0
   );
 
-  const tabItems = results ? [
-    {
-      key: 'all',
-      label: <span>All Results <Badge count={results.total} overflowCount={999} color="#667eea" /></span>,
-      children: (
-        <div>
-          {results.emails.length > 0 && (
-            <div style={{ marginBottom: 24 }}>
-              <Text strong style={{ fontSize: 14 }}><MailOutlined /> Emails ({results.emails.length})</Text>
-              <Table dataSource={results.emails} columns={emailColumns} rowKey="id"
-                size="small" pagination={false} scroll={{ x: 'max-content' }} style={{ marginTop: 8 }} />
-            </div>
-          )}
-          {results.companies.length > 0 && (
-            <div style={{ marginBottom: 24 }}>
-              <Text strong style={{ fontSize: 14 }}><BankOutlined /> Companies ({results.companies.length})</Text>
-              <Table dataSource={results.companies} columns={companyColumns} rowKey="id"
-                size="small" pagination={false} scroll={{ x: 'max-content' }} style={{ marginTop: 8 }} />
-            </div>
-          )}
-          {results.operations.length > 0 && (
-            <div>
-              <Text strong style={{ fontSize: 14 }}><ToolOutlined /> Operations ({results.operations.length})</Text>
-              <Table dataSource={results.operations} columns={operationColumns} rowKey="id"
-                size="small" pagination={false} scroll={{ x: 'max-content' }} style={{ marginTop: 8 }} />
-            </div>
-          )}
-          {results.total === 0 && (
-            <div style={{ textAlign: 'center', padding: '48px 0', color: 'rgba(255,255,255,0.3)' }}>
-              <SearchOutlined style={{ fontSize: 48, marginBottom: 16 }} />
-              <div>No results found for "{query}"</div>
-            </div>
-          )}
-        </div>
-      ),
-    },
-    {
-      key: 'emails',
-      label: <span>Emails <Badge count={results.emails.length} color="#667eea" /></span>,
-      children: <Table dataSource={results.emails} columns={emailColumns} rowKey="id"
-        size="small" pagination={{ pageSize: 20 }} scroll={{ x: 'max-content' }} />,
-    },
-    {
-      key: 'companies',
-      label: <span>Companies <Badge count={results.companies.length} color="#667eea" /></span>,
-      children: <Table dataSource={results.companies} columns={companyColumns} rowKey="id"
-        size="small" pagination={{ pageSize: 20 }} scroll={{ x: 'max-content' }} />,
-    },
-    {
-      key: 'operations',
-      label: <span>Operations <Badge count={results.operations.length} color="#667eea" /></span>,
-      children: <Table dataSource={results.operations} columns={operationColumns} rowKey="id"
-        size="small" pagination={{ pageSize: 20 }} scroll={{ x: 'max-content' }} />,
-    },
-  ] : [];
+  // Source counts
+  const sourceCounts = useMemo(() => {
+    if (!response) return { email: 0, company: 0, operation: 0 };
+    const c = { email: 0, company: 0, operation: 0 };
+    for (const r of response.results) c[r.source_type]++;
+    return c;
+  }, [response]);
 
   return (
     <div style={{ padding: '24px', maxWidth: 1400, margin: '0 auto' }}>
@@ -291,16 +340,16 @@ const VectorSearchPage: React.FC = () => {
         <div>
           <Title level={3} style={{ margin: 0 }}>Semantic Search</Title>
           <Paragraph type="secondary" style={{ margin: '4px 0 0 0' }}>
-            Search across emails, companies, and operations using natural language
+            Hybrid search with AI understanding + keyword precision + time awareness
           </Paragraph>
         </div>
         <ClientSelector value={clientId || ''} onChange={id => setClientId(id)} />
       </div>
 
       {/* Search bar */}
-      <Card className="glass-card" style={{ marginBottom: 24 }}>
+      <Card className="glass-card" style={{ marginBottom: 16 }}>
         <Search
-          placeholder="Ask anything about your portfolio... e.g. 'wide format printing', 'deal at risk', 'rush delivery'"
+          placeholder="Search with natural language... e.g. 'what happened with Acme last quarter', 'rush delivery complaints'"
           allowClear
           enterButton={<><SearchOutlined /> Search</>}
           size="large"
@@ -311,16 +360,91 @@ const VectorSearchPage: React.FC = () => {
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           <Text type="secondary" style={{ fontSize: 12, marginRight: 4 }}>Try:</Text>
           {SUGGESTED_PROMPTS.map(p => (
-            <Tag
-              key={p}
-              style={{ cursor: 'pointer', fontSize: 11 }}
-              onClick={() => handleSearch(p)}
-            >
-              {p}
-            </Tag>
+            <Tag key={p} style={{ cursor: 'pointer', fontSize: 11 }} onClick={() => handleSearch(p)}>{p}</Tag>
           ))}
         </div>
       </Card>
+
+      {/* Temporal + source info bar */}
+      {response && (
+        <Card className="glass-card" size="small" style={{ marginBottom: 16 }}>
+          <Row gutter={16} align="middle">
+            <Col flex="auto">
+              <Space wrap size="middle">
+                <Text strong>{response.total} results</Text>
+                {response.cleaned_query !== response.query && (
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    Cleaned: "{response.cleaned_query}"
+                  </Text>
+                )}
+                {(response.date_from || response.date_to) && (
+                  <Tag icon={<ClockCircleOutlined />} color="processing">
+                    {response.date_from || '...'} → {response.date_to || 'now'}
+                  </Tag>
+                )}
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  Vector: {response.total_vector_hits} | Keyword: {response.total_keyword_hits}
+                </Text>
+              </Space>
+            </Col>
+            <Col>
+              <Space>
+                <FilterOutlined />
+                <Select
+                  value={sourceFilter}
+                  onChange={setSourceFilter}
+                  style={{ width: 140 }}
+                  size="small"
+                  options={SOURCE_OPTIONS.map(o => ({
+                    ...o,
+                    label: (
+                      <span>
+                        {o.value ? SOURCE_ICONS[o.value] : null} {o.label}
+                        {o.value && response ? ` (${sourceCounts[o.value as keyof typeof sourceCounts] || 0})` : ''}
+                      </span>
+                    ),
+                  }))}
+                />
+              </Space>
+            </Col>
+          </Row>
+        </Card>
+      )}
+
+      {/* Results table */}
+      {response && filteredResults.length > 0 && (
+        <div className="glass-table-container" style={{ marginBottom: 16 }}>
+          <DataTable
+            table={table}
+            loading={searching}
+            total={filteredResults.length}
+            currentPage={1}
+            pageSize={50}
+            onPageChange={() => {}}
+            onRowClick={handleRowClick}
+          />
+        </div>
+      )}
+
+      {/* No results */}
+      {response && response.total === 0 && (
+        <Card className="glass-card" style={{ textAlign: 'center', padding: 48, marginBottom: 16 }}>
+          <SearchOutlined style={{ fontSize: 48, marginBottom: 16, opacity: 0.3 }} />
+          <div><Text type="secondary">No results found for "{query}"</Text></div>
+          <div style={{ marginTop: 8 }}><Text type="secondary" style={{ fontSize: 12 }}>Try a broader query or lower the similarity threshold</Text></div>
+        </Card>
+      )}
+
+      {/* Empty state */}
+      {!response && !searching && (
+        <Card className="glass-card" style={{ textAlign: 'center', padding: 64, marginBottom: 16 }}>
+          <SearchOutlined style={{ fontSize: 64, marginBottom: 16, opacity: 0.2 }} />
+          <div style={{ fontSize: 16, marginBottom: 8 }}><Text type="secondary">Search your portfolio with natural language</Text></div>
+          <div><Text type="secondary" style={{ fontSize: 13 }}>
+            Combines AI understanding + keyword matching + time awareness for precise results
+          </Text></div>
+        </Card>
+      )}
 
       {/* Embedding Stats + Management */}
       <Collapse
@@ -357,12 +481,8 @@ const VectorSearchPage: React.FC = () => {
                               value={s.data.embedded}
                               suffix={<Text type="secondary">/ {s.data.total.toLocaleString()}</Text>}
                             />
-                            <Progress
-                              percent={pct}
-                              size="small"
-                              status={pct === 100 ? 'success' : 'active'}
-                              strokeColor={pct === 100 ? '#52c41a' : '#667eea'}
-                            />
+                            <Progress percent={pct} size="small" status={pct === 100 ? 'success' : 'active'}
+                              strokeColor={pct === 100 ? '#52c41a' : '#667eea'} />
                           </Card>
                         </Col>
                       );
@@ -370,40 +490,13 @@ const VectorSearchPage: React.FC = () => {
                   </Row>
                   <Space wrap>
                     {reembedStatus?.status === 'running' ? (
-                      <Button
-                        danger
-                        icon={<SyncOutlined spin />}
-                        onClick={handleStopReembed}
-                      >
-                        Stop Embedding
-                      </Button>
+                      <Button danger icon={<SyncOutlined spin />} onClick={handleStopReembed}>Stop Embedding</Button>
                     ) : (
                       <>
-                        <Button
-                          type="primary"
-                          icon={<MailOutlined />}
-                          onClick={() => handleReembed(['emails'])}
-                        >
-                          Embed Emails
-                        </Button>
-                        <Button
-                          icon={<BankOutlined />}
-                          onClick={() => handleReembed(['companies'])}
-                        >
-                          Embed Companies
-                        </Button>
-                        <Button
-                          icon={<ToolOutlined />}
-                          onClick={() => handleReembed(['operations'])}
-                        >
-                          Embed Operations
-                        </Button>
-                        <Button
-                          icon={<ThunderboltOutlined />}
-                          onClick={() => handleReembed()}
-                        >
-                          Embed All
-                        </Button>
+                        <Button type="primary" icon={<MailOutlined />} onClick={() => handleReembed(['emails'])}>Embed Emails</Button>
+                        <Button icon={<BankOutlined />} onClick={() => handleReembed(['companies'])}>Embed Companies</Button>
+                        <Button icon={<ToolOutlined />} onClick={() => handleReembed(['operations'])}>Embed Operations</Button>
+                        <Button icon={<ThunderboltOutlined />} onClick={() => handleReembed()}>Embed All</Button>
                       </>
                     )}
                     <Button icon={<ReloadOutlined />} onClick={loadStats}>Refresh Stats</Button>
@@ -412,19 +505,10 @@ const VectorSearchPage: React.FC = () => {
                         Stop Indexing ({backfillTotal.toLocaleString()})
                       </Button>
                     ) : (
-                      <Button icon={<SearchOutlined />} onClick={handleBackfillSearchText}>
-                        Build Search Index
-                      </Button>
+                      <Button icon={<SearchOutlined />} onClick={handleBackfillSearchText}>Build Search Index</Button>
                     )}
                     {reembedStatus?.status === 'complete' && reembedStatus.result && (
-                      <Text type="success">
-                        <CheckCircleOutlined /> {reembedStatus.result.total_embedded} embedded
-                      </Text>
-                    )}
-                    {reembedStatus?.status === 'stopped' && reembedStatus.result && (
-                      <Text type="warning">
-                        Stopped — {reembedStatus.result.total_embedded} embedded so far
-                      </Text>
+                      <Text type="success"><CheckCircleOutlined /> {reembedStatus.result.total_embedded} embedded</Text>
                     )}
                   </Space>
                 </>
@@ -432,7 +516,6 @@ const VectorSearchPage: React.FC = () => {
                 <Alert
                   type="warning"
                   message="Could not load embedding stats"
-                  description="The backend may be busy or temporarily unavailable. Click Refresh to retry."
                   action={<Button size="small" onClick={loadStats}>Refresh</Button>}
                 />
               )}
@@ -442,37 +525,12 @@ const VectorSearchPage: React.FC = () => {
         style={{ marginBottom: 24 }}
       />
 
-      {/* No embeddings warning */}
       {stats && !hasEmbeddings && (
         <Alert
-          type="warning"
-          showIcon
-          style={{ marginBottom: 24 }}
+          type="warning" showIcon style={{ marginBottom: 24 }}
           message="No embeddings found"
-          description="Click 'Embed All Records' above to generate embeddings. This is a one-time operation (~$0.15 cost)."
+          description="Click 'Embed All' above to generate embeddings. This is a one-time operation."
         />
-      )}
-
-      {/* Results */}
-      {results && (
-        <Card className="glass-card">
-          <Tabs activeKey={activeTab} onChange={setActiveTab} items={tabItems} type="line" />
-        </Card>
-      )}
-
-      {/* Empty state */}
-      {!results && !searching && (
-        <div style={{
-          textAlign: 'center',
-          padding: '64px 0',
-          color: 'rgba(255,255,255,0.25)',
-        }}>
-          <SearchOutlined style={{ fontSize: 64, marginBottom: 16 }} />
-          <div style={{ fontSize: 16, marginBottom: 8 }}>Search your portfolio with natural language</div>
-          <div style={{ fontSize: 13 }}>
-            Find emails, companies, and operations by meaning — not just keywords
-          </div>
-        </div>
       )}
     </div>
   );
