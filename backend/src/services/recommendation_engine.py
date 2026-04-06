@@ -380,23 +380,33 @@ class RecommendationEngine:
 
             qb_key_id = cust_result.data[0]['customer_key_id']
 
-            # Sales line items → revenue by product_group
+            # Sales line items → revenue by product_group (fallback to industry)
             sli_result = (
                 self._supabase.table('qb_sales_line_items')
-                .select('product_group, total')
+                .select('product_group, industry, total')
                 .eq('qb_customer_id', qb_key_id)
                 .eq('client_id', self._client_id)
                 .execute()
             )
             group_totals: dict = {}
             for row in (sli_result.data or []):
-                pg = row.get('product_group') or 'Other'
+                # Use product_group first, fallback to industry, then 'Other'
+                pg = (row.get('product_group') or '').strip()
+                if not pg or pg.lower() == 'other':
+                    pg = (row.get('industry') or '').strip()
+                if not pg:
+                    pg = 'Other'
                 group_totals[pg] = group_totals.get(pg, 0) + float(row.get('total') or 0)
 
             categories = [
                 {'category': k, 'revenue': round(v, 2)}
                 for k, v in sorted(group_totals.items(), key=lambda x: -x[1])
             ]
+
+            # If categories are just "Other", use capability tags as categories instead
+            if len(categories) <= 1 and categories and categories[0]['category'] == 'Other':
+                # Will be populated from operations below — defer to capability_breakdown
+                categories = []
 
             # Operation names + QB tags from qb_operations
             ops_result = (

@@ -87,12 +87,31 @@ class CustomerAnalyticsService:
             if cached:
                 return cached
 
-        # Fetch all quotes for this company
-        quotes = self._fetch_all_paginated(
-            'qb_quotes',
-            'quote_no, has_job, contact_email, contact_name, date_created',
-            {'matched_company_id': company_id},
-        )
+        # Resolve QB customer key ID (quotes link via qb_customer_id, not matched_company_id)
+        try:
+            cust_result = self._sb.table('qb_customers').select(
+                'customer_key_id'
+            ).eq('matched_company_id', company_id).eq(
+                'client_id', self._client_id
+            ).limit(1).execute()
+            qb_key_id = cust_result.data[0].get('customer_key_id') if cust_result.data else None
+        except Exception:
+            qb_key_id = None
+
+        # Fetch all quotes for this company via QB customer key
+        if qb_key_id:
+            quotes = self._fetch_all_paginated(
+                'qb_quotes',
+                'quote_no, has_job, contact_email, contact_name, date_created',
+                {'qb_customer_id': qb_key_id},
+            )
+        else:
+            # Fallback: try matched_company_id (if propagated)
+            quotes = self._fetch_all_paginated(
+                'qb_quotes',
+                'quote_no, has_job, contact_email, contact_name, date_created',
+                {'matched_company_id': company_id},
+            )
 
         if not quotes:
             result = {

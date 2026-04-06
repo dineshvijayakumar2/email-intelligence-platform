@@ -2016,11 +2016,11 @@ async def get_company_threads(
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0)
 ):
-    """Get all threads for a specific company."""
+    """Get all threads for a specific company, deduplicated by canonical_thread_id."""
     try:
         result = _supabase.table('thread_status').select(
             '''
-            thread_id, subject, customer_contact_id, customer_company_id,
+            thread_id, canonical_thread_id, subject, customer_contact_id, customer_company_id,
             status, message_count, last_message_at, last_sender_is_outbound, days_since_last_email,
             created_at
             '''
@@ -2028,14 +2028,35 @@ async def get_company_threads(
             'last_message_at', desc=True
         ).range(offset, offset + limit - 1).execute()
 
+        # Dedup by canonical_thread_id — keep the most recent entry per thread
+        seen_threads: dict = {}
+        for t in (result.data or []):
+            key = t.get('canonical_thread_id') or t.get('thread_id')
+            if key not in seen_threads:
+                seen_threads[key] = t
+            else:
+                # Merge: keep higher message_count, most recent date, aggregate contacts
+                existing = seen_threads[key]
+                existing['message_count'] = max(
+                    existing.get('message_count') or 0,
+                    t.get('message_count') or 0
+                )
+                if (t.get('last_message_at') or '') > (existing.get('last_message_at') or ''):
+                    existing['last_message_at'] = t['last_message_at']
+                    existing['last_sender_is_outbound'] = t.get('last_sender_is_outbound')
+                    existing['days_since_last_email'] = t.get('days_since_last_email')
+                    existing['status'] = t.get('status')
+
+        deduped = list(seen_threads.values())
+
         # Fetch company name once
         company_name = None
         company_result = _supabase.table('customer_companies').select('company_name').eq('id', company_id).execute()
         if company_result.data:
             company_name = company_result.data[0].get('company_name')
 
-        # Batch-fetch contacts (avoid N+1 queries)
-        contact_ids = list(set(t['customer_contact_id'] for t in result.data if t.get('customer_contact_id')))
+        # Batch-fetch contacts
+        contact_ids = list(set(t['customer_contact_id'] for t in deduped if t.get('customer_contact_id')))
         contact_map = {}
         if contact_ids:
             try:
@@ -2048,7 +2069,7 @@ async def get_company_threads(
                 pass
 
         threads = []
-        for t in result.data:
+        for t in deduped:
             contact = contact_map.get(t.get('customer_contact_id'), {})
             thread_data = {
                 'thread_id': t.get('canonical_thread_id') or t.get('thread_id'),
@@ -2067,9 +2088,7 @@ async def get_company_threads(
             }
             threads.append(ThreadStatusSummary(**thread_data))
 
-        total = len(result.data)  # Use actual count from query
-
-        return ThreadStatusListResponse(threads=threads, total=total)
+        return ThreadStatusListResponse(threads=threads, total=len(threads))
 
     except Exception as e:
         logger.error(f"Failed to get company threads: {e}")
