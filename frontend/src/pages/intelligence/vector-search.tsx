@@ -26,7 +26,7 @@ import { DataTable } from '../../components/DataTable';
 import * as vectorApi from '../../services/vectorService';
 import type { HybridResult } from '../../services/vectorService';
 import { ClientSelector } from '../../components/analytics/ClientSelector';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 const { Title, Text, Paragraph } = Typography;
 const { Search } = Input;
@@ -72,14 +72,16 @@ const SOURCE_COLORS: Record<string, string> = {
 
 const VectorSearchPage: React.FC = () => {
   const navigate = useNavigate();
-  const [query, setQuery] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [query, setQuery] = useState(() => searchParams.get('q') || '');
   const [searching, setSearching] = useState(false);
   const [response, setResponse] = useState<vectorApi.HybridSearchResponse | null>(null);
-  const [sourceFilter, setSourceFilter] = useState('');
+  const [sourceFilter, setSourceFilter] = useState(() => searchParams.get('source') || '');
   const [sorting, setSorting] = useState<SortingState>([{ id: 'score', desc: true }]);
   const [clientId, setClientId] = useState<string | undefined>(
     localStorage.getItem('analytics_client_id') || undefined
   );
+  const initialSearchDone = useRef(false);
 
   // Embedding stats
   const [stats, setStats] = useState<vectorApi.VectorStats | null>(null);
@@ -137,6 +139,11 @@ const VectorSearchPage: React.FC = () => {
     }
     setSearching(true);
     setQuery(q);
+    // Persist to URL so results survive navigation
+    const next = new URLSearchParams(searchParams);
+    next.set('q', q);
+    if (sourceFilter) next.set('source', sourceFilter); else next.delete('source');
+    setSearchParams(next, { replace: true });
     try {
       const r = await vectorApi.hybridSearch(q, clientId, undefined, 50, 0.5);
       setResponse(r);
@@ -149,6 +156,16 @@ const VectorSearchPage: React.FC = () => {
       setSearching(false);
     }
   };
+
+  // Auto-search on mount if URL has a query
+  useEffect(() => {
+    if (initialSearchDone.current) return;
+    const urlQuery = searchParams.get('q');
+    if (urlQuery && urlQuery.trim().length >= 3) {
+      initialSearchDone.current = true;
+      handleSearch(urlQuery);
+    }
+  }, []);
 
   const handleReembed = async (tables?: string[]) => {
     try {
