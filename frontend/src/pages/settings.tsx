@@ -1,292 +1,188 @@
 import { useEffect, useState } from 'react';
-import {
-  Card,
-  Form,
-  Select,
-  TimePicker,
-  Checkbox,
-  Button,
-  message,
-  Spin,
-  Typography,
-  Space,
-  Divider,
-} from 'antd';
-import { ClockCircleOutlined, GlobalOutlined, DollarOutlined } from '@ant-design/icons';
-import dayjs from 'dayjs';
 import api from '../services/apiClient';
-import { ClientSelector } from '../components/analytics/ClientSelector';
+import { useClient } from '../contexts/ClientContext';
 import { CURRENCY_OPTIONS } from '../utils/numberFormat';
-
-const { Title, Text } = Typography;
+import { PageShell, PageHeader } from '@/components/ui/page-shell';
+import { ContentSkeleton } from '@/components/ui/empty-state';
+import { toast } from '@/lib/toast';
+import { Clock, Globe, DollarSign } from 'lucide-react';
+import { Spinner } from '@/lib/icons';
 
 interface BusinessHoursSettings {
-  timezone: string;
-  business_hours_start: number;
-  business_hours_end: number;
-  business_days: number[];
+  timezone: string; business_hours_start: number; business_hours_end: number; business_days: number[];
 }
 
 const WEEKDAYS = [
-  { label: 'Monday', value: 1 },
-  { label: 'Tuesday', value: 2 },
-  { label: 'Wednesday', value: 3 },
-  { label: 'Thursday', value: 4 },
-  { label: 'Friday', value: 5 },
-  { label: 'Saturday', value: 6 },
-  { label: 'Sunday', value: 7 },
+  { label: 'Mon', value: 1 }, { label: 'Tue', value: 2 }, { label: 'Wed', value: 3 },
+  { label: 'Thu', value: 4 }, { label: 'Fri', value: 5 }, { label: 'Sat', value: 6 }, { label: 'Sun', value: 7 },
 ];
 
-// Common timezones grouped by region
 const TIMEZONE_OPTIONS = [
-  { label: 'UTC', value: 'UTC' },
-  { label: 'Asia/Kolkata (IST, UTC+5:30)', value: 'Asia/Kolkata' },
-  { label: 'Asia/Dubai (GST, UTC+4)', value: 'Asia/Dubai' },
-  { label: 'Asia/Singapore (SGT, UTC+8)', value: 'Asia/Singapore' },
-  { label: 'Asia/Tokyo (JST, UTC+9)', value: 'Asia/Tokyo' },
-  { label: 'Asia/Shanghai (CST, UTC+8)', value: 'Asia/Shanghai' },
-  { label: 'Europe/London (GMT/BST)', value: 'Europe/London' },
-  { label: 'Europe/Paris (CET/CEST)', value: 'Europe/Paris' },
-  { label: 'Europe/Berlin (CET/CEST)', value: 'Europe/Berlin' },
-  { label: 'America/New_York (EST/EDT)', value: 'America/New_York' },
-  { label: 'America/Chicago (CST/CDT)', value: 'America/Chicago' },
-  { label: 'America/Denver (MST/MDT)', value: 'America/Denver' },
-  { label: 'America/Los_Angeles (PST/PDT)', value: 'America/Los_Angeles' },
-  { label: 'Australia/Sydney (AEST/AEDT)', value: 'Australia/Sydney' },
-  { label: 'Pacific/Auckland (NZST/NZDT)', value: 'Pacific/Auckland' },
+  'UTC', 'Asia/Kolkata', 'Asia/Dubai', 'Asia/Singapore', 'Asia/Tokyo', 'Asia/Shanghai',
+  'Europe/London', 'Europe/Paris', 'Europe/Berlin',
+  'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
+  'Australia/Sydney', 'Pacific/Auckland',
 ];
 
 export default function SettingsPage() {
-  const [form] = Form.useForm();
-  const [clientForm] = Form.useForm();
+  const { clientId } = useClient();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [clientId, setClientId] = useState('');
   const [clientSaving, setClientSaving] = useState(false);
 
-  useEffect(() => {
-    loadSettings();
-  }, []);
+  // Business hours state
+  const [timezone, setTimezone] = useState('UTC');
+  const [startHour, setStartHour] = useState(9);
+  const [endHour, setEndHour] = useState(18);
+  const [businessDays, setBusinessDays] = useState<number[]>([1, 2, 3, 4, 5]);
 
-  // Load client locale settings when clientId changes
-  useEffect(() => {
-    if (!clientId) return;
-    loadClientLocale(clientId);
-  }, [clientId]);
+  // Client locale state
+  const [clientTz, setClientTz] = useState('Australia/Sydney');
+  const [currency, setCurrency] = useState('AUD');
 
-  const loadSettings = async () => {
-    try {
-      setLoading(true);
-      const data = await api.get<BusinessHoursSettings>('/auth/me/settings');
-      form.setFieldsValue({
-        timezone: data.timezone,
-        business_hours_start: dayjs().hour(data.business_hours_start).minute(0),
-        business_hours_end: dayjs().hour(data.business_hours_end).minute(0),
-        business_days: data.business_days,
-      });
-    } catch (err) {
-      message.error('Failed to load settings');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadClientLocale = async (cid: string) => {
-    try {
-      const data = await api.get<any>(`/v1/clients/${cid}`);
-      clientForm.setFieldsValue({
-        client_timezone: data.timezone || 'Australia/Sydney',
-        currency_code: data.currency_code || 'AUD',
-      });
-    } catch (err) {
-      // silently fail — defaults remain
-    }
-  };
-
-  const handleSave = async (values: any) => {
-    try {
-      setSaving(true);
-      const payload: Partial<BusinessHoursSettings> = {
-        timezone: values.timezone,
-        business_hours_start: values.business_hours_start?.hour() ?? 9,
-        business_hours_end: values.business_hours_end?.hour() ?? 18,
-        business_days: values.business_days,
-      };
-      await api.patch<BusinessHoursSettings>('/auth/me/settings', payload);
-      message.success('Business hours settings saved');
-    } catch (err) {
-      message.error('Failed to save settings');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleClientLocaleSave = async (values: any) => {
-    if (!clientId) {
-      message.warning('Select a client first');
-      return;
-    }
-    try {
-      setClientSaving(true);
-      await api.patch(`/v1/clients/${clientId}`, {
-        timezone: values.client_timezone,
-        currency_code: values.currency_code,
-      });
-      message.success('Client locale settings saved');
-    } catch (err) {
-      message.error('Failed to save client settings');
-    } finally {
-      setClientSaving(false);
-    }
-  };
-
-  // Detect browser timezone for suggestion
   const detectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}>
-        <Spin size="large" />
-      </div>
-    );
-  }
+  useEffect(() => {
+    (async () => {
+      try {
+        setLoading(true);
+        const data = await api.get<BusinessHoursSettings>('/auth/me/settings');
+        setTimezone(data.timezone || 'UTC');
+        setStartHour(data.business_hours_start ?? 9);
+        setEndHour(data.business_hours_end ?? 18);
+        setBusinessDays(data.business_days || [1, 2, 3, 4, 5]);
+      } catch { toast.error('Failed to load settings'); }
+      finally { setLoading(false); }
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (!clientId) return;
+    api.get<any>(`/v1/clients/${clientId}`).then(data => {
+      setClientTz(data.timezone || 'Australia/Sydney');
+      setCurrency(data.currency_code || 'AUD');
+    }).catch(() => {});
+  }, [clientId]);
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await api.patch('/auth/me/settings', { timezone, business_hours_start: startHour, business_hours_end: endHour, business_days: businessDays });
+      toast.success('Business hours saved');
+    } catch { toast.error('Failed to save'); }
+    finally { setSaving(false); }
+  };
+
+  const handleClientSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!clientId) { toast.warning('Select a client first'); return; }
+    setClientSaving(true);
+    try {
+      await api.patch(`/v1/clients/${clientId}`, { timezone: clientTz, currency_code: currency });
+      toast.success('Client locale saved');
+    } catch { toast.error('Failed to save'); }
+    finally { setClientSaving(false); }
+  };
+
+  const toggleDay = (day: number) => {
+    setBusinessDays(prev => prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day].sort());
+  };
+
+  if (loading) return <PageShell><ContentSkeleton rows={6} /></PageShell>;
 
   return (
-    <div style={{ maxWidth: 640, margin: '0 auto' }}>
-      <Title level={3}>Settings</Title>
+    <PageShell maxWidth="640px">
+      <PageHeader title="Settings" />
 
-      {/* ── Business Hours ─────────────────────────────────────────── */}
-      <Card style={{ marginBottom: 24 }}>
-        <Space direction="vertical" size="small" style={{ width: '100%', marginBottom: 16 }}>
-          <Title level={5} style={{ margin: 0 }}>
-            <GlobalOutlined style={{ marginRight: 8 }} />
-            Timezone & Business Hours
-          </Title>
-          <Text type="secondary">
-            Response time metrics will be calculated using only the hours that fall within your
-            configured business hours. Wall-clock times are always stored alongside.
-          </Text>
-        </Space>
-
-        <Divider style={{ margin: '12px 0 24px' }} />
-
-        <Form
-          form={form}
-          layout="vertical"
-          onFinish={handleSave}
-          initialValues={{
-            timezone: 'UTC',
-            business_hours_start: dayjs().hour(9).minute(0),
-            business_hours_end: dayjs().hour(18).minute(0),
-            business_days: [1, 2, 3, 4, 5],
-          }}
-        >
-          <Form.Item
-            label="Timezone"
-            name="timezone"
-            extra={`Detected: ${detectedTz}`}
-          >
-            <Select
-              showSearch
-              options={TIMEZONE_OPTIONS}
-              filterOption={(input, option) =>
-                (option?.label as string)?.toLowerCase().includes(input.toLowerCase()) ||
-                (option?.value as string)?.toLowerCase().includes(input.toLowerCase())
-              }
-              placeholder="Select timezone"
-            />
-          </Form.Item>
-
-          <Space size="large">
-            <Form.Item label="Start" name="business_hours_start">
-              <TimePicker format="HH:mm" minuteStep={30} allowClear={false} />
-            </Form.Item>
-            <Form.Item label="End" name="business_hours_end">
-              <TimePicker format="HH:mm" minuteStep={30} allowClear={false} />
-            </Form.Item>
-          </Space>
-
-          <Form.Item label="Business Days" name="business_days">
-            <Checkbox.Group options={WEEKDAYS} />
-          </Form.Item>
-
-          <Form.Item style={{ marginBottom: 0 }}>
-            <Button type="primary" htmlType="submit" loading={saving} icon={<ClockCircleOutlined />}>
-              Save Business Hours
-            </Button>
-          </Form.Item>
-        </Form>
-      </Card>
-
-      {/* ── Client Locale Settings ─────────────────────────────────── */}
-      <Card>
-        <Space direction="vertical" size="small" style={{ width: '100%', marginBottom: 16 }}>
-          <Title level={5} style={{ margin: 0 }}>
-            <DollarOutlined style={{ marginRight: 8 }} />
-            Client Locale (Admin)
-          </Title>
-          <Text type="secondary">
-            Set the timezone and currency used for AI analysis, digests, and financial figures
-            for each client. These affect how the AI interprets and formats numbers in all prompts.
-          </Text>
-        </Space>
-
-        <Divider style={{ margin: '12px 0 24px' }} />
-
-        <div style={{ marginBottom: 16 }}>
-          <Text strong style={{ display: 'block', marginBottom: 8 }}>Client</Text>
-          <ClientSelector value={clientId} onChange={setClientId} style={{ width: '100%' }} />
+      {/* Business Hours */}
+      <div className="rounded-lg border bg-white shadow-sm p-5 mb-5">
+        <div className="flex items-center gap-2 mb-1">
+          <Globe className="h-4 w-4 text-primary" />
+          <h2 className="text-sm font-bold text-slate-900">Timezone & Business Hours</h2>
         </div>
+        <p className="text-xs text-slate-500 mb-4">Response time metrics calculated within configured business hours.</p>
 
-        <Form
-          form={clientForm}
-          layout="vertical"
-          onFinish={handleClientLocaleSave}
-          initialValues={{ client_timezone: 'Australia/Sydney', currency_code: 'AUD' }}
-        >
-          <Form.Item label="Client Timezone" name="client_timezone">
-            <Select
-              showSearch
-              options={TIMEZONE_OPTIONS}
-              filterOption={(input, option) =>
-                (option?.label as string)?.toLowerCase().includes(input.toLowerCase()) ||
-                (option?.value as string)?.toLowerCase().includes(input.toLowerCase())
-              }
-              placeholder="Select client timezone"
-              disabled={!clientId}
-            />
-          </Form.Item>
+        <form onSubmit={handleSave} className="space-y-4">
+          <div>
+            <label className="text-xs font-medium text-slate-600 block mb-1">Timezone</label>
+            <select value={timezone} onChange={e => setTimezone(e.target.value)}
+              className="w-full h-9 px-3 text-sm rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20">
+              {TIMEZONE_OPTIONS.map(tz => <option key={tz} value={tz}>{tz}</option>)}
+            </select>
+            <p className="text-[11px] text-slate-400 mt-1">Detected: {detectedTz}</p>
+          </div>
 
-          <Form.Item
-            label="Currency"
-            name="currency_code"
-            extra="Used for all financial figures in AI prompts, digests, and insights."
-          >
-            <Select
-              showSearch
-              options={CURRENCY_OPTIONS}
-              filterOption={(input, option) =>
-                (option?.label as string)?.toLowerCase().includes(input.toLowerCase()) ||
-                (option?.value as string)?.toLowerCase().includes(input.toLowerCase())
-              }
-              placeholder="Select currency"
-              disabled={!clientId}
-            />
-          </Form.Item>
+          <div className="flex gap-4">
+            <div>
+              <label className="text-xs font-medium text-slate-600 block mb-1">Start</label>
+              <select value={startHour} onChange={e => setStartHour(Number(e.target.value))}
+                className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20">
+                {Array.from({ length: 24 }, (_, i) => <option key={i} value={i}>{String(i).padStart(2, '0')}:00</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600 block mb-1">End</label>
+              <select value={endHour} onChange={e => setEndHour(Number(e.target.value))}
+                className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20">
+                {Array.from({ length: 24 }, (_, i) => <option key={i} value={i}>{String(i).padStart(2, '0')}:00</option>)}
+              </select>
+            </div>
+          </div>
 
-          <Form.Item style={{ marginBottom: 0 }}>
-            <Button
-              type="primary"
-              htmlType="submit"
-              loading={clientSaving}
-              icon={<DollarOutlined />}
-              disabled={!clientId}
-            >
-              Save Client Locale
-            </Button>
-          </Form.Item>
-        </Form>
-      </Card>
-    </div>
+          <div>
+            <label className="text-xs font-medium text-slate-600 block mb-2">Business Days</label>
+            <div className="flex gap-2">
+              {WEEKDAYS.map(d => (
+                <button key={d.value} type="button" onClick={() => toggleDay(d.value)}
+                  className={`px-3 py-1.5 text-xs rounded-md border transition-colors ${businessDays.includes(d.value) ? 'bg-primary text-white border-primary' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>
+                  {d.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <button type="submit" disabled={saving}
+            className="h-9 px-4 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary-dark disabled:opacity-50 inline-flex items-center gap-2">
+            {saving && <Spinner className="h-3.5 w-3.5 animate-spin" />}
+            <Clock className="h-3.5 w-3.5" />Save Business Hours
+          </button>
+        </form>
+      </div>
+
+      {/* Client Locale */}
+      <div className="rounded-lg border bg-white shadow-sm p-5">
+        <div className="flex items-center gap-2 mb-1">
+          <DollarSign className="h-4 w-4 text-primary" />
+          <h2 className="text-sm font-bold text-slate-900">Client Locale (Admin)</h2>
+        </div>
+        <p className="text-xs text-slate-500 mb-4">Timezone and currency for AI analysis, digests, and financial figures.</p>
+
+        <form onSubmit={handleClientSave} className="space-y-4">
+          <div>
+            <label className="text-xs font-medium text-slate-600 block mb-1">Client Timezone</label>
+            <select value={clientTz} onChange={e => setClientTz(e.target.value)} disabled={!clientId}
+              className="w-full h-9 px-3 text-sm rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50">
+              {TIMEZONE_OPTIONS.map(tz => <option key={tz} value={tz}>{tz}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-slate-600 block mb-1">Currency</label>
+            <select value={currency} onChange={e => setCurrency(e.target.value)} disabled={!clientId}
+              className="w-full h-9 px-3 text-sm rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50">
+              {CURRENCY_OPTIONS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+            </select>
+            <p className="text-[11px] text-slate-400 mt-1">Used for all financial figures in AI prompts and insights.</p>
+          </div>
+
+          <button type="submit" disabled={clientSaving || !clientId}
+            className="h-9 px-4 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary-dark disabled:opacity-50 inline-flex items-center gap-2">
+            {clientSaving && <Spinner className="h-3.5 w-3.5 animate-spin" />}
+            <DollarSign className="h-3.5 w-3.5" />Save Client Locale
+          </button>
+        </form>
+      </div>
+    </PageShell>
   );
 }

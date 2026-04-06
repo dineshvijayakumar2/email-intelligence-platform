@@ -1,220 +1,126 @@
 /**
- * Reset Password Page
- *
- * Page where users can set a new password after clicking the reset link from their email.
- * Uses Supabase Auth's password update functionality.
+ * Reset Password Page — set new password after clicking reset link.
  */
-
 import React, { useState, useEffect } from 'react';
-import { Form, Input, Button, Typography, Alert, Card, Space, message } from 'antd';
-import { LockOutlined, CheckCircleOutlined, MailOutlined } from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import '../styles/login.css';
-
-const { Title, Text, Paragraph } = Typography;
+import { toast } from '@/lib/toast';
+import { Lock, CheckCircle2, Mail } from 'lucide-react';
+import { Spinner } from '@/lib/icons';
 
 export const ResetPasswordPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [isValidSession, setIsValidSession] = useState<boolean | null>(null);
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const { resetPassword, signOut } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Check if user has a valid recovery session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        setIsValidSession(true);
-      } else {
-        setIsValidSession(false);
-      }
+      setIsValidSession(!!session);
     });
   }, []);
 
-  const handleResetPassword = async (values: { password: string }) => {
-    setLoading(true);
-    setError(null);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!password || password.length < 6) { setError('Password must be at least 6 characters'); return; }
+    if (password !== confirmPassword) { setError('Passwords do not match'); return; }
+    setLoading(true); setError(null);
     try {
-      await resetPassword(values.password);
+      await resetPassword(password);
       setSuccess(true);
-
-      // Redirect to dashboard after 3 seconds
-      setTimeout(() => {
-        navigate('/', { replace: true });
-      }, 3000);
+      setTimeout(() => navigate('/', { replace: true }), 3000);
     } catch (err: any) {
-      setError(err.message || 'Failed to reset password. Please try again.');
-    } finally {
-      setLoading(false);
-    }
+      setError(err.message || 'Failed to reset password');
+    } finally { setLoading(false); }
   };
 
-  const handleCancelAndSignOut = async () => {
-    try {
-      await signOut();
-      message.success('Signed out successfully');
-      navigate('/login', { replace: true });
-    } catch (err: any) {
-      message.error('Failed to sign out');
-    }
+  const handleCancel = async () => {
+    try { await signOut(); toast.success('Signed out'); navigate('/login', { replace: true }); }
+    catch { toast.error('Failed to sign out'); }
   };
 
-  // Show loading while checking session
-  if (isValidSession === null) {
-    return (
-      <div className="login-page">
-        <div className="login-container">
-          <Card className="login-card glass-card-static">
-            <div style={{ textAlign: 'center', padding: '40px 0' }}>
-              <Text type="secondary">Loading...</Text>
-            </div>
-          </Card>
-        </div>
-      </div>
-    );
-  }
-
-  // Show error if no valid session
-  if (!isValidSession) {
-    return (
-      <div className="login-page">
-        <div className="login-container">
-          <Card className="login-card glass-card-static">
-            <div className="login-header">
-              <div className="login-logo">
-                <MailOutlined />
-              </div>
-              <Title level={3}>Invalid or Expired Link</Title>
-            </div>
-            <Alert
-              type="error"
-              message="This password reset link is invalid or has expired."
-              description="Please request a new password reset link from the login page."
-              showIcon
-              style={{ marginBottom: 20 }}
-            />
-            <Button type="primary" block onClick={() => navigate('/login')} size="large">
-              Back to Login
-            </Button>
-          </Card>
-        </div>
-      </div>
-    );
-  }
-
-  // Show success message
-  if (success) {
-    return (
-      <div className="login-page">
-        <div className="login-container">
-          <Card className="login-card glass-card-static">
-            <div style={{ textAlign: 'center', padding: '20px 0' }}>
-              <CheckCircleOutlined style={{ fontSize: 64, color: '#52c41a', marginBottom: 16 }} />
-              <Title level={3}>Password Reset Successful!</Title>
-              <Paragraph type="secondary">
-                Your password has been updated successfully. You're already logged in and will be redirected to the dashboard.
-              </Paragraph>
-              <Paragraph type="secondary" style={{ fontSize: 12, marginTop: 16 }}>
-                Redirecting to dashboard...
-              </Paragraph>
-            </div>
-          </Card>
-        </div>
-      </div>
-    );
-  }
-
-  // Show reset password form
-  return (
-    <div className="login-page">
-      <div className="login-container">
-        <Card className="login-card glass-card-static">
-          <div className="login-header">
-            <div className="login-logo">
-              <MailOutlined />
-            </div>
-            <Title level={3} className="gradient-text">
-              Set New Password
-            </Title>
-            <Text type="secondary">Please set a new password for your account</Text>
-          </div>
-
-          {error && (
-            <Alert
-              type="error"
-              message={error}
-              showIcon
-              closable
-              onClose={() => setError(null)}
-              style={{ marginBottom: 20 }}
-            />
-          )}
-
-          <Form onFinish={handleResetPassword} layout="vertical" size="large">
-            <Form.Item
-              name="password"
-              label="New Password"
-              rules={[
-                { required: true, message: 'Please enter your new password' },
-                { min: 6, message: 'Password must be at least 6 characters' },
-              ]}
-              hasFeedback
-            >
-              <Input.Password
-                prefix={<LockOutlined />}
-                placeholder="Enter new password"
-                autoFocus
-              />
-            </Form.Item>
-
-            <Form.Item
-              name="confirmPassword"
-              label="Confirm New Password"
-              dependencies={['password']}
-              hasFeedback
-              rules={[
-                { required: true, message: 'Please confirm your new password' },
-                ({ getFieldValue }) => ({
-                  validator(_, value) {
-                    if (!value || getFieldValue('password') === value) {
-                      return Promise.resolve();
-                    }
-                    return Promise.reject(new Error('Passwords do not match'));
-                  },
-                }),
-              ]}
-            >
-              <Input.Password prefix={<LockOutlined />} placeholder="Confirm new password" />
-            </Form.Item>
-
-            <Form.Item style={{ marginBottom: 0 }}>
-              <Space style={{ width: '100%' }} direction="vertical">
-                <Button
-                  type="primary"
-                  htmlType="submit"
-                  loading={loading}
-                  block
-                  className="glass-button-primary"
-                >
-                  Reset Password
-                </Button>
-                <Button block onClick={handleCancelAndSignOut}>
-                  Cancel & Sign Out
-                </Button>
-              </Space>
-            </Form.Item>
-          </Form>
-        </Card>
-
-        <div className="login-footer">
-          <Text type="secondary">Powered by Newbound Intelligence</Text>
-        </div>
+  // Shared card wrapper
+  const Card = ({ children }: { children: React.ReactNode }) => (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4">
+      <div className="w-full max-w-md">
+        <div className="rounded-xl border bg-white shadow-lg p-8">{children}</div>
+        <p className="text-center text-xs text-slate-400 mt-4">Powered by Newbound Intelligence</p>
       </div>
     </div>
   );
-};
 
-export default ResetPasswordPage;
+  if (isValidSession === null) return <Card><div className="text-center py-8"><Spinner className="h-6 w-6 animate-spin text-primary mx-auto" /><p className="text-sm text-slate-500 mt-3">Loading...</p></div></Card>;
+
+  if (!isValidSession) return (
+    <Card>
+      <div className="text-center mb-6"><Mail className="h-10 w-10 text-primary mx-auto mb-3" /><h1 className="text-xl font-semibold text-slate-900">Invalid or Expired Link</h1></div>
+      <div className="rounded-lg bg-destructive-subtle p-3 mb-6"><p className="text-sm text-destructive">This link is invalid or has expired. Please request a new one from the login page.</p></div>
+      <button onClick={() => navigate('/login')} className="w-full h-10 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary-dark transition-colors">Back to Login</button>
+    </Card>
+  );
+
+  if (success) return (
+    <Card>
+      <div className="text-center py-4">
+        <CheckCircle2 className="h-16 w-16 text-success mx-auto mb-4" />
+        <h1 className="text-xl font-semibold text-slate-900 mb-2">Password Reset Successful!</h1>
+        <p className="text-sm text-slate-500">Your password has been updated. Redirecting to dashboard...</p>
+      </div>
+    </Card>
+  );
+
+  return (
+    <Card>
+      <div className="text-center mb-6">
+        <Mail className="h-10 w-10 text-primary mx-auto mb-3" />
+        <h1 className="text-xl font-semibold text-slate-900">Set New Password</h1>
+        <p className="text-sm text-slate-500 mt-1">Enter a new password for your account</p>
+      </div>
+
+      {error && (
+        <div className="rounded-lg bg-destructive-subtle p-3 mb-4">
+          <p className="text-sm text-destructive">{error}</p>
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="text-sm font-medium text-slate-700 block mb-1">New Password</label>
+          <div className="relative">
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+              placeholder="Enter new password" autoFocus
+              className="w-full h-10 pl-10 pr-4 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" />
+          </div>
+        </div>
+
+        <div>
+          <label className="text-sm font-medium text-slate-700 block mb-1">Confirm Password</label>
+          <div className="relative">
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
+              placeholder="Confirm new password"
+              className="w-full h-10 pl-10 pr-4 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" />
+          </div>
+        </div>
+
+        <div className="space-y-2 pt-2">
+          <button type="submit" disabled={loading}
+            className="w-full h-10 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary-dark disabled:opacity-50 transition-colors inline-flex items-center justify-center gap-2">
+            {loading && <Spinner className="h-4 w-4 animate-spin" />}
+            Reset Password
+          </button>
+          <button type="button" onClick={handleCancel}
+            className="w-full h-10 text-sm font-medium text-slate-600 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors">
+            Cancel & Sign Out
+          </button>
+        </div>
+      </form>
+    </Card>
+  );
+};
