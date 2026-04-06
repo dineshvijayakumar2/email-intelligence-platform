@@ -16,21 +16,14 @@ import {
   CheckCircleOutlined, SyncOutlined, ClockCircleOutlined,
   FilterOutlined,
 } from '@ant-design/icons';
-import {
-  useReactTable,
-  getCoreRowModel,
-  createColumnHelper,
-  type SortingState,
-} from '@tanstack/react-table';
-import { DataTable } from '../../components/DataTable';
 import * as vectorApi from '../../services/vectorService';
 import type { HybridResult } from '../../services/vectorService';
 import { ClientSelector } from '../../components/analytics/ClientSelector';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { formatRelativeDate } from '../../utils/dateUtils';
 
 const { Title, Text, Paragraph } = Typography;
 const { Search } = Input;
-const col = createColumnHelper<HybridResult>();
 
 // ---------------------------------------------------------------------------
 // Suggested prompts
@@ -77,7 +70,6 @@ const VectorSearchPage: React.FC = () => {
   const [searching, setSearching] = useState(false);
   const [response, setResponse] = useState<vectorApi.HybridSearchResponse | null>(null);
   const [sourceFilter, setSourceFilter] = useState(() => searchParams.get('source') || '');
-  const [sorting, setSorting] = useState<SortingState>([{ id: 'score', desc: true }]);
   const [clientId, setClientId] = useState<string | undefined>(
     localStorage.getItem('analytics_client_id') || undefined
   );
@@ -216,127 +208,29 @@ const VectorSearchPage: React.FC = () => {
     }
   };
 
-  // Filtered results
-  const filteredResults = useMemo(() => {
-    if (!response) return [];
-    if (!sourceFilter) return response.results;
-    return response.results.filter(r => r.source_type === sourceFilter);
-  }, [response, sourceFilter]);
+  // Expanded thread state
+  const [expandedThreads, setExpandedThreads] = useState<Set<string>>(new Set());
 
-  // Row click handler
-  const handleRowClick = (result: HybridResult) => {
-    if (result.source_type === 'company') {
-      navigate(`/customers/${result.id}`);
-    } else if (result.source_type === 'email') {
-      navigate(`/emails?email_id=${result.id}`);
-    }
+  const toggleThread = (threadId: string) => {
+    setExpandedThreads(prev => {
+      const next = new Set(prev);
+      if (next.has(threadId)) next.delete(threadId); else next.add(threadId);
+      return next;
+    });
   };
 
-  // TanStack Table columns
-  const columns = useMemo(() => [
-    col.accessor('source_type', {
-      header: 'Source',
-      size: 90,
-      cell: info => {
-        const t = info.getValue();
-        return (
-          <Tag color={SOURCE_COLORS[t] || 'default'} style={{ margin: 0 }}>
-            {SOURCE_ICONS[t]} {t === 'email' ? 'Email' : t === 'company' ? 'Company' : 'Operation'}
-          </Tag>
-        );
-      },
-    }),
-    col.accessor('title', {
-      header: 'Title',
-      size: 320,
-      cell: info => {
-        const r = info.row.original;
-        const clickable = r.source_type === 'company' || r.source_type === 'email';
-        return (
-          <div>
-            <Text
-              strong
-              ellipsis={{ tooltip: info.getValue() }}
-              style={clickable ? { color: '#667eea', cursor: 'pointer' } : undefined}
-              onClick={clickable ? (e) => { e.stopPropagation(); handleRowClick(r); } : undefined}
-            >
-              {info.getValue()}
-            </Text>
-            <div><Text type="secondary" style={{ fontSize: 11 }}>{r.snippet}</Text></div>
-          </div>
-        );
-      },
-    }),
-    col.accessor('score', {
-      header: 'Score',
-      size: 80,
-      cell: info => {
-        const v = info.getValue();
-        const pct = Math.min(v * 10000, 100);  // RRF scores are small — normalize for display
-        return (
-          <Tooltip title={`Vector: ${info.row.original.vector_score} | Keyword: ${info.row.original.keyword_score} | Recency: ${info.row.original.recency_score}`}>
-            <Progress
-              percent={Math.round(pct)}
-              size="small"
-              strokeColor={pct > 70 ? '#52c41a' : pct > 40 ? '#faad14' : '#667eea'}
-              format={p => `${p}`}
-              style={{ width: 60 }}
-            />
-          </Tooltip>
-        );
-      },
-    }),
-    col.accessor(r => r.metadata?.sent_date || r.metadata?.last_contact_date, {
-      id: 'date',
-      header: 'Date',
-      size: 100,
-      cell: info => {
-        const v = info.getValue();
-        return v ? new Date(v).toLocaleDateString() : '-';
-      },
-    }),
-    col.accessor('vector_score', {
-      header: 'Vector',
-      size: 70,
-      cell: info => {
-        const v = info.getValue();
-        return v > 0 ? (
-          <Text style={{ color: v > 0.8 ? '#52c41a' : v > 0.7 ? '#faad14' : undefined, fontSize: 12 }}>
-            {(v * 100).toFixed(0)}%
-          </Text>
-        ) : <Text type="secondary" style={{ fontSize: 12 }}>-</Text>;
-      },
-    }),
-    col.accessor('keyword_score', {
-      header: 'Keyword',
-      size: 70,
-      cell: info => {
-        const v = info.getValue();
-        return v > 0 ? (
-          <Text style={{ color: '#667eea', fontSize: 12 }}>{v.toFixed(2)}</Text>
-        ) : <Text type="secondary" style={{ fontSize: 12 }}>-</Text>;
-      },
-    }),
-    col.accessor('recency_score', {
-      header: 'Recency',
-      size: 70,
-      cell: info => {
-        const v = info.getValue();
-        return v < 1 ? (
-          <Text style={{ fontSize: 12 }}>{(v * 100).toFixed(0)}%</Text>
-        ) : <Text type="secondary" style={{ fontSize: 12 }}>-</Text>;
-      },
-    }),
-  ], [navigate]);
+  // Filtered threads and other results
+  const filteredThreads = useMemo(() => {
+    if (!response) return [];
+    if (sourceFilter && sourceFilter !== 'email') return [];
+    return response.threads || [];
+  }, [response, sourceFilter]);
 
-  const table = useReactTable({
-    data: filteredResults,
-    columns,
-    state: { sorting },
-    onSortingChange: setSorting,
-    getCoreRowModel: getCoreRowModel(),
-    manualSorting: false, // client-side sort on already-fetched results
-  });
+  const filteredOther = useMemo(() => {
+    if (!response) return [];
+    if (!sourceFilter) return response.other_results || [];
+    return (response.other_results || []).filter(r => r.source_type === sourceFilter);
+  }, [response, sourceFilter]);
 
   const hasEmbeddings = stats && (
     stats.emails.embedded > 0 || stats.companies.embedded > 0 || stats.operations.embedded > 0
@@ -345,9 +239,11 @@ const VectorSearchPage: React.FC = () => {
   // Source counts
   const sourceCounts = useMemo(() => {
     if (!response) return { email: 0, company: 0, operation: 0 };
-    const c = { email: 0, company: 0, operation: 0 };
-    for (const r of response.results) c[r.source_type]++;
-    return c;
+    return {
+      email: (response.threads || []).length,
+      company: (response.other_results || []).filter(r => r.source_type === 'company').length,
+      operation: (response.other_results || []).filter(r => r.source_type === 'operation').length,
+    };
   }, [response]);
 
   return (
@@ -430,18 +326,142 @@ const VectorSearchPage: React.FC = () => {
         </Card>
       )}
 
-      {/* Results table */}
-      {response && filteredResults.length > 0 && (
-        <div className="glass-table-container" style={{ marginBottom: 16 }}>
-          <DataTable
-            table={table}
-            loading={searching}
-            total={filteredResults.length}
-            currentPage={1}
-            pageSize={50}
-            onPageChange={() => {}}
-            onRowClick={handleRowClick}
-          />
+      {/* Thread-grouped email results */}
+      {filteredThreads.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          {(!sourceFilter || sourceFilter === 'email') && (
+            <Text strong style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>
+              <MailOutlined style={{ color: '#667eea', marginRight: 6 }} />
+              Email Threads ({filteredThreads.length})
+            </Text>
+          )}
+          {filteredThreads.map(thread => (
+            <Card
+              key={thread.thread_id}
+              className="glass-card"
+              size="small"
+              style={{ marginBottom: 8, borderLeft: '3px solid #667eea' }}
+            >
+              {/* Thread header */}
+              <div
+                style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}
+                onClick={() => toggleThread(thread.thread_id)}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <Text strong ellipsis={{ tooltip: thread.subject }} style={{ fontSize: 14 }}>
+                    {thread.subject || '(No subject)'}
+                  </Text>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 2 }}>
+                    <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>
+                      {thread.total_emails} email{thread.total_emails !== 1 ? 's' : ''}
+                    </Tag>
+                    {thread.matched_count > 1 && (
+                      <Tag color="purple" style={{ margin: 0, fontSize: 11 }}>
+                        {thread.matched_count} matched
+                      </Tag>
+                    )}
+                    <Tooltip title={`Vector: ${thread.vector_score} | Keyword: ${thread.keyword_score} | Recency: ${thread.recency_score}`}>
+                      <Text type="secondary" style={{ fontSize: 11 }}>
+                        Score: {(thread.score * 10000).toFixed(0)}
+                      </Text>
+                    </Tooltip>
+                  </div>
+                </div>
+                <Button
+                  type="text"
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/emails?thread_id=${encodeURIComponent(thread.thread_id)}&name=${encodeURIComponent(thread.subject || 'Thread')}`);
+                  }}
+                  style={{ color: '#667eea', fontSize: 12 }}
+                >
+                  Open Thread
+                </Button>
+                <Text type="secondary" style={{ fontSize: 18 }}>
+                  {expandedThreads.has(thread.thread_id) ? '▾' : '▸'}
+                </Text>
+              </div>
+
+              {/* Expanded: show all emails in the thread */}
+              {expandedThreads.has(thread.thread_id) && (
+                <div style={{ marginTop: 10, borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 8 }}>
+                  {thread.emails.map((email, idx) => (
+                    <div
+                      key={email.id}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        padding: '6px 8px', borderRadius: 4, marginBottom: 2,
+                        background: email.is_match ? 'rgba(102,126,234,0.08)' : 'transparent',
+                        cursor: 'pointer',
+                      }}
+                      onClick={() => navigate(`/emails?email_id=${email.id}&name=${encodeURIComponent(email.subject || 'Email')}`)}
+                    >
+                      <Text type="secondary" style={{ fontSize: 11, width: 20, textAlign: 'center', flexShrink: 0 }}>
+                        {idx + 1}
+                      </Text>
+                      <Tag
+                        color={email.is_outbound ? 'green' : 'default'}
+                        style={{ margin: 0, fontSize: 10, padding: '0 4px', width: 32, textAlign: 'center' }}
+                      >
+                        {email.is_outbound ? 'OUT' : 'IN'}
+                      </Tag>
+                      <Text style={{ fontSize: 12, width: 140, flexShrink: 0 }} ellipsis>
+                        {email.sender_name || email.sender_email || '?'}
+                      </Text>
+                      <Text
+                        style={{ fontSize: 12, flex: 1, color: email.is_match ? '#667eea' : undefined }}
+                        ellipsis
+                      >
+                        {email.is_match && '● '}{email.subject || '(No subject)'}
+                      </Text>
+                      <Text type="secondary" style={{ fontSize: 11, flexShrink: 0 }}>
+                        {email.sent_date ? formatRelativeDate(email.sent_date) : '-'}
+                      </Text>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Non-email results (companies, operations) */}
+      {filteredOther.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <Text strong style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>
+            <BankOutlined style={{ color: '#52c41a', marginRight: 6 }} />
+            Companies & Operations ({filteredOther.length})
+          </Text>
+          {filteredOther.map(r => (
+            <Card
+              key={r.id}
+              className="glass-card"
+              size="small"
+              style={{
+                marginBottom: 6,
+                cursor: r.source_type === 'company' ? 'pointer' : 'default',
+                borderLeft: `3px solid ${r.source_type === 'company' ? '#52c41a' : '#faad14'}`,
+              }}
+              onClick={r.source_type === 'company' ? () => navigate(`/customers/${r.id}`) : undefined}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <Tag color={SOURCE_COLORS[r.source_type] || 'default'} style={{ margin: 0 }}>
+                  {SOURCE_ICONS[r.source_type]} {r.source_type === 'company' ? 'Company' : 'Operation'}
+                </Tag>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <Text strong ellipsis={{ tooltip: r.title }}>{r.title}</Text>
+                  <div><Text type="secondary" style={{ fontSize: 11 }}>{r.snippet}</Text></div>
+                </div>
+                <Tooltip title={`Vector: ${r.vector_score} | Keyword: ${r.keyword_score} | Recency: ${r.recency_score}`}>
+                  <Text type="secondary" style={{ fontSize: 11 }}>
+                    Score: {(r.score * 10000).toFixed(0)}
+                  </Text>
+                </Tooltip>
+              </div>
+            </Card>
+          ))}
         </div>
       )}
 

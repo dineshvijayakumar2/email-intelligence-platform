@@ -2021,12 +2021,90 @@ async def hybrid_search(
             limit=limit,
             vector_threshold=threshold,
         )
+        # Group email results by canonical thread
+        email_results = [r for r in response.results if r.source_type == "email"]
+        non_email_results = [r for r in response.results if r.source_type != "email"]
+
+        threads: list[dict] = []
+        if email_results:
+            email_ids = [r.id for r in email_results]
+            # Look up canonical_thread_id for matched emails
+            try:
+                thread_lookup = _supabase.table("emails").select(
+                    "id, canonical_thread_id"
+                ).in_("id", email_ids[:200]).execute()
+                email_thread_map = {
+                    r["id"]: r.get("canonical_thread_id")
+                    for r in (thread_lookup.data or [])
+                }
+            except Exception:
+                email_thread_map = {}
+
+            # Group by thread — emails without a thread become their own group
+            from collections import OrderedDict
+            thread_groups: OrderedDict[str, list] = OrderedDict()
+            for r in email_results:
+                tid = email_thread_map.get(r.id) or r.id  # fallback: email as its own thread
+                if tid not in thread_groups:
+                    thread_groups[tid] = []
+                thread_groups[tid].append(r)
+
+            # For each thread, fetch full thread emails for context
+            for thread_id, matched_emails in thread_groups.items():
+                best_score = max(r.score for r in matched_emails)
+                best_result = max(matched_emails, key=lambda r: r.score)
+
+                # Fetch all emails in this thread (up to 20)
+                thread_emails = []
+                try:
+                    te_result = _supabase.table("emails").select(
+                        "id, subject, sender_email, sender_name, sent_date, is_outbound"
+                    ).eq("canonical_thread_id", thread_id).order(
+                        "sent_date", desc=False
+                    ).limit(20).execute()
+                    thread_emails = te_result.data or []
+                except Exception:
+                    # Fallback: just use the matched email
+                    thread_emails = [{
+                        "id": best_result.id,
+                        "subject": best_result.title,
+                        "sender_name": best_result.metadata.get("sender_name"),
+                        "sender_email": best_result.metadata.get("sender_email"),
+                        "sent_date": best_result.metadata.get("sent_date"),
+                        "is_outbound": best_result.metadata.get("is_outbound"),
+                    }]
+
+                threads.append({
+                    "thread_id": thread_id,
+                    "subject": best_result.title,
+                    "score": round(best_score, 4),
+                    "matched_count": len(matched_emails),
+                    "total_emails": len(thread_emails),
+                    "matched_email_ids": [r.id for r in matched_emails],
+                    "emails": [
+                        {
+                            "id": e.get("id"),
+                            "subject": e.get("subject"),
+                            "sender_name": e.get("sender_name"),
+                            "sender_email": e.get("sender_email"),
+                            "sent_date": e.get("sent_date"),
+                            "is_outbound": e.get("is_outbound", False),
+                            "is_match": e.get("id") in {r.id for r in matched_emails},
+                        }
+                        for e in thread_emails
+                    ],
+                    "vector_score": round(best_result.vector_score, 3),
+                    "keyword_score": round(best_result.keyword_score, 3),
+                    "recency_score": round(best_result.recency_score, 3),
+                })
+
         return {
             "query": response.query,
             "cleaned_query": response.cleaned_query,
             "date_from": response.date_from,
             "date_to": response.date_to,
-            "results": [
+            "threads": threads,
+            "other_results": [
                 {
                     "id": r.id,
                     "source_type": r.source_type,
@@ -2038,9 +2116,9 @@ async def hybrid_search(
                     "keyword_score": round(r.keyword_score, 3),
                     "recency_score": round(r.recency_score, 3),
                 }
-                for r in response.results
+                for r in non_email_results
             ],
-            "total": len(response.results),
+            "total": len(threads) + len(non_email_results),
             "total_vector_hits": response.total_vector_hits,
             "total_keyword_hits": response.total_keyword_hits,
         }

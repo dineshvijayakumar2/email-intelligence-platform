@@ -93,12 +93,36 @@ export interface HybridResult {
   recency_score: number;
 }
 
+export interface ThreadEmail {
+  id: string;
+  subject: string;
+  sender_name: string | null;
+  sender_email: string | null;
+  sent_date: string | null;
+  is_outbound: boolean;
+  is_match: boolean;
+}
+
+export interface ThreadGroup {
+  thread_id: string;
+  subject: string;
+  score: number;
+  matched_count: number;
+  total_emails: number;
+  matched_email_ids: string[];
+  emails: ThreadEmail[];
+  vector_score: number;
+  keyword_score: number;
+  recency_score: number;
+}
+
 export interface HybridSearchResponse {
   query: string;
   cleaned_query: string;
   date_from: string | null;
   date_to: string | null;
-  results: HybridResult[];
+  threads: ThreadGroup[];
+  other_results: HybridResult[];
   total: number;
   total_vector_hits: number;
   total_keyword_hits: number;
