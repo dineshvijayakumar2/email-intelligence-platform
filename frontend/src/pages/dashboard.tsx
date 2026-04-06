@@ -1,19 +1,4 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Row, Col, Statistic, Typography, Tag, Button, Empty, Space, Skeleton, List } from "antd";
-import {
-  MailOutlined,
-  InboxOutlined,
-  CheckCircleOutlined,
-  ExclamationCircleOutlined,
-  ArrowRightOutlined,
-  SyncOutlined,
-  BulbOutlined,
-  WarningOutlined,
-  AlertOutlined,
-  RightOutlined,
-  FireOutlined,
-  TeamOutlined,
-} from "@ant-design/icons";
 import { Link, useNavigate } from "react-router-dom";
 import {
   dashboardService,
@@ -25,17 +10,26 @@ import {
 import { bucketApi } from '../services/aiService';
 import type { BucketSummary, ActionItem } from '../types/ai';
 import { useAuth } from '../contexts/AuthContext';
+import { cn } from '@/lib/utils';
+import { PageShell } from '@/components/ui/page-shell';
+import { KPICard, KPIStrip } from '@/components/ui/kpi-card';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { EmptyState, ContentSkeleton } from '@/components/ui/empty-state';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Mail, Inbox, AlertTriangle, CheckCircle2, Zap, ChevronRight,
+  Lightbulb, Users, Flame, Clock, ArrowRight, Plus, Activity,
+  RefreshCw, XCircle,
+} from 'lucide-react';
 
-const { Text } = Typography;
-
-// Signal display config (AM-centric v3)
-const BUCKET_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
-  response_urgency:   { label: 'Response Urgency',  color: '#f5222d', icon: <AlertOutlined /> },
-  deal_at_risk:       { label: 'Deal at Risk',      color: '#fa8c16', icon: <WarningOutlined /> },
-  retention_risk:     { label: 'Retention Risk',     color: '#f5222d', icon: <ExclamationCircleOutlined /> },
-  revenue_opportunity:{ label: 'Revenue Opp.',       color: '#52c41a', icon: <FireOutlined /> },
-  new_relationship:   { label: 'New Relationship',   color: '#1890ff', icon: <TeamOutlined /> },
-  account_neglect:    { label: 'Account Neglect',    color: '#fa8c16', icon: <BulbOutlined /> },
+// Signal config
+const SIGNALS: Record<string, { label: string; variant: 'danger' | 'warning' | 'success' | 'info'; icon: React.ReactNode }> = {
+  response_urgency:    { label: 'Response Urgency',  variant: 'danger',  icon: <AlertTriangle className="h-4 w-4" /> },
+  deal_at_risk:        { label: 'Deal at Risk',      variant: 'warning', icon: <AlertTriangle className="h-4 w-4" /> },
+  retention_risk:      { label: 'Retention Risk',     variant: 'danger',  icon: <XCircle className="h-4 w-4" /> },
+  revenue_opportunity: { label: 'Revenue Opp.',       variant: 'success', icon: <Flame className="h-4 w-4" /> },
+  new_relationship:    { label: 'New Relationship',   variant: 'info',    icon: <Users className="h-4 w-4" /> },
+  account_neglect:     { label: 'Account Neglect',    variant: 'warning', icon: <Clock className="h-4 w-4" /> },
 };
 
 export const Dashboard: React.FC = () => {
@@ -52,10 +46,8 @@ export const Dashboard: React.FC = () => {
   const [statsLoading, setStatsLoading] = useState(true);
   const [processingLoading, setProcessingLoading] = useState(true);
   const [aiLoading, setAiLoading] = useState(true);
-
   const isMountedRef = useRef(true);
 
-  // Get first accessible mailbox for AI data
   const firstMailboxId = profile?.accessibleMailboxIds?.[0];
 
   const loadFastData = async () => {
@@ -112,288 +104,272 @@ export const Dashboard: React.FC = () => {
     return () => { isMountedRef.current = false; clearInterval(interval); };
   }, [firstMailboxId]);
 
-  // Count urgent action items (urgency + retention + deal risk + neglect)
   const urgentCount = (bucketSummary?.response_urgency || 0) + (bucketSummary?.retention_risk || 0) + (bucketSummary?.deal_at_risk || 0) + (bucketSummary?.account_neglect || 0);
   const opportunityCount = (bucketSummary?.revenue_opportunity || 0) + (bucketSummary?.new_relationship || 0);
 
-  const getTypeTag = (type: string, hasLive: boolean) => {
-    const color = type === 'gmail' ? 'red' : type === 'outlook_live' ? 'blue' : type === 'mbox' ? 'green' : type === 'pst' ? 'geekblue' : 'purple';
-    return (
-      <Tag color={color} style={{ fontSize: 11 }}>
-        {type === 'outlook_live' ? 'OUTLOOK' : type.toUpperCase()}{hasLive && ' LIVE'}
-      </Tag>
-    );
-  };
-
   return (
-    <div className="glass-page-bg" style={{ padding: 24 }}>
+    <PageShell>
       {/* Greeting */}
-      <div className="fade-in-up" style={{ marginBottom: 24 }}>
-        <Text type="secondary">
-          {profile?.name ? `Welcome back, ${profile.name.split(' ')[0]}` : 'Email intelligence overview'}
-        </Text>
-      </div>
+      <p className="text-sm text-slate-500 mb-5">
+        {profile?.name ? `Welcome back, ${profile.name.split(' ')[0]}` : 'Email intelligence overview'}
+      </p>
 
-      {/* Row 1: Key metrics */}
-      <Row gutter={[16, 16]} className="fade-in-up stagger-1">
-        <Col xs={12} sm={6}>
-          <div className="glass-card" style={{ padding: 20, cursor: 'pointer' }} onClick={() => navigate('/emails')}>
-            {statsLoading ? <Skeleton.Input active style={{ width: 80, height: 28 }} /> : (
-              <Statistic title="Total Emails" value={stats.totalEmails} prefix={<MailOutlined />} valueStyle={{ color: "#667eea" }} />
-            )}
-          </div>
-        </Col>
-        <Col xs={12} sm={6}>
-          <div className="glass-card" style={{ padding: 20, cursor: 'pointer' }} onClick={() => navigate('/mailboxes')}>
-            {statsLoading ? <Skeleton.Input active style={{ width: 60, height: 28 }} /> : (
-              <Statistic title="Mailboxes" value={stats.totalMailboxes} prefix={<InboxOutlined />} valueStyle={{ color: "#52c41a" }} />
-            )}
-          </div>
-        </Col>
-        <Col xs={12} sm={6}>
-          <div className="glass-card" style={{ padding: 20, cursor: urgentCount > 0 ? 'pointer' : 'default' }} onClick={() => urgentCount > 0 && navigate('/insights/inbox')}>
-            {aiLoading ? <Skeleton.Input active style={{ width: 60, height: 28 }} /> : (
-              <Statistic
-                title="Needs Attention"
-                value={urgentCount}
-                prefix={urgentCount > 0 ? <WarningOutlined /> : <CheckCircleOutlined />}
-                valueStyle={{ color: urgentCount > 0 ? '#f5222d' : '#52c41a' }}
-              />
-            )}
-          </div>
-        </Col>
-        <Col xs={12} sm={6}>
-          <div className="glass-card" style={{ padding: 20, cursor: opportunityCount > 0 ? 'pointer' : 'default' }} onClick={() => opportunityCount > 0 && navigate('/insights/opportunities')}>
-            {aiLoading ? <Skeleton.Input active style={{ width: 60, height: 28 }} /> : (
-              <Statistic
-                title="Opportunities"
-                value={opportunityCount}
-                prefix={<FireOutlined />}
-                valueStyle={{ color: opportunityCount > 0 ? '#52c41a' : '#999' }}
-              />
-            )}
-          </div>
-        </Col>
-      </Row>
+      {/* KPI Strip */}
+      <KPIStrip className="mb-6">
+        <KPICard
+          title="Total Emails"
+          value={stats.totalEmails}
+          loading={statsLoading}
+          onClick={() => navigate('/emails')}
+          subtitle={stats.todayEmails > 0 ? `+${stats.todayEmails} today` : undefined}
+          trend={stats.todayEmails > 0 ? 'up' : undefined}
+          delta={stats.todayEmails > 0 ? `${stats.todayEmails}` : undefined}
+        />
+        <KPICard
+          title="Mailboxes"
+          value={stats.totalMailboxes}
+          loading={statsLoading}
+          onClick={() => navigate('/mailboxes')}
+          subtitle={`${processingOverview.activeJobs} active jobs`}
+        />
+        <KPICard
+          title="Needs Attention"
+          value={urgentCount}
+          loading={aiLoading}
+          danger={urgentCount > 0}
+          onClick={() => urgentCount > 0 ? navigate('/insights/inbox') : undefined}
+          subtitle={urgentCount === 0 ? 'All clear' : undefined}
+        />
+        <KPICard
+          title="Opportunities"
+          value={opportunityCount}
+          loading={aiLoading}
+          onClick={() => opportunityCount > 0 ? navigate('/insights/opportunities') : undefined}
+          trend={opportunityCount > 0 ? 'up' : undefined}
+          delta={opportunityCount > 0 ? `${opportunityCount}` : undefined}
+        />
+      </KPIStrip>
 
-      {/* Row 2: Mailboxes + AI Signals */}
-      <Row gutter={[16, 16]} style={{ marginTop: 24 }} className="fade-in-up stagger-2">
-        {/* Mailboxes — click to open emails */}
-        <Col xs={24} lg={14}>
-          <div className="glass-table-container" style={{ height: '100%' }}>
-            <div style={{ padding: '16px 24px', borderBottom: '1px solid rgba(102, 126, 234, 0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text strong style={{ fontSize: 16 }}>Your Mailboxes</Text>
-              <Link to="/mailboxes" style={{ color: '#667eea', fontSize: 13 }}>Manage <ArrowRightOutlined /></Link>
+      {/* Two-column layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
+        {/* Mailboxes — 3/5 width */}
+        <div className="lg:col-span-3">
+          <div className="rounded-lg border bg-white shadow-sm">
+            <div className="flex items-center justify-between px-5 py-3 border-b">
+              <h2 className="text-sm font-semibold text-slate-900">Your Mailboxes</h2>
+              <Link to="/mailboxes" className="text-xs font-medium text-primary hover:underline inline-flex items-center gap-1">
+                Manage <ArrowRight className="h-3 w-3" />
+              </Link>
             </div>
             {statsLoading ? (
-              <div style={{ padding: 16 }}>
-                {[1, 2, 3].map(i => (
-                  <div key={i} style={{ display: 'flex', gap: 16, marginBottom: 16, alignItems: 'center' }}>
-                    <Skeleton.Avatar active size="small" />
-                    <Skeleton.Input active size="small" style={{ width: 140 }} />
-                    <Skeleton.Input active size="small" style={{ width: 60 }} />
-                  </div>
-                ))}
-              </div>
+              <ContentSkeleton rows={3} />
             ) : mailboxes.length > 0 ? (
-              <List
-                dataSource={mailboxes}
-                size="small"
-                renderItem={(mb) => {
+              <div className="divide-y">
+                {mailboxes.map(mb => {
                   const isLive = mb.hasLiveSync || ['gmail', 'outlook_live'].includes(mb.type);
+                  const typeLabel = mb.type === 'outlook_live' ? 'OUTLOOK' : mb.type.toUpperCase();
                   return (
-                    <List.Item
-                      style={{ padding: '12px 24px', cursor: 'pointer', transition: 'background 0.2s' }}
-                      className="hover-highlight"
+                    <div
+                      key={mb.id}
+                      className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50 cursor-pointer transition-colors"
                       onClick={() => navigate(`/emails/${mb.id}`)}
-                      actions={[
-                        <RightOutlined key="go" style={{ color: '#667eea', fontSize: 12 }} />,
-                      ]}
                     >
-                      <List.Item.Meta
-                        avatar={<InboxOutlined style={{ fontSize: 20, color: mb.isActive ? '#667eea' : '#999', marginTop: 4 }} />}
-                        title={
-                          <Space>
-                            <Text strong>{mb.name}</Text>
-                            {getTypeTag(mb.type, isLive)}
-                          </Space>
-                        }
-                        description={
-                          <Space size={16}>
-                            <Text type="secondary" style={{ fontSize: 12 }}>{mb.emailCount.toLocaleString()} emails</Text>
-                            <Text type="secondary" style={{ fontSize: 12 }}>
-                              {mb.lastSync ? `Synced ${dashboardService.formatRelativeTime(mb.lastSync)}` : 'Never synced'}
-                            </Text>
-                          </Space>
-                        }
-                      />
-                    </List.Item>
+                      <Inbox className={cn('h-5 w-5 shrink-0', mb.isActive ? 'text-primary' : 'text-slate-300')} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-slate-900 truncate">{mb.name}</span>
+                          <StatusBadge variant={mb.type === 'gmail' ? 'danger' : 'info'} size="sm">
+                            {typeLabel}{isLive ? ' LIVE' : ''}
+                          </StatusBadge>
+                        </div>
+                        <div className="flex items-center gap-3 mt-0.5">
+                          <span className="text-xs text-slate-500">{mb.emailCount.toLocaleString()} emails</span>
+                          <span className="text-xs text-slate-400">
+                            {mb.lastSync ? `Synced ${dashboardService.formatRelativeTime(mb.lastSync)}` : 'Never synced'}
+                          </span>
+                        </div>
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-slate-300 shrink-0" />
+                    </div>
                   );
-                }}
-              />
-            ) : (
-              <div style={{ padding: 48, textAlign: 'center' }}>
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<Text type="secondary">No mailboxes connected</Text>}>
-                  <Button type="primary" onClick={() => navigate('/mailboxes/create')}>Add Your First Mailbox</Button>
-                </Empty>
+                })}
               </div>
+            ) : (
+              <EmptyState
+                icon={<Mail className="h-10 w-10" />}
+                title="No mailboxes connected"
+                description="Connect your first mailbox to start analyzing emails"
+                action={
+                  <button onClick={() => navigate('/mailboxes/create')}
+                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary-dark transition-colors">
+                    <Plus className="h-4 w-4" /> Add Mailbox
+                  </button>
+                }
+              />
             )}
           </div>
-        </Col>
+        </div>
 
-        {/* AI Signal Summary */}
-        <Col xs={24} lg={10}>
-          <div className="glass-card-static" style={{ padding: 24, height: '100%' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <Space>
-                <BulbOutlined style={{ color: '#667eea', fontSize: 18 }} />
-                <Text strong style={{ fontSize: 16 }}>AI Signals</Text>
-              </Space>
-              <Link to="/insights/inbox" style={{ color: '#667eea', fontSize: 13 }}>View All <ArrowRightOutlined /></Link>
-            </div>
-
-            {aiLoading ? (
-              <div>
-                {[1, 2, 3, 4].map(i => <Skeleton.Input key={i} active size="small" style={{ width: '100%', marginBottom: 8 }} />)}
+        {/* AI Signals — 2/5 width */}
+        <div className="lg:col-span-2">
+          <div className="rounded-lg border bg-white shadow-sm h-full">
+            <div className="flex items-center justify-between px-5 py-3 border-b">
+              <div className="flex items-center gap-2">
+                <Lightbulb className="h-4 w-4 text-primary" />
+                <h2 className="text-sm font-semibold text-slate-900">AI Signals</h2>
               </div>
+              <Link to="/insights/inbox" className="text-xs font-medium text-primary hover:underline inline-flex items-center gap-1">
+                View All <ArrowRight className="h-3 w-3" />
+              </Link>
+            </div>
+            {aiLoading ? (
+              <ContentSkeleton rows={4} />
             ) : bucketSummary && bucketSummary.total > 0 ? (
-              <Space direction="vertical" size={8} style={{ width: '100%' }}>
-                {Object.entries(BUCKET_CONFIG).map(([key, cfg]) => {
+              <div className="p-3 space-y-1.5">
+                {Object.entries(SIGNALS).map(([key, cfg]) => {
                   const count = (bucketSummary as any)[key] || 0;
                   if (count === 0) return null;
                   return (
                     <div
                       key={key}
-                      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', borderRadius: 8, background: 'rgba(0,0,0,0.02)', cursor: 'pointer' }}
+                      className="flex items-center justify-between px-3 py-2 rounded-md hover:bg-slate-50 cursor-pointer transition-colors"
                       onClick={() => navigate('/insights/inbox')}
                     >
-                      <Space size={8}>
-                        <span style={{ color: cfg.color }}>{cfg.icon}</span>
-                        <Text style={{ fontSize: 13 }}>{cfg.label}</Text>
-                      </Space>
-                      <Tag color={cfg.color} style={{ margin: 0, minWidth: 28, textAlign: 'center' }}>{count}</Tag>
+                      <div className="flex items-center gap-2">
+                        <span className={cn(
+                          cfg.variant === 'danger' ? 'text-destructive' :
+                          cfg.variant === 'warning' ? 'text-warning' :
+                          cfg.variant === 'success' ? 'text-success' : 'text-primary'
+                        )}>{cfg.icon}</span>
+                        <span className="text-sm text-slate-700">{cfg.label}</span>
+                      </div>
+                      <StatusBadge variant={cfg.variant}>{count}</StatusBadge>
                     </div>
                   );
                 })}
-                <div style={{ marginTop: 8 }}>
-                  <Link to="/insights/digest" style={{ fontSize: 13, color: '#667eea' }}>
-                    <BulbOutlined /> View today's digest <ArrowRightOutlined />
+                <div className="pt-2 px-3">
+                  <Link to="/insights/digest" className="text-xs font-medium text-primary hover:underline inline-flex items-center gap-1">
+                    <Lightbulb className="h-3 w-3" /> View today's digest <ArrowRight className="h-3 w-3" />
                   </Link>
                 </div>
-              </Space>
+              </div>
             ) : (
-              <div style={{ textAlign: 'center', padding: '24px 0' }}>
-                <CheckCircleOutlined style={{ fontSize: 32, color: '#52c41a', marginBottom: 12 }} />
-                <Text type="secondary" style={{ display: 'block' }}>No action items detected</Text>
-                <Link to="/insights/digest" style={{ fontSize: 13, color: '#667eea', marginTop: 8, display: 'inline-block' }}>
-                  View digest <ArrowRightOutlined />
+              <div className="flex flex-col items-center justify-center py-10">
+                <CheckCircle2 className="h-8 w-8 text-success mb-2" />
+                <p className="text-sm text-slate-500">No action items detected</p>
+                <Link to="/insights/digest" className="text-xs text-primary hover:underline mt-2 inline-flex items-center gap-1">
+                  View digest <ArrowRight className="h-3 w-3" />
                 </Link>
               </div>
             )}
           </div>
-        </Col>
-      </Row>
+        </div>
+      </div>
 
-      {/* Row 3: Priority Action Items + Recent Activity */}
-      <Row gutter={[16, 16]} style={{ marginTop: 24 }} className="fade-in-up stagger-3">
-        {/* Priority Action Items */}
-        <Col xs={24} lg={14}>
-          <div className="glass-table-container" style={{ height: '100%' }}>
-            <div style={{ padding: '16px 24px', borderBottom: '1px solid rgba(102, 126, 234, 0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text strong style={{ fontSize: 16 }}>Priority Actions</Text>
-              <Link to="/insights/opportunities" style={{ color: '#667eea', fontSize: 13 }}>All Opportunities <ArrowRightOutlined /></Link>
+      {/* Row 2: Priority Actions + Recent Activity */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-5 mt-5">
+        {/* Priority Actions */}
+        <div className="lg:col-span-3">
+          <div className="rounded-lg border bg-white shadow-sm">
+            <div className="flex items-center justify-between px-5 py-3 border-b">
+              <h2 className="text-sm font-semibold text-slate-900">Priority Actions</h2>
+              <Link to="/insights/opportunities" className="text-xs font-medium text-primary hover:underline inline-flex items-center gap-1">
+                All Opportunities <ArrowRight className="h-3 w-3" />
+              </Link>
             </div>
             {aiLoading ? (
-              <div style={{ padding: 16 }}>
-                {[1, 2, 3].map(i => <Skeleton.Input key={i} active style={{ width: '100%', marginBottom: 12 }} />)}
-              </div>
+              <ContentSkeleton rows={3} />
             ) : actionItems.length > 0 ? (
-              <List
-                dataSource={actionItems.slice(0, 5)}
-                size="small"
-                renderItem={(item) => {
-                  const cfg = BUCKET_CONFIG[item.bucket] || { label: item.bucket, color: '#999', icon: <BulbOutlined /> };
+              <div className="divide-y">
+                {actionItems.slice(0, 5).map((item, i) => {
+                  const cfg = SIGNALS[item.bucket] || { label: item.bucket, variant: 'info' as const, icon: <Lightbulb className="h-4 w-4" /> };
                   return (
-                    <List.Item style={{ padding: '10px 24px' }}>
-                      <List.Item.Meta
-                        avatar={<span style={{ color: cfg.color, fontSize: 16 }}>{cfg.icon}</span>}
-                        title={
-                          <Space size={8}>
-                            <Text style={{ fontSize: 13 }}>{item.email_summary || item.recommended_action || 'Email action item'}</Text>
-                            <Tag color={cfg.color} style={{ fontSize: 11 }}>{cfg.label}</Tag>
-                          </Space>
-                        }
-                        description={
-                          <Text type="secondary" style={{ fontSize: 12 }}>
-                            {item.justification || ''}
-                            {item.severity && <Tag style={{ marginLeft: 8, fontSize: 10 }}>{item.severity}</Tag>}
-                          </Text>
-                        }
-                      />
-                    </List.Item>
+                    <div key={i} className="flex items-start gap-3 px-5 py-3">
+                      <span className={cn(
+                        'mt-0.5',
+                        cfg.variant === 'danger' ? 'text-destructive' :
+                        cfg.variant === 'warning' ? 'text-warning' :
+                        cfg.variant === 'success' ? 'text-success' : 'text-primary'
+                      )}>{cfg.icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-slate-800 truncate">{item.email_summary || item.recommended_action || 'Action item'}</span>
+                          <StatusBadge variant={cfg.variant} size="sm">{cfg.label}</StatusBadge>
+                        </div>
+                        {item.justification && (
+                          <p className="text-xs text-slate-500 mt-0.5 truncate">{item.justification}</p>
+                        )}
+                      </div>
+                    </div>
                   );
-                }}
-              />
+                })}
+              </div>
             ) : (
-              <div style={{ padding: 32, textAlign: 'center' }}>
-                <CheckCircleOutlined style={{ fontSize: 28, color: '#52c41a', marginBottom: 8 }} />
-                <Text type="secondary" style={{ display: 'block' }}>No priority actions right now</Text>
+              <div className="flex flex-col items-center justify-center py-10">
+                <CheckCircle2 className="h-8 w-8 text-success mb-2" />
+                <p className="text-sm text-slate-500">No priority actions right now</p>
               </div>
             )}
           </div>
-        </Col>
+        </div>
 
-        {/* Recent Activity (compact) */}
-        <Col xs={24} lg={10}>
-          <div className="glass-card-static" style={{ padding: 24, height: '100%' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <Text strong style={{ fontSize: 16 }}>Recent Activity</Text>
-              <Link to="/processing" style={{ color: '#667eea', fontSize: 13 }}>View All <ArrowRightOutlined /></Link>
+        {/* Recent Activity */}
+        <div className="lg:col-span-2">
+          <div className="rounded-lg border bg-white shadow-sm h-full">
+            <div className="flex items-center justify-between px-5 py-3 border-b">
+              <h2 className="text-sm font-semibold text-slate-900">Recent Activity</h2>
+              <Link to="/processing" className="text-xs font-medium text-primary hover:underline inline-flex items-center gap-1">
+                View All <ArrowRight className="h-3 w-3" />
+              </Link>
             </div>
             {processingLoading ? (
-              <div>{[1, 2, 3].map(i => <Skeleton.Input key={i} active style={{ width: '100%', marginBottom: 8 }} />)}</div>
+              <ContentSkeleton rows={3} />
             ) : (
-              <>
-                {/* Compact stats */}
-                <Row gutter={[8, 8]} style={{ marginBottom: 16 }}>
-                  <Col span={8}>
-                    <Statistic title="Completed" value={processingOverview.completedToday} valueStyle={{ fontSize: 20 }}
-                      prefix={<CheckCircleOutlined style={{ color: '#52c41a', fontSize: 14 }} />} />
-                  </Col>
-                  <Col span={8}>
-                    <Statistic title="Failed" value={processingOverview.failedToday} valueStyle={{ fontSize: 20, color: processingOverview.failedToday > 0 ? '#f5222d' : undefined }}
-                      prefix={<ExclamationCircleOutlined style={{ color: processingOverview.failedToday > 0 ? '#f5222d' : '#999', fontSize: 14 }} />} />
-                  </Col>
-                  <Col span={8}>
-                    <Statistic title="Active" value={processingOverview.activeJobs} valueStyle={{ fontSize: 20 }}
-                      prefix={processingOverview.activeJobs > 0 ? <SyncOutlined spin style={{ color: '#667eea', fontSize: 14 }} /> : <SyncOutlined style={{ color: '#999', fontSize: 14 }} />} />
-                  </Col>
-                </Row>
+              <div className="p-4">
+                {/* Processing stats */}
+                <div className="grid grid-cols-3 gap-3 mb-4">
+                  <div className="text-center">
+                    <p className="text-lg font-semibold tabular-nums text-slate-900">{processingOverview.completedToday}</p>
+                    <p className="text-xs text-slate-500">Completed</p>
+                  </div>
+                  <div className="text-center">
+                    <p className={cn('text-lg font-semibold tabular-nums', processingOverview.failedToday > 0 ? 'text-destructive' : 'text-slate-900')}>
+                      {processingOverview.failedToday}
+                    </p>
+                    <p className="text-xs text-slate-500">Failed</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-lg font-semibold tabular-nums text-slate-900">{processingOverview.activeJobs}</p>
+                    <p className="text-xs text-slate-500">Active</p>
+                  </div>
+                </div>
 
-                {/* Recent jobs list */}
+                {/* Recent jobs */}
                 {recentJobs.length > 0 ? (
-                  <Space direction="vertical" size={6} style={{ width: '100%' }}>
+                  <div className="space-y-2">
                     {recentJobs.map(job => {
-                      const statusColor = job.status === 'completed' ? '#52c41a' : job.status === 'failed' ? '#f5222d' : job.status === 'running' ? '#667eea' : '#fa8c16';
+                      const statusColor = job.status === 'completed' ? 'bg-success' : job.status === 'failed' ? 'bg-destructive' : job.status === 'running' ? 'bg-primary' : 'bg-warning';
                       return (
-                        <div key={job.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, padding: '4px 0' }}>
-                          <Space size={6}>
-                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: statusColor, display: 'inline-block' }} />
-                            <Text style={{ fontSize: 12 }}>{job.mailboxName}</Text>
-                          </Space>
-                          <Text type="secondary" style={{ fontSize: 11 }}>{dashboardService.formatRelativeTime(job.completedAt || job.createdAt)}</Text>
+                        <div key={job.id} className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className={cn('w-1.5 h-1.5 rounded-full', statusColor)} />
+                            <span className="text-xs text-slate-700">{job.mailboxName}</span>
+                          </div>
+                          <span className="text-xs text-slate-400">
+                            {dashboardService.formatRelativeTime(job.completedAt || job.createdAt)}
+                          </span>
                         </div>
                       );
                     })}
-                  </Space>
+                  </div>
                 ) : (
-                  <Text type="secondary" style={{ fontSize: 12 }}>No recent jobs</Text>
+                  <p className="text-xs text-slate-400 text-center">No recent jobs</p>
                 )}
-              </>
+              </div>
             )}
           </div>
-        </Col>
-      </Row>
-    </div>
+        </div>
+      </div>
+    </PageShell>
   );
 };
