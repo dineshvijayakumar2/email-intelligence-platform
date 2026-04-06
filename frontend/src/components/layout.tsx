@@ -1,383 +1,323 @@
 import React, { PropsWithChildren, useState, useEffect } from 'react';
-import {
-  Layout as AntdLayout,
-  Menu,
-  Typography,
-  Drawer,
-  Button,
-  Avatar,
-  Dropdown,
-  Space,
-  Tag,
-} from 'antd';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import {
-  DashboardOutlined,
-  SettingOutlined,
-  MenuOutlined,
-  CloseOutlined,
-  LogoutOutlined,
-  DownOutlined,
-  TeamOutlined,
-  BulbOutlined,
-  MailOutlined,
-} from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
+import { cn } from '@/lib/utils';
+import {
+  LayoutDashboard, Mail, Building2, Users, Lightbulb, Settings,
+  Menu, X, LogOut, ChevronDown, Search, Bot, Zap, BarChart3,
+  FolderOpen, AlertTriangle, Activity, Database, Brain, BookOpen,
+  Shield, FileText, Cpu, Link2, ClipboardList, Eye, ScrollText,
+} from 'lucide-react';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuLabel,
+  DropdownMenuGroup,
+} from '@/components/ui/dropdown-menu';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { StatusBadge } from '@/components/ui/status-badge';
 
-const { Header, Content } = AntdLayout;
-const { Title, Text } = Typography;
-
-// Page titles mapped to routes
-const pageTitles: Record<string, string> = {
-  '/': 'Dashboard',
-  '/mailboxes': 'Mailboxes',
-  '/emails': 'All Emails',
-  // Customers
-  '/customers': 'Companies',
-  '/customers/contacts': 'Contacts',
-  '/customers/threads': 'Threads',
-  // Insights
-  '/insights/inbox': 'Smart Inbox',
-  '/insights/digest': 'Daily Digest',
-  '/insights/opportunities': 'Opportunities',
-  '/insights/strategic': 'Strategic Digest',
-  '/insights/search': 'Semantic Search',
-  '/insights/agent': 'AI Assistant',
-  // Manage
-  '/manage/response-times': 'Response Times',
-  '/manage/patterns': 'Communication Patterns',
-  '/manage/email-rules': 'Email Rules',
-  '/manage/data-health': 'Data Health',
-  '/manage/extraction': 'Extraction Management',
-  '/manage/processing': 'Processing Jobs',
-  '/manage/errors': 'Error Logs',
-  '/manage/ai-usage': 'AI Usage',
-  '/manage/ai-playground': 'AI Playground',
-  '/manage/quickbase': 'QB Config',
-  '/manage/quickbase-data': 'QB Data',
-  '/manage/quickbase-matches': 'QB Match Review',
-  '/manage/logs': 'Log Monitor',
-  '/clients': 'Clients',
-  '/users': 'User Management',
-  '/admin/data': 'Admin Data View',
-  '/admin/audit-logs': 'Audit Logs',
-  '/settings': 'Settings',
+// Role config
+const roleConfig: Record<string, { label: string; variant: 'warning' | 'info' | 'success' }> = {
+  admin: { label: 'Admin', variant: 'warning' },
+  client_manager: { label: 'Client Manager', variant: 'info' },
+  account_manager: { label: 'Account Manager', variant: 'success' },
 };
 
-// Role labels and colors
-const roleConfig: Record<string, { label: string; color: string }> = {
-  admin: { label: 'Admin', color: 'gold' },
-  client_manager: { label: 'Client Manager', color: 'blue' },
-  account_manager: { label: 'Account Manager', color: 'green' },
-};
+// Navigation structure
+interface NavItem {
+  label: string;
+  href?: string;
+  icon: React.ReactNode;
+  children?: { label: string; href: string; icon?: React.ReactNode }[];
+  adminOnly?: boolean;
+}
+
+const navItems: NavItem[] = [
+  { label: 'Dashboard', href: '/', icon: <LayoutDashboard className="h-4 w-4" /> },
+  { label: 'Emails', href: '/emails', icon: <Mail className="h-4 w-4" /> },
+  {
+    label: 'Customers', icon: <Building2 className="h-4 w-4" />,
+    children: [
+      { label: 'Companies', href: '/customers', icon: <Building2 className="h-3.5 w-3.5" /> },
+      { label: 'Contacts', href: '/customers/contacts', icon: <Users className="h-3.5 w-3.5" /> },
+      { label: 'Threads', href: '/customers/threads', icon: <FolderOpen className="h-3.5 w-3.5" /> },
+    ],
+  },
+  {
+    label: 'Insights', icon: <Lightbulb className="h-4 w-4" />,
+    children: [
+      { label: 'Smart Inbox', href: '/insights/inbox', icon: <Mail className="h-3.5 w-3.5" /> },
+      { label: 'Daily Digest', href: '/insights/digest', icon: <BookOpen className="h-3.5 w-3.5" /> },
+      { label: 'Strategic Digest', href: '/insights/strategic', icon: <BarChart3 className="h-3.5 w-3.5" /> },
+      { label: 'Opportunities', href: '/insights/opportunities', icon: <Zap className="h-3.5 w-3.5" /> },
+      { label: 'Semantic Search', href: '/insights/search', icon: <Search className="h-3.5 w-3.5" /> },
+      { label: 'AI Assistant', href: '/insights/agent', icon: <Bot className="h-3.5 w-3.5" /> },
+    ],
+  },
+  {
+    label: 'Manage', icon: <Settings className="h-4 w-4" />,
+    children: [
+      { label: 'Mailboxes', href: '/mailboxes', icon: <Mail className="h-3.5 w-3.5" /> },
+      { label: 'Clients', href: '/clients', icon: <Building2 className="h-3.5 w-3.5" /> },
+      { label: 'Email Rules', href: '/manage/email-rules', icon: <Shield className="h-3.5 w-3.5" /> },
+      { label: 'Extraction', href: '/manage/extraction', icon: <Cpu className="h-3.5 w-3.5" /> },
+      { label: 'Processing Jobs', href: '/manage/processing', icon: <Activity className="h-3.5 w-3.5" /> },
+      { label: 'Error Logs', href: '/manage/errors', icon: <AlertTriangle className="h-3.5 w-3.5" /> },
+      { label: 'Response Times', href: '/manage/response-times', icon: <BarChart3 className="h-3.5 w-3.5" /> },
+      { label: 'Data Health', href: '/manage/data-health', icon: <Activity className="h-3.5 w-3.5" /> },
+      { label: 'Settings', href: '/settings', icon: <Settings className="h-3.5 w-3.5" /> },
+    ],
+  },
+  {
+    label: 'Admin', icon: <Shield className="h-4 w-4" />, adminOnly: true,
+    children: [
+      { label: 'AI Usage', href: '/manage/ai-usage', icon: <Zap className="h-3.5 w-3.5" /> },
+      { label: 'AI Playground', href: '/manage/ai-playground', icon: <Brain className="h-3.5 w-3.5" /> },
+      { label: 'QB Config', href: '/manage/quickbase', icon: <Database className="h-3.5 w-3.5" /> },
+      { label: 'QB Data', href: '/manage/quickbase-data', icon: <Database className="h-3.5 w-3.5" /> },
+      { label: 'QB Match Review', href: '/manage/quickbase-matches', icon: <Link2 className="h-3.5 w-3.5" /> },
+      { label: 'Intelligence Config', href: '/manage/intelligence-config', icon: <Brain className="h-3.5 w-3.5" /> },
+      { label: 'Log Monitor', href: '/manage/logs', icon: <ScrollText className="h-3.5 w-3.5" /> },
+      { label: 'Users', href: '/users', icon: <Users className="h-3.5 w-3.5" /> },
+      { label: 'Data View', href: '/admin/data', icon: <Eye className="h-3.5 w-3.5" /> },
+      { label: 'Audit Logs', href: '/admin/audit-logs', icon: <FileText className="h-3.5 w-3.5" /> },
+    ],
+  },
+];
 
 export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { profile, signOut, isAdmin } = useAuth();
   const [isMobile, setIsMobile] = useState(false);
-  const [drawerVisible, setDrawerVisible] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
-  // Check if device is mobile
   useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth <= 768);
-    };
-
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-
-    return () => window.removeEventListener('resize', checkMobile);
+    const check = () => setIsMobile(window.innerWidth <= 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
   }, []);
 
-  // Close drawer when route changes
-  useEffect(() => {
-    setDrawerVisible(false);
-  }, [location.pathname]);
+  useEffect(() => { setSheetOpen(false); }, [location.pathname]);
 
   const handleSignOut = async () => {
     await signOut();
     navigate('/login', { replace: true });
   };
 
-  const menuItems = [
-    {
-      key: '/',
-      icon: <DashboardOutlined />,
-      label: <Link to="/">Dashboard</Link>,
-    },
-    {
-      key: '/emails',
-      icon: <MailOutlined />,
-      label: <Link to="/emails">Emails</Link>,
-    },
-    {
-      key: 'customers-menu',
-      icon: <TeamOutlined />,
-      label: 'Customers',
-      children: [
-        { key: '/customers', label: <Link to="/customers">Companies</Link> },
-        { key: '/customers/contacts', label: <Link to="/customers/contacts">Contacts</Link> },
-        { key: '/customers/threads', label: <Link to="/customers/threads">Threads</Link> },
-      ],
-    },
-    {
-      key: '/insights',
-      icon: <BulbOutlined />,
-      label: 'Insights',
-      children: [
-        { key: '/insights/inbox', label: <Link to="/insights/inbox">Smart Inbox</Link> },
-        { key: '/insights/digest', label: <Link to="/insights/digest">Daily Digest</Link> },
-        { key: '/insights/opportunities', label: <Link to="/insights/opportunities">Opportunities</Link> },
-        { key: '/insights/strategic', label: <Link to="/insights/strategic">Strategic Digest</Link> },
-        { key: '/insights/search', label: <Link to="/insights/search">Semantic Search</Link> },
-        { key: '/insights/agent', label: <Link to="/insights/agent">AI Assistant</Link> },
-      ],
-    },
-    {
-      key: '/manage',
-      icon: <SettingOutlined />,
-      label: 'Manage',
-      children: [
-        { key: '/mailboxes', label: <Link to="/mailboxes">Mailboxes</Link> },
-        { key: '/clients', label: <Link to="/clients">Clients</Link> },
-        { key: '/manage/email-rules', label: <Link to="/manage/email-rules">Email Rules</Link> },
-        { key: '/manage/extraction', label: <Link to="/manage/extraction">Extraction</Link> },
-        { type: 'divider' as const },
-        { key: '/manage/processing', label: <Link to="/manage/processing">Processing Jobs</Link> },
-        { key: '/manage/errors', label: <Link to="/manage/errors">Error Logs</Link> },
-        { key: '/manage/response-times', label: <Link to="/manage/response-times">Response Times</Link> },
-        { key: '/manage/patterns', label: <Link to="/manage/patterns">Comm Patterns</Link> },
-        { key: '/manage/data-health', label: <Link to="/manage/data-health">Data Health</Link> },
-        { type: 'divider' as const },
-        { key: '/settings', label: <Link to="/settings">Settings</Link> },
-        ...(isAdmin ? [
-          { key: '/manage/ai-usage', label: <Link to="/manage/ai-usage">AI Usage</Link> },
-          { key: '/manage/ai-playground', label: <Link to="/manage/ai-playground">AI Playground</Link> },
-          { key: '/manage/quickbase', label: <Link to="/manage/quickbase">QB Config</Link> },
-          { key: '/manage/quickbase-data', label: <Link to="/manage/quickbase-data">QB Data</Link> },
-          { key: '/manage/quickbase-matches', label: <Link to="/manage/quickbase-matches">QB Match Review</Link> },
-          { key: '/manage/intelligence-config', label: <Link to="/manage/intelligence-config">Intelligence Config</Link> },
-          { key: '/manage/logs', label: <Link to="/manage/logs">Log Monitor</Link> },
-          { key: '/users', label: <Link to="/users">Users</Link> },
-          { key: '/admin/data', label: <Link to="/admin/data">Data View</Link> },
-          { key: '/admin/audit-logs', label: <Link to="/admin/audit-logs">Audit Logs</Link> },
-        ] : []),
-      ],
-    },
-  ];
-
-  // Get selected key from current path
-  const getSelectedKey = () => {
-    // Check for exact match first
-    if (pageTitles[location.pathname]) {
-      return location.pathname;
-    }
-    // Check for partial match (for nested routes) — longest match wins
-    let bestMatch = '/';
-    let bestLen = 0;
-    for (const path of Object.keys(pageTitles)) {
-      if (path !== '/' && location.pathname.startsWith(path) && path.length > bestLen) {
-        bestMatch = path;
-        bestLen = path.length;
-      }
-    }
-    return bestMatch;
-  };
-
-  // User dropdown menu items
-  const userMenuItems = [
-    {
-      key: 'profile',
-      label: (
-        <div style={{ padding: '4px 0' }}>
-          <div style={{ fontWeight: 500 }}>{profile?.name || 'User'}</div>
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            {profile?.email}
-          </Text>
-          {profile?.roles && profile.roles.length > 0 && (
-            <div style={{ marginTop: 4 }}>
-              {profile.roles.map(role => (
-                <Tag key={role} color={roleConfig[role]?.color || 'default'} style={{ marginBottom: 4 }}>
-                  {roleConfig[role]?.label || role}
-                </Tag>
-              ))}
-            </div>
-          )}
-        </div>
-      ),
-      disabled: true,
-    },
-    { type: 'divider' as const },
-    {
-      key: 'logout',
-      icon: <LogoutOutlined />,
-      label: 'Sign Out',
-      onClick: handleSignOut,
-    },
-  ];
-
-  // Get user initials for avatar
   const getUserInitials = () => {
     if (profile?.name) {
       const names = profile.name.split(' ');
-      if (names.length >= 2) {
-        return `${names[0][0]}${names[1][0]}`.toUpperCase();
-      }
-      return profile.name.substring(0, 2).toUpperCase();
+      return names.length >= 2
+        ? `${names[0][0]}${names[1][0]}`.toUpperCase()
+        : profile.name.substring(0, 2).toUpperCase();
     }
     return 'U';
   };
 
-  return (
-    <AntdLayout style={{ minHeight: '100vh' }}>
-      {/* Mobile Drawer for navigation */}
-      <Drawer
-        placement="left"
-        onClose={() => setDrawerVisible(false)}
-        open={drawerVisible}
-        closable={false}
-        width={280}
-        styles={{
-          body: { padding: 0 },
-        }}
-        className="mobile-nav-drawer"
-      >
-        <div className="mobile-nav-content">
-          <div className="mobile-nav-header">
-            <div className="mobile-nav-logo">
-              <span className="logo-icon">📧</span>
-              <div className="logo-text">
-                <Title level={5} style={{ margin: 0 }}>
-                  Email Intelligence
-                </Title>
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  Analytics Platform
-                </Text>
-              </div>
-            </div>
-            <Button type="text" icon={<CloseOutlined />} onClick={() => setDrawerVisible(false)} />
-          </div>
+  const isActive = (href?: string) => {
+    if (!href) return false;
+    if (href === '/') return location.pathname === '/';
+    return location.pathname.startsWith(href);
+  };
 
-          {/* User info in mobile drawer */}
-          {profile && (
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(102, 126, 234, 0.1)' }}>
-              <Space>
-                <Avatar
-                  size={40}
-                  src={profile.avatarUrl}
-                  style={{ backgroundColor: '#667eea' }}
-                >
-                  {!profile.avatarUrl && getUserInitials()}
-                </Avatar>
-                <div>
-                  <div style={{ fontWeight: 500 }}>{profile.name}</div>
-                  <div style={{ marginTop: 4 }}>
-                    {profile.roles?.map(role => (
-                      <Tag
-                        key={role}
-                        color={roleConfig[role]?.color || 'default'}
-                        style={{ marginRight: 4, marginBottom: 4 }}
-                      >
-                        {roleConfig[role]?.label || role}
-                      </Tag>
+  const filteredNav = navItems.filter(item => !item.adminOnly || isAdmin);
+
+  // Desktop nav item renderer
+  const NavLink = ({ item }: { item: NavItem }) => {
+    if (item.children) {
+      return (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className={cn(
+              'inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors',
+              item.children.some(c => isActive(c.href))
+                ? 'text-primary bg-primary/5'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50',
+            )}>
+              {item.icon}
+              {item.label}
+              <ChevronDown className="h-3 w-3 opacity-50" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-52">
+            {item.children.map(child => (
+              <DropdownMenuItem key={child.href} onClick={() => navigate(child.href)}
+                className={cn(isActive(child.href) && 'bg-primary/5 text-primary')}>
+                {child.icon && <span className="mr-2">{child.icon}</span>}
+                {child.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      );
+    }
+
+    return (
+      <Link to={item.href!} className={cn(
+        'inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors',
+        isActive(item.href) ? 'text-primary bg-primary/5' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50',
+      )}>
+        {item.icon}
+        {item.label}
+      </Link>
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+      {/* Top bar */}
+      <header className="sticky top-0 z-50 w-full border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
+        {/* Accent bar */}
+        <div className="h-[3px] bg-gradient-to-r from-primary to-accent" />
+
+        <div className="flex h-14 items-center px-4 gap-4">
+          {/* Mobile menu trigger */}
+          {isMobile && (
+            <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+              <SheetTrigger asChild>
+                <button className="p-2 -ml-2 text-slate-600 hover:text-slate-900">
+                  <Menu className="h-5 w-5" />
+                </button>
+              </SheetTrigger>
+              <SheetContent side="left" className="w-72 p-0">
+                <div className="flex flex-col h-full">
+                  {/* Mobile header */}
+                  <div className="flex items-center gap-3 px-4 py-3 border-b">
+                    <span className="text-lg">📧</span>
+                    <div>
+                      <p className="text-sm font-semibold">Email Intelligence</p>
+                      <p className="text-xs text-slate-500">Analytics Platform</p>
+                    </div>
+                  </div>
+
+                  {/* Mobile nav */}
+                  <div className="flex-1 overflow-y-auto py-2">
+                    {filteredNav.map(item => (
+                      <div key={item.label}>
+                        {item.href ? (
+                          <Link to={item.href} onClick={() => setSheetOpen(false)}
+                            className={cn(
+                              'flex items-center gap-3 px-4 py-2.5 text-sm',
+                              isActive(item.href) ? 'text-primary bg-primary/5 font-medium' : 'text-slate-600 hover:bg-slate-50',
+                            )}>
+                            {item.icon}
+                            {item.label}
+                          </Link>
+                        ) : (
+                          <>
+                            <p className="px-4 pt-4 pb-1 text-xs font-medium uppercase tracking-wider text-slate-400">
+                              {item.label}
+                            </p>
+                            {item.children?.map(child => (
+                              <Link key={child.href} to={child.href} onClick={() => setSheetOpen(false)}
+                                className={cn(
+                                  'flex items-center gap-3 px-6 py-2 text-sm',
+                                  isActive(child.href) ? 'text-primary bg-primary/5 font-medium' : 'text-slate-600 hover:bg-slate-50',
+                                )}>
+                                {child.icon}
+                                {child.label}
+                              </Link>
+                            ))}
+                          </>
+                        )}
+                      </div>
                     ))}
                   </div>
+
+                  {/* Mobile user + logout */}
+                  <div className="border-t p-4">
+                    {profile && (
+                      <div className="flex items-center gap-3 mb-3">
+                        <Avatar className="h-9 w-9">
+                          <AvatarImage src={profile.avatarUrl} />
+                          <AvatarFallback className="bg-primary text-white text-xs">{getUserInitials()}</AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <p className="text-sm font-medium">{profile.name}</p>
+                          <div className="flex gap-1 mt-0.5">
+                            {profile.roles?.map(role => (
+                              <StatusBadge key={role} variant={roleConfig[role]?.variant || 'neutral'} size="sm">
+                                {roleConfig[role]?.label || role}
+                              </StatusBadge>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    <button onClick={handleSignOut}
+                      className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-md">
+                      <LogOut className="h-4 w-4" />
+                      Sign Out
+                    </button>
+                  </div>
                 </div>
-              </Space>
-            </div>
+              </SheetContent>
+            </Sheet>
           )}
 
-          <Menu
-            mode="inline"
-            selectedKeys={[getSelectedKey()]}
-            items={menuItems}
-            className="mobile-nav-menu"
-          />
+          {/* Brand */}
+          <Link to="/" className="flex items-center gap-2 shrink-0">
+            <span className="text-lg">📧</span>
+            {!isMobile && <span className="text-sm font-semibold text-slate-900">Email Intelligence</span>}
+          </Link>
 
-          {/* Logout button at bottom of mobile drawer */}
-          <div style={{ padding: '16px 20px', borderTop: '1px solid rgba(102, 126, 234, 0.1)' }}>
-            <Button
-              block
-              icon={<LogoutOutlined />}
-              onClick={handleSignOut}
-              style={{ borderColor: '#ff4d4f', color: '#ff4d4f' }}
-            >
-              Sign Out
-            </Button>
-          </div>
-        </div>
-      </Drawer>
-
-      {/* Top Navigation Header */}
-      <Header className="app-header">
-        <div className="header-container">
-          {/* Left: Logo & Brand */}
-          <div className="header-left">
-            {isMobile ? (
-              <Button
-                type="text"
-                icon={<MenuOutlined />}
-                onClick={() => setDrawerVisible(true)}
-                className="mobile-menu-btn"
-              />
-            ) : (
-              <Link to="/" className="header-brand">
-                <span className="brand-icon">📧</span>
-                <span className="brand-text">Email Intelligence</span>
-              </Link>
-            )}
-          </div>
-
-          {/* Center: Navigation (Desktop only) */}
+          {/* Desktop nav */}
           {!isMobile && (
-            <nav className="header-nav">
-              <Menu
-                mode="horizontal"
-                selectedKeys={[getSelectedKey()]}
-                items={menuItems}
-                className="header-menu"
-              />
+            <nav className="flex items-center gap-1 ml-4">
+              {filteredNav.map(item => <NavLink key={item.label} item={item} />)}
             </nav>
           )}
 
-          {/* Right: User Menu */}
-          <div className="header-right">
-            {isMobile ? (
-              <Link to="/" className="mobile-brand">
-                <span className="brand-icon">📧</span>
-              </Link>
-            ) : (
-              <Dropdown menu={{ items: userMenuItems }} trigger={['click']} placement="bottomRight">
-                <Button type="text" style={{ height: 'auto', padding: '4px 8px' }}>
-                  <Space size={8}>
-                    <Avatar
-                      size={32}
-                      src={profile?.avatarUrl}
-                      style={{ backgroundColor: '#667eea' }}
-                    >
-                      {!profile?.avatarUrl && getUserInitials()}
-                    </Avatar>
-                    {!isMobile && (
-                      <>
-                        <span style={{ fontWeight: 500, color: '#374151' }}>
-                          {profile?.name || 'User'}
-                        </span>
-                        <DownOutlined style={{ fontSize: 10, color: '#9ca3af' }} />
-                      </>
-                    )}
-                  </Space>
-                </Button>
-              </Dropdown>
-            )}
-          </div>
-        </div>
-      </Header>
+          {/* Spacer */}
+          <div className="flex-1" />
 
-      {/* Main Content */}
-      <Content className="glass-content" style={{ marginTop: 64 }}>
+          {/* User menu */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-slate-50 transition-colors">
+                <Avatar className="h-8 w-8">
+                  <AvatarImage src={profile?.avatarUrl} />
+                  <AvatarFallback className="bg-primary text-white text-xs">{getUserInitials()}</AvatarFallback>
+                </Avatar>
+                {!isMobile && (
+                  <>
+                    <span className="text-sm font-medium text-slate-700">{profile?.name || 'User'}</span>
+                    <ChevronDown className="h-3 w-3 text-slate-400" />
+                  </>
+                )}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>
+                <p className="text-sm font-medium">{profile?.name}</p>
+                <p className="text-xs text-muted-foreground">{profile?.email}</p>
+                {profile?.roles && (
+                  <div className="flex gap-1 mt-1.5">
+                    {profile.roles.map(role => (
+                      <StatusBadge key={role} variant={roleConfig[role]?.variant || 'neutral'} size="sm">
+                        {roleConfig[role]?.label || role}
+                      </StatusBadge>
+                    ))}
+                  </div>
+                )}
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleSignOut} className="text-red-600 focus:text-red-600">
+                <LogOut className="h-4 w-4 mr-2" />
+                Sign Out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </header>
+
+      {/* Main content */}
+      <main className="min-h-[calc(100vh-61px)]">
         {children}
-      </Content>
-    </AntdLayout>
+      </main>
+    </div>
   );
 };
