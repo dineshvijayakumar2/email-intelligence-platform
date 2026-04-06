@@ -68,7 +68,15 @@ const VectorSearchPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [query, setQuery] = useState(() => searchParams.get('q') || '');
   const [searching, setSearching] = useState(false);
-  const [response, setResponse] = useState<vectorApi.HybridSearchResponse | null>(null);
+  const [response, setResponse] = useState<vectorApi.HybridSearchResponse | null>(() => {
+    // Restore cached results on mount
+    try {
+      const cached = sessionStorage.getItem('semantic_search_result');
+      const cachedQuery = sessionStorage.getItem('semantic_search_query');
+      if (cached && cachedQuery === searchParams.get('q')) return JSON.parse(cached);
+    } catch { /* ignore */ }
+    return null;
+  });
   const [sourceFilter, setSourceFilter] = useState(() => searchParams.get('source') || '');
   const [clientId, setClientId] = useState<string | undefined>(
     localStorage.getItem('analytics_client_id') || undefined
@@ -139,6 +147,11 @@ const VectorSearchPage: React.FC = () => {
     try {
       const r = await vectorApi.hybridSearch(q, clientId, undefined, 50, 0.5);
       setResponse(r);
+      // Cache in sessionStorage for instant back-navigation
+      try {
+        sessionStorage.setItem('semantic_search_result', JSON.stringify(r));
+        sessionStorage.setItem('semantic_search_query', q);
+      } catch { /* storage full — ignore */ }
       if (r.total === 0) {
         message.info('No results found. Try a different query.');
       }
@@ -149,9 +162,10 @@ const VectorSearchPage: React.FC = () => {
     }
   };
 
-  // Auto-search on mount if URL has a query
+  // Auto-search on mount if URL has a query and no cached result
   useEffect(() => {
     if (initialSearchDone.current) return;
+    if (response) { initialSearchDone.current = true; return; } // Already have cached results
     const urlQuery = searchParams.get('q');
     if (urlQuery && urlQuery.trim().length >= 3) {
       initialSearchDone.current = true;
