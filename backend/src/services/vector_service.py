@@ -22,8 +22,8 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 EMBEDDING_MODEL = "models/gemini-embedding-001"
 EMBEDDING_DIMS = 768   # Force 768 dims (pgvector HNSW/IVFFlat max = 2000)
-EMBED_BATCH_SIZE = 50   # Smaller batches to stay under token-per-minute limits
-EMBED_DELAY_SECONDS = 2  # Pause between batches (~25 req/min × 50 texts = 1250 texts/min)
+EMBED_BATCH_SIZE = 20   # Small batches to stay under Gemini free-tier rate limits
+EMBED_DELAY_SECONDS = 4  # Pause between batches (~15 req/min × 20 texts = 300 texts/min)
 
 
 def _get_embedding_model():
