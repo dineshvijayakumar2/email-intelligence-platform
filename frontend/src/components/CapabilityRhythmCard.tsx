@@ -1,24 +1,16 @@
 import React, { useMemo, useState } from 'react';
-import { Card, Tag, Spin, Typography, Space, Button, Badge, Alert } from 'antd';
-import { ReloadOutlined, ClockCircleOutlined, WarningOutlined } from '@ant-design/icons';
 import {
   useReactTable, getCoreRowModel, getSortedRowModel,
   createColumnHelper, flexRender, type SortingState,
 } from '@tanstack/react-table';
 import { useQuery } from '@tanstack/react-query';
 import { companiesApi } from '../services/analyticsService';
-
-const { Text } = Typography;
+import { RefreshCw, Clock, AlertTriangle } from 'lucide-react';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { ContentSkeleton } from '@/components/ui/empty-state';
+import { cn } from '@/lib/utils';
 
 interface Props { companyId: string; }
-
-const STATUS_CONFIG: Record<string, { color: string; badge: 'success' | 'warning' | 'error' | 'default' }> = {
-  on_track: { color: 'green', badge: 'success' },
-  due_soon: { color: 'orange', badge: 'warning' },
-  overdue: { color: 'red', badge: 'error' },
-  insufficient_data: { color: 'default', badge: 'default' },
-};
-
 const col = createColumnHelper<any>();
 
 const CapabilityRhythmCard: React.FC<Props> = ({ companyId }) => {
@@ -31,35 +23,34 @@ const CapabilityRhythmCard: React.FC<Props> = ({ companyId }) => {
   });
 
   const columns = useMemo(() => [
-    col.accessor('capability', {
-      header: 'Capability', size: 160,
-      cell: info => <Tag color="blue" style={{ fontSize: 11 }}>{info.getValue()}</Tag>,
+    col.accessor('capability', { header: 'Capability', size: 160,
+      cell: info => <span className="text-sm text-slate-800">{info.getValue()}</span>,
     }),
-    col.accessor('order_count', { header: 'Orders', size: 65, meta: { align: 'right' } }),
-    col.accessor('avg_interval_days', {
-      header: 'Avg Interval', size: 100,
+    col.accessor('order_count', { header: 'Orders', size: 60, meta: { align: 'right' },
+      cell: info => <span className="tabular-nums">{info.getValue()}</span>,
+    }),
+    col.accessor('avg_interval_days', { header: 'Avg Interval', size: 90,
       cell: info => {
         const v = info.getValue();
-        if (v == null) return <Text type="secondary">—</Text>;
+        if (v == null) return <span className="text-slate-300">—</span>;
         const weeks = Math.round(v / 7);
-        return weeks > 0 ? `~${weeks} weeks` : `${v} days`;
+        return <span className="text-slate-600">{weeks > 0 ? `~${weeks}w` : `${v}d`}</span>;
       },
     }),
-    col.accessor('last_order_date', {
-      header: 'Last Order', size: 100,
-      cell: info => info.getValue() ? new Date(info.getValue()).toLocaleDateString() : '—',
+    col.accessor('days_since_last', { header: 'Since Last', size: 75, meta: { align: 'right' },
+      cell: info => {
+        const v = info.getValue();
+        const overdue = info.row.original.overdue;
+        return <span className={cn('tabular-nums', overdue ? 'text-destructive font-medium' : 'text-slate-600')}>{v != null ? `${v}d` : '—'}</span>;
+      },
     }),
-    col.accessor('days_since_last', {
-      header: 'Days Since', size: 80, meta: { align: 'right' },
-      cell: info => <Text type={info.row.original.overdue ? 'danger' : undefined}>{info.getValue() != null ? `${info.getValue()}d` : '—'}</Text>,
-    }),
-    col.accessor('status', {
-      header: 'Status', size: 110,
+    col.accessor('status', { header: 'Status', size: 100,
       cell: info => {
         const v = info.getValue();
         const r = info.row.original;
-        const cfg = STATUS_CONFIG[v] || STATUS_CONFIG.insufficient_data;
-        return <Badge status={cfg.badge} text={<Text style={{ fontSize: 11, color: r.overdue ? '#ff4d4f' : undefined }}>{v === 'overdue' ? `${r.overdue_days}d overdue` : v === 'due_soon' ? 'Due soon' : v === 'on_track' ? 'On track' : 'Low data'}</Text>} />;
+        const variant = v === 'overdue' ? 'danger' : v === 'due_soon' ? 'warning' : v === 'on_track' ? 'success' : 'neutral';
+        const label = v === 'overdue' ? `${r.overdue_days}d overdue` : v === 'due_soon' ? 'Due soon' : v === 'on_track' ? 'On track' : 'Low data';
+        return <StatusBadge variant={variant as any} size="sm">{label}</StatusBadge>;
       },
     }),
   ], []);
@@ -73,39 +64,43 @@ const CapabilityRhythmCard: React.FC<Props> = ({ companyId }) => {
     getSortedRowModel: getSortedRowModel(),
   });
 
-  if (isLoading) return <Card className="glass-card" title="Ordering Rhythm"><Spin /></Card>;
-  if (!data?.rhythms?.length) return <Card className="glass-card" title="Ordering Rhythm"><Text type="secondary">No classified operations with dates available</Text></Card>;
+  const overdueCount = data?.alerts?.length || 0;
 
-  const overdueCount = data.alerts?.length || 0;
+  if (isLoading) return <div className="rounded-lg border bg-white shadow-sm p-4"><div className="flex items-center gap-2 mb-3"><Clock className="h-4 w-4 text-primary" /><span className="text-sm font-semibold">Ordering Rhythm</span></div><ContentSkeleton rows={3} className="p-0" /></div>;
+  if (!data?.rhythms?.length) return <div className="rounded-lg border bg-white shadow-sm p-4"><div className="flex items-center gap-2"><Clock className="h-4 w-4 text-primary" /><span className="text-sm font-semibold">Ordering Rhythm</span></div><p className="text-sm text-slate-400 mt-2">No data available</p></div>;
 
   return (
-    <Card className="glass-card"
-      title={<Space><ClockCircleOutlined /> Ordering Rhythm {overdueCount > 0 && <Tag color="red" icon={<WarningOutlined />}>{overdueCount} overdue</Tag>}</Space>}
-      extra={<Button size="small" icon={<ReloadOutlined />} onClick={() => refetch()}>Refresh</Button>}>
-      {overdueCount > 0 && (
-        <Alert type="warning" showIcon style={{ marginBottom: 12 }}
-          message={<span>{data.alerts.map((a: any) => <Tag key={a.capability} color={a.severity === 'danger' ? 'red' : 'orange'} style={{ fontSize: 11 }}>{a.capability}: {a.overdue_days}d overdue</Tag>)}</span>} />
-      )}
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+    <div className="rounded-lg border bg-white shadow-sm overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b">
+        <div className="flex items-center gap-2">
+          <Clock className="h-4 w-4 text-primary" />
+          <span className="text-sm font-semibold text-slate-900">Ordering Rhythm</span>
+          {overdueCount > 0 && <StatusBadge variant="danger" size="sm"><AlertTriangle className="h-3 w-3 mr-1 inline" />{overdueCount} overdue</StatusBadge>}
+        </div>
+        <button onClick={() => refetch()} className="p-1 rounded hover:bg-slate-100"><RefreshCw className="h-3.5 w-3.5 text-slate-400" /></button>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
           <thead>
             {table.getHeaderGroups().map(hg => (
-              <tr key={hg.id} style={{ borderBottom: '1px solid var(--ant-color-border, #f0f0f0)', background: 'var(--ant-color-bg-container-secondary, rgba(0,0,0,0.02))' }}>
+              <tr key={hg.id} className="border-b bg-slate-50/50">
                 {hg.headers.map(h => (
                   <th key={h.id} onClick={h.column.getCanSort() ? h.column.getToggleSortingHandler() : undefined}
-                    style={{ padding: '8px 10px', textAlign: (h.column.columnDef.meta as any)?.align || 'left', fontWeight: 600, fontSize: 12, color: 'var(--ant-color-text-secondary)', cursor: h.column.getCanSort() ? 'pointer' : 'default', whiteSpace: 'nowrap' }}>
+                    className={cn('px-3 py-2 text-xs font-medium uppercase tracking-wider text-slate-500 whitespace-nowrap',
+                      h.column.getCanSort() && 'cursor-pointer hover:text-slate-700',
+                      (h.column.columnDef.meta as any)?.align === 'right' && 'text-right')}>
                     {flexRender(h.column.columnDef.header, h.getContext())}
-                    {h.column.getCanSort() && <span style={{ marginLeft: 4, opacity: h.column.getIsSorted() ? 1 : 0.3, fontSize: 10 }}>{h.column.getIsSorted() === 'asc' ? '▲' : h.column.getIsSorted() === 'desc' ? '▼' : '⇅'}</span>}
+                    {h.column.getCanSort() && <span className={cn('ml-1 text-[10px]', h.column.getIsSorted() ? 'opacity-100' : 'opacity-30')}>{h.column.getIsSorted() === 'asc' ? '▲' : h.column.getIsSorted() === 'desc' ? '▼' : '⇅'}</span>}
                   </th>
                 ))}
               </tr>
             ))}
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-slate-50">
             {table.getRowModel().rows.map(row => (
-              <tr key={row.id} style={{ borderBottom: '1px solid var(--ant-color-border-secondary, #f5f5f5)', background: row.original.overdue ? 'rgba(255,77,79,0.04)' : undefined }}>
+              <tr key={row.id} className={cn(row.original.overdue && 'bg-red-50/30')}>
                 {row.getVisibleCells().map(cell => (
-                  <td key={cell.id} style={{ padding: '8px 10px', textAlign: (cell.column.columnDef.meta as any)?.align || 'left' }}>
+                  <td key={cell.id} className={cn('px-3 py-2', (cell.column.columnDef.meta as any)?.align === 'right' && 'text-right')}>
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </td>
                 ))}
@@ -114,8 +109,7 @@ const CapabilityRhythmCard: React.FC<Props> = ({ companyId }) => {
           </tbody>
         </table>
       </div>
-      {data.computed_at && <Text type="secondary" style={{ fontSize: 11, marginTop: 8, display: 'block' }}>Computed: {new Date(data.computed_at).toLocaleString()}</Text>}
-    </Card>
+    </div>
   );
 };
 

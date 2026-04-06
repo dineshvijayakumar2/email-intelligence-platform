@@ -1,13 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Select, Space, Typography } from 'antd';
-import { BankOutlined } from '@ant-design/icons';
+import { Building2 } from 'lucide-react';
 import { clientService, ClientSummary } from '../../services/clientService';
-
-const { Text } = Typography;
 
 const STORAGE_KEY = 'analytics_client_id';
 
-// Module-level cache: fetched once, shared across all ClientSelector instances
 let _cachedClients: ClientSummary[] | null = null;
 let _fetchPromise: Promise<ClientSummary[]> | null = null;
 
@@ -42,7 +38,6 @@ export const ClientSelector: React.FC<ClientSelectorProps> = ({ value, onChange,
 
     const saved = localStorage.getItem(STORAGE_KEY);
 
-    // If cache is ready, use it immediately (no network call)
     if (_cachedClients) {
       setClients(_cachedClients);
       setLoading(false);
@@ -53,41 +48,37 @@ export const ClientSelector: React.FC<ClientSelectorProps> = ({ value, onChange,
       return;
     }
 
-    // Optimistic: fire onChange with saved ID immediately so page can start loading data
-    if (!value && saved) {
-      onChange(saved);
-    }
+    if (!value && saved) onChange(saved);
 
-    // Then fetch the list (deduped across all instances)
     getClients().then(list => {
       setClients(list);
       setLoading(false);
       if (!value && list.length > 0) {
         const initial = (saved && list.some(c => c.id === saved)) ? saved : list[0].id;
-        if (initial !== saved) {
-          onChange(initial);
-        }
+        if (initial !== saved) onChange(initial);
       }
     });
   }, []);
 
-  const handleChange = (id: string) => {
+  const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const id = e.target.value;
     localStorage.setItem(STORAGE_KEY, id);
     onChange(id);
   };
 
   return (
-    <Space>
-      <BankOutlined style={{ color: '#667eea' }} />
-      <Text strong>Client:</Text>
-      <Select
+    <div className="inline-flex items-center gap-2" style={style}>
+      <Building2 className="h-4 w-4 text-primary" />
+      <span className="text-sm font-medium text-slate-700">Client:</span>
+      <select
         value={value}
         onChange={handleChange}
-        loading={loading}
-        placeholder="Select client"
-        style={{ minWidth: 200, ...style }}
-        options={clients.map(c => ({ value: c.id, label: c.client_name }))}
-      />
-    </Space>
+        disabled={loading}
+        className="h-8 px-2 text-sm rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary min-w-[180px]"
+      >
+        {loading && <option>Loading...</option>}
+        {clients.map(c => <option key={c.id} value={c.id}>{c.client_name}</option>)}
+      </select>
+    </div>
   );
 };
