@@ -5,18 +5,20 @@
  * Admin-level controls for budget caps, kill switches, and feature toggles.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Card, Row, Col, Statistic, Switch, InputNumber, Button, Table, Select,
   Tag, Space, Progress, Alert, Divider, Tooltip, Badge, Typography,
-  Spin, message, Form, Input, Checkbox, Empty, Skeleton,
+  Spin, message, Form, Input, Checkbox, Empty, Skeleton, Collapse,
 } from 'antd';
 import {
   DollarOutlined, ThunderboltOutlined, WarningOutlined,
   ReloadOutlined, PauseCircleOutlined, PlayCircleOutlined,
   ClockCircleOutlined, CheckCircleOutlined, CloseCircleOutlined,
-  ExclamationCircleOutlined, SyncOutlined,
+  ExclamationCircleOutlined, SyncOutlined, MailOutlined,
+  BankOutlined, ToolOutlined, SearchOutlined,
 } from '@ant-design/icons';
+import * as vectorApi from '../../services/vectorService';
 import { controlsApi, intelligenceApi } from '../../services/aiService';
 import { modelsApi } from '../../services/strategicDigestService';
 import { MailboxSelector } from '../../components/MailboxSelector';
@@ -731,7 +733,7 @@ const UsagePage: React.FC = () => {
       </Card>
 
       {/* Row 4: Recent API Calls */}
-      <Card title="Recent API Calls" className="glass-card">
+      <Card title="Recent API Calls" className="glass-card" style={{ marginBottom: 24 }}>
         {showSkeleton ? <Skeleton active paragraph={{ rows: 5 }} /> : (
           <Table
             dataSource={recentLogs}
@@ -744,9 +746,164 @@ const UsagePage: React.FC = () => {
         )}
       </Card>
 
+      {/* Row 5: Embedding Coverage & Management */}
+      <EmbeddingManagement clientId={clientId} />
+
     </div>
   );
 };
 
+
+// ---------------------------------------------------------------------------
+// Embedding Coverage & Management (moved from Semantic Search page)
+// ---------------------------------------------------------------------------
+
+const EmbeddingManagement: React.FC<{ clientId: string }> = ({ clientId }) => {
+  const [stats, setStats] = useState<vectorApi.VectorStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [reembedStatus, setReembedStatus] = useState<vectorApi.ReembedStatus | null>(null);
+  const [backfillRunning, setBackfillRunning] = useState(false);
+  const [backfillTotal, setBackfillTotal] = useState(0);
+  const backfillCancelRef = useRef(false);
+
+  const loadStats = useCallback(async () => {
+    if (!clientId) return; // Don't query without client_id
+    setStatsLoading(true);
+    try {
+      const s = await vectorApi.getVectorStats(clientId);
+      setStats(s);
+    } catch { /* keep previous */ } finally {
+      setStatsLoading(false);
+    }
+  }, [clientId]);
+
+  // Only load stats when clientId is available
+  useEffect(() => {
+    if (clientId) loadStats();
+  }, [clientId, loadStats]);
+
+  // Poll reembed status
+  useEffect(() => {
+    if (reembedStatus?.status !== 'running') return;
+    const interval = setInterval(async () => {
+      try {
+        const status = await vectorApi.getReembedStatus(clientId);
+        setReembedStatus(status);
+        if (status.status !== 'running') {
+          clearInterval(interval);
+          loadStats();
+          if (status.status === 'complete') message.success(`Embedding complete: ${status.result?.total_embedded} records`);
+          else if (status.status === 'error') message.error(`Embedding failed: ${status.error}`);
+        }
+      } catch { /* ignore */ }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [reembedStatus?.status, clientId, loadStats]);
+
+  const handleReembed = async (tables?: string[]) => {
+    try {
+      const resp = await vectorApi.triggerReembed(clientId, tables);
+      if (resp.status === 'already_running') message.info('Embedding already in progress');
+      else message.success(`Embedding ${tables ? tables.join(' + ') : 'all tables'} in background`);
+      setReembedStatus({ status: 'running', started_at: Date.now() / 1000 });
+    } catch (err: any) {
+      message.error(err?.message || 'Failed to start embedding');
+    }
+  };
+
+  const handleStopReembed = async () => {
+    try {
+      await vectorApi.stopReembed(clientId);
+      message.info('Stopping — already embedded records are kept');
+    } catch (err: any) {
+      message.error(err?.message || 'Failed to stop');
+    }
+  };
+
+  const handleBackfill = async () => {
+    setBackfillRunning(true);
+    setBackfillTotal(0);
+    backfillCancelRef.current = false;
+    let total = 0;
+    try {
+      while (!backfillCancelRef.current) {
+        const resp = await vectorApi.backfillSearchText(2000);
+        if (!resp) break;
+        total += resp.updated || 0;
+        setBackfillTotal(total);
+        if (resp.done || resp.updated === 0) {
+          message.success(`Search index built: ${total.toLocaleString()} emails indexed`);
+          break;
+        }
+      }
+      if (backfillCancelRef.current) message.info(`Stopped — ${total.toLocaleString()} indexed`);
+    } catch (err: any) {
+      message.error(err?.message || 'Backfill failed');
+    } finally {
+      setBackfillRunning(false);
+    }
+  };
+
+  if (!clientId) return null;
+
+  return (
+    <Card
+      title={<Space><ThunderboltOutlined style={{ color: '#667eea' }} /> Embedding Coverage & Management</Space>}
+      className="glass-card"
+    >
+      {statsLoading ? <Skeleton active paragraph={{ rows: 3 }} /> : stats ? (
+        <>
+          <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+            {[
+              { label: 'Emails', icon: <MailOutlined />, data: stats.emails },
+              { label: 'Companies', icon: <BankOutlined />, data: stats.companies },
+              { label: 'Operations', icon: <ToolOutlined />, data: stats.operations },
+            ].map(s => {
+              const pct = s.data.total > 0 ? Math.round((s.data.embedded / s.data.total) * 100) : 0;
+              return (
+                <Col key={s.label} xs={24} sm={8}>
+                  <Card size="small" className="glass-card">
+                    <Statistic
+                      title={<Space>{s.icon} {s.label}</Space>}
+                      value={s.data.embedded}
+                      suffix={<Text type="secondary">/ {s.data.total.toLocaleString()}</Text>}
+                    />
+                    <Progress percent={pct} size="small" status={pct === 100 ? 'success' : 'active'}
+                      strokeColor={pct === 100 ? '#52c41a' : '#667eea'} />
+                  </Card>
+                </Col>
+              );
+            })}
+          </Row>
+          <Space wrap>
+            {reembedStatus?.status === 'running' ? (
+              <Button danger icon={<SyncOutlined spin />} onClick={handleStopReembed}>Stop Embedding</Button>
+            ) : (
+              <>
+                <Button type="primary" icon={<MailOutlined />} onClick={() => handleReembed(['emails'])}>Embed Emails</Button>
+                <Button icon={<BankOutlined />} onClick={() => handleReembed(['companies'])}>Embed Companies</Button>
+                <Button icon={<ToolOutlined />} onClick={() => handleReembed(['operations'])}>Embed Operations</Button>
+                <Button icon={<ThunderboltOutlined />} onClick={() => handleReembed()}>Embed All</Button>
+              </>
+            )}
+            <Button icon={<ReloadOutlined />} onClick={loadStats}>Refresh Stats</Button>
+            {backfillRunning ? (
+              <Button danger icon={<SyncOutlined spin />} onClick={() => { backfillCancelRef.current = true; }}>
+                Stop Indexing ({backfillTotal.toLocaleString()})
+              </Button>
+            ) : (
+              <Button icon={<SearchOutlined />} onClick={handleBackfill}>Build Search Index</Button>
+            )}
+            {reembedStatus?.status === 'complete' && reembedStatus.result && (
+              <Text type="success"><CheckCircleOutlined /> {reembedStatus.result.total_embedded} embedded</Text>
+            )}
+          </Space>
+        </>
+      ) : (
+        <Empty description="Select a client to view embedding stats" />
+      )}
+    </Card>
+  );
+};
 
 export default UsagePage;

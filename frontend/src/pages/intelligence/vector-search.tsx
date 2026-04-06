@@ -1,20 +1,18 @@
 /**
  * Semantic Search Page — Hybrid search with vector + keyword + temporal parsing.
- * Uses TanStack Table for results with sorting, filtering, source-type tabs.
- * Embedding management (stats, reembed, backfill) in collapsible panel.
+ * Thread-grouped email results with expandable conversation context.
+ * Embedding management moved to AI Usage page.
  */
 
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Card, Input, Tag, Space, Typography, Button, Row, Col,
-  Statistic, Progress, Alert, message, Collapse, Badge, Spin,
-  Select, Tooltip,
+  message, Select, Tooltip,
 } from 'antd';
 import {
-  SearchOutlined, ThunderboltOutlined, ReloadOutlined,
+  SearchOutlined,
   MailOutlined, BankOutlined, ToolOutlined,
-  CheckCircleOutlined, SyncOutlined, ClockCircleOutlined,
-  FilterOutlined,
+  ClockCircleOutlined, FilterOutlined,
 } from '@ant-design/icons';
 import * as vectorApi from '../../services/vectorService';
 import type { HybridResult } from '../../services/vectorService';
@@ -69,11 +67,14 @@ const VectorSearchPage: React.FC = () => {
   const [query, setQuery] = useState(() => searchParams.get('q') || '');
   const [searching, setSearching] = useState(false);
   const [response, setResponse] = useState<vectorApi.HybridSearchResponse | null>(() => {
-    // Restore cached results on mount
     try {
       const cached = sessionStorage.getItem('semantic_search_result');
       const cachedQuery = sessionStorage.getItem('semantic_search_query');
-      if (cached && cachedQuery === searchParams.get('q')) return JSON.parse(cached);
+      if (cached && cachedQuery === searchParams.get('q')) {
+        const parsed = JSON.parse(cached);
+        // Validate it has the current response shape (threads, not results)
+        if (parsed && 'threads' in parsed) return parsed;
+      }
     } catch { /* ignore */ }
     return null;
   });
@@ -83,54 +84,6 @@ const VectorSearchPage: React.FC = () => {
   );
   const initialSearchDone = useRef(false);
 
-  // Embedding stats
-  const [stats, setStats] = useState<vectorApi.VectorStats | null>(null);
-  const [statsLoading, setStatsLoading] = useState(false);
-  const [reembedStatus, setReembedStatus] = useState<vectorApi.ReembedStatus | null>(null);
-
-  // Full-text search backfill
-  const [backfillRunning, setBackfillRunning] = useState(false);
-  const [backfillTotal, setBackfillTotal] = useState(0);
-  const backfillCancelRef = useRef(false);
-
-  // Load stats on mount and when client changes
-  useEffect(() => {
-    loadStats();
-    setResponse(null);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientId]);
-
-  const loadStats = useCallback(async () => {
-    setStatsLoading(true);
-    try {
-      const s = await vectorApi.getVectorStats(clientId);
-      setStats(s);
-    } catch { /* keep previous */ } finally {
-      setStatsLoading(false);
-    }
-  }, [clientId]);
-
-  // Poll reembed status
-  useEffect(() => {
-    if (reembedStatus?.status !== 'running') return;
-    const interval = setInterval(async () => {
-      try {
-        const status = await vectorApi.getReembedStatus(clientId);
-        setReembedStatus(status);
-        if (status.status !== 'running') {
-          clearInterval(interval);
-          loadStats();
-          if (status.status === 'complete') {
-            message.success(`Embedding complete: ${status.result?.total_embedded} records`);
-          } else if (status.status === 'error') {
-            message.error(`Embedding failed: ${status.error}`);
-          }
-        }
-      } catch { /* ignore */ }
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [reembedStatus?.status, clientId, loadStats]);
-
   // Search handler — uses hybrid search
   const handleSearch = async (q: string) => {
     if (!q || q.trim().length < 3) {
@@ -139,7 +92,6 @@ const VectorSearchPage: React.FC = () => {
     }
     setSearching(true);
     setQuery(q);
-    // Persist to URL so results survive navigation
     const next = new URLSearchParams(searchParams);
     next.set('q', q);
     if (sourceFilter) next.set('source', sourceFilter); else next.delete('source');
@@ -147,11 +99,10 @@ const VectorSearchPage: React.FC = () => {
     try {
       const r = await vectorApi.hybridSearch(q, clientId, undefined, 50, 0.5);
       setResponse(r);
-      // Cache in sessionStorage for instant back-navigation
       try {
         sessionStorage.setItem('semantic_search_result', JSON.stringify(r));
         sessionStorage.setItem('semantic_search_query', q);
-      } catch { /* storage full — ignore */ }
+      } catch { /* storage full */ }
       if (r.total === 0) {
         message.info('No results found. Try a different query.');
       }
@@ -165,7 +116,7 @@ const VectorSearchPage: React.FC = () => {
   // Auto-search on mount if URL has a query and no cached result
   useEffect(() => {
     if (initialSearchDone.current) return;
-    if (response) { initialSearchDone.current = true; return; } // Already have cached results
+    if (response) { initialSearchDone.current = true; return; }
     const urlQuery = searchParams.get('q');
     if (urlQuery && urlQuery.trim().length >= 3) {
       initialSearchDone.current = true;
@@ -173,58 +124,8 @@ const VectorSearchPage: React.FC = () => {
     }
   }, []);
 
-  const handleReembed = async (tables?: string[]) => {
-    try {
-      const resp = await vectorApi.triggerReembed(clientId, tables);
-      if (resp.status === 'already_running') {
-        message.info('Embedding already in progress');
-      } else {
-        message.success(`Embedding ${tables ? tables.join(' + ') : 'all tables'} in background`);
-      }
-      setReembedStatus({ status: 'running', started_at: Date.now() / 1000 });
-    } catch (err: any) {
-      message.error(err?.message || 'Failed to start embedding');
-    }
-  };
-
-  const handleStopReembed = async () => {
-    try {
-      await vectorApi.stopReembed(clientId);
-      message.info('Stopping embedding — already embedded records are kept');
-    } catch (err: any) {
-      message.error(err?.message || 'Failed to stop embedding');
-    }
-  };
-
-  const handleBackfillSearchText = async () => {
-    setBackfillRunning(true);
-    setBackfillTotal(0);
-    backfillCancelRef.current = false;
-    let totalUpdated = 0;
-    try {
-      while (!backfillCancelRef.current) {
-        const resp = await vectorApi.backfillSearchText(2000);
-        if (!resp) break;
-        totalUpdated += resp.updated || 0;
-        setBackfillTotal(totalUpdated);
-        if (resp.done || resp.updated === 0) {
-          message.success(`Search index built: ${totalUpdated.toLocaleString()} emails indexed`);
-          break;
-        }
-      }
-      if (backfillCancelRef.current) {
-        message.info(`Backfill stopped — ${totalUpdated.toLocaleString()} indexed so far`);
-      }
-    } catch (err: any) {
-      message.error(err?.message || 'Search text backfill failed');
-    } finally {
-      setBackfillRunning(false);
-    }
-  };
-
   // Expanded thread state
   const [expandedThreads, setExpandedThreads] = useState<Set<string>>(new Set());
-
   const toggleThread = (threadId: string) => {
     setExpandedThreads(prev => {
       const next = new Set(prev);
@@ -245,10 +146,6 @@ const VectorSearchPage: React.FC = () => {
     if (!sourceFilter) return response.other_results || [];
     return (response.other_results || []).filter(r => r.source_type === sourceFilter);
   }, [response, sourceFilter]);
-
-  const hasEmbeddings = stats && (
-    stats.emails.embedded > 0 || stats.companies.embedded > 0 || stats.operations.embedded > 0
-  );
 
   // Source counts
   const sourceCounts = useMemo(() => {
@@ -356,7 +253,6 @@ const VectorSearchPage: React.FC = () => {
               size="small"
               style={{ marginBottom: 8, borderLeft: '3px solid #667eea' }}
             >
-              {/* Thread header */}
               <div
                 style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}
                 onClick={() => toggleThread(thread.thread_id)}
@@ -397,7 +293,6 @@ const VectorSearchPage: React.FC = () => {
                 </Text>
               </div>
 
-              {/* Expanded: show all emails in the thread */}
               {expandedThreads.has(thread.thread_id) && (
                 <div style={{ marginTop: 10, borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 8 }}>
                   {thread.emails.map((email, idx) => (
@@ -497,93 +392,6 @@ const VectorSearchPage: React.FC = () => {
             Combines AI understanding + keyword matching + time awareness for precise results
           </Text></div>
         </Card>
-      )}
-
-      {/* Embedding Stats + Management */}
-      <Collapse
-        items={[{
-          key: 'embeddings',
-          label: (
-            <Space>
-              <ThunderboltOutlined />
-              <span>Embedding Coverage</span>
-              {stats && (
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  {(stats.emails.embedded + stats.companies.embedded + stats.operations.embedded).toLocaleString()} /
-                  {' '}{(stats.emails.total + stats.companies.total + stats.operations.total).toLocaleString()} records
-                </Text>
-              )}
-            </Space>
-          ),
-          children: (
-            <div>
-              {statsLoading ? <Spin /> : stats ? (
-                <>
-                  <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-                    {[
-                      { label: 'Emails', icon: <MailOutlined />, data: stats.emails },
-                      { label: 'Companies', icon: <BankOutlined />, data: stats.companies },
-                      { label: 'Operations', icon: <ToolOutlined />, data: stats.operations },
-                    ].map(s => {
-                      const pct = s.data.total > 0 ? Math.round((s.data.embedded / s.data.total) * 100) : 0;
-                      return (
-                        <Col key={s.label} xs={24} sm={8}>
-                          <Card size="small" className="glass-card">
-                            <Statistic
-                              title={<Space>{s.icon} {s.label}</Space>}
-                              value={s.data.embedded}
-                              suffix={<Text type="secondary">/ {s.data.total.toLocaleString()}</Text>}
-                            />
-                            <Progress percent={pct} size="small" status={pct === 100 ? 'success' : 'active'}
-                              strokeColor={pct === 100 ? '#52c41a' : '#667eea'} />
-                          </Card>
-                        </Col>
-                      );
-                    })}
-                  </Row>
-                  <Space wrap>
-                    {reembedStatus?.status === 'running' ? (
-                      <Button danger icon={<SyncOutlined spin />} onClick={handleStopReembed}>Stop Embedding</Button>
-                    ) : (
-                      <>
-                        <Button type="primary" icon={<MailOutlined />} onClick={() => handleReembed(['emails'])}>Embed Emails</Button>
-                        <Button icon={<BankOutlined />} onClick={() => handleReembed(['companies'])}>Embed Companies</Button>
-                        <Button icon={<ToolOutlined />} onClick={() => handleReembed(['operations'])}>Embed Operations</Button>
-                        <Button icon={<ThunderboltOutlined />} onClick={() => handleReembed()}>Embed All</Button>
-                      </>
-                    )}
-                    <Button icon={<ReloadOutlined />} onClick={loadStats}>Refresh Stats</Button>
-                    {backfillRunning ? (
-                      <Button danger icon={<SyncOutlined spin />} onClick={() => { backfillCancelRef.current = true; }}>
-                        Stop Indexing ({backfillTotal.toLocaleString()})
-                      </Button>
-                    ) : (
-                      <Button icon={<SearchOutlined />} onClick={handleBackfillSearchText}>Build Search Index</Button>
-                    )}
-                    {reembedStatus?.status === 'complete' && reembedStatus.result && (
-                      <Text type="success"><CheckCircleOutlined /> {reembedStatus.result.total_embedded} embedded</Text>
-                    )}
-                  </Space>
-                </>
-              ) : (
-                <Alert
-                  type="warning"
-                  message="Could not load embedding stats"
-                  action={<Button size="small" onClick={loadStats}>Refresh</Button>}
-                />
-              )}
-            </div>
-          ),
-        }]}
-        style={{ marginBottom: 24 }}
-      />
-
-      {stats && !hasEmbeddings && (
-        <Alert
-          type="warning" showIcon style={{ marginBottom: 24 }}
-          message="No embeddings found"
-          description="Click 'Embed All' above to generate embeddings. This is a one-time operation."
-        />
       )}
     </div>
   );
