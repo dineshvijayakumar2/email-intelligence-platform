@@ -12,8 +12,10 @@ import {
   Empty,
   Badge,
   Avatar,
-  Dropdown,
   Skeleton,
+  DatePicker,
+  Space,
+  Pagination,
 } from "antd";
 import {
   SearchOutlined,
@@ -32,6 +34,9 @@ import {
   AppstoreOutlined,
   CloseOutlined,
   SyncOutlined,
+  CalendarOutlined,
+  SwapOutlined,
+  UserOutlined,
 } from "@ant-design/icons";
 import { emailService, Email, EmailFilters } from '../services/emailService';
 import { mailboxService, Mailbox } from '../services/mailboxService';
@@ -47,10 +52,12 @@ import {
   filterContentTags,
 } from '../components/EmailDetailPanel';
 import { formatRelativeDate } from '../utils/dateUtils';
+import { useEmails } from '../hooks/queries';
 
 const { Text, Title } = Typography;
 const { Option } = Select;
 const { Search } = Input;
+const { RangePicker } = DatePicker;
 
 // Email List Item Component
 const EmailListItem: React.FC<{
@@ -120,12 +127,11 @@ const EmailListItem: React.FC<{
 
 // Main Email List Component
 export const EmailList: React.FC = () => {
-  // Router hooks for mailbox-based navigation
   const { mailboxId, emailId } = useParams<{ mailboxId?: string; emailId?: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  // Analytics mode: when navigated from contact/company/thread detail pages
+  // Analytics mode
   const analyticsContactId = searchParams.get('contact_id');
   const analyticsCompanyId = searchParams.get('company_id');
   const analyticsThreadId = searchParams.get('thread_id');
@@ -134,38 +140,78 @@ export const EmailList: React.FC = () => {
   const isAnalyticsMode = !!(analyticsContactId || analyticsCompanyId || analyticsThreadId || analyticsEmailId);
 
   // State
-  const [emails, setEmails] = useState<Email[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [totalCount, setTotalCount] = useState(0);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize] = useState(25); // Reduced from 50 for faster initial load
-  const isLoadingMoreRef = useRef(false); // Track if we're loading more vs fresh load
+  const [analyticsEmails, setAnalyticsEmails] = useState<Email[]>([]);
+  const [analyticsTotal, setAnalyticsTotal] = useState(0);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
   const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailExpanded, setDetailExpanded] = useState(false);
   const [categories, setCategories] = useState<string[]>([]);
   const [accessibleMailboxes, setAccessibleMailboxes] = useState<Mailbox[]>([]);
-  const [mailboxesLoading, setMailboxesLoading] = useState(true); // Track if mailboxes are still loading
-  const [mailboxIdMap, setMailboxIdMap] = useState<Record<string, string>>({}); // name -> id mapping
-  const [mailboxIdToNameMap, setMailboxIdToNameMap] = useState<Record<string, string>>({}); // id -> name mapping
+  const [mailboxesLoading, setMailboxesLoading] = useState(true);
+  const [mailboxIdMap, setMailboxIdMap] = useState<Record<string, string>>({});
+  const [mailboxIdToNameMap, setMailboxIdToNameMap] = useState<Record<string, string>>({});
   const [folders, setFolders] = useState<string[]>([]);
   const [foldersLoading, setFoldersLoading] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [processingJobs, setProcessingJobs] = useState<any[]>([]);
-  const processingJobsRef = useRef<any[]>([]); // Ref to prevent stale closure
+  const processingJobsRef = useRef<any[]>([]);
+  const [showFilters, setShowFilters] = useState(false);
 
-  const [filters, setFilters] = useState<EmailFilters>({
-    search: '',
-    category: '',
-    mailbox: '',
-    folder: '',
-    dateRange: null,
-    isOutbound: '',
+  // Filter state
+  const [searchText, setSearchText] = useState('');
+  const [senderSearch, setSenderSearch] = useState('');
+  const [mailboxName, setMailboxName] = useState('');
+  const [folderFilter, setFolderFilter] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [directionFilter, setDirectionFilter] = useState('');
+  const [dateRange, setDateRange] = useState<[string, string] | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(25);
+  const [sortBy, setSortBy] = useState('sent_date');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+
+  // Debounced search
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [debouncedSender, setDebouncedSender] = useState('');
+
+  useEffect(() => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      setDebouncedSearch(searchText);
+      setDebouncedSender(senderSearch);
+      setPage(1);
+    }, 400);
+    return () => { if (searchTimerRef.current) clearTimeout(searchTimerRef.current); };
+  }, [searchText, senderSearch]);
+
+  // Build filters for TanStack Query
+  const queryFilters: EmailFilters = useMemo(() => ({
+    search: debouncedSearch || undefined,
+    sender: debouncedSender || undefined,
+    mailbox: mailboxName || undefined,
+    folder: folderFilter || undefined,
+    category: categoryFilter || undefined,
+    isOutbound: directionFilter || undefined,
+    dateRange: dateRange || undefined,
+  }), [debouncedSearch, debouncedSender, mailboxName, folderFilter, categoryFilter, directionFilter, dateRange]);
+
+  // TanStack Query for emails (standard mode only)
+  const emailsQuery = useEmails({
+    filters: queryFilters,
+    page,
+    pageSize,
+    sort_by: sortBy,
+    sort_dir: sortDir,
   });
 
-  // System folders that always show — keys MUST be proper case to match DB folder_path values
+  const emails = isAnalyticsMode ? analyticsEmails : (emailsQuery.data?.emails || []);
+  const totalCount = isAnalyticsMode ? analyticsTotal : (emailsQuery.data?.totalCount || 0);
+  const loading = isAnalyticsMode ? analyticsLoading : emailsQuery.isLoading;
+
+  // System folders
   const systemFolders = useMemo(() => [
     { key: '', label: 'All Mail', icon: <AppstoreOutlined /> },
     { key: 'Inbox', label: 'Inbox', icon: <InboxOutlined /> },
@@ -174,368 +220,16 @@ export const EmailList: React.FC = () => {
     { key: 'Trash', label: 'Trash', icon: <DeleteOutlined /> },
   ], []);
 
-  // Get current folder key for highlighting — must return proper case to match system folder keys
   const currentFolderKey = useMemo(() => {
-    if (!filters.folder) return '';
-    const lower = filters.folder.toLowerCase();
+    if (!folderFilter) return '';
+    const lower = folderFilter.toLowerCase();
     if (lower.includes('inbox')) return 'Inbox';
     if (lower.includes('sent')) return 'Sent';
     if (lower.includes('starred') || lower.includes('flagged')) return 'Starred';
     if (lower.includes('trash') || lower.includes('deleted')) return 'Trash';
-    return filters.folder;
-  }, [filters.folder]);
+    return folderFilter;
+  }, [folderFilter]);
 
-  // Load emails
-  const loadEmails = useCallback(async (append: boolean = false) => {
-    // CRITICAL: Never load emails without a mailbox selected
-    if (!filters.mailbox) {
-      setLoading(false);
-      setEmails([]);
-      setTotalCount(0);
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const { emails: emailData, totalCount: total } = await emailService.getEmails(
-        filters,
-        currentPage,
-        pageSize
-      );
-      // If appending (load more), add to existing emails; otherwise replace
-      if (append && currentPage > 1) {
-        setEmails(prev => [...prev, ...emailData]);
-      } else {
-        setEmails(emailData);
-      }
-      setTotalCount(total);
-    } catch (error) {
-      console.error('Error loading emails:', error);
-      message.error('Failed to load emails');
-    } finally {
-      setLoading(false);
-    }
-  }, [filters, currentPage, pageSize]);
-
-  // Load filter options (categories and mailboxes - static)
-  const loadFilterOptions = useCallback(async () => {
-    try {
-      setMailboxesLoading(true);
-      const [categoriesData, mailboxListResponse] = await Promise.all([
-        emailService.getEmailCategories(),
-        mailboxService.getMailboxes(),
-        // Don't load folders initially - wait for mailbox selection
-      ]);
-      setCategories(categoriesData);
-
-      // Store all mailboxes and create ID maps from ALL mailboxes
-      // This allows navigation to any mailbox (active or not)
-      setAccessibleMailboxes(mailboxListResponse);
-
-      const idMap: Record<string, string> = {};
-      const idToNameMap: Record<string, string> = {};
-      mailboxListResponse.forEach((m: Mailbox) => {
-        idMap[m.name] = m.id;
-        idToNameMap[m.id] = m.name;
-      });
-      setMailboxIdMap(idMap);
-      setMailboxIdToNameMap(idToNameMap);
-      // Folders will be loaded after mailbox selection
-    } catch (error) {
-      console.error('[EmailList] Error loading filter options:', error);
-      message.error('Failed to load mailboxes. Please refresh the page.');
-    } finally {
-      setMailboxesLoading(false);
-    }
-  }, []); // No dependencies - only run once on mount
-
-  // Navigate to first mailbox if none is selected (separate effect)
-  useEffect(() => {
-    // Skip mailbox redirect in analytics mode
-    if (isAnalyticsMode) return;
-    // Wait for mailboxes to be loaded
-    if (accessibleMailboxes.length > 0 && !mailboxId) {
-      navigate(`/emails/${accessibleMailboxes[0].id}`, { replace: true });
-    }
-  }, [accessibleMailboxes, mailboxId, navigate, isAnalyticsMode]);
-
-  // Analytics mode: load emails from analytics API with pagination
-  const loadAnalyticsEmails = useCallback(async (append: boolean = false) => {
-    if (!isAnalyticsMode) return;
-    setLoading(true);
-    try {
-      if (analyticsEmailId) {
-        // Single email preview: load just this email and show detail panel
-        const fullEmail = await emailService.getEmail(analyticsEmailId);
-        if (fullEmail) {
-          setEmails([fullEmail as Email]);
-          setTotalCount(1);
-          setSelectedEmail(fullEmail as Email);
-          setSelectedEmailId(analyticsEmailId);
-        } else {
-          setEmails([]);
-          setTotalCount(0);
-        }
-      } else if (analyticsThreadId) {
-        // Thread drilldown: load all emails in the thread
-        const detail = await threadsApi.getDetail(analyticsThreadId);
-        if (detail?.emails) {
-          const threadEmails = detail.emails.map(e => ({
-            id: e.id,
-            subject: e.subject || '',
-            sender_email: e.sender_email || '',
-            sender_name: e.sender_name || '',
-            recipients: e.recipients || [],
-            sent_date: e.sent_date || '',
-            is_outbound: e.is_outbound ?? false,
-            body_text: e.body_text || '',
-            folder_path: e.folder_path || '',
-          })) as Email[];
-          setEmails(threadEmails);
-          setTotalCount(threadEmails.length);
-        } else {
-          setEmails([]);
-          setTotalCount(0);
-        }
-      } else {
-        const offset = append ? emails.length : 0;
-        const result = analyticsContactId
-          ? await contactsApi.getEmails(analyticsContactId, pageSize, offset)
-          : await companiesApi.getEmails(analyticsCompanyId!, pageSize, offset);
-        const newEmails = (result.emails || []) as Email[];
-        if (append) {
-          setEmails(prev => [...prev, ...newEmails]);
-        } else {
-          setEmails(newEmails);
-        }
-        setTotalCount(result.total || newEmails.length);
-      }
-    } catch (error) {
-      console.error('Error loading analytics emails:', error);
-      message.error('Failed to load emails');
-    } finally {
-      setLoading(false);
-    }
-  }, [isAnalyticsMode, analyticsContactId, analyticsCompanyId, analyticsThreadId, analyticsEmailId, emails.length, pageSize]);
-
-  useEffect(() => {
-    if (!isAnalyticsMode) return;
-    loadAnalyticsEmails(false);
-  }, [isAnalyticsMode, analyticsContactId, analyticsCompanyId, analyticsThreadId, analyticsEmailId]);
-
-  // Load folders for a specific mailbox (dynamic) - uses cached mailboxIdMap
-  const loadFoldersForMailbox = useCallback(async (mailboxName: string) => {
-    const mailboxId = mailboxIdMap[mailboxName];
-    if (!mailboxId) {
-      console.error('Mailbox ID not found for:', mailboxName);
-      return;
-    }
-
-    try {
-      setFoldersLoading(true);
-      const foldersData = await emailService.getFolderNames(mailboxId);
-      setFolders(foldersData);
-    } catch (error) {
-      console.error('Error loading folders for mailbox:', error);
-    } finally {
-      setFoldersLoading(false);
-    }
-  }, [mailboxIdMap]);
-
-  // Load email details
-  const loadEmailDetails = useCallback(async (emailId: string) => {
-    try {
-      setDetailLoading(true);
-      setSelectedEmailId(emailId);
-      const fullEmail = await emailService.getEmail(emailId);
-      setSelectedEmail(fullEmail);
-    } catch (error) {
-      console.error('Error loading email details:', error);
-      message.error('Failed to load email');
-    } finally {
-      setDetailLoading(false);
-    }
-  }, []);
-
-  // Keep processingJobs ref in sync with state
-  useEffect(() => {
-    processingJobsRef.current = processingJobs;
-  }, [processingJobs]);
-
-  // Load processing jobs for sync status
-  const loadProcessingJobs = useCallback(async () => {
-    try {
-      const jobs = await dashboardService._fetchProcessingJobs();
-      // Preserve existing data if API returns empty (transient failure)
-      const currentJobs = processingJobsRef.current;
-      if (jobs && Array.isArray(jobs)) {
-        // Only clear if we got a valid response - empty array when we have data might be transient
-        if (jobs.length === 0 && currentJobs.length > 0) {
-          // Keep existing data on empty response
-          return;
-        }
-        setProcessingJobs(jobs);
-      }
-    } catch (error) {
-      console.error('Error loading processing jobs:', error);
-      // Don't clear existing data on error
-    }
-  }, []);
-
-  useEffect(() => {
-    // In analytics mode, skip mailbox/filter loading
-    if (isAnalyticsMode) {
-      setMailboxesLoading(false);
-      setLoading(false);
-      return;
-    }
-    // Don't call loadEmails() here - it will be called by the effect that watches filters
-    loadFilterOptions();
-    loadProcessingJobs();
-
-    // Poll for job updates every 5 seconds
-    const interval = setInterval(loadProcessingJobs, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    // Only load emails if a mailbox is selected
-    if (filters.mailbox) {
-      loadEmails(isLoadingMoreRef.current);
-      isLoadingMoreRef.current = false; // Reset after loading
-    } else {
-      setLoading(false);
-    }
-  }, [filters, currentPage, loadEmails]);
-
-  // Reload folders when mailbox selection changes
-  useEffect(() => {
-    if (filters.mailbox && mailboxIdMap[filters.mailbox]) {
-      loadFoldersForMailbox(filters.mailbox);
-    }
-  }, [filters.mailbox, mailboxIdMap, loadFoldersForMailbox]);
-
-  // Sync URL param (mailboxId) with component state
-  useEffect(() => {
-    // Wait for mailboxes to be loaded before trying to sync
-    if (mailboxesLoading) return;
-
-    if (mailboxId && mailboxIdToNameMap[mailboxId]) {
-      const mailboxName = mailboxIdToNameMap[mailboxId];
-
-      // Update filters with the mailbox name (triggers email loading)
-      setFilters(prev => ({ ...prev, mailbox: mailboxName }));
-
-      // Clear any selected email when switching mailboxes (unless emailId is in URL)
-      if (!emailId) {
-        setSelectedEmail(null);
-        setSelectedEmailId(null);
-      }
-      setCurrentPage(1);
-    } else if (mailboxId && Object.keys(mailboxIdToNameMap).length > 0) {
-      // Mailbox ID from URL not found in accessible mailboxes
-      console.warn(`[EmailList] Mailbox ${mailboxId} not found in accessible mailboxes, redirecting to mailboxes page`);
-      message.warning('Mailbox not found or not accessible');
-      navigate('/mailboxes', { replace: true });
-    }
-  }, [mailboxId, mailboxIdToNameMap, emailId, mailboxesLoading, navigate]);
-
-  // Load email detail when emailId changes in URL
-  useEffect(() => {
-    if (emailId && emailId !== selectedEmailId) {
-      loadEmailDetails(emailId);
-    } else if (!emailId && selectedEmailId) {
-      // URL has no emailId but we have one selected - clear it
-      setSelectedEmail(null);
-      setSelectedEmailId(null);
-    }
-  }, [emailId, selectedEmailId, loadEmailDetails]);
-
-  // Handlers
-  const handleFilterChange = (key: keyof EmailFilters, value: any) => {
-    // For filters that affect email list, show immediate feedback
-    if (key === 'folder' || key === 'category' || key === 'isOutbound') {
-      setEmails([]);
-      setTotalCount(0); // Clear count to force skeleton display
-      setLoading(true);
-      setSelectedEmail(null);
-      setSelectedEmailId(null);
-    }
-    setFilters(prev => ({ ...prev, [key]: value }));
-    setCurrentPage(1);
-  };
-
-  const handleFolderSelect = (folderKey: string) => {
-    // Optimistically clear emails and show loading for instant feedback
-    setEmails([]);
-    setTotalCount(0); // Clear count to force skeleton display
-    setLoading(true);
-    setSelectedEmail(null);
-    setSelectedEmailId(null);
-    setCurrentPage(1);
-
-    if (folderKey === '') {
-      setFilters(prev => ({ ...prev, folder: '' }));
-    } else {
-      // Try to find matching folder with increasing specificity:
-      // 1. Exact match (case-sensitive)
-      let matchedFolder = folders.find(f => f === folderKey);
-
-      // 2. If no exact match, try case-insensitive exact match
-      if (!matchedFolder) {
-        matchedFolder = folders.find(f => f.toLowerCase() === folderKey.toLowerCase());
-      }
-
-      // 3. If still no match, try case-insensitive includes (for system folders like 'inbox', 'sent')
-      if (!matchedFolder) {
-        matchedFolder = folders.find(f => f.toLowerCase().includes(folderKey.toLowerCase()));
-      }
-
-      // Use matched folder if found, otherwise use the key itself for filtering
-      setFilters(prev => ({ ...prev, folder: matchedFolder || folderKey }));
-    }
-  };
-
-  const handleEmailSelect = (email: Email) => {
-    if (isAnalyticsMode) {
-      // In analytics mode, load email detail directly (no URL navigation)
-      loadEmailDetails(email.id);
-    } else if (mailboxId) {
-      navigate(`/emails/${mailboxId}/${email.id}`);
-    }
-  };
-
-  const handleCloseDetail = () => {
-    if (isAnalyticsMode) {
-      setSelectedEmail(null);
-      setSelectedEmailId(null);
-    } else if (mailboxId) {
-      navigate(`/emails/${mailboxId}`);
-    }
-  };
-
-  const handleRefresh = () => {
-    if (!filters.mailbox) {
-      return;
-    }
-    setEmails([]);
-    setLoading(true);
-    setCurrentPage(1); // Reset to first page on refresh
-    setSelectedEmail(null);
-    setSelectedEmailId(null);
-    loadEmails(false); // Fresh load, don't append
-  };
-
-  const handleLoadMore = () => {
-    if (!loading && emails.length < totalCount) {
-      isLoadingMoreRef.current = true; // Mark as load more operation
-      setCurrentPage(prev => prev + 1);
-    }
-  };
-
-  const hasActiveFilters = !!(filters.category || filters.isOutbound || filters.folder);
-
-  // Get additional folders (not system folders)
   const additionalFolders = useMemo(() => {
     return folders.filter(f => {
       const lower = f.toLowerCase();
@@ -543,61 +237,216 @@ export const EmailList: React.FC = () => {
     });
   }, [folders]);
 
-  // Client-side search filter for analytics mode
-  const filteredEmails = useMemo(() => {
-    if (!isAnalyticsMode || !filters.search) return emails;
-    const q = filters.search.toLowerCase();
+  const hasActiveFilters = !!(categoryFilter || directionFilter || folderFilter || dateRange || debouncedSender);
+
+  // Load filter options (categories + mailboxes) — once on mount
+  useEffect(() => {
+    if (isAnalyticsMode) { setMailboxesLoading(false); return; }
+    (async () => {
+      try {
+        setMailboxesLoading(true);
+        const [cats, mbs] = await Promise.all([
+          emailService.getEmailCategories(),
+          mailboxService.getMailboxes(),
+        ]);
+        setCategories(cats);
+        setAccessibleMailboxes(mbs);
+        const idMap: Record<string, string> = {};
+        const nameMap: Record<string, string> = {};
+        mbs.forEach((m: Mailbox) => { idMap[m.name] = m.id; nameMap[m.id] = m.name; });
+        setMailboxIdMap(idMap);
+        setMailboxIdToNameMap(nameMap);
+      } catch (e) {
+        console.error('Failed to load mailboxes:', e);
+      } finally {
+        setMailboxesLoading(false);
+      }
+    })();
+  }, [isAnalyticsMode]);
+
+  // Navigate to first mailbox if none selected
+  useEffect(() => {
+    if (isAnalyticsMode || mailboxesLoading) return;
+    if (accessibleMailboxes.length > 0 && !mailboxId) {
+      navigate(`/emails/${accessibleMailboxes[0].id}`, { replace: true });
+    }
+  }, [accessibleMailboxes, mailboxId, navigate, isAnalyticsMode, mailboxesLoading]);
+
+  // Sync mailboxId URL param → mailboxName filter
+  useEffect(() => {
+    if (mailboxesLoading || isAnalyticsMode) return;
+    if (mailboxId && mailboxIdToNameMap[mailboxId]) {
+      const name = mailboxIdToNameMap[mailboxId];
+      if (name !== mailboxName) {
+        setMailboxName(name);
+        setPage(1);
+        if (!emailId) { setSelectedEmail(null); setSelectedEmailId(null); }
+      }
+    } else if (mailboxId && Object.keys(mailboxIdToNameMap).length > 0) {
+      navigate('/mailboxes', { replace: true });
+    }
+  }, [mailboxId, mailboxIdToNameMap, emailId, mailboxesLoading, isAnalyticsMode]);
+
+  // Load folders when mailbox changes
+  useEffect(() => {
+    if (!mailboxName || !mailboxIdMap[mailboxName]) return;
+    (async () => {
+      setFoldersLoading(true);
+      try {
+        const f = await emailService.getFolderNames(mailboxIdMap[mailboxName]);
+        setFolders(f);
+      } catch { /* ignore */ } finally { setFoldersLoading(false); }
+    })();
+  }, [mailboxName, mailboxIdMap]);
+
+  // Load email detail
+  const loadEmailDetails = useCallback(async (id: string) => {
+    setDetailLoading(true);
+    setSelectedEmailId(id);
+    try {
+      const full = await emailService.getEmail(id);
+      setSelectedEmail(full);
+    } catch { message.error('Failed to load email'); } finally { setDetailLoading(false); }
+  }, []);
+
+  // URL emailId → detail panel
+  useEffect(() => {
+    if (emailId && emailId !== selectedEmailId) loadEmailDetails(emailId);
+    else if (!emailId && selectedEmailId) { setSelectedEmail(null); setSelectedEmailId(null); }
+  }, [emailId, selectedEmailId, loadEmailDetails]);
+
+  // Analytics mode: load emails
+  useEffect(() => {
+    if (!isAnalyticsMode) return;
+    (async () => {
+      setAnalyticsLoading(true);
+      try {
+        if (analyticsEmailId) {
+          const full = await emailService.getEmail(analyticsEmailId);
+          if (full) {
+            setAnalyticsEmails([full as Email]);
+            setAnalyticsTotal(1);
+            setSelectedEmail(full as Email);
+            setSelectedEmailId(analyticsEmailId);
+          }
+        } else if (analyticsThreadId) {
+          const detail = await threadsApi.getDetail(analyticsThreadId);
+          const threadEmails = (detail?.emails || []).map((e: any) => ({
+            id: e.id, subject: e.subject || '', sender_email: e.sender_email || '',
+            sender_name: e.sender_name || '', recipients: e.recipients || [],
+            sent_date: e.sent_date || '', is_outbound: e.is_outbound ?? false,
+            body_text: e.body_text || '', folder_path: e.folder_path || '',
+          })) as Email[];
+          setAnalyticsEmails(threadEmails);
+          setAnalyticsTotal(threadEmails.length);
+        } else {
+          const result = analyticsContactId
+            ? await contactsApi.getEmails(analyticsContactId, 100, 0)
+            : await companiesApi.getEmails(analyticsCompanyId!, 100, 0);
+          setAnalyticsEmails((result.emails || []) as Email[]);
+          setAnalyticsTotal(result.total || 0);
+        }
+      } catch { message.error('Failed to load emails'); }
+      finally { setAnalyticsLoading(false); }
+    })();
+  }, [isAnalyticsMode, analyticsContactId, analyticsCompanyId, analyticsThreadId, analyticsEmailId]);
+
+  // Processing jobs for sync status
+  useEffect(() => {
+    if (isAnalyticsMode) return;
+    const load = async () => {
+      try {
+        const jobs = await dashboardService._fetchProcessingJobs();
+        if (jobs?.length) setProcessingJobs(jobs);
+      } catch { /* ignore */ }
+    };
+    load();
+    const interval = setInterval(load, 5000);
+    return () => clearInterval(interval);
+  }, [isAnalyticsMode]);
+
+  // Keep ref in sync
+  useEffect(() => { processingJobsRef.current = processingJobs; }, [processingJobs]);
+
+  // Handlers
+  const handleFolderSelect = (key: string) => {
+    setPage(1);
+    setSelectedEmail(null);
+    setSelectedEmailId(null);
+    if (key === '') { setFolderFilter(''); return; }
+    const matched = folders.find(f => f === key)
+      || folders.find(f => f.toLowerCase() === key.toLowerCase())
+      || folders.find(f => f.toLowerCase().includes(key.toLowerCase()));
+    setFolderFilter(matched || key);
+  };
+
+  const handleEmailSelect = (email: Email) => {
+    if (isAnalyticsMode) { loadEmailDetails(email.id); }
+    else if (mailboxId) { navigate(`/emails/${mailboxId}/${email.id}`); }
+  };
+
+  const handleCloseDetail = () => {
+    if (isAnalyticsMode) { setSelectedEmail(null); setSelectedEmailId(null); }
+    else if (mailboxId) { navigate(`/emails/${mailboxId}`); }
+  };
+
+  const handleRefresh = () => {
+    setSelectedEmail(null);
+    setSelectedEmailId(null);
+    emailsQuery.refetch();
+  };
+
+  const clearFilters = () => {
+    setCategoryFilter('');
+    setDirectionFilter('');
+    setFolderFilter('');
+    setDateRange(null);
+    setSenderSearch('');
+    setPage(1);
+  };
+
+  // Client-side search for analytics mode
+  const displayEmails = useMemo(() => {
+    if (!isAnalyticsMode || !searchText) return emails;
+    const q = searchText.toLowerCase();
     return emails.filter(e =>
       (e.subject || '').toLowerCase().includes(q) ||
       (e.sender_name || '').toLowerCase().includes(q) ||
       (e.sender_email || '').toLowerCase().includes(q)
     );
-  }, [isAnalyticsMode, emails, filters.search]);
-
-  const displayEmails = isAnalyticsMode ? filteredEmails : emails;
+  }, [isAnalyticsMode, emails, searchText]);
 
   return (
     <div className="mail-client">
       {/* Left Sidebar — hidden in analytics mode */}
       {!isAnalyticsMode && (
         <div className={`mail-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
-          {/* Sidebar Header */}
           <div className="mail-sidebar-header">
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
               <Tooltip title="Back to Mailboxes">
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<LeftOutlined />}
-                  onClick={() => navigate('/mailboxes')}
-                  style={{ color: 'rgba(255,255,255,0.8)' }}
-                />
+                <Button type="text" size="small" icon={<LeftOutlined />}
+                  onClick={() => navigate('/mailboxes')} style={{ color: 'rgba(255,255,255,0.8)' }} />
               </Tooltip>
               {!sidebarCollapsed && (
                 <Text strong style={{ fontSize: 14, color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {filters.mailbox || 'Loading...'}
+                  {mailboxName || 'Loading...'}
                 </Text>
               )}
             </div>
             <Tooltip title={sidebarCollapsed ? 'Expand' : 'Collapse'}>
-              <Button
-                type="text"
-                size="small"
+              <Button type="text" size="small"
                 icon={sidebarCollapsed ? <ExpandOutlined /> : <CompressOutlined />}
                 onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-                style={{ color: 'rgba(255,255,255,0.8)' }}
-              />
+                style={{ color: 'rgba(255,255,255,0.8)' }} />
             </Tooltip>
           </div>
 
-          {/* Folders Section */}
           <div className="mail-sidebar-section">
             <div className="mail-sidebar-section-title">
               {foldersLoading ? <SyncOutlined spin /> : <FolderOutlined />} {!sidebarCollapsed && 'Folders'}
             </div>
             <div className="mail-sidebar-items">
-              {mailboxesLoading || (foldersLoading && !filters.mailbox) ? (
-                // Skeleton loader while loading
+              {mailboxesLoading || (foldersLoading && !mailboxName) ? (
                 !sidebarCollapsed && (
                   <div style={{ padding: '8px 12px' }}>
                     {[1, 2, 3, 4, 5].map(i => (
@@ -608,7 +457,7 @@ export const EmailList: React.FC = () => {
                     ))}
                   </div>
                 )
-              ) : !filters.mailbox ? (
+              ) : !mailboxName ? (
                 !sidebarCollapsed && (
                   <div style={{ padding: '12px', textAlign: 'center', color: 'rgba(255,255,255,0.5)', fontSize: 12 }}>
                     Select a mailbox
@@ -617,11 +466,9 @@ export const EmailList: React.FC = () => {
               ) : (
                 <>
                   {systemFolders.map(folder => (
-                    <div
-                      key={folder.key}
+                    <div key={folder.key}
                       className={`mail-sidebar-item ${currentFolderKey === folder.key ? 'active' : ''}`}
-                      onClick={() => handleFolderSelect(folder.key)}
-                    >
+                      onClick={() => handleFolderSelect(folder.key)}>
                       {folder.icon}
                       {!sidebarCollapsed && <span>{folder.label}</span>}
                     </div>
@@ -630,11 +477,9 @@ export const EmailList: React.FC = () => {
                     <>
                       <div className="mail-sidebar-divider" />
                       {additionalFolders.map(folder => (
-                        <div
-                          key={folder}
-                          className={`mail-sidebar-item ${filters.folder === folder ? 'active' : ''}`}
-                          onClick={() => handleFilterChange('folder', folder)}
-                        >
+                        <div key={folder}
+                          className={`mail-sidebar-item ${folderFilter === folder ? 'active' : ''}`}
+                          onClick={() => { setFolderFilter(folder); setPage(1); }}>
                           <FolderOutlined />
                           {!sidebarCollapsed && <span>{folder}</span>}
                         </div>
@@ -658,147 +503,151 @@ export const EmailList: React.FC = () => {
             background: 'linear-gradient(135deg, rgba(102,126,234,0.12), rgba(118,75,162,0.08))',
             borderBottom: '1px solid rgba(102,126,234,0.2)',
           }}>
-            <Button
-              type="text"
-              icon={<LeftOutlined />}
-              onClick={() => navigate(-1)}
-              style={{ color: '#667eea' }}
-            >
-              Back
-            </Button>
+            <Button type="text" icon={<LeftOutlined />} onClick={() => navigate(-1)} style={{ color: '#667eea' }}>Back</Button>
             <MailOutlined style={{ color: '#667eea', fontSize: 16 }} />
-            <Text strong style={{ fontSize: 14 }}>
-              Emails for {analyticsLabel}
-            </Text>
+            <Text strong style={{ fontSize: 14 }}>Emails for {analyticsLabel}</Text>
             <Tag color="purple">{totalCount} email{totalCount !== 1 ? 's' : ''} across all mailboxes</Tag>
           </div>
         )}
 
         {/* Top Bar - Search & Filters */}
         <div className="mail-topbar">
-          <div className="mail-topbar-left">
+          <div className="mail-topbar-left" style={{ flex: 1 }}>
             <Search
-              placeholder="Search emails..."
+              placeholder="Search subject, sender..."
               allowClear
-              value={filters.search}
-              onChange={(e) => handleFilterChange('search', e.target.value)}
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
               prefix={<SearchOutlined style={{ color: '#667eea' }} />}
               className="mail-search"
+              style={{ maxWidth: 300 }}
             />
           </div>
 
           {!isAnalyticsMode && (
-            <div className="mail-topbar-right">
-              {/* Filter Button */}
-              <Dropdown
-                trigger={['click']}
-                open={showFilters}
-                onOpenChange={setShowFilters}
-                dropdownRender={() => (
-                  <div className="mail-filters-dropdown">
-                    <div className="filter-header">
-                      <Text strong>Filters</Text>
-                      {hasActiveFilters && (
-                        <Button
-                          type="link"
-                          size="small"
-                          onClick={() => {
-                            setFilters({
-                              search: filters.search,
-                              category: '',
-                              mailbox: filters.mailbox,
-                              folder: '',
-                              dateRange: null,
-                              isOutbound: '',
-                            });
-                          }}
-                        >
-                          Clear
-                        </Button>
-                      )}
-                    </div>
+            <div className="mail-topbar-right" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              {/* Sender filter */}
+              <Input
+                placeholder="Sender..."
+                prefix={<UserOutlined />}
+                allowClear
+                value={senderSearch}
+                onChange={e => setSenderSearch(e.target.value)}
+                style={{ width: 160 }}
+                size="small"
+              />
 
-                    <div className="filter-group">
-                      <Text type="secondary" style={{ fontSize: 12, fontWeight: 500 }}>Category</Text>
-                      <Select
-                        placeholder="All categories"
-                        allowClear
-                        style={{ width: '100%' }}
-                        value={filters.category || undefined}
-                        onChange={(v) => handleFilterChange('category', v)}
-                      >
-                        {categories.map(cat => (
-                          <Option key={cat} value={cat}>{getCategoryLabel(cat)}</Option>
-                        ))}
-                      </Select>
-                    </div>
+              {/* Direction filter */}
+              <Select
+                placeholder="Direction"
+                allowClear
+                value={directionFilter || undefined}
+                onChange={v => { setDirectionFilter(v || ''); setPage(1); }}
+                style={{ width: 110 }}
+                size="small"
+                options={[
+                  { value: 'inbound', label: 'Received' },
+                  { value: 'outbound', label: 'Sent' },
+                ]}
+              />
 
-                    <div className="filter-group">
-                      <Text type="secondary" style={{ fontSize: 12, fontWeight: 500 }}>Direction</Text>
-                      <Select
-                        placeholder="All"
-                        allowClear
-                        style={{ width: '100%' }}
-                        value={filters.isOutbound || undefined}
-                        onChange={(v) => handleFilterChange('isOutbound', v)}
-                      >
-                        <Option value="inbound">Received</Option>
-                        <Option value="outbound">Sent</Option>
-                      </Select>
-                    </div>
-                  </div>
-                )}
-              >
-                <Badge dot={hasActiveFilters} offset={[-2, 2]}>
-                  <Button type={hasActiveFilters ? 'primary' : 'text'} icon={<FilterOutlined />}>
-                    Filters
-                  </Button>
-                </Badge>
-              </Dropdown>
+              {/* Category filter */}
+              {categories.length > 0 && (
+                <Select
+                  placeholder="Category"
+                  allowClear
+                  value={categoryFilter || undefined}
+                  onChange={v => { setCategoryFilter(v || ''); setPage(1); }}
+                  style={{ width: 130 }}
+                  size="small"
+                >
+                  {categories.map(cat => (
+                    <Option key={cat} value={cat}>{getCategoryLabel(cat)}</Option>
+                  ))}
+                </Select>
+              )}
 
-              {/* Refresh */}
+              {/* Date range */}
+              <RangePicker
+                size="small"
+                onChange={(_, dateStrings) => {
+                  if (dateStrings[0] && dateStrings[1]) {
+                    setDateRange([dateStrings[0], dateStrings[1]]);
+                  } else {
+                    setDateRange(null);
+                  }
+                  setPage(1);
+                }}
+                style={{ width: 220 }}
+              />
+
+              {/* Sort */}
+              <Select
+                value={`${sortBy}_${sortDir}`}
+                onChange={v => {
+                  const [col, dir] = v.split('_');
+                  setSortBy(col);
+                  setSortDir(dir as 'asc' | 'desc');
+                  setPage(1);
+                }}
+                style={{ width: 140 }}
+                size="small"
+                options={[
+                  { value: 'sent_date_desc', label: 'Newest first' },
+                  { value: 'sent_date_asc', label: 'Oldest first' },
+                  { value: 'sender_name_asc', label: 'Sender A→Z' },
+                  { value: 'sender_name_desc', label: 'Sender Z→A' },
+                  { value: 'subject_asc', label: 'Subject A→Z' },
+                ]}
+              />
+
+              {hasActiveFilters && (
+                <Button type="link" size="small" onClick={clearFilters} icon={<CloseOutlined />}>Clear</Button>
+              )}
+
               <Tooltip title="Refresh">
-                <Button
-                  type="text"
-                  icon={<ReloadOutlined spin={loading} />}
-                  onClick={handleRefresh}
-                />
+                <Button type="text" icon={<ReloadOutlined spin={loading} />} onClick={handleRefresh} />
               </Tooltip>
             </div>
           )}
         </div>
 
         {/* Sync Status Bar */}
-        {!isAnalyticsMode && filters.mailbox && mailboxIdMap[filters.mailbox] && (
+        {!isAnalyticsMode && mailboxName && mailboxIdMap[mailboxName] && (
           <SyncStatusBar
-            selectedMailboxIds={[mailboxIdMap[filters.mailbox]]}
+            selectedMailboxIds={[mailboxIdMap[mailboxName]]}
             jobs={processingJobs}
             onViewDetails={() => navigate('/processing')}
           />
         )}
 
-        {/* Content Area - Key based on mailbox to ensure fresh mount */}
-        <div className="mail-content" key={isAnalyticsMode ? 'analytics' : (filters.mailbox || 'no-mailbox')}>
+        {/* Content Area */}
+        <div className="mail-content" key={isAnalyticsMode ? 'analytics' : (mailboxName || 'no-mailbox')}>
           {/* Email List */}
           <div className={`mail-list-panel ${selectedEmail ? 'has-detail' : ''}`}>
             {/* Stats bar */}
-            <div className="mail-list-stats">
+            <div className="mail-list-stats" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Text type="secondary" style={{ fontSize: 13 }}>
-                {loading && displayEmails.length === 0 ? (
-                  'Loading emails...'
-                ) : isAnalyticsMode ? (
-                  <>
-                    {displayEmails.length} email{displayEmails.length !== 1 ? 's' : ''}
-                    {filters.search && ` matching "${filters.search}"`}
-                  </>
-                ) : (
-                  <>
-                    {totalCount.toLocaleString()} email{totalCount !== 1 ? 's' : ''}
-                    {filters.mailbox && ` in ${filters.mailbox}`}
-                    {filters.folder && ` • ${filters.folder}`}
-                  </>
-                )}
+                {loading && displayEmails.length === 0 ? 'Loading emails...'
+                  : isAnalyticsMode ? (
+                    <>{displayEmails.length} email{displayEmails.length !== 1 ? 's' : ''}
+                      {searchText && ` matching "${searchText}"`}</>
+                  ) : (
+                    <>{totalCount.toLocaleString()} email{totalCount !== 1 ? 's' : ''}
+                      {mailboxName && ` in ${mailboxName}`}
+                      {folderFilter && ` • ${folderFilter}`}</>
+                  )}
               </Text>
+              {!isAnalyticsMode && totalCount > pageSize && (
+                <Pagination
+                  current={page}
+                  total={totalCount}
+                  pageSize={pageSize}
+                  size="small"
+                  simple
+                  onChange={p => { setPage(p); setSelectedEmail(null); setSelectedEmailId(null); }}
+                />
+              )}
             </div>
 
             {/* Email List */}
@@ -815,41 +664,21 @@ export const EmailList: React.FC = () => {
                     </div>
                   ))}
                 </div>
-              ) : !isAnalyticsMode && !filters.mailbox ? (
-                <Empty
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description="Select a mailbox to view emails"
-                  style={{ marginTop: 60 }}
-                />
+              ) : !isAnalyticsMode && !mailboxName ? (
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Select a mailbox to view emails" style={{ marginTop: 60 }} />
               ) : displayEmails.length === 0 ? (
-                <Empty
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE}
                   description={isAnalyticsMode ? 'No emails linked yet' : 'No emails found'}
-                  style={{ marginTop: 60 }}
-                />
+                  style={{ marginTop: 60 }} />
               ) : (
-                <>
-                  {displayEmails.map(email => (
-                    <EmailListItem
-                      key={email.id}
-                      email={email}
-                      isSelected={selectedEmailId === email.id}
-                      onClick={() => handleEmailSelect(email)}
-                    />
-                  ))}
-
-                  {emails.length < totalCount && (
-                    <div className="mail-list-load-more">
-                      <Button
-                        type="link"
-                        onClick={isAnalyticsMode ? () => loadAnalyticsEmails(true) : handleLoadMore}
-                        loading={loading}
-                      >
-                        Load more ({totalCount - emails.length} remaining)
-                      </Button>
-                    </div>
-                  )}
-                </>
+                displayEmails.map(email => (
+                  <EmailListItem
+                    key={email.id}
+                    email={email}
+                    isSelected={selectedEmailId === email.id}
+                    onClick={() => handleEmailSelect(email)}
+                  />
+                ))
               )}
             </div>
           </div>

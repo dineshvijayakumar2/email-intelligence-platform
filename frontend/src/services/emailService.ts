@@ -39,6 +39,8 @@ export interface EmailFilters {
   folder?: string;
   dateRange?: [string, string] | null;
   isOutbound?: string;
+  sender?: string;
+  company_id?: string;
   // New tag-based filters
   tags?: string[];
   isSpam?: boolean;
@@ -49,7 +51,10 @@ export interface EmailFilters {
 
 export const emailService = {
   // Get emails with filters and pagination - now uses backend API
-  async getEmails(filters: EmailFilters = {}, page = 1, pageSize = 20): Promise<{ emails: Email[]; totalCount: number }> {
+  async getEmails(
+    filters: EmailFilters = {}, page = 1, pageSize = 20,
+    sort_by?: string, sort_dir?: string,
+  ): Promise<{ emails: Email[]; totalCount: number }> {
     try {
       const token = await getAccessToken();
       const headers: Record<string, string> = {
@@ -65,7 +70,9 @@ export const emailService = {
         body: JSON.stringify({
           filters,
           page,
-          pageSize
+          pageSize,
+          sort_by,
+          sort_dir,
         }),
       });
 

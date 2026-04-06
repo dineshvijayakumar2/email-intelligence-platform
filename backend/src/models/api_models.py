@@ -84,12 +84,16 @@ class EmailFilters(BaseModel):
     isMarketing: Optional[bool] = None
     minPriority: Optional[int] = None
     maxPriority: Optional[int] = None
+    sender: Optional[str] = None       # Search sender_name or sender_email
+    company_id: Optional[str] = None   # Filter by linked company
 
 
 class EmailRequest(BaseModel):
     filters: EmailFilters = EmailFilters()
     page: int = 1
     pageSize: int = 20
+    sort_by: Optional[str] = None      # sent_date, subject, sender_name, sender_email
+    sort_dir: Optional[str] = None     # asc or desc
 
 
 class EmailResponse(BaseModel):

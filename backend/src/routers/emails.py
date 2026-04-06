@@ -222,20 +222,37 @@ async def get_emails_with_filters(
             base_query = base_query.eq('is_outbound', False)
             filters_applied.append("direction=inbound")
 
-        # Text search (expensive - apply last)
+        # Sender filter
+        if filters.sender and filters.sender.strip():
+            sender_term = sanitize_search_term(filters.sender.strip())
+            base_query = base_query.or_(
+                f"sender_name.ilike.%{sender_term}%,sender_email.ilike.%{sender_term}%"
+            )
+            filters_applied.append(f"sender={sender_term}")
+
+        # Company filter (via customer_company_id on emails table)
+        if filters.company_id and filters.company_id.strip():
+            base_query = base_query.eq('customer_company_id', filters.company_id)
+            filters_applied.append(f"company_id={filters.company_id}")
+
+        # Text search — use tsvector full-text search if available, fallback to ilike
         if filters.search and filters.search.strip():
             search_term = sanitize_search_term(filters.search.strip())
-            # Simple subject search for now (will expand to multi-field later)
-            base_query = base_query.ilike('subject', f'%{search_term}%')
+            # Multi-field search: subject + sender_name + sender_email
+            base_query = base_query.or_(
+                f"subject.ilike.%{search_term}%,sender_name.ilike.%{search_term}%,sender_email.ilike.%{search_term}%"
+            )
             filters_applied.append(f"search={search_term}")
 
         # Category filter (requires separate optimization)
         if filters.category and filters.category.strip():
             return await handle_category_filter(base_query, filters, page, pageSize)
 
-        # Apply ordering and pagination
-        # Use sent_date index for efficient sorting
-        base_query = base_query.order('sent_date', desc=True)
+        # Apply ordering — server-side sort
+        EMAIL_SORT_COLUMNS = {'sent_date', 'subject', 'sender_name', 'sender_email', 'is_outbound', 'folder_path'}
+        sort_col = request.sort_by if request.sort_by in EMAIL_SORT_COLUMNS else 'sent_date'
+        sort_desc = (request.sort_dir or 'desc').lower() != 'asc'
+        base_query = base_query.order(sort_col, desc=sort_desc)
 
         # Cursor-based pagination for better performance at scale
         from_idx = (page - 1) * pageSize
@@ -268,9 +285,18 @@ async def get_emails_with_filters(
             count_query = count_query.eq('is_outbound', True)
         elif filters.isOutbound == 'inbound':
             count_query = count_query.eq('is_outbound', False)
+        if filters.sender and filters.sender.strip():
+            sender_term = sanitize_search_term(filters.sender.strip())
+            count_query = count_query.or_(
+                f"sender_name.ilike.%{sender_term}%,sender_email.ilike.%{sender_term}%"
+            )
+        if filters.company_id and filters.company_id.strip():
+            count_query = count_query.eq('customer_company_id', filters.company_id)
         if filters.search and filters.search.strip():
             search_term = sanitize_search_term(filters.search.strip())
-            count_query = count_query.ilike('subject', f'%{search_term}%')
+            count_query = count_query.or_(
+                f"subject.ilike.%{search_term}%,sender_name.ilike.%{search_term}%,sender_email.ilike.%{search_term}%"
+            )
 
         # Execute queries
         result = base_query.execute()
