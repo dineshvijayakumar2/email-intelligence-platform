@@ -173,7 +173,7 @@ class VectorService:
                     v_ids, v_embs = list(v_ids), list(v_embs)
                     total_skipped += len(ids) - len(v_ids)
                     # Write to DB in small chunks to avoid statement timeout
-                    DB_CHUNK = 25
+                    DB_CHUNK = 10
                     for ci in range(0, len(v_ids), DB_CHUNK):
                         chunk_ids = v_ids[ci:ci + DB_CHUNK]
                         chunk_embs = v_embs[ci:ci + DB_CHUNK]
