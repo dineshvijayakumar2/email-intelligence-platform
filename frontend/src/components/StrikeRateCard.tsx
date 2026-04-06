@@ -26,7 +26,7 @@ const StrikeRateCard: React.FC<Props> = ({ companyId }) => {
   return (
     <div className="rounded-lg border bg-white shadow-sm p-4">
       <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2"><Target className="h-4 w-4 text-primary" /><span className="text-sm font-semibold text-slate-900">Strike Rate</span></div>
+        <div className="flex items-center gap-2"><Target className="h-4 w-4 text-primary" /><span className="text-sm font-bold text-slate-900">Strike Rate</span></div>
         <button onClick={() => load(true)} className="p-1 rounded hover:bg-slate-100"><RefreshCw className="h-3.5 w-3.5 text-slate-400" /></button>
       </div>
       {total && total.total_quotes > 0 ? (
@@ -37,7 +37,7 @@ const StrikeRateCard: React.FC<Props> = ({ companyId }) => {
           </div>
           {data.by_contact?.length > 0 && (
             <div className="space-y-1">
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">By Contact</p>
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-600">By Contact</p>
               {data.by_contact.slice(0, 5).map((c: any) => (
                 <div key={c.contact_email} className="flex items-center justify-between text-sm">
                   <span className="text-slate-700 truncate">{c.contact_name || c.contact_email}</span>
@@ -48,7 +48,7 @@ const StrikeRateCard: React.FC<Props> = ({ companyId }) => {
           )}
           {data.by_year?.length > 0 && (
             <div className="mt-3 space-y-1">
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">By Year</p>
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-600">By Year</p>
               {data.by_year.slice(0, 4).map((y: any) => (
                 <div key={y.year} className="flex items-center justify-between text-sm">
                   <span className="text-slate-700">{y.year}</span>

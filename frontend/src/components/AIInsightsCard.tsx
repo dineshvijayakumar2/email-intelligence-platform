@@ -27,7 +27,7 @@ const BulletList: React.FC<{ items?: string[]; header: string }> = ({ items, hea
   if (!items || items.length === 0) return null;
   return (
     <div className="mt-3">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">{header}</p>
+      <p className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">{header}</p>
       <ul className="space-y-1">
         {items.map((item, i) => (
           <li key={i} className="text-sm text-slate-700 flex gap-2">
@@ -57,7 +57,7 @@ const ContactInsight: React.FC<{ insight: AIInsight }> = ({ insight }) => (
     {insight.engagement_summary && <p className="text-sm text-slate-700 leading-relaxed">{insight.engagement_summary}</p>}
     {insight.importance_level && <div className="text-xs text-slate-500">Importance: <StatusBadge variant={riskVariant(insight.importance_level) as any} size="sm">{insight.importance_level}</StatusBadge></div>}
     {insight.follow_up_suggestion && (
-      <div className="mt-2"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">Follow-up</p><p className="text-sm text-slate-700">{insight.follow_up_suggestion}</p></div>
+      <div className="mt-2"><p className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Follow-up</p><p className="text-sm text-slate-700">{insight.follow_up_suggestion}</p></div>
     )}
     <BulletList items={insight.key_observations} header="Key Observations" />
   </div>
@@ -72,7 +72,7 @@ const ThreadInsight: React.FC<{ insight: AIInsight }> = ({ insight }) => (
     </div>
     <BulletList items={insight.key_signals} header="Key Signals" />
     {insight.recommended_action && (
-      <div className="mt-2"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">Recommended Action</p><p className="text-sm text-slate-700">{insight.recommended_action}</p></div>
+      <div className="mt-2"><p className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Recommended Action</p><p className="text-sm text-slate-700">{insight.recommended_action}</p></div>
     )}
   </div>
 );
@@ -82,7 +82,7 @@ const GenericInsight: React.FC<{ insight: Record<string, any> }> = ({ insight })
     {Object.entries(insight).filter(([k]) => !SKIP_KEYS.has(k)).map(([key, value]) => {
       const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
       if (Array.isArray(value)) return <BulletList key={key} items={value.map(String)} header={label} />;
-      if (typeof value === 'string' && value.length > 80) return <div key={key}><p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">{label}</p><p className="text-sm text-slate-700">{value}</p></div>;
+      if (typeof value === 'string' && value.length > 80) return <div key={key}><p className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">{label}</p><p className="text-sm text-slate-700">{value}</p></div>;
       if (typeof value === 'string') return <div key={key} className="text-xs text-slate-500">{label}: <StatusBadge variant="neutral" size="sm">{value}</StatusBadge></div>;
       if (typeof value === 'number') return <div key={key} className="text-xs text-slate-500">{label}: <StatusBadge variant="info" size="sm">{value}</StatusBadge></div>;
       return null;
@@ -127,7 +127,7 @@ const AIInsightsCard: React.FC<AIInsightsCardProps> = ({ entityType, entityId, c
       <div className="flex items-center justify-between px-4 py-3 border-b">
         <div className="flex items-center gap-2">
           <Bot className="h-4 w-4 text-primary" />
-          <h3 className="text-sm font-semibold text-slate-900">AI Insights</h3>
+          <h3 className="text-sm font-bold text-slate-900">AI Insights</h3>
         </div>
         {insight && (
           <button onClick={handleAnalyze} disabled={loading}

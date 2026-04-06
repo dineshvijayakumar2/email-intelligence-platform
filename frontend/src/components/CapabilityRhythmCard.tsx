@@ -74,7 +74,7 @@ const CapabilityRhythmCard: React.FC<Props> = ({ companyId }) => {
       <div className="flex items-center justify-between px-4 py-3 border-b">
         <div className="flex items-center gap-2">
           <Clock className="h-4 w-4 text-primary" />
-          <span className="text-sm font-semibold text-slate-900">Ordering Rhythm</span>
+          <span className="text-sm font-bold text-slate-900">Ordering Rhythm</span>
           {overdueCount > 0 && <StatusBadge variant="danger" size="sm"><AlertTriangle className="h-3 w-3 mr-1 inline" />{overdueCount} overdue</StatusBadge>}
         </div>
         <button onClick={() => refetch()} className="p-1 rounded hover:bg-slate-100"><RefreshCw className="h-3.5 w-3.5 text-slate-400" /></button>

@@ -44,7 +44,7 @@ export const ProductProfileCards: React.FC<Props> = ({
       {/* Revenue by Category */}
       {hasCategories && (
         <div className="rounded-lg border bg-white shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b"><span className="text-sm font-semibold text-slate-900">Revenue by Category</span></div>
+          <div className="px-4 py-3 border-b"><span className="text-sm font-bold text-slate-900">Revenue by Category</span></div>
           <table className="w-full text-sm">
             <tbody className="divide-y divide-slate-50">
               {categories.map(c => (
@@ -62,7 +62,7 @@ export const ProductProfileCards: React.FC<Props> = ({
       {hasCapabilities && (
         <div className="rounded-lg border bg-white shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b">
-            <span className="text-sm font-semibold text-slate-900">Capabilities</span>
+            <span className="text-sm font-bold text-slate-900">Capabilities</span>
             <span className="text-xs text-slate-400 ml-2">{capability_breakdown!.reduce((s, c) => s + c.operation_count, 0)} ops</span>
           </div>
           <table className="w-full text-sm">
@@ -83,7 +83,7 @@ export const ProductProfileCards: React.FC<Props> = ({
         <div className="rounded-lg border bg-white shadow-sm p-4">
           {deptCounts.length > 0 && (
             <div className={hasProcesses || hasEmbellishments ? 'mb-3' : ''}>
-              <p className="text-sm font-semibold text-slate-900 mb-2">Operations by Department <span className="text-xs text-slate-400 font-normal">({operations.length})</span></p>
+              <p className="text-sm font-bold text-slate-900 mb-2">Operations by Department <span className="text-xs text-slate-400 font-normal">({operations.length})</span></p>
               <div className="space-y-1">
                 {deptCounts.map(d => (
                   <div key={d.department} className="flex items-center justify-between text-sm">

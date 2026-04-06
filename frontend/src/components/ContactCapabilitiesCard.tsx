@@ -55,7 +55,7 @@ const ContactCapabilitiesCard: React.FC<{ companyId: string }> = ({ companyId })
   return (
     <div className="rounded-lg border bg-white shadow-sm overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b">
-        <div className="flex items-center gap-2"><User className="h-4 w-4 text-primary" /><span className="text-sm font-semibold text-slate-900">Contact Capabilities</span></div>
+        <div className="flex items-center gap-2"><User className="h-4 w-4 text-primary" /><span className="text-sm font-bold text-slate-900">Contact Capabilities</span></div>
         <button onClick={() => refetch()} className="p-1 rounded hover:bg-slate-100"><RefreshCw className="h-3.5 w-3.5 text-slate-400" /></button>
       </div>
       <div className="overflow-x-auto">
