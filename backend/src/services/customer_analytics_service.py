@@ -196,9 +196,17 @@ class CustomerAnalyticsService:
         # Include QB tags — they may exist even when classifier capability_tags is []
         ops = self._fetch_all_paginated(
             'qb_operations',
-            'contact_email, capability_tags, qb_capability_tag, qb_process_tag, cost_plus_price, date_accepted',
+            'contact_email, customer_name, capability_tags, qb_capability_tag, qb_process_tag, cost_plus_price, date_accepted',
             {'matched_company_id': company_id},
         )
+
+        # If most operations lack contact_email, fall back to customer_name as grouping key
+        ops_with_email = [o for o in ops if o.get('contact_email')]
+        if len(ops_with_email) < len(ops) * 0.3 and ops:
+            # Use customer_name as a proxy group — at least shows capability data
+            for op in ops:
+                if not op.get('contact_email'):
+                    op['contact_email'] = op.get('customer_name') or 'Unknown'
 
         # Fetch contacts for this company (for name resolution)
         contacts_result = self._sb.table('customer_contacts').select(
