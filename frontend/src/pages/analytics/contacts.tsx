@@ -8,7 +8,7 @@ import {
 } from '@tanstack/react-table';
 import { DataTable } from '../../components/DataTable';
 import { useClient } from '../../contexts/ClientContext';
-import { EngagementBadge } from '../../components/analytics/EngagementBadge';
+// EngagementBadge removed — score not shown in UI
 import { LifecycleBadge } from '../../components/analytics/LifecycleBadge';
 import {
   useContacts,
@@ -28,7 +28,7 @@ export const ContactsAnalytics: React.FC = () => {
   const { clientId } = useClient();
 
   const [contactsPage, setContactsPage] = useState(1);
-  const [sorting, setSorting] = useState<SortingState>([{ id: 'engagement_score', desc: true }]);
+  const [sorting, setSorting] = useState<SortingState>([{ id: 'last_contacted_at', desc: true }]);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [qbLinked, setQbLinked] = useState(false);
@@ -43,7 +43,7 @@ export const ContactsAnalytics: React.FC = () => {
     return () => { if (searchTimerRef.current) clearTimeout(searchTimerRef.current); };
   }, [search]);
 
-  const sortBy = sorting[0]?.id || 'engagement_score';
+  const sortBy = sorting[0]?.id || 'last_contacted_at';
   const sortDir = sorting[0]?.desc ? 'desc' : 'asc';
 
   const contactsQuery = useContacts({
@@ -93,11 +93,6 @@ export const ContactsAnalytics: React.FC = () => {
         if (!v) return <span className="text-slate-300">—</span>;
         return <StatusBadge variant="purple" size="sm">{v}</StatusBadge>;
       },
-    }),
-    col.accessor('engagement_score', {
-      header: 'Score',
-      size: 140,
-      cell: info => <EngagementBadge score={info.getValue() ?? 0} showBar size="small" />,
     }),
     col.accessor('total_emails_sent', {
       header: 'Sent',

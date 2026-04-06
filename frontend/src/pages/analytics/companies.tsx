@@ -8,7 +8,7 @@ import {
 } from '@tanstack/react-table';
 import { DataTable } from '../../components/DataTable';
 import { useClient } from '../../contexts/ClientContext';
-import { EngagementBadge } from '../../components/analytics/EngagementBadge';
+// EngagementBadge removed — score not shown in UI
 import {
   useCompanies,
   useCompanyFilterOptions,
@@ -31,7 +31,7 @@ export const CompaniesAnalytics: React.FC = () => {
   const [qbMatched, setQbMatched] = useState(false);
   const [tierFilter, setTierFilter] = useState('');
   const [amFilter, setAmFilter] = useState('');
-  const [sorting, setSorting] = useState<SortingState>([{ id: 'engagement_score', desc: true }]);
+  const [sorting, setSorting] = useState<SortingState>([{ id: 'last_contact_date', desc: true }]);
 
   // Debounce search
   const searchTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -41,7 +41,7 @@ export const CompaniesAnalytics: React.FC = () => {
     return () => { if (searchTimerRef.current) clearTimeout(searchTimerRef.current); };
   }, [search]);
 
-  const sortBy = sorting[0]?.id || 'engagement_score';
+  const sortBy = sorting[0]?.id || 'last_contact_date';
   const sortDir = sorting[0]?.desc ? 'desc' : 'asc';
 
   const companiesQuery = useCompanies({
@@ -105,11 +105,6 @@ export const CompaniesAnalytics: React.FC = () => {
       header: 'AM',
       size: 110,
       cell: info => <span className="text-slate-600">{info.getValue() || '—'}</span>,
-    }),
-    col.accessor('engagement_score', {
-      header: 'Score',
-      size: 100,
-      cell: info => <EngagementBadge score={info.getValue() ?? 0} />,
     }),
     col.accessor('total_emails', {
       header: 'Emails',

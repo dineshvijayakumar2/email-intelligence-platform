@@ -2,7 +2,7 @@ import React from 'react';
 import QBLinkWidget from '../../components/QBLinkWidget';
 import { useParams, useNavigate } from 'react-router-dom';
 import AIInsightsCard from '../../components/AIInsightsCard';
-import { EngagementBadge } from '../../components/analytics/EngagementBadge';
+// EngagementBadge removed — score not shown in UI
 import { LifecycleBadge } from '../../components/analytics/LifecycleBadge';
 import { useContactDetail, useCompanyDetail } from '../../hooks/queries';
 import { useThreadsByContact } from '../../hooks/queries';
@@ -89,7 +89,6 @@ export const ContactDetail: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <EngagementBadge score={contact.engagement_score} showBar />
             <QBLinkWidget
               mode="contact" entityId={contactId!} clientId={contact.client_id}
               qbLinkedId={contact.qb_contact_id}

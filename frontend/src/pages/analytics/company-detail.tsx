@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import AIInsightsCard from '../../components/AIInsightsCard';
-import { EngagementBadge } from '../../components/analytics/EngagementBadge';
+// EngagementBadge removed — score not shown in UI
 import { LifecycleBadge } from '../../components/analytics/LifecycleBadge';
 import { OrderHistoryTable } from '../../components/OrderHistoryTable';
 import { ProductProfileCards } from '../../components/ProductProfileCard';
@@ -77,7 +77,6 @@ export const CompanyDetail: React.FC = () => {
             )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <EngagementBadge score={company.engagement_score} showBar />
             {isAtRisk && <StatusBadge variant="danger">At Risk</StatusBadge>}
           </div>
         </div>
