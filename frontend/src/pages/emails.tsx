@@ -625,8 +625,8 @@ export const EmailList: React.FC = () => {
         <div className="mail-content" key={isAnalyticsMode ? 'analytics' : (mailboxName || 'no-mailbox')}>
           {/* Email List */}
           <div className={`mail-list-panel ${selectedEmail ? 'has-detail' : ''}`}>
-            {/* Stats bar */}
-            <div className="mail-list-stats" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            {/* Stats + Pagination bar */}
+            <div className="mail-list-stats" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
               <Text type="secondary" style={{ fontSize: 13 }}>
                 {loading && displayEmails.length === 0 ? 'Loading emails...'
                   : isAnalyticsMode ? (
@@ -639,14 +639,17 @@ export const EmailList: React.FC = () => {
                   )}
               </Text>
               {!isAnalyticsMode && totalCount > pageSize && (
-                <Pagination
-                  current={page}
-                  total={totalCount}
-                  pageSize={pageSize}
-                  size="small"
-                  simple
-                  onChange={p => { setPage(p); setSelectedEmail(null); setSelectedEmailId(null); }}
-                />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Pagination
+                    current={page}
+                    total={totalCount}
+                    pageSize={pageSize}
+                    size="small"
+                    showSizeChanger={false}
+                    showTotal={(total, range) => <Text type="secondary" style={{ fontSize: 12 }}>{range[0]}-{range[1]}</Text>}
+                    onChange={p => { setPage(p); setSelectedEmail(null); setSelectedEmailId(null); }}
+                  />
+                </div>
               )}
             </div>
 
