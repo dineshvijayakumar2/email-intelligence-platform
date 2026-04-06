@@ -94,7 +94,7 @@ export const CompanyDetail: React.FC = () => {
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
             <KPICard title="Emails" value={company.total_emails || 0} onClick={() => navigate(`/emails?company_id=${companyId}`)}
               subtitle={`${company.total_inbound || 0} in / ${company.total_outbound || 0} out`} />
-            <KPICard title="Contacts" value={company.contact_count} onClick={() => navigate(`/customers/contacts?company_id=${companyId}&client_id=${company.client_id}`)}
+            <KPICard title="Contacts" value={company.contact_count} onClick={() => navigate(`/customers/contacts?company_id=${companyId}&client_id=${company.client_id}&name=${encodeURIComponent(company.company_name)}`)}
               subtitle={company.decision_maker_count > 0 ? `${company.decision_maker_count} DMs` : undefined} />
             <KPICard title="Threads" value={threads.length} onClick={() => navigate(`/customers/threads?company_id=${companyId}`)}
               danger={overdueCount > 0}
