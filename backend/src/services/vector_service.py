@@ -22,8 +22,8 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 EMBEDDING_MODEL = "models/gemini-embedding-001"
 EMBEDDING_DIMS = 768   # Force 768 dims (pgvector HNSW/IVFFlat max = 2000)
-EMBED_BATCH_SIZE = 20   # Small batches to stay under Gemini free-tier rate limits
-EMBED_DELAY_SECONDS = 4  # Pause between batches (~15 req/min × 20 texts = 300 texts/min)
+EMBED_BATCH_SIZE = 50   # Texts per API call — Gemini handles 50 fine per request
+EMBED_DELAY_SECONDS = 5  # Base delay between batches
 
 
 def _get_embedding_model():
@@ -58,6 +58,7 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
     """
     model = _get_embedding_model()
     all_embeddings: list[list[float]] = []
+    batch_count = 0
 
     for i in range(0, len(texts), EMBED_BATCH_SIZE):
         batch = texts[i:i + EMBED_BATCH_SIZE]
@@ -81,20 +82,27 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
                     raise
 
         if not succeeded:
-            # Skip this batch instead of killing the entire job
             logger.warning(
                 f"[Vector] Skipping batch of {len(batch)} texts after 5 retries. "
-                f"Embedded {len(all_embeddings)} of {len(texts)} so far. Will continue with next batch."
+                f"Embedded {len(all_embeddings)} of {len(texts)} so far."
             )
-            # Pad with None so indices stay aligned — caller must handle None entries
             all_embeddings.extend([None] * len(batch))
-            # Long cooldown before next batch
             await asyncio.sleep(60)
             continue
 
-        # Pause between batches — longer cooldown after recovering from 429
+        batch_count += 1
+
+        # Progressive delay strategy to stay under rate limits:
+        # - Normal: 5s between batches
+        # - Every 5 batches: 15s cooldown (lets quota replenish)
+        # - After rate limit recovery: 30s cooldown
         if i + EMBED_BATCH_SIZE < len(texts):
-            cooldown = 30 if was_rate_limited else EMBED_DELAY_SECONDS
+            if was_rate_limited:
+                cooldown = 30
+            elif batch_count % 5 == 0:
+                cooldown = 15
+            else:
+                cooldown = EMBED_DELAY_SECONDS
             await asyncio.sleep(cooldown)
 
     return all_embeddings
