@@ -93,7 +93,7 @@ export const CompanyDetail: React.FC = () => {
           subtitle={activeThreads.length > 0 ? `${activeThreads.length} active` : undefined} />
         <KPICard title="Quotes" value={orderHistoryQuery.data?.quote_count || 0}
           onClick={() => setShowOrderHistory(true)}
-          subtitle={orderHistoryQuery.data?.accepted_quotes ? `${orderHistoryQuery.data.accepted_quotes} accepted` : undefined} />
+          subtitle={orderHistoryQuery.data?.accepted_quotes ? `${orderHistoryQuery.data.accepted_quotes} converted` : undefined} />
         <KPICard title="Jobs" value={orderHistoryQuery.data?.job_count || 0}
           onClick={() => setShowOrderHistory(true)}
           subtitle={orderHistoryQuery.data?.active_jobs ? `${orderHistoryQuery.data.active_jobs} active` : undefined} />
