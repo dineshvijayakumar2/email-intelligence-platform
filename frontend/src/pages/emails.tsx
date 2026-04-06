@@ -526,14 +526,14 @@ export const EmailList: React.FC = () => {
 
           {!isAnalyticsMode && (
             <div className="mail-topbar-right" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              {/* Sender filter */}
+              {/* People filter (from, to, cc, bcc) */}
               <Input
-                placeholder="Sender..."
+                placeholder="From / To / CC..."
                 prefix={<UserOutlined />}
                 allowClear
                 value={senderSearch}
                 onChange={e => setSenderSearch(e.target.value)}
-                style={{ width: 160 }}
+                style={{ width: 170 }}
                 size="small"
               />
 

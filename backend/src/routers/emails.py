@@ -222,13 +222,56 @@ async def get_emails_with_filters(
             base_query = base_query.eq('is_outbound', False)
             filters_applied.append("direction=inbound")
 
-        # Sender filter
+        people_match_ids: list | None = None  # Set by people filter, reused in count query
+        # People filter — searches sender (from), recipients (to), CC, BCC
+        # Uses email_contact_links junction table for to/cc/bcc, sender columns for from
         if filters.sender and filters.sender.strip():
             sender_term = sanitize_search_term(filters.sender.strip())
-            base_query = base_query.or_(
-                f"sender_name.ilike.%{sender_term}%,sender_email.ilike.%{sender_term}%"
-            )
-            filters_applied.append(f"sender={sender_term}")
+            # First: check sender columns (fast, indexed)
+            sender_match_ids = set()
+            try:
+                sender_res = sb.table('emails').select('id').or_(
+                    f"sender_name.ilike.%{sender_term}%,sender_email.ilike.%{sender_term}%"
+                )
+                # Apply mailbox restriction
+                if filters.mailbox and filters.mailbox.strip():
+                    try:
+                        mb = sb.table('mailboxes').select('id').eq('name', filters.mailbox).in_('id', accessible_mailbox_ids).execute()
+                        if mb.data:
+                            sender_res = sender_res.eq('mailbox_id', mb.data[0]['id'])
+                    except Exception:
+                        pass
+                elif accessible_mailbox_ids:
+                    sender_res = sender_res.in_('mailbox_id', accessible_mailbox_ids)
+                sender_result = sender_res.limit(500).execute()
+                sender_match_ids = {r['id'] for r in (sender_result.data or [])}
+            except Exception:
+                pass
+
+            # Second: check junction table for to/cc/bcc participants
+            junction_ids = set()
+            try:
+                # Find contacts matching the search term
+                contacts_res = sb.table('customer_contacts').select('id').or_(
+                    f"full_name.ilike.%{sender_term}%,email_address.ilike.%{sender_term}%"
+                ).limit(100).execute()
+                contact_ids = [c['id'] for c in (contacts_res.data or [])]
+                if contact_ids:
+                    links_res = sb.table('email_contact_links').select('email_id').in_(
+                        'contact_id', contact_ids
+                    ).in_('role', ['to', 'cc', 'bcc']).limit(500).execute()
+                    junction_ids = {r['email_id'] for r in (links_res.data or [])}
+            except Exception:
+                pass
+
+            people_match_ids = list(sender_match_ids | junction_ids)
+            all_match_ids = people_match_ids
+            if people_match_ids:
+                base_query = base_query.in_('id', all_match_ids[:1000])
+            else:
+                # No matches — return empty
+                return EmailListResponse(emails=[], totalCount=0)
+            filters_applied.append(f"people={sender_term}")
 
         # Company filter (via customer_company_id on emails table)
         if filters.company_id and filters.company_id.strip():
@@ -285,11 +328,12 @@ async def get_emails_with_filters(
             count_query = count_query.eq('is_outbound', True)
         elif filters.isOutbound == 'inbound':
             count_query = count_query.eq('is_outbound', False)
-        if filters.sender and filters.sender.strip():
-            sender_term = sanitize_search_term(filters.sender.strip())
-            count_query = count_query.or_(
-                f"sender_name.ilike.%{sender_term}%,sender_email.ilike.%{sender_term}%"
-            )
+        if filters.sender and filters.sender.strip() and people_match_ids is not None:
+            # Reuse the same ID set from the main query (includes from/to/cc/bcc)
+            if people_match_ids:
+                count_query = count_query.in_('id', people_match_ids[:1000])
+            else:
+                return EmailListResponse(emails=[], totalCount=0)
         if filters.company_id and filters.company_id.strip():
             count_query = count_query.eq('customer_company_id', filters.company_id)
         if filters.search and filters.search.strip():
