@@ -13,50 +13,53 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Semantic — strict, one per meaning
+        // ── shadcn CSS variable tokens ──
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',
         background: 'hsl(var(--background))',
         foreground: 'hsl(var(--foreground))',
+        card: { DEFAULT: 'hsl(var(--card))', foreground: 'hsl(var(--card-foreground))' },
+        popover: { DEFAULT: 'hsl(var(--popover))', foreground: 'hsl(var(--popover-foreground))' },
+        secondary: { DEFAULT: 'hsl(var(--secondary))', foreground: 'hsl(var(--secondary-foreground))' },
+        muted: { DEFAULT: '#f1f5f9', foreground: '#64748b' },
+
+        // ── Semantic tokens — ONE color per meaning ──
+        // Never use raw colors (red-500, green-600) in components.
+        // Change these to retheme the entire app.
         primary: {
           DEFAULT: '#667eea',
           foreground: '#ffffff',
           light: '#8b9ef5',
           dark: '#4c5fd5',
+          subtle: '#eef0fd',  // bg tint for primary highlights
         },
         accent: {
           DEFAULT: '#764ba2',
           foreground: '#ffffff',
           light: '#9b6fc2',
+          subtle: '#f3eef8',
         },
         destructive: {
           DEFAULT: '#ef4444',
           foreground: '#ffffff',
+          subtle: '#fef2f2',  // bg tint for danger alerts
         },
         warning: {
           DEFAULT: '#f59e0b',
           foreground: '#ffffff',
+          subtle: '#fffbeb',
         },
         success: {
           DEFAULT: '#10b981',
           foreground: '#ffffff',
+          subtle: '#f0fdf4',
         },
-        muted: {
-          DEFAULT: '#f1f5f9',
-          foreground: '#64748b',
-        },
-        card: {
-          DEFAULT: 'hsl(var(--card))',
-          foreground: 'hsl(var(--card-foreground))',
-        },
-        popover: {
-          DEFAULT: 'hsl(var(--popover))',
-          foreground: 'hsl(var(--popover-foreground))',
-        },
-        secondary: {
-          DEFAULT: 'hsl(var(--secondary))',
-          foreground: 'hsl(var(--secondary-foreground))',
+        // Alias: "risk" = destructive but semantically distinct
+        risk: {
+          DEFAULT: '#dc2626',
+          subtle: '#fef2f2',
+          foreground: '#ffffff',
         },
       },
       fontFamily: {

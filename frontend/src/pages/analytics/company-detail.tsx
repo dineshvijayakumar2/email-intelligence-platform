@@ -22,6 +22,7 @@ import { StatusBadge } from '@/components/ui/status-badge';
 import { ContentSkeleton } from '@/components/ui/empty-state';
 import { cn } from '@/lib/utils';
 import { ArrowLeft, ArrowUp, ArrowDown, ChevronDown, ChevronRight } from 'lucide-react';
+import { getRiskClass } from '@/lib/risk-variants';
 
 export const CompanyDetail: React.FC = () => {
   const { companyId } = useParams<{ companyId: string }>();
@@ -54,15 +55,13 @@ export const CompanyDetail: React.FC = () => {
   }
 
   const activeThreads = threads.filter(t => !['dropped', 'complete'].includes(t.status));
+  const riskClass = getRiskClass(company.engagement_status);
   const isAtRisk = company.engagement_status === 'at_risk' || (company.engagement_status as string) === 'churning';
 
   return (
     <PageShell>
-      {/* Header card */}
-      <div className={cn(
-        'rounded-lg border bg-white shadow-sm p-4 mb-4',
-        isAtRisk && 'border-l-4 border-l-destructive bg-red-50/30',
-      )}>
+      {/* Header card — risk border from global pattern */}
+      <div className={cn('rounded-lg border bg-white shadow-sm p-4 mb-4', riskClass)}>
         <div className="flex items-center gap-3">
           <button onClick={() => navigate('/customers')} className="p-1 rounded hover:bg-slate-100">
             <ArrowLeft className="h-4 w-4 text-slate-500" />
