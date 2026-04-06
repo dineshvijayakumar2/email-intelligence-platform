@@ -610,7 +610,21 @@ async def get_order_history(
         # Sort by date descending (None dates go last)
         items.sort(key=lambda x: x.get('date') or '', reverse=True)
 
-        return {'items': items[:limit], 'company_id': company_id, 'total': len(items)}
+        # Counts by type
+        quote_count = sum(1 for i in items if i['type'] == 'quote')
+        job_count = sum(1 for i in items if i['type'] == 'job')
+        active_jobs = sum(1 for i in items if i['type'] == 'job' and i.get('status') not in ('R-Complete', 'Complete', 'Cancelled'))
+        accepted_quotes = sum(1 for i in items if i['type'] == 'quote' and i.get('status') == 'Accepted')
+
+        return {
+            'items': items[:limit],
+            'company_id': company_id,
+            'total': len(items),
+            'quote_count': quote_count,
+            'job_count': job_count,
+            'active_jobs': active_jobs,
+            'accepted_quotes': accepted_quotes,
+        }
 
     except Exception as e:
         logger.error(f"Failed to get order history for {company_id}: {e}")

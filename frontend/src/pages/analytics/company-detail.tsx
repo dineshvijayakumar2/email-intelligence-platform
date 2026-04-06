@@ -83,14 +83,20 @@ export const CompanyDetail: React.FC = () => {
         </div>
       </div>
 
-      {/* KPI strip + Business Data */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-4">
+      {/* KPI strip */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
         <KPICard title="Emails" value={company.total_emails || 0} onClick={() => navigate(`/emails?company_id=${companyId}`)}
           subtitle={`${company.total_inbound || 0} in / ${company.total_outbound || 0} out`} />
         <KPICard title="Contacts" value={company.contact_count} onClick={() => navigate(`/customers/contacts?company_id=${companyId}&client_id=${company.client_id}`)}
-          subtitle={company.decision_maker_count > 0 ? `${company.decision_maker_count} decision makers` : undefined} />
+          subtitle={company.decision_maker_count > 0 ? `${company.decision_maker_count} DMs` : undefined} />
         <KPICard title="Threads" value={threads.length} onClick={() => navigate(`/customers/threads?company_id=${companyId}`)}
-          subtitle={activeThreads.length > 0 ? `${activeThreads.length} active` : 'None active'} />
+          subtitle={activeThreads.length > 0 ? `${activeThreads.length} active` : undefined} />
+        <KPICard title="Quotes" value={orderHistoryQuery.data?.quote_count || 0}
+          onClick={() => setShowOrderHistory(true)}
+          subtitle={orderHistoryQuery.data?.accepted_quotes ? `${orderHistoryQuery.data.accepted_quotes} accepted` : undefined} />
+        <KPICard title="Jobs" value={orderHistoryQuery.data?.job_count || 0}
+          onClick={() => setShowOrderHistory(true)}
+          subtitle={orderHistoryQuery.data?.active_jobs ? `${orderHistoryQuery.data.active_jobs} active` : undefined} />
         <KPICard title="Overdue" value={threads.filter(t => t.status === 'overdue').length}
           danger={threads.filter(t => t.status === 'overdue').length > 0} />
       </div>
@@ -132,7 +138,6 @@ export const CompanyDetail: React.FC = () => {
               </div>
             )}
             {company.qb_days_since_last_invoice != null && <div><span className="text-slate-500">Days Since Order</span><div className="font-medium tabular-nums">{company.qb_days_since_last_invoice}</div></div>}
-            <div><span className="text-slate-500">Orders</span><div className="font-medium tabular-nums">{orderHistory.filter(o => o.status !== 'Cancelled').length}</div></div>
             <div><span className="text-slate-500">First Contact</span><div className="text-xs text-slate-600">{formatRelativeTime(company.first_contact_date)}</div></div>
             <div><span className="text-slate-500">Last Contact</span><div className="text-xs text-slate-600">{formatRelativeTime(company.last_contact_date)}</div></div>
           </div>
