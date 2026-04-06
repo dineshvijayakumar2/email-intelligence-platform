@@ -351,6 +351,8 @@ const VectorSearchPage: React.FC = () => {
         <Search
           placeholder="Search with natural language... e.g. 'what happened with Acme last quarter', 'rush delivery complaints'"
           allowClear
+          value={query}
+          onChange={e => setQuery(e.target.value)}
           enterButton={<><SearchOutlined /> Search</>}
           size="large"
           loading={searching}
