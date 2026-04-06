@@ -11,10 +11,13 @@ const StrikeRateCard: React.FC<Props> = ({ companyId }) => {
 
   const load = (force = false) => {
     setLoading(true);
-    companiesApi.getStrikeRate(companyId, force).then(setData).finally(() => setLoading(false));
+    companiesApi.getStrikeRate(companyId, force)
+      .then(d => { setData(d); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(); }, [companyId]);
+  useEffect(() => { load(true); }, [companyId]);
 
   if (loading) return <div className="rounded-lg border bg-white shadow-sm p-4"><div className="flex items-center gap-2 mb-3"><Target className="h-4 w-4 text-primary" /><span className="text-sm font-semibold">Strike Rate</span></div><ContentSkeleton rows={3} className="p-0" /></div>;
 

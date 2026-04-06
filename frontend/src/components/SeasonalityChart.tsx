@@ -17,7 +17,7 @@ const SeasonalityChart: React.FC<Props> = ({ companyId }) => {
     companiesApi.getSeasonality(companyId, force).then(setData).finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(); }, [companyId]);
+  useEffect(() => { load(true); }, [companyId]);
 
   if (loading) return <div className="rounded-lg border bg-white shadow-sm p-4"><div className="flex items-center gap-2 mb-3"><Calendar className="h-4 w-4 text-primary" /><span className="text-sm font-semibold">Seasonality</span></div><ContentSkeleton rows={3} className="p-0" /></div>;
   if (!data?.monthly?.length) return <div className="rounded-lg border bg-white shadow-sm p-4"><div className="flex items-center gap-2"><Calendar className="h-4 w-4 text-primary" /><span className="text-sm font-semibold">Seasonality</span></div><p className="text-sm text-slate-400 mt-2">No ordering history</p></div>;
