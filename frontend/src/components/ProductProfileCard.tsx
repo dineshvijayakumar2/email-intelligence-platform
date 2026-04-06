@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
-import { Typography, Tag, Empty, Skeleton, Space, Button } from 'antd';
-import { DownOutlined, RightOutlined } from '@ant-design/icons';
+import React from 'react';
+import { Typography, Tag, Empty, Skeleton, Space, Row, Col } from 'antd';
 import { formatCurrency } from '../utils/numberFormat';
 
 const { Text } = Typography;
@@ -18,13 +17,9 @@ interface Props {
   loading?: boolean;
 }
 
-const MAX_COLLAPSED = 6;
-
 export const ProductProfileCard: React.FC<Props> = ({
   categories, operations, capability_breakdown, process_tags, embellishment_tags, loading,
 }) => {
-  const [expanded, setExpanded] = useState(false);
-
   if (loading) return <Skeleton active paragraph={{ rows: 3 }} />;
 
   const hasCategories = categories.length > 0;
@@ -38,144 +33,69 @@ export const ProductProfileCard: React.FC<Props> = ({
     return <Empty description="No product data — QB sync needed" image={Empty.PRESENTED_IMAGE_SIMPLE} />;
   }
 
-  // Group operations by department
-  const deptMap: Record<string, string[]> = {};
-  operations.forEach(op => {
-    const dept = op.department || 'Other';
-    if (!deptMap[dept]) deptMap[dept] = [];
-    deptMap[dept].push(op.operation);
-  });
+  // Max revenue for bar width calculation
+  const maxRevenue = hasCategories ? Math.max(...categories.map(c => c.revenue)) : 0;
 
   return (
     <div>
-      {/* Collapsed: summary line */}
-      {!expanded && (
-        <div>
-          {/* Capabilities as primary summary */}
-          {hasCapabilities && (
-            <div style={{ marginBottom: 8 }}>
-              <Space size={[4, 4]} wrap>
-                {capability_breakdown!.slice(0, MAX_COLLAPSED).map(c => (
-                  <Tag key={c.capability} color="blue" style={{ fontSize: 11, margin: 0 }}>
-                    {c.capability} ({c.operation_count})
-                  </Tag>
-                ))}
-                {capability_breakdown!.length > MAX_COLLAPSED && (
-                  <Text type="secondary" style={{ fontSize: 11 }}>+{capability_breakdown!.length - MAX_COLLAPSED} more</Text>
-                )}
-              </Space>
+      {/* Revenue by Category — inline bar */}
+      {hasCategories && (
+        <div style={{ marginBottom: 12 }}>
+          <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 6 }}>Revenue by Category</Text>
+          {categories.map(c => (
+            <div key={c.category} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+              <Text style={{ fontSize: 12, width: 160, flexShrink: 0 }} ellipsis>{c.category}</Text>
+              <div style={{ flex: 1, height: 14, background: 'rgba(102,126,234,0.08)', borderRadius: 3 }}>
+                <div style={{
+                  width: `${maxRevenue > 0 ? (c.revenue / maxRevenue) * 100 : 0}%`,
+                  height: '100%', borderRadius: 3,
+                  background: 'linear-gradient(90deg, #667eea, #764ba2)',
+                  minWidth: 2,
+                }} />
+              </div>
+              <Text strong style={{ fontSize: 11, flexShrink: 0, width: 70, textAlign: 'right' }}>
+                {formatCurrency(c.revenue)}
+              </Text>
             </div>
-          )}
-
-          {/* Categories as inline stats */}
-          {hasCategories && (
-            <div style={{ marginBottom: 8 }}>
-              <Space size={[6, 4]} wrap>
-                {categories.slice(0, 4).map(c => (
-                  <span key={c.category} style={{ fontSize: 12 }}>
-                    <Text type="secondary">{c.category}:</Text>{' '}
-                    <Text strong>{formatCurrency(c.revenue)}</Text>
-                  </span>
-                ))}
-                {categories.length > 4 && (
-                  <Text type="secondary" style={{ fontSize: 11 }}>+{categories.length - 4} more</Text>
-                )}
-              </Space>
-            </div>
-          )}
-
-          {/* Process + embellishment tags inline */}
-          {(hasProcesses || hasEmbellishments) && (
-            <Space size={[3, 3]} wrap>
-              {(process_tags || []).slice(0, 4).map(t => <Tag key={t} color="cyan" style={{ fontSize: 10, margin: 0 }}>{t}</Tag>)}
-              {(embellishment_tags || []).slice(0, 3).map(t => <Tag key={t} color="purple" style={{ fontSize: 10, margin: 0 }}>{t}</Tag>)}
-              {((process_tags || []).length + (embellishment_tags || []).length) > 7 && (
-                <Text type="secondary" style={{ fontSize: 10 }}>
-                  +{(process_tags || []).length + (embellishment_tags || []).length - 7} more
-                </Text>
-              )}
-            </Space>
-          )}
+          ))}
         </div>
       )}
 
-      {/* Expanded: full detail */}
-      {expanded && (
-        <div>
-          {/* Categories with revenue */}
-          {hasCategories && (
-            <div style={{ marginBottom: 12 }}>
-              <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 4 }}>Revenue by Category</Text>
-              {categories.map(c => (
-                <div key={c.category} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
-                  <Text style={{ fontSize: 12 }}>{c.category}</Text>
-                  <Text strong style={{ fontSize: 12 }}>{formatCurrency(c.revenue)}</Text>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Capabilities */}
-          {hasCapabilities && (
-            <div style={{ marginBottom: 10 }}>
-              <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 4 }}>Capabilities</Text>
-              <Space size={[4, 4]} wrap>
-                {capability_breakdown!.map(c => (
-                  <Tag key={c.capability} color="blue" style={{ fontSize: 11, margin: 0 }}>
-                    {c.capability} ({c.operation_count})
-                  </Tag>
-                ))}
-              </Space>
-            </div>
-          )}
-
-          {/* Processes */}
-          {hasProcesses && (
-            <div style={{ marginBottom: 10 }}>
-              <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 4 }}>Processes</Text>
-              <Space size={[4, 4]} wrap>
-                {process_tags!.map(t => <Tag key={t} color="cyan" style={{ fontSize: 11, margin: 0 }}>{t}</Tag>)}
-              </Space>
-            </div>
-          )}
-
-          {/* Embellishments */}
-          {hasEmbellishments && (
-            <div style={{ marginBottom: 10 }}>
-              <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 4 }}>Embellishments</Text>
-              <Space size={[4, 4]} wrap>
-                {embellishment_tags!.map(t => <Tag key={t} color="purple" style={{ fontSize: 11, margin: 0 }}>{t}</Tag>)}
-              </Space>
-            </div>
-          )}
-
-          {/* Operations by department */}
-          {hasOperations && (
-            <div>
-              <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 4 }}>Operations ({operations.length})</Text>
-              {Object.entries(deptMap).map(([dept, ops]) => (
-                <div key={dept} style={{ marginBottom: 4 }}>
-                  <Text style={{ fontSize: 11, fontWeight: 500 }}>{dept}: </Text>
-                  <Space size={[3, 3]} wrap style={{ display: 'inline-flex' }}>
-                    {ops.map(op => <Tag key={op} color="geekblue" style={{ fontSize: 10, margin: 0, padding: '0 4px' }}>{op}</Tag>)}
-                  </Space>
-                </div>
-              ))}
-            </div>
-          )}
+      {/* Capability breakdown — always show all */}
+      {hasCapabilities && (
+        <div style={{ marginBottom: 8 }}>
+          <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 4 }}>
+            Capabilities ({capability_breakdown!.reduce((s, c) => s + c.operation_count, 0)} operations)
+          </Text>
+          <Space size={[4, 4]} wrap>
+            {capability_breakdown!.map(c => (
+              <Tag key={c.capability} color="blue" style={{ fontSize: 11, margin: 0 }}>
+                {c.capability} ({c.operation_count})
+              </Tag>
+            ))}
+          </Space>
         </div>
       )}
 
-      {/* Toggle */}
-      <Button
-        type="link"
-        size="small"
-        onClick={() => setExpanded(!expanded)}
-        icon={expanded ? <DownOutlined /> : <RightOutlined />}
-        style={{ padding: 0, marginTop: 8, fontSize: 12 }}
-      >
-        {expanded ? 'Show less' : 'Show all details'}
-      </Button>
+      {/* Processes — always show all */}
+      {hasProcesses && (
+        <div style={{ marginBottom: 8 }}>
+          <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 4 }}>Processes</Text>
+          <Space size={[4, 4]} wrap>
+            {process_tags!.map(t => <Tag key={t} color="cyan" style={{ fontSize: 11, margin: 0 }}>{t}</Tag>)}
+          </Space>
+        </div>
+      )}
+
+      {/* Embellishments — always show all */}
+      {hasEmbellishments && (
+        <div style={{ marginBottom: 8 }}>
+          <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 4 }}>Embellishments</Text>
+          <Space size={[4, 4]} wrap>
+            {embellishment_tags!.map(t => <Tag key={t} color="purple" style={{ fontSize: 11, margin: 0 }}>{t}</Tag>)}
+          </Space>
+        </div>
+      )}
     </div>
   );
 };

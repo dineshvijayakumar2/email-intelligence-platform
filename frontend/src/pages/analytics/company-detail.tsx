@@ -144,8 +144,10 @@ export const CompanyDetail: React.FC = () => {
             {company.qb_total_revenue != null ? (
               <>
                 <Descriptions column={3} size="small">
+                  {company.qb_customer_type && <Descriptions.Item label="Type"><Tag>{company.qb_customer_type}</Tag></Descriptions.Item>}
                   {company.qb_tier && <Descriptions.Item label="Tier"><Tag color="purple">{company.qb_tier}</Tag></Descriptions.Item>}
                   {company.qb_account_manager && <Descriptions.Item label="AM">{company.qb_account_manager}</Descriptions.Item>}
+                  {company.industry && <Descriptions.Item label="Industry">{company.industry}</Descriptions.Item>}
                   <Descriptions.Item label="Revenue">{formatCurrency(company.qb_total_revenue)}</Descriptions.Item>
                   {company.qb_invoiced_ty != null && (
                     <Descriptions.Item label="This Year">
@@ -155,16 +157,11 @@ export const CompanyDetail: React.FC = () => {
                     </Descriptions.Item>
                   )}
                   {company.qb_invoiced_ly != null && <Descriptions.Item label="Last Year">{formatCurrency(company.qb_invoiced_ly)}</Descriptions.Item>}
+                  {company.qb_growth_90d != null && <Descriptions.Item label="Growth 90d">{company.qb_growth_90d > 0 ? '+' : ''}{Number(company.qb_growth_90d).toFixed(1)}%</Descriptions.Item>}
                   {company.qb_days_since_last_invoice != null && <Descriptions.Item label="Days Since Order">{company.qb_days_since_last_invoice}</Descriptions.Item>}
                   <Descriptions.Item label="Orders">{orderHistory.filter(o => o.status !== 'Cancelled').length}</Descriptions.Item>
+                  {company.decision_maker_count > 0 && <Descriptions.Item label="Decision Makers">{company.decision_maker_count}</Descriptions.Item>}
                 </Descriptions>
-                {(company.qb_capabilities?.length > 0 || company.qb_processes?.length > 0 || company.qb_embellishments?.length > 0) && (
-                  <div style={{ marginTop: 8 }}>
-                    {company.qb_capabilities?.length > 0 && <div style={{ marginBottom: 4 }}><Text type="secondary" style={{ fontSize: 11 }}>Capabilities: </Text><Space size={[3, 3]} wrap>{company.qb_capabilities.map((c: string) => <Tag key={c} color="blue" style={{ fontSize: 10 }}>{c}</Tag>)}</Space></div>}
-                    {company.qb_processes?.length > 0 && <div style={{ marginBottom: 4 }}><Text type="secondary" style={{ fontSize: 11 }}>Processes: </Text><Space size={[3, 3]} wrap>{company.qb_processes.map((p: string) => <Tag key={p} color="cyan" style={{ fontSize: 10 }}>{p}</Tag>)}</Space></div>}
-                    {company.qb_embellishments?.length > 0 && <div><Text type="secondary" style={{ fontSize: 11 }}>Embellishments: </Text><Space size={[3, 3]} wrap>{company.qb_embellishments.map((e: string) => <Tag key={e} color="purple" style={{ fontSize: 10 }}>{e}</Tag>)}</Space></div>}
-                  </div>
-                )}
               </>
             ) : (
               <Text type="secondary">No QB data — link a QB customer to enrich this profile.</Text>
@@ -203,7 +200,7 @@ export const CompanyDetail: React.FC = () => {
           <Col xs={24} lg={12}><SeasonalityChart companyId={companyId} /></Col>
           <Col xs={24} lg={12}><CapabilityRhythmCard companyId={companyId} /></Col>
           <Col xs={24} lg={12}><ContactCapabilitiesCard companyId={companyId} /></Col>
-          <Col xs={24} lg={12}>
+          <Col xs={24}>
             <div className="glass-card" style={{ padding: 16 }}>
               <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 12 }}>Product Profile</Text>
               <ProductProfileCard
@@ -216,7 +213,7 @@ export const CompanyDetail: React.FC = () => {
               />
             </div>
           </Col>
-          <Col xs={24} lg={12}>
+          <Col xs={24}>
             <div className="glass-card" style={{ padding: 16 }}>
               <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 12 }}>Sales Opportunities</Text>
               <RecommendationsPanel companyId={companyId} />
