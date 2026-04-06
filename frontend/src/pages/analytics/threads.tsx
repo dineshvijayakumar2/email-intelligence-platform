@@ -1,56 +1,61 @@
 import React, { useState, useMemo } from 'react';
-import { Typography, Tag, Space, Select, Button, Input } from 'antd';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { LeftOutlined } from '@ant-design/icons';
 import {
-  useReactTable,
-  getCoreRowModel,
-  createColumnHelper,
-  type SortingState,
+  useReactTable, getCoreRowModel, createColumnHelper, type SortingState,
 } from '@tanstack/react-table';
-import { ClientSelector } from '../../components/analytics/ClientSelector';
-import { MailboxSelector } from '../../components/MailboxSelector';
-import { AnalyticsTable } from '../../components/analytics/AnalyticsTable';
 import { DataTable } from '../../components/DataTable';
-import {
-  useThreads,
-  useThreadsByCompany,
-  useThreadsByContact,
-} from '../../hooks/queries';
+import { useThreads, useThreadsByCompany, useThreadsByContact } from '../../hooks/queries';
 import { formatRelativeTime, threadStatusConfig } from '../../services/analyticsService';
 import type { ThreadStatusSummary, ThreadStatus } from '../../types/analytics';
+import { useClient } from '../../contexts/ClientContext';
+import { PageShell, PageHeader } from '@/components/ui/page-shell';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { Search, ArrowLeft, X } from 'lucide-react';
 
-const { Text } = Typography;
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 25;
 const col = createColumnHelper<ThreadStatusSummary>();
 
-const THREAD_STATUS_OPTIONS = [
+const STATUS_OPTIONS = [
   { value: '', label: 'All Statuses' },
-  { value: 'active', label: 'Active (Ongoing + Awaiting)' },
+  { value: 'active', label: 'Active' },
   { value: 'complete', label: 'Complete' },
-  { value: 'awaiting_response', label: 'Awaiting Response' },
   { value: 'awaiting_our_response', label: 'Awaiting Our Response' },
   { value: 'overdue', label: 'Overdue' },
   { value: 'dropped', label: 'Dropped' },
   { value: 'ongoing', label: 'Ongoing' },
 ];
 
+const statusVariant = (s: string) => {
+  if (s === 'overdue') return 'danger';
+  if (s === 'awaiting_our_response') return 'warning';
+  if (s === 'ongoing' || s === 'active') return 'info';
+  if (s === 'complete') return 'success';
+  return 'neutral';
+};
+
 export const ThreadAnalytics: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { clientId } = useClient();
 
   const drilldownContactId = searchParams.get('contact_id');
   const drilldownCompanyId = searchParams.get('company_id');
   const drilldownLabel = searchParams.get('name') || '';
   const isDrilldownMode = !!(drilldownContactId || drilldownCompanyId);
 
-  const [clientId, setClientId] = useState('');
-  const [mailboxIds, setMailboxIds] = useState<string[]>([]);
-  const mailboxId = mailboxIds[0] || '';
   const [page, setPage] = useState(1);
-  const [statusFilter, setStatusFilter] = useState<string>(() => searchParams.get('status') || '');
+  const [statusFilter, setStatusFilter] = useState(() => searchParams.get('status') || '');
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [sorting, setSorting] = useState<SortingState>([{ id: 'last_message_at', desc: true }]);
+
+  // Debounce search
+  const searchTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  React.useEffect(() => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => { setDebouncedSearch(search); setPage(1); }, 400);
+    return () => { if (searchTimerRef.current) clearTimeout(searchTimerRef.current); };
+  }, [search]);
 
   const sortBy = sorting[0]?.id || 'last_message_at';
   const sortDir = sorting[0]?.desc ? 'desc' : 'asc';
@@ -62,11 +67,10 @@ export const ThreadAnalytics: React.FC = () => {
   // Normal mode query
   const normalThreadsQuery = useThreads(!isDrilldownMode ? {
     client_id: clientId,
-    mailbox_id: mailboxId || undefined,
     limit: PAGE_SIZE,
     offset: (page - 1) * PAGE_SIZE,
     status: statusFilter || undefined,
-    search: search || undefined,
+    search: debouncedSearch || undefined,
     sort_by: sortBy,
     sort_dir: sortDir,
   } : { client_id: '' });
@@ -79,19 +83,16 @@ export const ThreadAnalytics: React.FC = () => {
   const drilldownFiltered = useMemo(() => {
     let filtered = drilldownRaw;
     if (statusFilter) {
-      const statusMap: Record<string, string[]> = {
-        'active': ['ongoing', 'awaiting_our_response'],
-        'overdue': ['overdue'], 'complete': ['complete'], 'dropped': ['dropped'],
-      };
+      const statusMap: Record<string, string[]> = { active: ['ongoing', 'awaiting_our_response'], overdue: ['overdue'], complete: ['complete'], dropped: ['dropped'] };
       const allowed = statusMap[statusFilter] || [statusFilter];
       filtered = filtered.filter(t => allowed.includes(t.status));
     }
-    if (search) {
-      const term = search.toLowerCase();
+    if (debouncedSearch) {
+      const term = debouncedSearch.toLowerCase();
       filtered = filtered.filter(t => (t.subject || '').toLowerCase().includes(term));
     }
     return filtered;
-  }, [drilldownRaw, statusFilter, search]);
+  }, [drilldownRaw, statusFilter, debouncedSearch]);
 
   const threads = isDrilldownMode ? drilldownFiltered : (normalThreadsQuery.data?.threads || []);
   const threadsTotal = isDrilldownMode ? drilldownFiltered.length : (normalThreadsQuery.data?.total || 0);
@@ -104,137 +105,107 @@ export const ThreadAnalytics: React.FC = () => {
     navigate(`/emails?thread_id=${encodeURIComponent(record.thread_id)}&name=${name}`);
   };
 
-  // TanStack Table columns for normal mode
-  const tanstackColumns = useMemo(() => [
+  const columns = useMemo(() => [
     col.accessor('subject', {
       header: 'Subject',
       cell: info => {
         const r = info.row.original;
         return (
-          <a onClick={(e) => { e.stopPropagation(); handleThreadClick(r); }} style={{ color: '#667eea' }}>
-            {info.getValue() || <Text type="secondary" style={{ fontSize: 12 }}>{r.thread_id?.slice(0, 16)}...</Text>}
-          </a>
+          <button onClick={(e) => { e.stopPropagation(); handleThreadClick(r); }} className="text-primary hover:underline text-left truncate">
+            {info.getValue() || <span className="text-slate-400">{r.thread_id?.slice(0, 16)}...</span>}
+          </button>
         );
       },
     }),
-    col.accessor('contact_name', {
-      header: 'Contact',
-      cell: info => info.getValue() || info.row.original.contact_email || '-',
+    col.accessor('contact_name', { header: 'Contact',
+      cell: info => <span className="text-slate-600">{info.getValue() || info.row.original.contact_email || '—'}</span>,
     }),
-    col.accessor('company_name', {
-      header: 'Company',
-      cell: info => info.getValue() || '-',
+    col.accessor('company_name', { header: 'Company',
+      cell: info => <span className="text-slate-600">{info.getValue() || '—'}</span>,
     }),
-    col.accessor('status', {
-      header: 'Status',
-      size: 150,
+    col.accessor('status', { header: 'Status', size: 140,
       cell: info => {
         const v = info.getValue() as ThreadStatus;
-        const cfg = threadStatusConfig[v] || { label: v, color: 'default' };
-        return <Tag color={cfg.color}>{cfg.label}</Tag>;
+        const cfg = threadStatusConfig[v] || { label: v };
+        return <StatusBadge variant={statusVariant(v) as any} size="sm">{cfg.label}</StatusBadge>;
       },
     }),
-    col.accessor('total_messages', {
-      id: 'message_count',
-      header: 'Emails',
-      size: 90,
+    col.accessor('total_messages', { id: 'message_count', header: 'Emails', size: 70, meta: { align: 'right' },
+      cell: info => <span className="tabular-nums">{info.getValue()}</span>,
     }),
-    col.accessor('last_message_date', {
-      id: 'last_message_at',
-      header: 'Last Email',
-      size: 110,
-      cell: info => formatRelativeTime(info.getValue()),
+    col.accessor('last_message_date', { id: 'last_message_at', header: 'Last Email', size: 100,
+      cell: info => <span className="text-xs text-slate-500">{formatRelativeTime(info.getValue())}</span>,
     }),
-    col.accessor('days_since_last_message', {
-      header: 'Days',
-      size: 70,
-      id: 'days_since_last_email',
+    col.accessor('days_since_last_message', { header: 'Days', size: 60, id: 'days_since_last_email', meta: { align: 'right' },
+      cell: info => <span className="tabular-nums text-slate-600">{info.getValue()}</span>,
     }),
   ], [navigate]);
 
   const table = useReactTable({
     data: threads,
-    columns: tanstackColumns,
+    columns,
     state: { sorting },
     onSortingChange: (updater) => {
       setSorting(typeof updater === 'function' ? updater(sorting) : updater);
       setPage(1);
     },
     getCoreRowModel: getCoreRowModel(),
-    manualSorting: true,
+    manualSorting: !isDrilldownMode,
     enableSortingRemoval: false,
   });
 
-  // Drilldown: Ant Design columns (simpler, no server-side sort)
-  const drilldownColumns = [
-    { title: 'Subject', dataIndex: 'subject', key: 'subject', ellipsis: true,
-      render: (v: string, r: ThreadStatusSummary) => (
-        <a onClick={(e: any) => { e.stopPropagation(); handleThreadClick(r); }} style={{ color: '#667eea' }}>
-          {v || r.thread_id?.slice(0, 16) + '...'}
-        </a>
-      ),
-    },
-    { title: 'Contact', key: 'contact', render: (_: any, r: ThreadStatusSummary) => r.contact_name || r.contact_email || '-' },
-    { title: 'Company', dataIndex: 'company_name', key: 'company', render: (v: string) => v || '-' },
-    { title: 'Status', dataIndex: 'status', key: 'status', width: 150,
-      render: (v: ThreadStatus) => { const cfg = threadStatusConfig[v] || { label: v, color: 'default' }; return <Tag color={cfg.color}>{cfg.label}</Tag>; },
-    },
-    { title: 'Emails', dataIndex: 'total_messages', key: 'msgs', width: 90 },
-    { title: 'Last Email', dataIndex: 'last_message_date', key: 'last', width: 110, render: (v: string) => formatRelativeTime(v) },
-    { title: 'Days', dataIndex: 'days_since_last_message', key: 'days', width: 70 },
-  ];
-
-  if (isDrilldownMode) {
-    return (
-      <div className="glass-page-bg" style={{ padding: 24 }}>
-        <div className="fade-in-up" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-          <Button type="text" icon={<LeftOutlined />} onClick={() => navigate(-1)} style={{ color: '#667eea' }}>Back</Button>
-          <Text strong style={{ fontSize: 16 }}>Threads{drilldownLabel ? ` for ${drilldownLabel}` : ''}</Text>
-          <Tag color="purple">{threadsTotal} thread{threadsTotal !== 1 ? 's' : ''}</Tag>
-        </div>
-        <Space style={{ marginBottom: 12 }} wrap>
-          <Input.Search placeholder="Search subject..." allowClear onSearch={v => setSearch(v)} style={{ width: 240 }} size="small" />
-          <Select value={statusFilter} onChange={v => setStatusFilter(v)} options={THREAD_STATUS_OPTIONS} style={{ width: 240 }} size="small" />
-        </Space>
-        <AnalyticsTable<ThreadStatusSummary>
-          columns={drilldownColumns}
-          data={threads}
-          total={threadsTotal}
-          loading={loading}
-          pageSize={PAGE_SIZE}
-          currentPage={page}
-          onPageChange={setPage}
-          rowKey="thread_id"
-          onRowClick={handleThreadClick}
-        />
-      </div>
-    );
-  }
+  const hasFilters = !!statusFilter || !!debouncedSearch;
 
   return (
-    <div className="glass-page-bg" style={{ padding: 24 }}>
-      <div className="fade-in-up" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <Text type="secondary">All Threads ({threadsTotal})</Text>
-        <Space>
-          <ClientSelector value={clientId} onChange={setClientId} />
-          <MailboxSelector value={mailboxIds} onChange={setMailboxIds} mode="single" placeholder="All mailboxes" style={{ width: 220 }} />
-        </Space>
+    <PageShell>
+      {isDrilldownMode && (
+        <button onClick={() => navigate(-1)} className="inline-flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900 mb-4">
+          <ArrowLeft className="h-4 w-4" /> Back
+        </button>
+      )}
+
+      <PageHeader
+        title={isDrilldownMode ? `Threads${drilldownLabel ? ` for ${drilldownLabel}` : ''}` : 'Threads'}
+        description={isDrilldownMode ? `${threadsTotal} thread${threadsTotal !== 1 ? 's' : ''}` : `All conversation threads (${threadsTotal})`}
+      />
+
+      {/* Filters */}
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search subject..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="h-8 pl-8 pr-3 text-sm rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary w-52"
+          />
+        </div>
+        <select
+          value={statusFilter}
+          onChange={e => { setStatusFilter(e.target.value); setPage(1); }}
+          className="h-8 px-2 text-sm rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20"
+        >
+          {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+        {hasFilters && (
+          <button onClick={() => { setSearch(''); setDebouncedSearch(''); setStatusFilter(''); setPage(1); }}
+            className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+            <X className="h-3 w-3" /> Clear
+          </button>
+        )}
+        <span className="text-xs text-slate-400 ml-auto tabular-nums">{threadsTotal.toLocaleString()} threads</span>
       </div>
-      <div className="fade-in-up stagger-1">
-        <Space style={{ marginBottom: 16 }} wrap>
-          <Input.Search placeholder="Search thread subject..." allowClear onSearch={(v) => { setSearch(v); setPage(1); }} style={{ width: 240 }} size="small" />
-          <Select value={statusFilter} onChange={v => { setStatusFilter(v); setPage(1); }} options={THREAD_STATUS_OPTIONS} style={{ width: 240 }} size="small" />
-        </Space>
-        <DataTable<ThreadStatusSummary>
-          table={table}
-          total={threadsTotal}
-          loading={loading}
-          pageSize={PAGE_SIZE}
-          currentPage={page}
-          onPageChange={setPage}
-          onRowClick={handleThreadClick}
-        />
-      </div>
-    </div>
+
+      <DataTable<ThreadStatusSummary>
+        table={table}
+        total={threadsTotal}
+        loading={loading}
+        pageSize={PAGE_SIZE}
+        currentPage={page}
+        onPageChange={setPage}
+        onRowClick={handleThreadClick}
+      />
+    </PageShell>
   );
 };

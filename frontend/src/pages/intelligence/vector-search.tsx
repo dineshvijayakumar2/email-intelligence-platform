@@ -1,31 +1,22 @@
 /**
- * Semantic Search Page — Hybrid search with vector + keyword + temporal parsing.
- * Thread-grouped email results with expandable conversation context.
- * Embedding management moved to AI Usage page.
+ * Semantic Search — Hybrid search with thread-grouped results.
+ * Zero antd. Tailwind + Lucide + shadcn.
  */
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import {
-  Card, Input, Tag, Space, Typography, Button, Row, Col,
-  message, Select, Tooltip,
-} from 'antd';
-import {
-  SearchOutlined,
-  MailOutlined, BankOutlined, ToolOutlined,
-  ClockCircleOutlined, FilterOutlined,
-} from '@ant-design/icons';
 import * as vectorApi from '../../services/vectorService';
 import type { HybridResult } from '../../services/vectorService';
-import { ClientSelector } from '../../components/analytics/ClientSelector';
+import { useClient } from '../../contexts/ClientContext';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { formatRelativeDate } from '../../utils/dateUtils';
-
-const { Title, Text, Paragraph } = Typography;
-const { Search } = Input;
-
-// ---------------------------------------------------------------------------
-// Suggested prompts
-// ---------------------------------------------------------------------------
+import { PageShell, PageHeader } from '@/components/ui/page-shell';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { cn } from '@/lib/utils';
+import {
+  Search, Mail, Building2, Wrench, Clock, Filter, ChevronDown,
+  ChevronRight, ArrowRight,
+} from 'lucide-react';
+import { toast } from '@/lib/toast';
 
 const SUGGESTED_PROMPTS = [
   'wide format printing banner',
@@ -46,24 +37,15 @@ const SOURCE_OPTIONS = [
 ];
 
 const SOURCE_ICONS: Record<string, React.ReactNode> = {
-  email: <MailOutlined style={{ color: '#667eea' }} />,
-  company: <BankOutlined style={{ color: '#52c41a' }} />,
-  operation: <ToolOutlined style={{ color: '#faad14' }} />,
+  email: <Mail className="h-3.5 w-3.5 text-primary" />,
+  company: <Building2 className="h-3.5 w-3.5 text-success" />,
+  operation: <Wrench className="h-3.5 w-3.5 text-warning" />,
 };
-
-const SOURCE_COLORS: Record<string, string> = {
-  email: 'blue',
-  company: 'green',
-  operation: 'gold',
-};
-
-// ---------------------------------------------------------------------------
-// Page component
-// ---------------------------------------------------------------------------
 
 const VectorSearchPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { clientId } = useClient();
   const [query, setQuery] = useState(() => searchParams.get('q') || '');
   const [searching, setSearching] = useState(false);
   const [response, setResponse] = useState<vectorApi.HybridSearchResponse | null>(() => {
@@ -72,22 +54,17 @@ const VectorSearchPage: React.FC = () => {
       const cachedQuery = sessionStorage.getItem('semantic_search_query');
       if (cached && cachedQuery === searchParams.get('q')) {
         const parsed = JSON.parse(cached);
-        // Validate it has the current response shape (threads, not results)
         if (parsed && 'threads' in parsed) return parsed;
       }
-    } catch { /* ignore */ }
+    } catch {}
     return null;
   });
   const [sourceFilter, setSourceFilter] = useState(() => searchParams.get('source') || '');
-  const [clientId, setClientId] = useState<string | undefined>(
-    localStorage.getItem('analytics_client_id') || undefined
-  );
   const initialSearchDone = useRef(false);
 
-  // Search handler — uses hybrid search
   const handleSearch = async (q: string) => {
     if (!q || q.trim().length < 3) {
-      message.warning('Query must be at least 3 characters');
+      toast.warning('Query must be at least 3 characters');
       return;
     }
     setSearching(true);
@@ -102,18 +79,15 @@ const VectorSearchPage: React.FC = () => {
       try {
         sessionStorage.setItem('semantic_search_result', JSON.stringify(r));
         sessionStorage.setItem('semantic_search_query', q);
-      } catch { /* storage full */ }
-      if (r.total === 0) {
-        message.info('No results found. Try a different query.');
-      }
+      } catch {}
+      if (r.total === 0) toast.info('No results found. Try a different query.');
     } catch (err: any) {
-      message.error(err?.message || 'Search failed');
+      toast.error(err?.message || 'Search failed');
     } finally {
       setSearching(false);
     }
   };
 
-  // Auto-search on mount if URL has a query and no cached result
   useEffect(() => {
     if (initialSearchDone.current) return;
     if (response) { initialSearchDone.current = true; return; }
@@ -124,17 +98,15 @@ const VectorSearchPage: React.FC = () => {
     }
   }, []);
 
-  // Expanded thread state
   const [expandedThreads, setExpandedThreads] = useState<Set<string>>(new Set());
-  const toggleThread = (threadId: string) => {
+  const toggleThread = (id: string) => {
     setExpandedThreads(prev => {
       const next = new Set(prev);
-      if (next.has(threadId)) next.delete(threadId); else next.add(threadId);
+      if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
   };
 
-  // Filtered threads and other results
   const filteredThreads = useMemo(() => {
     if (!response) return [];
     if (sourceFilter && sourceFilter !== 'email') return [];
@@ -147,7 +119,6 @@ const VectorSearchPage: React.FC = () => {
     return (response.other_results || []).filter(r => r.source_type === sourceFilter);
   }, [response, sourceFilter]);
 
-  // Source counts
   const sourceCounts = useMemo(() => {
     if (!response) return { email: 0, company: 0, operation: 0 };
     return {
@@ -158,242 +129,156 @@ const VectorSearchPage: React.FC = () => {
   }, [response]);
 
   return (
-    <div style={{ padding: '24px', maxWidth: 1400, margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <div>
-          <Title level={3} style={{ margin: 0 }}>Semantic Search</Title>
-          <Paragraph type="secondary" style={{ margin: '4px 0 0 0' }}>
-            Hybrid search with AI understanding + keyword precision + time awareness
-          </Paragraph>
-        </div>
-        <ClientSelector value={clientId || ''} onChange={id => setClientId(id)} />
-      </div>
+    <PageShell>
+      <PageHeader title="Semantic Search" description="Hybrid search — AI understanding + keyword precision + time awareness" />
 
       {/* Search bar */}
-      <Card className="glass-card" style={{ marginBottom: 16 }}>
-        <Search
-          placeholder="Search with natural language... e.g. 'what happened with Acme last quarter', 'rush delivery complaints'"
-          allowClear
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          enterButton={<><SearchOutlined /> Search</>}
-          size="large"
-          loading={searching}
-          onSearch={handleSearch}
-          style={{ marginBottom: 12 }}
-        />
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          <Text type="secondary" style={{ fontSize: 12, marginRight: 4 }}>Try:</Text>
+      <div className="rounded-lg border bg-white shadow-sm p-4 mb-4">
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search with natural language... e.g. 'what happened with Acme last quarter'"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleSearch(query)}
+              className="w-full h-10 pl-10 pr-4 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+            />
+          </div>
+          <button
+            onClick={() => handleSearch(query)}
+            disabled={searching}
+            className="h-10 px-5 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary-dark disabled:opacity-50 transition-colors inline-flex items-center gap-2"
+          >
+            <Search className="h-4 w-4" />
+            {searching ? 'Searching...' : 'Search'}
+          </button>
+        </div>
+        <div className="flex gap-1.5 mt-3 flex-wrap">
+          <span className="text-xs text-slate-400 mr-1">Try:</span>
           {SUGGESTED_PROMPTS.map(p => (
-            <Tag key={p} style={{ cursor: 'pointer', fontSize: 11 }} onClick={() => handleSearch(p)}>{p}</Tag>
+            <button key={p} onClick={() => handleSearch(p)}
+              className="px-2 py-0.5 text-xs rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors">
+              {p}
+            </button>
           ))}
         </div>
-      </Card>
+      </div>
 
-      {/* Temporal + source info bar */}
+      {/* Info bar */}
       {response && (
-        <Card className="glass-card" size="small" style={{ marginBottom: 16 }}>
-          <Row gutter={16} align="middle">
-            <Col flex="auto">
-              <Space wrap size="middle">
-                <Text strong>{response.total} results</Text>
-                {response.cleaned_query !== response.query && (
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    Cleaned: "{response.cleaned_query}"
-                  </Text>
-                )}
-                {(response.date_from || response.date_to) && (
-                  <Tag icon={<ClockCircleOutlined />} color="processing">
-                    {response.date_from || '...'} → {response.date_to || 'now'}
-                  </Tag>
-                )}
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  Vector: {response.total_vector_hits} | Keyword: {response.total_keyword_hits}
-                </Text>
-              </Space>
-            </Col>
-            <Col>
-              <Space>
-                <FilterOutlined />
-                <Select
-                  value={sourceFilter}
-                  onChange={setSourceFilter}
-                  style={{ width: 140 }}
-                  size="small"
-                  options={SOURCE_OPTIONS.map(o => ({
-                    ...o,
-                    label: (
-                      <span>
-                        {o.value ? SOURCE_ICONS[o.value] : null} {o.label}
-                        {o.value && response ? ` (${sourceCounts[o.value as keyof typeof sourceCounts] || 0})` : ''}
-                      </span>
-                    ),
-                  }))}
-                />
-              </Space>
-            </Col>
-          </Row>
-        </Card>
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-bold text-slate-900">{response.total} results</span>
+            {response.cleaned_query !== response.query && (
+              <span className="text-xs text-slate-400">Cleaned: "{response.cleaned_query}"</span>
+            )}
+            {(response.date_from || response.date_to) && (
+              <StatusBadge variant="info" size="sm">
+                <Clock className="h-3 w-3 mr-1 inline" />
+                {response.date_from || '...'} → {response.date_to || 'now'}
+              </StatusBadge>
+            )}
+            <span className="text-xs text-slate-400">Vector: {response.total_vector_hits} | Keyword: {response.total_keyword_hits}</span>
+          </div>
+          <select
+            value={sourceFilter}
+            onChange={e => setSourceFilter(e.target.value)}
+            className="h-7 px-2 text-xs rounded border border-slate-200 bg-white"
+          >
+            {SOURCE_OPTIONS.map(o => (
+              <option key={o.value} value={o.value}>
+                {o.label}{o.value && response ? ` (${sourceCounts[o.value as keyof typeof sourceCounts] || 0})` : ''}
+              </option>
+            ))}
+          </select>
+        </div>
       )}
 
-      {/* Thread-grouped email results */}
+      {/* Thread results */}
       {filteredThreads.length > 0 && (
-        <div style={{ marginBottom: 16 }}>
-          {(!sourceFilter || sourceFilter === 'email') && (
-            <Text strong style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>
-              <MailOutlined style={{ color: '#667eea', marginRight: 6 }} />
-              Email Threads ({filteredThreads.length})
-            </Text>
-          )}
+        <div className="mb-4">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
+            <Mail className="h-3.5 w-3.5 inline mr-1" />Email Threads ({filteredThreads.length})
+          </h3>
           {filteredThreads.map(thread => (
-            <Card
-              key={thread.thread_id}
-              className="glass-card"
-              size="small"
-              style={{ marginBottom: 8, borderLeft: '3px solid #667eea' }}
-            >
-              <div
-                style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}
-                onClick={() => toggleThread(thread.thread_id)}
-              >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <Text strong ellipsis={{ tooltip: thread.subject }} style={{ fontSize: 14 }}>
-                    {thread.subject || '(No subject)'}
-                  </Text>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 2 }}>
-                    <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>
-                      {thread.total_emails} email{thread.total_emails !== 1 ? 's' : ''}
-                    </Tag>
-                    {thread.matched_count > 1 && (
-                      <Tag color="purple" style={{ margin: 0, fontSize: 11 }}>
-                        {thread.matched_count} matched
-                      </Tag>
-                    )}
-                    <Tooltip title={`Vector: ${thread.vector_score} | Keyword: ${thread.keyword_score} | Recency: ${thread.recency_score}`}>
-                      <Text type="secondary" style={{ fontSize: 11 }}>
-                        Score: {(thread.score * 10000).toFixed(0)}
-                      </Text>
-                    </Tooltip>
+            <div key={thread.thread_id} className="rounded-lg border bg-white shadow-sm mb-2 overflow-hidden">
+              <div className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-slate-50" onClick={() => toggleThread(thread.thread_id)}>
+                {expandedThreads.has(thread.thread_id) ? <ChevronDown className="h-3.5 w-3.5 text-slate-400 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 text-slate-400 shrink-0" />}
+                <div className="flex-1 min-w-0">
+                  <span className="text-sm font-medium text-slate-900 truncate block">{thread.subject || '(No subject)'}</span>
+                  <div className="flex gap-2 mt-0.5">
+                    <span className="text-xs text-slate-400">{thread.total_emails} email{thread.total_emails !== 1 ? 's' : ''}</span>
+                    {thread.matched_count > 1 && <span className="text-xs text-slate-400">{thread.matched_count} matched</span>}
                   </div>
                 </div>
-                <Button
-                  type="text"
-                  size="small"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    navigate(`/emails?thread_id=${encodeURIComponent(thread.thread_id)}&name=${encodeURIComponent(thread.subject || 'Thread')}`);
-                  }}
-                  style={{ color: '#667eea', fontSize: 12 }}
-                >
-                  Open Thread
-                </Button>
-                <Text type="secondary" style={{ fontSize: 18 }}>
-                  {expandedThreads.has(thread.thread_id) ? '▾' : '▸'}
-                </Text>
+                <button onClick={(e) => {
+                  e.stopPropagation();
+                  navigate(`/emails?thread_id=${encodeURIComponent(thread.thread_id)}&name=${encodeURIComponent(thread.subject || 'Thread')}`);
+                }} className="text-xs text-primary hover:underline shrink-0">Open Thread</button>
               </div>
-
               {expandedThreads.has(thread.thread_id) && (
-                <div style={{ marginTop: 10, borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 8 }}>
+                <div className="border-t divide-y divide-slate-50">
                   {thread.emails.map((email, idx) => (
-                    <div
-                      key={email.id}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 10,
-                        padding: '6px 8px', borderRadius: 4, marginBottom: 2,
-                        background: email.is_match ? 'rgba(102,126,234,0.08)' : 'transparent',
-                        cursor: 'pointer',
-                      }}
-                      onClick={() => navigate(`/emails?email_id=${email.id}&name=${encodeURIComponent(email.subject || 'Email')}`)}
-                    >
-                      <Text type="secondary" style={{ fontSize: 11, width: 20, textAlign: 'center', flexShrink: 0 }}>
-                        {idx + 1}
-                      </Text>
-                      <Tag
-                        color={email.is_outbound ? 'green' : 'default'}
-                        style={{ margin: 0, fontSize: 10, padding: '0 4px', width: 32, textAlign: 'center' }}
-                      >
-                        {email.is_outbound ? 'OUT' : 'IN'}
-                      </Tag>
-                      <Text style={{ fontSize: 12, width: 140, flexShrink: 0 }} ellipsis>
-                        {email.sender_name || email.sender_email || '?'}
-                      </Text>
-                      <Text
-                        style={{ fontSize: 12, flex: 1, color: email.is_match ? '#667eea' : undefined }}
-                        ellipsis
-                      >
+                    <div key={email.id}
+                      className={cn('flex items-center gap-3 px-4 py-1.5 cursor-pointer hover:bg-slate-50 text-sm', email.is_match && 'bg-primary/[0.03]')}
+                      onClick={() => navigate(`/emails?email_id=${email.id}&name=${encodeURIComponent(email.subject || 'Email')}`)}>
+                      <span className="text-xs text-slate-400 w-5 text-center tabular-nums">{idx + 1}</span>
+                      <span className={cn('text-[10px] font-medium w-7', email.is_outbound ? 'text-success' : 'text-slate-400')}>{email.is_outbound ? 'OUT' : 'IN'}</span>
+                      <span className="text-slate-600 w-32 truncate text-xs">{email.sender_name || email.sender_email || '?'}</span>
+                      <span className={cn('flex-1 truncate text-xs', email.is_match ? 'text-primary font-medium' : 'text-slate-600')}>
                         {email.is_match && '● '}{email.subject || '(No subject)'}
-                      </Text>
-                      <Text type="secondary" style={{ fontSize: 11, flexShrink: 0 }}>
-                        {email.sent_date ? formatRelativeDate(email.sent_date) : '-'}
-                      </Text>
+                      </span>
+                      <span className="text-xs text-slate-400 shrink-0">{email.sent_date ? formatRelativeDate(email.sent_date) : '—'}</span>
                     </div>
                   ))}
                 </div>
               )}
-            </Card>
+            </div>
           ))}
         </div>
       )}
 
-      {/* Non-email results (companies, operations) */}
+      {/* Non-email results */}
       {filteredOther.length > 0 && (
-        <div style={{ marginBottom: 16 }}>
-          <Text strong style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>
-            <BankOutlined style={{ color: '#52c41a', marginRight: 6 }} />
-            Companies & Operations ({filteredOther.length})
-          </Text>
+        <div className="mb-4">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
+            <Building2 className="h-3.5 w-3.5 inline mr-1" />Companies & Operations ({filteredOther.length})
+          </h3>
           {filteredOther.map(r => (
-            <Card
-              key={r.id}
-              className="glass-card"
-              size="small"
-              style={{
-                marginBottom: 6,
-                cursor: r.source_type === 'company' ? 'pointer' : 'default',
-                borderLeft: `3px solid ${r.source_type === 'company' ? '#52c41a' : '#faad14'}`,
-              }}
-              onClick={r.source_type === 'company' ? () => navigate(`/customers/${r.id}`) : undefined}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <Tag color={SOURCE_COLORS[r.source_type] || 'default'} style={{ margin: 0 }}>
-                  {SOURCE_ICONS[r.source_type]} {r.source_type === 'company' ? 'Company' : 'Operation'}
-                </Tag>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <Text strong ellipsis={{ tooltip: r.title }}>{r.title}</Text>
-                  <div><Text type="secondary" style={{ fontSize: 11 }}>{r.snippet}</Text></div>
+            <div key={r.id}
+              className={cn('rounded-lg border bg-white shadow-sm px-4 py-3 mb-2', r.source_type === 'company' && 'cursor-pointer hover:bg-slate-50')}
+              onClick={r.source_type === 'company' ? () => navigate(`/customers/${r.id}`) : undefined}>
+              <div className="flex items-center gap-3">
+                {SOURCE_ICONS[r.source_type]}
+                <div className="flex-1 min-w-0">
+                  <span className="text-sm font-medium text-slate-900">{r.title}</span>
+                  <p className="text-xs text-slate-400 truncate">{r.snippet}</p>
                 </div>
-                <Tooltip title={`Vector: ${r.vector_score} | Keyword: ${r.keyword_score} | Recency: ${r.recency_score}`}>
-                  <Text type="secondary" style={{ fontSize: 11 }}>
-                    Score: {(r.score * 10000).toFixed(0)}
-                  </Text>
-                </Tooltip>
+                <span className="text-xs text-slate-400 tabular-nums">Score: {(r.score * 10000).toFixed(0)}</span>
               </div>
-            </Card>
+            </div>
           ))}
         </div>
       )}
 
-      {/* No results */}
+      {/* Empty states */}
       {response && response.total === 0 && (
-        <Card className="glass-card" style={{ textAlign: 'center', padding: 48, marginBottom: 16 }}>
-          <SearchOutlined style={{ fontSize: 48, marginBottom: 16, opacity: 0.3 }} />
-          <div><Text type="secondary">No results found for "{query}"</Text></div>
-          <div style={{ marginTop: 8 }}><Text type="secondary" style={{ fontSize: 12 }}>Try a broader query or lower the similarity threshold</Text></div>
-        </Card>
+        <div className="text-center py-16">
+          <Search className="h-12 w-12 text-slate-200 mx-auto mb-3" />
+          <p className="text-sm text-slate-500">No results found for "{query}"</p>
+          <p className="text-xs text-slate-400 mt-1">Try a broader query or different keywords</p>
+        </div>
       )}
-
-      {/* Empty state */}
       {!response && !searching && (
-        <Card className="glass-card" style={{ textAlign: 'center', padding: 64, marginBottom: 16 }}>
-          <SearchOutlined style={{ fontSize: 64, marginBottom: 16, opacity: 0.2 }} />
-          <div style={{ fontSize: 16, marginBottom: 8 }}><Text type="secondary">Search your portfolio with natural language</Text></div>
-          <div><Text type="secondary" style={{ fontSize: 13 }}>
-            Combines AI understanding + keyword matching + time awareness for precise results
-          </Text></div>
-        </Card>
+        <div className="text-center py-20">
+          <Search className="h-16 w-16 text-slate-200 mx-auto mb-4" />
+          <p className="text-slate-500">Search your portfolio with natural language</p>
+          <p className="text-xs text-slate-400 mt-1">AI understanding + keyword matching + time awareness</p>
+        </div>
       )}
-    </div>
+    </PageShell>
   );
 };
 
