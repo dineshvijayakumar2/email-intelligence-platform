@@ -1,15 +1,18 @@
 /**
- * DataTable — TanStack Table wrapper with server-side pagination + sorting.
- * Drop-in replacement for AnalyticsTable on pages that need proper filtering.
- * Keeps Ant Design styling (Skeleton, Empty, Pagination) for visual consistency.
+ * DataTable — TanStack Table wrapper with Tailwind styling.
+ * Server-side pagination + sortable column headers.
+ * Zero antd dependency.
  */
 
 import React from 'react';
-import { Pagination, Skeleton, Empty } from 'antd';
 import {
   flexRender,
   type Table as TanStackTable,
 } from '@tanstack/react-table';
+import { cn } from '@/lib/utils';
+import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
+import { ChevronLeft, ChevronRight, Database } from 'lucide-react';
 
 interface DataTableProps<T> {
   table: TanStackTable<T>;
@@ -34,8 +37,15 @@ export function DataTable<T>({
 }: DataTableProps<T>) {
   if (loading) {
     return (
-      <div className="glass-table-container" style={{ padding: 24 }}>
-        <Skeleton active paragraph={{ rows: 8 }} />
+      <div className="rounded-lg border bg-white shadow-sm p-6 space-y-3">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="flex gap-4">
+            <Skeleton className="h-4 w-1/4" />
+            <Skeleton className="h-4 w-1/6" />
+            <Skeleton className="h-4 w-1/5" />
+            <Skeleton className="h-4 w-1/6" />
+          </div>
+        ))}
       </div>
     );
   }
@@ -44,55 +54,46 @@ export function DataTable<T>({
 
   if (!rows.length) {
     return (
-      <div className="glass-table-container" style={{ padding: 24 }}>
-        <Empty description={emptyText || 'No data available'} />
+      <div className="rounded-lg border bg-white shadow-sm">
+        <EmptyState
+          icon={<Database className="h-10 w-10" />}
+          title={emptyText || 'No data available'}
+        />
       </div>
     );
   }
 
+  const totalPages = Math.ceil(total / pageSize);
+
   return (
-    <div className="glass-table-container">
-      <div style={{ overflowX: 'auto' }}>
-        <table
-          style={{
-            width: '100%',
-            borderCollapse: 'collapse',
-            fontSize: 14,
-          }}
-        >
+    <div className="rounded-lg border bg-white shadow-sm overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
           <thead>
             {table.getHeaderGroups().map(headerGroup => (
-              <tr
-                key={headerGroup.id}
-                style={{
-                  borderBottom: '1px solid var(--ant-color-border, #f0f0f0)',
-                  background: 'var(--ant-color-bg-container-secondary, rgba(0,0,0,0.02))',
-                }}
-              >
+              <tr key={headerGroup.id} className="border-b bg-slate-50/50">
                 {headerGroup.headers.map(header => {
                   const canSort = header.column.getCanSort();
                   const sorted = header.column.getIsSorted();
+                  const align = (header.column.columnDef.meta as any)?.align || 'left';
                   return (
                     <th
                       key={header.id}
                       onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
+                      className={cn(
+                        'px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap',
+                        canSort && 'cursor-pointer select-none hover:text-slate-700',
+                        align === 'right' && 'text-right',
+                        align === 'center' && 'text-center',
+                      )}
                       style={{
-                        padding: '10px 12px',
-                        textAlign: (header.column.columnDef.meta as any)?.align || 'left',
-                        fontWeight: 600,
-                        fontSize: 13,
-                        color: 'var(--ant-color-text-secondary, rgba(0,0,0,0.65))',
-                        cursor: canSort ? 'pointer' : 'default',
-                        userSelect: canSort ? 'none' : undefined,
                         width: header.column.columnDef.size || undefined,
                         minWidth: header.column.columnDef.minSize || undefined,
-                        maxWidth: header.column.columnDef.maxSize || undefined,
-                        whiteSpace: 'nowrap',
                       }}
                     >
                       {flexRender(header.column.columnDef.header, header.getContext())}
                       {canSort && (
-                        <span style={{ marginLeft: 4, opacity: sorted ? 1 : 0.3, fontSize: 11 }}>
+                        <span className={cn('ml-1 text-[10px]', sorted ? 'opacity-100' : 'opacity-30')}>
                           {sorted === 'asc' ? '▲' : sorted === 'desc' ? '▼' : '⇅'}
                         </span>
                       )}
@@ -102,49 +103,61 @@ export function DataTable<T>({
               </tr>
             ))}
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-slate-100">
             {rows.map(row => (
               <tr
                 key={row.id}
                 onClick={onRowClick ? () => onRowClick(row.original) : undefined}
-                style={{
-                  borderBottom: '1px solid var(--ant-color-border-secondary, #f5f5f5)',
-                  cursor: onRowClick ? 'pointer' : 'default',
-                  transition: 'background 0.15s',
-                }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--ant-color-bg-text-hover, rgba(0,0,0,0.04))'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                className={cn(
+                  'transition-colors',
+                  onRowClick && 'cursor-pointer hover:bg-slate-50',
+                )}
               >
-                {row.getVisibleCells().map(cell => (
-                  <td
-                    key={cell.id}
-                    style={{
-                      padding: '10px 12px',
-                      textAlign: (cell.column.columnDef.meta as any)?.align || 'left',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      maxWidth: cell.column.columnDef.maxSize || undefined,
-                    }}
-                  >
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </td>
-                ))}
+                {row.getVisibleCells().map(cell => {
+                  const align = (cell.column.columnDef.meta as any)?.align || 'left';
+                  return (
+                    <td
+                      key={cell.id}
+                      className={cn(
+                        'px-3 py-2.5 text-sm text-slate-700 whitespace-nowrap',
+                        align === 'right' && 'text-right',
+                        align === 'center' && 'text-center',
+                      )}
+                      style={{ maxWidth: cell.column.columnDef.maxSize || undefined }}
+                    >
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </td>
+                  );
+                })}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
       {total > pageSize && onPageChange && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '16px 16px 8px' }}>
-          <Pagination
-            current={currentPage}
-            pageSize={pageSize}
-            total={total}
-            onChange={onPageChange}
-            showSizeChanger={false}
-            showTotal={(t) => `${t} total`}
-          />
+        <div className="flex items-center justify-between px-4 py-3 border-t bg-slate-50/30">
+          <span className="text-xs text-slate-500">
+            {((currentPage - 1) * pageSize + 1).toLocaleString()}–{Math.min(currentPage * pageSize, total).toLocaleString()} of {total.toLocaleString()}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => onPageChange(currentPage - 1)}
+              disabled={currentPage <= 1}
+              className="p-1.5 rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <span className="text-xs text-slate-600 px-2 tabular-nums">
+              {currentPage} / {totalPages}
+            </span>
+            <button
+              onClick={() => onPageChange(currentPage + 1)}
+              disabled={currentPage >= totalPages}
+              className="p-1.5 rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       )}
     </div>
