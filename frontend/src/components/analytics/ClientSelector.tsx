@@ -3,8 +3,24 @@ import { Building2 } from 'lucide-react';
 import { clientService, ClientSummary } from '../../services/clientService';
 
 const STORAGE_KEY = 'analytics_client_id';
+const CACHE_KEY = 'client_list_cache';
 
+// Module-level + sessionStorage cache
 let _cachedClients: ClientSummary[] | null = null;
+
+function loadFromSession(): ClientSummary[] | null {
+  try {
+    const raw = sessionStorage.getItem(CACHE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch { /* ignore */ }
+  return null;
+}
+
+// Initialize from sessionStorage immediately (sync, no network)
+if (!_cachedClients) {
+  _cachedClients = loadFromSession();
+}
+
 let _fetchPromise: Promise<ClientSummary[]> | null = null;
 
 function getClients(): Promise<ClientSummary[]> {
@@ -13,6 +29,7 @@ function getClients(): Promise<ClientSummary[]> {
   _fetchPromise = clientService.list().then(r => {
     _cachedClients = r.clients || [];
     _fetchPromise = null;
+    try { sessionStorage.setItem(CACHE_KEY, JSON.stringify(_cachedClients)); } catch { /* full */ }
     return _cachedClients;
   }).catch(() => {
     _fetchPromise = null;
@@ -38,7 +55,7 @@ export const ClientSelector: React.FC<ClientSelectorProps> = ({ value, onChange,
 
     const saved = localStorage.getItem(STORAGE_KEY);
 
-    if (_cachedClients) {
+    if (_cachedClients && _cachedClients.length > 0) {
       setClients(_cachedClients);
       setLoading(false);
       if (!value && _cachedClients.length > 0) {
@@ -48,6 +65,7 @@ export const ClientSelector: React.FC<ClientSelectorProps> = ({ value, onChange,
       return;
     }
 
+    // Fire immediately with saved ID (no waiting for fetch)
     if (!value && saved) onChange(saved);
 
     getClients().then(list => {
@@ -66,17 +84,21 @@ export const ClientSelector: React.FC<ClientSelectorProps> = ({ value, onChange,
     onChange(id);
   };
 
+  // Show saved client name while loading
+  const savedId = localStorage.getItem(STORAGE_KEY);
+  const showValue = value || savedId || '';
+
   return (
     <div className="inline-flex items-center gap-2" style={style}>
       <Building2 className="h-4 w-4 text-primary" />
       <span className="text-sm font-medium text-slate-700">Client:</span>
       <select
-        value={value}
+        value={showValue}
         onChange={handleChange}
-        disabled={loading}
+        disabled={loading && clients.length === 0}
         className="h-8 px-2 text-sm rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary min-w-[180px]"
       >
-        {loading && <option>Loading...</option>}
+        {clients.length === 0 && loading && <option value={showValue}>Loading...</option>}
         {clients.map(c => <option key={c.id} value={c.id}>{c.client_name}</option>)}
       </select>
     </div>
