@@ -1,92 +1,44 @@
 /**
- * Live Log Monitor — Real-time backend log viewer with filtering.
- * Polls /api/v1/logs/recent every 3s. Classifies by service, level, mailbox.
+ * Live Log Monitor — Real-time log viewer with filtering. Zero antd.
  */
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import {
-  Card, Table, Tag, Space, Typography, Select, Input, Switch, Button, Badge,
-} from 'antd';
-import {
-  ReloadOutlined, PauseCircleOutlined, PlayCircleOutlined,
-  ClearOutlined,
-} from '@ant-design/icons';
 import api from '../../services/apiClient';
-
-const { Title, Text } = Typography;
-const { Search } = Input;
+import { PageShell } from '@/components/ui/page-shell';
+import { cn } from '@/lib/utils';
+import { RefreshCw, Play, Pause, Trash2, Search } from 'lucide-react';
+import { StatusBadge } from '@/components/ui/status-badge';
 
 interface LogEntry {
-  ts: string;
-  level: string;
-  service: string;
-  message: string;
-  mailbox_id?: string;
-  client_id?: string;
-  job_id?: string;
-  step?: string;
+  ts: string; level: string; service: string; message: string;
+  mailbox_id?: string; client_id?: string; job_id?: string; step?: string;
 }
 
-const levelColors: Record<string, string> = {
-  DEBUG: 'default',
-  INFO: 'blue',
-  WARNING: 'gold',
-  ERROR: 'red',
-  CRITICAL: 'magenta',
+const LEVEL_VARIANT: Record<string, 'danger' | 'warning' | 'info' | 'neutral'> = {
+  ERROR: 'danger', CRITICAL: 'danger', WARNING: 'warning', INFO: 'info', DEBUG: 'neutral',
 };
 
 const POLL_OPTIONS = [
-  { value: 1000, label: '1s' },
-  { value: 3000, label: '3s' },
-  { value: 5000, label: '5s' },
-  { value: 10000, label: '10s' },
-  { value: 30000, label: '30s' },
+  { value: 1000, label: '1s' }, { value: 3000, label: '3s' }, { value: 5000, label: '5s' },
+  { value: 10000, label: '10s' }, { value: 30000, label: '30s' },
 ];
 
 export default function LogMonitorPage() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [paused, setPaused] = useState(false);
-  const [autoScroll, setAutoScroll] = useState(true);
   const [pollInterval, setPollInterval] = useState(3000);
-
-  // Filters
-  const [levelFilter, setLevelFilter] = useState<string | undefined>(undefined);
-  const [serviceFilter, setServiceFilter] = useState<string | undefined>(undefined);
-  const [mailboxFilter, setMailboxFilter] = useState<string | undefined>(undefined);
-  const [clientFilter, setClientFilter] = useState<string | undefined>(undefined);
+  const [levelFilter, setLevelFilter] = useState('');
+  const [serviceFilter, setServiceFilter] = useState('');
   const [searchFilter, setSearchFilter] = useState('');
   const [services, setServices] = useState<string[]>([]);
-
-  // Unique mailbox/client IDs seen in logs (for filter dropdowns)
-  const [seenMailboxes, setSeenMailboxes] = useState<string[]>([]);
-  const [seenClients, setSeenClients] = useState<string[]>([]);
-
-  // Name lookups: id → label
   const [mailboxNames, setMailboxNames] = useState<Record<string, string>>({});
   const [clientNames, setClientNames] = useState<Record<string, string>>({});
-
-  const tableRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Load services (static, no DB) immediately; context names (DB) lazily with timeout
   useEffect(() => {
-    api.get('/v1/logs/services').then((data: any) => {
-      setServices(data?.services || []);
-    }).catch(() => {});
-    // Context names are nice-to-have — don't block if Supabase is busy
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 5000); // 5s timeout
-    api.get('/v1/logs/context', { signal: ctrl.signal } as any).then((data: any) => {
-      setMailboxNames(data?.mailboxes || {});
-      setClientNames(data?.clients || {});
-    }).catch(() => {});
-    return () => { clearTimeout(timer); ctrl.abort(); };
+    api.get('/v1/logs/services').then((d: any) => setServices(d?.services || [])).catch(() => {});
+    api.get('/v1/logs/context').then((d: any) => { setMailboxNames(d?.mailboxes || {}); setClientNames(d?.clients || {}); }).catch(() => {});
   }, []);
-
-  // Use refs for seen IDs to avoid stale closures in fetchLogs
-  const seenMbRef = useRef(new Set<string>());
-  const seenClRef = useRef(new Set<string>());
 
   const fetchLogs = useCallback(async () => {
     if (paused) return;
@@ -95,216 +47,104 @@ export default function LogMonitorPage() {
       const params = new URLSearchParams({ limit: '200' });
       if (levelFilter) params.set('level', levelFilter);
       if (serviceFilter) params.set('service', serviceFilter);
-      if (mailboxFilter) params.set('mailbox_id', mailboxFilter);
-      if (clientFilter) params.set('client_id', clientFilter);
       if (searchFilter) params.set('search', searchFilter);
       const data = await api.get(`/v1/logs/recent?${params}`) as { logs: LogEntry[] };
-      const entries = data.logs || [];
-      setLogs(entries);
+      setLogs(data.logs || []);
+    } catch {} finally { setLoading(false); }
+  }, [paused, levelFilter, serviceFilter, searchFilter]);
 
-      // Track unique mailbox/client IDs for filter dropdowns
-      let mbChanged = false, clChanged = false;
-      for (const e of entries) {
-        if (e.mailbox_id && !seenMbRef.current.has(e.mailbox_id)) {
-          seenMbRef.current.add(e.mailbox_id); mbChanged = true;
-        }
-        if (e.client_id && !seenClRef.current.has(e.client_id)) {
-          seenClRef.current.add(e.client_id); clChanged = true;
-        }
-      }
-      if (mbChanged) setSeenMailboxes(Array.from(seenMbRef.current));
-      if (clChanged) setSeenClients(Array.from(seenClRef.current));
-    } catch { /* silent */ }
-    setLoading(false);
-  }, [paused, levelFilter, serviceFilter, mailboxFilter, clientFilter, searchFilter]);
-
-  // Initial load + polling at configurable interval
   useEffect(() => {
     fetchLogs();
     pollRef.current = setInterval(fetchLogs, pollInterval);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [fetchLogs, pollInterval]);
 
-  // Auto-scroll to bottom when new logs arrive
-  useEffect(() => {
-    if (autoScroll && tableRef.current) {
-      const tableBody = tableRef.current.querySelector('.ant-table-body');
-      if (tableBody) tableBody.scrollTop = 0; // newest at top
-    }
-  }, [logs, autoScroll]);
-
-  // Count by level
   const errorCount = logs.filter(l => l.level === 'ERROR' || l.level === 'CRITICAL').length;
   const warnCount = logs.filter(l => l.level === 'WARNING').length;
 
-  const columns = [
-    {
-      title: 'Time',
-      dataIndex: 'ts',
-      key: 'ts',
-      width: 90,
-      render: (v: string) => {
-        const d = new Date(v);
-        return <Text style={{ fontSize: 11, fontFamily: 'monospace' }}>{d.toLocaleTimeString()}</Text>;
-      },
-    },
-    {
-      title: 'Level',
-      dataIndex: 'level',
-      key: 'level',
-      width: 75,
-      render: (v: string) => <Tag color={levelColors[v] || 'default'} style={{ fontSize: 11 }}>{v}</Tag>,
-    },
-    {
-      title: 'Service',
-      dataIndex: 'service',
-      key: 'service',
-      width: 110,
-      ellipsis: true,
-      render: (v: string) => <Text code style={{ fontSize: 11 }}>{v}</Text>,
-    },
-    {
-      title: 'Message',
-      dataIndex: 'message',
-      key: 'message',
-      ellipsis: false,
-      render: (v: string, record: LogEntry) => (
-        <div>
-          <Text style={{ fontSize: 12 }}>{v}</Text>
-          {(record.mailbox_id || record.job_id || record.step) && (
-            <div style={{ marginTop: 2 }}>
-              {record.step && <Tag style={{ fontSize: 10 }}>Step {record.step}</Tag>}
-              {record.job_id && <Tag style={{ fontSize: 10 }} color="geekblue">Job: {record.job_id.slice(0, 8)}</Tag>}
-              {record.mailbox_id && <Tag style={{ fontSize: 10 }} color="cyan">{mailboxNames[record.mailbox_id] || `MB: ${record.mailbox_id.slice(0, 8)}`}</Tag>}
-              {record.client_id && <Tag style={{ fontSize: 10 }} color="green">{clientNames[record.client_id] || `Client: ${record.client_id.slice(0, 8)}`}</Tag>}
-            </div>
-          )}
-        </div>
-      ),
-    },
-  ];
-
   return (
-    <div style={{ padding: '16px 24px', maxWidth: 1600, margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <Space>
-          <Title level={4} style={{ margin: 0 }}>Live Log Monitor</Title>
-          {errorCount > 0 && <Badge count={errorCount} style={{ backgroundColor: '#ff4d4f' }} />}
-          {warnCount > 0 && <Badge count={warnCount} style={{ backgroundColor: '#faad14' }} />}
-          {paused && <Tag color="orange">Paused</Tag>}
-        </Space>
-        <Space>
-          <Select
-            placeholder="Level"
-            allowClear
-            size="small"
-            style={{ width: 100 }}
-            value={levelFilter}
-            onChange={setLevelFilter}
-            options={['ERROR', 'WARNING', 'INFO', 'DEBUG'].map(l => ({ value: l, label: l }))}
-          />
-          <Select
-            placeholder="Service"
-            allowClear
-            showSearch
-            size="small"
-            style={{ width: 140 }}
-            value={serviceFilter}
-            onChange={setServiceFilter}
-            options={services.map(s => ({ value: s, label: s }))}
-          />
-          {seenMailboxes.length > 0 && (
-            <Select
-              placeholder="Mailbox"
-              allowClear
-              showSearch
-              optionFilterProp="label"
-              size="small"
-              style={{ width: 180 }}
-              value={mailboxFilter}
-              onChange={setMailboxFilter}
-              options={seenMailboxes.map(id => ({
-                value: id,
-                label: mailboxNames[id] || id.slice(0, 8) + '…',
-              }))}
-            />
-          )}
-          {seenClients.length > 0 && (
-            <Select
-              placeholder="Client"
-              allowClear
-              showSearch
-              optionFilterProp="label"
-              size="small"
-              style={{ width: 140 }}
-              value={clientFilter}
-              onChange={setClientFilter}
-              options={seenClients.map(id => ({
-                value: id,
-                label: clientNames[id] || id.slice(0, 8) + '…',
-              }))}
-            />
-          )}
-          <Search
-            placeholder="Search messages..."
-            size="small"
-            style={{ width: 200 }}
-            allowClear
-            onSearch={setSearchFilter}
-            enterButton={false}
-          />
-          <Select
-            size="small"
-            style={{ width: 80 }}
-            value={pollInterval}
-            onChange={setPollInterval}
-            options={POLL_OPTIONS}
-          />
-          <Button
-            size="small"
-            icon={paused ? <PlayCircleOutlined /> : <PauseCircleOutlined />}
-            onClick={() => setPaused(!paused)}
-            type={paused ? 'primary' : 'default'}
-          >
-            {paused ? 'Resume' : 'Pause'}
-          </Button>
-          <Button size="small" icon={<ReloadOutlined />} onClick={fetchLogs}>Refresh</Button>
-          <Button size="small" icon={<ClearOutlined />} onClick={() => setLogs([])}>Clear</Button>
-          <Switch
-            checkedChildren="Auto-scroll"
-            unCheckedChildren="Manual"
-            checked={autoScroll}
-            onChange={setAutoScroll}
-            size="small"
-          />
-        </Space>
+    <PageShell maxWidth="1600px">
+      {/* Header + controls */}
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <div className="flex items-center gap-3">
+          <h1 className="text-lg font-bold text-slate-900">Live Log Monitor</h1>
+          {errorCount > 0 && <StatusBadge variant="danger">{errorCount} errors</StatusBadge>}
+          {warnCount > 0 && <StatusBadge variant="warning">{warnCount} warnings</StatusBadge>}
+          {paused && <StatusBadge variant="warning">Paused</StatusBadge>}
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <select value={levelFilter} onChange={e => setLevelFilter(e.target.value)}
+            className="h-7 px-2 text-xs rounded border border-slate-200 bg-white">
+            <option value="">All Levels</option>
+            {['ERROR', 'WARNING', 'INFO', 'DEBUG'].map(l => <option key={l} value={l}>{l}</option>)}
+          </select>
+          <select value={serviceFilter} onChange={e => setServiceFilter(e.target.value)}
+            className="h-7 px-2 text-xs rounded border border-slate-200 bg-white max-w-[140px]">
+            <option value="">All Services</option>
+            {services.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <div className="relative">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
+            <input type="text" placeholder="Search..." value={searchFilter} onChange={e => setSearchFilter(e.target.value)}
+              className="h-7 pl-7 pr-2 text-xs rounded border border-slate-200 bg-white w-40 focus:outline-none focus:ring-1 focus:ring-primary/20" />
+          </div>
+          <select value={pollInterval} onChange={e => setPollInterval(Number(e.target.value))}
+            className="h-7 px-2 text-xs rounded border border-slate-200 bg-white w-16">
+            {POLL_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+          <button onClick={() => setPaused(!paused)} className={cn('h-7 px-2 text-xs rounded border inline-flex items-center gap-1', paused ? 'bg-primary text-white border-primary' : 'border-slate-200 hover:bg-slate-50')}>
+            {paused ? <><Play className="h-3 w-3" />Resume</> : <><Pause className="h-3 w-3" />Pause</>}
+          </button>
+          <button onClick={fetchLogs} className="h-7 px-2 text-xs rounded border border-slate-200 hover:bg-slate-50 inline-flex items-center gap-1">
+            <RefreshCw className={cn('h-3 w-3', loading && 'animate-spin')} />
+          </button>
+          <button onClick={() => setLogs([])} className="h-7 px-2 text-xs rounded border border-slate-200 hover:bg-slate-50 inline-flex items-center gap-1">
+            <Trash2 className="h-3 w-3" />
+          </button>
+        </div>
       </div>
 
-      <div ref={tableRef}>
-        <Card size="small" bodyStyle={{ padding: 0 }}>
-          <Table
-            dataSource={logs}
-            columns={columns}
-            rowKey={(_, idx) => `${idx}`}
-            loading={loading && logs.length === 0}
-            size="small"
-            pagination={false}
-            scroll={{ y: 'calc(100vh - 200px)' }}
-            rowClassName={(record) =>
-              record.level === 'ERROR' || record.level === 'CRITICAL'
-                ? 'log-row-error'
-                : record.level === 'WARNING'
-                ? 'log-row-warn'
-                : ''
-            }
-          />
-        </Card>
+      {/* Log table */}
+      <div className="rounded-lg border bg-white shadow-sm overflow-hidden">
+        <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 180px)' }}>
+          <table className="w-full text-xs">
+            <thead className="sticky top-0 z-10">
+              <tr className="bg-slate-50 border-b">
+                <th className="px-3 py-2 text-left font-bold uppercase tracking-wider text-slate-600 w-20">Time</th>
+                <th className="px-3 py-2 text-left font-bold uppercase tracking-wider text-slate-600 w-16">Level</th>
+                <th className="px-3 py-2 text-left font-bold uppercase tracking-wider text-slate-600 w-28">Service</th>
+                <th className="px-3 py-2 text-left font-bold uppercase tracking-wider text-slate-600">Message</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {logs.map((log, i) => (
+                <tr key={i} className={cn(
+                  (log.level === 'ERROR' || log.level === 'CRITICAL') && 'bg-destructive-subtle',
+                  log.level === 'WARNING' && 'bg-warning-subtle',
+                )}>
+                  <td className="px-3 py-1.5 font-mono text-slate-500">{new Date(log.ts).toLocaleTimeString()}</td>
+                  <td className="px-3 py-1.5"><StatusBadge variant={LEVEL_VARIANT[log.level] || 'neutral'} size="sm">{log.level}</StatusBadge></td>
+                  <td className="px-3 py-1.5 font-mono text-slate-600">{log.service}</td>
+                  <td className="px-3 py-1.5 text-slate-700">
+                    {log.message}
+                    {(log.step || log.job_id || log.mailbox_id || log.client_id) && (
+                      <div className="flex gap-1 mt-0.5">
+                        {log.step && <span className="inline-flex px-1 text-[10px] rounded bg-slate-100 text-slate-500">Step {log.step}</span>}
+                        {log.job_id && <span className="inline-flex px-1 text-[10px] rounded bg-primary-subtle text-primary">Job: {log.job_id.slice(0, 8)}</span>}
+                        {log.mailbox_id && <span className="inline-flex px-1 text-[10px] rounded bg-slate-100 text-slate-500">{mailboxNames[log.mailbox_id] || `MB: ${log.mailbox_id.slice(0, 8)}`}</span>}
+                        {log.client_id && <span className="inline-flex px-1 text-[10px] rounded bg-success-subtle text-success">{clientNames[log.client_id] || `Client: ${log.client_id.slice(0, 8)}`}</span>}
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {logs.length === 0 && (
+                <tr><td colSpan={4} className="px-3 py-8 text-center text-slate-400">No logs</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
-
-      <style>{`
-        .log-row-error td { background: rgba(255, 77, 79, 0.08) !important; }
-        .log-row-warn td { background: rgba(250, 173, 20, 0.06) !important; }
-      `}</style>
-    </div>
+    </PageShell>
   );
 }
