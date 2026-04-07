@@ -159,8 +159,9 @@ class EmailRulesService:
         mark_important = importance == "high"
         mark_read = actions.get("markAsRead", False)
         delete = actions.get("delete", False)
-        move_to_folder = actions.get("moveToFolder")
-        skip_inbox = bool(move_to_folder) or delete
+        move_to_folder_raw = actions.get("moveToFolder")
+        move_to_folder = actions.get("moveToFolderName") or move_to_folder_raw  # Prefer resolved name
+        skip_inbox = bool(move_to_folder_raw) or delete
 
         # Outlook has a stop processing flag — treat as-is
         # actions.get("stopProcessingRules", False)

@@ -378,8 +378,6 @@ export const EmailRulesPage: React.FC = () => {
                       <div className="space-y-1.5">
                         {selectedInsight.allMailboxes.map(mb => {
                           const mbRules = rulesByMailbox[mb] || [];
-                          const totalForMb = allRules.filter(r => r.mailbox_email === mb).length;
-                          const pct = totalForMb > 0 ? Math.round((mbRules.length / totalForMb) * 100) : 0;
                           const isExpanded = expandedMailboxes.has(mb);
 
                           return (
@@ -388,12 +386,7 @@ export const EmailRulesPage: React.FC = () => {
                                 className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 transition-colors">
                                 {isExpanded ? <ChevronDown className="h-3.5 w-3.5 text-slate-400 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 text-slate-400 shrink-0" />}
                                 <span className="text-sm font-medium text-slate-800 flex-1 text-left truncate">{mb}</span>
-                                <span className="text-xs text-slate-500 tabular-nums shrink-0">{mbRules.length} rules</span>
-                                {/* Percentage bar */}
-                                <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden shrink-0">
-                                  <div className="h-full bg-warning rounded-full" style={{ width: `${pct}%` }} />
-                                </div>
-                                <span className="text-[10px] text-slate-400 tabular-nums w-8 text-right shrink-0">{pct}%</span>
+                                <span className="text-xs text-slate-500 tabular-nums shrink-0">{mbRules.length} rule{mbRules.length !== 1 ? 's' : ''}</span>
                               </button>
                               {/* Expanded — inline rules */}
                               {isExpanded && mbRules.length > 0 && (

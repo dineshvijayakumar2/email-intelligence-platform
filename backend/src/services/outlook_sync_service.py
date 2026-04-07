@@ -884,7 +884,36 @@ class OutlookSyncService:
         rules = response.json().get('value', [])
         imported = []
 
+        # Pre-resolve Outlook folder IDs to display names (Option 2 — resolve at sync time)
+        folder_name_cache: dict[str, str] = {}
+
+        def resolve_folder_name(folder_id: str) -> str:
+            """Resolve Outlook folder ID to displayName via Graph API."""
+            if not folder_id or not folder_id.startswith('AAMk'):
+                return folder_id
+            if folder_id in folder_name_cache:
+                return folder_name_cache[folder_id]
+            try:
+                folder_resp = http_requests.get(
+                    f'https://graph.microsoft.com/v1.0/me/mailFolders/{folder_id}',
+                    headers=headers,
+                    timeout=5,
+                )
+                if folder_resp.status_code == 200:
+                    name = folder_resp.json().get('displayName', folder_id)
+                    folder_name_cache[folder_id] = name
+                    return name
+            except Exception as e:
+                logger.debug(f"Could not resolve folder {folder_id[:20]}...: {e}")
+            folder_name_cache[folder_id] = folder_id  # cache failure too
+            return folder_id
+
         for rule_data in rules:
+            # Resolve folder names in actions before storing
+            actions = rule_data.get('actions') or {}
+            if actions.get('moveToFolder') and isinstance(actions['moveToFolder'], str):
+                actions['moveToFolderName'] = resolve_folder_name(actions['moveToFolder'])
+
             rule_record = {
                 'user_id': user_id,
                 'rule_id': rule_data['id'],
@@ -892,7 +921,7 @@ class OutlookSyncService:
                 'sequence': rule_data.get('sequence', 0),
                 'is_enabled': rule_data.get('isEnabled', True),
                 'conditions': rule_data.get('conditions') or {},
-                'actions': rule_data.get('actions') or {},
+                'actions': actions,
                 'exceptions': rule_data.get('exceptions') or {},
                 'updated_at': datetime.now(timezone.utc).isoformat(),
             }
