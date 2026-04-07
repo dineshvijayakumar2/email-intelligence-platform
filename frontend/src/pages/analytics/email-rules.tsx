@@ -2,11 +2,16 @@
  * Email Rules Intelligence — analyze email rules across account managers.
  * Moved to Insights section. Zero antd.
  */
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import {
+  useReactTable, getCoreRowModel, getSortedRowModel, getFilteredRowModel,
+  createColumnHelper, type SortingState,
+} from '@tanstack/react-table';
 import { useClient } from '../../contexts/ClientContext';
 import { formatDateTime } from '../../utils/dateUtils';
 import { rulesApi, clearRulesCache, getSignalLabel } from '../../services/rulesService';
 import type { RulesAnalyticsResponse, MailboxRulesMetrics, RulesInsight, UnifiedRule } from '../../services/rulesService';
+import { DataTable } from '../../components/DataTable';
 import { PageShell, PageHeader } from '@/components/ui/page-shell';
 import { KPICard, KPIStrip } from '@/components/ui/kpi-card';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -14,7 +19,7 @@ import { ContentSkeleton, EmptyState } from '@/components/ui/empty-state';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import {
-  Filter, RefreshCw, Download, AlertTriangle, Info, ChevronLeft, ChevronRight,
+  Filter, RefreshCw, Download, AlertTriangle, Info, Search, X,
 } from 'lucide-react';
 import { Spinner } from '@/lib/icons';
 
@@ -37,7 +42,12 @@ export const EmailRulesPage: React.FC = () => {
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'comparison' | 'rules' | 'insights'>('comparison');
   const [rulesPage, setRulesPage] = useState(1);
-  const RULES_PAGE_SIZE = 20;
+  const RULES_PAGE_SIZE = 25;
+  const [rulesSorting, setRulesSorting] = useState<SortingState>([]);
+  const [rulesSearch, setRulesSearch] = useState('');
+  const [signalFilter, setSignalFilter] = useState('');
+
+  const col = createColumnHelper<UnifiedRule>();
 
   useEffect(() => { isMountedRef.current = true; return () => { isMountedRef.current = false; }; }, []);
 
@@ -83,8 +93,86 @@ export const EmailRulesPage: React.FC = () => {
     finally { if (isMountedRef.current) setSyncing(false); }
   };
 
-  const pagedRules = allRules.slice((rulesPage - 1) * RULES_PAGE_SIZE, rulesPage * RULES_PAGE_SIZE);
-  const totalRulesPages = Math.ceil(allRules.length / RULES_PAGE_SIZE);
+  // Filtered rules
+  const filteredRules = useMemo(() => {
+    let rules = allRules;
+    if (signalFilter) rules = rules.filter(r => r.engagement_signal === signalFilter);
+    if (rulesSearch) {
+      const q = rulesSearch.toLowerCase();
+      rules = rules.filter(r =>
+        r.name.toLowerCase().includes(q) ||
+        r.mailbox_email.toLowerCase().includes(q) ||
+        r.conditions.from_addresses.some(a => a.toLowerCase().includes(q)) ||
+        r.conditions.from_domains.some(d => d.toLowerCase().includes(q)) ||
+        r.conditions.subject_contains.some(s => s.toLowerCase().includes(q))
+      );
+    }
+    return rules;
+  }, [allRules, signalFilter, rulesSearch]);
+
+  // TanStack Table columns for rules
+  const rulesColumns = useMemo(() => [
+    col.accessor('source_type', { header: 'Source', size: 70,
+      cell: info => <span className="text-xs text-slate-500">{info.getValue() === 'gmail' ? 'Gmail' : 'Outlook'}</span>,
+    }),
+    col.accessor('mailbox_email', { header: 'Mailbox', size: 180,
+      cell: info => <span className="text-xs text-slate-600 truncate block max-w-[160px]">{info.getValue()}</span>,
+    }),
+    col.accessor('name', { header: 'Rule Name',
+      cell: info => <span className="text-sm text-slate-800 font-medium">{info.getValue()}</span>,
+    }),
+    col.accessor('engagement_signal', { header: 'Signal', size: 110,
+      cell: info => <StatusBadge variant={signalVariant(info.getValue())} size="sm">{getSignalLabel(info.getValue())}</StatusBadge>,
+    }),
+    col.accessor('conditions', { header: 'Conditions', enableSorting: false,
+      cell: info => {
+        const c = info.getValue();
+        const parts = [
+          c.from_addresses.length ? `From: ${c.from_addresses.slice(0, 2).join(', ')}${c.from_addresses.length > 2 ? '...' : ''}` : '',
+          c.from_domains.length ? `Domain: ${c.from_domains.slice(0, 2).join(', ')}` : '',
+          c.subject_contains.length ? `Subject: ${c.subject_contains.slice(0, 2).join(', ')}` : '',
+          c.has_attachment ? 'Has attachment' : '',
+        ].filter(Boolean);
+        return <span className="text-xs text-slate-500">{parts.join(' · ') || 'Any'}</span>;
+      },
+    }),
+    col.accessor('actions', { header: 'Actions', enableSorting: false,
+      cell: info => {
+        const a = info.getValue();
+        const tags: string[] = [];
+        if (a.mark_important) tags.push('Important');
+        if (a.forward_to?.length) tags.push(`Fwd → ${a.forward_to.slice(0, 1).join(', ')}`);
+        if (a.label) tags.push(`Label: ${a.label}`);
+        if (a.move_to_folder) tags.push(`Move: ${a.move_to_folder}`);
+        if (a.mark_read) tags.push('Mark Read');
+        if (a.skip_inbox) tags.push('Skip Inbox');
+        if (a.delete) tags.push('Delete');
+        return tags.length
+          ? <div className="flex flex-wrap gap-1">{tags.map(t => <span key={t} className="inline-flex px-1.5 py-0 text-[10px] rounded bg-slate-100 text-slate-600">{t}</span>)}</div>
+          : <span className="text-xs text-slate-300">None</span>;
+      },
+    }),
+    col.accessor('is_active', { header: 'Active', size: 60,
+      cell: info => info.getValue() ? <span className="text-xs text-success font-medium">Yes</span> : <span className="text-xs text-slate-400">No</span>,
+    }),
+  ], []);
+
+  const rulesTable = useReactTable({
+    data: filteredRules,
+    columns: rulesColumns,
+    state: { sorting: rulesSorting },
+    onSortingChange: setRulesSorting,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  });
+
+  const hasRulesFilters = !!signalFilter || !!rulesSearch;
+
+  // Unique signals for filter dropdown
+  const signalOptions = useMemo(() => {
+    const signals = new Set(allRules.map(r => r.engagement_signal));
+    return Array.from(signals).sort();
+  }, [allRules]);
 
   return (
     <PageShell>
@@ -170,50 +258,36 @@ export const EmailRulesPage: React.FC = () => {
             </div>
           )}
 
-          {/* Rules tab */}
+          {/* Rules tab — TanStack Table with filters */}
           {activeTab === 'rules' && (
-            <div className="rounded-lg border bg-white shadow-sm overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b bg-slate-50/50">
-                      <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600 w-16">Source</th>
-                      <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600 w-44">Mailbox</th>
-                      <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Rule Name</th>
-                      <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600 w-24">Signal</th>
-                      <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Conditions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
-                    {pagedRules.map((r, i) => (
-                      <tr key={`${r.source_type}-${r.source_rule_id}-${i}`} className="hover:bg-slate-50/50">
-                        <td className="px-3 py-2 text-xs text-slate-500">{r.source_type === 'gmail' ? 'Gmail' : 'Outlook'}</td>
-                        <td className="px-3 py-2 text-xs text-slate-600 truncate max-w-[170px]">{r.mailbox_email}</td>
-                        <td className="px-3 py-2 text-slate-800">{r.name}</td>
-                        <td className="px-3 py-2"><StatusBadge variant={signalVariant(r.engagement_signal)} size="sm">{getSignalLabel(r.engagement_signal)}</StatusBadge></td>
-                        <td className="px-3 py-2 text-xs text-slate-500 truncate max-w-[250px]">
-                          {[
-                            r.conditions.from_addresses.length ? `From: ${r.conditions.from_addresses.join(', ')}` : '',
-                            r.conditions.from_domains.length ? `Domain: ${r.conditions.from_domains.join(', ')}` : '',
-                            r.conditions.subject_contains.length ? `Subject: ${r.conditions.subject_contains.join(', ')}` : '',
-                          ].filter(Boolean).join(' | ') || 'Any'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {allRules.length > RULES_PAGE_SIZE && (
-                <div className="flex items-center justify-between px-4 py-3 border-t bg-slate-50/30">
-                  <span className="text-xs text-slate-500">{allRules.length} rules</span>
-                  <div className="flex items-center gap-1">
-                    <button onClick={() => setRulesPage(p => Math.max(1, p - 1))} disabled={rulesPage <= 1} className="p-1.5 rounded hover:bg-slate-100 disabled:opacity-30"><ChevronLeft className="h-4 w-4" /></button>
-                    <span className="text-xs text-slate-600 px-2 tabular-nums">{rulesPage} / {totalRulesPages}</span>
-                    <button onClick={() => setRulesPage(p => Math.min(totalRulesPages, p + 1))} disabled={rulesPage >= totalRulesPages} className="p-1.5 rounded hover:bg-slate-100 disabled:opacity-30"><ChevronRight className="h-4 w-4" /></button>
-                  </div>
+            <>
+              <div className="flex items-center gap-2 mb-3 flex-wrap">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                  <input type="text" placeholder="Search rules, mailbox, conditions..."
+                    value={rulesSearch} onChange={e => { setRulesSearch(e.target.value); setRulesPage(1); }}
+                    className="h-8 pl-8 pr-3 text-sm rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 w-64" />
                 </div>
-              )}
-            </div>
+                <select value={signalFilter} onChange={e => { setSignalFilter(e.target.value); setRulesPage(1); }}
+                  className="h-8 px-2 text-sm rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20">
+                  <option value="">All Signals</option>
+                  {signalOptions.map(s => <option key={s} value={s}>{getSignalLabel(s)}</option>)}
+                </select>
+                {hasRulesFilters && (
+                  <button onClick={() => { setRulesSearch(''); setSignalFilter(''); setRulesPage(1); }}
+                    className="inline-flex items-center gap-1 text-xs text-primary hover:underline"><X className="h-3 w-3" />Clear</button>
+                )}
+                <span className="text-xs text-slate-400 ml-auto tabular-nums">{filteredRules.length} rules</span>
+              </div>
+              <DataTable<UnifiedRule>
+                table={rulesTable}
+                total={filteredRules.length}
+                loading={false}
+                pageSize={RULES_PAGE_SIZE}
+                currentPage={rulesPage}
+                onPageChange={setRulesPage}
+              />
+            </>
           )}
 
           {/* Insights tab */}
