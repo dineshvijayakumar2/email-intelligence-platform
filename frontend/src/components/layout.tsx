@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Mail, Building2, Users, Lightbulb, Settings,
   Menu, X, LogOut, ChevronDown, Search, Bot, Zap, BarChart3,
   FolderOpen, AlertTriangle, Activity, Database, Brain, BookOpen, Filter,
-  Shield, FileText, Cpu, Link2, Eye, ScrollText,
+  FileText, Cpu, Link2, Eye, ScrollText,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -48,14 +48,12 @@ const navItems: NavItem[] = [
   {
     label: 'Insights', icon: <Lightbulb className="h-4 w-4" />,
     children: [
-      // Intelligence
       { label: 'Smart Inbox', href: '/insights/inbox', icon: <Mail className="h-3.5 w-3.5" />, group: 'Intelligence' },
       { label: 'Opportunities', href: '/insights/opportunities', icon: <Zap className="h-3.5 w-3.5" /> },
       { label: 'Email Rules', href: '/insights/email-rules', icon: <Filter className="h-3.5 w-3.5" /> },
-      // Reports
+      { label: 'Response Times', href: '/manage/response-times', icon: <BarChart3 className="h-3.5 w-3.5" /> },
       { label: 'Daily Digest', href: '/insights/digest', icon: <BookOpen className="h-3.5 w-3.5" />, group: 'Reports' },
       { label: 'Strategic Digest', href: '/insights/strategic', icon: <BarChart3 className="h-3.5 w-3.5" /> },
-      // Tools
       { label: 'Semantic Search', href: '/insights/search', icon: <Search className="h-3.5 w-3.5" />, group: 'Tools' },
       { label: 'AI Assistant', href: '/insights/agent', icon: <Bot className="h-3.5 w-3.5" /> },
     ],
@@ -66,24 +64,18 @@ const navItems: NavItem[] = [
       { label: 'Mailboxes', href: '/mailboxes', icon: <Mail className="h-3.5 w-3.5" />, group: 'Setup' },
       { label: 'Clients', href: '/clients', icon: <Building2 className="h-3.5 w-3.5" /> },
       { label: 'Extraction', href: '/manage/extraction', icon: <Cpu className="h-3.5 w-3.5" /> },
+      { label: 'Settings', href: '/settings', icon: <Settings className="h-3.5 w-3.5" /> },
+      { label: 'QB Config', href: '/manage/quickbase', icon: <Database className="h-3.5 w-3.5" />, group: 'QuickBase' },
+      { label: 'QB Synced Data', href: '/manage/quickbase-data', icon: <Database className="h-3.5 w-3.5" /> },
+      { label: 'QB Match Review', href: '/manage/quickbase-matches', icon: <Link2 className="h-3.5 w-3.5" /> },
       { label: 'Processing Jobs', href: '/manage/processing', icon: <Activity className="h-3.5 w-3.5" />, group: 'Operations' },
       { label: 'Error Logs', href: '/manage/errors', icon: <AlertTriangle className="h-3.5 w-3.5" /> },
-      { label: 'Response Times', href: '/manage/response-times', icon: <BarChart3 className="h-3.5 w-3.5" />, group: 'Analytics' },
       { label: 'Data Health', href: '/manage/data-health', icon: <Activity className="h-3.5 w-3.5" /> },
-      { label: 'Settings', href: '/settings', icon: <Settings className="h-3.5 w-3.5" />, group: 'Config' },
-    ],
-  },
-  {
-    label: 'Admin', icon: <Shield className="h-4 w-4" />, adminOnly: true,
-    children: [
-      { label: 'AI Usage', href: '/manage/ai-usage', icon: <Zap className="h-3.5 w-3.5" /> },
+      { label: 'AI Usage', href: '/manage/ai-usage', icon: <Zap className="h-3.5 w-3.5" />, group: 'Admin' },
       { label: 'AI Playground', href: '/manage/ai-playground', icon: <Brain className="h-3.5 w-3.5" /> },
-      { label: 'QB Config', href: '/manage/quickbase', icon: <Database className="h-3.5 w-3.5" /> },
-      { label: 'QB Data', href: '/manage/quickbase-data', icon: <Database className="h-3.5 w-3.5" /> },
-      { label: 'QB Match Review', href: '/manage/quickbase-matches', icon: <Link2 className="h-3.5 w-3.5" /> },
       { label: 'Intelligence Config', href: '/manage/intelligence-config', icon: <Brain className="h-3.5 w-3.5" /> },
-      { label: 'Log Monitor', href: '/manage/logs', icon: <ScrollText className="h-3.5 w-3.5" /> },
       { label: 'Users', href: '/users', icon: <Users className="h-3.5 w-3.5" /> },
+      { label: 'Log Monitor', href: '/manage/logs', icon: <ScrollText className="h-3.5 w-3.5" /> },
       { label: 'Data View', href: '/admin/data', icon: <Eye className="h-3.5 w-3.5" /> },
       { label: 'Audit Logs', href: '/admin/audit-logs', icon: <FileText className="h-3.5 w-3.5" /> },
     ],
