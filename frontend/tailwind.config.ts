@@ -6,10 +6,8 @@ const config: Config = {
     './src/**/*.{js,ts,jsx,tsx}',
     './node_modules/@tremor/**/*.{js,ts,jsx,tsx}',
   ],
-  // Disable preflight during migration — Ant Design styles need to coexist
-  corePlugins: {
-    preflight: false,
-  },
+  // Preflight enabled — provides CSS reset for clean, consistent styling.
+  // Remaining antd pages may need minor fixes.
   theme: {
     extend: {
       colors: {

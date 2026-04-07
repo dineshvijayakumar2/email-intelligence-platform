@@ -28,7 +28,7 @@
   }
 }
 
-/* Global styles */
+/* Global styles — Tailwind preflight handles most resets */
 body {
   margin: 0;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -36,6 +36,12 @@ body {
   -moz-osx-font-smoothing: grayscale;
   background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
   min-height: 100vh;
+  color: #1e293b; /* slate-800 default text */
+}
+
+/* Ensure antd components still render while being migrated */
+.ant-btn, .ant-input, .ant-select, .ant-tag, .ant-table {
+  font-family: inherit;
 }
 
 code {
