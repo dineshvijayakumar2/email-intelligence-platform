@@ -23,6 +23,112 @@ import {
 } from 'lucide-react';
 import { Spinner } from '@/lib/icons';
 
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
+import type { RuleConditions, RuleActions } from '../../services/rulesService';
+
+// ── Rule Detail Modal ──────────────────────────────────────────────────
+const RuleDetailModal: React.FC<{ rule: UnifiedRule | null; open: boolean; onClose: () => void }> = ({ rule, open, onClose }) => {
+  if (!rule) return null;
+
+  const conditionRows = [
+    { label: 'From Addresses', value: rule.conditions.from_addresses },
+    { label: 'From Domains', value: rule.conditions.from_domains },
+    { label: 'To Addresses', value: rule.conditions.to_addresses },
+    { label: 'Subject Contains', value: rule.conditions.subject_contains },
+    { label: 'Body Contains', value: rule.conditions.body_contains },
+    { label: 'Has Attachment', value: rule.conditions.has_attachment != null ? [String(rule.conditions.has_attachment)] : [] },
+  ].filter(r => r.value.length > 0);
+
+  const actionRows = describeActions(rule.actions);
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[560px]">
+        <DialogHeader>
+          <DialogTitle className="text-base">{rule.name}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 text-sm">
+          {/* Meta */}
+          <div className="grid grid-cols-2 gap-3">
+            <div><span className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-0.5">Source</span><span className="text-slate-700">{rule.source_type === 'gmail' ? 'Gmail' : 'Outlook'}</span></div>
+            <div><span className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-0.5">Mailbox</span><span className="text-slate-700">{rule.mailbox_email}</span></div>
+            <div><span className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-0.5">Signal</span><StatusBadge variant={signalVariant(rule.engagement_signal)} size="sm">{getSignalLabel(rule.engagement_signal)}</StatusBadge></div>
+            <div><span className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-0.5">Status</span><span className={rule.is_active ? 'text-success font-medium' : 'text-slate-400'}>  {rule.is_active ? 'Active' : 'Inactive'}</span></div>
+          </div>
+
+          {/* Conditions */}
+          {conditionRows.length > 0 && (
+            <div>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">Conditions (When)</h4>
+              <div className="rounded-md border border-slate-100 divide-y divide-slate-50">
+                {conditionRows.map(r => (
+                  <div key={r.label} className="flex gap-3 px-3 py-2">
+                    <span className="text-xs text-slate-500 w-28 shrink-0">{r.label}</span>
+                    <div className="flex flex-wrap gap-1">
+                      {r.value.map((v, i) => (
+                        <span key={i} className="inline-flex px-1.5 py-0 text-[11px] rounded bg-slate-100 text-slate-700">{v}</span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Actions */}
+          {actionRows.length > 0 && (
+            <div>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">Actions (Then)</h4>
+              <div className="flex flex-wrap gap-1.5">
+                {actionRows.map(a => (
+                  <span key={a} className="inline-flex px-2 py-0.5 text-xs rounded-md bg-primary-subtle text-primary">{a}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Raw IDs — for debugging Outlook folder IDs */}
+          {(rule.actions.move_to_folder && isOutlookFolderId(rule.actions.move_to_folder)) && (
+            <div>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Raw Folder ID</h4>
+              <p className="text-[11px] font-mono text-slate-400 break-all">{rule.actions.move_to_folder}</p>
+            </div>
+          )}
+
+          {/* Imported */}
+          {rule.imported_at && (
+            <p className="text-xs text-slate-400">Imported: {formatDateTime(rule.imported_at)}</p>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+/** Clean up Outlook folder IDs — show readable text instead of raw AAMk... base64 */
+const isOutlookFolderId = (val: string): boolean => !!(val && val.startsWith('AAMk') && val.length > 30);
+
+/** Build human-readable action descriptions */
+const describeActions = (actions: RuleActions): string[] => {
+  const parts: string[] = [];
+  if (actions.mark_important) parts.push('Mark Important');
+  if (actions.mark_read) parts.push('Mark Read');
+  if (actions.skip_inbox) parts.push('Skip Inbox');
+  if (actions.delete) parts.push('Delete');
+  if (actions.move_to_folder) {
+    parts.push(isOutlookFolderId(actions.move_to_folder) ? 'Move to Folder' : `Move to "${actions.move_to_folder}"`);
+  }
+  if (actions.label) {
+    parts.push(isOutlookFolderId(actions.label) ? 'Apply Label' : `Label: ${actions.label}`);
+  }
+  if (actions.forward_to?.length) {
+    parts.push(`Forward to ${actions.forward_to[0]}${actions.forward_to.length > 1 ? ` +${actions.forward_to.length - 1}` : ''}`);
+  }
+  return parts;
+};
+
 const signalVariant = (s: string): 'success' | 'warning' | 'danger' | 'info' | 'neutral' | 'purple' => {
   if (s === 'high_value') return 'success';
   if (s === 'escalation') return 'info';
@@ -41,6 +147,7 @@ export const EmailRulesPage: React.FC = () => {
   const [syncing, setSyncing] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'comparison' | 'rules' | 'insights'>('comparison');
+  const [selectedRule, setSelectedRule] = useState<UnifiedRule | null>(null);
   const [rulesPage, setRulesPage] = useState(1);
   const RULES_PAGE_SIZE = 25;
   const [rulesSorting, setRulesSorting] = useState<SortingState>([]);
@@ -124,14 +231,7 @@ export const EmailRulesPage: React.FC = () => {
     col.accessor('name', { header: 'Rule',
       cell: info => {
         const r = info.row.original;
-        const actionParts: string[] = [];
-        if (r.actions.mark_important) actionParts.push('Important');
-        if (r.actions.forward_to?.length) actionParts.push(`Fwd → ${r.actions.forward_to[0]}`);
-        if (r.actions.label) actionParts.push(`Label: ${r.actions.label}`);
-        if (r.actions.move_to_folder) actionParts.push(`Move: ${r.actions.move_to_folder}`);
-        if (r.actions.mark_read) actionParts.push('Mark Read');
-        if (r.actions.skip_inbox) actionParts.push('Skip Inbox');
-        if (r.actions.delete) actionParts.push('Delete');
+        const actionParts = describeActions(r.actions);
 
         const condParts = [
           r.conditions.from_addresses.length ? `From: ${r.conditions.from_addresses.slice(0, 2).join(', ')}` : '',
@@ -301,6 +401,7 @@ export const EmailRulesPage: React.FC = () => {
                 pageSize={RULES_PAGE_SIZE}
                 currentPage={rulesPage}
                 onPageChange={setRulesPage}
+                onRowClick={setSelectedRule}
               />
             </>
           )}
@@ -340,10 +441,15 @@ export const EmailRulesPage: React.FC = () => {
                             <p className="text-sm text-slate-700 mb-2">{insight.description}</p>
                             <p className="text-xs text-slate-500"><span className="font-medium">Recommendation:</span> {insight.recommendation}</p>
                             {insight.affected_mailboxes.length > 0 && (
-                              <div className="flex flex-wrap gap-1 mt-2">
+                              <div className="flex items-center gap-2 mt-2 flex-wrap">
                                 {insight.affected_mailboxes.map((mb, i) => (
                                   <span key={i} className="inline-flex px-1.5 py-0 text-[11px] rounded bg-slate-100 text-slate-500">{mb}</span>
                                 ))}
+                                <button onClick={() => {
+                                  setMailboxFilter(insight.affected_mailboxes[0]);
+                                  setActiveTab('rules');
+                                  setRulesPage(1);
+                                }} className="text-[11px] text-primary hover:underline ml-1">View Rules →</button>
                               </div>
                             )}
                           </div>
@@ -365,6 +471,8 @@ export const EmailRulesPage: React.FC = () => {
           )}
         </>
       )}
+      {/* Rule Detail Modal */}
+      <RuleDetailModal rule={selectedRule} open={!!selectedRule} onClose={() => setSelectedRule(null)} />
     </PageShell>
   );
 };
