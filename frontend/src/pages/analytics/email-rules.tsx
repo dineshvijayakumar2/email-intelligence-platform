@@ -417,6 +417,13 @@ export const EmailRulesPage: React.FC = () => {
                 const warnings = insights.filter(i => i.severity === 'warning');
                 const info = insights.filter(i => i.severity !== 'critical' && i.severity !== 'warning');
 
+                // Find rules related to an insight (by affected mailbox emails)
+                const getRelatedRules = (insight: RulesInsight): UnifiedRule[] => {
+                  if (!insight.affected_mailboxes.length) return [];
+                  const mbSet = new Set(insight.affected_mailboxes.map(m => m.toLowerCase()));
+                  return allRules.filter(r => mbSet.has(r.mailbox_email.toLowerCase()));
+                };
+
                 const renderGroup = (title: string, items: RulesInsight[], variant: 'danger' | 'warning' | 'info') => {
                   if (!items.length) return null;
                   return (
@@ -427,33 +434,57 @@ export const EmailRulesPage: React.FC = () => {
                         {variant === 'info' && <Info className="h-3.5 w-3.5 text-primary" />}
                         {title} ({items.length})
                       </h3>
-                      <div className="space-y-2">
-                        {items.map((insight, idx) => (
-                          <div key={idx} className={cn(
-                            'rounded-lg border bg-white shadow-sm p-4',
-                            variant === 'danger' && 'border-l-4 border-l-destructive',
-                            variant === 'warning' && 'border-l-4 border-l-warning',
-                            variant === 'info' && 'border-l-4 border-l-primary',
-                          )}>
-                            <p className="text-sm font-bold text-slate-900 mb-1">
-                              {insight.insight_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
-                            </p>
-                            <p className="text-sm text-slate-700 mb-2">{insight.description}</p>
-                            <p className="text-xs text-slate-500"><span className="font-medium">Recommendation:</span> {insight.recommendation}</p>
-                            {insight.affected_mailboxes.length > 0 && (
-                              <div className="flex items-center gap-2 mt-2 flex-wrap">
-                                {insight.affected_mailboxes.map((mb, i) => (
-                                  <span key={i} className="inline-flex px-1.5 py-0 text-[11px] rounded bg-slate-100 text-slate-500">{mb}</span>
-                                ))}
-                                <button onClick={() => {
-                                  setMailboxFilter(insight.affected_mailboxes[0]);
-                                  setActiveTab('rules');
-                                  setRulesPage(1);
-                                }} className="text-[11px] text-primary hover:underline ml-1">View Rules →</button>
+                      <div className="space-y-3">
+                        {items.map((insight, idx) => {
+                          const related = getRelatedRules(insight);
+                          return (
+                            <div key={idx} className={cn(
+                              'rounded-lg border bg-white shadow-sm overflow-hidden',
+                              variant === 'danger' && 'border-l-4 border-l-destructive',
+                              variant === 'warning' && 'border-l-4 border-l-warning',
+                              variant === 'info' && 'border-l-4 border-l-primary',
+                            )}>
+                              {/* Insight summary */}
+                              <div className="p-4">
+                                <p className="text-sm font-bold text-slate-900 mb-1">
+                                  {insight.insight_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                                </p>
+                                <p className="text-sm text-slate-700 mb-2">{insight.description}</p>
+                                <p className="text-xs text-slate-500"><span className="font-medium">Recommendation:</span> {insight.recommendation}</p>
+                                {insight.affected_mailboxes.length > 0 && (
+                                  <div className="flex flex-wrap gap-1 mt-2">
+                                    {insight.affected_mailboxes.map((mb, i) => (
+                                      <span key={i} className="inline-flex px-1.5 py-0 text-[11px] rounded bg-slate-100 text-slate-500">{mb}</span>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
-                            )}
-                          </div>
-                        ))}
+
+                              {/* Related rules — inline, no navigation needed */}
+                              {related.length > 0 && (
+                                <div className="border-t bg-slate-50/50 px-4 py-2">
+                                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                                    Related Rules ({related.length})
+                                  </p>
+                                  <div className="space-y-1">
+                                    {related.slice(0, 5).map((rule, ri) => (
+                                      <div key={ri}
+                                        className="flex items-center gap-2 py-1 cursor-pointer hover:bg-white rounded px-1 -mx-1"
+                                        onClick={() => setSelectedRule(rule)}>
+                                        <span className="text-xs text-slate-700 font-medium flex-1 truncate">{rule.name}</span>
+                                        <StatusBadge variant={signalVariant(rule.engagement_signal)} size="sm">{getSignalLabel(rule.engagement_signal)}</StatusBadge>
+                                        <span className="text-[10px] text-slate-400">{rule.mailbox_email.split('@')[0]}</span>
+                                      </div>
+                                    ))}
+                                    {related.length > 5 && (
+                                      <p className="text-[11px] text-slate-400">+{related.length - 5} more rules</p>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   );
