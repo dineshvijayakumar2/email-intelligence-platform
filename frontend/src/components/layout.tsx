@@ -127,7 +127,7 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
 
   const filteredNav = navItems.filter(item => !item.adminOnly || isAdmin);
 
-  // Desktop nav item renderer — premium pill style
+  // Desktop nav item renderer
   const NavLink = ({ item }: { item: NavItem }) => {
     if (item.children) {
       const active = item.children.some(c => isActive(c.href));
@@ -135,24 +135,24 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className={cn(
-              'inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-medium rounded-full transition-all duration-200',
+              'inline-flex items-center gap-1.5 h-8 px-3 text-[13px] font-medium rounded-md transition-all duration-150',
               active
-                ? 'text-primary bg-primary/8 shadow-sm'
-                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100/80',
+                ? 'text-white bg-primary shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100',
             )}>
               {item.icon}
               {item.label}
-              <ChevronDown className="h-3 w-3 opacity-40" />
+              <ChevronDown className={cn('h-3 w-3', active ? 'opacity-70' : 'opacity-40')} />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-56 shadow-lg border-slate-200/80">
+          <DropdownMenuContent align="start" sideOffset={8} className="w-56 shadow-xl border border-slate-200 rounded-lg">
             {item.children.map(child => (
               <DropdownMenuItem key={child.href} onClick={() => navigate(child.href)}
                 className={cn(
-                  'gap-2 py-2',
-                  isActive(child.href) && 'bg-primary/5 text-primary font-medium',
+                  'gap-2.5 py-2.5 px-3 cursor-pointer',
+                  isActive(child.href) ? 'bg-primary/5 text-primary font-medium' : 'text-slate-600',
                 )}>
-                {child.icon && <span className="opacity-60">{child.icon}</span>}
+                {child.icon && <span className={isActive(child.href) ? 'text-primary' : 'text-slate-400'}>{child.icon}</span>}
                 {child.label}
               </DropdownMenuItem>
             ))}
@@ -163,10 +163,10 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
 
     return (
       <Link to={item.href!} className={cn(
-        'inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-medium rounded-full transition-all duration-200',
+        'inline-flex items-center gap-1.5 h-8 px-3 text-[13px] font-medium rounded-md transition-all duration-150',
         isActive(item.href)
-          ? 'text-primary bg-primary/8 shadow-sm'
-          : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100/80',
+          ? 'text-white bg-primary shadow-sm'
+          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100',
       )}>
         {item.icon}
         {item.label}
@@ -279,11 +279,11 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
           </Link>
 
           {/* Nav divider */}
-          {!isMobile && <div className="w-px h-5 bg-slate-200" />}
+          {!isMobile && <div className="w-px h-5 bg-slate-200/70" />}
 
           {/* Desktop nav */}
           {!isMobile && (
-            <nav className="flex items-center gap-0.5">
+            <nav className="flex items-center gap-1">
               {filteredNav.map(item => <NavLink key={item.label} item={item} />)}
             </nav>
           )}
