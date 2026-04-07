@@ -93,10 +93,19 @@ export const EmailRulesPage: React.FC = () => {
     finally { if (isMountedRef.current) setSyncing(false); }
   };
 
+  const [mailboxFilter, setMailboxFilter] = useState('');
+
+  // Unique mailboxes for filter
+  const mailboxOptions = useMemo(() => {
+    const mbs = new Set(allRules.map(r => r.mailbox_email));
+    return Array.from(mbs).sort();
+  }, [allRules]);
+
   // Filtered rules
   const filteredRules = useMemo(() => {
     let rules = allRules;
     if (signalFilter) rules = rules.filter(r => r.engagement_signal === signalFilter);
+    if (mailboxFilter) rules = rules.filter(r => r.mailbox_email === mailboxFilter);
     if (rulesSearch) {
       const q = rulesSearch.toLowerCase();
       rules = rules.filter(r =>
@@ -108,7 +117,7 @@ export const EmailRulesPage: React.FC = () => {
       );
     }
     return rules;
-  }, [allRules, signalFilter, rulesSearch]);
+  }, [allRules, signalFilter, mailboxFilter, rulesSearch]);
 
   // TanStack Table columns for rules
   const rulesColumns = useMemo(() => [
@@ -166,7 +175,7 @@ export const EmailRulesPage: React.FC = () => {
     getSortedRowModel: getSortedRowModel(),
   });
 
-  const hasRulesFilters = !!signalFilter || !!rulesSearch;
+  const hasRulesFilters = !!signalFilter || !!rulesSearch || !!mailboxFilter;
 
   // Unique signals for filter dropdown
   const signalOptions = useMemo(() => {
@@ -273,8 +282,13 @@ export const EmailRulesPage: React.FC = () => {
                   <option value="">All Signals</option>
                   {signalOptions.map(s => <option key={s} value={s}>{getSignalLabel(s)}</option>)}
                 </select>
+                <select value={mailboxFilter} onChange={e => { setMailboxFilter(e.target.value); setRulesPage(1); }}
+                  className="h-8 px-2 text-sm rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 max-w-[200px]">
+                  <option value="">All Mailboxes</option>
+                  {mailboxOptions.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
                 {hasRulesFilters && (
-                  <button onClick={() => { setRulesSearch(''); setSignalFilter(''); setRulesPage(1); }}
+                  <button onClick={() => { setRulesSearch(''); setSignalFilter(''); setMailboxFilter(''); setRulesPage(1); }}
                     className="inline-flex items-center gap-1 text-xs text-primary hover:underline"><X className="h-3 w-3" />Clear</button>
                 )}
                 <span className="text-xs text-slate-400 ml-auto tabular-nums">{filteredRules.length} rules</span>
