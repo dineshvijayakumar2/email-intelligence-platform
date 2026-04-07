@@ -30,7 +30,7 @@ interface NavItem {
   label: string;
   href?: string;
   icon: React.ReactNode;
-  children?: { label: string; href: string; icon?: React.ReactNode }[];
+  children?: { label: string; href: string; icon?: React.ReactNode; group?: string }[];
   adminOnly?: boolean;
 }
 
@@ -48,26 +48,29 @@ const navItems: NavItem[] = [
   {
     label: 'Insights', icon: <Lightbulb className="h-4 w-4" />,
     children: [
-      { label: 'Smart Inbox', href: '/insights/inbox', icon: <Mail className="h-3.5 w-3.5" /> },
-      { label: 'Daily Digest', href: '/insights/digest', icon: <BookOpen className="h-3.5 w-3.5" /> },
-      { label: 'Strategic Digest', href: '/insights/strategic', icon: <BarChart3 className="h-3.5 w-3.5" /> },
+      // Intelligence
+      { label: 'Smart Inbox', href: '/insights/inbox', icon: <Mail className="h-3.5 w-3.5" />, group: 'Intelligence' },
       { label: 'Opportunities', href: '/insights/opportunities', icon: <Zap className="h-3.5 w-3.5" /> },
-      { label: 'Semantic Search', href: '/insights/search', icon: <Search className="h-3.5 w-3.5" /> },
       { label: 'Email Rules', href: '/insights/email-rules', icon: <Filter className="h-3.5 w-3.5" /> },
+      // Reports
+      { label: 'Daily Digest', href: '/insights/digest', icon: <BookOpen className="h-3.5 w-3.5" />, group: 'Reports' },
+      { label: 'Strategic Digest', href: '/insights/strategic', icon: <BarChart3 className="h-3.5 w-3.5" /> },
+      // Tools
+      { label: 'Semantic Search', href: '/insights/search', icon: <Search className="h-3.5 w-3.5" />, group: 'Tools' },
       { label: 'AI Assistant', href: '/insights/agent', icon: <Bot className="h-3.5 w-3.5" /> },
     ],
   },
   {
     label: 'Manage', icon: <Settings className="h-4 w-4" />,
     children: [
-      { label: 'Mailboxes', href: '/mailboxes', icon: <Mail className="h-3.5 w-3.5" /> },
+      { label: 'Mailboxes', href: '/mailboxes', icon: <Mail className="h-3.5 w-3.5" />, group: 'Setup' },
       { label: 'Clients', href: '/clients', icon: <Building2 className="h-3.5 w-3.5" /> },
       { label: 'Extraction', href: '/manage/extraction', icon: <Cpu className="h-3.5 w-3.5" /> },
-      { label: 'Processing Jobs', href: '/manage/processing', icon: <Activity className="h-3.5 w-3.5" /> },
+      { label: 'Processing Jobs', href: '/manage/processing', icon: <Activity className="h-3.5 w-3.5" />, group: 'Operations' },
       { label: 'Error Logs', href: '/manage/errors', icon: <AlertTriangle className="h-3.5 w-3.5" /> },
-      { label: 'Response Times', href: '/manage/response-times', icon: <BarChart3 className="h-3.5 w-3.5" /> },
+      { label: 'Response Times', href: '/manage/response-times', icon: <BarChart3 className="h-3.5 w-3.5" />, group: 'Analytics' },
       { label: 'Data Health', href: '/manage/data-health', icon: <Activity className="h-3.5 w-3.5" /> },
-      { label: 'Settings', href: '/settings', icon: <Settings className="h-3.5 w-3.5" /> },
+      { label: 'Settings', href: '/settings', icon: <Settings className="h-3.5 w-3.5" />, group: 'Config' },
     ],
   },
   {
@@ -146,15 +149,25 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" sideOffset={8} className="w-56 shadow-xl border border-slate-200 rounded-lg">
-            {item.children.map(child => (
-              <DropdownMenuItem key={child.href} onClick={() => navigate(child.href)}
-                className={cn(
-                  'gap-2.5 py-2.5 px-3 cursor-pointer',
-                  isActive(child.href) ? 'bg-primary/5 text-primary font-medium' : 'text-slate-600',
-                )}>
-                {child.icon && <span className={isActive(child.href) ? 'text-primary' : 'text-slate-400'}>{child.icon}</span>}
-                {child.label}
-              </DropdownMenuItem>
+            {item.children.map((child, idx) => (
+              <React.Fragment key={child.href}>
+                {child.group && (
+                  <>
+                    {idx > 0 && <DropdownMenuSeparator />}
+                    <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-slate-400 font-medium px-3 py-1">
+                      {child.group}
+                    </DropdownMenuLabel>
+                  </>
+                )}
+                <DropdownMenuItem onClick={() => navigate(child.href)}
+                  className={cn(
+                    'gap-2.5 py-2 px-3 cursor-pointer',
+                    isActive(child.href) ? 'bg-primary/5 text-primary font-medium' : 'text-slate-600',
+                  )}>
+                  {child.icon && <span className={isActive(child.href) ? 'text-primary' : 'text-slate-400'}>{child.icon}</span>}
+                  {child.label}
+                </DropdownMenuItem>
+              </React.Fragment>
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
