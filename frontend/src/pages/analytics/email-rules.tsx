@@ -290,10 +290,8 @@ export const EmailRulesPage: React.FC = () => {
           <KPIStrip className="mb-4">
             <KPICard title="Total Rules" value={analytics?.total_rules || 0}
               subtitle={`across ${analytics?.total_mailboxes || 0} mailboxes`} />
-            <KPICard title="Covered" value={(analytics?.total_mailboxes || 0) - (analytics?.mailboxes_with_no_rules || 0)}
-              subtitle={`of ${analytics?.total_mailboxes || 0} mailboxes`}
-              trend={(analytics?.mailboxes_with_no_rules || 0) === 0 ? 'up' : undefined}
-              delta={(analytics?.mailboxes_with_no_rules || 0) === 0 ? 'All covered' : undefined} />
+            <KPICard title="Mailboxes with Rules" value={(analytics?.total_mailboxes || 0) - (analytics?.mailboxes_with_no_rules || 0)}
+              subtitle={`of ${analytics?.total_mailboxes || 0} total`} />
             <KPICard title="Avg / Mailbox" value={analytics?.avg_rules_per_mailbox || 0}
               subtitle="rules per mailbox" />
             <KPICard title="No Rules" value={analytics?.mailboxes_with_no_rules || 0}
