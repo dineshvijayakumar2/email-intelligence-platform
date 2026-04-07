@@ -257,7 +257,7 @@ export const EmailRulesPage: React.FC = () => {
           : <span className="text-xs text-slate-300">Any</span>;
       },
     }),
-    col.accessor('actions', { header: 'Actions', enableSorting: false,
+    col.accessor('actions', { id: 'rule_actions', header: 'Actions', enableSorting: false,
       cell: info => {
         const parts = describeActions(info.getValue());
         return parts.length > 0
