@@ -304,35 +304,62 @@ export const EmailRulesPage: React.FC = () => {
             </>
           )}
 
-          {/* Insights tab */}
+          {/* Insights tab — grouped by severity */}
           {activeTab === 'insights' && (
-            <div className="space-y-3">
+            <div>
               {insights.length === 0 ? (
                 <EmptyState icon={<Info className="h-8 w-8" />} title="No insights" description="Import rules first to generate insights" />
-              ) : insights.map((insight, idx) => {
-                const variant = insight.severity === 'critical' ? 'danger' : insight.severity === 'warning' ? 'warning' : 'info';
-                return (
-                  <div key={idx} className={cn('rounded-lg border bg-white shadow-sm p-4', variant === 'danger' && 'border-l-4 border-l-destructive', variant === 'warning' && 'border-l-4 border-l-warning')}>
-                    <div className="flex items-start gap-3">
-                      {insight.severity === 'critical' || insight.severity === 'warning'
-                        ? <AlertTriangle className={cn('h-4 w-4 mt-0.5 shrink-0', variant === 'danger' ? 'text-destructive' : 'text-warning')} />
-                        : <Info className="h-4 w-4 mt-0.5 text-primary shrink-0" />}
-                      <div>
-                        <p className="text-sm font-bold text-slate-900 mb-1">{insight.insight_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</p>
-                        <p className="text-sm text-slate-700 mb-2">{insight.description}</p>
-                        <p className="text-xs text-slate-500"><span className="font-medium">Recommendation:</span> {insight.recommendation}</p>
-                        {insight.affected_mailboxes.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-2">
-                            {insight.affected_mailboxes.map((mb, i) => (
-                              <span key={i} className="inline-flex px-1.5 py-0 text-[11px] rounded bg-slate-100 text-slate-500">{mb}</span>
-                            ))}
+              ) : (() => {
+                // Group by severity
+                const critical = insights.filter(i => i.severity === 'critical');
+                const warnings = insights.filter(i => i.severity === 'warning');
+                const info = insights.filter(i => i.severity !== 'critical' && i.severity !== 'warning');
+
+                const renderGroup = (title: string, items: RulesInsight[], variant: 'danger' | 'warning' | 'info') => {
+                  if (!items.length) return null;
+                  return (
+                    <div className="mb-5">
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-2 flex items-center gap-2">
+                        {variant === 'danger' && <AlertTriangle className="h-3.5 w-3.5 text-destructive" />}
+                        {variant === 'warning' && <AlertTriangle className="h-3.5 w-3.5 text-warning" />}
+                        {variant === 'info' && <Info className="h-3.5 w-3.5 text-primary" />}
+                        {title} ({items.length})
+                      </h3>
+                      <div className="space-y-2">
+                        {items.map((insight, idx) => (
+                          <div key={idx} className={cn(
+                            'rounded-lg border bg-white shadow-sm p-4',
+                            variant === 'danger' && 'border-l-4 border-l-destructive',
+                            variant === 'warning' && 'border-l-4 border-l-warning',
+                            variant === 'info' && 'border-l-4 border-l-primary',
+                          )}>
+                            <p className="text-sm font-bold text-slate-900 mb-1">
+                              {insight.insight_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                            </p>
+                            <p className="text-sm text-slate-700 mb-2">{insight.description}</p>
+                            <p className="text-xs text-slate-500"><span className="font-medium">Recommendation:</span> {insight.recommendation}</p>
+                            {insight.affected_mailboxes.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-2">
+                                {insight.affected_mailboxes.map((mb, i) => (
+                                  <span key={i} className="inline-flex px-1.5 py-0 text-[11px] rounded bg-slate-100 text-slate-500">{mb}</span>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                        )}
+                        ))}
                       </div>
                     </div>
-                  </div>
+                  );
+                };
+
+                return (
+                  <>
+                    {renderGroup('Critical Issues', critical, 'danger')}
+                    {renderGroup('Warnings', warnings, 'warning')}
+                    {renderGroup('Recommendations', info, 'info')}
+                  </>
                 );
-              })}
+              })()}
             </div>
           )}
         </>
