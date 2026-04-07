@@ -128,7 +128,7 @@ export const EmailList: React.FC = () => {
   }, [folderFilter]);
 
   const additionalFolders = useMemo(() => folders.filter(f => !['inbox','sent','starred','flagged','trash','deleted'].some(s => f.toLowerCase().includes(s))), [folders]);
-  const hasActiveFilters = !!(categoryFilter || directionFilter || folderFilter || debouncedSender);
+  const hasActiveFilters = !!(directionFilter || folderFilter || debouncedSender);
 
   useEffect(() => {
     if (isAnalyticsMode) { setMailboxesLoading(false); return; }
@@ -176,7 +176,7 @@ export const EmailList: React.FC = () => {
   const handleFolderSelect = (key: string) => { setPage(1); setSelectedEmail(null); setSelectedEmailId(null); if (key === '') { setFolderFilter(''); return; } const m = folders.find(f => f === key) || folders.find(f => f.toLowerCase() === key.toLowerCase()) || folders.find(f => f.toLowerCase().includes(key.toLowerCase())); setFolderFilter(m || key); };
   const handleEmailSelect = (email: Email) => { if (isAnalyticsMode) loadEmailDetails(email.id); else if (mailboxId) navigate(`/emails/${mailboxId}/${email.id}`); };
   const handleCloseDetail = () => { if (isAnalyticsMode) { setSelectedEmail(null); setSelectedEmailId(null); } else if (mailboxId) navigate(`/emails/${mailboxId}`); };
-  const clearFilters = () => { setCategoryFilter(''); setDirectionFilter(''); setFolderFilter(''); setSenderSearch(''); setPage(1); };
+  const clearFilters = () => { setDirectionFilter(''); setFolderFilter(''); setSenderSearch(''); setPage(1); };
 
   const displayEmails = useMemo(() => {
     if (!isAnalyticsMode || !searchText) return emails;
@@ -244,26 +244,35 @@ export const EmailList: React.FC = () => {
           </div>
           {!isAnalyticsMode && (
             <>
-              <div className="relative">
+              {/* People search with helper text */}
+              <div className="relative group">
                 <User className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
-                <input placeholder="From / To / CC..." value={senderSearch} onChange={e => setSenderSearch(e.target.value)}
-                  className="h-8 pl-7 pr-2 text-xs rounded-md border border-slate-200 bg-white w-36 focus:outline-none focus:ring-1 focus:ring-primary/20" />
+                <input placeholder="Person name or email..." value={senderSearch} onChange={e => setSenderSearch(e.target.value)}
+                  className="h-8 pl-7 pr-2 text-sm rounded-md border border-slate-200 bg-white w-48 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:w-64 transition-all"
+                  title="Search across From, To, CC and BCC fields" />
               </div>
-              <select value={directionFilter} onChange={e => { setDirectionFilter(e.target.value); setPage(1); }}
+
+              {/* Sort */}
+              <select value={`${sortBy}|${sortDir}`} onChange={e => { const parts = e.target.value.split('|'); setSortBy(parts[0]); setSortDir(parts[1] as any); setPage(1); }}
                 className="h-8 px-2 text-xs rounded-md border border-slate-200 bg-white">
-                <option value="">Direction</option><option value="inbound">Received</option><option value="outbound">Sent</option>
+                <option value="sent_date|desc">Newest first</option>
+                <option value="sent_date|asc">Oldest first</option>
+                <option value="sender_name|asc">Sender A→Z</option>
+                <option value="subject|asc">Subject A→Z</option>
               </select>
-              {categories.length > 0 && (
-                <select value={categoryFilter} onChange={e => { setCategoryFilter(e.target.value); setPage(1); }}
-                  className="h-8 px-2 text-xs rounded-md border border-slate-200 bg-white">
-                  <option value="">Category</option>{categories.map(c => <option key={c} value={c}>{getCategoryLabel(c)}</option>)}
-                </select>
-              )}
-              <select value={`${sortBy}_${sortDir}`} onChange={e => { const [c, d] = e.target.value.split('_'); setSortBy(c); setSortDir(d as any); setPage(1); }}
-                className="h-8 px-2 text-xs rounded-md border border-slate-200 bg-white">
-                <option value="sent_date_desc">Newest</option><option value="sent_date_asc">Oldest</option>
-                <option value="sender_name_asc">Sender A→Z</option>
-              </select>
+
+              {/* Sent/Received toggle — compact pills instead of dropdown */}
+              <div className="flex rounded-md border border-slate-200 overflow-hidden">
+                <button onClick={() => { setDirectionFilter(directionFilter === 'inbound' ? '' : 'inbound'); setPage(1); }}
+                  className={cn('px-2.5 py-1 text-xs transition-colors', directionFilter === 'inbound' ? 'bg-primary text-white' : 'bg-white text-slate-500 hover:bg-slate-50')}>
+                  Received
+                </button>
+                <button onClick={() => { setDirectionFilter(directionFilter === 'outbound' ? '' : 'outbound'); setPage(1); }}
+                  className={cn('px-2.5 py-1 text-xs border-l transition-colors', directionFilter === 'outbound' ? 'bg-primary text-white' : 'bg-white text-slate-500 hover:bg-slate-50')}>
+                  Sent
+                </button>
+              </div>
+
               {hasActiveFilters && <button onClick={clearFilters} className="text-xs text-primary hover:underline inline-flex items-center gap-0.5"><X className="h-3 w-3" />Clear</button>}
               <button onClick={() => { setSelectedEmail(null); setSelectedEmailId(null); emailsQuery.refetch(); }} className="p-1.5 rounded hover:bg-slate-100">
                 <RefreshCw className={cn('h-3.5 w-3.5 text-slate-400', loading && 'animate-spin')} />
