@@ -126,7 +126,8 @@ function App() {
             {/* Manage routes */}
             <Route path="/manage/response-times" element={<ProtectedRoute><Layout><ResponseTimesAnalytics /></Layout></ProtectedRoute>} />
             <Route path="/manage/patterns" element={<ProtectedRoute><Layout><CommunicationPatterns /></Layout></ProtectedRoute>} />
-            <Route path="/manage/email-rules" element={<ProtectedRoute><Layout><EmailRulesPage /></Layout></ProtectedRoute>} />
+            <Route path="/insights/email-rules" element={<ProtectedRoute><Layout><EmailRulesPage /></Layout></ProtectedRoute>} />
+            <Route path="/manage/email-rules" element={<Navigate to="/insights/email-rules" replace />} />
             <Route path="/manage/data-health" element={<ProtectedRoute><Layout><DataHealthDashboard /></Layout></ProtectedRoute>} />
             <Route path="/manage/extraction" element={<ProtectedRoute><Layout><ExtractionManagement /></Layout></ProtectedRoute>} />
             <Route path="/manage/processing" element={<ProtectedRoute><Layout><ProcessingJobs /></Layout></ProtectedRoute>} />

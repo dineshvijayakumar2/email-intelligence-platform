@@ -1,48 +1,46 @@
+/**
+ * Email Rules Intelligence — analyze email rules across account managers.
+ * Moved to Insights section. Zero antd.
+ */
 import React, { useState, useEffect, useRef } from 'react';
-import { Row, Col, Typography, Table, Tag, Button, Tabs, Alert, Card, Tooltip, Spin, message, Empty } from 'antd';
-import {
-  FilterOutlined, SyncOutlined, ImportOutlined, InfoCircleOutlined,
-  WarningOutlined, CheckCircleOutlined, SwapOutlined,
-} from '@ant-design/icons';
-import { ClientSelector } from '../../components/analytics/ClientSelector';
-import { MetricCard } from '../../components/analytics/MetricCard';
+import { useClient } from '../../contexts/ClientContext';
 import { formatDateTime } from '../../utils/dateUtils';
+import { rulesApi, clearRulesCache, getSignalLabel } from '../../services/rulesService';
+import type { RulesAnalyticsResponse, MailboxRulesMetrics, RulesInsight, UnifiedRule } from '../../services/rulesService';
+import { PageShell, PageHeader } from '@/components/ui/page-shell';
+import { KPICard, KPIStrip } from '@/components/ui/kpi-card';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { ContentSkeleton, EmptyState } from '@/components/ui/empty-state';
+import { toast } from '@/lib/toast';
+import { cn } from '@/lib/utils';
 import {
-  rulesApi, clearRulesCache, getSignalColor, getSignalLabel,
-} from '../../services/rulesService';
-import type {
-  RulesAnalyticsResponse, MailboxRulesMetrics, RulesInsight, UnifiedRule,
-} from '../../services/rulesService';
+  Filter, RefreshCw, Download, AlertTriangle, Info, ChevronLeft, ChevronRight,
+} from 'lucide-react';
+import { Spinner } from '@/lib/icons';
 
-const { Title, Text, Paragraph } = Typography;
-
-// ============================================================================
-// SIGNAL TAG COMPONENT
-// ============================================================================
-
-const SignalTag: React.FC<{ signal: string }> = ({ signal }) => (
-  <Tag color={getSignalColor(signal)} style={{ borderRadius: 4 }}>
-    {getSignalLabel(signal)}
-  </Tag>
-);
-
-// ============================================================================
-// MAIN PAGE
-// ============================================================================
+const signalVariant = (s: string): 'success' | 'warning' | 'danger' | 'info' | 'neutral' | 'purple' => {
+  if (s === 'high_value') return 'success';
+  if (s === 'escalation') return 'info';
+  if (s === 'low_priority') return 'warning';
+  if (s === 'segmentation') return 'purple';
+  return 'neutral';
+};
 
 export const EmailRulesPage: React.FC = () => {
   const isMountedRef = useRef(true);
-  const [clientId, setClientId] = useState('');
+  const { clientId } = useClient();
   const [analytics, setAnalytics] = useState<RulesAnalyticsResponse | null>(null);
   const [insights, setInsights] = useState<RulesInsight[]>([]);
   const [allRules, setAllRules] = useState<UnifiedRule[]>([]);
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'comparison' | 'rules' | 'insights'>('comparison');
+  const [rulesPage, setRulesPage] = useState(1);
+  const RULES_PAGE_SIZE = 20;
 
   useEffect(() => { isMountedRef.current = true; return () => { isMountedRef.current = false; }; }, []);
 
-  // Helper: load all data via single combined API call
   const loadData = async (cId: string) => {
     const result = await rulesApi.fullAnalytics(cId);
     if (!isMountedRef.current) return;
@@ -52,336 +50,206 @@ export const EmailRulesPage: React.FC = () => {
     setLastSyncedAt(result.last_rules_import_at);
   };
 
-  // Load analytics + insights + rules when client changes (read-only, no imports)
   useEffect(() => {
     if (!clientId) return;
-    const load = async () => {
-      setLoading(true);
-      await loadData(clientId);
-      if (isMountedRef.current) setLoading(false);
-    };
-    load();
+    setLoading(true);
+    loadData(clientId).finally(() => { if (isMountedRef.current) setLoading(false); });
   }, [clientId]);
 
-  // Sync: import rules from all LIVE mailboxes, then refresh
-  const handleSyncRules = async () => {
+  const handleSync = async () => {
     if (!analytics) return;
-    const liveMailboxes = (analytics.mailboxes || []).filter(mb => mb.live_connection);
-    if (liveMailboxes.length === 0) {
-      message.info('No LIVE mailbox connections to sync.');
-      return;
-    }
+    const live = (analytics.mailboxes || []).filter(mb => mb.live_connection);
+    if (!live.length) { toast.info('No LIVE mailbox connections to sync.'); return; }
     setSyncing(true);
     try {
-      const results = await Promise.allSettled(
-        liveMailboxes.map(mb => rulesApi.importRules(mb.mailbox_id))
-      );
-      const totalImported = results
-        .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled')
+      const results = await Promise.allSettled(live.map(mb => rulesApi.importRules(mb.mailbox_id)));
+      const total = results.filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled')
         .reduce((sum, r) => sum + (r.value?.imported_count || 0), 0);
-      message.success(`Synced ${totalImported} rules from ${liveMailboxes.length} mailbox(es)`);
+      toast.success(`Synced ${total} rules from ${live.length} mailbox(es)`);
       clearRulesCache();
       await loadData(clientId);
-    } catch {
-      message.error('Failed to sync rules. Check mail server connections.');
-    } finally {
-      if (isMountedRef.current) setSyncing(false);
-    }
+    } catch { toast.error('Failed to sync rules'); }
+    finally { if (isMountedRef.current) setSyncing(false); }
   };
 
-  // Import rules for a single mailbox
   const handleImport = async (mailboxId: string) => {
     setSyncing(true);
     try {
       const result = await rulesApi.importRules(mailboxId);
-      message.success(`Imported ${result.imported_count} rules from ${result.source}`);
+      toast.success(`Imported ${result.imported_count} rules`);
       clearRulesCache();
       await loadData(clientId);
-    } catch {
-      message.error('Failed to import rules. Check mail server connection.');
-    } finally {
-      if (isMountedRef.current) setSyncing(false);
-    }
+    } catch { toast.error('Failed to import rules'); }
+    finally { if (isMountedRef.current) setSyncing(false); }
   };
 
-  // ======== COMPARISON TABLE COLUMNS ========
-  const comparisonColumns = [
-    {
-      title: 'Mailbox',
-      key: 'mailbox',
-      render: (_: any, r: MailboxRulesMetrics) => (
-        <div>
-          <Text strong>{r.mailbox_email || 'Unknown'}</Text>
-          <div>
-            <Tag color={r.live_connection === 'gmail' ? 'red' : r.live_connection === 'outlook' ? 'blue' : 'default'} style={{ fontSize: 10 }}>
-              {r.live_connection === 'gmail' ? 'Gmail' : r.live_connection === 'outlook' ? 'Outlook' : r.mailbox_type || 'Archive'}
-            </Tag>
-          </div>
-        </div>
-      ),
-    },
-    { title: 'Total', dataIndex: 'total_rules', key: 'total_rules', sorter: (a: MailboxRulesMetrics, b: MailboxRulesMetrics) => a.total_rules - b.total_rules },
-    { title: 'Active', dataIndex: 'active_rules', key: 'active_rules' },
-    {
-      title: 'High Value', dataIndex: 'high_value_count', key: 'high_value',
-      render: (v: number) => v > 0 ? <Tag color="green">{v}</Tag> : <Text type="secondary">0</Text>,
-    },
-    {
-      title: 'Escalation', dataIndex: 'escalation_count', key: 'escalation',
-      render: (v: number) => v > 0 ? <Tag color="blue">{v}</Tag> : <Text type="secondary">0</Text>,
-    },
-    {
-      title: 'Low Priority', dataIndex: 'low_priority_count', key: 'low_priority',
-      render: (v: number) => v > 0 ? <Tag color="orange">{v}</Tag> : <Text type="secondary">0</Text>,
-    },
-    {
-      title: 'Segmentation', dataIndex: 'segmentation_count', key: 'segmentation',
-      render: (v: number) => v > 0 ? <Tag color="purple">{v}</Tag> : <Text type="secondary">0</Text>,
-    },
-    {
-      title: 'Forwards', dataIndex: 'forward_count', key: 'forward',
-      render: (v: number) => v > 0 ? <Tag color="cyan">{v}</Tag> : <Text type="secondary">0</Text>,
-    },
-    {
-      title: 'Domains Covered', key: 'domains',
-      render: (_: any, r: MailboxRulesMetrics) => r.covered_domains.length || 0,
-    },
-    {
-      title: 'Action', key: 'action',
-      render: (_: any, r: MailboxRulesMetrics) => (
-        <Button
-          size="small"
-          icon={<ImportOutlined />}
-          loading={syncing}
-          onClick={() => handleImport(r.mailbox_id)}
-          disabled={!r.live_connection || syncing}
-        >
-          Import
-        </Button>
-      ),
-    },
-  ];
-
-  // ======== ALL RULES TABLE COLUMNS ========
-  const rulesColumns = [
-    {
-      title: 'Source', key: 'source', width: 80,
-      render: (_: any, r: UnifiedRule) => (
-        <Tag color={r.source_type === 'gmail' ? 'red' : 'blue'}>
-          {r.source_type === 'gmail' ? 'Gmail' : 'Outlook'}
-        </Tag>
-      ),
-    },
-    {
-      title: 'Mailbox', dataIndex: 'mailbox_email', key: 'mailbox', width: 200,
-      render: (v: string) => <Text ellipsis={{ tooltip: v }} style={{ maxWidth: 180 }}>{v}</Text>,
-    },
-    { title: 'Rule Name', dataIndex: 'name', key: 'name', ellipsis: true },
-    {
-      title: 'Signal', key: 'signal', width: 120,
-      render: (_: any, r: UnifiedRule) => <SignalTag signal={r.engagement_signal} />,
-      filters: [
-        { text: 'High Value', value: 'high_value' },
-        { text: 'Escalation', value: 'escalation' },
-        { text: 'Low Priority', value: 'low_priority' },
-        { text: 'Segmentation', value: 'segmentation' },
-        { text: 'Neutral', value: 'neutral' },
-      ],
-      onFilter: (value: any, record: UnifiedRule) => record.engagement_signal === value,
-    },
-    {
-      title: 'Conditions', key: 'conditions',
-      render: (_: any, r: UnifiedRule) => {
-        const parts: string[] = [];
-        if (r.conditions.from_addresses.length) parts.push(`From: ${r.conditions.from_addresses.join(', ')}`);
-        if (r.conditions.from_domains.length) parts.push(`Domain: ${r.conditions.from_domains.join(', ')}`);
-        if (r.conditions.subject_contains.length) parts.push(`Subject: ${r.conditions.subject_contains.join(', ')}`);
-        if (r.conditions.has_attachment) parts.push('Has attachment');
-        return <Text type="secondary" style={{ fontSize: 12 }}>{parts.join(' | ') || 'Any'}</Text>;
-      },
-    },
-    {
-      title: 'Actions', key: 'actions',
-      render: (_: any, r: UnifiedRule) => {
-        const tags: React.ReactNode[] = [];
-        if (r.actions.mark_important) tags.push(<Tag key="imp" color="gold">Important</Tag>);
-        if (r.actions.forward_to.length) tags.push(<Tag key="fwd" color="blue">Forward</Tag>);
-        if (r.actions.label) tags.push(<Tag key="lbl" color="purple">Label</Tag>);
-        if (r.actions.move_to_folder) tags.push(<Tag key="mv" color="cyan">Move</Tag>);
-        if (r.actions.mark_read) tags.push(<Tag key="rd" color="orange">Mark Read</Tag>);
-        if (r.actions.skip_inbox) tags.push(<Tag key="skip" color="orange">Skip Inbox</Tag>);
-        if (r.actions.delete) tags.push(<Tag key="del" color="red">Delete</Tag>);
-        return tags.length ? tags : <Text type="secondary">None</Text>;
-      },
-    },
-    {
-      title: 'Active', dataIndex: 'is_active', key: 'active', width: 70,
-      render: (v: boolean) => v ? <Tag color="green">Yes</Tag> : <Tag>No</Tag>,
-    },
-  ];
-
-  // ======== INSIGHT SEVERITY ICON ========
-  const severityIcon = (severity: string) => {
-    switch (severity) {
-      case 'critical': return <WarningOutlined style={{ color: '#f5222d' }} />;
-      case 'warning': return <WarningOutlined style={{ color: '#faad14' }} />;
-      default: return <InfoCircleOutlined style={{ color: '#1890ff' }} />;
-    }
-  };
+  const pagedRules = allRules.slice((rulesPage - 1) * RULES_PAGE_SIZE, rulesPage * RULES_PAGE_SIZE);
+  const totalRulesPages = Math.ceil(allRules.length / RULES_PAGE_SIZE);
 
   return (
-    <div style={{ padding: '24px' }}>
-      <Row justify="space-between" align="middle" style={{ marginBottom: 24 }}>
-        <Col>
-          <Title level={3} style={{ margin: 0 }}>
-            <FilterOutlined style={{ marginRight: 8 }} />
-            Email Rules Intelligence
-          </Title>
-          <Text type="secondary">View and analyze email rules across account managers</Text>
-        </Col>
-        <Col>
-          <Row gutter={12} align="middle">
-            <Col>
-              <ClientSelector value={clientId} onChange={setClientId} />
-            </Col>
-            {lastSyncedAt && (
-              <Col>
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  Last synced: {formatDateTime(lastSyncedAt)}
-                </Text>
-              </Col>
-            )}
-            <Col>
-              <Button
-                type="primary"
-                icon={<SyncOutlined spin={syncing} />}
-                onClick={handleSyncRules}
-                disabled={!analytics || analytics.total_mailboxes === 0}
-                loading={syncing}
-              >
-                Sync Rules
-              </Button>
-            </Col>
-          </Row>
-        </Col>
-      </Row>
+    <PageShell>
+      <PageHeader title="Email Rules Intelligence" description="Analyze email rules across account managers"
+        actions={
+          <div className="flex items-center gap-3">
+            {lastSyncedAt && <span className="text-xs text-slate-400">Synced: {formatDateTime(lastSyncedAt)}</span>}
+            <button onClick={handleSync} disabled={syncing || !analytics}
+              className="h-8 px-3 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary-dark disabled:opacity-50 inline-flex items-center gap-1.5">
+              {syncing ? <Spinner className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+              Sync Rules
+            </button>
+          </div>
+        }
+      />
 
       {!clientId ? (
-        <Empty description="Select a client to view email rules" />
+        <EmptyState icon={<Filter className="h-10 w-10" />} title="Select a client" description="Choose a client from the top-right menu to view email rules" />
       ) : loading ? (
-        <div style={{ textAlign: 'center', padding: 60 }}><Spin size="large" /></div>
+        <ContentSkeleton rows={8} />
       ) : (
         <>
-          {/* Summary Cards */}
-          <Row gutter={16} style={{ marginBottom: 24 }}>
-            <Col span={6}>
-              <MetricCard
-                title="Total Rules"
-                value={analytics?.total_rules || 0}
-                prefix={<FilterOutlined />}
-              />
-            </Col>
-            <Col span={6}>
-              <MetricCard
-                title="Mailboxes Covered"
-                value={(analytics?.total_mailboxes || 0) - (analytics?.mailboxes_with_no_rules || 0)}
-                prefix={<CheckCircleOutlined />}
-                suffix={`/ ${analytics?.total_mailboxes || 0}`}
-              />
-            </Col>
-            <Col span={6}>
-              <MetricCard
-                title="Avg Rules / Mailbox"
-                value={analytics?.avg_rules_per_mailbox || 0}
-                prefix={<SwapOutlined />}
-              />
-            </Col>
-            <Col span={6}>
-              <MetricCard
-                title="No Rules"
-                value={analytics?.mailboxes_with_no_rules || 0}
-                prefix={<WarningOutlined />}
-                valueStyle={analytics?.mailboxes_with_no_rules ? { color: '#faad14' } : undefined}
-              />
-            </Col>
-          </Row>
+          {/* KPIs */}
+          <KPIStrip className="mb-4">
+            <KPICard title="Total Rules" value={analytics?.total_rules || 0} />
+            <KPICard title="Mailboxes Covered" value={(analytics?.total_mailboxes || 0) - (analytics?.mailboxes_with_no_rules || 0)}
+              subtitle={`of ${analytics?.total_mailboxes || 0}`} />
+            <KPICard title="Avg / Mailbox" value={analytics?.avg_rules_per_mailbox || 0} />
+            <KPICard title="No Rules" value={analytics?.mailboxes_with_no_rules || 0}
+              danger={(analytics?.mailboxes_with_no_rules || 0) > 0} />
+          </KPIStrip>
 
-          {/* Cross-AM Comparison Table */}
-          <Card title="Cross-AM Rules Comparison" style={{ marginBottom: 24 }}>
-            <Table
-              dataSource={analytics?.mailboxes || []}
-              columns={comparisonColumns}
-              rowKey="mailbox_id"
-              pagination={false}
-              size="small"
-              rowClassName={(record) => record.total_rules === 0 ? 'ant-table-row-warning' : ''}
-            />
-          </Card>
+          {/* Tab bar */}
+          <div className="flex gap-1 mb-4 border-b border-slate-200 pb-px">
+            {(['comparison', 'rules', 'insights'] as const).map(tab => (
+              <button key={tab} onClick={() => setActiveTab(tab)}
+                className={cn('px-4 py-2 text-sm font-medium rounded-t-md transition-colors -mb-px',
+                  activeTab === tab ? 'text-primary border-b-2 border-primary bg-white' : 'text-slate-500 hover:text-slate-700')}>
+                {tab === 'comparison' ? 'Cross-AM Comparison' : tab === 'rules' ? `All Rules (${allRules.length})` : `Insights (${insights.length})`}
+              </button>
+            ))}
+          </div>
 
-          {/* Tabs: All Rules + Insights */}
-          <Card>
-            <Tabs
-              defaultActiveKey="rules"
-              items={[
-                {
-                  key: 'rules',
-                  label: `All Rules (${allRules.length})`,
-                  children: (
-                    <Table
-                      dataSource={allRules}
-                      columns={rulesColumns}
-                      rowKey={(r) => `${r.source_type}-${r.source_rule_id}`}
-                      pagination={{ pageSize: 20, showSizeChanger: true }}
-                      size="small"
-                      scroll={{ x: 1000 }}
-                    />
-                  ),
-                },
-                {
-                  key: 'insights',
-                  label: `Insights (${insights.length})`,
-                  children: insights.length === 0 ? (
-                    <Empty description="No insights available. Import rules first." />
-                  ) : (
-                    <div>
-                      {insights.map((insight, idx) => (
-                        <Alert
-                          key={idx}
-                          type={insight.severity === 'critical' ? 'error' : insight.severity === 'warning' ? 'warning' : 'info'}
-                          icon={severityIcon(insight.severity)}
-                          showIcon
-                          style={{ marginBottom: 12 }}
-                          message={
-                            <Text strong>
-                              {insight.insight_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
-                            </Text>
-                          }
-                          description={
-                            <div>
-                              <Paragraph style={{ marginBottom: 8 }}>{insight.description}</Paragraph>
-                              <Paragraph type="secondary" style={{ marginBottom: 4 }}>
-                                <strong>Recommendation:</strong> {insight.recommendation}
-                              </Paragraph>
-                              {insight.affected_mailboxes.length > 0 && (
-                                <div>
-                                  {insight.affected_mailboxes.map((mb, i) => (
-                                    <Tag key={i} style={{ marginBottom: 4 }}>{mb}</Tag>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          }
-                        />
-                      ))}
+          {/* Comparison tab */}
+          {activeTab === 'comparison' && (
+            <div className="rounded-lg border bg-white shadow-sm overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-slate-50/50">
+                    <th className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Mailbox</th>
+                    <th className="px-3 py-2.5 text-right text-xs font-bold uppercase tracking-wider text-slate-600 w-16">Total</th>
+                    <th className="px-3 py-2.5 text-right text-xs font-bold uppercase tracking-wider text-slate-600 w-16">Active</th>
+                    <th className="px-3 py-2.5 text-right text-xs font-bold uppercase tracking-wider text-slate-600 w-20">High Val</th>
+                    <th className="px-3 py-2.5 text-right text-xs font-bold uppercase tracking-wider text-slate-600 w-20">Escalate</th>
+                    <th className="px-3 py-2.5 text-right text-xs font-bold uppercase tracking-wider text-slate-600 w-20">Low Pri</th>
+                    <th className="px-3 py-2.5 text-right text-xs font-bold uppercase tracking-wider text-slate-600 w-16">Fwd</th>
+                    <th className="px-3 py-2.5 w-20"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {(analytics?.mailboxes || []).map(mb => (
+                    <tr key={mb.mailbox_id} className={cn('hover:bg-slate-50/50', mb.total_rules === 0 && 'bg-warning-subtle')}>
+                      <td className="px-4 py-2.5">
+                        <span className="font-medium text-slate-900">{mb.mailbox_email || 'Unknown'}</span>
+                        <div className="text-xs text-slate-400">{mb.live_connection === 'gmail' ? 'Gmail' : mb.live_connection === 'outlook' ? 'Outlook' : 'Archive'}</div>
+                      </td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">{mb.total_rules}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">{mb.active_rules}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">{mb.high_value_count || '—'}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">{mb.escalation_count || '—'}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">{mb.low_priority_count || '—'}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">{mb.forward_count || '—'}</td>
+                      <td className="px-3 py-2.5">
+                        {mb.live_connection && (
+                          <button onClick={() => handleImport(mb.mailbox_id)} disabled={syncing}
+                            className="text-xs text-primary hover:underline disabled:opacity-50">Import</button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Rules tab */}
+          {activeTab === 'rules' && (
+            <div className="rounded-lg border bg-white shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-slate-50/50">
+                      <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600 w-16">Source</th>
+                      <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600 w-44">Mailbox</th>
+                      <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Rule Name</th>
+                      <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600 w-24">Signal</th>
+                      <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Conditions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {pagedRules.map((r, i) => (
+                      <tr key={`${r.source_type}-${r.source_rule_id}-${i}`} className="hover:bg-slate-50/50">
+                        <td className="px-3 py-2 text-xs text-slate-500">{r.source_type === 'gmail' ? 'Gmail' : 'Outlook'}</td>
+                        <td className="px-3 py-2 text-xs text-slate-600 truncate max-w-[170px]">{r.mailbox_email}</td>
+                        <td className="px-3 py-2 text-slate-800">{r.name}</td>
+                        <td className="px-3 py-2"><StatusBadge variant={signalVariant(r.engagement_signal)} size="sm">{getSignalLabel(r.engagement_signal)}</StatusBadge></td>
+                        <td className="px-3 py-2 text-xs text-slate-500 truncate max-w-[250px]">
+                          {[
+                            r.conditions.from_addresses.length ? `From: ${r.conditions.from_addresses.join(', ')}` : '',
+                            r.conditions.from_domains.length ? `Domain: ${r.conditions.from_domains.join(', ')}` : '',
+                            r.conditions.subject_contains.length ? `Subject: ${r.conditions.subject_contains.join(', ')}` : '',
+                          ].filter(Boolean).join(' | ') || 'Any'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {allRules.length > RULES_PAGE_SIZE && (
+                <div className="flex items-center justify-between px-4 py-3 border-t bg-slate-50/30">
+                  <span className="text-xs text-slate-500">{allRules.length} rules</span>
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => setRulesPage(p => Math.max(1, p - 1))} disabled={rulesPage <= 1} className="p-1.5 rounded hover:bg-slate-100 disabled:opacity-30"><ChevronLeft className="h-4 w-4" /></button>
+                    <span className="text-xs text-slate-600 px-2 tabular-nums">{rulesPage} / {totalRulesPages}</span>
+                    <button onClick={() => setRulesPage(p => Math.min(totalRulesPages, p + 1))} disabled={rulesPage >= totalRulesPages} className="p-1.5 rounded hover:bg-slate-100 disabled:opacity-30"><ChevronRight className="h-4 w-4" /></button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Insights tab */}
+          {activeTab === 'insights' && (
+            <div className="space-y-3">
+              {insights.length === 0 ? (
+                <EmptyState icon={<Info className="h-8 w-8" />} title="No insights" description="Import rules first to generate insights" />
+              ) : insights.map((insight, idx) => {
+                const variant = insight.severity === 'critical' ? 'danger' : insight.severity === 'warning' ? 'warning' : 'info';
+                return (
+                  <div key={idx} className={cn('rounded-lg border bg-white shadow-sm p-4', variant === 'danger' && 'border-l-4 border-l-destructive', variant === 'warning' && 'border-l-4 border-l-warning')}>
+                    <div className="flex items-start gap-3">
+                      {insight.severity === 'critical' || insight.severity === 'warning'
+                        ? <AlertTriangle className={cn('h-4 w-4 mt-0.5 shrink-0', variant === 'danger' ? 'text-destructive' : 'text-warning')} />
+                        : <Info className="h-4 w-4 mt-0.5 text-primary shrink-0" />}
+                      <div>
+                        <p className="text-sm font-bold text-slate-900 mb-1">{insight.insight_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</p>
+                        <p className="text-sm text-slate-700 mb-2">{insight.description}</p>
+                        <p className="text-xs text-slate-500"><span className="font-medium">Recommendation:</span> {insight.recommendation}</p>
+                        {insight.affected_mailboxes.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {insight.affected_mailboxes.map((mb, i) => (
+                              <span key={i} className="inline-flex px-1.5 py-0 text-[11px] rounded bg-slate-100 text-slate-500">{mb}</span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  ),
-                },
-              ]}
-            />
-          </Card>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </>
       )}
-    </div>
+    </PageShell>
   );
 };
 

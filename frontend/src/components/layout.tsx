@@ -5,8 +5,8 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, Mail, Building2, Users, Lightbulb, Settings,
   Menu, X, LogOut, ChevronDown, Search, Bot, Zap, BarChart3,
-  FolderOpen, AlertTriangle, Activity, Database, Brain, BookOpen,
-  Shield, FileText, Cpu, Link2, ClipboardList, Eye, ScrollText,
+  FolderOpen, AlertTriangle, Activity, Database, Brain, BookOpen, Filter,
+  Shield, FileText, Cpu, Link2, Eye, ScrollText,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -53,6 +53,7 @@ const navItems: NavItem[] = [
       { label: 'Strategic Digest', href: '/insights/strategic', icon: <BarChart3 className="h-3.5 w-3.5" /> },
       { label: 'Opportunities', href: '/insights/opportunities', icon: <Zap className="h-3.5 w-3.5" /> },
       { label: 'Semantic Search', href: '/insights/search', icon: <Search className="h-3.5 w-3.5" /> },
+      { label: 'Email Rules', href: '/insights/email-rules', icon: <Filter className="h-3.5 w-3.5" /> },
       { label: 'AI Assistant', href: '/insights/agent', icon: <Bot className="h-3.5 w-3.5" /> },
     ],
   },
@@ -61,7 +62,6 @@ const navItems: NavItem[] = [
     children: [
       { label: 'Mailboxes', href: '/mailboxes', icon: <Mail className="h-3.5 w-3.5" /> },
       { label: 'Clients', href: '/clients', icon: <Building2 className="h-3.5 w-3.5" /> },
-      { label: 'Email Rules', href: '/manage/email-rules', icon: <Shield className="h-3.5 w-3.5" /> },
       { label: 'Extraction', href: '/manage/extraction', icon: <Cpu className="h-3.5 w-3.5" /> },
       { label: 'Processing Jobs', href: '/manage/processing', icon: <Activity className="h-3.5 w-3.5" /> },
       { label: 'Error Logs', href: '/manage/errors', icon: <AlertTriangle className="h-3.5 w-3.5" /> },
