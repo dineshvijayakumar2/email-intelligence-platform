@@ -226,44 +226,44 @@ export const EmailRulesPage: React.FC = () => {
     return rules;
   }, [allRules, signalFilter, mailboxFilter, rulesSearch]);
 
-  // TanStack Table columns — compact, no horizontal scroll
+  // TanStack Table columns — separate columns, modal for full details
   const rulesColumns = useMemo(() => [
-    col.accessor('name', { header: 'Rule',
+    col.accessor('name', { header: 'Rule Name',
+      cell: info => (
+        <div>
+          <span className="text-sm font-medium text-slate-800">{info.getValue()}</span>
+          {!info.row.original.is_active && <span className="text-[10px] text-slate-400 italic ml-2">inactive</span>}
+        </div>
+      ),
+    }),
+    col.accessor('mailbox_email', { header: 'Mailbox', size: 180,
+      cell: info => <span className="text-xs text-slate-600 truncate block">{info.getValue().split('@')[0]}</span>,
+    }),
+    col.accessor('engagement_signal', { header: 'Signal', size: 100,
+      cell: info => <StatusBadge variant={signalVariant(info.getValue())} size="sm">{getSignalLabel(info.getValue())}</StatusBadge>,
+    }),
+    col.accessor('conditions', { header: 'Conditions', enableSorting: false,
       cell: info => {
-        const r = info.row.original;
-        const actionParts = describeActions(r.actions);
-
-        const condParts = [
-          r.conditions.from_addresses.length ? `From: ${r.conditions.from_addresses.slice(0, 2).join(', ')}` : '',
-          r.conditions.from_domains.length ? `Domain: ${r.conditions.from_domains.slice(0, 2).join(', ')}` : '',
-          r.conditions.subject_contains.length ? `Subject: ${r.conditions.subject_contains.slice(0, 2).join(', ')}` : '',
-          r.conditions.has_attachment ? 'Has attachment' : '',
-        ].filter(Boolean);
-
-        return (
-          <div>
-            <span className="text-sm font-medium text-slate-800">{info.getValue()}</span>
-            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-              <span className="text-[11px] text-slate-400">{r.mailbox_email} · {r.source_type === 'gmail' ? 'Gmail' : 'Outlook'}</span>
-              {!r.is_active && <span className="text-[10px] text-slate-400 italic">inactive</span>}
-            </div>
-            {condParts.length > 0 && (
-              <div className="text-[11px] text-slate-500 mt-1">
-                <span className="font-medium text-slate-600">When: </span>{condParts.join(' · ')}
-              </div>
-            )}
-            {actionParts.length > 0 && (
-              <div className="flex flex-wrap gap-1 mt-1">
-                <span className="text-[11px] font-medium text-slate-600">Then: </span>
-                {actionParts.map(t => <span key={t} className="inline-flex px-1.5 py-0 text-[10px] rounded bg-slate-100 text-slate-600">{t}</span>)}
-              </div>
-            )}
-          </div>
-        );
+        const c = info.getValue();
+        const count = c.from_addresses.length + c.from_domains.length + c.subject_contains.length + (c.has_attachment ? 1 : 0);
+        const summary = [
+          c.from_addresses.length ? `${c.from_addresses.length} address${c.from_addresses.length > 1 ? 'es' : ''}` : '',
+          c.from_domains.length ? `${c.from_domains.length} domain${c.from_domains.length > 1 ? 's' : ''}` : '',
+          c.subject_contains.length ? `${c.subject_contains.length} subject` : '',
+          c.has_attachment ? 'attachment' : '',
+        ].filter(Boolean).join(', ');
+        return count > 0
+          ? <span className="text-xs text-slate-500">{summary}</span>
+          : <span className="text-xs text-slate-300">Any</span>;
       },
     }),
-    col.accessor('engagement_signal', { header: 'Signal', size: 110,
-      cell: info => <StatusBadge variant={signalVariant(info.getValue())} size="sm">{getSignalLabel(info.getValue())}</StatusBadge>,
+    col.accessor('actions', { header: 'Actions', enableSorting: false,
+      cell: info => {
+        const parts = describeActions(info.getValue());
+        return parts.length > 0
+          ? <span className="text-xs text-slate-600">{parts.slice(0, 2).join(', ')}{parts.length > 2 ? ` +${parts.length - 2}` : ''}</span>
+          : <span className="text-xs text-slate-300">None</span>;
+      },
     }),
   ], []);
 
