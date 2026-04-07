@@ -119,50 +119,51 @@ export const EmailRulesPage: React.FC = () => {
     return rules;
   }, [allRules, signalFilter, mailboxFilter, rulesSearch]);
 
-  // TanStack Table columns for rules
+  // TanStack Table columns — compact, no horizontal scroll
   const rulesColumns = useMemo(() => [
-    col.accessor('source_type', { header: 'Source', size: 70,
-      cell: info => <span className="text-xs text-slate-500">{info.getValue() === 'gmail' ? 'Gmail' : 'Outlook'}</span>,
-    }),
-    col.accessor('mailbox_email', { header: 'Mailbox', size: 180,
-      cell: info => <span className="text-xs text-slate-600 truncate block max-w-[160px]">{info.getValue()}</span>,
-    }),
-    col.accessor('name', { header: 'Rule Name',
-      cell: info => <span className="text-sm text-slate-800 font-medium">{info.getValue()}</span>,
+    col.accessor('name', { header: 'Rule',
+      cell: info => {
+        const r = info.row.original;
+        const actionParts: string[] = [];
+        if (r.actions.mark_important) actionParts.push('Important');
+        if (r.actions.forward_to?.length) actionParts.push(`Fwd → ${r.actions.forward_to[0]}`);
+        if (r.actions.label) actionParts.push(`Label: ${r.actions.label}`);
+        if (r.actions.move_to_folder) actionParts.push(`Move: ${r.actions.move_to_folder}`);
+        if (r.actions.mark_read) actionParts.push('Mark Read');
+        if (r.actions.skip_inbox) actionParts.push('Skip Inbox');
+        if (r.actions.delete) actionParts.push('Delete');
+
+        const condParts = [
+          r.conditions.from_addresses.length ? `From: ${r.conditions.from_addresses.slice(0, 2).join(', ')}` : '',
+          r.conditions.from_domains.length ? `Domain: ${r.conditions.from_domains.slice(0, 2).join(', ')}` : '',
+          r.conditions.subject_contains.length ? `Subject: ${r.conditions.subject_contains.slice(0, 2).join(', ')}` : '',
+          r.conditions.has_attachment ? 'Has attachment' : '',
+        ].filter(Boolean);
+
+        return (
+          <div>
+            <span className="text-sm font-medium text-slate-800">{info.getValue()}</span>
+            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+              <span className="text-[11px] text-slate-400">{r.mailbox_email} · {r.source_type === 'gmail' ? 'Gmail' : 'Outlook'}</span>
+              {!r.is_active && <span className="text-[10px] text-slate-400 italic">inactive</span>}
+            </div>
+            {condParts.length > 0 && (
+              <div className="text-[11px] text-slate-500 mt-1">
+                <span className="font-medium text-slate-600">When: </span>{condParts.join(' · ')}
+              </div>
+            )}
+            {actionParts.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-1">
+                <span className="text-[11px] font-medium text-slate-600">Then: </span>
+                {actionParts.map(t => <span key={t} className="inline-flex px-1.5 py-0 text-[10px] rounded bg-slate-100 text-slate-600">{t}</span>)}
+              </div>
+            )}
+          </div>
+        );
+      },
     }),
     col.accessor('engagement_signal', { header: 'Signal', size: 110,
       cell: info => <StatusBadge variant={signalVariant(info.getValue())} size="sm">{getSignalLabel(info.getValue())}</StatusBadge>,
-    }),
-    col.accessor('conditions', { header: 'Conditions', enableSorting: false,
-      cell: info => {
-        const c = info.getValue();
-        const parts = [
-          c.from_addresses.length ? `From: ${c.from_addresses.slice(0, 2).join(', ')}${c.from_addresses.length > 2 ? '...' : ''}` : '',
-          c.from_domains.length ? `Domain: ${c.from_domains.slice(0, 2).join(', ')}` : '',
-          c.subject_contains.length ? `Subject: ${c.subject_contains.slice(0, 2).join(', ')}` : '',
-          c.has_attachment ? 'Has attachment' : '',
-        ].filter(Boolean);
-        return <span className="text-xs text-slate-500">{parts.join(' · ') || 'Any'}</span>;
-      },
-    }),
-    col.accessor('actions', { header: 'Actions', enableSorting: false,
-      cell: info => {
-        const a = info.getValue();
-        const tags: string[] = [];
-        if (a.mark_important) tags.push('Important');
-        if (a.forward_to?.length) tags.push(`Fwd → ${a.forward_to.slice(0, 1).join(', ')}`);
-        if (a.label) tags.push(`Label: ${a.label}`);
-        if (a.move_to_folder) tags.push(`Move: ${a.move_to_folder}`);
-        if (a.mark_read) tags.push('Mark Read');
-        if (a.skip_inbox) tags.push('Skip Inbox');
-        if (a.delete) tags.push('Delete');
-        return tags.length
-          ? <div className="flex flex-wrap gap-1">{tags.map(t => <span key={t} className="inline-flex px-1.5 py-0 text-[10px] rounded bg-slate-100 text-slate-600">{t}</span>)}</div>
-          : <span className="text-xs text-slate-300">None</span>;
-      },
-    }),
-    col.accessor('is_active', { header: 'Active', size: 60,
-      cell: info => info.getValue() ? <span className="text-xs text-success font-medium">Yes</span> : <span className="text-xs text-slate-400">No</span>,
     }),
   ], []);
 
