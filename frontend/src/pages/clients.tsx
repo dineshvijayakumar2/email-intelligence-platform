@@ -1,127 +1,93 @@
 /**
- * Clients Page - Stage 2 Business Hierarchy
- *
- * List and manage consulting clients with their customer companies.
+ * Clients Page — Manage consulting clients. Zero antd.
  */
-
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  Table,
-  Tag,
-  Button,
-  Space,
-  Typography,
-  Input,
-  Row,
-  Col,
-  Statistic,
-  Modal,
-  Form,
-  Select,
-  message,
-  Tooltip,
-  Breadcrumb,
-  Popconfirm,
-} from 'antd';
-import {
-  PlusOutlined,
-  EditOutlined,
-  DeleteOutlined,
-  TeamOutlined,
-  HomeOutlined,
-  ReloadOutlined,
-  BankOutlined,
-  GlobalOutlined,
-  CloseCircleOutlined,
-} from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 import {
-  clientService,
-  ClientSummary,
-  ClientCreate,
-  ClientUpdate,
-  ClientStatus,
-  InternalDomain,
+  clientService, ClientSummary, ClientCreate, ClientUpdate, ClientStatus, InternalDomain,
 } from '../services/clientService';
-
-const { Text } = Typography;
-const { Option } = Select;
+import { PageShell, PageHeader } from '@/components/ui/page-shell';
+import { KPICard, KPIStrip } from '@/components/ui/kpi-card';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { ContentSkeleton, EmptyState } from '@/components/ui/empty-state';
+import { toast } from '@/lib/toast';
+import { cn } from '@/lib/utils';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  Plus, Pencil, Trash2, RefreshCw, Building2, Globe, Users, X,
+} from 'lucide-react';
+import { Spinner } from '@/lib/icons';
 
 const ClientsPage: React.FC = () => {
-  // State
   const [loading, setLoading] = useState(false);
   const [clients, setClients] = useState<ClientSummary[]>([]);
   const [total, setTotal] = useState(0);
-  const [modalVisible, setModalVisible] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<ClientSummary | null>(null);
-  const [form] = Form.useForm();
+  const [statusFilter, setStatusFilter] = useState<string>('');
+
+  // Form state
+  const [formName, setFormName] = useState('');
+  const [formLabel, setFormLabel] = useState('');
+  const [formStatus, setFormStatus] = useState('active');
+  const [formIndustry, setFormIndustry] = useState('');
+  const [formNotes, setFormNotes] = useState('');
+  const [saving, setSaving] = useState(false);
 
   // Internal domains
   const [internalDomains, setInternalDomains] = useState<InternalDomain[]>([]);
   const [newDomain, setNewDomain] = useState('');
-  const [domainsLoading, setDomainsLoading] = useState(false);
 
-  // Filters
-  const [statusFilter, setStatusFilter] = useState<ClientStatus | undefined>();
-
-  // Load clients
   const loadClients = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await clientService.list(undefined, statusFilter);
-      setClients(response.clients);
-      setTotal(response.total);
-    } catch (error) {
-      console.error('Failed to load clients:', error);
-      message.error('Failed to load clients');
-    } finally {
-      setLoading(false);
-    }
+      const resp = await clientService.list(undefined, statusFilter as ClientStatus || undefined);
+      setClients(resp.clients); setTotal(resp.total);
+    } catch { toast.error('Failed to load clients'); }
+    finally { setLoading(false); }
   }, [statusFilter]);
 
-  // Initial load
-  useEffect(() => {
-    loadClients();
-  }, [loadClients]);
+  useEffect(() => { loadClients(); }, [loadClients]);
 
-  // Handle create/edit
-  const handleSubmit = async (values: any) => {
+  const openCreate = () => {
+    setEditingClient(null);
+    setFormName(''); setFormLabel(''); setFormStatus('active'); setFormIndustry(''); setFormNotes('');
+    setInternalDomains([]);
+    setModalOpen(true);
+  };
+
+  const openEdit = (client: ClientSummary) => {
+    setEditingClient(client);
+    setFormName(client.client_name); setFormLabel(client.client_label || '');
+    setFormStatus(client.status); setFormIndustry(''); setFormNotes('');
+    setModalOpen(true);
+    clientService.listInternalDomains(client.id).then(r => setInternalDomains(r.domains)).catch(() => setInternalDomains([]));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formName.trim()) { toast.warning('Client name required'); return; }
+    setSaving(true);
     try {
+      const payload = { client_name: formName, client_label: formLabel, status: formStatus, industry: formIndustry, notes: formNotes };
       if (editingClient) {
-        await clientService.update(editingClient.id, values as ClientUpdate);
-        message.success('Client updated successfully');
+        await clientService.update(editingClient.id, payload as ClientUpdate);
+        toast.success('Client updated');
       } else {
-        await clientService.create(values as ClientCreate);
-        message.success('Client created successfully');
+        await clientService.create(payload as ClientCreate);
+        toast.success('Client created');
       }
-      setModalVisible(false);
-      form.resetFields();
-      setEditingClient(null);
-      loadClients();
-    } catch (error: any) {
-      message.error(error.message || 'Failed to save client');
-    }
+      setModalOpen(false); loadClients();
+    } catch (err: any) { toast.error(err.message || 'Failed to save'); }
+    finally { setSaving(false); }
   };
 
-  // Handle delete
   const handleDelete = async (id: string) => {
-    try {
-      await clientService.delete(id);
-      message.success('Client deleted successfully');
-      loadClients();
-    } catch (error: any) {
-      message.error(error.message || 'Failed to delete client');
-    }
-  };
-
-  // Load internal domains for a client
-  const loadInternalDomains = async (clientId: string) => {
-    setDomainsLoading(true);
-    try {
-      const resp = await clientService.listInternalDomains(clientId);
-      setInternalDomains(resp.domains);
-    } catch { setInternalDomains([]); }
-    finally { setDomainsLoading(false); }
+    if (!confirm('Delete this client? This will also delete all customer companies, contacts, and rules.')) return;
+    try { await clientService.delete(id); toast.success('Client deleted'); loadClients(); }
+    catch (err: any) { toast.error(err.message || 'Failed to delete'); }
   };
 
   const handleAddDomain = async () => {
@@ -129,393 +95,199 @@ const ClientsPage: React.FC = () => {
     try {
       await clientService.addInternalDomain(editingClient.id, newDomain.trim());
       setNewDomain('');
-      loadInternalDomains(editingClient.id);
-      message.success(`Domain "${newDomain.trim()}" added`);
-    } catch (err: any) {
-      message.error(err.message || 'Failed to add domain');
-    }
+      const r = await clientService.listInternalDomains(editingClient.id);
+      setInternalDomains(r.domains);
+      toast.success(`Domain "${newDomain.trim()}" added`);
+    } catch (err: any) { toast.error(err.message || 'Failed to add domain'); }
   };
 
   const handleRemoveDomain = async (domainId: string) => {
     if (!editingClient) return;
     try {
       await clientService.removeInternalDomain(editingClient.id, domainId);
-      loadInternalDomains(editingClient.id);
-    } catch { message.error('Failed to remove domain'); }
+      const r = await clientService.listInternalDomains(editingClient.id);
+      setInternalDomains(r.domains);
+    } catch { toast.error('Failed to remove domain'); }
   };
 
-  // Open edit modal
-  const openEditModal = (client: ClientSummary) => {
-    setEditingClient(client);
-    form.setFieldsValue({
-      client_name: client.client_name,
-      client_label: client.client_label,
-      status: client.status,
-    });
-    setModalVisible(true);
-    loadInternalDomains(client.id);
-  };
-
-  // Table columns
-  const columns = [
-    {
-      title: 'Client Name',
-      dataIndex: 'client_name',
-      key: 'client_name',
-      render: (name: string, record: ClientSummary) => (
-        <Space>
-          <BankOutlined />
-          <Text strong>{name}</Text>
-          {record.client_label && (
-            <Tag color="blue">{record.client_label}</Tag>
-          )}
-        </Space>
-      ),
-    },
-    {
-      title: 'Status',
-      dataIndex: 'status',
-      key: 'status',
-      width: 100,
-      render: (status: ClientStatus) => (
-        <Tag color={clientService.getStatusColor(status)}>
-          {clientService.getStatusLabel(status)}
-        </Tag>
-      ),
-    },
-    {
-      title: 'Account Managers',
-      key: 'account_managers',
-      width: 220,
-      render: (_: any, record: ClientSummary) => {
-        if (!record.account_managers || record.account_managers.length === 0) {
-          return (
-            <Tooltip title="Assign mailboxes to account managers from the Mailboxes page">
-              <Text type="secondary" style={{ fontSize: 12 }}>None assigned</Text>
-            </Tooltip>
-          );
-        }
-        return (
-          <Space size={[0, 4]} wrap>
-            {record.account_managers.map((am) => (
-              <Tooltip key={am.id} title={am.email}>
-                <Tag icon={<TeamOutlined />} color="blue">
-                  {am.name}
-                </Tag>
-              </Tooltip>
-            ))}
-          </Space>
-        );
-      },
-    },
-    {
-      title: 'Companies',
-      dataIndex: 'customer_company_count',
-      key: 'customer_company_count',
-      width: 100,
-      align: 'center' as const,
-      render: (count: number) => (
-        <Tooltip title="Customer Companies">
-          <Tag color="geekblue">{count}</Tag>
-        </Tooltip>
-      ),
-    },
-    {
-      title: 'Contacts',
-      dataIndex: 'contact_count',
-      key: 'contact_count',
-      width: 100,
-      align: 'center' as const,
-      render: (count: number) => (
-        <Tooltip title="Customer Contacts">
-          <Tag color="cyan">{count}</Tag>
-        </Tooltip>
-      ),
-    },
-    {
-      title: 'Mailboxes',
-      dataIndex: 'mailbox_count',
-      key: 'mailbox_count',
-      width: 100,
-      align: 'center' as const,
-      render: (count: number) => (
-        <Tooltip title="Connected Mailboxes">
-          <Tag>{count}</Tag>
-        </Tooltip>
-      ),
-    },
-    {
-      title: 'Emails',
-      dataIndex: 'total_emails',
-      key: 'total_emails',
-      width: 100,
-      align: 'right' as const,
-      render: (count: number) => count.toLocaleString(),
-    },
-    {
-      title: 'Actions',
-      key: 'actions',
-      width: 100,
-      render: (_: any, record: ClientSummary) => (
-        <Space size="small">
-          <Tooltip title="Edit">
-            <Button
-              type="text"
-              size="small"
-              icon={<EditOutlined />}
-              onClick={() => openEditModal(record)}
-            />
-          </Tooltip>
-          <Popconfirm
-            title="Delete this client?"
-            description="This will also delete all customer companies, contacts, and rules."
-            onConfirm={() => handleDelete(record.id)}
-            okText="Delete"
-            okButtonProps={{ danger: true }}
-          >
-            <Tooltip title="Delete">
-              <Button
-                type="text"
-                size="small"
-                icon={<DeleteOutlined />}
-                danger
-              />
-            </Tooltip>
-          </Popconfirm>
-        </Space>
-      ),
-    },
-  ];
-
-  // Calculate stats
   const activeClients = clients.filter(c => c.status === 'active').length;
   const totalCompanies = clients.reduce((sum, c) => sum + c.customer_company_count, 0);
   const totalContacts = clients.reduce((sum, c) => sum + c.contact_count, 0);
 
   return (
-    <div className="glass-page-bg" style={{ padding: 24 }}>
-      {/* Breadcrumb */}
-      <Breadcrumb className="fade-in-up" style={{ marginBottom: 16 }}>
-        <Breadcrumb.Item>
-          <Link to="/"><HomeOutlined /> Home</Link>
-        </Breadcrumb.Item>
-        <Breadcrumb.Item>
-          <TeamOutlined /> Clients
-        </Breadcrumb.Item>
-      </Breadcrumb>
+    <PageShell>
+      <PageHeader title="Clients" description="Manage consulting clients and customer companies"
+        actions={
+          <div className="flex items-center gap-2">
+            <button onClick={loadClients} disabled={loading}
+              className="h-8 px-3 text-sm rounded-md border border-slate-200 hover:bg-slate-50 inline-flex items-center gap-1.5">
+              <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />Refresh
+            </button>
+            <button onClick={openCreate}
+              className="h-8 px-3 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary-dark inline-flex items-center gap-1.5">
+              <Plus className="h-3.5 w-3.5" />Add Client
+            </button>
+          </div>
+        }
+      />
 
-      {/* Header */}
-      <Row justify="space-between" align="middle" style={{ marginBottom: 24 }} className="fade-in-up">
-        <Col>
-          <Text type="secondary">
-            Manage consulting clients and customer companies
-          </Text>
-        </Col>
-        <Col>
-          <Space>
-            <Button
-              icon={<ReloadOutlined />}
-              onClick={loadClients}
-              loading={loading}
-            >
-              Refresh
-            </Button>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => {
-                setEditingClient(null);
-                form.resetFields();
-                setModalVisible(true);
-              }}
-              className="glass-button-primary"
-            >
-              Add Client
-            </Button>
-          </Space>
-        </Col>
-      </Row>
+      <KPIStrip className="mb-4">
+        <KPICard title="Total Clients" value={total} loading={loading} />
+        <KPICard title="Active" value={activeClients} loading={loading} />
+        <KPICard title="Companies" value={totalCompanies} loading={loading} />
+        <KPICard title="Contacts" value={totalContacts} loading={loading} />
+      </KPIStrip>
 
-      {/* Stats */}
-      <Row gutter={16} style={{ marginBottom: 24 }} className="fade-in-up stagger-1">
-        <Col span={6}>
-          <div className="glass-card" style={{ padding: 24 }}>
-            <Statistic title="Total Clients" value={total} valueStyle={{ color: '#667eea' }} />
-          </div>
-        </Col>
-        <Col span={6}>
-          <div className="glass-card" style={{ padding: 24 }}>
-            <Statistic
-              title="Active Clients"
-              value={activeClients}
-              valueStyle={{ color: '#3f8600' }}
-            />
-          </div>
-        </Col>
-        <Col span={6}>
-          <div className="glass-card" style={{ padding: 24 }}>
-            <Statistic title="Customer Companies" value={totalCompanies} valueStyle={{ color: '#764ba2' }} />
-          </div>
-        </Col>
-        <Col span={6}>
-          <div className="glass-card" style={{ padding: 24 }}>
-            <Statistic title="Customer Contacts" value={totalContacts} valueStyle={{ color: '#fa8c16' }} />
-          </div>
-        </Col>
-      </Row>
-
-      {/* Filters */}
-      <div className="glass-filters fade-in-up stagger-2" style={{ marginBottom: 24 }}>
-        <Row gutter={16}>
-          <Col span={8}>
-            <Text strong>Filter by Status:</Text>
-            <Select
-              style={{ width: '100%', marginTop: 8 }}
-              placeholder="All Statuses"
-              allowClear
-              value={statusFilter}
-              onChange={setStatusFilter}
-            >
-              <Option value="active">Active</Option>
-              <Option value="inactive">Inactive</Option>
-              <Option value="prospect">Prospect</Option>
-            </Select>
-          </Col>
-        </Row>
+      {/* Filter */}
+      <div className="flex items-center gap-2 mb-4">
+        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+          className="h-8 px-2 text-sm rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20">
+          <option value="">All Statuses</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+          <option value="prospect">Prospect</option>
+        </select>
       </div>
 
-      {/* Clients Table */}
-      <div className="glass-table-container fade-in-up stagger-3">
-        <Table
-          dataSource={clients}
-          columns={columns}
-          rowKey="id"
-          loading={loading}
-          pagination={{
-            total,
-            pageSize: 20,
-            showSizeChanger: true,
-            showTotal: (total) => `Total ${total} clients`,
-          }}
-        />
+      {/* Table */}
+      <div className="rounded-lg border bg-white shadow-sm overflow-hidden">
+        {loading && clients.length === 0 ? <ContentSkeleton rows={5} /> : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b bg-slate-50/50">
+                <th className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Client</th>
+                <th className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600 w-20">Status</th>
+                <th className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Account Managers</th>
+                <th className="px-4 py-2.5 text-right text-xs font-bold uppercase tracking-wider text-slate-600 w-20">Companies</th>
+                <th className="px-4 py-2.5 text-right text-xs font-bold uppercase tracking-wider text-slate-600 w-20">Contacts</th>
+                <th className="px-4 py-2.5 text-right text-xs font-bold uppercase tracking-wider text-slate-600 w-20">Emails</th>
+                <th className="px-4 py-2.5 w-20"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {clients.map(client => {
+                const statusVariant = client.status === 'active' ? 'success' : client.status === 'inactive' ? 'neutral' : 'info';
+                return (
+                  <tr key={client.id} className="hover:bg-slate-50/50">
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <Building2 className="h-4 w-4 text-slate-400" />
+                        <span className="font-medium text-slate-900">{client.client_name}</span>
+                        {client.client_label && <span className="text-xs text-slate-400">{client.client_label}</span>}
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5"><StatusBadge variant={statusVariant as any} size="sm">{clientService.getStatusLabel(client.status)}</StatusBadge></td>
+                    <td className="px-4 py-2.5">
+                      {client.account_managers?.length ? (
+                        <div className="flex gap-1 flex-wrap">
+                          {client.account_managers.map(am => (
+                            <span key={am.id} className="inline-flex items-center gap-1 px-1.5 py-0 text-[11px] rounded bg-slate-100 text-slate-600" title={am.email}>
+                              <Users className="h-3 w-3" />{am.name}
+                            </span>
+                          ))}
+                        </div>
+                      ) : <span className="text-xs text-slate-400">None assigned</span>}
+                    </td>
+                    <td className="px-4 py-2.5 text-right tabular-nums">{client.customer_company_count}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums">{client.contact_count}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums">{client.total_emails.toLocaleString()}</td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => openEdit(client)} className="p-1 rounded hover:bg-slate-100" title="Edit">
+                          <Pencil className="h-3.5 w-3.5 text-slate-400" />
+                        </button>
+                        <button onClick={() => handleDelete(client.id)} className="p-1 rounded hover:bg-red-50" title="Delete">
+                          <Trash2 className="h-3.5 w-3.5 text-slate-400 hover:text-destructive" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
 
-      {/* Create/Edit Modal */}
-      <Modal
-        title={editingClient ? 'Edit Client' : 'Add Client'}
-        open={modalVisible}
-        onCancel={() => {
-          setModalVisible(false);
-          form.resetFields();
-          setEditingClient(null);
-        }}
-        footer={null}
-        width={600}
-      >
-        <Form
-          form={form}
-          layout="vertical"
-          onFinish={handleSubmit}
-          initialValues={{ status: 'active' }}
-        >
-          <Form.Item
-            name="client_name"
-            label="Client Name"
-            rules={[{ required: true, message: 'Please enter client name' }]}
-          >
-            <Input placeholder="e.g., ABC Corporation" />
-          </Form.Item>
-
-          <Form.Item
-            name="client_label"
-            label="Short Label"
-            extra="A short identifier for quick reference (e.g., ABC)"
-          >
-            <Input placeholder="e.g., ABC" maxLength={20} />
-          </Form.Item>
-
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                name="status"
-                label="Status"
-                rules={[{ required: true }]}
-              >
-                <Select>
-                  <Option value="active">Active</Option>
-                  <Option value="inactive">Inactive</Option>
-                  <Option value="prospect">Prospect</Option>
-                </Select>
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item label="Account Managers">
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  Managed at mailbox level. Assign mailboxes to account managers from the Mailboxes page.
-                </Text>
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Form.Item
-            name="industry"
-            label="Industry"
-          >
-            <Input placeholder="e.g., Manufacturing, Technology" />
-          </Form.Item>
-
-          <Form.Item
-            name="notes"
-            label="Notes"
-          >
-            <Input.TextArea rows={3} placeholder="Additional notes..." />
-          </Form.Item>
-
-          {/* Internal Domains — only show when editing */}
-          {editingClient && (
-            <div style={{ marginBottom: 24 }}>
-              <Text strong><GlobalOutlined /> Internal Domains</Text>
-              <Text type="secondary" style={{ display: 'block', fontSize: 12, marginBottom: 8 }}>
-                Email domains owned by this client (excluded from customer extraction)
-              </Text>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
-                {internalDomains.map(d => (
-                  <Tag key={d.id} closable onClose={() => handleRemoveDomain(d.id)} color="orange">
-                    {d.domain}
-                  </Tag>
-                ))}
-                {!domainsLoading && internalDomains.length === 0 && (
-                  <Text type="secondary" style={{ fontSize: 12 }}>No internal domains configured</Text>
-                )}
-              </div>
-              <Space.Compact style={{ width: '100%' }}>
-                <Input
-                  placeholder="e.g., carbon8.com.au"
-                  value={newDomain}
-                  onChange={e => setNewDomain(e.target.value)}
-                  onPressEnter={handleAddDomain}
-                  style={{ flex: 1 }}
-                />
-                <Button type="primary" onClick={handleAddDomain} disabled={!newDomain.trim()}>
-                  Add
-                </Button>
-              </Space.Compact>
+      {/* Create/Edit Dialog */}
+      <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>{editingClient ? 'Edit Client' : 'Add Client'}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="text-sm font-medium text-slate-700 block mb-1">Client Name *</label>
+              <input value={formName} onChange={e => setFormName(e.target.value)} placeholder="e.g., ABC Corporation" required
+                className="w-full h-9 px-3 text-sm rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20" />
             </div>
-          )}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium text-slate-700 block mb-1">Short Label</label>
+                <input value={formLabel} onChange={e => setFormLabel(e.target.value)} placeholder="e.g., ABC" maxLength={20}
+                  className="w-full h-9 px-3 text-sm rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20" />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-slate-700 block mb-1">Status</label>
+                <select value={formStatus} onChange={e => setFormStatus(e.target.value)}
+                  className="w-full h-9 px-3 text-sm rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20">
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                  <option value="prospect">Prospect</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-slate-700 block mb-1">Industry</label>
+              <input value={formIndustry} onChange={e => setFormIndustry(e.target.value)} placeholder="e.g., Manufacturing"
+                className="w-full h-9 px-3 text-sm rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20" />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-slate-700 block mb-1">Notes</label>
+              <textarea value={formNotes} onChange={e => setFormNotes(e.target.value)} rows={2} placeholder="Additional notes..."
+                className="w-full px-3 py-2 text-sm rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20" />
+            </div>
 
-          <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
-            <Space>
-              <Button onClick={() => setModalVisible(false)}>
-                Cancel
-              </Button>
-              <Button type="primary" htmlType="submit">
+            {/* Internal Domains — edit mode only */}
+            {editingClient && (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Globe className="h-3.5 w-3.5 text-slate-500" />
+                  <label className="text-sm font-medium text-slate-700">Internal Domains</label>
+                </div>
+                <p className="text-xs text-slate-400 mb-2">Email domains owned by this client (excluded from customer extraction)</p>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {internalDomains.map(d => (
+                    <span key={d.id} className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-warning-subtle text-warning">
+                      {d.domain}
+                      <button onClick={() => handleRemoveDomain(d.id)} className="hover:text-destructive"><X className="h-3 w-3" /></button>
+                    </span>
+                  ))}
+                  {internalDomains.length === 0 && <span className="text-xs text-slate-400">No internal domains</span>}
+                </div>
+                <div className="flex gap-2">
+                  <input value={newDomain} onChange={e => setNewDomain(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddDomain())}
+                    placeholder="e.g., carbon8.com.au"
+                    className="flex-1 h-8 px-3 text-sm rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                  <button type="button" onClick={handleAddDomain} disabled={!newDomain.trim()}
+                    className="h-8 px-3 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary-dark disabled:opacity-50">Add</button>
+                </div>
+              </div>
+            )}
+
+            <DialogFooter>
+              <button type="button" onClick={() => setModalOpen(false)}
+                className="h-9 px-4 text-sm rounded-md border border-slate-200 hover:bg-slate-50">Cancel</button>
+              <button type="submit" disabled={saving}
+                className="h-9 px-4 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary-dark disabled:opacity-50 inline-flex items-center gap-2">
+                {saving && <Spinner className="h-3.5 w-3.5 animate-spin" />}
                 {editingClient ? 'Update' : 'Create'}
-              </Button>
-            </Space>
-          </Form.Item>
-        </Form>
-      </Modal>
-    </div>
+              </button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </PageShell>
   );
 };
 
