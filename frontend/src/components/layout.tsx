@@ -127,28 +127,32 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
 
   const filteredNav = navItems.filter(item => !item.adminOnly || isAdmin);
 
-  // Desktop nav item renderer
+  // Desktop nav item renderer — premium pill style
   const NavLink = ({ item }: { item: NavItem }) => {
     if (item.children) {
+      const active = item.children.some(c => isActive(c.href));
       return (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className={cn(
-              'inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors',
-              item.children.some(c => isActive(c.href))
-                ? 'text-primary bg-primary/5'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50',
+              'inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-medium rounded-full transition-all duration-200',
+              active
+                ? 'text-primary bg-primary/8 shadow-sm'
+                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100/80',
             )}>
               {item.icon}
               {item.label}
-              <ChevronDown className="h-3 w-3 opacity-50" />
+              <ChevronDown className="h-3 w-3 opacity-40" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-52">
+          <DropdownMenuContent align="start" className="w-56 shadow-lg border-slate-200/80">
             {item.children.map(child => (
               <DropdownMenuItem key={child.href} onClick={() => navigate(child.href)}
-                className={cn(isActive(child.href) && 'bg-primary/5 text-primary')}>
-                {child.icon && <span className="mr-2">{child.icon}</span>}
+                className={cn(
+                  'gap-2 py-2',
+                  isActive(child.href) && 'bg-primary/5 text-primary font-medium',
+                )}>
+                {child.icon && <span className="opacity-60">{child.icon}</span>}
                 {child.label}
               </DropdownMenuItem>
             ))}
@@ -159,8 +163,10 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
 
     return (
       <Link to={item.href!} className={cn(
-        'inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors',
-        isActive(item.href) ? 'text-primary bg-primary/5' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50',
+        'inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-medium rounded-full transition-all duration-200',
+        isActive(item.href)
+          ? 'text-primary bg-primary/8 shadow-sm'
+          : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100/80',
       )}>
         {item.icon}
         {item.label}
@@ -171,11 +177,11 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
       {/* Top bar */}
-      <header className="sticky top-0 z-50 w-full border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
+      <header className="sticky top-0 z-50 w-full bg-white border-b border-slate-200/60 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
         {/* Accent bar */}
-        <div className="h-[3px] bg-gradient-to-r from-primary to-accent" />
+        <div className="h-[2px] bg-gradient-to-r from-primary via-accent to-primary/60" />
 
-        <div className="flex h-14 items-center px-4 gap-4">
+        <div className="flex h-12 items-center px-5 gap-5">
           {/* Mobile menu trigger */}
           {isMobile && (
             <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
@@ -261,14 +267,23 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
           )}
 
           {/* Brand */}
-          <Link to="/" className="flex items-center gap-2 shrink-0">
-            <span className="text-lg">📧</span>
-            {!isMobile && <span className="text-sm font-semibold text-slate-900">Email Intelligence</span>}
+          <Link to="/" className="flex items-center gap-2.5 shrink-0 group">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-sm group-hover:shadow-md transition-shadow">
+              <Mail className="h-3.5 w-3.5 text-white" />
+            </div>
+            {!isMobile && (
+              <span className="text-[13px] font-bold text-slate-800 tracking-tight">
+                Email Intelligence
+              </span>
+            )}
           </Link>
+
+          {/* Nav divider */}
+          {!isMobile && <div className="w-px h-5 bg-slate-200" />}
 
           {/* Desktop nav */}
           {!isMobile && (
-            <nav className="flex items-center gap-1 ml-4">
+            <nav className="flex items-center gap-0.5">
               {filteredNav.map(item => <NavLink key={item.label} item={item} />)}
             </nav>
           )}
@@ -279,18 +294,18 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
           {/* User menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-slate-50 transition-colors">
-                <Avatar className="h-8 w-8">
+              <button className="flex items-center gap-2 px-2 py-1 rounded-full hover:bg-slate-100/80 transition-all duration-200 border border-transparent hover:border-slate-200/60">
+                <Avatar className="h-7 w-7">
                   <AvatarImage src={profile?.avatarUrl} />
-                  <AvatarFallback className="bg-primary text-white text-xs">{getUserInitials()}</AvatarFallback>
+                  <AvatarFallback className="bg-primary text-white text-[10px] font-medium">{getUserInitials()}</AvatarFallback>
                 </Avatar>
                 {!isMobile && (
                   <>
                     <div className="text-left">
-                      <span className="text-sm font-medium text-slate-700 block leading-tight">{profile?.name || 'User'}</span>
+                      <span className="text-[13px] font-medium text-slate-700 block leading-tight">{profile?.name || 'User'}</span>
                       {clientName && <span className="text-[10px] text-slate-400 block leading-tight">{clientName}</span>}
                     </div>
-                    <ChevronDown className="h-3 w-3 text-slate-400" />
+                    <ChevronDown className="h-3 w-3 text-slate-300" />
                   </>
                 )}
               </button>
@@ -336,7 +351,7 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
       </header>
 
       {/* Main content */}
-      <main className="min-h-[calc(100vh-61px)]">
+      <main className="min-h-[calc(100vh-56px)]">
         {children}
       </main>
     </div>
