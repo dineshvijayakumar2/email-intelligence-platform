@@ -134,7 +134,7 @@ export const ContactsAnalytics: React.FC = () => {
           <button onClick={() => { setSearch(''); setDebouncedSearch(''); setQbLinked(false); setContactsPage(1); }}
             className="inline-flex items-center gap-1 text-xs text-primary hover:underline"><X className="h-3 w-3" />Clear</button>
         )}
-        <span className="text-xs text-slate-400 ml-auto tabular-nums">{contactsTotal.toLocaleString()} contacts</span>
+        <span className="text-xs text-slate-400 ml-auto tabular-nums">{contactsTotal.toLocaleString('en-AU')} contacts</span>
       </div>
 
       <DataTable<ContactAnalytics>

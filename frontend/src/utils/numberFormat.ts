@@ -85,6 +85,16 @@ export function formatCurrencyCompact(
   return `${meta.symbol}${formatted}${suffix}`;
 }
 
+/**
+ * Format a plain number with locale-correct thousand separators.
+ * Always uses en-AU format (123,456) regardless of browser locale.
+ * Use this instead of .toLocaleString() to avoid Indian format (1,23,456).
+ */
+export function formatNumber(value: number | null | undefined): string {
+  if (value == null) return '0';
+  return new Intl.NumberFormat('en-AU').format(value);
+}
+
 /** Options list for the currency selector in the settings page. */
 export const CURRENCY_OPTIONS = [
   { label: 'AUD — Australian Dollar ($)', value: 'AUD' },

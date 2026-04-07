@@ -103,7 +103,7 @@ const AdminDataViewPage: React.FC = () => {
         <select value={selectedTable} onChange={e => handleTableSelect(e.target.value)} disabled={tablesLoading}
           className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 min-w-[300px]">
           <option value="">Select a table...</option>
-          {tables.map(t => <option key={t.table_name} value={t.table_name}>{t.display_name} ({t.row_count >= 0 ? t.row_count.toLocaleString() : '?'} rows)</option>)}
+          {tables.map(t => <option key={t.table_name} value={t.table_name}>{t.display_name} ({t.row_count >= 0 ? t.row_count.toLocaleString('en-AU') : '?'} rows)</option>)}
         </select>
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
@@ -129,7 +129,7 @@ const AdminDataViewPage: React.FC = () => {
       </div>
 
       {selectedTable && tableData && (
-        <p className="text-xs text-slate-500 mb-2">{tableData.total.toLocaleString()} total rows{searchText && ` (filtered by "${searchText}")`}</p>
+        <p className="text-xs text-slate-500 mb-2">{tableData.total.toLocaleString('en-AU')} total rows{searchText && ` (filtered by "${searchText}")`}</p>
       )}
 
       {/* Table */}
@@ -172,7 +172,7 @@ const AdminDataViewPage: React.FC = () => {
                 </table>
               </div>
               <div className="flex items-center justify-between px-4 py-3 border-t bg-slate-50/30">
-                <span className="text-xs text-slate-500">{((currentPage - 1) * pageSize + 1).toLocaleString()}–{Math.min(currentPage * pageSize, tableData.total).toLocaleString()} of {tableData.total.toLocaleString()}</span>
+                <span className="text-xs text-slate-500">{((currentPage - 1) * pageSize + 1).toLocaleString('en-AU')}–{Math.min(currentPage * pageSize, tableData.total).toLocaleString('en-AU')} of {tableData.total.toLocaleString('en-AU')}</span>
                 <div className="flex items-center gap-1">
                   <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage <= 1} className="p-1.5 rounded hover:bg-slate-100 disabled:opacity-30"><ChevronLeft className="h-4 w-4" /></button>
                   <span className="text-xs text-slate-600 px-2 tabular-nums">{currentPage} / {totalPages}</span>

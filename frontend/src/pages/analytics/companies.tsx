@@ -200,7 +200,7 @@ export const CompaniesAnalytics: React.FC = () => {
             <X className="h-3 w-3" /> Clear
           </button>
         )}
-        <span className="text-xs text-slate-400 ml-auto tabular-nums">{total.toLocaleString()} companies</span>
+        <span className="text-xs text-slate-400 ml-auto tabular-nums">{total.toLocaleString('en-AU')} companies</span>
       </div>
 
       {/* Table */}

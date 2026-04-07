@@ -194,7 +194,7 @@ export const ThreadAnalytics: React.FC = () => {
             <X className="h-3 w-3" /> Clear
           </button>
         )}
-        <span className="text-xs text-slate-400 ml-auto tabular-nums">{threadsTotal.toLocaleString()} threads</span>
+        <span className="text-xs text-slate-400 ml-auto tabular-nums">{threadsTotal.toLocaleString('en-AU')} threads</span>
       </div>
 
       <DataTable<ThreadStatusSummary>

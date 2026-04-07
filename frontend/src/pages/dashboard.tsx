@@ -132,7 +132,7 @@ export const Dashboard: React.FC = () => {
                           </StatusBadge>
                         </div>
                         <div className="flex items-center gap-3 mt-0.5">
-                          <span className="text-xs text-slate-500">{mb.emailCount.toLocaleString()} emails</span>
+                          <span className="text-xs text-slate-500">{mb.emailCount.toLocaleString('en-AU')} emails</span>
                           <span className="text-xs text-slate-400">
                             {mb.lastSync ? `Synced ${dashboardService.formatRelativeTime(mb.lastSync)}` : 'Never synced'}
                           </span>

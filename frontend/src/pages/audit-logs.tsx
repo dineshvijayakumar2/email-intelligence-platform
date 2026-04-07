@@ -150,7 +150,7 @@ const AuditLogsPage: React.FC = () => {
         )}
         {total > pageSize && (
           <div className="flex items-center justify-between px-4 py-3 border-t bg-slate-50/30">
-            <span className="text-xs text-slate-500">{total.toLocaleString()} entries</span>
+            <span className="text-xs text-slate-500">{total.toLocaleString('en-AU')} entries</span>
             <div className="flex items-center gap-1">
               <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1} className="p-1.5 rounded hover:bg-slate-100 disabled:opacity-30"><ChevronLeft className="h-4 w-4" /></button>
               <span className="text-xs text-slate-600 px-2 tabular-nums">{page} / {totalPages}</span>

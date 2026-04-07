@@ -190,7 +190,7 @@ const ClientsPage: React.FC = () => {
                     </td>
                     <td className="px-4 py-2.5 text-right tabular-nums">{client.customer_company_count}</td>
                     <td className="px-4 py-2.5 text-right tabular-nums">{client.contact_count}</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums">{client.total_emails.toLocaleString()}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums">{client.total_emails.toLocaleString('en-AU')}</td>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center gap-1">
                         <button onClick={() => openEdit(client)} className="p-1 rounded hover:bg-slate-100" title="Edit">

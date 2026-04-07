@@ -294,7 +294,7 @@ export const EmailList: React.FC = () => {
             <div className="flex items-center justify-between px-4 py-2 border-b bg-slate-50/50">
               <span className="text-xs text-slate-500">
                 {loading && displayEmails.length === 0 ? 'Loading...'
-                  : `${totalCount.toLocaleString()} email${totalCount !== 1 ? 's' : ''}${folderFilter ? ` · ${folderFilter}` : ''}`}
+                  : `${totalCount.toLocaleString('en-AU')} email${totalCount !== 1 ? 's' : ''}${folderFilter ? ` · ${folderFilter}` : ''}`}
               </span>
               {!isAnalyticsMode && totalCount > pageSize && (
                 <div className="flex items-center gap-1">

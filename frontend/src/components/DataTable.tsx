@@ -137,7 +137,7 @@ export function DataTable<T>({
       {total > pageSize && onPageChange && (
         <div className="flex items-center justify-between px-4 py-3 border-t bg-slate-50/30">
           <span className="text-xs text-slate-500">
-            {((currentPage - 1) * pageSize + 1).toLocaleString()}–{Math.min(currentPage * pageSize, total).toLocaleString()} of {total.toLocaleString()}
+            {((currentPage - 1) * pageSize + 1).toLocaleString('en-AU')}–{Math.min(currentPage * pageSize, total).toLocaleString('en-AU')} of {total.toLocaleString('en-AU')}
           </span>
           <div className="flex items-center gap-1">
             <button

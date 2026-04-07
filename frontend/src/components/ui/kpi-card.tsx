@@ -61,7 +61,7 @@ export function KPICard({
       <div className="flex items-baseline gap-1">
         {prefix && <span className="text-sm text-slate-500">{prefix}</span>}
         <span className="text-2xl font-semibold tabular-nums text-slate-900">
-          {typeof value === 'number' ? value.toLocaleString() : value}
+          {typeof value === 'number' ? new Intl.NumberFormat('en-AU').format(value) : value}
         </span>
         {suffix && <span className="text-sm text-slate-500">{suffix}</span>}
       </div>
