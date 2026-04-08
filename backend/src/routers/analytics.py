@@ -1765,8 +1765,39 @@ async def list_thread_statuses(
             except Exception:
                 pass
 
-        threads = []
+        # Dedup by canonical_thread_id + normalized subject (cross-mailbox merge)
+        import re as _re
+        _SUBJECT_STRIP = _re.compile(r'^(re|fwd?|fw):\s*', _re.IGNORECASE)
+
+        def _norm_subject(s: str | None) -> str:
+            if not s:
+                return ''
+            return _SUBJECT_STRIP.sub('', s.strip()).strip().lower()
+
+        seen_threads: dict[str, dict] = {}  # dedup key → best row
         for t in result.data:
+            canon = t.get('canonical_thread_id') or t.get('thread_id') or ''
+            subj_norm = _norm_subject(t.get('subject'))
+            dedup_key = f"{canon}|{subj_norm}" if canon else subj_norm
+
+            existing = seen_threads.get(dedup_key)
+            if existing:
+                # Merge: keep higher message count, most recent date
+                existing_count = existing.get('message_count', 0) or 0
+                new_count = t.get('message_count', 0) or 0
+                if new_count > existing_count:
+                    seen_threads[dedup_key] = t
+                elif new_count == existing_count:
+                    # Keep the one with most recent last_message_at
+                    existing_date = existing.get('last_message_at') or ''
+                    new_date = t.get('last_message_at') or ''
+                    if new_date > existing_date:
+                        seen_threads[dedup_key] = t
+            else:
+                seen_threads[dedup_key] = t
+
+        threads = []
+        for t in seen_threads.values():
             thread_data = {
                 'thread_id': t.get('canonical_thread_id') or t.get('thread_id'),
                 'subject': t.get('subject'),
@@ -1794,10 +1825,12 @@ async def list_thread_statuses(
 
             threads.append(thread)
 
-        # Get total count (same filters)
+        # Get total count (same filters — must match main query exactly)
         count_query = _supabase.table('thread_status').select('thread_id', count='exact')
         if client_id and mailbox_ids:
-            count_query = count_query.in_('mailbox_id', mailbox_ids[:500])
+            # Match main query: include both mailbox-specific AND null-mailbox threads
+            mb_filter_count = ','.join(f"mailbox_id.eq.{mid}" for mid in mailbox_ids[:100])
+            count_query = count_query.or_(f"{mb_filter_count},mailbox_id.is.null")
         elif mailbox_id:
             count_query = count_query.eq('mailbox_id', mailbox_id)
         if status and status_db_values:
@@ -1809,7 +1842,7 @@ async def list_thread_statuses(
             term = _sanitize_search_term(search.strip())
             count_query = count_query.ilike('subject', f'%{term}%')
         count_result = count_query.execute()
-        total = count_result.count if count_result.count else len(count_result.data)
+        total = count_result.count if count_result.count is not None else len(count_result.data or [])
 
         return ThreadStatusListResponse(threads=threads, total=total)
 

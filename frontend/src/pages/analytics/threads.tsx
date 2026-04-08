@@ -118,7 +118,12 @@ export const ThreadAnalytics: React.FC = () => {
       },
     }),
     col.accessor('contact_name', { header: 'Contact',
-      cell: info => <span className="text-slate-600">{info.getValue() || info.row.original.contact_email || '—'}</span>,
+      cell: info => {
+        let name = info.getValue() || info.row.original.contact_email || '—';
+        // Strip company suffix like "Peter Musarra | Carbon8"
+        if (name.includes(' | ')) name = name.split(' | ')[0];
+        return <span className="text-slate-600">{name}</span>;
+      },
     }),
     col.accessor('company_name', { header: 'Company',
       cell: info => <span className="text-slate-600">{info.getValue() || '—'}</span>,

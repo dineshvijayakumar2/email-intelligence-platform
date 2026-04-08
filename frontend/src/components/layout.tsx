@@ -122,6 +122,10 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
   const isActive = (href?: string) => {
     if (!href) return false;
     if (href === '/') return location.pathname === '/';
+    // Exact match for leaf items, startsWith for prefix routes
+    // But /customers should NOT match /customers/threads (threads is under Emails now)
+    if (href === '/customers' && location.pathname.startsWith('/customers/threads')) return false;
+    if (href === '/customers/contacts' && location.pathname === '/customers/contacts') return true;
     return location.pathname.startsWith(href);
   };
 
