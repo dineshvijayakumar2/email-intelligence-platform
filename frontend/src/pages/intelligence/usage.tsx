@@ -82,6 +82,11 @@ const UsagePage: React.FC = () => {
   const [openaiKey, setOpenaiKey] = useState('');
   const [apiKeysSaving, setApiKeysSaving] = useState(false);
 
+  // Embedding config state
+  const [embeddingConfig, setEmbeddingConfig] = useState<any>(null);
+  const [embeddingProvider, setEmbeddingProvider] = useState('google');
+  const [embeddingSaving, setEmbeddingSaving] = useState(false);
+
   // Re-analyze state
   const [reanalyzeMailbox, setReanalyzeMailbox] = useState<string[]>([]);
   const [reanalyzeVersion, setReanalyzeVersion] = useState('v1.2');
@@ -110,6 +115,32 @@ const UsagePage: React.FC = () => {
   const clientSettings = clientSettingsQuery.data || {};
   const cheapModel = clientSettings['ai_cheap_model'] || controls?.cheap_model || 'haiku';
   const strategicModel = clientSettings['ai_strategic_model'] || controls?.strategic_model || 'sonnet';
+
+  // Load embedding config
+  React.useEffect(() => {
+    if (!clientId) return;
+    api.get<any>(`/v1/ai/embedding-config?client_id=${clientId}`).then((cfg) => {
+      if (cfg) {
+        setEmbeddingConfig(cfg);
+        setEmbeddingProvider(cfg.provider || 'google');
+      }
+    }).catch(() => {});
+  }, [clientId]);
+
+  const handleEmbeddingProviderChange = async (provider: string) => {
+    setEmbeddingProvider(provider);
+    setEmbeddingSaving(true);
+    try {
+      await api.put('/v1/ai/embedding-config', { provider, client_id: clientId });
+      const cfg = await api.get<any>(`/v1/ai/embedding-config?client_id=${clientId}`);
+      if (cfg) setEmbeddingConfig(cfg);
+      toast.success(`Embedding provider set to ${provider === 'openai' ? 'OpenAI' : 'Google Gemini'}`);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to update embedding provider');
+    } finally {
+      setEmbeddingSaving(false);
+    }
+  };
 
   // Manual refresh handler
   const loadData = () => {
@@ -466,6 +497,52 @@ const UsagePage: React.FC = () => {
                 <hr className="border-slate-100" />
               </>
             )}
+
+            {/* Embedding Configuration */}
+            <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Embedding Provider</h4>
+            <div className="grid grid-cols-2 gap-4 mb-1">
+              <div>
+                <p className="text-[11px] text-slate-500 mb-1">Vector embedding model for semantic search</p>
+                <select
+                  value={embeddingProvider}
+                  onChange={(e) => handleEmbeddingProviderChange(e.target.value)}
+                  disabled={embeddingSaving}
+                  className="w-full rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700 shadow-sm focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 disabled:opacity-50"
+                >
+                  <option value="google">Google Gemini (gemini-embedding-001)</option>
+                  <option value="openai">OpenAI (text-embedding-3-small)</option>
+                </select>
+              </div>
+              <div>
+                <p className="text-[11px] text-slate-500 mb-1">Status</p>
+                <div className="flex items-center gap-2 h-[30px]">
+                  {embeddingConfig ? (
+                    <>
+                      <span className={`inline-block h-2 w-2 rounded-full ${
+                        embeddingProvider === 'openai'
+                          ? (apiKeys?.openai_set ? 'bg-emerald-500' : 'bg-red-500')
+                          : (apiKeys?.google_set ? 'bg-emerald-500' : 'bg-amber-500')
+                      }`} />
+                      <span className="text-xs text-slate-600">
+                        {embeddingProvider === 'openai'
+                          ? (apiKeys?.openai_set ? 'OpenAI key configured' : 'OpenAI key required — set above')
+                          : (apiKeys?.google_set ? 'Google key configured' : 'Using env var')}
+                      </span>
+                      {embeddingConfig.provider_source === 'db' && (
+                        <span className="text-[10px] text-slate-400 ml-auto">saved in DB</span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-xs text-slate-400">Loading...</span>
+                  )}
+                </div>
+              </div>
+            </div>
+            <p className="text-[10px] text-slate-400 mb-2">
+              Both produce 768-dim vectors. Switch to OpenAI if Google hits 503 errors. Existing embeddings remain valid.
+            </p>
+
+            <hr className="border-slate-100" />
 
             {/* Budget Controls */}
             <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Budget Limits</h4>

@@ -84,6 +84,15 @@ def _get_embedding_model():
 
 
 # ---------------------------------------------------------------------------
+def reset_embedding_model():
+    """Clear the cached embedding model so next call picks up new provider/config."""
+    global _embedding_model_cache, EMBEDDING_PROVIDER
+    _embedding_model_cache = None
+    EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "google").lower()
+    logger.info(f"Embedding model cache cleared. Provider will be resolved on next call.")
+
+
+# ---------------------------------------------------------------------------
 # Core helpers
 # ---------------------------------------------------------------------------
 

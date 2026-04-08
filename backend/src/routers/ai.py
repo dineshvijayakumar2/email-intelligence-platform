@@ -1745,6 +1745,62 @@ async def update_default_models(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.get("/embedding-config")
+async def get_embedding_config(
+    client_id: Optional[str] = Query(default=None),
+    current_user: dict = Depends(require_role('admin')),
+):
+    """Get current embedding provider configuration. DB > env var fallback."""
+    import os
+    db_provider = _get_client_setting('embedding_provider', client_id)
+    db_model = _get_client_setting('embedding_model', client_id)
+
+    provider = db_provider or os.getenv("EMBEDDING_PROVIDER", "google")
+    model = db_model
+    if not model:
+        model = "text-embedding-3-small" if provider == "openai" else "models/gemini-embedding-001"
+
+    return {
+        "provider": provider,
+        "provider_source": "db" if db_provider else "env",
+        "model": model,
+        "model_source": "db" if db_model else "default",
+        "available_providers": [
+            {"value": "google", "label": "Google Gemini (gemini-embedding-001)", "requires": "Google API Key"},
+            {"value": "openai", "label": "OpenAI (text-embedding-3-small)", "requires": "OpenAI API Key"},
+        ],
+    }
+
+
+@router.put("/embedding-config")
+async def update_embedding_config(
+    data: dict,
+    current_user: dict = Depends(require_role('admin')),
+):
+    """Update embedding provider. Clears model cache so next embed call uses new provider."""
+    client_id = data.get("client_id")
+    provider = data.get("provider", "").lower()
+
+    if provider not in ("google", "openai"):
+        raise HTTPException(status_code=400, detail=f"Invalid provider: {provider}. Must be 'google' or 'openai'.")
+
+    _upsert_client_setting('embedding_provider', provider, client_id)
+
+    model = data.get("model")
+    if model:
+        _upsert_client_setting('embedding_model', model, client_id)
+
+    # Clear the cached model so next embed call picks up the new provider
+    from ..services.vector_service import reset_embedding_model
+    reset_embedding_model()
+
+    # Also set env var for immediate use
+    import os
+    os.environ["EMBEDDING_PROVIDER"] = provider
+
+    return {"status": "ok", "provider": provider, "model": model, "client_id": client_id}
+
+
 def _load_persisted_api_keys():
     """No-op: API keys are per-client now. Env vars serve as baseline."""
     logger.info("API keys are per-client (system_settings). Env vars used as baseline.")
