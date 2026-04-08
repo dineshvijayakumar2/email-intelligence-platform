@@ -1765,34 +1765,58 @@ async def list_thread_statuses(
             except Exception:
                 pass
 
-        # Dedup by canonical_thread_id + normalized subject (cross-mailbox merge)
+        # Two-pass dedup to eliminate cross-mailbox duplicates:
+        #  Pass 1: by canonical_thread_id (exact thread merge)
+        #  Pass 2: by normalized subject + contact (catches same conversation across mailboxes)
         import re as _re
         _SUBJECT_STRIP = _re.compile(r'^(re|fwd?|fw):\s*', _re.IGNORECASE)
 
         def _norm_subject(s: str | None) -> str:
             if not s:
                 return ''
-            return _SUBJECT_STRIP.sub('', s.strip()).strip().lower()
+            cleaned = _SUBJECT_STRIP.sub('', s.strip()).strip().lower()
+            # Strip again for multiple prefixes like "Re: Fwd: ..."
+            while _SUBJECT_STRIP.match(cleaned):
+                cleaned = _SUBJECT_STRIP.sub('', cleaned).strip()
+            return cleaned
 
-        seen_threads: dict[str, dict] = {}  # dedup key → best row
+        def _merge_thread(existing: dict, new_row: dict) -> dict:
+            """Keep the row with higher message count, or most recent date."""
+            existing_count = existing.get('message_count', 0) or 0
+            new_count = new_row.get('message_count', 0) or 0
+            if new_count > existing_count:
+                return new_row
+            if new_count == existing_count:
+                if (new_row.get('last_message_at') or '') > (existing.get('last_message_at') or ''):
+                    return new_row
+            return existing
+
+        # Pass 1: dedup by canonical_thread_id
+        canon_map: dict[str, dict] = {}
+        no_canon: list[dict] = []
         for t in result.data:
-            canon = t.get('canonical_thread_id') or t.get('thread_id') or ''
-            subj_norm = _norm_subject(t.get('subject'))
-            dedup_key = f"{canon}|{subj_norm}" if canon else subj_norm
+            canon = t.get('canonical_thread_id') or ''
+            if canon:
+                if canon in canon_map:
+                    canon_map[canon] = _merge_thread(canon_map[canon], t)
+                else:
+                    canon_map[canon] = t
+            else:
+                no_canon.append(t)
 
-            existing = seen_threads.get(dedup_key)
-            if existing:
-                # Merge: keep higher message count, most recent date
-                existing_count = existing.get('message_count', 0) or 0
-                new_count = t.get('message_count', 0) or 0
-                if new_count > existing_count:
-                    seen_threads[dedup_key] = t
-                elif new_count == existing_count:
-                    # Keep the one with most recent last_message_at
-                    existing_date = existing.get('last_message_at') or ''
-                    new_date = t.get('last_message_at') or ''
-                    if new_date > existing_date:
-                        seen_threads[dedup_key] = t
+        after_pass1 = list(canon_map.values()) + no_canon
+
+        # Pass 2: dedup by normalized subject + contact_id (catches cross-mailbox same conversation)
+        seen_threads: dict[str, dict] = {}
+        for t in after_pass1:
+            subj_norm = _norm_subject(t.get('subject'))
+            contact_id = t.get('customer_contact_id') or ''
+            company_id = t.get('customer_company_id') or ''
+            # Key: subject + contact (or subject + company if no contact)
+            dedup_key = f"{subj_norm}|{contact_id or company_id}"
+
+            if dedup_key in seen_threads:
+                seen_threads[dedup_key] = _merge_thread(seen_threads[dedup_key], t)
             else:
                 seen_threads[dedup_key] = t
 
