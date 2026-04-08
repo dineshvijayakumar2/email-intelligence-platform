@@ -6,13 +6,17 @@ import { ChartCard } from '../../components/analytics/ChartCard';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { ContentSkeleton } from '@/components/ui/empty-state';
 import { PageShell, PageHeader } from '@/components/ui/page-shell';
+import { Spinner } from '@/lib/icons';
+import { toast } from '@/lib/toast';
+import { formatNumber } from '../../utils/numberFormat';
 import {
   dataHealthApi,
   type MailboxHealth,
   type DataHealthResponse,
   type ExtractionJobHealth,
 } from '../../services/analyticsService';
-import { CheckCircle, AlertTriangle, XCircle, RefreshCw, Database } from 'lucide-react';
+import api from '../../services/apiClient';
+import { CheckCircle, AlertTriangle, XCircle, RefreshCw, Database, GitMerge } from 'lucide-react';
 
 const THREAD_COLORS: Record<string, string> = {
   complete: '#10b981', awaiting_response: '#667eea', awaiting_our_response: '#f59e0b',
@@ -58,6 +62,52 @@ export const DataHealthDashboard: React.FC = () => {
     };
     load();
   }, [clientId]);
+
+  // Thread recompute state
+  const [recomputing, setRecomputing] = useState(false);
+  const [recomputeProgress, setRecomputeProgress] = useState<{ phase: string; pct: number; message: string } | null>(null);
+  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const startRecompute = async () => {
+    if (!clientId || recomputing) return;
+    setRecomputing(true);
+    setRecomputeProgress({ phase: 'starting', pct: 0, message: 'Starting thread recompute...' });
+    try {
+      await api.post(`/v1/analytics/extraction/recompute-threads?client_id=${clientId}`);
+      // Start polling for progress
+      const poll = async () => {
+        try {
+          const prog = await api.get<any>(`/v1/analytics/extraction/thread-recompute-progress?client_id=${clientId}`);
+          setRecomputeProgress(prog);
+          if (prog.phase === 'completed') {
+            setRecomputing(false);
+            toast.success(prog.message || 'Thread recompute complete');
+            // Reload data health
+            const result = await dataHealthApi.get(clientId);
+            if (isMountedRef.current) setData(result);
+            return;
+          }
+          if (prog.phase === 'failed') {
+            setRecomputing(false);
+            toast.error(prog.message || 'Thread recompute failed');
+            return;
+          }
+          pollRef.current = setTimeout(poll, 3000);
+        } catch {
+          pollRef.current = setTimeout(poll, 5000);
+        }
+      };
+      pollRef.current = setTimeout(poll, 2000);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to start recompute');
+      setRecomputing(false);
+      setRecomputeProgress(null);
+    }
+  };
+
+  useEffect(() => {
+    return () => { if (pollRef.current) clearTimeout(pollRef.current); };
+  }, []);
 
   const coveragePct = data?.identity_resolution?.coverage_percent ?? 0;
   const coverageColor = coveragePct >= 90 ? 'text-success' : coveragePct >= 70 ? 'text-warning' : 'text-destructive';
@@ -146,6 +196,84 @@ export const DataHealthDashboard: React.FC = () => {
           </ChartCard>
         </div>
       </div>
+
+      {/* Thread Health */}
+      {data && (
+        <div className="rounded-lg border bg-white shadow-sm p-4 mb-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <GitMerge className="h-4 w-4 text-primary" />
+              <h3 className="text-sm font-semibold text-slate-900">Thread Health</h3>
+            </div>
+            <button
+              onClick={startRecompute}
+              disabled={recomputing || !clientId}
+              className="h-7 px-3 text-xs font-medium rounded-md border border-slate-200 hover:bg-slate-50 inline-flex items-center gap-1.5 disabled:opacity-50"
+            >
+              {recomputing ? <Spinner className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+              Recompute Threads
+            </button>
+          </div>
+
+          {/* Progress bar */}
+          {recomputing && recomputeProgress && (
+            <div className="mb-3">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs text-slate-500">{recomputeProgress.message}</span>
+                <span className="text-xs tabular-nums text-slate-400">{recomputeProgress.pct}%</span>
+              </div>
+              <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-primary transition-all"
+                  style={{ width: `${recomputeProgress.pct}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Thread stats */}
+          {(() => {
+            const th = (data as any).thread_health;
+            if (!th) return null;
+            const hasDupes = th.duplicate_rows > 0;
+            return (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                  <p className="text-xs text-slate-500">Total Rows</p>
+                  <p className="text-lg font-semibold tabular-nums">{formatNumber(th.total_rows)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Unique Threads</p>
+                  <p className="text-lg font-semibold tabular-nums">{formatNumber(th.unique_threads)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Duplicate Rows</p>
+                  <p className={`text-lg font-semibold tabular-nums ${hasDupes ? 'text-destructive' : 'text-success'}`}>
+                    {formatNumber(th.duplicate_rows)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Duplication Rate</p>
+                  <p className={`text-lg font-semibold tabular-nums ${th.duplicate_pct > 5 ? 'text-destructive' : th.duplicate_pct > 0 ? 'text-warning' : 'text-success'}`}>
+                    {th.duplicate_pct}%
+                  </p>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Duplication warning */}
+          {(data as any).thread_health?.duplicate_rows > 0 && !recomputing && (
+            <div className="mt-3 flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/5 px-3 py-2">
+              <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
+              <p className="text-xs text-slate-600">
+                {formatNumber((data as any).thread_health.duplicate_rows)} duplicate thread rows detected.
+                Click "Recompute Threads" to clean up and rebuild thread statuses.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Missing weekdays alert */}
       {data && data.missing_weekdays.length > 0 && (

@@ -196,42 +196,82 @@ async def recompute_threads(
 
     Runs only the thread tracking step — no full extraction.
     Clears ALL existing thread_status rows for this client and rebuilds from scratch.
-    Threads span mailboxes (a conversation involving multiple people/mailboxes = one thread).
-    Uses email_contact_links for accurate company resolution (includes CC/BCC).
+    Progress stored in Redis for frontend polling via GET /extraction/thread-recompute-progress.
     """
     try:
+        import redis, json as _json
+        redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379')
+        _redis = redis.from_url(redis_url, decode_responses=True)
+        progress_key = f"thread_recompute:{client_id}"
+
+        def _set_progress(phase: str, pct: int, message: str):
+            _redis.setex(progress_key, 600, _json.dumps({
+                'phase': phase, 'pct': pct, 'message': message,
+                'timestamp': datetime.utcnow().isoformat(),
+            }))
+
         def _run_recompute():
             from ..services.thread_tracker import ThreadTracker
 
-            logger.info(f"Recompute threads: clearing existing for client {client_id}")
+            try:
+                _set_progress('clearing', 5, 'Clearing existing thread data...')
 
-            # Clear ALL thread_status for this client (via mailbox IDs + NULL mailbox_id)
-            mailboxes = _supabase.table('mailboxes').select('id').eq(
-                'client_id', client_id
-            ).execute()
-            for m in (mailboxes.data or []):
-                _supabase.table('thread_status').delete().eq('mailbox_id', m['id']).execute()
-            # Also clear any client-wide threads (mailbox_id IS NULL)
-            _supabase.table('thread_status').delete().is_('mailbox_id', 'null').not_.is_(
-                'customer_company_id', 'null'
-            ).execute()
+                mailboxes = _supabase.table('mailboxes').select('id').eq(
+                    'client_id', client_id
+                ).execute()
+                mb_ids = [m['id'] for m in (mailboxes.data or [])]
+                for m_id in mb_ids:
+                    _supabase.table('thread_status').delete().eq('mailbox_id', m_id).execute()
+                _supabase.table('thread_status').delete().is_('mailbox_id', 'null').not_.is_(
+                    'customer_company_id', 'null'
+                ).execute()
 
-            logger.info("Evaluating threads across all mailboxes (client-wide)")
-            tracker = ThreadTracker(client_id=client_id)
-            tracker.evaluate_threads()  # Evaluates and saves in batches internally
+                _set_progress('evaluating', 15, f'Evaluating threads across {len(mb_ids)} mailboxes...')
 
-            logger.info(f"Thread recompute complete for client {client_id}")
+                tracker = ThreadTracker(client_id=client_id)
+                # Hook into tracker to report progress
+                _original_save = tracker.save_thread_statuses
+                _saved_total = [0]
+
+                def _progress_save(statuses):
+                    result = _original_save(statuses)
+                    _saved_total[0] += len(statuses)
+                    _set_progress('saving', min(90, 15 + int(_saved_total[0] / 100)),
+                                  f'Saved {_saved_total[0]} threads...')
+                    return result
+
+                tracker.save_thread_statuses = _progress_save
+                tracker.evaluate_threads()
+
+                _set_progress('completed', 100, f'Done — {_saved_total[0]} threads computed')
+                logger.info(f"Thread recompute complete: {_saved_total[0]} threads for client {client_id}")
+
+            except Exception as e:
+                _set_progress('failed', 0, f'Error: {str(e)[:200]}')
+                logger.error(f"Thread recompute failed: {e}")
 
         background_tasks.add_task(_run_recompute)
-        return {
-            "status": "started",
-            "message": f"Recomputing threads client-wide in background",
-        }
+        return {"status": "started", "message": "Recomputing threads client-wide in background"}
 
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/extraction/thread-recompute-progress")
+async def get_thread_recompute_progress(client_id: str = Query(...)):
+    """Poll progress of a running thread recompute job."""
+    try:
+        import redis, json as _json
+        redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379')
+        _redis = redis.from_url(redis_url, decode_responses=True)
+        data = _redis.get(f"thread_recompute:{client_id}")
+        if data:
+            return _json.loads(data)
+        return {'phase': 'idle', 'pct': 0, 'message': 'No active recompute'}
+    except Exception:
+        return {'phase': 'idle', 'pct': 0, 'message': 'No active recompute'}
 
 
 @router.post("/extraction/backfill-email-links")
@@ -3411,10 +3451,46 @@ async def get_data_health(client_id: Optional[str] = Query(default=None)):
         jobs_result = jobs_query.order('started_at', desc=True).limit(10).execute()
         recent_jobs = jobs_result.data or []
 
+        # ---------- 6. Thread duplication health ----------
+        logger.info("data-health: step 6 - thread duplication")
+        thread_health = {'total_rows': 0, 'unique_threads': 0, 'duplicate_rows': 0, 'duplicate_pct': 0}
+        try:
+            total_rows_r = _supabase.table('thread_status').select('id', count='exact')
+            if mailbox_ids:
+                total_rows_r = total_rows_r.in_('mailbox_id', mailbox_ids[:500])
+            total_rows_r = total_rows_r.execute()
+            total_rows = total_rows_r.count or 0
+
+            # Count unique thread_ids
+            unique_threads_r = _supabase.rpc('count_unique_threads', {
+                'p_mailbox_ids': mailbox_ids[:500] if mailbox_ids else None
+            }).execute()
+            unique_count = unique_threads_r.data if isinstance(unique_threads_r.data, int) else total_rows
+
+            thread_health = {
+                'total_rows': total_rows,
+                'unique_threads': unique_count,
+                'duplicate_rows': max(0, total_rows - unique_count),
+                'duplicate_pct': round((total_rows - unique_count) / total_rows * 100, 1) if total_rows > 0 else 0,
+            }
+        except Exception as th_err:
+            # RPC may not exist yet — fall back to simple count
+            logger.warning(f"Thread health RPC failed (expected if migration not run): {th_err}")
+            try:
+                total_r = _supabase.table('thread_status').select('id', count='exact')
+                if mailbox_ids:
+                    total_r = total_r.in_('mailbox_id', mailbox_ids[:500])
+                total_r = total_r.execute()
+                thread_health['total_rows'] = total_r.count or 0
+                thread_health['unique_threads'] = total_r.count or 0
+            except Exception:
+                pass
+
         return {
             'mailbox_health': mailbox_health,
             'identity_resolution': identity_resolution,
             'thread_distribution': thread_distribution,
+            'thread_health': thread_health,
             'missing_weekdays': missing_weekdays,
             'missing_weekday_count': len(missing_weekdays),
             'recent_extraction_jobs': recent_jobs,
