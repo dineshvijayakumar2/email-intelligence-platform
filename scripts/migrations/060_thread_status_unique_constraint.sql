@@ -1,27 +1,35 @@
--- Migration 060: Add unique constraint on thread_status to prevent duplicates
+-- Migration 060: Fix thread_status duplicate accumulation
 --
--- Root cause: save_thread_statuses uses upsert(on_conflict='thread_id') but
--- thread_id has no UNIQUE constraint, so every save creates new rows.
--- Duplicates accumulate with every sync cycle.
+-- Root cause: save_thread_statuses had no working unique constraint,
+-- so every sync cycle created new rows instead of updating existing ones.
 --
--- Fix: Add unique index on (mailbox_id, thread_id) so upsert actually merges.
--- Also add a subject_normalized column for cross-mailbox dedup at query time.
+-- Fix: Add UNIQUE on thread_id (one row per logical thread).
+-- The save code now deletes-then-inserts to avoid constraint issues.
 
--- Step 1: Remove duplicates BEFORE adding unique constraint
--- Keep the row with highest message_count (or most recent updated_at)
+-- Step 1: Remove ALL duplicates — keep one row per thread_id
+-- (the one with highest message_count / most recent update)
 DELETE FROM thread_status
 WHERE id NOT IN (
-    SELECT DISTINCT ON (mailbox_id, thread_id)
+    SELECT DISTINCT ON (thread_id)
         id
     FROM thread_status
-    ORDER BY mailbox_id, thread_id, message_count DESC NULLS LAST, updated_at DESC NULLS LAST
+    ORDER BY thread_id, message_count DESC NULLS LAST, updated_at DESC NULLS LAST
 );
 
--- Step 2: Add unique constraint
+-- Step 2: Add unique constraint on thread_id
 ALTER TABLE thread_status
-    ADD CONSTRAINT uq_thread_status_mailbox_thread
-    UNIQUE (mailbox_id, thread_id);
+    DROP CONSTRAINT IF EXISTS uq_thread_status_mailbox_thread;
 
--- Step 3: Add index for subject-based dedup queries
-CREATE INDEX IF NOT EXISTS idx_thread_status_subject_norm
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'uq_thread_status_thread_id'
+    ) THEN
+        ALTER TABLE thread_status
+            ADD CONSTRAINT uq_thread_status_thread_id UNIQUE (thread_id);
+    END IF;
+END $$;
+
+-- Step 3: Index for subject-based dedup at query time
+CREATE INDEX IF NOT EXISTS idx_thread_status_subject_lower
     ON thread_status (lower(subject));

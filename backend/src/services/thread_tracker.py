@@ -576,19 +576,39 @@ class ThreadTracker:
             }
             records.append(record)
 
-        # Batch upsert — uses UNIQUE(mailbox_id, thread_id) constraint (migration 060)
-        # This ensures syncs UPDATE existing thread rows instead of creating duplicates
+        # Dedup records before saving — same thread_id should only have one row
+        deduped: dict[str, dict] = {}
+        for r in records:
+            tid = r['thread_id']
+            existing = deduped.get(tid)
+            if existing:
+                # Keep higher message count
+                if (r.get('message_count') or 0) > (existing.get('message_count') or 0):
+                    deduped[tid] = r
+            else:
+                deduped[tid] = r
+        records = list(deduped.values())
+
+        # Delete-then-insert strategy: more reliable than upsert with constraint issues
+        # Delete existing rows for these thread_ids, then insert fresh
         batch_size = 100
         created_count = 0
         errors = []
 
         for i in range(0, len(records), batch_size):
             batch = records[i:i + batch_size]
+            batch_thread_ids = [r['thread_id'] for r in batch]
             try:
-                self.client.table('thread_status').upsert(
-                    batch,
-                    on_conflict='mailbox_id,thread_id'
+                # Delete existing rows for these thread_ids (any mailbox_id)
+                self.client.table('thread_status').delete().in_(
+                    'thread_id', batch_thread_ids
                 ).execute()
+                # Also delete by canonical_thread_id
+                self.client.table('thread_status').delete().in_(
+                    'canonical_thread_id', batch_thread_ids
+                ).execute()
+                # Insert fresh
+                self.client.table('thread_status').insert(batch).execute()
                 created_count += len(batch)
                 if (i // batch_size + 1) % 10 == 0:
                     logger.info(f"Saved batch {i//batch_size + 1}: {created_count} thread statuses so far")
