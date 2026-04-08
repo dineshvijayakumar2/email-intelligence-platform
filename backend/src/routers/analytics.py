@@ -3415,14 +3415,20 @@ async def get_data_health(client_id: Optional[str] = Query(default=None)):
 
         # ---------- 3. Thread confidence distribution ----------
         logger.info("data-health: step 3 - thread distribution")
-        # thread_status has no client_id — filter via mailbox_ids
+        # thread_status has no client_id — filter via mailbox_ids (include NULL for client-wide threads)
         mailbox_ids = [m['mailbox_id'] for m in mailbox_health]
         thread_data = []
         if mailbox_ids:
-            for i in range(0, len(mailbox_ids), 500):
-                batch = mailbox_ids[i:i+500]
-                thread_batch = _supabase.table('thread_status').select('status').in_('mailbox_id', batch).execute()
-                thread_data.extend(thread_batch.data or [])
+            mb_filter = ','.join(f"mailbox_id.eq.{mid}" for mid in mailbox_ids[:100])
+            or_filter = f"{mb_filter},mailbox_id.is.null"
+            offset_t = 0
+            while True:
+                thread_batch = _supabase.table('thread_status').select('status').or_(or_filter).range(offset_t, offset_t + 999).execute()
+                rows = thread_batch.data or []
+                thread_data.extend(rows)
+                if len(rows) == 0:
+                    break
+                offset_t += len(rows)
         else:
             # Paginate fallback — no mailbox filter
             offset = 0
@@ -3499,7 +3505,8 @@ async def get_data_health(client_id: Optional[str] = Query(default=None)):
         try:
             total_rows_r = _supabase.table('thread_status').select('id', count='exact')
             if mailbox_ids:
-                total_rows_r = total_rows_r.in_('mailbox_id', mailbox_ids[:500])
+                mb_filter_th = ','.join(f"mailbox_id.eq.{mid}" for mid in mailbox_ids[:100])
+                total_rows_r = total_rows_r.or_(f"{mb_filter_th},mailbox_id.is.null")
             total_rows_r = total_rows_r.execute()
             total_rows = total_rows_r.count or 0
 
@@ -3661,7 +3668,7 @@ async def get_thread_health(client_id: Optional[str] = Query(default=None)):
         except Exception as job_err:
             logger.warning(f"Could not fetch thread recompute job: {job_err}")
 
-        # Thread count per mailbox
+        # Thread count per mailbox + client-wide (NULL mailbox_id) threads
         mailbox_stats = []
         for mb_id in mailbox_ids:
             count_r = _supabase.table('thread_status').select(
@@ -3681,28 +3688,53 @@ async def get_thread_health(client_id: Optional[str] = Query(default=None)):
                 'thread_count': thread_count,
                 'with_intent': with_intent,
                 'intent_coverage_pct': round(with_intent / thread_count * 100, 1) if thread_count > 0 else 0.0,
-                'status': 'success',  # Will be overridden by error data below
+                'status': 'success',
+            })
+
+        # Client-wide threads (mailbox_id IS NULL) — created by client-wide thread evaluation
+        null_count_r = _supabase.table('thread_status').select(
+            'id', count='exact'
+        ).is_('mailbox_id', 'null').execute()
+        null_thread_count = null_count_r.count or 0
+        if null_thread_count > 0:
+            null_intent_r = _supabase.table('thread_status').select(
+                'id', count='exact'
+            ).is_('mailbox_id', 'null').not_.is_('last_email_intent', 'null').execute()
+            null_with_intent = null_intent_r.count or 0
+            mailbox_stats.append({
+                'mailbox_id': None,
+                'email_address': 'Client-wide threads',
+                'thread_count': null_thread_count,
+                'with_intent': null_with_intent,
+                'intent_coverage_pct': round(null_with_intent / null_thread_count * 100, 1) if null_thread_count > 0 else 0.0,
+                'status': 'success',
             })
 
         # Intent coverage totals
         total_threads = sum(m['thread_count'] for m in mailbox_stats)
         total_with_intent = sum(m['with_intent'] for m in mailbox_stats)
 
-        # Status distribution
+        # Status distribution (include NULL-mailbox threads)
         status_counts = {}
         intent_counts = {}
         if mailbox_ids:
-            for i in range(0, len(mailbox_ids), 500):
-                batch = mailbox_ids[i:i+500]
+            mb_or_filter = ','.join(f"mailbox_id.eq.{mid}" for mid in mailbox_ids[:100])
+            or_filter = f"{mb_or_filter},mailbox_id.is.null"
+            offset_sd = 0
+            while True:
                 rows = _supabase.table('thread_status').select(
                     'status, intent_status'
-                ).in_('mailbox_id', batch).execute()
-                for r in (rows.data or []):
+                ).or_(or_filter).range(offset_sd, offset_sd + 999).execute()
+                batch = rows.data or []
+                if not batch:
+                    break
+                for r in batch:
                     s = r.get('status', 'unknown')
                     status_counts[s] = status_counts.get(s, 0) + 1
                     intent_s = r.get('intent_status')
                     if intent_s:
                         intent_counts[intent_s] = intent_counts.get(intent_s, 0) + 1
+                offset_sd += len(batch)
 
         return {
             'last_evaluation': {

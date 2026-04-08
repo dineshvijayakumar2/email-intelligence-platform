@@ -933,14 +933,18 @@ class ThreadTracker:
             mb_ids = [m['id'] for m in (mb_resp.data or [])]
 
             if mb_ids:
+                # Include NULL mailbox_id rows (client-wide thread evaluation)
+                mb_filter = ','.join(f"mailbox_id.eq.{mid}" for mid in mb_ids[:100])
+                or_filter = f"{mb_filter},mailbox_id.is.null"
+
                 total_resp = self.client.table('thread_status').select(
                     'id', count='exact'
-                ).in_('mailbox_id', mb_ids[:500]).execute()
+                ).or_(or_filter).execute()
                 total = total_resp.count or 0
 
                 with_intent_resp = self.client.table('thread_status').select(
                     'id', count='exact'
-                ).in_('mailbox_id', mb_ids[:500]).not_.is_(
+                ).or_(or_filter).not_.is_(
                     'last_email_intent', 'null'
                 ).execute()
                 with_intent = with_intent_resp.count or 0
