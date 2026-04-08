@@ -240,6 +240,12 @@ export interface ThreadStatusSummary {
   // QB context (Sprint 3)
   qb_customer_type?: string | null;
   qb_customer_tier?: string | null;
+  // Intent intelligence (Thread Intelligence)
+  intent_status?: string | null;
+  intent_override_reason?: string | null;
+  last_email_intent?: string | null;
+  last_email_urgency?: string | null;
+  last_email_sentiment?: string | null;
   created_at?: string | null;
 }
 

@@ -1614,7 +1614,10 @@ class AIEmailAnalyzer:
             {"total_analyzed": int, "total_failed": int, "batches": int, "date_range": dict}
         """
         # Apply default date range: last 7 days if not specified
-        if not date_from:
+        # Pass date_from="all" to analyze ALL unanalyzed emails (no date filter)
+        if date_from == "all":
+            date_from = None  # No lower bound — analyze everything
+        elif not date_from:
             date_from = (datetime.utcnow() - timedelta(days=DEFAULT_LOOKBACK_DAYS)).isoformat()
         if not date_to:
             date_to = datetime.utcnow().isoformat()

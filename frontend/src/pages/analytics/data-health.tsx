@@ -16,7 +16,7 @@ import {
   type ExtractionJobHealth,
 } from '../../services/analyticsService';
 import api from '../../services/apiClient';
-import { CheckCircle, AlertTriangle, XCircle, RefreshCw, Database, GitMerge } from 'lucide-react';
+import { CheckCircle, AlertTriangle, XCircle, RefreshCw, Database, GitMerge, Brain, Zap } from 'lucide-react';
 
 const THREAD_COLORS: Record<string, string> = {
   complete: '#10b981', awaiting_response: '#667eea', awaiting_our_response: '#f59e0b',
@@ -46,7 +46,10 @@ export const DataHealthDashboard: React.FC = () => {
   const isMountedRef = useRef(true);
   const { clientId } = useClient();
   const [data, setData] = useState<DataHealthResponse | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [classificationHealth, setClassificationHealth] = useState<any>(null);
+  const [threadHealth, setThreadHealth] = useState<any>(null);
+  const [backfilling, setBackfilling] = useState(false);
 
   useEffect(() => { isMountedRef.current = true; return () => { isMountedRef.current = false; }; }, []);
 
@@ -55,13 +58,34 @@ export const DataHealthDashboard: React.FC = () => {
     const load = async () => {
       setLoading(true);
       try {
-        const result = await dataHealthApi.get(clientId);
-        if (isMountedRef.current) setData(result);
+        const [result, classHealth, thHealth] = await Promise.all([
+          dataHealthApi.get(clientId),
+          api.get<any>(`/v1/analytics/data-health/classification?client_id=${clientId}`).catch(() => null),
+          api.get<any>(`/v1/analytics/data-health/threads?client_id=${clientId}`).catch(() => null),
+        ]);
+        if (isMountedRef.current) {
+          setData(result);
+          setClassificationHealth(classHealth);
+          setThreadHealth(thHealth);
+        }
       } catch { /* silent */ }
       finally { if (isMountedRef.current) setLoading(false); }
     };
     load();
   }, [clientId]);
+
+  const startBackfill = async () => {
+    if (!clientId || backfilling) return;
+    setBackfilling(true);
+    try {
+      await api.post(`/v1/ai/backfill-intent?client_id=${clientId}`);
+      toast.success('Intent backfill started — this may take several minutes');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to start backfill');
+    } finally {
+      setBackfilling(false);
+    }
+  };
 
   // Thread recompute state
   const [recomputing, setRecomputing] = useState(false);
@@ -306,6 +330,142 @@ export const DataHealthDashboard: React.FC = () => {
               </p>
             </div>
           )}
+        </div>
+      )}
+
+      {/* AI Classification Health */}
+      {classificationHealth && (
+        <div className="rounded-lg border bg-white shadow-sm p-4 mb-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Brain className="h-4 w-4 text-primary" />
+              <h3 className="text-sm font-semibold text-slate-900">AI Classification Health</h3>
+            </div>
+            <button
+              onClick={startBackfill}
+              disabled={backfilling || !clientId || (classificationHealth?.totals?.pending ?? 0) === 0}
+              className="h-7 px-3 text-xs font-medium rounded-md border border-slate-200 hover:bg-slate-50 inline-flex items-center gap-1.5 disabled:opacity-50"
+            >
+              {backfilling ? <Spinner className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
+              Classify Pending ({formatNumber(classificationHealth?.totals?.pending ?? 0)})
+            </button>
+          </div>
+
+          {/* Overall progress bar */}
+          {(() => {
+            const t = classificationHealth.totals;
+            const pct = t?.coverage_pct ?? 0;
+            return (
+              <>
+                <div className="h-2 rounded-full bg-slate-100 overflow-hidden mb-2">
+                  <div className={`h-full rounded-full transition-all ${pct >= 90 ? 'bg-success' : pct >= 70 ? 'bg-warning' : 'bg-destructive'}`}
+                    style={{ width: `${pct}%` }} />
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-3">
+                  <div><p className="text-xs text-slate-500">Total Emails</p><p className="text-lg font-semibold tabular-nums">{formatNumber(t?.total_emails ?? 0)}</p></div>
+                  <div><p className="text-xs text-slate-500">Classified</p><p className="text-lg font-semibold tabular-nums text-success">{formatNumber(t?.classified ?? 0)}</p></div>
+                  <div><p className="text-xs text-slate-500">Pending</p><p className={`text-lg font-semibold tabular-nums ${(t?.pending ?? 0) > 0 ? 'text-warning' : 'text-success'}`}>{formatNumber(t?.pending ?? 0)}</p></div>
+                  <div><p className="text-xs text-slate-500">Failed</p><p className={`text-lg font-semibold tabular-nums ${(t?.failed ?? 0) > 0 ? 'text-destructive' : 'text-success'}`}>{formatNumber(t?.failed ?? 0)}</p></div>
+                  <div><p className="text-xs text-slate-500">Coverage</p><p className={`text-lg font-semibold tabular-nums ${pct >= 90 ? 'text-success' : pct >= 70 ? 'text-warning' : 'text-destructive'}`}>{pct}%</p></div>
+                </div>
+              </>
+            );
+          })()}
+
+          {/* Per-mailbox breakdown */}
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b bg-slate-50/50">
+                <th className="px-3 py-1.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Mailbox</th>
+                <th className="px-3 py-1.5 text-right text-xs font-bold uppercase tracking-wider text-slate-600 w-20">Total</th>
+                <th className="px-3 py-1.5 text-right text-xs font-bold uppercase tracking-wider text-slate-600 w-24">Classified</th>
+                <th className="px-3 py-1.5 text-right text-xs font-bold uppercase tracking-wider text-slate-600 w-20">Pending</th>
+                <th className="px-3 py-1.5 text-right text-xs font-bold uppercase tracking-wider text-slate-600 w-20">Failed</th>
+                <th className="px-3 py-1.5 text-right text-xs font-bold uppercase tracking-wider text-slate-600 w-24">Coverage</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {(classificationHealth.mailboxes || []).map((mb: any) => (
+                <tr key={mb.mailbox_id}>
+                  <td className="px-3 py-1.5 truncate">{mb.email_address}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums">{formatNumber(mb.total_emails)}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums text-success">{formatNumber(mb.classified)}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums">{mb.pending > 0 ? <span className="text-warning">{formatNumber(mb.pending)}</span> : '0'}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums">{mb.failed > 0 ? <span className="text-destructive">{formatNumber(mb.failed)}</span> : '0'}</td>
+                  <td className="px-3 py-1.5 text-right">
+                    <StatusBadge variant={mb.coverage_pct >= 90 ? 'success' : mb.coverage_pct >= 70 ? 'warning' : 'danger'} size="sm">{mb.coverage_pct}%</StatusBadge>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Thread Intent Coverage */}
+      {threadHealth && (
+        <div className="rounded-lg border bg-white shadow-sm p-4 mb-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Zap className="h-4 w-4 text-primary" />
+            <h3 className="text-sm font-semibold text-slate-900">Thread Intent Coverage</h3>
+          </div>
+
+          {/* Intent coverage bar */}
+          {(() => {
+            const t = threadHealth.totals;
+            const pct = t?.intent_coverage_pct ?? 0;
+            return (
+              <>
+                <div className="h-2 rounded-full bg-slate-100 overflow-hidden mb-2">
+                  <div className={`h-full rounded-full transition-all ${pct >= 80 ? 'bg-success' : pct >= 50 ? 'bg-warning' : 'bg-destructive'}`}
+                    style={{ width: `${pct}%` }} />
+                </div>
+                <p className="text-xs text-slate-600 mb-3">
+                  {formatNumber(t?.with_intent ?? 0)} / {formatNumber(t?.total_threads ?? 0)} threads have intent classification ({pct}%)
+                </p>
+              </>
+            );
+          })()}
+
+          {/* Intent distribution */}
+          {threadHealth.intent_distribution && Object.keys(threadHealth.intent_distribution).length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-3">
+              {Object.entries(threadHealth.intent_distribution).map(([intent, count]) => {
+                const v = intent === 'urgent' ? 'danger' : intent === 'escalation' ? 'warning' : intent === 'revenue_opportunity' ? 'success' : intent === 'closing' ? 'info' : 'neutral';
+                return (
+                  <StatusBadge key={intent} variant={v as any} size="sm">
+                    {intent.replace(/_/g, ' ')}: {formatNumber(count as number)}
+                  </StatusBadge>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Per-mailbox intent coverage */}
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b bg-slate-50/50">
+                <th className="px-3 py-1.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Mailbox</th>
+                <th className="px-3 py-1.5 text-right text-xs font-bold uppercase tracking-wider text-slate-600 w-24">Threads</th>
+                <th className="px-3 py-1.5 text-right text-xs font-bold uppercase tracking-wider text-slate-600 w-28">With Intent</th>
+                <th className="px-3 py-1.5 text-right text-xs font-bold uppercase tracking-wider text-slate-600 w-24">Coverage</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {(threadHealth.mailboxes || []).map((mb: any) => (
+                <tr key={mb.mailbox_id}>
+                  <td className="px-3 py-1.5 truncate">{mb.email_address}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums">{formatNumber(mb.thread_count)}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums text-success">{formatNumber(mb.with_intent)}</td>
+                  <td className="px-3 py-1.5 text-right">
+                    <StatusBadge variant={mb.intent_coverage_pct >= 80 ? 'success' : mb.intent_coverage_pct >= 50 ? 'warning' : 'danger'} size="sm">
+                      {mb.intent_coverage_pct}%
+                    </StatusBadge>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 

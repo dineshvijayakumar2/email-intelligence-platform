@@ -47,6 +47,12 @@ class ThreadStatus:
     primary_company_id: Optional[str]
     subject: Optional[str] = None
     message_count: int = 0
+    # Intent-based intelligence (from ai_email_intelligence)
+    intent_status: Optional[str] = None           # urgent, revenue_opportunity, closing, escalation, informational
+    intent_override_reason: Optional[str] = None   # human-readable reason for intent override
+    last_email_intent: Optional[str] = None        # cached intent from AI classification
+    last_email_urgency: Optional[str] = None       # cached urgency
+    last_email_sentiment: Optional[str] = None     # cached sentiment
 
 
 class ThreadTracker:
@@ -103,6 +109,9 @@ class ThreadTracker:
 
         # Preload junction table data: email_id → {contact_id, company_id}
         self._preload_junction_cache()
+
+        # Preload AI intent data: email_id → {intent, urgency, sentiment}
+        self._preload_intent_cache()
 
         # Fetch all threads
         threads = self._fetch_threads(limit=limit)
@@ -183,6 +192,97 @@ class ThreadTracker:
         except Exception as e:
             logger.warning(f"Failed to preload junction cache (will use email FK fallback): {e}")
             self._junction_cache = {}
+
+    def _preload_intent_cache(self):
+        """Preload ai_email_intelligence into memory for fast intent lookup.
+
+        Builds: self._intent_cache: dict[email_id] → {intent, urgency, sentiment, business_signal, action_type}
+        Only loads completed classifications.
+        """
+        self._intent_cache: Dict[str, Dict] = {}
+        try:
+            offset = 0
+            total = 0
+            while True:
+                resp = self.client.table('ai_email_intelligence').select(
+                    'email_id, intent, urgency, sentiment, business_signal, action_type'
+                ).eq('client_id', self.client_id).eq(
+                    'processing_status', 'completed'
+                ).range(offset, offset + 999).execute()
+                rows = resp.data or []
+                if not rows:
+                    break
+                for r in rows:
+                    eid = r.get('email_id')
+                    if eid:
+                        self._intent_cache[eid] = {
+                            'intent': r.get('intent'),
+                            'urgency': r.get('urgency'),
+                            'sentiment': r.get('sentiment'),
+                            'business_signal': r.get('business_signal'),
+                            'action_type': r.get('action_type'),
+                        }
+                total += len(rows)
+                offset += len(rows)
+                if total % 50000 == 0:
+                    logger.info(f"Intent cache loading: {total} classifications loaded")
+
+            logger.info(f"Intent cache loaded: {total} classifications for {len(self._intent_cache)} emails")
+        except Exception as e:
+            logger.warning(f"Failed to preload intent cache (threads will use timing-only status): {e}")
+            self._intent_cache = {}
+
+    def _apply_intent_override(self, status: str, last_email: dict) -> tuple:
+        """Apply intent-based status override using cached AI classification.
+
+        Returns: (intent_status, intent_override_reason, last_email_intent,
+                  last_email_urgency, last_email_sentiment)
+
+        intent_status supplements (not replaces) the timing-based status.
+        """
+        intent_cache = getattr(self, '_intent_cache', {})
+        last_intent_data = intent_cache.get(last_email.get('id'))
+
+        if not last_intent_data:
+            return None, None, None, None, None
+
+        intent = last_intent_data.get('intent')
+        urgency = last_intent_data.get('urgency')
+        sentiment = last_intent_data.get('sentiment')
+
+        intent_status = None
+        reason = None
+
+        # Override rules (ordered by priority):
+
+        # 1. Complaint/churn with high urgency → urgent
+        if intent in ('complaint', 'churn_risk') or urgency in ('critical', 'high'):
+            intent_status = 'urgent'
+            reason = f"Last email intent: {intent}, urgency: {urgency}"
+
+        # 2. Pricing inquiry / expansion signal → revenue_opportunity
+        elif intent in ('pricing_inquiry', 'expansion_signal', 'feature_request'):
+            intent_status = 'revenue_opportunity'
+            reason = f"Last email shows {intent}"
+
+        # 3. Positive feedback / FYI on a thread that timing says "awaiting" → closing
+        elif intent in ('positive_feedback', 'fyi_update') and status in (
+            'awaiting_our_response', 'awaiting_response'
+        ):
+            intent_status = 'closing'
+            reason = f"Last email is {intent} — thread naturally concluding"
+
+        # 4. Action required → escalation (if we haven't responded)
+        elif intent == 'action_required' and status != 'ongoing':
+            intent_status = 'escalation'
+            reason = f"Action required by contact, current status: {status}"
+
+        # 5. Meeting/follow-up/introduction → informational
+        elif intent in ('meeting_scheduling', 'follow_up', 'introduction', 'other'):
+            intent_status = 'informational'
+            reason = None  # No override, just metadata
+
+        return intent_status, reason, intent, urgency, sentiment
 
     def _fetch_threads(self, limit: Optional[int] = None) -> Dict[str, List[Dict]]:
         """
@@ -401,6 +501,10 @@ class ThreadTracker:
         # Check if overdue
         is_overdue = days_since_last > self.OVERDUE_DAYS and status in ['awaiting_response', 'awaiting_our_response']
 
+        # Apply intent-based override from AI classification
+        intent_status, intent_reason, last_intent, last_urgency, last_sentiment = \
+            self._apply_intent_override(status, last_email)
+
         # Get subject from first email in thread
         subject = None
         for email in emails:
@@ -421,7 +525,12 @@ class ThreadTracker:
             primary_contact_id=primary_contact_id,
             primary_company_id=primary_company_id,
             subject=subject,
-            message_count=len(emails)
+            message_count=len(emails),
+            intent_status=intent_status,
+            intent_override_reason=intent_reason,
+            last_email_intent=last_intent,
+            last_email_urgency=last_urgency,
+            last_email_sentiment=last_sentiment,
         )
 
     def _calculate_thread_depth(self, emails: List[Dict]) -> int:
@@ -588,6 +697,12 @@ class ThreadTracker:
                 'primary_company_id': status.primary_company_id,
                 'customer_contact_id': status.primary_contact_id,
                 'customer_company_id': status.primary_company_id,
+                # Intent-based intelligence
+                'intent_status': status.intent_status,
+                'intent_override_reason': status.intent_override_reason,
+                'last_email_intent': status.last_email_intent,
+                'last_email_urgency': status.last_email_urgency,
+                'last_email_sentiment': status.last_email_sentiment,
                 'created_at': timestamp,
                 'updated_at': timestamp
             }
@@ -799,6 +914,42 @@ class ThreadTracker:
                 'status_breakdown': {},
                 'overdue_threads': 0
             }
+
+    def get_health_report(self) -> Dict:
+        """Return thread processing health metrics including fetch errors and intent coverage.
+
+        Designed for the Data Health page — shows per-mailbox status and
+        intent classification coverage.
+        """
+        mailbox_errors = getattr(self, '_mailbox_errors', [])
+
+        # Get intent coverage from thread_status
+        intent_coverage = {'with_intent': 0, 'without_intent': 0, 'coverage_pct': 0.0}
+        try:
+            total_resp = self.client.table('thread_status').select(
+                'id', count='exact'
+            ).eq('client_id', self.client_id).execute()
+            total = total_resp.count or 0
+
+            with_intent_resp = self.client.table('thread_status').select(
+                'id', count='exact'
+            ).eq('client_id', self.client_id).not_.is_(
+                'last_email_intent', 'null'
+            ).execute()
+            with_intent = with_intent_resp.count or 0
+
+            intent_coverage = {
+                'with_intent': with_intent,
+                'without_intent': total - with_intent,
+                'coverage_pct': round(with_intent / total * 100, 1) if total > 0 else 0.0,
+            }
+        except Exception as e:
+            logger.warning(f"Failed to compute intent coverage: {e}")
+
+        return {
+            'mailbox_errors': mailbox_errors,
+            'intent_coverage': intent_coverage,
+        }
 
 
 # Example usage

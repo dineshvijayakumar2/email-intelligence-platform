@@ -353,6 +353,13 @@ class ThreadStatusSummary(BaseModel):
     qb_customer_type: Optional[str] = None
     qb_customer_tier: Optional[str] = None
 
+    # Intent intelligence (Thread Intelligence)
+    intent_status: Optional[str] = None
+    intent_override_reason: Optional[str] = None
+    last_email_intent: Optional[str] = None
+    last_email_urgency: Optional[str] = None
+    last_email_sentiment: Optional[str] = None
+
     created_at: Optional[datetime] = None
 
     class Config:

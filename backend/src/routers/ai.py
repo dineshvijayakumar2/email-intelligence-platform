@@ -339,6 +339,114 @@ async def trigger_reanalysis(
     )
 
 
+@router.post("/backfill-intent")
+async def trigger_backfill_intent(
+    background_tasks: BackgroundTasks,
+    client_id: Optional[str] = Query(default=None),
+    mailbox_id: Optional[str] = Query(default=None),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Backfill AI intent classification for unanalyzed emails.
+
+    Analyzes ALL pending emails (no 7-day lookback limit).
+    Can target a specific mailbox or all mailboxes for a client.
+    Used by Data Health page to fill classification gaps.
+    """
+    analyzer = get_email_analyzer()
+    if not analyzer:
+        raise HTTPException(status_code=503, detail="AI analyzer not initialized")
+
+    # Determine which mailboxes to process
+    if mailbox_id:
+        mailbox_ids = [mailbox_id]
+        # Get client_id from mailbox
+        try:
+            resp = _supabase.table("mailboxes").select("client_id").eq("id", mailbox_id).limit(1).execute()
+            if resp.data:
+                client_id = resp.data[0].get("client_id")
+        except Exception:
+            pass
+    elif client_id:
+        try:
+            resp = _supabase.table("mailboxes").select("id").eq("client_id", client_id).execute()
+            mailbox_ids = [m["id"] for m in (resp.data or [])]
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to get mailboxes: {str(e)[:200]}")
+    else:
+        raise HTTPException(status_code=400, detail="Provide client_id or mailbox_id")
+
+    if not mailbox_ids:
+        return {"status": "no_mailboxes", "message": "No mailboxes found", "mailboxes": []}
+
+    import uuid
+    job_id = str(uuid.uuid4())
+
+    # Create processing job for visibility
+    try:
+        _supabase.table("processing_jobs").insert({
+            "id": job_id,
+            "mailbox_id": mailbox_ids[0] if len(mailbox_ids) == 1 else None,
+            "client_id": client_id,
+            "job_type": "ai_backfill",
+            "status": "running",
+            "started_at": datetime.utcnow().isoformat(),
+            "error_summary": {"progress_pct": 0, "progress_message": f"Backfilling intent for {len(mailbox_ids)} mailbox(es)..."},
+        }).execute()
+    except Exception:
+        job_id = None
+
+    def run_backfill():
+        total_analyzed = 0
+        total_failed = 0
+        for idx, mb_id in enumerate(mailbox_ids):
+            try:
+                result = analyzer.analyze_all_unanalyzed(
+                    mailbox_id=mb_id,
+                    client_id=client_id,
+                    max_emails=10000,
+                    date_from="all",  # No date limit — process everything
+                )
+                total_analyzed += result.get("total_analyzed", 0)
+                total_failed += result.get("total_failed", 0)
+                logger.info(
+                    f"Backfill mailbox {idx+1}/{len(mailbox_ids)} ({mb_id}): "
+                    f"{result.get('total_analyzed', 0)} classified"
+                )
+
+                # Run bucket engine after each mailbox
+                bucket_engine = get_bucket_engine()
+                if bucket_engine and result.get("total_analyzed", 0) > 0:
+                    bucket_engine.process_email_buckets(mb_id)
+
+            except Exception as e:
+                logger.error(f"Backfill failed for mailbox {mb_id}: {e}")
+                total_failed += 1
+
+        if job_id:
+            try:
+                _supabase.table("processing_jobs").update({
+                    "status": "completed",
+                    "completed_at": datetime.utcnow().isoformat(),
+                    "error_summary": {
+                        "progress_pct": 100,
+                        "progress_message": f"Done: {total_analyzed} classified, {total_failed} failed across {len(mailbox_ids)} mailboxes",
+                    },
+                }).eq("id", job_id).execute()
+            except Exception:
+                pass
+
+    background_tasks.add_task(run_backfill)
+    audit_from_user(current_user, "backfill_intent", "client", resource_id=client_id or "unknown")
+
+    return {
+        "status": "accepted",
+        "message": f"Backfill started for {len(mailbox_ids)} mailbox(es) — all unanalyzed emails will be classified",
+        "job_id": job_id,
+        "mailbox_count": len(mailbox_ids),
+    }
+
+
 @router.get("/intelligence/{mailbox_id}", response_model=IntelligenceListResponse)
 async def get_intelligence(
     mailbox_id: str,

@@ -442,6 +442,9 @@ class ExtractionOrchestrator:
             # Embed newly extracted emails (runs on un-embedded records only)
             self._embed_new_emails()
 
+            # Auto-trigger AI classification for unanalyzed emails
+            self._auto_trigger_ai_analysis()
+
             # Calculate duration
             duration = (datetime.utcnow() - start_time).total_seconds()
 
@@ -1182,6 +1185,48 @@ class ExtractionOrchestrator:
                 logger.warning(f"Could not schedule email embedding: {e2}")
         except Exception as e:
             logger.warning(f"Auto-embed emails failed (non-critical): {e}")
+
+    def _auto_trigger_ai_analysis(self):
+        """Auto-trigger AI email classification for unanalyzed emails.
+
+        Runs at the end of the extraction pipeline so newly imported emails get
+        intent/urgency/sentiment classification without manual user action.
+        Non-blocking — failures don't affect the extraction result.
+
+        Uses date_from="all" to analyze ALL unanalyzed emails (not just last 7 days),
+        ensuring historical imports also get classified.
+        """
+        try:
+            from .ai_email_analyzer import get_email_analyzer
+            analyzer = get_email_analyzer()
+            if not analyzer:
+                logger.info("AI analyzer not initialized — skipping auto-analysis")
+                return
+
+            result = analyzer.analyze_all_unanalyzed(
+                mailbox_id=self.mailbox_id,
+                client_id=self.client_id,
+                max_emails=5000,
+                date_from="all",  # Analyze ALL unanalyzed, not just last 7 days
+            )
+            analyzed = result.get("total_analyzed", 0)
+            failed = result.get("total_failed", 0)
+            if analyzed > 0 or failed > 0:
+                logger.info(
+                    f"Auto AI analysis: {analyzed} classified, {failed} failed "
+                    f"for mailbox {self.mailbox_id}"
+                )
+
+            # Auto-run bucket engine after analysis
+            if analyzed > 0:
+                from .ai_action_bucket_engine import get_bucket_engine
+                bucket_engine = get_bucket_engine()
+                if bucket_engine:
+                    bucket_engine.process_email_buckets(self.mailbox_id)
+                    logger.info("Auto bucket derivation complete")
+
+        except Exception as e:
+            logger.warning(f"Auto AI analysis failed (non-critical): {e}")
 
     def _assign_canonical_threads(self):
         """Assign canonical_thread_id to emails that don't have one yet.

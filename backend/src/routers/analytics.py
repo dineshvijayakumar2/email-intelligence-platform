@@ -1761,7 +1761,9 @@ async def list_thread_statuses(
             '''
             thread_id, canonical_thread_id, subject, customer_contact_id, customer_company_id,
             status, message_count, last_message_at, last_sender_is_outbound, days_since_last_email,
-            mailbox_id, qb_customer_type, qb_customer_tier, created_at
+            mailbox_id, qb_customer_type, qb_customer_tier,
+            intent_status, intent_override_reason, last_email_intent, last_email_urgency, last_email_sentiment,
+            created_at
             '''
         )
 
@@ -1893,6 +1895,12 @@ async def list_thread_statuses(
                 'last_message_date': t.get('last_message_at'),
                 'last_sender_type': 'outbound' if t.get('last_sender_is_outbound') else 'inbound',
                 'days_since_last_message': t.get('days_since_last_email', 0),
+                # Intent intelligence
+                'intent_status': t.get('intent_status'),
+                'intent_override_reason': t.get('intent_override_reason'),
+                'last_email_intent': t.get('last_email_intent'),
+                'last_email_urgency': t.get('last_email_urgency'),
+                'last_email_sentiment': t.get('last_email_sentiment'),
                 'created_at': t.get('created_at')
             }
 
@@ -2074,6 +2082,7 @@ async def get_contact_threads(
             '''
             thread_id, subject, customer_contact_id, customer_company_id,
             status, message_count, last_message_at, last_sender_is_outbound, days_since_last_email,
+            intent_status, intent_override_reason, last_email_intent, last_email_urgency, last_email_sentiment,
             created_at
             '''
         ).eq('customer_contact_id', contact_id).order(
@@ -2108,6 +2117,11 @@ async def get_contact_threads(
                 'last_message_date': t.get('last_message_at'),
                 'last_sender_type': 'outbound' if t.get('last_sender_is_outbound') else 'inbound',
                 'days_since_last_message': t.get('days_since_last_email', 0),
+                'intent_status': t.get('intent_status'),
+                'intent_override_reason': t.get('intent_override_reason'),
+                'last_email_intent': t.get('last_email_intent'),
+                'last_email_urgency': t.get('last_email_urgency'),
+                'last_email_sentiment': t.get('last_email_sentiment'),
                 'created_at': t.get('created_at'),
                 'contact_email': contact_email,
                 'contact_name': contact_name,
@@ -2140,6 +2154,7 @@ async def get_company_threads(
             '''
             thread_id, canonical_thread_id, subject, customer_contact_id, customer_company_id,
             status, message_count, last_message_at, last_sender_is_outbound, days_since_last_email,
+            intent_status, intent_override_reason, last_email_intent, last_email_urgency, last_email_sentiment,
             created_at
             '''
         ).eq('customer_company_id', company_id).order(
@@ -2210,6 +2225,11 @@ async def get_company_threads(
                 'last_message_date': t.get('last_message_at'),
                 'last_sender_type': 'outbound' if t.get('last_sender_is_outbound') else 'inbound',
                 'days_since_last_message': t.get('days_since_last_email', 0),
+                'intent_status': t.get('intent_status'),
+                'intent_override_reason': t.get('intent_override_reason'),
+                'last_email_intent': t.get('last_email_intent'),
+                'last_email_urgency': t.get('last_email_urgency'),
+                'last_email_sentiment': t.get('last_email_sentiment'),
                 'created_at': t.get('created_at'),
                 'company_name': company_name,
                 'contact_email': contact.get('email_address'),
@@ -3506,4 +3526,200 @@ async def get_data_health(client_id: Optional[str] = Query(default=None)):
 
     except Exception as e:
         logger.error(f"Failed to get data health: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/data-health/classification")
+async def get_classification_health(client_id: Optional[str] = Query(default=None)):
+    """
+    AI classification coverage — how many emails have intent/urgency/sentiment.
+    Shows per-mailbox breakdown + total coverage percentage.
+    """
+    try:
+        # Get mailboxes
+        mb_query = _supabase.table('mailboxes').select('id, email_address')
+        if client_id:
+            mb_query = mb_query.eq('client_id', client_id)
+        mb_result = mb_query.execute()
+        mailboxes = mb_result.data or []
+
+        per_mailbox = []
+        total_emails_all = 0
+        total_classified_all = 0
+        total_pending_all = 0
+        total_failed_all = 0
+        total_skipped_all = 0
+
+        for mb in mailboxes:
+            mb_id = mb['id']
+
+            # Total emails in mailbox
+            email_count_r = _supabase.table('emails').select(
+                'id', count='exact'
+            ).eq('mailbox_id', mb_id).execute()
+            total_emails = email_count_r.count or 0
+
+            # Classified (completed)
+            classified_r = _supabase.table('ai_email_intelligence').select(
+                'id', count='exact'
+            ).eq('mailbox_id', mb_id).eq('processing_status', 'completed').execute()
+            classified = classified_r.count or 0
+
+            # Failed
+            failed_r = _supabase.table('ai_email_intelligence').select(
+                'id', count='exact'
+            ).eq('mailbox_id', mb_id).eq('processing_status', 'failed').execute()
+            failed = failed_r.count or 0
+
+            # Skipped
+            skipped_r = _supabase.table('ai_email_intelligence').select(
+                'id', count='exact'
+            ).eq('mailbox_id', mb_id).eq('processing_status', 'skipped').execute()
+            skipped = skipped_r.count or 0
+
+            pending = max(0, total_emails - classified - failed - skipped)
+
+            # Last analysis timestamp
+            last_analysis = None
+            try:
+                last_r = _supabase.table('ai_email_intelligence').select(
+                    'processed_at'
+                ).eq('mailbox_id', mb_id).eq(
+                    'processing_status', 'completed'
+                ).order('processed_at', desc=True).limit(1).execute()
+                if last_r.data:
+                    last_analysis = last_r.data[0].get('processed_at')
+            except Exception:
+                pass
+
+            coverage_pct = round(classified / total_emails * 100, 1) if total_emails > 0 else 0.0
+
+            per_mailbox.append({
+                'mailbox_id': mb_id,
+                'email_address': mb.get('email_address', 'Unknown'),
+                'total_emails': total_emails,
+                'classified': classified,
+                'pending': pending,
+                'failed': failed,
+                'skipped': skipped,
+                'coverage_pct': coverage_pct,
+                'last_analysis_at': last_analysis,
+            })
+
+            total_emails_all += total_emails
+            total_classified_all += classified
+            total_pending_all += pending
+            total_failed_all += failed
+            total_skipped_all += skipped
+
+        overall_coverage = round(
+            total_classified_all / total_emails_all * 100, 1
+        ) if total_emails_all > 0 else 0.0
+
+        return {
+            'mailboxes': per_mailbox,
+            'totals': {
+                'total_emails': total_emails_all,
+                'classified': total_classified_all,
+                'pending': total_pending_all,
+                'failed': total_failed_all,
+                'skipped': total_skipped_all,
+                'coverage_pct': overall_coverage,
+            },
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to get classification health: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/data-health/threads")
+async def get_thread_health(client_id: Optional[str] = Query(default=None)):
+    """
+    Thread processing health — per-mailbox fetch status, intent coverage,
+    and status distribution. Shows which mailboxes had errors during thread evaluation.
+    """
+    try:
+        # Get last thread evaluation job
+        jobs_query = _supabase.table('processing_jobs').select(
+            'id, status, started_at, completed_at, error_summary, error_log'
+        ).eq('job_type', 'thread_recompute').order('started_at', desc=True).limit(1)
+        if client_id:
+            jobs_query = jobs_query.eq('client_id', client_id)
+        job_result = jobs_query.execute()
+        last_job = job_result.data[0] if job_result.data else None
+
+        # Get mailbox IDs for this client
+        mb_query = _supabase.table('mailboxes').select('id, email_address')
+        if client_id:
+            mb_query = mb_query.eq('client_id', client_id)
+        mb_result = mb_query.execute()
+        mailboxes = {m['id']: m.get('email_address', 'Unknown') for m in (mb_result.data or [])}
+        mailbox_ids = list(mailboxes.keys())
+
+        # Thread count per mailbox
+        mailbox_stats = []
+        for mb_id in mailbox_ids:
+            count_r = _supabase.table('thread_status').select(
+                'id', count='exact'
+            ).eq('mailbox_id', mb_id).execute()
+            thread_count = count_r.count or 0
+
+            # Intent coverage for this mailbox
+            with_intent_r = _supabase.table('thread_status').select(
+                'id', count='exact'
+            ).eq('mailbox_id', mb_id).not_.is_('last_email_intent', 'null').execute()
+            with_intent = with_intent_r.count or 0
+
+            mailbox_stats.append({
+                'mailbox_id': mb_id,
+                'email_address': mailboxes.get(mb_id, 'Unknown'),
+                'thread_count': thread_count,
+                'with_intent': with_intent,
+                'intent_coverage_pct': round(with_intent / thread_count * 100, 1) if thread_count > 0 else 0.0,
+                'status': 'success',  # Will be overridden by error data below
+            })
+
+        # Intent coverage totals
+        total_threads = sum(m['thread_count'] for m in mailbox_stats)
+        total_with_intent = sum(m['with_intent'] for m in mailbox_stats)
+
+        # Status distribution
+        status_counts = {}
+        intent_counts = {}
+        if mailbox_ids:
+            for i in range(0, len(mailbox_ids), 500):
+                batch = mailbox_ids[i:i+500]
+                rows = _supabase.table('thread_status').select(
+                    'status, intent_status'
+                ).in_('mailbox_id', batch).execute()
+                for r in (rows.data or []):
+                    s = r.get('status', 'unknown')
+                    status_counts[s] = status_counts.get(s, 0) + 1
+                    intent_s = r.get('intent_status')
+                    if intent_s:
+                        intent_counts[intent_s] = intent_counts.get(intent_s, 0) + 1
+
+        return {
+            'last_evaluation': {
+                'job_id': last_job.get('id') if last_job else None,
+                'status': last_job.get('status') if last_job else None,
+                'started_at': last_job.get('started_at') if last_job else None,
+                'completed_at': last_job.get('completed_at') if last_job else None,
+            },
+            'mailboxes': mailbox_stats,
+            'totals': {
+                'total_threads': total_threads,
+                'with_intent': total_with_intent,
+                'without_intent': total_threads - total_with_intent,
+                'intent_coverage_pct': round(
+                    total_with_intent / total_threads * 100, 1
+                ) if total_threads > 0 else 0.0,
+            },
+            'status_distribution': dict(sorted(status_counts.items(), key=lambda x: -x[1])),
+            'intent_distribution': dict(sorted(intent_counts.items(), key=lambda x: -x[1])),
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to get thread health: {e}")
         raise HTTPException(status_code=500, detail=str(e))

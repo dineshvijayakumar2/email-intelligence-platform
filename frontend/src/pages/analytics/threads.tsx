@@ -25,12 +25,40 @@ const STATUS_OPTIONS = [
   { value: 'ongoing', label: 'Ongoing' },
 ];
 
+const INTENT_OPTIONS = [
+  { value: '', label: 'All Intents' },
+  { value: 'urgent', label: 'Urgent' },
+  { value: 'revenue_opportunity', label: 'Revenue Opportunity' },
+  { value: 'escalation', label: 'Escalation' },
+  { value: 'closing', label: 'Closing' },
+  { value: 'informational', label: 'Informational' },
+];
+
 const statusVariant = (s: string) => {
   if (s === 'overdue') return 'danger';
   if (s === 'awaiting_our_response') return 'warning';
   if (s === 'ongoing' || s === 'active') return 'info';
   if (s === 'complete') return 'success';
   return 'neutral';
+};
+
+const intentVariant = (s: string): 'danger' | 'warning' | 'success' | 'info' | 'neutral' => {
+  if (s === 'urgent') return 'danger';
+  if (s === 'escalation') return 'warning';
+  if (s === 'revenue_opportunity') return 'success';
+  if (s === 'closing') return 'info';
+  return 'neutral';
+};
+
+const intentLabel = (s: string) => {
+  const labels: Record<string, string> = {
+    urgent: 'Urgent',
+    revenue_opportunity: 'Revenue Opp',
+    escalation: 'Escalation',
+    closing: 'Closing',
+    informational: 'Info',
+  };
+  return labels[s] || s;
 };
 
 export const ThreadAnalytics: React.FC = () => {
@@ -45,6 +73,7 @@ export const ThreadAnalytics: React.FC = () => {
 
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState(() => searchParams.get('status') || '');
+  const [intentFilter, setIntentFilter] = useState(() => searchParams.get('intent_status') || '');
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [sorting, setSorting] = useState<SortingState>([{ id: 'last_message_at', desc: true }]);
@@ -87,12 +116,15 @@ export const ThreadAnalytics: React.FC = () => {
       const allowed = statusMap[statusFilter] || [statusFilter];
       filtered = filtered.filter(t => allowed.includes(t.status));
     }
+    if (intentFilter) {
+      filtered = filtered.filter(t => t.intent_status === intentFilter);
+    }
     if (debouncedSearch) {
       const term = debouncedSearch.toLowerCase();
       filtered = filtered.filter(t => (t.subject || '').toLowerCase().includes(term));
     }
     return filtered;
-  }, [drilldownRaw, statusFilter, debouncedSearch]);
+  }, [drilldownRaw, statusFilter, intentFilter, debouncedSearch]);
 
   const threads = isDrilldownMode ? drilldownFiltered : (normalThreadsQuery.data?.threads || []);
   const threadsTotal = isDrilldownMode ? drilldownFiltered.length : (normalThreadsQuery.data?.total || 0);
@@ -135,6 +167,13 @@ export const ThreadAnalytics: React.FC = () => {
         return <StatusBadge variant={statusVariant(v) as any} size="sm">{cfg.label}</StatusBadge>;
       },
     }),
+    col.accessor('intent_status', { header: 'Intent', size: 130,
+      cell: info => {
+        const v = info.getValue();
+        if (!v) return <span className="text-slate-300">—</span>;
+        return <StatusBadge variant={intentVariant(v)} size="sm">{intentLabel(v)}</StatusBadge>;
+      },
+    }),
     col.accessor('total_messages', { id: 'message_count', header: 'Emails', size: 70, meta: { align: 'right' },
       cell: info => <span className="tabular-nums">{info.getValue()}</span>,
     }),
@@ -159,7 +198,7 @@ export const ThreadAnalytics: React.FC = () => {
     enableSortingRemoval: false,
   });
 
-  const hasFilters = !!statusFilter || !!debouncedSearch;
+  const hasFilters = !!statusFilter || !!intentFilter || !!debouncedSearch;
 
   return (
     <PageShell>
@@ -193,8 +232,15 @@ export const ThreadAnalytics: React.FC = () => {
         >
           {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
+        <select
+          value={intentFilter}
+          onChange={e => { setIntentFilter(e.target.value); setPage(1); }}
+          className="h-8 px-2 text-sm rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20"
+        >
+          {INTENT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
         {hasFilters && (
-          <button onClick={() => { setSearch(''); setDebouncedSearch(''); setStatusFilter(''); setPage(1); }}
+          <button onClick={() => { setSearch(''); setDebouncedSearch(''); setStatusFilter(''); setIntentFilter(''); setPage(1); }}
             className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
             <X className="h-3 w-3" /> Clear
           </button>
