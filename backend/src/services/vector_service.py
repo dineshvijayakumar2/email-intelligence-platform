@@ -6,8 +6,11 @@ Fully independent of AI analysis pipeline. Embeds directly from raw source table
   - customer_companies (name + industry + domains + QB data)
   - qb_operations (operation + dept + machine + customer + capabilities)
 
-Uses Google text-embedding-004 (768 dims) via langchain-google-genai.
-Already in requirements.txt — no new packages needed.
+Supports two embedding providers (set EMBEDDING_PROVIDER env var):
+  - "google" (default): Google text-embedding-004 / gemini-embedding-001 (768 dims)
+  - "openai": OpenAI text-embedding-3-small (768 dims, configurable)
+
+Both produce 768-dim vectors compatible with the existing pgvector schema.
 """
 
 import asyncio
@@ -20,50 +23,97 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Embedding model config
 # ---------------------------------------------------------------------------
-EMBEDDING_MODEL = "models/gemini-embedding-001"
+EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "google").lower()  # "google" or "openai"
 EMBEDDING_DIMS = 768   # Force 768 dims (pgvector HNSW/IVFFlat max = 2000)
-EMBED_BATCH_SIZE = 50   # Texts per API call — Gemini handles 50 fine per request
-EMBED_DELAY_SECONDS = 5  # Base delay between batches
+EMBED_BATCH_SIZE = 50   # Texts per API call
+EMBED_DELAY_SECONDS = 5  # Base delay between batches (Google rate limits)
+
+# Google model
+GOOGLE_EMBEDDING_MODEL = "models/gemini-embedding-001"
+
+# OpenAI model — text-embedding-3-small supports dimensions param for 768
+OPENAI_EMBEDDING_MODEL = "text-embedding-3-small"
+
+# Cache the model instance to avoid re-init on every call
+_embedding_model_cache = None
 
 
 def _get_embedding_model():
-    """Lazy-init Google embedding model (avoids import cost at module level)."""
-    from langchain_google_genai import GoogleGenerativeAIEmbeddings
+    """Lazy-init embedding model based on EMBEDDING_PROVIDER env var.
 
-    api_key = (
-        os.getenv("GOOGLE_GENAI_API_KEY")
-        or os.getenv("GOOGLE_API_KEY")
-        or os.getenv("GOOGLE_GENERATIVE_AI_API_KEY")
-    )
-    if not api_key:
-        raise RuntimeError(
-            "GOOGLE_GENAI_API_KEY (or GOOGLE_API_KEY) env var required for embeddings"
+    Returns a LangChain Embeddings instance (Google or OpenAI).
+    Both produce 768-dim vectors compatible with pgvector.
+    """
+    global _embedding_model_cache
+    if _embedding_model_cache is not None:
+        return _embedding_model_cache
+
+    if EMBEDDING_PROVIDER == "openai":
+        from langchain_openai import OpenAIEmbeddings
+
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise RuntimeError("OPENAI_API_KEY env var required for OpenAI embeddings")
+
+        _embedding_model_cache = OpenAIEmbeddings(
+            model=OPENAI_EMBEDDING_MODEL,
+            openai_api_key=api_key,
+            dimensions=EMBEDDING_DIMS,
         )
-    return GoogleGenerativeAIEmbeddings(
-        model=EMBEDDING_MODEL,
-        google_api_key=api_key,
-        output_dimensionality=EMBEDDING_DIMS,
-    )
+        logger.info(f"Embedding provider: OpenAI ({OPENAI_EMBEDDING_MODEL}, {EMBEDDING_DIMS} dims)")
+    else:
+        from langchain_google_genai import GoogleGenerativeAIEmbeddings
+
+        api_key = (
+            os.getenv("GOOGLE_GENAI_API_KEY")
+            or os.getenv("GOOGLE_API_KEY")
+            or os.getenv("GOOGLE_GENERATIVE_AI_API_KEY")
+        )
+        if not api_key:
+            raise RuntimeError(
+                "GOOGLE_GENAI_API_KEY (or GOOGLE_API_KEY) env var required for embeddings"
+            )
+        _embedding_model_cache = GoogleGenerativeAIEmbeddings(
+            model=GOOGLE_EMBEDDING_MODEL,
+            google_api_key=api_key,
+            output_dimensionality=EMBEDDING_DIMS,
+        )
+        logger.info(f"Embedding provider: Google ({GOOGLE_EMBEDDING_MODEL}, {EMBEDDING_DIMS} dims)")
+
+    return _embedding_model_cache
 
 
 # ---------------------------------------------------------------------------
 # Core helpers
 # ---------------------------------------------------------------------------
 
+def _is_rate_limit_error(e: Exception) -> bool:
+    """Check if an exception is a rate limit / availability error from any provider."""
+    error_str = str(e)
+    return any(kw in error_str for kw in [
+        '429', 'RESOURCE_EXHAUSTED', 'RateLimitError', 'rate_limit',
+        '503', 'UNAVAILABLE', 'overloaded', 'high demand',
+    ])
+
+
 async def embed_texts(texts: list[str]) -> list[list[float]]:
-    """Embed a list of texts using Gemini embedding model.
+    """Embed a list of texts using configured embedding provider.
 
     Returns list of 768-dim float vectors, one per input text.
-    Handles batching + rate limit retries for Google free tier.
+    Handles batching + rate limit retries for both Google and OpenAI.
     """
     model = _get_embedding_model()
     all_embeddings: list[list[float]] = []
     batch_count = 0
 
+    # OpenAI has higher rate limits — less aggressive delays needed
+    is_openai = EMBEDDING_PROVIDER == "openai"
+    base_delay = 1 if is_openai else EMBED_DELAY_SECONDS
+
     for i in range(0, len(texts), EMBED_BATCH_SIZE):
         batch = texts[i:i + EMBED_BATCH_SIZE]
 
-        # Retry with exponential backoff on 429 (rate limit)
+        # Retry with exponential backoff on rate limit / availability errors
         was_rate_limited = False
         succeeded = False
         for attempt in range(5):
@@ -73,10 +123,10 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
                 succeeded = True
                 break
             except Exception as e:
-                if '429' in str(e) or 'RESOURCE_EXHAUSTED' in str(e):
+                if _is_rate_limit_error(e):
                     was_rate_limited = True
-                    wait = EMBED_DELAY_SECONDS * (2 ** attempt)
-                    logger.info(f"[Vector] Rate limited, waiting {wait}s (attempt {attempt + 1}/5)")
+                    wait = base_delay * (2 ** attempt)
+                    logger.info(f"[Vector] Rate limited ({EMBEDDING_PROVIDER}), waiting {wait}s (attempt {attempt + 1}/5)")
                     await asyncio.sleep(wait)
                 else:
                     raise
@@ -93,16 +143,14 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
         batch_count += 1
 
         # Progressive delay strategy to stay under rate limits:
-        # - Normal: 5s between batches
-        # - Every 5 batches: 15s cooldown (lets quota replenish)
-        # - After rate limit recovery: 30s cooldown
+        # OpenAI: minimal delays (higher quota), Google: aggressive delays (free tier)
         if i + EMBED_BATCH_SIZE < len(texts):
             if was_rate_limited:
-                cooldown = 30
+                cooldown = 10 if is_openai else 30
             elif batch_count % 5 == 0:
-                cooldown = 15
+                cooldown = 2 if is_openai else 15
             else:
-                cooldown = EMBED_DELAY_SECONDS
+                cooldown = 0.5 if is_openai else base_delay
             await asyncio.sleep(cooldown)
 
     return all_embeddings
