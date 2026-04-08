@@ -61,7 +61,8 @@ export const DataHealthDashboard: React.FC = () => {
         const result = await dataHealthApi.get(clientId);
         if (isMountedRef.current) setData(result);
       } catch { /* silent */ }
-      // Load new health sections independently — don't block main data
+      finally { if (isMountedRef.current) setLoading(false); }
+      // Load new health sections independently — don't block main data render
       try {
         const classHealth = await api.get<any>(`/v1/analytics/data-health/classification?client_id=${clientId}`);
         if (isMountedRef.current) setClassificationHealth(classHealth);
@@ -70,7 +71,6 @@ export const DataHealthDashboard: React.FC = () => {
         const thHealth = await api.get<any>(`/v1/analytics/data-health/threads?client_id=${clientId}`);
         if (isMountedRef.current) setThreadHealth(thHealth);
       } catch { /* silent */ }
-      if (isMountedRef.current) setLoading(false);
     };
     load();
   }, [clientId]);
