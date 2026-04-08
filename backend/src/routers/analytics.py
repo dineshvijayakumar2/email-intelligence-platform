@@ -243,8 +243,24 @@ async def recompute_threads(
                 tracker.save_thread_statuses = _progress_save
                 tracker.evaluate_threads()
 
-                _set_progress('completed', 100, f'Done — {_saved_total[0]} threads computed')
-                logger.info(f"Thread recompute complete: {_saved_total[0]} threads for client {client_id}")
+                # Check for mailbox errors
+                mb_errors = getattr(tracker, '_mailbox_errors', [])
+                if mb_errors:
+                    error_summary = '; '.join(
+                        f"Mailbox {e['mailbox_id'][:8]}… failed at {e['emails_fetched']} emails"
+                        for e in mb_errors
+                    )
+                    _set_progress('completed_with_errors', 100,
+                                  f'Done — {_saved_total[0]} threads. {len(mb_errors)} mailbox(es) had errors: {error_summary}')
+                    # Store detailed errors for the health page
+                    import json as _json2
+                    _redis.setex(f"thread_recompute_errors:{client_id}", 86400,
+                                 _json2.dumps(mb_errors))
+                else:
+                    _set_progress('completed', 100, f'Done — {_saved_total[0]} threads computed')
+
+                logger.info(f"Thread recompute complete: {_saved_total[0]} threads for client {client_id}"
+                            f"{f', {len(mb_errors)} mailbox errors' if mb_errors else ''}")
 
             except Exception as e:
                 _set_progress('failed', 0, f'Error: {str(e)[:200]}')
@@ -261,14 +277,19 @@ async def recompute_threads(
 
 @router.get("/extraction/thread-recompute-progress")
 async def get_thread_recompute_progress(client_id: str = Query(...)):
-    """Poll progress of a running thread recompute job."""
+    """Poll progress of a running thread recompute job. Includes mailbox errors if any."""
     try:
         import redis, json as _json
         redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379')
         _redis = redis.from_url(redis_url, decode_responses=True)
         data = _redis.get(f"thread_recompute:{client_id}")
         if data:
-            return _json.loads(data)
+            result = _json.loads(data)
+            # Attach detailed errors if present
+            errors_data = _redis.get(f"thread_recompute_errors:{client_id}")
+            if errors_data:
+                result['mailbox_errors'] = _json.loads(errors_data)
+            return result
         return {'phase': 'idle', 'pct': 0, 'message': 'No active recompute'}
     except Exception:
         return {'phase': 'idle', 'pct': 0, 'message': 'No active recompute'}

@@ -65,7 +65,7 @@ export const DataHealthDashboard: React.FC = () => {
 
   // Thread recompute state
   const [recomputing, setRecomputing] = useState(false);
-  const [recomputeProgress, setRecomputeProgress] = useState<{ phase: string; pct: number; message: string } | null>(null);
+  const [recomputeProgress, setRecomputeProgress] = useState<{ phase: string; pct: number; message: string; mailbox_errors?: any[] } | null>(null);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const startRecompute = async () => {
@@ -79,16 +79,21 @@ export const DataHealthDashboard: React.FC = () => {
         try {
           const prog = await api.get<any>(`/v1/analytics/extraction/thread-recompute-progress?client_id=${clientId}`);
           setRecomputeProgress(prog);
-          if (prog.phase === 'completed') {
+          if (prog.phase === 'completed' || prog.phase === 'completed_with_errors') {
             setRecomputing(false);
-            toast.success(prog.message || 'Thread recompute complete');
-            // Reload data health
+            setRecomputeProgress(prog); // Keep to show errors
+            if (prog.phase === 'completed_with_errors') {
+              toast.warning(prog.message || 'Completed with errors');
+            } else {
+              toast.success(prog.message || 'Thread recompute complete');
+            }
             const result = await dataHealthApi.get(clientId);
             if (isMountedRef.current) setData(result);
             return;
           }
           if (prog.phase === 'failed') {
             setRecomputing(false);
+            setRecomputeProgress(prog);
             toast.error(prog.message || 'Thread recompute failed');
             return;
           }
@@ -261,6 +266,35 @@ export const DataHealthDashboard: React.FC = () => {
               </div>
             );
           })()}
+
+          {/* Recompute errors */}
+          {recomputeProgress?.mailbox_errors && recomputeProgress.mailbox_errors.length > 0 && !recomputing && (
+            <div className="mt-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <XCircle className="h-4 w-4 text-destructive" />
+                <span className="text-xs font-medium text-destructive">
+                  {recomputeProgress.mailbox_errors.length} mailbox(es) had errors during recompute
+                </span>
+              </div>
+              <div className="space-y-1">
+                {recomputeProgress.mailbox_errors.map((err: any, i: number) => (
+                  <div key={i} className="flex items-center justify-between text-xs bg-white rounded px-2 py-1.5 border border-slate-100">
+                    <span className="text-slate-600 font-mono">{err.mailbox_id?.slice(0, 8)}...</span>
+                    <span className="text-slate-500">Fetched {formatNumber(err.emails_fetched)} emails before timeout at offset {formatNumber(err.offset)}</span>
+                    <button
+                      onClick={() => {
+                        // TODO: Trigger per-mailbox recompute
+                        toast.info('Per-mailbox recompute coming soon');
+                      }}
+                      className="text-primary hover:underline ml-2"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Duplication warning */}
           {(data as any).thread_health?.duplicate_rows > 0 && !recomputing && (

@@ -197,7 +197,7 @@ class ThreadTracker:
         Returns:
             Dict mapping thread_id to list of email dicts
         """
-        PAGE_SIZE = 200  # Smaller pages to avoid timeout on large mailboxes
+        PAGE_SIZE = 500  # Larger pages reduce API calls (was 200, caused timeouts on 160K+ mailboxes)
         COLUMNS = ('id, thread_id, canonical_thread_id, subject, subject_normalized, sent_date, is_outbound, '
                    'customer_contact_id, customer_company_id, processing_status, folder_path')
         EXCLUDED_FOLDERS = {'trash', 'junk', 'spam', 'deleted items', 'deleted',
@@ -205,6 +205,7 @@ class ThreadTracker:
 
         threads: Dict[str, List[Dict]] = {}
         total_emails = 0
+        self._mailbox_errors: List[Dict] = []  # Track fetch failures per mailbox
 
         # Determine which mailboxes to process
         if self.client_id and not self.mailbox_id:
@@ -244,8 +245,14 @@ class ThreadTracker:
                                 .range(offset, offset + PAGE_SIZE - 1)
                                 .execute()
                             )
-                        except Exception:
+                        except Exception as e2:
                             logger.error(f"Thread fetch failed at offset {offset}, skipping rest of mailbox")
+                            self._mailbox_errors.append({
+                                'mailbox_id': mb_id,
+                                'offset': offset,
+                                'emails_fetched': mb_count,
+                                'error': str(e2)[:200],
+                            })
                             break
                     batch = response.data or []
                     if not batch:
@@ -548,14 +555,24 @@ class ThreadTracker:
         records = []
         timestamp = datetime.utcnow().isoformat()
 
-        # Status values are written directly — CHECK constraint (migration 020)
-        # allows: complete, awaiting_reply, overdue, dropped, outbound_pending, stale,
-        #         ongoing, awaiting_response, awaiting_our_response
+        import uuid as _uuid
+
+        def _ensure_uuid(tid: str) -> str:
+            """Convert non-UUID thread IDs (e.g. Outlook base64) to deterministic UUIDs."""
+            if not tid:
+                return str(_uuid.uuid4())
+            try:
+                _uuid.UUID(tid)  # Already a valid UUID
+                return tid
+            except ValueError:
+                # Hash the non-UUID string into a deterministic UUID5
+                return str(_uuid.uuid5(_uuid.NAMESPACE_URL, tid))
 
         for status in thread_statuses:
+            safe_tid = _ensure_uuid(status.thread_id)
             record = {
-                'thread_id': status.thread_id,
-                'canonical_thread_id': status.thread_id,  # Same as thread_id when using canonical resolution
+                'thread_id': safe_tid,
+                'canonical_thread_id': safe_tid,
                 'mailbox_id': self.mailbox_id,  # NULL in client-wide mode
                 'subject': status.subject,
                 'message_count': status.message_count,
