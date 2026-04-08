@@ -3537,7 +3537,7 @@ async def get_classification_health(client_id: Optional[str] = Query(default=Non
     """
     try:
         # Get mailboxes
-        mb_query = _supabase.table('mailboxes').select('id, email_address')
+        mb_query = _supabase.table('mailboxes').select('id, email_address, name')
         if client_id:
             mb_query = mb_query.eq('client_id', client_id)
         mb_result = mb_query.execute()
@@ -3596,7 +3596,7 @@ async def get_classification_health(client_id: Optional[str] = Query(default=Non
 
             per_mailbox.append({
                 'mailbox_id': mb_id,
-                'email_address': mb.get('email_address', 'Unknown'),
+                'email_address': mb.get('email_address') or mb.get('name', 'Unknown'),
                 'total_emails': total_emails,
                 'classified': classified,
                 'pending': pending,
@@ -3645,7 +3645,7 @@ async def get_thread_health(client_id: Optional[str] = Query(default=None)):
         if client_id:
             mb_query = mb_query.eq('client_id', client_id)
         mb_result = mb_query.execute()
-        mailboxes = {m['id']: m.get('email_address', 'Unknown') for m in (mb_result.data or [])}
+        mailboxes = {m['id']: (m.get('email_address') or m.get('name', 'Unknown')) for m in (mb_result.data or [])}
         mailbox_ids = list(mailboxes.keys())
 
         # Get last thread evaluation job (processing_jobs has no client_id — filter via mailbox_id)
