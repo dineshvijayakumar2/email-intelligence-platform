@@ -3473,7 +3473,8 @@ async def get_data_health(client_id: Optional[str] = Query(default=None)):
         recent_jobs = jobs_result.data or []
 
         # ---------- 6. Thread duplication health ----------
-        logger.info("data-health: step 6 - thread duplication")
+        # ---------- 6. Thread health (simple count — UNIQUE(thread_id) prevents dupes) ----------
+        logger.info("data-health: step 6 - thread health")
         thread_health = {'total_rows': 0, 'unique_threads': 0, 'duplicate_rows': 0, 'duplicate_pct': 0}
         try:
             total_rows_r = _supabase.table('thread_status').select('id', count='exact')
@@ -3482,30 +3483,16 @@ async def get_data_health(client_id: Optional[str] = Query(default=None)):
             total_rows_r = total_rows_r.execute()
             total_rows = total_rows_r.count or 0
 
-            # Count unique thread_ids
-            unique_threads_r = _supabase.rpc('count_unique_threads', {
-                'p_mailbox_ids': mailbox_ids[:500] if mailbox_ids else None
-            }).execute()
-            unique_count = unique_threads_r.data if isinstance(unique_threads_r.data, int) else total_rows
-
+            # With UNIQUE(thread_id) constraint from migration 060,
+            # total_rows == unique_threads by definition. No RPC needed.
             thread_health = {
                 'total_rows': total_rows,
-                'unique_threads': unique_count,
-                'duplicate_rows': max(0, total_rows - unique_count),
-                'duplicate_pct': round((total_rows - unique_count) / total_rows * 100, 1) if total_rows > 0 else 0,
+                'unique_threads': total_rows,
+                'duplicate_rows': 0,
+                'duplicate_pct': 0,
             }
         except Exception as th_err:
-            # RPC may not exist yet — fall back to simple count
-            logger.warning(f"Thread health RPC failed (expected if migration not run): {th_err}")
-            try:
-                total_r = _supabase.table('thread_status').select('id', count='exact')
-                if mailbox_ids:
-                    total_r = total_r.in_('mailbox_id', mailbox_ids[:500])
-                total_r = total_r.execute()
-                thread_health['total_rows'] = total_r.count or 0
-                thread_health['unique_threads'] = total_r.count or 0
-            except Exception:
-                pass
+            logger.warning(f"Thread health count failed: {th_err}")
 
         return {
             'mailbox_health': mailbox_health,
