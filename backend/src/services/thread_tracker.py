@@ -576,7 +576,8 @@ class ThreadTracker:
             }
             records.append(record)
 
-        # Batch insert
+        # Batch upsert — uses UNIQUE(mailbox_id, thread_id) constraint (migration 060)
+        # This ensures syncs UPDATE existing thread rows instead of creating duplicates
         batch_size = 100
         created_count = 0
         errors = []
@@ -584,13 +585,13 @@ class ThreadTracker:
         for i in range(0, len(records), batch_size):
             batch = records[i:i + batch_size]
             try:
-                # Use upsert to handle duplicates
                 self.client.table('thread_status').upsert(
                     batch,
-                    on_conflict='thread_id'
+                    on_conflict='mailbox_id,thread_id'
                 ).execute()
                 created_count += len(batch)
-                logger.info(f"Saved batch {i//batch_size + 1}: {len(batch)} thread statuses")
+                if (i // batch_size + 1) % 10 == 0:
+                    logger.info(f"Saved batch {i//batch_size + 1}: {created_count} thread statuses so far")
             except Exception as e:
                 logger.error(f"Failed to save batch {i//batch_size + 1}: {e}")
                 errors.append({'batch': i//batch_size + 1, 'error': str(e)})
