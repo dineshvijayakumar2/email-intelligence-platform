@@ -3640,22 +3640,26 @@ async def get_thread_health(client_id: Optional[str] = Query(default=None)):
     and status distribution. Shows which mailboxes had errors during thread evaluation.
     """
     try:
-        # Get last thread evaluation job
-        jobs_query = _supabase.table('processing_jobs').select(
-            'id, status, started_at, completed_at, error_summary, error_log'
-        ).eq('job_type', 'thread_recompute').order('started_at', desc=True).limit(1)
-        if client_id:
-            jobs_query = jobs_query.eq('client_id', client_id)
-        job_result = jobs_query.execute()
-        last_job = job_result.data[0] if job_result.data else None
-
-        # Get mailbox IDs for this client
+        # Get mailbox IDs for this client (needed for all subsequent queries)
         mb_query = _supabase.table('mailboxes').select('id, email_address')
         if client_id:
             mb_query = mb_query.eq('client_id', client_id)
         mb_result = mb_query.execute()
         mailboxes = {m['id']: m.get('email_address', 'Unknown') for m in (mb_result.data or [])}
         mailbox_ids = list(mailboxes.keys())
+
+        # Get last thread evaluation job (processing_jobs has no client_id — filter via mailbox_id)
+        last_job = None
+        try:
+            jobs_query = _supabase.table('processing_jobs').select(
+                'id, status, started_at, completed_at, error_summary, error_log'
+            ).eq('job_type', 'thread_recompute').order('started_at', desc=True).limit(1)
+            if mailbox_ids:
+                jobs_query = jobs_query.in_('mailbox_id', mailbox_ids[:500])
+            job_result = jobs_query.execute()
+            last_job = job_result.data[0] if job_result.data else None
+        except Exception as job_err:
+            logger.warning(f"Could not fetch thread recompute job: {job_err}")
 
         # Thread count per mailbox
         mailbox_stats = []

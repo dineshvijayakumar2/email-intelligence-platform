@@ -923,26 +923,33 @@ class ThreadTracker:
         """
         mailbox_errors = getattr(self, '_mailbox_errors', [])
 
-        # Get intent coverage from thread_status
+        # Get intent coverage from thread_status (no client_id column — filter via mailbox_ids)
         intent_coverage = {'with_intent': 0, 'without_intent': 0, 'coverage_pct': 0.0}
         try:
-            total_resp = self.client.table('thread_status').select(
-                'id', count='exact'
-            ).eq('client_id', self.client_id).execute()
-            total = total_resp.count or 0
-
-            with_intent_resp = self.client.table('thread_status').select(
-                'id', count='exact'
-            ).eq('client_id', self.client_id).not_.is_(
-                'last_email_intent', 'null'
+            # Get mailbox IDs for this client
+            mb_resp = self.client.table('mailboxes').select('id').eq(
+                'client_id', self.client_id
             ).execute()
-            with_intent = with_intent_resp.count or 0
+            mb_ids = [m['id'] for m in (mb_resp.data or [])]
 
-            intent_coverage = {
-                'with_intent': with_intent,
-                'without_intent': total - with_intent,
-                'coverage_pct': round(with_intent / total * 100, 1) if total > 0 else 0.0,
-            }
+            if mb_ids:
+                total_resp = self.client.table('thread_status').select(
+                    'id', count='exact'
+                ).in_('mailbox_id', mb_ids[:500]).execute()
+                total = total_resp.count or 0
+
+                with_intent_resp = self.client.table('thread_status').select(
+                    'id', count='exact'
+                ).in_('mailbox_id', mb_ids[:500]).not_.is_(
+                    'last_email_intent', 'null'
+                ).execute()
+                with_intent = with_intent_resp.count or 0
+
+                intent_coverage = {
+                    'with_intent': with_intent,
+                    'without_intent': total - with_intent,
+                    'coverage_pct': round(with_intent / total * 100, 1) if total > 0 else 0.0,
+                }
         except Exception as e:
             logger.warning(f"Failed to compute intent coverage: {e}")
 
