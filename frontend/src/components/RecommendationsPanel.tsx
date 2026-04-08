@@ -53,7 +53,7 @@ export const RecommendationsPanel: React.FC<Props> = ({ companyId }) => {
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        {computedAt && <span className="text-[11px] text-slate-400">Computed {new Date(computedAt).toLocaleString()}</span>}
+        {computedAt && <span className="text-[11px] text-slate-400">Computed {new Date(computedAt).toLocaleString('en-AU')}</span>}
         <button onClick={() => load(true)} className="ml-auto p-1 rounded hover:bg-slate-100"><RefreshCw className="h-3.5 w-3.5 text-slate-400" /></button>
       </div>
 

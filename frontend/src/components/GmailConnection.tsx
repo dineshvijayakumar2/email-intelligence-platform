@@ -20,6 +20,7 @@ import { Spinner } from '@/lib/icons';
 import { toast } from '@/lib/toast';
 import { StatusBadge } from '@/components/ui/status-badge';
 import gmailService, { GmailConnectionStatus } from '../services/gmailService';
+import { formatNumber } from '../utils/numberFormat';
 
 /* Google "G" icon — inline SVG so we don't need @ant-design/icons */
 const GoogleIcon: React.FC<{ className?: string }> = ({ className }) => (
@@ -319,7 +320,7 @@ const GmailConnection: React.FC<GmailConnectionProps> = ({
               <div className="flex justify-between items-center">
                 <span className="text-xs text-slate-500 flex items-center gap-1">
                   <Mail className="h-3 w-3" />
-                  {status.email_count.toLocaleString()} emails synced
+                  {formatNumber(status.email_count)} emails synced
                 </span>
                 <span className="text-xs text-slate-500 flex items-center gap-1">
                   <Clock className="h-3 w-3" />
@@ -442,7 +443,7 @@ const GmailConnection: React.FC<GmailConnectionProps> = ({
                 <p className="text-xs text-slate-500">Emails Synced</p>
                 <p className="mt-1 text-2xl font-semibold text-[#667eea] flex items-center gap-2">
                   <Mail className="h-5 w-5" />
-                  {status.email_count.toLocaleString()}
+                  {formatNumber(status.email_count)}
                 </p>
               </div>
               <div>

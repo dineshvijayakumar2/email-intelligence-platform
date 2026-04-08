@@ -15,6 +15,7 @@ import { ContentSkeleton } from '@/components/ui/empty-state';
 import { notify } from '@/lib/toast';
 import { useClient } from '../../contexts/ClientContext';
 import api from '../../services/apiClient';
+import { formatCurrency } from '../../utils/numberFormat';
 
 const PAGE_SIZE = 30;
 
@@ -485,7 +486,7 @@ export default function QuickbaseMatchesPage() {
                           {/* QB Revenue */}
                           <td className="px-4 py-2 text-sm text-right">
                             {record.qb_total_revenue != null
-                              ? <span className="text-slate-700">${Number(record.qb_total_revenue).toLocaleString()}</span>
+                              ? <span className="text-slate-700">{formatCurrency(Number(record.qb_total_revenue))}</span>
                               : <span className="text-slate-400">-</span>
                             }
                           </td>

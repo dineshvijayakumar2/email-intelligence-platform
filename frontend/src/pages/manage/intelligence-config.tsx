@@ -14,6 +14,7 @@ import { PageShell, PageHeader } from '@/components/ui/page-shell';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { ContentSkeleton } from '@/components/ui/empty-state';
 import { useClient } from '../../contexts/ClientContext';
+import { formatNumber } from '../../utils/numberFormat';
 import {
   getCapabilityTags, getClassifierRules, importClassifierRules,
   getRushSettings, updateRushSettings,
@@ -169,7 +170,7 @@ function ClassifierRulesTab({ clientId }: { clientId?: string }) {
             ))}
           </select>
           <span className="text-xs text-slate-400">
-            {total.toLocaleString()} rules &middot; v{version}
+            {formatNumber(total)} rules &middot; v{version}
           </span>
         </div>
         <button
@@ -205,7 +206,7 @@ function ClassifierRulesTab({ clientId }: { clientId?: string }) {
                     <td className="px-3 py-2 text-xs truncate max-w-[160px]">{r.dept || <span className="text-slate-400">&mdash;</span>}</td>
                     <td className="px-3 py-2 text-xs truncate">{r.op}</td>
                     <td className="px-3 py-2 text-xs truncate max-w-[180px]">{r.machine || <span className="text-slate-400">&mdash;</span>}</td>
-                    <td className="px-3 py-2 text-xs text-right text-slate-500">{r.count?.toLocaleString()}</td>
+                    <td className="px-3 py-2 text-xs text-right text-slate-500">{formatNumber(r.count)}</td>
                     <td className="px-3 py-2">
                       {r.tag
                         ? <StatusBadge variant="info" size="sm">{r.tag}</StatusBadge>
@@ -248,7 +249,7 @@ function ClassifierRulesTab({ clientId }: { clientId?: string }) {
         {/* Pagination */}
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-4 py-2.5 border-t bg-slate-50/50 text-xs text-slate-500">
-            <span>{total.toLocaleString()} rules</span>
+            <span>{formatNumber(total)} rules</span>
             <div className="flex items-center gap-1">
               <button
                 onClick={() => setPage(p => Math.max(1, p - 1))}
@@ -559,7 +560,7 @@ function CacheTab({ clientId }: { clientId?: string }) {
       return (
         <span className="inline-flex items-center gap-1.5 text-sm text-green-600">
           <CheckCircle2 className="h-3.5 w-3.5" />
-          Complete — {reclassifyStatus.updated?.toLocaleString()} operations updated
+          Complete — {formatNumber(reclassifyStatus.updated)} operations updated
         </span>
       );
     }
@@ -647,7 +648,7 @@ function CacheTab({ clientId }: { clientId?: string }) {
                     <StatusBadge variant="neutral" size="sm">{entry.cache_type}</StatusBadge>
                   </td>
                   <td className="px-4 py-2 text-sm text-slate-500">
-                    {entry.computed_at ? new Date(entry.computed_at).toLocaleString() : '—'}
+                    {entry.computed_at ? new Date(entry.computed_at).toLocaleString('en-AU') : '—'}
                   </td>
                 </tr>
               ))}

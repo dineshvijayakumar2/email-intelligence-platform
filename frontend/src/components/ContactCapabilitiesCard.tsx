@@ -8,6 +8,7 @@ import { companiesApi } from '../services/analyticsService';
 import { RefreshCw, User } from 'lucide-react';
 import { ContentSkeleton } from '@/components/ui/empty-state';
 import { cn } from '@/lib/utils';
+import { formatCurrency } from '../utils/numberFormat';
 
 const col = createColumnHelper<any>();
 
@@ -34,7 +35,7 @@ const ContactCapabilitiesCard: React.FC<{ companyId: string }> = ({ companyId })
       cell: info => (
         <div className="flex flex-wrap gap-1">
           {(info.getValue() || []).map((c: any) => (
-            <span key={c.tag} className="inline-flex items-center px-1.5 py-0 text-[11px] rounded bg-slate-100 text-slate-600" title={`${c.order_count} orders, $${Number(c.total_revenue).toLocaleString()}`}>
+            <span key={c.tag} className="inline-flex items-center px-1.5 py-0 text-[11px] rounded bg-slate-100 text-slate-600" title={`${c.order_count} orders, ${formatCurrency(Number(c.total_revenue))}`}>
               {c.tag} ({c.order_count})
             </span>
           ))}

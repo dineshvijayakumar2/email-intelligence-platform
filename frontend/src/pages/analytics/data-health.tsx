@@ -189,7 +189,7 @@ export const DataHealthDashboard: React.FC = () => {
                         </div>
                       ) : <span className="text-slate-400">—</span>}
                     </td>
-                    <td className="px-4 py-2 text-slate-500">{r.started_at ? new Date(r.started_at).toLocaleString() : '—'}</td>
+                    <td className="px-4 py-2 text-slate-500">{r.started_at ? new Date(r.started_at).toLocaleString('en-AU') : '—'}</td>
                     <td className="px-4 py-2">
                       {r.errors && r.errors.length > 0 ? <span className="text-xs text-destructive">{r.errors.length} error(s)</span> : '—'}
                     </td>

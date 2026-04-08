@@ -409,7 +409,7 @@ const PlaygroundPage: React.FC = () => {
             {promptUpdatedAt && (
               <StatusBadge variant="info" size="sm">
                 <Clock className="h-3 w-3 mr-1" />
-                Prompt updated: {new Date(promptUpdatedAt).toLocaleString()}
+                Prompt updated: {new Date(promptUpdatedAt).toLocaleString('en-AU')}
               </StatusBadge>
             )}
             {!promptUpdatedAt && !overrides[selectedPromptKey] && selectedPromptKey && (

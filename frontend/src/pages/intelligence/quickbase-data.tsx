@@ -17,6 +17,7 @@ import { StatusBadge } from '@/components/ui/status-badge';
 import { ContentSkeleton } from '@/components/ui/empty-state';
 import api from '../../services/apiClient';
 import { useQBTable, useQBSyncStatus } from '../../hooks/queries';
+import { formatNumber, formatCurrency } from '../../utils/numberFormat';
 
 const PAGE_SIZE = 50;
 
@@ -75,11 +76,11 @@ const customerColumns: ColDef[] = [
   { title: 'Account Manager', dataIndex: 'account_manager', key: 'account_manager', width: 160, ellipsis: true, sorter: true },
   { title: 'Industry', dataIndex: 'industry', key: 'industry', width: 140, ellipsis: true },
   { title: 'Total Invoiced', dataIndex: 'total_invoiced', key: 'total_invoiced', width: 130, align: 'right', sorter: true,
-    render: (v: number) => v != null ? `$${Number(v).toLocaleString()}` : '-' },
+    render: (v: number) => v != null ? formatCurrency(Number(v)) : '-' },
   { title: 'TY', dataIndex: 'invoiced_ty', key: 'invoiced_ty', width: 110, align: 'right', sorter: true,
-    render: (v: number) => v != null ? `$${Number(v).toLocaleString()}` : '-' },
+    render: (v: number) => v != null ? formatCurrency(Number(v)) : '-' },
   { title: 'LY', dataIndex: 'invoiced_ly', key: 'invoiced_ly', width: 110, align: 'right', sorter: true,
-    render: (v: number) => v != null ? `$${Number(v).toLocaleString()}` : '-' },
+    render: (v: number) => v != null ? formatCurrency(Number(v)) : '-' },
   { title: 'Days Since Invoice', dataIndex: 'days_since_last_invoice', key: 'days_since_last_invoice', width: 130, align: 'right', sorter: true,
     render: (v: number) => v != null
       ? <span className={v > 180 ? 'text-red-600 font-medium' : v > 90 ? 'text-amber-600 font-medium' : 'text-slate-700'}>{v}d</span>
@@ -116,7 +117,7 @@ const quoteColumns: ColDef[] = [
   { title: 'Category', dataIndex: 'category', key: 'category', width: 120,
     render: (v: string) => v ? <TagPill>{v}</TagPill> : '-' },
   { title: 'Sell (ex tax)', dataIndex: 'sell_ex_tax', key: 'sell_ex_tax', width: 120, align: 'right', sorter: true,
-    render: (v: number) => v != null ? `$${Number(v).toLocaleString()}` : '-' },
+    render: (v: number) => v != null ? formatCurrency(Number(v)) : '-' },
   { title: 'Created', dataIndex: 'date_created', key: 'date_created', width: 110, sorter: true,
     render: (v: string) => v ? new Date(v).toLocaleDateString() : '-' },
   { title: 'Accepted', dataIndex: 'date_accepted', key: 'date_accepted', width: 110, sorter: true,
@@ -132,9 +133,9 @@ const jobColumns: ColDef[] = [
   { title: 'Status', dataIndex: 'job_status', key: 'job_status', width: 120, sorter: true,
     render: (v: string) => v ? <TagPill>{v}</TagPill> : '-' },
   { title: 'Retail Sale', dataIndex: 'retail_sale', key: 'retail_sale', width: 120, align: 'right', sorter: true,
-    render: (v: number) => v != null ? `$${Number(v).toLocaleString()}` : '-' },
+    render: (v: number) => v != null ? formatCurrency(Number(v)) : '-' },
   { title: 'Margin', dataIndex: 'invoiced_margin', key: 'invoiced_margin', width: 110, align: 'right', sorter: true,
-    render: (v: number) => v != null ? `$${Number(v).toLocaleString()}` : '-' },
+    render: (v: number) => v != null ? formatCurrency(Number(v)) : '-' },
   { title: 'Margin %', dataIndex: 'margin_pct', key: 'margin_pct', width: 100, align: 'right', sorter: true,
     render: (v: number) => v != null ? `${Number(v).toFixed(1)}%` : '-' },
   { title: 'Accepted', dataIndex: 'accepted_date', key: 'accepted_date', width: 110, sorter: true,
@@ -175,9 +176,9 @@ const sliColumns: ColDef[] = [
     render: (v: string) => v ? <TagPill>{v}</TagPill> : '-' },
   { title: 'Industry', dataIndex: 'industry', key: 'industry', width: 130, ellipsis: true },
   { title: 'Subtotal', dataIndex: 'subtotal', key: 'subtotal', width: 110, align: 'right', sorter: true,
-    render: (v: number) => v != null ? `$${Number(v).toLocaleString()}` : '-' },
+    render: (v: number) => v != null ? formatCurrency(Number(v)) : '-' },
   { title: 'Total', dataIndex: 'total', key: 'total', width: 110, align: 'right', sorter: true,
-    render: (v: number) => v != null ? `$${Number(v).toLocaleString()}` : '-' },
+    render: (v: number) => v != null ? formatCurrency(Number(v)) : '-' },
   { title: 'Date', dataIndex: 'inv_date', key: 'inv_date', width: 110, sorter: true,
     render: (v: string) => v ? new Date(v).toLocaleDateString() : '-' },
 ];
@@ -216,7 +217,7 @@ const operationsColumns: ColDef[] = [
   { title: 'Date Accepted', dataIndex: 'date_accepted', key: 'date_accepted', width: 110, sorter: true,
     render: (v: string) => v ? new Date(v).toLocaleDateString() : '-' },
   { title: 'Cost+ Price', dataIndex: 'cost_plus_price', key: 'cost_plus_price', width: 110, align: 'right', sorter: true,
-    render: (v: number) => v != null ? `$${Number(v).toLocaleString()}` : '-' },
+    render: (v: number) => v != null ? formatCurrency(Number(v)) : '-' },
   { title: 'Profit %', dataIndex: 'profit_pct', key: 'profit_pct', width: 90, align: 'right', sorter: true,
     render: (v: number) => v != null ? `${Number(v).toFixed(1)}%` : '-' },
 ];
@@ -277,7 +278,7 @@ function SimplePagination({ page, pageSize, total, onChange }: {
 
   return (
     <div className="flex items-center justify-between px-1 py-2 text-xs text-slate-500">
-      <span>{from}-{to} of {total.toLocaleString()}</span>
+      <span>{from}-{to} of {formatNumber(total)}</span>
       <div className="flex items-center gap-1">
         <button
           disabled={page <= 1}
@@ -526,10 +527,10 @@ const QBTableTab: React.FC<{
         <div className="flex items-center gap-3 flex-wrap">
           {log?.synced_at && (
             <span className="text-[11px] text-slate-400" title={`Status: ${log.status}`}>
-              Last sync: {new Date(log.synced_at).toLocaleString()}
+              Last sync: {new Date(log.synced_at).toLocaleString('en-AU')}
             </span>
           )}
-          <span className="text-xs text-slate-500">{(query.data?.total || 0).toLocaleString()} records</span>
+          <span className="text-xs text-slate-500">{formatNumber(query.data?.total || 0)} records</span>
           <SyncDropdownButton
             label="Sync"
             loading={syncing}
@@ -642,7 +643,7 @@ const QuickbaseDataPage: React.FC = () => {
           <div className="flex items-center gap-3">
             {lastSyncAt && (
               <span className="text-xs text-slate-400">
-                Last sync: {new Date(lastSyncAt).toLocaleString()}
+                Last sync: {new Date(lastSyncAt).toLocaleString('en-AU')}
               </span>
             )}
             <SyncDropdownButton
@@ -664,9 +665,9 @@ const QuickbaseDataPage: React.FC = () => {
           return (
             <div key={config.key} className="rounded-lg border bg-white shadow-sm p-3">
               <p className="text-[11px] font-medium text-slate-500 uppercase tracking-wide mb-1">{config.label}</p>
-              <p className="text-lg font-semibold text-slate-900 tabular-nums">{count.toLocaleString()}</p>
+              <p className="text-lg font-semibold text-slate-900 tabular-nums">{formatNumber(count)}</p>
               {log?.synced_at ? (
-                <p className="text-[10px] text-slate-400 mt-0.5">{new Date(log.synced_at).toLocaleString()}</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">{new Date(log.synced_at).toLocaleString('en-AU')}</p>
               ) : count > 0 ? (
                 <p className="text-[10px] text-slate-400 mt-0.5 opacity-50">Sync log unavailable</p>
               ) : (
@@ -700,7 +701,7 @@ const QuickbaseDataPage: React.FC = () => {
                     <span className={`ml-1.5 inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
                       isActive ? 'bg-primary/10 text-primary' : 'bg-slate-100 text-slate-500'
                     }`}>
-                      {count.toLocaleString()}
+                      {formatNumber(count)}
                     </span>
                   )}
                 </button>
