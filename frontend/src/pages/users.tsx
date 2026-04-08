@@ -1,51 +1,27 @@
 /**
- * User Management Page
+ * User Management Page — Zero antd.
  *
  * Admin-only page for managing users, roles, and client assignments.
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import {
-  Table,
-  Card,
-  Button,
-  Space,
-  Typography,
-  Tag,
-  Modal,
-  Form,
-  Select,
-  message,
-  Avatar,
-  Tooltip,
-  Popconfirm,
-  Badge,
-  Empty,
-  Spin,
-  Input,
-} from 'antd';
-import {
-  UserOutlined,
-  CrownOutlined,
-  TeamOutlined,
-  SolutionOutlined,
-  EditOutlined,
-  PlusOutlined,
-  LinkOutlined,
-  DisconnectOutlined,
-  SearchOutlined,
-  ReloadOutlined,
-  CheckCircleOutlined,
-  StopOutlined,
-  MailOutlined,
-  InboxOutlined,
-} from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../services/apiClient';
 import { clientService, ClientSummary } from '../services/clientService';
 import { mailboxService, Mailbox } from '../services/mailboxService';
-
-const { Title, Text } = Typography;
+import { PageShell, PageHeader } from '@/components/ui/page-shell';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { ContentSkeleton, EmptyState } from '@/components/ui/empty-state';
+import { toast } from '@/lib/toast';
+import { cn } from '@/lib/utils';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  Crown, Users, Briefcase, Pencil, Plus, Link2, Unlink,
+  Search, RefreshCw, CheckCircle, Ban, Mail, Inbox, ShieldAlert,
+} from 'lucide-react';
+import { Spinner } from '@/lib/icons';
 
 interface MailboxSummary {
   id: string;
@@ -71,20 +47,20 @@ interface User {
 const roleConfig = {
   admin: {
     label: 'Admin',
-    color: 'gold',
-    icon: <CrownOutlined />,
+    variant: 'warning' as const,
+    icon: Crown,
     description: 'Full access to all mailboxes and settings',
   },
   client_manager: {
     label: 'Client Manager',
-    color: 'blue',
-    icon: <TeamOutlined />,
+    variant: 'info' as const,
+    icon: Users,
     description: 'Access to assigned client mailboxes',
   },
   account_manager: {
     label: 'Account Manager',
-    color: 'green',
-    icon: <SolutionOutlined />,
+    variant: 'success' as const,
+    icon: Briefcase,
     description: 'Access to own mailboxes only',
   },
 };
@@ -102,9 +78,13 @@ const UsersPage: React.FC = () => {
   const [mailboxModalVisible, setMailboxModalVisible] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [searchText, setSearchText] = useState('');
-  const [form] = Form.useForm();
-  const [assignForm] = Form.useForm();
-  const [mailboxForm] = Form.useForm();
+
+  // Form state for Edit Roles modal
+  const [formRoles, setFormRoles] = useState<string[]>([]);
+  // Form state for Assign Clients modal
+  const [formClientIds, setFormClientIds] = useState<string[]>([]);
+  // Form state for Assign Mailboxes modal
+  const [formMailboxIds, setFormMailboxIds] = useState<string[]>([]);
 
   useEffect(() => {
     loadUsers();
@@ -126,7 +106,7 @@ const UsersPage: React.FC = () => {
       }
     } catch (error) {
       console.error('Failed to load users:', error);
-      message.error('Failed to load users');
+      toast.error('Failed to load users');
     } finally {
       setLoading(false);
     }
@@ -152,91 +132,97 @@ const UsersPage: React.FC = () => {
 
   const handleEditRole = (user: User) => {
     setSelectedUser(user);
-    form.setFieldsValue({ roles: user.roles || [] });
+    setFormRoles(user.roles || []);
     setEditModalVisible(true);
   };
 
   const handleManageAssignments = (user: User) => {
     setSelectedUser(user);
-    assignForm.setFieldsValue({
-      client_ids: user.assigned_clients?.map((c) => c.id) || [],
-    });
+    setFormClientIds(user.assigned_clients?.map((c) => c.id) || []);
     setAssignModalVisible(true);
   };
 
-  const handleUpdateRole = async (values: { roles: string[] }) => {
+  const handleUpdateRole = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!selectedUser) return;
+    if (formRoles.length === 0) {
+      toast.warning('Please select at least one role');
+      return;
+    }
 
     try {
-      await api.patch(`/auth/users/${selectedUser.id}/roles`, { roles: values.roles });
-      message.success('User roles updated successfully');
+      await api.patch(`/auth/users/${selectedUser.id}/roles`, { roles: formRoles });
+      toast.success('User roles updated successfully');
       setEditModalVisible(false);
       setUsers(prev => prev.map(u =>
-        u.id === selectedUser.id ? { ...u, roles: values.roles as User['roles'] } : u
+        u.id === selectedUser.id ? { ...u, roles: formRoles as User['roles'] } : u
       ));
     } catch (error: any) {
-      message.error(error.message || 'Failed to update user roles');
+      toast.error(error.message || 'Failed to update user roles');
     }
   };
 
-  const handleUpdateAssignments = async (values: { client_ids: string[] }) => {
+  const handleUpdateAssignments = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!selectedUser) return;
 
     try {
       await api.put(`/auth/users/${selectedUser.id}/client-assignments`, {
-        client_ids: values.client_ids,
+        client_ids: formClientIds,
       });
 
       const roleType = selectedUser.roles?.includes('client_manager') ? 'oversight' : 'operational';
-      message.success(`Client ${roleType} assignments updated successfully`);
+      toast.success(`Client ${roleType} assignments updated successfully`);
       setAssignModalVisible(false);
-      const newAssignedClients = clients.filter(c => values.client_ids.includes(c.id));
+      const newAssignedClients = clients.filter(c => formClientIds.includes(c.id));
       setUsers(prev => prev.map(u =>
         u.id === selectedUser.id ? { ...u, assigned_clients: newAssignedClients } : u
       ));
     } catch (error: any) {
-      message.error(error.message || 'Failed to update client assignments');
+      toast.error(error.message || 'Failed to update client assignments');
     }
   };
 
   const handleManageMailboxes = (user: User) => {
     setSelectedUser(user);
-    mailboxForm.setFieldsValue({
-      mailbox_ids: user.assigned_mailboxes?.map((m) => m.id) || [],
-    });
+    setFormMailboxIds(user.assigned_mailboxes?.map((m) => m.id) || []);
     setMailboxModalVisible(true);
   };
 
-  const handleUpdateMailboxAssignments = async (values: { mailbox_ids: string[] }) => {
+  const handleUpdateMailboxAssignments = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!selectedUser) return;
 
     try {
       await api.put(`/auth/users/${selectedUser.id}/mailbox-assignments`, {
-        mailbox_ids: values.mailbox_ids,
+        mailbox_ids: formMailboxIds,
       });
 
-      message.success('Mailbox assignments updated successfully');
+      toast.success('Mailbox assignments updated successfully');
       setMailboxModalVisible(false);
       const newAssignedMailboxes: MailboxSummary[] = mailboxes
-        .filter(m => values.mailbox_ids.includes(m.id))
+        .filter(m => formMailboxIds.includes(m.id))
         .map(m => ({ id: m.id, name: m.name, email_address: m.email_address, mailbox_type: m.mailbox_type }));
       setUsers(prev => prev.map(u =>
         u.id === selectedUser.id ? { ...u, assigned_mailboxes: newAssignedMailboxes } : u
       ));
     } catch (error: any) {
-      message.error(error.message || 'Failed to update mailbox assignments');
+      toast.error(error.message || 'Failed to update mailbox assignments');
     }
   };
 
   const handleToggleActive = async (user: User) => {
+    const action = user.is_active ? 'deactivate' : 'activate';
+    if (!window.confirm(`Are you sure you want to ${action} ${user.name}?`)) return;
+
     try {
       await api.patch(`/auth/users/${user.id}/status`, { is_active: !user.is_active });
-      message.success(`User ${user.is_active ? 'deactivated' : 'activated'} successfully`);
+      toast.success(`User ${user.is_active ? 'deactivated' : 'activated'} successfully`);
       setUsers(prev => prev.map(u =>
         u.id === user.id ? { ...u, is_active: !user.is_active } : u
       ));
     } catch (error: any) {
-      message.error(error.message || 'Failed to update user status');
+      toast.error(error.message || 'Failed to update user status');
     }
   };
 
@@ -247,380 +233,472 @@ const UsersPage: React.FC = () => {
       user.email.toLowerCase().includes(searchText.toLowerCase())
   );
 
-  const columns = [
-    {
-      title: 'User',
-      key: 'user',
-      render: (_: any, record: User) => (
-        <Space>
-          <Avatar
-            size={40}
-            src={record.avatar_url}
-            style={{ backgroundColor: record.is_active ? '#667eea' : '#d9d9d9' }}
-          >
-            {record.name?.charAt(0).toUpperCase() || 'U'}
-          </Avatar>
-          <div>
-            <div style={{ fontWeight: 500 }}>
-              {record.name}
-              {!record.is_active && (
-                <Tag color="default" style={{ marginLeft: 8 }}>
-                  Inactive
-                </Tag>
-              )}
-            </div>
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              {record.email}
-            </Text>
-          </div>
-        </Space>
-      ),
-    },
-    {
-      title: 'Roles',
-      dataIndex: 'roles',
-      key: 'roles',
-      render: (roles: string[]) => (
-        <>
-          {roles?.map(role => {
-            const config = roleConfig[role as keyof typeof roleConfig];
-            return (
-              <Tooltip key={role} title={config?.description}>
-                <Tag color={config?.color} icon={config?.icon} style={{ marginBottom: 4 }}>
-                  {config?.label || role}
-                </Tag>
-              </Tooltip>
-            );
-          })}
-        </>
-      ),
-      filters: Object.entries(roleConfig).map(([value, config]) => ({
-        text: config.label,
-        value,
-      })),
-      onFilter: (value: any, record: User) => record.roles?.includes(value),
-    },
-    {
-      title: 'Assigned Clients',
-      key: 'clients',
-      render: (_: any, record: User) => {
-        // Show client assignments for both account_manager and client_manager roles
-        const hasClientRole = record.roles?.includes('account_manager') || record.roles?.includes('client_manager');
-        if (!hasClientRole) {
-          return <Text type="secondary">-</Text>;
-        }
-        const clientCount = record.assigned_clients?.length || 0;
-        const roleLabel = record.roles?.includes('client_manager') ? 'Manages' : 'Assigned to';
-        if (clientCount === 0) {
-          return <Text type="secondary">No clients {roleLabel.toLowerCase()}</Text>;
-        }
-        return (
-          <Space wrap>
-            {record.assigned_clients?.slice(0, 3).map((client) => (
-              <Tag
-                key={client.id}
-                color={record.roles?.includes('client_manager') ? 'blue' : 'green'}
-              >
-                {client.client_name}
-              </Tag>
-            ))}
-            {clientCount > 3 && <Tag>+{clientCount - 3} more</Tag>}
-          </Space>
-        );
-      },
-    },
-    {
-      title: 'Assigned Mailboxes',
-      key: 'mailboxes',
-      render: (_: any, record: User) => {
-        const mailboxCount = record.assigned_mailboxes?.length || 0;
-        if (mailboxCount === 0) {
-          return <Text type="secondary">No mailboxes</Text>;
-        }
-        return (
-          <Space wrap>
-            {record.assigned_mailboxes?.slice(0, 2).map((mailbox) => (
-              <Tag key={mailbox.id} icon={<InboxOutlined />} color="purple">
-                {mailbox.name}
-              </Tag>
-            ))}
-            {mailboxCount > 2 && <Tag>+{mailboxCount - 2} more</Tag>}
-          </Space>
-        );
-      },
-    },
-    {
-      title: 'Status',
-      key: 'status',
-      render: (_: any, record: User) => (
-        <Badge
-          status={record.is_active ? 'success' : 'default'}
-          text={record.is_active ? 'Active' : 'Inactive'}
-        />
-      ),
-      filters: [
-        { text: 'Active', value: true },
-        { text: 'Inactive', value: false },
-      ],
-      onFilter: (value: any, record: User) => record.is_active === value,
-    },
-    {
-      title: 'Actions',
-      key: 'actions',
-      render: (_: any, record: User) => (
-        <Space size="small">
-          <Tooltip title="Edit role">
-            <Button
-              type="text"
-              icon={<EditOutlined />}
-              onClick={() => handleEditRole(record)}
-              size="small"
-            />
-          </Tooltip>
-          {(record.roles?.includes('client_manager') || record.roles?.includes('account_manager')) && (
-            <Tooltip title={record.roles?.includes('client_manager') ? 'Manage client oversight' : 'Assign to clients'}>
-              <Button
-                type="text"
-                icon={<LinkOutlined />}
-                onClick={() => handleManageAssignments(record)}
-                size="small"
-              />
-            </Tooltip>
-          )}
-          <Tooltip title="Assign mailboxes">
-            <Button
-              type="text"
-              icon={<MailOutlined />}
-              onClick={() => handleManageMailboxes(record)}
-              size="small"
-            />
-          </Tooltip>
-          <Tooltip title={record.is_active ? 'Deactivate' : 'Activate'}>
-            <Popconfirm
-              title={`${record.is_active ? 'Deactivate' : 'Activate'} user?`}
-              description={`Are you sure you want to ${record.is_active ? 'deactivate' : 'activate'} ${record.name}?`}
-              onConfirm={() => handleToggleActive(record)}
-              okText="Yes"
-              cancelText="No"
-            >
-              <Button
-                type="text"
-                icon={record.is_active ? <StopOutlined /> : <CheckCircleOutlined />}
-                danger={record.is_active}
-                size="small"
-              />
-            </Popconfirm>
-          </Tooltip>
-        </Space>
-      ),
-    },
-  ];
+  // Multi-select toggle helper
+  const toggleItem = (list: string[], item: string): string[] =>
+    list.includes(item) ? list.filter(i => i !== item) : [...list, item];
 
   if (!isAdmin) {
     return (
-      <div className="glass-page-bg" style={{ padding: 24 }}>
-        <Card className="glass-card-static">
-          <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
+      <PageShell>
+        <div className="rounded-lg border bg-white shadow-sm">
+          <EmptyState
+            icon={<ShieldAlert className="h-10 w-10" />}
+            title="Access Denied"
             description="You don't have permission to view this page"
           />
-        </Card>
-      </div>
+        </div>
+      </PageShell>
     );
   }
 
   return (
-    <div className="glass-page-bg" style={{ padding: 24 }}>
-      <div style={{ marginBottom: 24 }}>
-        <Title level={3} className="gradient-text" style={{ margin: 0 }}>
-          User Management
-        </Title>
-        <Text type="secondary">Manage user roles and client assignments</Text>
-      </div>
+    <PageShell>
+      <PageHeader
+        title="User Management"
+        description="Manage user roles and client assignments"
+        actions={
+          <button
+            onClick={loadUsers}
+            disabled={loading}
+            className="h-8 px-3 text-sm rounded-md border border-slate-200 hover:bg-slate-50 inline-flex items-center gap-1.5"
+          >
+            <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
+            Refresh
+          </button>
+        }
+      />
 
-      <Card className="glass-card-static" style={{ marginBottom: 24 }}>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: 16,
-          }}
-        >
-          <Space>
-            <Input
-              placeholder="Search users..."
-              prefix={<SearchOutlined />}
-              value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
-              style={{ width: 250 }}
-              allowClear
-            />
-          </Space>
-          <Space>
-            <Button icon={<ReloadOutlined />} onClick={loadUsers} loading={loading}>
-              Refresh
-            </Button>
-          </Space>
+      {/* Search bar */}
+      <div className="rounded-lg border bg-white shadow-sm p-3 mb-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search users..."
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            className="w-full max-w-[300px] h-9 pl-9 pr-3 text-sm rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20"
+          />
+          {searchText && (
+            <button
+              onClick={() => setSearchText('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            >
+              &times;
+            </button>
+          )}
         </div>
-      </Card>
-
-      <div className="glass-table-container">
-        <Table
-          columns={columns}
-          dataSource={filteredUsers}
-          rowKey="id"
-          loading={loading}
-          pagination={{
-            pageSize: 10,
-            showSizeChanger: true,
-            showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} users`,
-          }}
-        />
       </div>
 
-      {/* Edit Roles Modal */}
-      <Modal
-        title={`Edit Roles - ${selectedUser?.name}`}
-        open={editModalVisible}
-        onCancel={() => setEditModalVisible(false)}
-        footer={null}
-        className="glass-modal"
-      >
-        <Form form={form} onFinish={handleUpdateRole} layout="vertical">
-          <Form.Item
-            name="roles"
-            label="User Roles"
-            rules={[{ required: true, message: 'Please select at least one role' }]}
-            extra="Users can have multiple roles. Example: Admin can also be Account Manager to monitor mailboxes."
-          >
-            <Select mode="multiple" size="large" placeholder="Select roles">
-              {Object.entries(roleConfig).map(([value, config]) => (
-                <Select.Option key={value} value={value}>
-                  <Space>
-                    {config.icon}
-                    <span>{config.label}</span>
-                  </Space>
-                </Select.Option>
-              ))}
-            </Select>
-          </Form.Item>
-          <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
-            <Space>
-              <Button onClick={() => setEditModalVisible(false)}>Cancel</Button>
-              <Button type="primary" htmlType="submit" className="glass-button-primary">
+      {/* Users Table */}
+      <div className="rounded-lg border bg-white shadow-sm overflow-hidden">
+        {loading && users.length === 0 ? (
+          <ContentSkeleton rows={6} />
+        ) : filteredUsers.length === 0 ? (
+          <EmptyState
+            icon={<Users className="h-10 w-10" />}
+            title="No users found"
+            description={searchText ? 'Try adjusting your search' : 'No users available'}
+          />
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b bg-slate-50/50">
+                <th className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">User</th>
+                <th className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Roles</th>
+                <th className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Assigned Clients</th>
+                <th className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Assigned Mailboxes</th>
+                <th className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600 w-24">Status</th>
+                <th className="px-4 py-2.5 text-right text-xs font-bold uppercase tracking-wider text-slate-600 w-28">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {filteredUsers.map((record) => {
+                const hasClientRole = record.roles?.includes('account_manager') || record.roles?.includes('client_manager');
+                const clientCount = record.assigned_clients?.length || 0;
+                const mailboxCount = record.assigned_mailboxes?.length || 0;
+
+                return (
+                  <tr key={record.id} className="hover:bg-slate-50/50">
+                    {/* User column */}
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-3">
+                        {record.avatar_url ? (
+                          <img
+                            src={record.avatar_url}
+                            alt={record.name}
+                            className="h-9 w-9 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div
+                            className={cn(
+                              'h-9 w-9 rounded-full flex items-center justify-center text-sm font-medium text-white',
+                              record.is_active ? 'bg-primary' : 'bg-slate-300',
+                            )}
+                          >
+                            {record.name?.charAt(0).toUpperCase() || 'U'}
+                          </div>
+                        )}
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-slate-900">{record.name}</span>
+                            {!record.is_active && (
+                              <StatusBadge variant="neutral" size="sm">Inactive</StatusBadge>
+                            )}
+                          </div>
+                          <span className="text-xs text-slate-400">{record.email}</span>
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Roles column */}
+                    <td className="px-4 py-2.5">
+                      <div className="flex flex-wrap gap-1">
+                        {record.roles?.map((role) => {
+                          const config = roleConfig[role as keyof typeof roleConfig];
+                          if (!config) return null;
+                          const Icon = config.icon;
+                          return (
+                            <span key={role} title={config.description}>
+                              <StatusBadge variant={config.variant} size="sm">
+                                <Icon className="h-3 w-3 mr-1" />
+                                {config.label}
+                              </StatusBadge>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </td>
+
+                    {/* Assigned Clients column */}
+                    <td className="px-4 py-2.5">
+                      {!hasClientRole ? (
+                        <span className="text-xs text-slate-400">-</span>
+                      ) : clientCount === 0 ? (
+                        <span className="text-xs text-slate-400">
+                          No clients {record.roles?.includes('client_manager') ? 'manages' : 'assigned to'}
+                        </span>
+                      ) : (
+                        <div className="flex flex-wrap gap-1">
+                          {record.assigned_clients?.slice(0, 3).map((client) => (
+                            <StatusBadge
+                              key={client.id}
+                              variant={record.roles?.includes('client_manager') ? 'info' : 'success'}
+                              size="sm"
+                            >
+                              {client.client_name}
+                            </StatusBadge>
+                          ))}
+                          {clientCount > 3 && (
+                            <StatusBadge variant="neutral" size="sm">+{clientCount - 3} more</StatusBadge>
+                          )}
+                        </div>
+                      )}
+                    </td>
+
+                    {/* Assigned Mailboxes column */}
+                    <td className="px-4 py-2.5">
+                      {mailboxCount === 0 ? (
+                        <span className="text-xs text-slate-400">No mailboxes</span>
+                      ) : (
+                        <div className="flex flex-wrap gap-1">
+                          {record.assigned_mailboxes?.slice(0, 2).map((mailbox) => (
+                            <StatusBadge key={mailbox.id} variant="purple" size="sm">
+                              <Inbox className="h-3 w-3 mr-1" />
+                              {mailbox.name}
+                            </StatusBadge>
+                          ))}
+                          {mailboxCount > 2 && (
+                            <StatusBadge variant="neutral" size="sm">+{mailboxCount - 2} more</StatusBadge>
+                          )}
+                        </div>
+                      )}
+                    </td>
+
+                    {/* Status column */}
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className={cn(
+                          'h-2 w-2 rounded-full',
+                          record.is_active ? 'bg-emerald-500' : 'bg-slate-300',
+                        )} />
+                        <span className={cn(
+                          'text-xs',
+                          record.is_active ? 'text-slate-700' : 'text-slate-400',
+                        )}>
+                          {record.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                      </div>
+                    </td>
+
+                    {/* Actions column */}
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => handleEditRole(record)}
+                          className="p-1.5 rounded hover:bg-slate-100"
+                          title="Edit roles"
+                        >
+                          <Pencil className="h-3.5 w-3.5 text-slate-400" />
+                        </button>
+                        {(record.roles?.includes('client_manager') || record.roles?.includes('account_manager')) && (
+                          <button
+                            onClick={() => handleManageAssignments(record)}
+                            className="p-1.5 rounded hover:bg-slate-100"
+                            title={record.roles?.includes('client_manager') ? 'Manage client oversight' : 'Assign to clients'}
+                          >
+                            <Link2 className="h-3.5 w-3.5 text-slate-400" />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleManageMailboxes(record)}
+                          className="p-1.5 rounded hover:bg-slate-100"
+                          title="Assign mailboxes"
+                        >
+                          <Mail className="h-3.5 w-3.5 text-slate-400" />
+                        </button>
+                        <button
+                          onClick={() => handleToggleActive(record)}
+                          className={cn(
+                            'p-1.5 rounded',
+                            record.is_active ? 'hover:bg-red-50' : 'hover:bg-emerald-50',
+                          )}
+                          title={record.is_active ? 'Deactivate' : 'Activate'}
+                        >
+                          {record.is_active ? (
+                            <Ban className="h-3.5 w-3.5 text-slate-400 hover:text-destructive" />
+                          ) : (
+                            <CheckCircle className="h-3.5 w-3.5 text-slate-400 hover:text-emerald-600" />
+                          )}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div className="mt-2 text-xs text-slate-400 px-1">
+        {filteredUsers.length} of {users.length} users
+      </div>
+
+      {/* Edit Roles Dialog */}
+      <Dialog open={editModalVisible} onOpenChange={setEditModalVisible}>
+        <DialogContent className="sm:max-w-[460px]">
+          <DialogHeader>
+            <DialogTitle>Edit Roles &mdash; {selectedUser?.name}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleUpdateRole} className="space-y-4">
+            <div>
+              <label className="text-sm font-medium text-slate-700 block mb-1">User Roles</label>
+              <p className="text-xs text-slate-400 mb-2">
+                Users can have multiple roles. Example: Admin can also be Account Manager to monitor mailboxes.
+              </p>
+              <div className="space-y-2">
+                {Object.entries(roleConfig).map(([value, config]) => {
+                  const Icon = config.icon;
+                  const isSelected = formRoles.includes(value);
+                  return (
+                    <label
+                      key={value}
+                      className={cn(
+                        'flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-colors',
+                        isSelected
+                          ? 'border-primary bg-primary-subtle'
+                          : 'border-slate-200 hover:bg-slate-50',
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => setFormRoles(prev => toggleItem(prev, value))}
+                        className="sr-only"
+                      />
+                      <Icon className={cn('h-4 w-4', isSelected ? 'text-primary' : 'text-slate-400')} />
+                      <div className="flex-1">
+                        <span className={cn('text-sm font-medium', isSelected ? 'text-primary' : 'text-slate-700')}>
+                          {config.label}
+                        </span>
+                        <p className="text-xs text-slate-400">{config.description}</p>
+                      </div>
+                      <div className={cn(
+                        'h-4 w-4 rounded border flex items-center justify-center',
+                        isSelected ? 'bg-primary border-primary' : 'border-slate-300',
+                      )}>
+                        {isSelected && (
+                          <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+              {formRoles.length === 0 && (
+                <p className="text-xs text-destructive mt-1">Please select at least one role</p>
+              )}
+            </div>
+            <DialogFooter>
+              <button
+                type="button"
+                onClick={() => setEditModalVisible(false)}
+                className="h-9 px-4 text-sm rounded-md border border-slate-200 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={formRoles.length === 0}
+                className="h-9 px-4 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary-dark disabled:opacity-50"
+              >
                 Update Roles
-              </Button>
-            </Space>
-          </Form.Item>
-        </Form>
-      </Modal>
+              </button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
-      {/* Assign Clients Modal */}
-      <Modal
-        title={`Manage Client Assignments - ${selectedUser?.name}`}
-        open={assignModalVisible}
-        onCancel={() => setAssignModalVisible(false)}
-        footer={null}
-        className="glass-modal"
-        width={500}
-      >
-        <Form form={assignForm} onFinish={handleUpdateAssignments} layout="vertical">
-          <Form.Item
-            name="client_ids"
-            label="Assigned Clients"
-            extra="This user will have access to mailboxes belonging to these clients"
-          >
-            <Select
-              mode="multiple"
-              size="large"
-              placeholder="Select clients to assign"
-              optionFilterProp="label"
-              showSearch
-            >
-              {clients.map((client) => (
-                <Select.Option key={client.id} value={client.id} label={client.client_name}>
-                  <Space>
-                    <TeamOutlined />
-                    <span>{client.client_name}</span>
-                    {client.client_label && (
-                      <Text type="secondary" style={{ fontSize: 12 }}>
-                        ({client.client_label})
-                      </Text>
-                    )}
-                  </Space>
-                </Select.Option>
-              ))}
-            </Select>
-          </Form.Item>
-          <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
-            <Space>
-              <Button onClick={() => setAssignModalVisible(false)}>Cancel</Button>
-              <Button type="primary" htmlType="submit" className="glass-button-primary">
+      {/* Assign Clients Dialog */}
+      <Dialog open={assignModalVisible} onOpenChange={setAssignModalVisible}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Manage Client Assignments &mdash; {selectedUser?.name}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleUpdateAssignments} className="space-y-4">
+            <div>
+              <label className="text-sm font-medium text-slate-700 block mb-1">Assigned Clients</label>
+              <p className="text-xs text-slate-400 mb-2">
+                This user will have access to mailboxes belonging to these clients
+              </p>
+              <div className="max-h-[280px] overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100">
+                {clients.length === 0 ? (
+                  <div className="p-4 text-center text-xs text-slate-400">No clients available</div>
+                ) : (
+                  clients.map((client) => {
+                    const isSelected = formClientIds.includes(client.id);
+                    return (
+                      <label
+                        key={client.id}
+                        className={cn(
+                          'flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors',
+                          isSelected ? 'bg-primary-subtle' : 'hover:bg-slate-50',
+                        )}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => setFormClientIds(prev => toggleItem(prev, client.id))}
+                          className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary/20"
+                        />
+                        <Users className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <span className="text-sm text-slate-700">{client.client_name}</span>
+                          {client.client_label && (
+                            <span className="text-xs text-slate-400 ml-1.5">({client.client_label})</span>
+                          )}
+                        </div>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+              {formClientIds.length > 0 && (
+                <p className="text-xs text-slate-500 mt-1.5">{formClientIds.length} client(s) selected</p>
+              )}
+            </div>
+            <DialogFooter>
+              <button
+                type="button"
+                onClick={() => setAssignModalVisible(false)}
+                className="h-9 px-4 text-sm rounded-md border border-slate-200 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="h-9 px-4 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary-dark"
+              >
                 Update Assignments
-              </Button>
-            </Space>
-          </Form.Item>
-        </Form>
-      </Modal>
+              </button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
-      {/* Assign Mailboxes Modal */}
-      <Modal
-        title={`Manage Mailbox Assignments - ${selectedUser?.name}`}
-        open={mailboxModalVisible}
-        onCancel={() => setMailboxModalVisible(false)}
-        footer={null}
-        className="glass-modal"
-        width={600}
-      >
-        <Form form={mailboxForm} onFinish={handleUpdateMailboxAssignments} layout="vertical">
-          <Form.Item
-            name="mailbox_ids"
-            label="Assigned Mailboxes"
-            extra="Directly assign specific mailboxes to this user. This gives them access regardless of client assignments."
-          >
-            <Select
-              mode="multiple"
-              size="large"
-              placeholder="Select mailboxes to assign"
-              optionFilterProp="label"
-              showSearch
-              filterOption={(input, option) =>
-                (option?.label?.toString() || '').toLowerCase().includes(input.toLowerCase())
-              }
-            >
-              {mailboxes.map((mailbox) => (
-                <Select.Option
-                  key={mailbox.id}
-                  value={mailbox.id}
-                  label={`${mailbox.name} ${mailbox.email_address || ''}`}
-                >
-                  <Space>
-                    <InboxOutlined />
-                    <span>{mailbox.name}</span>
-                    {mailbox.email_address && (
-                      <Text type="secondary" style={{ fontSize: 12 }}>
-                        ({mailbox.email_address})
-                      </Text>
-                    )}
-                    <Tag style={{ marginLeft: 'auto' }}>{mailbox.mailbox_type.toUpperCase()}</Tag>
-                  </Space>
-                </Select.Option>
-              ))}
-            </Select>
-          </Form.Item>
-          <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
-            <Space>
-              <Button onClick={() => setMailboxModalVisible(false)}>Cancel</Button>
-              <Button type="primary" htmlType="submit" className="glass-button-primary">
+      {/* Assign Mailboxes Dialog */}
+      <Dialog open={mailboxModalVisible} onOpenChange={setMailboxModalVisible}>
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle>Manage Mailbox Assignments &mdash; {selectedUser?.name}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleUpdateMailboxAssignments} className="space-y-4">
+            <div>
+              <label className="text-sm font-medium text-slate-700 block mb-1">Assigned Mailboxes</label>
+              <p className="text-xs text-slate-400 mb-2">
+                Directly assign specific mailboxes to this user. This gives them access regardless of client assignments.
+              </p>
+              <div className="max-h-[300px] overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100">
+                {mailboxes.length === 0 ? (
+                  <div className="p-4 text-center text-xs text-slate-400">No mailboxes available</div>
+                ) : (
+                  mailboxes.map((mailbox) => {
+                    const isSelected = formMailboxIds.includes(mailbox.id);
+                    return (
+                      <label
+                        key={mailbox.id}
+                        className={cn(
+                          'flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors',
+                          isSelected ? 'bg-primary-subtle' : 'hover:bg-slate-50',
+                        )}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => setFormMailboxIds(prev => toggleItem(prev, mailbox.id))}
+                          className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary/20"
+                        />
+                        <Inbox className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <span className="text-sm text-slate-700">{mailbox.name}</span>
+                          {mailbox.email_address && (
+                            <span className="text-xs text-slate-400 ml-1.5">({mailbox.email_address})</span>
+                          )}
+                        </div>
+                        <span className="text-[10px] uppercase tracking-wide font-medium text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded flex-shrink-0">
+                          {mailbox.mailbox_type}
+                        </span>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+              {formMailboxIds.length > 0 && (
+                <p className="text-xs text-slate-500 mt-1.5">{formMailboxIds.length} mailbox(es) selected</p>
+              )}
+            </div>
+            <DialogFooter>
+              <button
+                type="button"
+                onClick={() => setMailboxModalVisible(false)}
+                className="h-9 px-4 text-sm rounded-md border border-slate-200 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="h-9 px-4 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary-dark"
+              >
                 Update Mailbox Assignments
-              </Button>
-            </Space>
-          </Form.Item>
-        </Form>
-      </Modal>
-    </div>
+              </button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </PageShell>
   );
 };
 

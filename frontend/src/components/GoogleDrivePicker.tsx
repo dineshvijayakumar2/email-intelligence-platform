@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Button, Modal, List, Space, Tag, message, Spin, Input, Empty, Breadcrumb, Typography } from 'antd';
-import { GoogleOutlined, FileOutlined, FolderOutlined, SearchOutlined, HomeOutlined } from '@ant-design/icons';
+import { Search, FolderOpen, File, Home, ChevronRight } from 'lucide-react';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Spinner } from '@/lib/icons';
+import { toast } from '@/lib/toast';
 import googleDriveService from '../services/googleDriveService';
 import { formatDate as formatDateUtil } from '../utils/dateUtils';
 // @ts-ignore
 import config from '../config.js';
-
-const { Text } = Typography;
 
 interface GoogleDriveFile {
   id: string;
@@ -23,9 +24,9 @@ interface GoogleDrivePickerProps {
   acceptedFormats?: string[];
 }
 
-const GoogleDrivePicker: React.FC<GoogleDrivePickerProps> = ({ 
-  onFileSelect, 
-  acceptedFormats = ['.mbox', '.pst', '.olm'] 
+const GoogleDrivePicker: React.FC<GoogleDrivePickerProps> = ({
+  onFileSelect,
+  acceptedFormats = ['.mbox', '.pst', '.olm']
 }) => {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -36,6 +37,7 @@ const GoogleDrivePicker: React.FC<GoogleDrivePickerProps> = ({
   const [folderPath, setFolderPath] = useState<Array<{id: string, name: string}>>([
     { id: 'all', name: 'All Files' }
   ]);
+  const [searchValue, setSearchValue] = useState('');
 
   useEffect(() => {
     // Check authentication status on mount
@@ -48,10 +50,10 @@ const GoogleDrivePicker: React.FC<GoogleDrivePickerProps> = ({
       await googleDriveService.authenticate();
       setIsAuthenticated(true);
       await loadFiles('all'); // Load all files
-      message.success('Successfully connected to Google Drive');
+      toast.success('Successfully connected to Google Drive');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      message.error(`Authentication failed: ${errorMessage}`);
+      toast.error(`Authentication failed: ${errorMessage}`);
       console.error('Authentication error:', error);
     } finally {
       setLoading(false);
@@ -115,7 +117,7 @@ const GoogleDrivePicker: React.FC<GoogleDrivePickerProps> = ({
         setFiles(filesWithPaths);
 
         if (allItems.length === 0) {
-          message.info('No email archive files (.mbox, .pst, .olm) found in your Google Drive');
+          toast.info('No email archive files (.mbox, .pst, .olm) found in your Google Drive');
         }
       } else {
         // In folder view, separate folders and files
@@ -139,7 +141,7 @@ const GoogleDrivePicker: React.FC<GoogleDrivePickerProps> = ({
         setFiles(combined);
       }
     } catch (error) {
-      message.error('Failed to load files from Google Drive');
+      toast.error('Failed to load files from Google Drive');
       console.error('Error loading files:', error);
     } finally {
       setLoading(false);
@@ -178,7 +180,7 @@ const GoogleDrivePicker: React.FC<GoogleDrivePickerProps> = ({
     if (selectedFile) {
       onFileSelect(selectedFile);
       setIsModalVisible(false);
-      message.success(`Selected: ${selectedFile.name}`);
+      toast.success(`Selected: ${selectedFile.name}`);
     }
   };
 
@@ -198,134 +200,186 @@ const GoogleDrivePicker: React.FC<GoogleDrivePickerProps> = ({
 
   const getFileIcon = (mimeType: string) => {
     if (mimeType === 'application/vnd.google-apps.folder') {
-      return <FolderOutlined />;
+      return <FolderOpen className="h-4 w-4 text-blue-500" />;
     }
-    return <FileOutlined />;
+    return <File className="h-4 w-4 text-slate-400" />;
   };
 
-  const getFileTypeTag = (name: string) => {
-    if (name.endsWith('.mbox')) return <Tag color="blue">MBOX</Tag>;
-    if (name.endsWith('.pst')) return <Tag color="green">PST</Tag>;
-    if (name.endsWith('.olm')) return <Tag color="purple">OLM</Tag>;
-    return <Tag>File</Tag>;
+  const getFileTypeBadge = (name: string) => {
+    const lower = name.toLowerCase();
+    if (lower.endsWith('.mbox')) return <StatusBadge variant="info">MBOX</StatusBadge>;
+    if (lower.endsWith('.pst')) return <StatusBadge variant="success">PST</StatusBadge>;
+    if (lower.endsWith('.olm')) return <StatusBadge variant="purple">OLM</StatusBadge>;
+    return <StatusBadge variant="neutral">File</StatusBadge>;
   };
 
   return (
     <>
-      <Button 
-        icon={<GoogleOutlined />} 
+      <button
+        type="button"
         onClick={() => setIsModalVisible(true)}
-        type="primary"
+        className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark transition-colors"
       >
+        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z"/>
+        </svg>
         Select from Google Drive
-      </Button>
+      </button>
 
-      <Modal
-        title="Select Email Archive from Google Drive"
-        open={isModalVisible}
-        onCancel={() => setIsModalVisible(false)}
-        onOk={handleConfirmSelection}
-        width={800}
-        okText="Select File"
-        okButtonProps={{ 
-          disabled: !selectedFile || selectedFile?.mimeType === 'application/vnd.google-apps.folder' 
-        }}
-      >
-        {!isAuthenticated ? (
-          <div style={{ textAlign: 'center', padding: '40px 0' }}>
-            <GoogleOutlined style={{ fontSize: 48, color: '#4285f4', marginBottom: 20 }} />
-            <h3>Connect to Google Drive</h3>
-            <p>Sign in to access your email archive files from Google Drive</p>
-            <Button 
-              type="primary" 
-              icon={<GoogleOutlined />} 
-              onClick={handleAuthenticate}
-              loading={loading}
-              size="large"
-            >
-              Connect Google Drive
-            </Button>
-          </div>
-        ) : (
-          <Spin spinning={loading}>
-            <Space direction="vertical" style={{ width: '100%' }} size="middle">
-              {/* Breadcrumb Navigation */}
-              <Breadcrumb 
-                items={folderPath.map((folder, index) => ({
-                  key: folder.id,
-                  title: (
-                    <a onClick={() => handleNavigateToBreadcrumb(folder.id, index)}>
-                      {index === 0 ? <><HomeOutlined /> {folder.name}</> : folder.name}
-                    </a>
-                  )
-                }))}
-              />
+      <Dialog open={isModalVisible} onOpenChange={setIsModalVisible}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Select Email Archive from Google Drive</DialogTitle>
+          </DialogHeader>
 
-              <Input.Search
-                placeholder="Search in current folder..."
-                prefix={<SearchOutlined />}
-                onSearch={handleSearch}
-                enterButton="Search"
-              />
+          {!isAuthenticated ? (
+            <div className="flex flex-col items-center py-10 gap-5">
+              <svg className="h-12 w-12 text-[#4285f4]" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z"/>
+              </svg>
+              <h3 className="text-lg font-semibold text-slate-900">Connect to Google Drive</h3>
+              <p className="text-sm text-slate-500">Sign in to access your email archive files from Google Drive</p>
+              <button
+                type="button"
+                onClick={handleAuthenticate}
+                disabled={loading}
+                className="inline-flex items-center gap-2 rounded-md bg-[#4285f4] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#3367d6] transition-colors disabled:opacity-50"
+              >
+                {loading && <Spinner className="h-4 w-4 animate-spin" />}
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z"/>
+                </svg>
+                Connect Google Drive
+              </button>
+            </div>
+          ) : (
+            <div className="relative">
+              {loading && (
+                <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/70 rounded-lg">
+                  <Spinner className="h-6 w-6 animate-spin text-primary" />
+                </div>
+              )}
+              <div className="flex flex-col gap-3">
+                {/* Breadcrumb Navigation */}
+                <nav className="flex items-center gap-1 text-sm">
+                  {folderPath.map((folder, index) => (
+                    <React.Fragment key={folder.id}>
+                      {index > 0 && <ChevronRight className="h-3.5 w-3.5 text-slate-400" />}
+                      <button
+                        type="button"
+                        onClick={() => handleNavigateToBreadcrumb(folder.id, index)}
+                        className="inline-flex items-center gap-1 text-slate-600 hover:text-primary transition-colors"
+                      >
+                        {index === 0 && <Home className="h-3.5 w-3.5" />}
+                        {folder.name}
+                      </button>
+                    </React.Fragment>
+                  ))}
+                </nav>
 
-              {files.length === 0 ? (
-                <Empty 
-                  description="No email archive files found"
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                />
-              ) : (
-                <List
-                  dataSource={files}
-                  style={{ maxHeight: 400, overflowY: 'auto' }}
-                  renderItem={(file) => (
-                    <List.Item
-                      key={file.id}
-                      onClick={() => handleSelectFile(file)}
-                      style={{
-                        cursor: 'pointer',
-                        backgroundColor: selectedFile?.id === file.id ? '#f0f2f5' : 'transparent',
-                        padding: '12px',
-                        borderRadius: '4px',
-                        borderLeft: file.mimeType === 'application/vnd.google-apps.folder' ? '3px solid #1890ff' : 'none',
+                {/* Search */}
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Search in current folder..."
+                      value={searchValue}
+                      onChange={(e) => setSearchValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleSearch(searchValue);
                       }}
-                    >
-                      <List.Item.Meta
-                        avatar={getFileIcon(file.mimeType)}
-                        title={
-                          <Space>
-                            {file.name}
-                            {file.mimeType !== 'application/vnd.google-apps.folder' && getFileTypeTag(file.name)}
+                      className="w-full rounded-md border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleSearch(searchValue)}
+                    className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+                  >
+                    Search
+                  </button>
+                </div>
+
+                {/* File List */}
+                {files.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+                    <File className="h-10 w-10 mb-3" />
+                    <p className="text-sm">No email archive files found</p>
+                  </div>
+                ) : (
+                  <div className="max-h-[400px] overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100">
+                    {files.map((file) => (
+                      <div
+                        key={file.id}
+                        onClick={() => handleSelectFile(file)}
+                        className={`flex items-start gap-3 px-3 py-3 cursor-pointer transition-colors ${
+                          selectedFile?.id === file.id
+                            ? 'bg-blue-50'
+                            : 'hover:bg-slate-50'
+                        } ${
+                          file.mimeType === 'application/vnd.google-apps.folder'
+                            ? 'border-l-[3px] border-l-blue-500'
+                            : ''
+                        }`}
+                      >
+                        <div className="mt-0.5">
+                          {getFileIcon(file.mimeType)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-slate-900 truncate">{file.name}</span>
+                            {file.mimeType !== 'application/vnd.google-apps.folder' && getFileTypeBadge(file.name)}
                             {file.mimeType === 'application/vnd.google-apps.folder' && (
-                              <Tag color="blue" icon={<FolderOutlined />}>Folder</Tag>
+                              <StatusBadge variant="info">
+                                <FolderOpen className="h-3 w-3 mr-1" />
+                                Folder
+                              </StatusBadge>
                             )}
-                          </Space>
-                        }
-                        description={
-                          file.mimeType === 'application/vnd.google-apps.folder' ? (
-                            <Text type="secondary">Click to open folder</Text>
+                          </div>
+                          {file.mimeType === 'application/vnd.google-apps.folder' ? (
+                            <p className="text-xs text-slate-400 mt-0.5">Click to open folder</p>
                           ) : (
-                            <Space direction="vertical" size={2}>
-                              <Space size="large">
+                            <div className="mt-0.5">
+                              <div className="flex items-center gap-4 text-xs text-slate-500">
                                 <span>{formatFileSize(file.size)}</span>
                                 <span>Modified: {formatDate(file.modifiedTime)}</span>
-                              </Space>
+                              </div>
                               {file.folderPath && (
-                                <Text type="secondary" style={{ fontSize: '12px' }}>
-                                  📁 {file.folderPath}
-                                </Text>
+                                <p className="text-xs text-slate-400 mt-0.5">
+                                  {file.folderPath}
+                                </p>
                               )}
-                            </Space>
-                          )
-                        }
-                      />
-                    </List.Item>
-                  )}
-                />
-              )}
-            </Space>
-          </Spin>
-        )}
-      </Modal>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setIsModalVisible(false)}
+              className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmSelection}
+              disabled={!selectedFile || selectedFile?.mimeType === 'application/vnd.google-apps.folder'}
+              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Select File
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };

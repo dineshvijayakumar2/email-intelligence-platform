@@ -4,36 +4,58 @@
  * Displays AI-generated strategic digest with executive summary,
  * AM performance, relationship health, pipeline, risks, opportunities,
  * competitive landscape, and action items.
+ *
+ * Migrated from Ant Design to Tailwind CSS + shadcn/ui primitives.
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import {
-  Card, Typography, Tag, Select, Button, Row, Col, Spin, Alert,
-  Table, Space, Descriptions, Empty, Progress,
-} from 'antd';
-import {
-  ThunderboltOutlined, ArrowUpOutlined, ArrowDownOutlined, MinusOutlined,
-  ReloadOutlined,
-} from '@ant-design/icons';
+import { ArrowUp, ArrowDown, Minus, RefreshCw, AlertTriangle, AlertCircle, Info } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { strategicDigestApi, streamDigestGeneration } from '../../services/strategicDigestService';
 import type { StrategicDigest, PeriodType, LifecycleTier } from '../../types/strategic-digest';
 import { LIFECYCLE_CONFIG, SIGNAL_CONFIG } from '../../types/strategic-digest';
-import { ClientSelector } from '../../components/analytics/ClientSelector';
+import { useClient } from '../../contexts/ClientContext';
 import { formatRelativeTime } from '../../utils/dateUtils';
+import { formatCurrency } from '../../utils/numberFormat';
+import { PageShell, PageHeader } from '@/components/ui/page-shell';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { ContentSkeleton } from '@/components/ui/empty-state';
+import { Spinner } from '@/lib/icons';
 
-const { Title, Text, Paragraph } = Typography;
+/* ---------- StatusBadge variant maps ---------- */
+
+const LIFECYCLE_VARIANT: Record<string, 'success' | 'warning' | 'danger' | 'info' | 'neutral' | 'purple'> = {
+  champion: 'success',
+  active_customer: 'info',
+  at_risk: 'warning',
+  dormant: 'neutral',
+  new_customer: 'purple',
+  prospect: 'info',
+};
+
+const SIGNAL_VARIANT: Record<string, 'success' | 'warning' | 'danger' | 'info' | 'neutral' | 'purple'> = {
+  response_urgency: 'danger',
+  deal_at_risk: 'warning',
+  retention_risk: 'danger',
+  revenue_opportunity: 'success',
+  new_relationship: 'info',
+  account_neglect: 'warning',
+};
 
 function lifecycleBadge(tier?: LifecycleTier | string) {
   if (!tier) return null;
   const cfg = LIFECYCLE_CONFIG[tier as LifecycleTier];
-  return <Tag color={cfg?.color || 'default'}>{cfg?.label || tier.replace(/_/g, ' ')}</Tag>;
+  const label = cfg?.label || tier.replace(/_/g, ' ');
+  const variant = LIFECYCLE_VARIANT[tier] || 'neutral';
+  return <StatusBadge variant={variant} size="sm">{label}</StatusBadge>;
 }
 
 function signalTag(type?: string) {
   if (!type) return null;
   const cfg = SIGNAL_CONFIG[type as keyof typeof SIGNAL_CONFIG];
-  return <Tag color={cfg?.color || 'default'}>{cfg?.label || type.replace(/_/g, ' ')}</Tag>;
+  const label = cfg?.label || type.replace(/_/g, ' ');
+  const variant = SIGNAL_VARIANT[type] || 'neutral';
+  return <StatusBadge variant={variant} size="sm">{label}</StatusBadge>;
 }
 
 const PERIOD_OPTIONS = [
@@ -43,30 +65,44 @@ const PERIOD_OPTIONS = [
   { value: 'ytd', label: 'Year to Date' },
 ];
 
-const SEVERITY_TYPE: Record<string, 'error' | 'warning' | 'info'> = {
-  critical: 'error',
-  high: 'warning',
-  medium: 'info',
-};
-
 function trendIcon(trend?: string) {
-  if (!trend) return <MinusOutlined style={{ color: '#999' }} />;
+  if (!trend) return <Minus className="h-4 w-4 text-slate-400" />;
   const t = trend.toLowerCase();
-  if (t === 'up' || t === 'increasing' || t === 'improving') return <ArrowUpOutlined style={{ color: '#52c41a' }} />;
-  if (t === 'down' || t === 'decreasing' || t === 'declining') return <ArrowDownOutlined style={{ color: '#f5222d' }} />;
-  return <MinusOutlined style={{ color: '#999' }} />;
+  if (t === 'up' || t === 'increasing' || t === 'improving') return <ArrowUp className="h-4 w-4 text-emerald-500" />;
+  if (t === 'down' || t === 'decreasing' || t === 'declining') return <ArrowDown className="h-4 w-4 text-red-500" />;
+  return <Minus className="h-4 w-4 text-slate-400" />;
 }
 
 function fmtCurrency(val?: number) {
   if (val == null) return '-';
-  return `$${val.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  return formatCurrency(val);
+}
+
+/* ---------- Severity icon for risk alerts ---------- */
+function severityIcon(severity?: string) {
+  if (severity === 'critical') return <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />;
+  if (severity === 'high') return <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />;
+  return <Info className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />;
+}
+
+/* ---------- Severity colors for risk alerts ---------- */
+function severityBorder(severity?: string) {
+  if (severity === 'critical') return 'border-l-red-500';
+  if (severity === 'high') return 'border-l-amber-500';
+  return 'border-l-blue-400';
+}
+
+function severityBg(severity?: string) {
+  if (severity === 'critical') return 'bg-red-50';
+  if (severity === 'high') return 'bg-amber-50';
+  return 'bg-blue-50';
 }
 
 
 export default function StrategicDigestPage() {
   const navigate = useNavigate();
   const isMountedRef = useRef(true);
-  const [clientId, setClientId] = useState('');
+  const { clientId } = useClient();
   const [periodType, setPeriodType] = useState<PeriodType>('monthly');
   const [digest, setDigest] = useState<StrategicDigest | null>(null);
   const [loading, setLoading] = useState(false);
@@ -173,7 +209,7 @@ export default function StrategicDigestPage() {
     setGenerating(true);
     setError('');
     setCancelling(false);
-    setProgress({ pct: 0, phase: 'starting', message: 'Initialising…' });
+    setProgress({ pct: 0, phase: 'starting', message: 'Initialising\u2026' });
     stopPolling();
     abortRef.current?.abort();
     abortRef.current = new AbortController();
@@ -243,78 +279,6 @@ export default function StrategicDigestPage() {
     abortRef.current?.abort();
   }, []);
 
-  // AM Efficiency columns (v2 — mailbox-based)
-  const amColumns = [
-    { title: 'Account Manager', dataIndex: 'am_name', key: 'am_name',
-      render: (v: string) => <Text strong>{v || '-'}</Text> },
-    {
-      title: 'BH Response', dataIndex: 'avg_bh_response_hours', key: 'avg_bh_response_hours',
-      render: (v: number) => {
-        if (v == null) return '-';
-        const color = v <= 4 ? '#52c41a' : v <= 8 ? '#fa8c16' : '#f5222d';
-        return <Text style={{ color }}>{v.toFixed(1)}h</Text>;
-      },
-    },
-    {
-      title: 'Response Rate', dataIndex: 'response_rate_pct', key: 'response_rate_pct',
-      render: (v: number) => {
-        if (v == null) return '-';
-        const color = v >= 80 ? '#52c41a' : v >= 60 ? '#fa8c16' : '#f5222d';
-        return <Text style={{ color }}>{v.toFixed(0)}%</Text>;
-      },
-    },
-    {
-      title: 'After Hours', dataIndex: 'after_hours_pct', key: 'after_hours_pct',
-      render: (v: number) => {
-        if (v == null) return '-';
-        const color = v > 30 ? '#fa8c16' : '#52c41a';
-        return <Text style={{ color }}>{v.toFixed(0)}%</Text>;
-      },
-    },
-    {
-      title: 'Revenue', dataIndex: 'revenue_attributed', key: 'revenue_attributed',
-      render: (v: number) => fmtCurrency(v),
-    },
-    {
-      title: 'Quote Conv.', dataIndex: 'quote_conversion_rate', key: 'quote_conversion_rate',
-      render: (v: number) => v != null ? `${v.toFixed(0)}%` : '-',
-    },
-    {
-      title: 'At Risk', dataIndex: 'accounts_at_risk', key: 'accounts_at_risk',
-      render: (v: number) => v > 0 ? <Tag color="red">{v}</Tag> : <Tag color="green">0</Tag>,
-    },
-    {
-      title: 'Note', dataIndex: 'performance_note', key: 'performance_note',
-      render: (v: string) => <Text type="secondary" style={{ fontSize: 12 }}>{v || '-'}</Text>,
-    },
-  ];
-
-  // Action items columns
-  const actionColumns = [
-    {
-      title: 'Priority', dataIndex: 'priority', key: 'priority', width: 85,
-      render: (v: string) => {
-        const color = v === 'urgent' ? 'red' : v === 'high' ? 'orange' : 'blue';
-        return <Tag color={color}>{typeof v === 'string' ? v.toUpperCase() : `P${v}`}</Tag>;
-      },
-    },
-    {
-      title: 'Signal', dataIndex: 'signal_type', key: 'signal_type', width: 160,
-      render: (v: string) => signalTag(v),
-    },
-    { title: 'Action', dataIndex: 'action', key: 'action' },
-    { title: 'Owner', dataIndex: 'owner', key: 'owner', width: 120, render: (v: string) => v || '-' },
-    { title: 'Company', dataIndex: 'company', key: 'company', width: 140, render: (v: string) => v || '-' },
-    {
-      title: 'Due', dataIndex: 'deadline_suggestion', key: 'deadline_suggestion', width: 110,
-      render: (v: string) => v ? <Tag>{v}</Tag> : '-',
-    },
-    {
-      title: 'Context', dataIndex: 'context', key: 'context',
-      render: (v: string) => <Text type="secondary" style={{ fontSize: 12 }}>{v || '-'}</Text>,
-    },
-  ];
-
   // AM performance: v2 stores as {summary: [...], ...}; v1 was an array
   const amRaw = digest?.am_performance;
   const amData: any[] = Array.isArray(amRaw)
@@ -331,359 +295,541 @@ export default function StrategicDigestPage() {
   const relationshipsRaw = digest?.relationship_health;
   const relationships: any[] = Array.isArray(relationshipsRaw) ? relationshipsRaw : [];
 
+  /* ---------- Response time color helper ---------- */
+  function responseTimeColor(v: number) {
+    if (v <= 4) return 'text-emerald-600';
+    if (v <= 8) return 'text-amber-600';
+    return 'text-red-600';
+  }
+  function rateColor(v: number, good: number, warn: number) {
+    if (v >= good) return 'text-emerald-600';
+    if (v >= warn) return 'text-amber-600';
+    return 'text-red-600';
+  }
+
+  /* ---------- Progress bar color ---------- */
+  function progressBarColor(phase?: string) {
+    if (phase === 'ai_analysis') return 'bg-indigo-500';
+    if (phase === 'am_performance') return 'bg-emerald-500';
+    return 'bg-primary';
+  }
+
+  /* ---------- Priority badge ---------- */
+  function priorityBadge(v: string | number) {
+    const label = typeof v === 'string' ? v.toUpperCase() : `P${v}`;
+    const variant: 'danger' | 'warning' | 'info' =
+      v === 'urgent' ? 'danger' : v === 'high' ? 'warning' : 'info';
+    return <StatusBadge variant={variant} size="sm">{label}</StatusBadge>;
+  }
+
   return (
-    <div style={{ padding: '24px', maxWidth: 1400, margin: '0 auto' }}>
+    <PageShell>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
-        <Title level={3} style={{ margin: 0 }}>
-          <ThunderboltOutlined style={{ color: '#667eea', marginRight: 8 }} />
-          Strategic Digest
-        </Title>
-        <Space wrap>
-          <ClientSelector value={clientId} onChange={setClientId} />
-          <Select
-            value={periodType}
-            onChange={(v) => setPeriodType(v)}
-            style={{ width: 140 }}
-            options={PERIOD_OPTIONS}
-          />
-          <Button
-            type="primary"
-            onClick={handleGenerate}
-            loading={generating}
-            icon={<ReloadOutlined />}
-          >
-            Generate Digest
-          </Button>
-        </Space>
-      </div>
+      <PageHeader
+        title="Strategic Digest"
+        actions={
+          <div className="flex items-center gap-2 flex-wrap">
+            <select
+              value={periodType}
+              onChange={(e) => setPeriodType(e.target.value as PeriodType)}
+              className="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30"
+            >
+              {PERIOD_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+            <button
+              onClick={handleGenerate}
+              disabled={generating || !clientId}
+              className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {generating ? (
+                <Spinner className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              Generate Digest
+            </button>
+          </div>
+        }
+      />
 
-      {error && <Alert message={error} type="warning" showIcon closable style={{ marginBottom: 16 }} />}
-
-      {!clientId && (
-        <Card className="glass-card">
-          <Empty description="Select a client to view the strategic digest" />
-        </Card>
-      )}
-
-      {loading && clientId && !generating && (
-        <div style={{ textAlign: 'center', padding: 80 }}>
-          <Spin size="large" />
-          <div style={{ marginTop: 16 }}><Text type="secondary">Loading digest…</Text></div>
+      {/* Error banner */}
+      {error && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 mb-4">
+          <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+          <div className="flex-1 text-sm text-amber-800">{error}</div>
+          <button onClick={() => setError('')} className="text-amber-400 hover:text-amber-600 text-sm font-medium">&times;</button>
         </div>
       )}
 
+      {/* No client selected */}
+      {!clientId && (
+        <div className="rounded-lg border bg-white shadow-sm p-12 text-center">
+          <p className="text-sm text-slate-500">Select a client to view the strategic digest</p>
+        </div>
+      )}
+
+      {/* Loading state */}
+      {loading && clientId && !generating && (
+        <div className="rounded-lg border bg-white shadow-sm">
+          <ContentSkeleton rows={6} />
+        </div>
+      )}
+
+      {/* Generation in progress */}
       {generating && clientId && (
-        <Card className="glass-card" style={{ padding: '32px 48px' }}>
-          <div style={{ textAlign: 'center', marginBottom: 24 }}>
-            <Text strong style={{ fontSize: 16 }}>
+        <div className="rounded-lg border bg-white shadow-sm p-8 max-w-xl mx-auto">
+          <div className="text-center mb-5">
+            <p className="text-base font-semibold text-slate-800">
               {progress?.phase === 'ai_analysis' ? 'Running AI Analysis' :
                progress?.phase === 'am_performance' ? 'Building AM Performance' :
                progress?.phase === 'building_context' ? 'Building Relationship Context' :
                'Generating Strategic Digest'}
-            </Text>
+            </p>
           </div>
-          <Progress
-            percent={progress?.pct ?? 0}
-            status={progress?.phase === 'failed' ? 'exception' : 'active'}
-            strokeColor={
-              progress?.phase === 'ai_analysis' ? '#667eea' :
-              progress?.phase === 'am_performance' ? '#52c41a' : '#1890ff'
-            }
-            style={{ marginBottom: 12 }}
-          />
-          <div style={{ textAlign: 'center' }}>
-            <Text type="secondary" style={{ fontSize: 13 }}>
-              {progress?.message || 'Please wait — this may take several minutes for large accounts…'}
-            </Text>
+          {/* Progress bar */}
+          <div className="h-2 rounded-full bg-slate-100 overflow-hidden mb-3">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${
+                progress?.phase === 'failed' ? 'bg-red-500' : progressBarColor(progress?.phase)
+              }`}
+              style={{ width: `${progress?.pct ?? 0}%` }}
+            />
           </div>
-          <div style={{ textAlign: 'center', marginTop: 20 }}>
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              You can navigate away — generation continues in the background.
-            </Text>
-            <div style={{ marginTop: 12 }}>
-              <Button
-                danger
-                size="small"
-                loading={cancelling || progress?.phase === 'cancelling'}
-                onClick={handleCancel}
-                disabled={progress?.phase === 'cancelling'}
-              >
-                {progress?.phase === 'cancelling' ? 'Cancelling…' : 'Cancel'}
-              </Button>
-            </div>
+          <p className="text-center text-sm text-slate-500 mb-5">
+            {progress?.message || 'Please wait \u2014 this may take several minutes for large accounts\u2026'}
+          </p>
+          <p className="text-center text-xs text-slate-400 mb-3">
+            You can navigate away \u2014 generation continues in the background.
+          </p>
+          <div className="text-center">
+            <button
+              onClick={handleCancel}
+              disabled={cancelling || progress?.phase === 'cancelling'}
+              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-red-200 text-red-600 text-sm font-medium hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {(cancelling || progress?.phase === 'cancelling') && (
+                <Spinner className="h-3.5 w-3.5 animate-spin" />
+              )}
+              {progress?.phase === 'cancelling' ? 'Cancelling\u2026' : 'Cancel'}
+            </button>
           </div>
-        </Card>
+        </div>
       )}
 
+      {/* No digest yet */}
       {!loading && !generating && clientId && !digest && !error && (
-        <Card className="glass-card" style={{ textAlign: 'center', padding: 40 }}>
-          <Empty description="No strategic digest available for this period.">
-            <Button type="primary" onClick={handleGenerate} loading={generating}>
-              Generate Digest Now
-            </Button>
-          </Empty>
-        </Card>
+        <div className="rounded-lg border bg-white shadow-sm p-12 text-center">
+          <p className="text-sm text-slate-500 mb-4">No strategic digest available for this period.</p>
+          <button
+            onClick={handleGenerate}
+            disabled={generating}
+            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            Generate Digest Now
+          </button>
+        </div>
       )}
 
+      {/* Digest content */}
       {!loading && !generating && digest && !error && (
-        <>
+        <div className="space-y-4">
+
           {/* Meta info */}
-          <Card className="glass-card" size="small" style={{ marginBottom: 16 }}>
-            <Space wrap size="large">
-              <Text type="secondary">
-                Period: {digest.period_start} to {digest.period_end}
-              </Text>
+          <div className="rounded-lg border bg-white shadow-sm px-4 py-3">
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-slate-500">
+              <span>Period: {digest.period_start} to {digest.period_end}</span>
               {digest.emails_analyzed != null && (
-                <Text type="secondary">{digest.emails_analyzed} emails analyzed</Text>
+                <span>{digest.emails_analyzed} emails analyzed</span>
               )}
               {digest.companies_analyzed != null && (
-                <Text type="secondary">{digest.companies_analyzed} companies</Text>
+                <span>{digest.companies_analyzed} companies</span>
               )}
               {digest.contacts_analyzed != null && (
-                <Text type="secondary">{digest.contacts_analyzed} contacts</Text>
+                <span>{digest.contacts_analyzed} contacts</span>
               )}
               {digest.created_at && (
-                <Text type="secondary">Generated {formatRelativeTime(digest.created_at)}</Text>
+                <span>Generated {formatRelativeTime(digest.created_at)}</span>
               )}
               {digest.total_cost_usd != null && (
-                <Text type="secondary">Cost: ${digest.total_cost_usd.toFixed(4)}</Text>
+                <span>Cost: ${digest.total_cost_usd.toFixed(4)}</span>
               )}
-            </Space>
-          </Card>
+            </div>
+          </div>
 
           {/* Section 1: Executive Summary */}
-          <Card className="glass-card" title="Executive Summary" style={{ marginBottom: 16 }}>
-            <Paragraph style={{ fontSize: 15, lineHeight: 1.8, marginBottom: 0 }}>
-              {digest.executive_summary || 'No executive summary available.'}
-            </Paragraph>
-          </Card>
+          <div className="rounded-lg border bg-white shadow-sm">
+            <div className="border-b px-5 py-3">
+              <h2 className="text-sm font-semibold text-slate-800">Executive Summary</h2>
+            </div>
+            <div className="px-5 py-4">
+              <p className="text-[15px] leading-relaxed text-slate-700 whitespace-pre-line">
+                {digest.executive_summary || 'No executive summary available.'}
+              </p>
+            </div>
+          </div>
 
           {/* Section 2: AM Performance */}
           {amData.length > 0 && (
-            <Card className="glass-card" title="Account Manager Performance" style={{ marginBottom: 16 }}>
-              <Table
-                dataSource={amData}
-                columns={amColumns}
-                rowKey="account_manager"
-                pagination={false}
-                size="small"
-              />
-            </Card>
+            <div className="rounded-lg border bg-white shadow-sm">
+              <div className="border-b px-5 py-3">
+                <h2 className="text-sm font-semibold text-slate-800">Account Manager Performance</h2>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-slate-50/50">
+                      <th className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Account Manager</th>
+                      <th className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">BH Response</th>
+                      <th className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Response Rate</th>
+                      <th className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">After Hours</th>
+                      <th className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Revenue</th>
+                      <th className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Quote Conv.</th>
+                      <th className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">At Risk</th>
+                      <th className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Note</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {amData.map((row: any, idx: number) => (
+                      <tr key={row.account_manager || idx} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="px-4 py-2.5 font-medium text-slate-800">{row.am_name || '-'}</td>
+                        <td className="px-4 py-2.5">
+                          {row.avg_bh_response_hours != null ? (
+                            <span className={responseTimeColor(row.avg_bh_response_hours)}>
+                              {row.avg_bh_response_hours.toFixed(1)}h
+                            </span>
+                          ) : '-'}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          {row.response_rate_pct != null ? (
+                            <span className={rateColor(row.response_rate_pct, 80, 60)}>
+                              {row.response_rate_pct.toFixed(0)}%
+                            </span>
+                          ) : '-'}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          {row.after_hours_pct != null ? (
+                            <span className={row.after_hours_pct > 30 ? 'text-amber-600' : 'text-emerald-600'}>
+                              {row.after_hours_pct.toFixed(0)}%
+                            </span>
+                          ) : '-'}
+                        </td>
+                        <td className="px-4 py-2.5 text-slate-700">{fmtCurrency(row.revenue_attributed)}</td>
+                        <td className="px-4 py-2.5 text-slate-700">
+                          {row.quote_conversion_rate != null ? `${row.quote_conversion_rate.toFixed(0)}%` : '-'}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          {row.accounts_at_risk > 0 ? (
+                            <StatusBadge variant="danger" size="sm">{row.accounts_at_risk}</StatusBadge>
+                          ) : (
+                            <StatusBadge variant="success" size="sm">0</StatusBadge>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5 text-xs text-slate-500">{row.performance_note || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           )}
 
           {/* Section 3: Relationship Health */}
           {relationships.length > 0 && (
-            <Card className="glass-card" title="Relationship Health" style={{ marginBottom: 16 }}>
-              <Row gutter={[12, 12]}>
-                {relationships.map((r, idx) => (
-                  <Col xs={24} sm={12} md={8} lg={6} key={r.company_id || idx}>
-                    <Card
-                      size="small"
-                      hoverable
-                      onClick={() => r.company_id ? navigate(`/customers/${r.company_id}`) : undefined}
-                      style={{
-                        height: '100%',
-                        borderLeft: r.lifecycle_tier === 'at_risk' ? '3px solid #fa8c16' :
-                                    r.lifecycle_tier === 'dormant' ? '3px solid #999' :
-                                    r.lifecycle_tier === 'champion' ? '3px solid #fadb14' : undefined,
-                      }}
-                    >
-                      <Text strong style={{ display: 'block', marginBottom: 4 }}>{r.company_name}</Text>
-                      <Space wrap size={4} style={{ marginBottom: 6 }}>
-                        {lifecycleBadge(r.lifecycle_tier)}
-                        {r.tier && <Tag color="blue" style={{ fontSize: 11 }}>{r.tier}</Tag>}
-                      </Space>
-                      {r.am_owner && (
-                        <div style={{ marginBottom: 4 }}>
-                          <Text type="secondary" style={{ fontSize: 12 }}>AM: {r.am_owner}</Text>
+            <div className="rounded-lg border bg-white shadow-sm">
+              <div className="border-b px-5 py-3">
+                <h2 className="text-sm font-semibold text-slate-800">Relationship Health</h2>
+              </div>
+              <div className="p-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {relationships.map((r, idx) => {
+                    const borderColor =
+                      r.lifecycle_tier === 'at_risk' ? 'border-l-amber-500' :
+                      r.lifecycle_tier === 'dormant' ? 'border-l-slate-400' :
+                      r.lifecycle_tier === 'champion' ? 'border-l-yellow-400' : 'border-l-transparent';
+                    return (
+                      <div
+                        key={r.company_id || idx}
+                        onClick={() => r.company_id ? navigate(`/customers/${r.company_id}`) : undefined}
+                        className={`rounded-lg border border-l-[3px] ${borderColor} bg-white p-3 hover:shadow-md transition-shadow cursor-pointer`}
+                      >
+                        <p className="font-medium text-sm text-slate-800 mb-1.5">{r.company_name}</p>
+                        <div className="flex flex-wrap items-center gap-1 mb-2">
+                          {lifecycleBadge(r.lifecycle_tier)}
+                          {r.tier && <StatusBadge variant="info" size="sm">{r.tier}</StatusBadge>}
                         </div>
-                      )}
-                      {r.signal && (
-                        <div style={{ marginBottom: 4 }}>
-                          <Text type="secondary" style={{ fontSize: 12, fontStyle: 'italic' }}>{r.signal}</Text>
-                        </div>
-                      )}
-                      {r.recommended_action && (
-                        <div style={{ marginTop: 4 }}>
-                          <Text style={{ fontSize: 11, color: '#1890ff' }}>→ {r.recommended_action}</Text>
-                        </div>
-                      )}
-                      {r.revenue_impact_estimate && (
-                        <div style={{ marginTop: 4 }}>
-                          <Tag color="gold" style={{ fontSize: 11 }}>{r.revenue_impact_estimate}</Tag>
-                        </div>
-                      )}
-                    </Card>
-                  </Col>
-                ))}
-              </Row>
-            </Card>
+                        {r.am_owner && (
+                          <p className="text-xs text-slate-500 mb-1">AM: {r.am_owner}</p>
+                        )}
+                        {r.signal && (
+                          <p className="text-xs text-slate-500 italic mb-1">{r.signal}</p>
+                        )}
+                        {r.recommended_action && (
+                          <p className="text-[11px] text-primary mt-1">&rarr; {r.recommended_action}</p>
+                        )}
+                        {r.revenue_impact_estimate && (
+                          <div className="mt-1">
+                            <StatusBadge variant="warning" size="sm">{r.revenue_impact_estimate}</StatusBadge>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
           )}
 
           {/* Section 4: Pipeline Intelligence + Lifecycle Breakdown */}
           {pipeline && (
-            <Card className="glass-card" title="Pipeline & Customer Lifecycle" style={{ marginBottom: 16 }}>
-              {pipeline.lifecycle_breakdown && Object.keys(pipeline.lifecycle_breakdown).length > 0 && (
-                <div style={{ marginBottom: 16 }}>
-                  <Text strong style={{ display: 'block', marginBottom: 8 }}>Customer Lifecycle Distribution</Text>
-                  <Space wrap>
-                    {(Object.entries(pipeline.lifecycle_breakdown) as [LifecycleTier, number][])
-                      .filter(([, count]) => count > 0)
-                      .map(([tier, count]) => (
-                        <Tag key={tier} color={LIFECYCLE_CONFIG[tier]?.color || 'default'} style={{ fontSize: 13, padding: '2px 10px' }}>
-                          {LIFECYCLE_CONFIG[tier]?.label || tier}: {count}
-                        </Tag>
+            <div className="rounded-lg border bg-white shadow-sm">
+              <div className="border-b px-5 py-3">
+                <h2 className="text-sm font-semibold text-slate-800">Pipeline &amp; Customer Lifecycle</h2>
+              </div>
+              <div className="px-5 py-4 space-y-4">
+                {/* Lifecycle breakdown */}
+                {pipeline.lifecycle_breakdown && Object.keys(pipeline.lifecycle_breakdown).length > 0 && (
+                  <div>
+                    <p className="text-sm font-medium text-slate-700 mb-2">Customer Lifecycle Distribution</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(Object.entries(pipeline.lifecycle_breakdown) as [LifecycleTier, number][])
+                        .filter(([, count]) => count > 0)
+                        .map(([tier, count]) => {
+                          const variant = LIFECYCLE_VARIANT[tier] || 'neutral';
+                          const label = LIFECYCLE_CONFIG[tier]?.label || tier;
+                          return (
+                            <StatusBadge key={tier} variant={variant} size="default">
+                              {label}: {count}
+                            </StatusBadge>
+                          );
+                        })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Pipeline stats */}
+                {(pipeline.active_quotes_value != null || pipeline.conversion_trend) && (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    {pipeline.active_quotes_value != null && (
+                      <div>
+                        <p className="text-xs text-slate-500 mb-0.5">Active Quotes Value</p>
+                        <p className="text-sm font-medium text-slate-800">{fmtCurrency(pipeline.active_quotes_value)}</p>
+                      </div>
+                    )}
+                    {pipeline.conversion_trend && (
+                      <div>
+                        <p className="text-xs text-slate-500 mb-0.5">Conversion Trend</p>
+                        <div className="flex items-center gap-1.5">
+                          {trendIcon(pipeline.conversion_trend)}
+                          <span className="text-sm font-medium text-slate-800">{pipeline.conversion_trend}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Stalled quotes */}
+                {pipeline.stalled_quotes && pipeline.stalled_quotes.length > 0 && (
+                  <div>
+                    <p className="text-sm font-medium text-slate-700 mb-2">Stalled Quotes</p>
+                    <div className="space-y-1.5">
+                      {pipeline.stalled_quotes.map((q, i) => (
+                        <div key={i} className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
+                          <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                          <span className="text-sm text-amber-800">{q}</span>
+                        </div>
                       ))}
-                  </Space>
-                </div>
-              )}
-              <Descriptions size="small" column={3} style={{ marginBottom: 12 }}>
-                {pipeline.active_quotes_value != null && (
-                  <Descriptions.Item label="Active Quotes Value">{fmtCurrency(pipeline.active_quotes_value)}</Descriptions.Item>
+                    </div>
+                  </div>
                 )}
-                {pipeline.conversion_trend && (
-                  <Descriptions.Item label="Conversion Trend">
-                    {trendIcon(pipeline.conversion_trend)} {pipeline.conversion_trend}
-                  </Descriptions.Item>
+
+                {/* New relationships */}
+                {pipeline.new_relationships_this_period && pipeline.new_relationships_this_period.length > 0 && (
+                  <div>
+                    <p className="text-sm font-medium text-slate-700 mb-2">New Relationships</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {pipeline.new_relationships_this_period.map((r, i) => (
+                        <StatusBadge key={i} variant="info" size="default">{r}</StatusBadge>
+                      ))}
+                    </div>
+                  </div>
                 )}
-              </Descriptions>
-              {pipeline.stalled_quotes && pipeline.stalled_quotes.length > 0 && (
-                <div style={{ marginBottom: 12 }}>
-                  <Text strong style={{ display: 'block', marginBottom: 6 }}>Stalled Quotes</Text>
-                  <Space direction="vertical" style={{ width: '100%' }}>
-                    {pipeline.stalled_quotes.map((q, i) => (
-                      <Alert key={i} type="warning" message={q} showIcon style={{ padding: '4px 12px' }} />
-                    ))}
-                  </Space>
-                </div>
-              )}
-              {pipeline.new_relationships_this_period && pipeline.new_relationships_this_period.length > 0 && (
-                <div>
-                  <Text strong style={{ display: 'block', marginBottom: 6 }}>New Relationships</Text>
-                  <Space wrap>
-                    {pipeline.new_relationships_this_period.map((r, i) => (
-                      <Tag key={i} color="blue">{r}</Tag>
-                    ))}
-                  </Space>
-                </div>
-              )}
-            </Card>
+              </div>
+            </div>
           )}
 
           {/* Section 5: Risk Alerts */}
           {risks.length > 0 && (
-            <Card className="glass-card" title={`Risk Alerts (${risks.length})`} style={{ marginBottom: 16 }}>
-              <Space direction="vertical" style={{ width: '100%' }}>
+            <div className="rounded-lg border bg-white shadow-sm">
+              <div className="border-b px-5 py-3">
+                <h2 className="text-sm font-semibold text-slate-800">Risk Alerts ({risks.length})</h2>
+              </div>
+              <div className="p-4 space-y-2">
                 {risks.map((risk, idx) => (
-                  <Alert
+                  <div
                     key={idx}
-                    type={SEVERITY_TYPE[risk.severity] || 'info'}
-                    showIcon
-                    message={
-                      <Space wrap>
-                        <Text strong>{risk.affected_company || risk.company_name}</Text>
-                        <Tag color={risk.severity === 'critical' ? 'red' : risk.severity === 'high' ? 'orange' : 'blue'}>
-                          {risk.severity}
-                        </Tag>
-                        {signalTag(risk.type) || <Tag>{(risk.risk_type || risk.type || '').replace(/_/g, ' ')}</Tag>}
-                        {risk.am_owner && <Text type="secondary">AM: {risk.am_owner}</Text>}
-                        {risk.days_overdue != null && risk.days_overdue > 0 && (
-                          <Tag color="red">{risk.days_overdue}d overdue</Tag>
-                        )}
-                      </Space>
-                    }
-                    description={
-                      <span>
-                        {risk.description}
+                    className={`rounded-lg border border-l-[3px] ${severityBorder(risk.severity)} ${severityBg(risk.severity)} p-3`}
+                  >
+                    <div className="flex items-start gap-2">
+                      {severityIcon(risk.severity)}
+                      <div className="flex-1 min-w-0">
+                        {/* Header row */}
+                        <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                          <span className="text-sm font-medium text-slate-800">
+                            {risk.affected_company || risk.company_name}
+                          </span>
+                          <StatusBadge
+                            variant={risk.severity === 'critical' ? 'danger' : risk.severity === 'high' ? 'warning' : 'info'}
+                            size="sm"
+                          >
+                            {risk.severity}
+                          </StatusBadge>
+                          {signalTag(risk.type) || (
+                            <StatusBadge variant="neutral" size="sm">
+                              {(risk.risk_type || risk.type || '').replace(/_/g, ' ')}
+                            </StatusBadge>
+                          )}
+                          {risk.am_owner && (
+                            <span className="text-xs text-slate-500">AM: {risk.am_owner}</span>
+                          )}
+                          {risk.days_overdue != null && risk.days_overdue > 0 && (
+                            <StatusBadge variant="danger" size="sm">{risk.days_overdue}d overdue</StatusBadge>
+                          )}
+                        </div>
+                        {/* Description */}
+                        <p className="text-sm text-slate-600">{risk.description}</p>
                         {risk.recommended_action && (
-                          <div style={{ marginTop: 4 }}>
-                            <Text style={{ color: '#1890ff', fontSize: 12 }}>→ {risk.recommended_action}</Text>
-                          </div>
+                          <p className="text-xs text-primary mt-1">&rarr; {risk.recommended_action}</p>
                         )}
                         {risk.revenue_at_risk != null && (
-                          <Text type="danger" style={{ marginLeft: 8 }}>
+                          <p className="text-xs text-red-600 font-medium mt-1">
                             Revenue at risk: {fmtCurrency(risk.revenue_at_risk)}
-                          </Text>
+                          </p>
                         )}
-                      </span>
-                    }
-                  />
+                      </div>
+                    </div>
+                  </div>
                 ))}
-              </Space>
-            </Card>
+              </div>
+            </div>
           )}
 
           {/* Section 6: Opportunities */}
           {opportunities.length > 0 && (
-            <Card className="glass-card" title={`Opportunities (${opportunities.length})`} style={{ marginBottom: 16 }}>
-              <Row gutter={[12, 12]}>
-                {opportunities.map((opp, idx) => (
-                  <Col xs={24} md={12} key={idx}>
-                    <Card size="small" style={{ borderLeft: '3px solid #52c41a' }}>
-                      <Space wrap style={{ marginBottom: 8 }}>
-                        <Tag color="green">{(opp.type || opp.opportunity_type || '').replace(/_/g, ' ')}</Tag>
-                        <Text strong>{opp.company_name}</Text>
+            <div className="rounded-lg border bg-white shadow-sm">
+              <div className="border-b px-5 py-3">
+                <h2 className="text-sm font-semibold text-slate-800">Opportunities ({opportunities.length})</h2>
+              </div>
+              <div className="p-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {opportunities.map((opp, idx) => (
+                    <div key={idx} className="rounded-lg border border-l-[3px] border-l-emerald-500 bg-white p-3">
+                      <div className="flex flex-wrap items-center gap-1.5 mb-2">
+                        <StatusBadge variant="success" size="sm">
+                          {(opp.type || opp.opportunity_type || '').replace(/_/g, ' ')}
+                        </StatusBadge>
+                        <span className="text-sm font-medium text-slate-800">{opp.company_name}</span>
                         {lifecycleBadge(opp.lifecycle_tier)}
-                        {opp.estimated_value && <Tag color="gold">{opp.estimated_value}</Tag>}
-                      </Space>
-                      <Paragraph style={{ marginBottom: 4, fontSize: 13 }}>{opp.description}</Paragraph>
+                        {opp.estimated_value && (
+                          <StatusBadge variant="warning" size="sm">{opp.estimated_value}</StatusBadge>
+                        )}
+                      </div>
+                      <p className="text-[13px] text-slate-600 mb-1">{opp.description}</p>
                       {opp.next_step && (
-                        <Text style={{ fontSize: 12, color: '#1890ff' }}>→ {opp.next_step}</Text>
+                        <p className="text-xs text-primary">&rarr; {opp.next_step}</p>
                       )}
-                    </Card>
-                  </Col>
-                ))}
-              </Row>
-            </Card>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
           )}
 
           {/* Section 7: Competitive Landscape */}
           {competitive && (competitive.competitor_mentions?.length || competitive.price_sensitivity_signals?.length) ? (
-            <Card className="glass-card" title="Competitive Landscape" style={{ marginBottom: 16 }}>
-              {competitive.competitor_mentions?.length ? (
-                <div style={{ marginBottom: 12 }}>
-                  <Text strong style={{ display: 'block', marginBottom: 6 }}>Competitor Mentions</Text>
-                  <Space wrap>{competitive.competitor_mentions.map((c, i) => <Tag key={i} color="volcano">{c}</Tag>)}</Space>
-                </div>
-              ) : null}
-              {competitive.price_sensitivity_signals?.length ? (
-                <div style={{ marginBottom: 12 }}>
-                  <Text strong style={{ display: 'block', marginBottom: 6 }}>Price Sensitivity</Text>
-                  <Space direction="vertical" style={{ width: '100%' }}>
-                    {competitive.price_sensitivity_signals.map((s, i) => (
-                      <Text key={i} type="secondary" style={{ fontSize: 13 }}>• {s}</Text>
-                    ))}
-                  </Space>
-                </div>
-              ) : null}
-              {competitive.win_loss_insights?.length ? (
-                <div>
-                  <Text strong style={{ display: 'block', marginBottom: 6 }}>Win/Loss Insights</Text>
-                  <Space direction="vertical" style={{ width: '100%' }}>
-                    {competitive.win_loss_insights.map((s, i) => (
-                      <Text key={i} type="secondary" style={{ fontSize: 13 }}>• {s}</Text>
-                    ))}
-                  </Space>
-                </div>
-              ) : null}
-            </Card>
+            <div className="rounded-lg border bg-white shadow-sm">
+              <div className="border-b px-5 py-3">
+                <h2 className="text-sm font-semibold text-slate-800">Competitive Landscape</h2>
+              </div>
+              <div className="px-5 py-4 space-y-4">
+                {competitive.competitor_mentions?.length ? (
+                  <div>
+                    <p className="text-sm font-medium text-slate-700 mb-2">Competitor Mentions</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {competitive.competitor_mentions.map((c, i) => (
+                        <StatusBadge key={i} variant="danger" size="default">{c}</StatusBadge>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                {competitive.price_sensitivity_signals?.length ? (
+                  <div>
+                    <p className="text-sm font-medium text-slate-700 mb-2">Price Sensitivity</p>
+                    <ul className="space-y-1">
+                      {competitive.price_sensitivity_signals.map((s, i) => (
+                        <li key={i} className="text-sm text-slate-500">&bull; {s}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {competitive.win_loss_insights?.length ? (
+                  <div>
+                    <p className="text-sm font-medium text-slate-700 mb-2">Win/Loss Insights</p>
+                    <ul className="space-y-1">
+                      {competitive.win_loss_insights.map((s, i) => (
+                        <li key={i} className="text-sm text-slate-500">&bull; {s}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
+            </div>
           ) : null}
 
           {/* Section 8: Action Items */}
           {actionItems.length > 0 && (
-            <Card className="glass-card" title={`Action Items (${actionItems.length})`} style={{ marginBottom: 16 }}>
-              <Table
-                dataSource={actionItems}
-                columns={actionColumns}
-                rowKey={(_, idx) => String(idx)}
-                pagination={false}
-                size="small"
-              />
-            </Card>
+            <div className="rounded-lg border bg-white shadow-sm">
+              <div className="border-b px-5 py-3">
+                <h2 className="text-sm font-semibold text-slate-800">Action Items ({actionItems.length})</h2>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-slate-50/50">
+                      <th className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600 w-[85px]">Priority</th>
+                      <th className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600 w-[160px]">Signal</th>
+                      <th className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Action</th>
+                      <th className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600 w-[120px]">Owner</th>
+                      <th className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600 w-[140px]">Company</th>
+                      <th className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600 w-[110px]">Due</th>
+                      <th className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Context</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {actionItems.map((item: any, idx: number) => (
+                      <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="px-4 py-2.5">{priorityBadge(item.priority)}</td>
+                        <td className="px-4 py-2.5">{signalTag(item.signal_type)}</td>
+                        <td className="px-4 py-2.5 text-slate-700">{item.action}</td>
+                        <td className="px-4 py-2.5 text-slate-600">{item.owner || '-'}</td>
+                        <td className="px-4 py-2.5 text-slate-600">{item.company || '-'}</td>
+                        <td className="px-4 py-2.5">
+                          {item.deadline_suggestion ? (
+                            <StatusBadge variant="neutral" size="sm">{item.deadline_suggestion}</StatusBadge>
+                          ) : '-'}
+                        </td>
+                        <td className="px-4 py-2.5 text-xs text-slate-500">{item.context || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           )}
-        </>
+
+        </div>
       )}
-    </div>
+    </PageShell>
   );
 }

@@ -1,60 +1,46 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Row, Col, Typography, Tag, Table, Progress, Alert } from 'antd';
-import {
-  CheckCircleOutlined,
-  WarningOutlined,
-  CloseCircleOutlined,
-  SyncOutlined,
-  DatabaseOutlined,
-} from '@ant-design/icons';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { ClientSelector } from '../../components/analytics/ClientSelector';
+import { useClient } from '../../contexts/ClientContext';
 import { MetricCard } from '../../components/analytics/MetricCard';
 import { ChartCard } from '../../components/analytics/ChartCard';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { ContentSkeleton } from '@/components/ui/empty-state';
+import { PageShell, PageHeader } from '@/components/ui/page-shell';
 import {
   dataHealthApi,
   type MailboxHealth,
   type DataHealthResponse,
   type ExtractionJobHealth,
 } from '../../services/analyticsService';
-
-const { Text } = Typography;
+import { CheckCircle, AlertTriangle, XCircle, RefreshCw, Database } from 'lucide-react';
 
 const THREAD_COLORS: Record<string, string> = {
-  complete: '#52c41a',
-  awaiting_response: '#1890ff',
-  awaiting_our_response: '#fa8c16',
-  overdue: '#f5222d',
-  dropped: '#999',
-  ongoing: '#13c2c2',
-  unknown: '#d9d9d9',
+  complete: '#10b981', awaiting_response: '#667eea', awaiting_our_response: '#f59e0b',
+  overdue: '#ef4444', dropped: '#94a3b8', ongoing: '#06b6d4', unknown: '#d1d5db',
 };
 
-function lagTag(hours: number | null) {
-  if (hours == null) return <Tag>Never</Tag>;
-  if (hours < 2) return <Tag color="green">{hours}h ago</Tag>;
-  if (hours < 24) return <Tag color="orange">{hours}h ago</Tag>;
-  return <Tag color="red">{Math.round(hours / 24)}d ago</Tag>;
+function lagBadge(hours: number | null) {
+  if (hours == null) return <StatusBadge variant="neutral" size="sm">Never</StatusBadge>;
+  if (hours < 2) return <StatusBadge variant="success" size="sm">{hours}h ago</StatusBadge>;
+  if (hours < 24) return <StatusBadge variant="warning" size="sm">{hours}h ago</StatusBadge>;
+  return <StatusBadge variant="danger" size="sm">{Math.round(hours / 24)}d ago</StatusBadge>;
 }
 
-function statusTag(status: string) {
-  const map: Record<string, string> = {
-    active: 'green', connected: 'green', syncing: 'blue',
-    error: 'red', disconnected: 'red', pending: 'orange',
-  };
-  return <Tag color={map[status] || 'default'}>{status}</Tag>;
+function statusBadge(status: string) {
+  const v = { active: 'success', connected: 'success', syncing: 'info', error: 'danger', disconnected: 'danger', pending: 'warning' }[status] || 'neutral';
+  return <StatusBadge variant={v as any} size="sm">{status}</StatusBadge>;
 }
 
-function jobStatusTag(status: string) {
-  if (status === 'completed') return <Tag icon={<CheckCircleOutlined />} color="success">Completed</Tag>;
-  if (status === 'failed') return <Tag icon={<CloseCircleOutlined />} color="error">Failed</Tag>;
-  if (status === 'processing') return <Tag icon={<SyncOutlined spin />} color="processing">Running</Tag>;
-  return <Tag color="default">{status}</Tag>;
+function jobStatusBadge(status: string) {
+  if (status === 'completed') return <StatusBadge variant="success" size="sm">Completed</StatusBadge>;
+  if (status === 'failed') return <StatusBadge variant="danger" size="sm">Failed</StatusBadge>;
+  if (status === 'processing') return <StatusBadge variant="info" size="sm">Running</StatusBadge>;
+  return <StatusBadge variant="neutral" size="sm">{status}</StatusBadge>;
 }
 
 export const DataHealthDashboard: React.FC = () => {
   const isMountedRef = useRef(true);
-  const [clientId, setClientId] = useState('');
+  const { clientId } = useClient();
   const [data, setData] = useState<DataHealthResponse | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -67,173 +53,153 @@ export const DataHealthDashboard: React.FC = () => {
       try {
         const result = await dataHealthApi.get(clientId);
         if (isMountedRef.current) setData(result);
-      } catch {
-        // silent
-      } finally {
-        if (isMountedRef.current) setLoading(false);
-      }
+      } catch { /* silent */ }
+      finally { if (isMountedRef.current) setLoading(false); }
     };
     load();
   }, [clientId]);
 
-  const mailboxColumns = [
-    { title: 'Email', dataIndex: 'email_address', key: 'email', ellipsis: true },
-    { title: 'Provider', dataIndex: 'provider', key: 'provider', width: 100, render: (v: string) => <Tag>{v}</Tag> },
-    { title: 'Status', dataIndex: 'status', key: 'status', width: 110, render: (v: string) => statusTag(v) },
-    { title: 'Last Sync', key: 'sync_lag', width: 120, render: (_: any, r: MailboxHealth) => lagTag(r.sync_lag_hours) },
-    { title: 'Last Extraction', key: 'ext_lag', width: 140, render: (_: any, r: MailboxHealth) => lagTag(r.extraction_lag_hours) },
-  ];
-
-  const jobColumns = [
-    { title: 'Status', dataIndex: 'status', key: 'status', width: 120, render: (v: string) => jobStatusTag(v) },
-    { title: 'Mode', dataIndex: 'extraction_mode', key: 'mode', width: 110, render: (v: string) => <Tag>{v}</Tag> },
-    {
-      title: 'Progress', key: 'progress', width: 160,
-      render: (_: any, r: ExtractionJobHealth) => {
-        if (!r.total_emails) return '-';
-        const pct = Math.round(((r.processed_emails || 0) / r.total_emails) * 100);
-        return <Progress percent={pct} size="small" />;
-      },
-    },
-    {
-      title: 'Started', dataIndex: 'started_at', key: 'started', width: 160,
-      render: (v: string | null) => v ? new Date(v).toLocaleString() : '-',
-    },
-    {
-      title: 'Errors', dataIndex: 'errors', key: 'errors', ellipsis: true,
-      render: (v: any[] | null) => v && v.length > 0 ? <Text type="danger" style={{ fontSize: 12 }}>{v.length} error(s)</Text> : '-',
-    },
-  ];
-
   const coveragePct = data?.identity_resolution?.coverage_percent ?? 0;
-  const coverageColor = coveragePct >= 90 ? '#52c41a' : coveragePct >= 70 ? '#faad14' : '#f5222d';
+  const coverageColor = coveragePct >= 90 ? 'text-success' : coveragePct >= 70 ? 'text-warning' : 'text-destructive';
 
   const pieData = (data?.thread_distribution || []).map((t) => ({
     name: t.status.replace(/_/g, ' '),
     value: t.count,
-    fill: THREAD_COLORS[t.status] || '#d9d9d9',
+    fill: THREAD_COLORS[t.status] || '#d1d5db',
   }));
 
   return (
-    <div className="glass-page-bg" style={{ padding: 24 }}>
-      <div className="fade-in-up" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <Text type="secondary">Data health — sync status, identity resolution, thread confidence, extraction jobs</Text>
-        <ClientSelector value={clientId} onChange={setClientId} />
-      </div>
+    <PageShell>
+      <PageHeader title="Data Health" description="Sync status, identity resolution, thread confidence, extraction jobs" />
 
       {/* Summary cards */}
-      <Row gutter={[16, 16]} className="fade-in-up stagger-1">
-        <Col xs={12} sm={6}>
-          <MetricCard
-            title="Mailboxes"
-            value={data?.mailbox_health?.length ?? 0}
-            prefix={<DatabaseOutlined />}
-            loading={loading}
-          />
-        </Col>
-        <Col xs={12} sm={6}>
-          <MetricCard
-            title="Identity Coverage"
-            value={`${coveragePct}%`}
-            loading={loading}
-            valueStyle={{ color: coverageColor }}
-          />
-        </Col>
-        <Col xs={12} sm={6}>
-          <MetricCard
-            title="Missing Weekdays (30d)"
-            value={data?.missing_weekday_count ?? 0}
-            loading={loading}
-            prefix={data?.missing_weekday_count ? <WarningOutlined /> : <CheckCircleOutlined />}
-            valueStyle={{ color: (data?.missing_weekday_count ?? 0) > 5 ? '#f5222d' : (data?.missing_weekday_count ?? 0) > 0 ? '#faad14' : '#52c41a' }}
-          />
-        </Col>
-        <Col xs={12} sm={6}>
-          <MetricCard
-            title="Total Emails"
-            value={data?.identity_resolution?.total_emails ?? 0}
-            loading={loading}
-          />
-        </Col>
-      </Row>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        <MetricCard title="Mailboxes" value={data?.mailbox_health?.length ?? 0} prefix={<Database className="h-4 w-4 text-primary inline mr-1" />} loading={loading} />
+        <MetricCard title="Identity Coverage" value={`${coveragePct}%`} loading={loading} />
+        <MetricCard title="Missing Weekdays (30d)" value={data?.missing_weekday_count ?? 0} loading={loading} />
+        <MetricCard title="Total Emails" value={data?.identity_resolution?.total_emails ?? 0} loading={loading} />
+      </div>
 
       {/* Identity resolution bar */}
       {data && (
-        <div className="glass-card fade-in-up stagger-1" style={{ padding: 20, marginTop: 16 }}>
-          <Text strong style={{ display: 'block', marginBottom: 8 }}>Identity Resolution</Text>
-          <Progress
-            percent={coveragePct}
-            strokeColor={coverageColor}
-            format={() => `${data.identity_resolution.resolved_emails.toLocaleString()} / ${data.identity_resolution.total_emails.toLocaleString()} emails linked`}
-          />
+        <div className="rounded-lg border bg-white shadow-sm p-4 mb-4">
+          <h3 className="text-sm font-semibold text-slate-900 mb-2">Identity Resolution</h3>
+          <div className="h-2 rounded-full bg-slate-100 overflow-hidden mb-2">
+            <div className={`h-full rounded-full transition-all ${coveragePct >= 90 ? 'bg-success' : coveragePct >= 70 ? 'bg-warning' : 'bg-destructive'}`}
+              style={{ width: `${coveragePct}%` }} />
+          </div>
+          <p className="text-xs text-slate-600">
+            {data.identity_resolution.resolved_emails.toLocaleString('en-AU')} / {data.identity_resolution.total_emails.toLocaleString('en-AU')} emails linked
+          </p>
           {data.identity_resolution.unresolved_emails > 0 && (
-            <Text type="secondary" style={{ fontSize: 12, marginTop: 4, display: 'block' }}>
-              {data.identity_resolution.unresolved_emails.toLocaleString()} emails not linked to any contact
-            </Text>
+            <p className="text-xs text-slate-400 mt-1">{data.identity_resolution.unresolved_emails.toLocaleString('en-AU')} emails not linked to any contact</p>
           )}
         </div>
       )}
 
       {/* Mailbox health + Thread distribution */}
-      <Row gutter={[16, 16]} style={{ marginTop: 16 }} className="fade-in-up stagger-2">
-        <Col xs={24} lg={14}>
-          <div className="glass-table-container" style={{ padding: 16 }}>
-            <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 12 }}>Mailbox Health</Text>
-            <Table
-              columns={mailboxColumns}
-              dataSource={data?.mailbox_health || []}
-              rowKey="mailbox_id"
-              size="small"
-              pagination={false}
-              loading={loading}
-            />
-          </div>
-        </Col>
-        <Col xs={24} lg={10}>
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 mb-4">
+        <div className="lg:col-span-3 rounded-lg border bg-white shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b"><h3 className="text-sm font-semibold text-slate-900">Mailbox Health</h3></div>
+          {loading ? <div className="p-4"><ContentSkeleton rows={4} /></div> : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-slate-50/50">
+                  <th className="px-4 py-2 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Email</th>
+                  <th className="px-4 py-2 text-left text-xs font-bold uppercase tracking-wider text-slate-600 w-24">Provider</th>
+                  <th className="px-4 py-2 text-left text-xs font-bold uppercase tracking-wider text-slate-600 w-24">Status</th>
+                  <th className="px-4 py-2 text-left text-xs font-bold uppercase tracking-wider text-slate-600 w-28">Last Sync</th>
+                  <th className="px-4 py-2 text-left text-xs font-bold uppercase tracking-wider text-slate-600 w-28">Last Extraction</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {(data?.mailbox_health || []).map(r => (
+                  <tr key={r.mailbox_id}>
+                    <td className="px-4 py-2 truncate">{r.email_address}</td>
+                    <td className="px-4 py-2"><StatusBadge variant="neutral" size="sm">{r.provider}</StatusBadge></td>
+                    <td className="px-4 py-2">{statusBadge(r.status)}</td>
+                    <td className="px-4 py-2">{lagBadge(r.sync_lag_hours)}</td>
+                    <td className="px-4 py-2">{lagBadge(r.extraction_lag_hours)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div className="lg:col-span-2">
           <ChartCard title="Thread Status Distribution" loading={loading} height={280}>
             {pieData.length > 0 ? (
               <ResponsiveContainer>
                 <PieChart>
-                  <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} label={(e) => `${e.name}: ${e.value}`}>
-                    {pieData.map((entry, i) => (
-                      <Cell key={i} fill={entry.fill} />
-                    ))}
+                  <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90}
+                    label={(e) => `${e.name}: ${e.value}`}>
+                    {pieData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
                   </Pie>
                   <Tooltip />
                   <Legend />
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <Text type="secondary">No thread data</Text>
+              <p className="text-sm text-slate-400 text-center py-8">No thread data</p>
             )}
           </ChartCard>
-        </Col>
-      </Row>
+        </div>
+      </div>
 
       {/* Missing weekdays alert */}
       {data && data.missing_weekdays.length > 0 && (
-        <Alert
-          type="warning"
-          showIcon
-          className="fade-in-up stagger-2"
-          style={{ marginTop: 16 }}
-          message={`${data.missing_weekdays.length} weekday(s) with no email data in the last 30 days`}
-          description={data.missing_weekdays.join(', ')}
-        />
+        <div className="rounded-lg border border-warning/30 bg-warning/5 p-3 mb-4">
+          <div className="flex items-center gap-2 mb-1">
+            <AlertTriangle className="h-4 w-4 text-warning" />
+            <span className="text-sm font-medium">{data.missing_weekdays.length} weekday(s) with no email data in the last 30 days</span>
+          </div>
+          <p className="text-xs text-slate-600">{data.missing_weekdays.join(', ')}</p>
+        </div>
       )}
 
       {/* Recent extraction jobs */}
-      <div className="glass-table-container fade-in-up stagger-3" style={{ padding: 16, marginTop: 16 }}>
-        <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 12 }}>Recent Extraction Jobs</Text>
-        <Table
-          columns={jobColumns}
-          dataSource={data?.recent_extraction_jobs || []}
-          rowKey="id"
-          size="small"
-          pagination={false}
-          loading={loading}
-        />
+      <div className="rounded-lg border bg-white shadow-sm overflow-hidden">
+        <div className="px-4 py-3 border-b"><h3 className="text-sm font-semibold text-slate-900">Recent Extraction Jobs</h3></div>
+        {loading ? <div className="p-4"><ContentSkeleton rows={4} /></div> : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b bg-slate-50/50">
+                <th className="px-4 py-2 text-left text-xs font-bold uppercase tracking-wider text-slate-600 w-28">Status</th>
+                <th className="px-4 py-2 text-left text-xs font-bold uppercase tracking-wider text-slate-600 w-28">Mode</th>
+                <th className="px-4 py-2 text-left text-xs font-bold uppercase tracking-wider text-slate-600 w-40">Progress</th>
+                <th className="px-4 py-2 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Started</th>
+                <th className="px-4 py-2 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Errors</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {(data?.recent_extraction_jobs || []).map(r => {
+                const pct = r.total_emails ? Math.round(((r.processed_emails || 0) / r.total_emails) * 100) : 0;
+                return (
+                  <tr key={r.id}>
+                    <td className="px-4 py-2">{jobStatusBadge(r.status)}</td>
+                    <td className="px-4 py-2"><StatusBadge variant="neutral" size="sm">{r.extraction_mode}</StatusBadge></td>
+                    <td className="px-4 py-2">
+                      {r.total_emails ? (
+                        <div className="flex items-center gap-2">
+                          <div className="h-1.5 flex-1 rounded-full bg-slate-100 overflow-hidden">
+                            <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
+                          </div>
+                          <span className="text-xs tabular-nums text-slate-500">{pct}%</span>
+                        </div>
+                      ) : <span className="text-slate-400">—</span>}
+                    </td>
+                    <td className="px-4 py-2 text-slate-500">{r.started_at ? new Date(r.started_at).toLocaleString() : '—'}</td>
+                    <td className="px-4 py-2">
+                      {r.errors && r.errors.length > 0 ? <span className="text-xs text-destructive">{r.errors.length} error(s)</span> : '—'}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
-    </div>
+    </PageShell>
   );
 };

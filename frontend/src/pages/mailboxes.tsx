@@ -1,39 +1,7 @@
+/**
+ * Mailboxes Page — Manage email sources for intelligence gathering. Zero antd.
+ */
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import {
-  Alert,
-  Table,
-  Space,
-  Button,
-  Typography,
-  Tag,
-  Popconfirm,
-  message,
-  Modal,
-  DatePicker,
-  InputNumber,
-  Form,
-  Select,
-  Dropdown,
-  Skeleton
-} from "antd";
-import {
-  PlusOutlined,
-  EditOutlined,
-  DeleteOutlined,
-  SyncOutlined,
-  MailOutlined,
-  GoogleOutlined,
-  WindowsOutlined,
-  LinkOutlined,
-  ThunderboltOutlined,
-  HistoryOutlined,
-  CalendarOutlined,
-  TeamOutlined,
-  UserOutlined,
-  DownOutlined,
-  EyeOutlined,
-  ExclamationCircleOutlined
-} from "@ant-design/icons";
 import dayjs from 'dayjs';
 import { useNavigate, useParams } from "react-router-dom";
 import { mailboxService, Mailbox, hasGmailLiveSync, hasOutlookLiveSync, hasLiveSync, getLiveSyncType } from '../services/mailboxService';
@@ -46,29 +14,49 @@ import mailboxAssignmentService from '../services/mailboxAssignmentService';
 import clientService from '../services/clientService';
 import { userService } from '../services/userService';
 import ProcessingStatusBadge from '../components/ProcessingStatusBadge';
-import { dashboardService } from '../services/dashboardService';
 import { formatDate } from '../utils/dateUtils';
+import { useMailboxes, useProcessingJobs, useInvalidateMailboxes } from '../hooks/queries';
 
-const { Text } = Typography;
-const { RangePicker } = DatePicker;
+import { PageShell, PageHeader } from '@/components/ui/page-shell';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { ContentSkeleton } from '@/components/ui/empty-state';
+import { toast } from '@/lib/toast';
+import { cn } from '@/lib/utils';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  Plus, Pencil, Trash2, RefreshCw, Mail, Link as LinkIcon,
+  Zap, Calendar, Users, User, ChevronDown, Eye,
+  AlertCircle, History, Spinner,
+} from '@/lib/icons';
 
 export const MailboxList: React.FC = () => {
   const navigate = useNavigate();
   const { profile } = useAuth();
   const isAdmin = useMemo(() => profile?.roles?.includes('admin'), [profile?.roles]);
 
-  const [mailboxes, setMailboxes] = useState<Mailbox[]>([]);
-  const [loading, setLoading] = useState(true);
+  // TanStack Query — replaces manual fetch + polling
+  const mailboxQuery = useMailboxes();
+  const jobsQuery = useProcessingJobs();
+  const invalidateMailboxes = useInvalidateMailboxes();
+  const mailboxes = mailboxQuery.data || [];
+  const loading = mailboxQuery.isLoading;
+  const processingJobs = jobsQuery.data || [];
+
   const [gmailConnected, setGmailConnected] = useState(false);
   const [outlookConnected, setOutlookConnected] = useState(false);
   const [linkingMailboxId, setLinkingMailboxId] = useState<string | null>(null);
-  const [processingJobs, setProcessingJobs] = useState<any[]>([]);
 
   // Date range fetch modal state
   const [dateRangeModalVisible, setDateRangeModalVisible] = useState(false);
   const [selectedMailboxForFetch, setSelectedMailboxForFetch] = useState<Mailbox | null>(null);
   const [fetchingEmails, setFetchingEmails] = useState(false);
-  const [dateRangeForm] = Form.useForm();
+  // Date range form state (replaces antd Form)
+  const [fetchStartDate, setFetchStartDate] = useState('');
+  const [fetchEndDate, setFetchEndDate] = useState('');
+  const [fetchMaxEmails, setFetchMaxEmails] = useState<number | ''>('');
 
   // Assignment modal state
   const [assignmentModalVisible, setAssignmentModalVisible] = useState(false);
@@ -77,19 +65,12 @@ export const MailboxList: React.FC = () => {
   const [clients, setClients] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [assignmentLoading, setAssignmentLoading] = useState(false);
-  const [clientsUsersLoading, setClientsUsersLoading] = useState(true); // Track loading state for client/user data
+  const [clientsUsersLoading, setClientsUsersLoading] = useState(true);
 
-  // Track if component is mounted to prevent state updates after unmount
+  // Sync dropdown state
+  const [openSyncDropdown, setOpenSyncDropdown] = useState<string | null>(null);
+
   const isMountedRef = useRef(true);
-  // Use ref to track mailboxes for stale closure prevention
-  const mailboxesRef = useRef<Mailbox[]>([]);
-  // Use ref to track processingJobs for stale closure prevention
-  const processingJobsRef = useRef<any[]>([]);
-
-  // Keep refs in sync with state
-  useEffect(() => {
-    mailboxesRef.current = mailboxes;
-  }, [mailboxes]);
 
   // Mailboxes where Gmail or Outlook auth has expired and needs user reconnection
   const mailboxesWithExpiredAuth = useMemo(() => {
@@ -100,40 +81,29 @@ export const MailboxList: React.FC = () => {
   }, [mailboxes]);
 
   useEffect(() => {
-    processingJobsRef.current = processingJobs;
-  }, [processingJobs]);
-
-  useEffect(() => {
     isMountedRef.current = true;
-
-    // Only load once on mount, not on every isAdmin change
-    loadMailboxes();
     checkGmailConnection();
     checkOutlookConnection();
-    loadProcessingJobs();
-    if (isAdmin) {
-      loadClientsAndUsers();
-    }
+    if (isAdmin) loadClientsAndUsers();
+    return () => { isMountedRef.current = false; };
+  }, []);
 
-    // Poll for job updates every 5 seconds
-    const interval = setInterval(() => {
-      if (isMountedRef.current) {
-        loadProcessingJobs();
-      }
-    }, 5000);
-
-    return () => {
-      isMountedRef.current = false;
-      clearInterval(interval);
-    };
-  }, []); // Empty dependency array - only run once on mount
-
-  // Separate effect for when isAdmin changes (to load clients/users)
   useEffect(() => {
-    if (isAdmin) {
-      loadClientsAndUsers();
-    }
+    if (isAdmin) loadClientsAndUsers();
   }, [isAdmin]);
+
+  // Close sync dropdown on outside click
+  useEffect(() => {
+    if (!openSyncDropdown) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-sync-dropdown]')) {
+        setOpenSyncDropdown(null);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [openSyncDropdown]);
 
   const checkGmailConnection = async () => {
     if (!profile?.id) return;
@@ -171,67 +141,27 @@ export const MailboxList: React.FC = () => {
     }
   };
 
-  const loadProcessingJobs = async () => {
-    try {
-      const jobs = await dashboardService._fetchProcessingJobs();
-      if (!isMountedRef.current) return;
-
-      // Preserve existing data if API returns empty (transient failure)
-      if (jobs && Array.isArray(jobs)) {
-        if (jobs.length > 0 || processingJobsRef.current.length === 0) {
-          setProcessingJobs(jobs);
-        }
-      }
-    } catch (error) {
-      console.error('Error loading processing jobs:', error);
-    }
-  };
-
-  const loadMailboxes = async () => {
-    try {
-      if (isMountedRef.current) setLoading(true);
-      const data = await mailboxService.getMailboxes();
-
-      if (!isMountedRef.current) return;
-
-      console.log('[Mailboxes] Loaded data:', data?.length || 0, 'mailboxes');
-
-      // Preserve existing data if service returns empty (transient hiccup)
-      if (data && data.length > 0) {
-        setMailboxes(data);
-      } else if (mailboxesRef.current.length === 0) {
-        // Only set empty if we have no existing data
-        setMailboxes(data || []);
-      } else {
-        console.warn('[Mailboxes] Received empty data, preserving existing mailboxes');
-      }
-    } catch (error) {
-      console.error('[Mailboxes] Error loading mailboxes:', error);
-      // Show error message to user
-      message.error('Failed to load mailboxes. Please refresh the page.');
-    } finally {
-      if (isMountedRef.current) setLoading(false);
-    }
-  };
+  // loadMailboxes replaced by invalidateMailboxes() from TanStack Query
 
   const handleDelete = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this mailbox?')) return;
     try {
       await mailboxService.deleteMailbox(id);
-      message.success("Mailbox deleted successfully");
-      loadMailboxes(); // Reload the list
+      toast.success("Mailbox deleted successfully");
+      invalidateMailboxes(); // Reload the list
     } catch (error) {
-      message.error("Failed to delete mailbox");
+      toast.error("Failed to delete mailbox");
     }
   };
 
   const handleSync = async (id: string, name: string) => {
     try {
-      message.info(`Starting sync for ${name}...`);
+      toast.info(`Starting sync for ${name}...`);
       await mailboxService.syncMailbox(id);
-      message.success(`Sync initiated for ${name}`);
-      loadMailboxes(); // Reload to show updated sync time
+      toast.success(`Sync initiated for ${name}`);
+      invalidateMailboxes(); // Reload to show updated sync time
     } catch (error) {
-      message.error(`Failed to sync ${name}`);
+      toast.error(`Failed to sync ${name}`);
     }
   };
 
@@ -249,16 +179,16 @@ export const MailboxList: React.FC = () => {
 
       if (assignmentType === 'client') {
         await mailboxAssignmentService.assignToClient(selectedMailboxForAssignment.id, value);
-        message.success('Mailbox assigned to client successfully');
+        toast.success('Mailbox assigned to client successfully');
       } else {
         await mailboxAssignmentService.assignToUser(selectedMailboxForAssignment.id, value);
-        message.success('Mailbox assigned to account manager successfully');
+        toast.success('Mailbox assigned to account manager successfully');
       }
 
       setAssignmentModalVisible(false);
-      loadMailboxes(); // Reload to show updated assignments
+      invalidateMailboxes(); // Reload to show updated assignments
     } catch (error: any) {
-      message.error(error.message || 'Failed to assign mailbox');
+      toast.error(error.message || 'Failed to assign mailbox');
     } finally {
       setAssignmentLoading(false);
     }
@@ -266,19 +196,19 @@ export const MailboxList: React.FC = () => {
 
   const handleLinkGmail = async (mailboxId: string, mailboxName: string) => {
     if (!gmailConnected) {
-      message.warning('Please connect your Gmail account from the Dashboard first');
+      toast.warning('Please connect your Gmail account from the Dashboard first');
       navigate('/');
       return;
     }
 
     if (!profile?.id) {
-      message.error('User not authenticated');
+      toast.error('User not authenticated');
       return;
     }
 
     try {
       setLinkingMailboxId(mailboxId);
-      message.loading({ content: `Linking Gmail to ${mailboxName}...`, key: 'link-gmail' });
+      toast.info(`Linking Gmail to ${mailboxName}...`);
 
       const result = await gmailService.extendMailboxWithGmail(mailboxId, profile.id);
 
@@ -289,11 +219,7 @@ export const MailboxList: React.FC = () => {
         // Validate: prevent linking a different Gmail account
         if (linkedEmail && currentMailbox?.email_address) {
           if (linkedEmail.toLowerCase() !== currentMailbox.email_address.toLowerCase()) {
-            message.error({
-              content: `Cannot link ${linkedEmail}. This mailbox is already associated with ${currentMailbox.email_address}. Please use the same account or remove the existing link first.`,
-              key: 'link-gmail',
-              duration: 6,
-            });
+            toast.error(`Cannot link ${linkedEmail}. This mailbox is already associated with ${currentMailbox.email_address}. Please use the same account or remove the existing link first.`);
             setLinkingMailboxId(null);
             return;
           }
@@ -310,14 +236,14 @@ export const MailboxList: React.FC = () => {
           }
         }
 
-        message.success({ content: result.message, key: 'link-gmail' });
+        toast.success(result.message);
         mailboxService.clearCache();
-        loadMailboxes(); // Reload to show updated status
+        invalidateMailboxes(); // Reload to show updated status
       } else {
-        message.error({ content: result.message, key: 'link-gmail' });
+        toast.error(result.message);
       }
     } catch (error) {
-      message.error({ content: 'Failed to link Gmail', key: 'link-gmail' });
+      toast.error('Failed to link Gmail');
     } finally {
       setLinkingMailboxId(null);
     }
@@ -325,19 +251,19 @@ export const MailboxList: React.FC = () => {
 
   const handleLinkOutlook = async (mailboxId: string, mailboxName: string) => {
     if (!outlookConnected) {
-      message.warning('Please connect your Outlook account from the Dashboard first');
+      toast.warning('Please connect your Outlook account from the Dashboard first');
       navigate('/');
       return;
     }
 
     if (!profile?.id) {
-      message.error('User not authenticated');
+      toast.error('User not authenticated');
       return;
     }
 
     try {
       setLinkingMailboxId(mailboxId);
-      message.loading({ content: `Linking Outlook to ${mailboxName}...`, key: 'link-outlook' });
+      toast.info(`Linking Outlook to ${mailboxName}...`);
 
       const result = await outlookService.extendMailboxWithOutlook(mailboxId, profile.id);
 
@@ -348,11 +274,7 @@ export const MailboxList: React.FC = () => {
         // Validate: prevent linking a different Outlook account
         if (linkedEmail && currentMailbox?.email_address) {
           if (linkedEmail.toLowerCase() !== currentMailbox.email_address.toLowerCase()) {
-            message.error({
-              content: `Cannot link ${linkedEmail}. This mailbox is already associated with ${currentMailbox.email_address}. Please use the same account or remove the existing link first.`,
-              key: 'link-outlook',
-              duration: 6,
-            });
+            toast.error(`Cannot link ${linkedEmail}. This mailbox is already associated with ${currentMailbox.email_address}. Please use the same account or remove the existing link first.`);
             setLinkingMailboxId(null);
             return;
           }
@@ -369,14 +291,14 @@ export const MailboxList: React.FC = () => {
           }
         }
 
-        message.success({ content: result.message, key: 'link-outlook' });
+        toast.success(result.message);
         mailboxService.clearCache();
-        loadMailboxes(); // Reload to show updated status
+        invalidateMailboxes(); // Reload to show updated status
       } else {
-        message.error({ content: result.message, key: 'link-outlook' });
+        toast.error(result.message);
       }
     } catch (error) {
-      message.error({ content: 'Failed to link Outlook', key: 'link-outlook' });
+      toast.error('Failed to link Outlook');
     } finally {
       setLinkingMailboxId(null);
     }
@@ -385,7 +307,7 @@ export const MailboxList: React.FC = () => {
   const handleReconnectGmail = async (mailboxId: string, mailboxName: string) => {
     try {
       setLinkingMailboxId(mailboxId);
-      message.loading({ content: `Reconnecting Gmail for ${mailboxName}...`, key: 'reconnect-gmail' });
+      toast.info(`Reconnecting Gmail for ${mailboxName}...`);
       const result = await gmailService.connectToMailbox(mailboxId);
       if (result.success) {
         const linkedEmail = result.gmail_email;
@@ -394,11 +316,7 @@ export const MailboxList: React.FC = () => {
         // Validate: prevent reconnecting with a different Gmail account
         if (linkedEmail && currentMailbox?.email_address) {
           if (linkedEmail.toLowerCase() !== currentMailbox.email_address.toLowerCase()) {
-            message.error({
-              content: `Cannot reconnect with ${linkedEmail}. This mailbox is associated with ${currentMailbox.email_address}. Please use the same Gmail account.`,
-              key: 'reconnect-gmail',
-              duration: 6,
-            });
+            toast.error(`Cannot reconnect with ${linkedEmail}. This mailbox is associated with ${currentMailbox.email_address}. Please use the same Gmail account.`);
             setLinkingMailboxId(null);
             return;
           }
@@ -415,17 +333,17 @@ export const MailboxList: React.FC = () => {
           }
         }
 
-        message.success({ content: result.message || 'Gmail reconnected successfully', key: 'reconnect-gmail' });
+        toast.success(result.message || 'Gmail reconnected successfully');
         mailboxService.clearCache();
-        loadMailboxes();
+        invalidateMailboxes();
       } else {
-        message.error({ content: result.message || 'Failed to reconnect Gmail', key: 'reconnect-gmail' });
+        toast.error(result.message || 'Failed to reconnect Gmail');
       }
     } catch (error: any) {
       if (error?.message?.includes('cancelled')) {
-        message.info({ content: 'Reconnection cancelled', key: 'reconnect-gmail' });
+        toast.info('Reconnection cancelled');
       } else {
-        message.error({ content: error?.message || 'Failed to reconnect Gmail', key: 'reconnect-gmail' });
+        toast.error(error?.message || 'Failed to reconnect Gmail');
       }
     } finally {
       setLinkingMailboxId(null);
@@ -435,7 +353,7 @@ export const MailboxList: React.FC = () => {
   const handleReconnectOutlook = async (mailboxId: string, mailboxName: string) => {
     try {
       setLinkingMailboxId(mailboxId);
-      message.loading({ content: `Reconnecting Outlook for ${mailboxName}...`, key: 'reconnect-outlook' });
+      toast.info(`Reconnecting Outlook for ${mailboxName}...`);
       const result = await outlookService.connectToMailbox(mailboxId);
       if (result.success) {
         const linkedEmail = result.outlook_email;
@@ -444,11 +362,7 @@ export const MailboxList: React.FC = () => {
         // Validate: prevent reconnecting with a different Outlook account
         if (linkedEmail && currentMailbox?.email_address) {
           if (linkedEmail.toLowerCase() !== currentMailbox.email_address.toLowerCase()) {
-            message.error({
-              content: `Cannot reconnect with ${linkedEmail}. This mailbox is associated with ${currentMailbox.email_address}. Please use the same Outlook account.`,
-              key: 'reconnect-outlook',
-              duration: 6,
-            });
+            toast.error(`Cannot reconnect with ${linkedEmail}. This mailbox is associated with ${currentMailbox.email_address}. Please use the same Outlook account.`);
             setLinkingMailboxId(null);
             return;
           }
@@ -465,17 +379,17 @@ export const MailboxList: React.FC = () => {
           }
         }
 
-        message.success({ content: result.message || 'Outlook reconnected successfully', key: 'reconnect-outlook' });
+        toast.success(result.message || 'Outlook reconnected successfully');
         mailboxService.clearCache();
-        loadMailboxes();
+        invalidateMailboxes();
       } else {
-        message.error({ content: result.message || 'Failed to reconnect Outlook', key: 'reconnect-outlook' });
+        toast.error(result.message || 'Failed to reconnect Outlook');
       }
     } catch (error: any) {
       if (error?.message?.includes('cancelled')) {
-        message.info({ content: 'Reconnection cancelled', key: 'reconnect-outlook' });
+        toast.info('Reconnection cancelled');
       } else {
-        message.error({ content: error?.message || 'Failed to reconnect Outlook', key: 'reconnect-outlook' });
+        toast.error(error?.message || 'Failed to reconnect Outlook');
       }
     } finally {
       setLinkingMailboxId(null);
@@ -484,26 +398,28 @@ export const MailboxList: React.FC = () => {
 
   const handleOpenDateRangeFetch = (mailbox: Mailbox) => {
     setSelectedMailboxForFetch(mailbox);
+    setFetchStartDate('');
+    setFetchEndDate('');
+    setFetchMaxEmails('');
     setDateRangeModalVisible(true);
-    dateRangeForm.resetFields();
   };
 
-  const handleDateRangeFetch = async (values: any) => {
+  const handleDateRangeFetch = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!selectedMailboxForFetch) return;
 
     if (!profile?.id) {
-      message.error('User not authenticated');
+      toast.error('User not authenticated');
       return;
     }
 
-    const { dateRange, maxEmails } = values;
-    if (!dateRange || dateRange.length !== 2) {
-      message.error('Please select a date range');
+    if (!fetchStartDate || !fetchEndDate) {
+      toast.error('Please select a date range');
       return;
     }
 
-    const startDate = dateRange[0].format('YYYY-MM-DD');
-    const endDate = dateRange[1].format('YYYY-MM-DD');
+    const startDate = fetchStartDate;
+    const endDate = fetchEndDate;
 
     // Determine which service to use based on sync type
     const syncType = getLiveSyncType(selectedMailboxForFetch);
@@ -518,7 +434,7 @@ export const MailboxList: React.FC = () => {
           profile.id,
           startDate,
           endDate,
-          maxEmails
+          fetchMaxEmails || undefined
         );
       } else {
         // Default to Gmail
@@ -527,23 +443,31 @@ export const MailboxList: React.FC = () => {
           profile.id,
           startDate,
           endDate,
-          maxEmails
+          fetchMaxEmails || undefined
         );
       }
 
       if (result.success) {
-        message.success(`${result.message}. Job ID: ${result.job_id}`);
+        toast.success(`${result.message}. Job ID: ${result.job_id}`);
         setDateRangeModalVisible(false);
         // Navigate to processing page filtered to this mailbox
         navigate(`/processing/${selectedMailboxForFetch.id}`);
       } else {
-        message.error(result.message);
+        toast.error(result.message);
       }
     } catch (error) {
-      message.error('Failed to start email fetch');
+      toast.error('Failed to start email fetch');
     } finally {
       setFetchingEmails(false);
     }
+  };
+
+  // Quick date presets
+  const applyDatePreset = (days: number) => {
+    const end = dayjs().format('YYYY-MM-DD');
+    const start = dayjs().subtract(days, 'day').format('YYYY-MM-DD');
+    setFetchStartDate(start);
+    setFetchEndDate(end);
   };
 
   // Helper: Detect email provider from domain for validation
@@ -555,537 +479,532 @@ export const MailboxList: React.FC = () => {
     return 'unknown';
   };
 
-  const columns = [
-    {
-      title: 'Name',
-      dataIndex: 'name',
-      key: 'name',
-      render: (text: string, record: Mailbox) => (
-        <Space>
-          <MailOutlined />
-          <div>
-            <div style={{ fontWeight: 500 }}>{text}</div>
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              {record.email_address}
-            </Text>
-          </div>
-        </Space>
-      ),
-    },
-    {
-      title: 'Type',
-      dataIndex: 'mailbox_type',
-      key: 'mailbox_type',
-      render: (type: string, record: Mailbox) => {
-        const colors: Record<string, string> = {
-          mbox: 'green',
-          pst: 'blue',
-          olm: 'purple',
-          gmail: 'cyan',
-          outlook_live: 'geekblue'
-        };
-        const labels: Record<string, string> = {
-          mbox: 'MBOX',
-          pst: 'PST',
-          olm: 'OLM',
-          gmail: 'Gmail LIVE',
-          outlook_live: 'Outlook LIVE'
-        };
-        const isLiveEnabled = hasGmailLiveSync(record);
-        const displayType = record.connection_config?.original_type || type;
-        const cfg = (record.connection_config || {}) as Record<string, unknown>;
-        const isAuthExpired = cfg.gmail_sync_status === 'auth_expired' || cfg.outlook_sync_status === 'auth_expired';
-
-        return (
-          <Space size={4}>
-            <Tag color={colors[displayType] || 'default'}>
-              {labels[displayType] || displayType.toUpperCase()}
-            </Tag>
-            {isLiveEnabled && !isAuthExpired && (
-              <Tag color="cyan" icon={<ThunderboltOutlined />}>
-                LIVE
-              </Tag>
-            )}
-            {isAuthExpired && (
-              <Tag color="warning" icon={<ExclamationCircleOutlined />}>
-                Reconnect
-              </Tag>
-            )}
-          </Space>
-        );
-      },
-    },
-    {
-      title: 'Status',
-      dataIndex: 'is_active',
-      key: 'is_active',
-      render: (isActive: boolean) => (
-        <Tag color={isActive ? 'success' : 'default'}>
-          {isActive ? 'Active' : 'Inactive'}
-        </Tag>
-      ),
-    },
-    {
-      title: 'Sync Status',
-      key: 'sync_status',
-      render: (_: any, record: Mailbox) => (
-        <ProcessingStatusBadge
-          mailboxId={record.id}
-          jobs={processingJobs}
-          showProgress={false}
-          onClick={() => navigate(`/processing/${record.id}`)}
-        />
-      ),
-    },
-    {
-      title: 'Errors',
-      key: 'errors',
-      width: 100,
-      render: (_: any, record: Mailbox) => {
-
-        // Count failed jobs for this mailbox
-        const failedJobs = processingJobs.filter(
-          j => j.mailbox_id === record.id && (j.status === 'failed' || j.failed_records > 0)
-        );
-        const totalFailed = failedJobs.reduce((sum, j) => sum + (j.failed_records || 0), 0);
-
-        if (totalFailed === 0 && failedJobs.length === 0) {
-          return <Text type="secondary">-</Text>;
-        }
-
-        return (
-          <Button
-            type="link"
-            danger
-            size="small"
-            icon={<ExclamationCircleOutlined />}
-            onClick={() => navigate(`/manage/errors/${record.id}`)}
-          >
-            {totalFailed > 0 ? totalFailed : failedJobs.length}
-          </Button>
-        );
-      },
-    },
-    ...(isAdmin ? [{
-      title: 'Client',
-      dataIndex: 'client_id',
-      key: 'client_id',
-      render: (clientId: string, record: any) => {
-        // Show skeleton while clients are loading
-        if (clientsUsersLoading) {
-          return <Skeleton.Input active size="small" style={{ width: 100 }} />;
-        }
-        const client = clients.find(c => c.id === clientId);
-        return client ? (
-          <Space>
-            <TeamOutlined />
-            <Text>{client.client_name}</Text>
-          </Space>
-        ) : (
-          <Button
-            size="small"
-            type="link"
-            icon={<TeamOutlined />}
-            onClick={() => handleOpenAssignment(record, 'client')}
-          >
-            Assign Client
-          </Button>
-        );
-      },
-    },
-    {
-      title: 'Account Manager',
-      dataIndex: 'user_id',
-      key: 'user_id',
-      render: (userId: string, record: any) => {
-        // Show skeleton while users are loading
-        if (clientsUsersLoading) {
-          return <Skeleton.Input active size="small" style={{ width: 100 }} />;
-        }
-        const user = users.find(u => u.id === userId);
-        return user ? (
-          <Space>
-            <UserOutlined />
-            <Text>{user.name}</Text>
-          </Space>
-        ) : (
-          <Button
-            size="small"
-            type="link"
-            icon={<UserOutlined />}
-            onClick={() => handleOpenAssignment(record, 'user')}
-          >
-            Assign User
-          </Button>
-        );
-      },
-    }] : []),
-    {
-      title: 'Emails',
-      dataIndex: 'total_emails',
-      key: 'total_emails',
-      render: (count: number, record: Mailbox) => (
-        <Button
-          type="link"
-          size="small"
-          icon={<MailOutlined />}
-          onClick={() => navigate(`/emails/${record.id}`)}
-          style={{ padding: 0 }}
-        >
-          {count.toLocaleString()}
-        </Button>
-      ),
-    },
-    {
-      title: 'Last Sync',
-      dataIndex: 'last_sync_at',
-      key: 'last_sync_at',
-      render: (date: string) => {
-        if (!date) return 'Never';
-        return formatDate(date);
-      },
-    },
-    {
-      title: 'Actions',
-      key: 'actions',
-      render: (_: any, record: Mailbox) => {
-        const isGmailLive = hasGmailLiveSync(record);
-        const isOutlookLive = hasOutlookLiveSync(record);
-        const isAnyLiveSync = hasLiveSync(record) || ['gmail', 'outlook_live'].includes(record.mailbox_type);
-        const isArchiveType = ['mbox', 'pst', 'olm'].includes(record.mailbox_type);
-        const actionCfg = (record.connection_config || {}) as Record<string, unknown>;
-        const gmailAuthExpired = actionCfg.gmail_sync_status === 'auth_expired';
-        const outlookAuthExpired = actionCfg.outlook_sync_status === 'auth_expired';
-
-        // Guardrail 1: Mutual exclusivity - don't allow linking to both providers
-        const isAlreadyLinked = isGmailLive || isOutlookLive;
-
-        // Guardrail 2: Email domain validation - only show appropriate Link button
-        const emailProvider = getEmailProvider(record.email_address);
-        const canLinkGmail = isArchiveType && !isAlreadyLinked && gmailConnected &&
-          (emailProvider === 'gmail' || emailProvider === 'unknown');
-        const canLinkOutlook = isArchiveType && !isAlreadyLinked && outlookConnected &&
-          (emailProvider === 'outlook' || emailProvider === 'unknown');
-
-        // Consolidated sync menu
-        const syncMenuItems = [
-          {
-            key: 'sync-now',
-            icon: <SyncOutlined />,
-            label: 'Sync Now',
-            onClick: () => handleSync(record.id, record.name)
-          },
-          ...(isAnyLiveSync ? [{
-            key: 'fetch-range',
-            icon: <CalendarOutlined />,
-            label: 'Fetch Date Range',
-            onClick: () => handleOpenDateRangeFetch(record)
-          }] : []),
-          {
-            key: 'view-history',
-            icon: <EyeOutlined />,
-            label: 'View Sync History',
-            onClick: () => navigate(`/processing/${record.id}`)
-          }
-        ];
-
-        return (
-          <Space wrap>
-            <Dropdown.Button
-              type="primary"
-              size="small"
-              icon={<DownOutlined />}
-              menu={{ items: syncMenuItems }}
-              onClick={() => handleSync(record.id, record.name)}
-              disabled={!record.is_active}
-            >
-              <SyncOutlined /> Sync
-            </Dropdown.Button>
-            {/* Reconnect buttons - shown when OAuth token has expired */}
-            {gmailAuthExpired && (
-              <Button
-                size="small"
-                danger
-                icon={<GoogleOutlined />}
-                onClick={() => handleReconnectGmail(record.id, record.name)}
-                loading={linkingMailboxId === record.id}
-              >
-                Reconnect Gmail
-              </Button>
-            )}
-            {outlookAuthExpired && (
-              <Button
-                size="small"
-                danger
-                icon={<WindowsOutlined />}
-                onClick={() => handleReconnectOutlook(record.id, record.name)}
-                loading={linkingMailboxId === record.id}
-              >
-                Reconnect Outlook
-              </Button>
-            )}
-            {/* Link Gmail - enforces mutual exclusivity and email domain validation */}
-            {canLinkGmail && (
-              <Button
-                size="small"
-                icon={<LinkOutlined />}
-                onClick={() => handleLinkGmail(record.id, record.name)}
-                loading={linkingMailboxId === record.id}
-                title="Link Gmail account for LIVE sync"
-                style={{
-                  color: '#4285f4',
-                  borderColor: '#4285f4'
-                }}
-              >
-                <GoogleOutlined /> Link Gmail
-              </Button>
-            )}
-            {/* Link Outlook - enforces mutual exclusivity and email domain validation */}
-            {canLinkOutlook && (
-              <Button
-                size="small"
-                icon={<LinkOutlined />}
-                onClick={() => handleLinkOutlook(record.id, record.name)}
-                loading={linkingMailboxId === record.id}
-                title="Link Outlook account for LIVE sync"
-                style={{
-                  color: '#0078d4',
-                  borderColor: '#0078d4'
-                }}
-              >
-                <WindowsOutlined /> Link Outlook
-              </Button>
-            )}
-            <Button
-              size="small"
-              icon={<EditOutlined />}
-              onClick={() => navigate(`/mailboxes/edit/${record.id}`)}
-            >
-              Edit
-            </Button>
-            <Popconfirm
-              title="Are you sure you want to delete this mailbox?"
-              onConfirm={() => handleDelete(record.id)}
-              okText="Yes"
-              cancelText="No"
-            >
-              <Button size="small" danger icon={<DeleteOutlined />}>
-                Delete
-              </Button>
-            </Popconfirm>
-          </Space>
-        );
-      },
-    },
-  ];
+  // Helper: Type badge colors
+  const typeConfig: Record<string, { label: string; variant: 'success' | 'info' | 'purple' | 'neutral' }> = {
+    mbox: { label: 'MBOX', variant: 'success' },
+    pst: { label: 'PST', variant: 'info' },
+    olm: { label: 'OLM', variant: 'purple' },
+    gmail: { label: 'Gmail LIVE', variant: 'info' },
+    outlook_live: { label: 'Outlook LIVE', variant: 'info' },
+  };
 
   return (
-    <div className="glass-page-bg" style={{ padding: 24 }}>
-      {/* Header */}
-      <div className="fade-in-up" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <div>
-          <Text type="secondary">
-            Manage your email sources for intelligence gathering
-          </Text>
-        </div>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => navigate('/mailboxes/create')}
-          className="glass-button-primary"
-        >
-          Add Mailbox
-        </Button>
-      </div>
+    <PageShell>
+      <PageHeader
+        title="Mailboxes"
+        description="Manage your email sources for intelligence gathering"
+        actions={
+          <button
+            onClick={() => navigate('/mailboxes/create')}
+            className="h-8 px-3 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary-dark inline-flex items-center gap-1.5"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add Mailbox
+          </button>
+        }
+      />
 
       {/* Auth Expired Banner */}
       {mailboxesWithExpiredAuth.length > 0 && (
-        <Alert
-          type="warning"
-          showIcon
-          message={`${mailboxesWithExpiredAuth.length} mailbox${mailboxesWithExpiredAuth.length > 1 ? 'es need' : ' needs'} reauthentication`}
-          description={`${mailboxesWithExpiredAuth.map(m => m.name).join(', ')} — the Gmail or Outlook connection has expired. Find the mailbox below and click the Reconnect action to restore sync.`}
-          style={{ marginBottom: 16, borderRadius: 8 }}
-          closable
-        />
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-amber-800">
+                {mailboxesWithExpiredAuth.length} mailbox{mailboxesWithExpiredAuth.length > 1 ? 'es need' : ' needs'} reauthentication
+              </p>
+              <p className="text-xs text-amber-700 mt-1">
+                {mailboxesWithExpiredAuth.map(m => m.name).join(', ')} — the Gmail or Outlook connection has expired. Find the mailbox below and click the Reconnect action to restore sync.
+              </p>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Table */}
-      <div className="glass-table-container fade-in-up stagger-1">
+      <div className="rounded-lg border bg-white shadow-sm overflow-hidden">
         {loading && mailboxes.length === 0 ? (
-          <div style={{ padding: 24 }}>
-            {[1, 2, 3, 4, 5].map(i => (
-              <div key={i} style={{ display: 'flex', gap: 16, marginBottom: 20, alignItems: 'center' }}>
-                <Skeleton.Input active size="small" style={{ width: 140 }} />
-                <Skeleton.Button active size="small" style={{ width: 60 }} />
-                <Skeleton.Input active size="small" style={{ width: 100 }} />
-                <Skeleton.Input active size="small" style={{ width: 80 }} />
-                <Skeleton.Input active size="small" style={{ width: 70 }} />
-                <Skeleton.Input active size="small" style={{ width: 90 }} />
-                <Space>
-                  <Skeleton.Button active size="small" />
-                  <Skeleton.Button active size="small" />
-                </Space>
-              </div>
-            ))}
-          </div>
+          <ContentSkeleton rows={5} />
         ) : (
-          <Table
-            dataSource={mailboxes}
-            columns={columns}
-            rowKey="id"
-            pagination={{
-              pageSize: 10,
-              showSizeChanger: true,
-              showQuickJumper: true,
-              showTotal: (total, range) =>
-                `${range[0]}-${range[1]} of ${total} mailboxes`,
-            }}
-          />
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-slate-50/50">
+                    <th className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Name</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Type</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Status</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Sync Status</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600 w-20">Errors</th>
+                    {isAdmin && (
+                      <>
+                        <th className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Client</th>
+                        <th className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Account Manager</th>
+                      </>
+                    )}
+                    <th className="px-4 py-2.5 text-right text-xs font-bold uppercase tracking-wider text-slate-600 w-20">Emails</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Last Sync</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {mailboxes.map((record) => {
+                    const isGmailLive = hasGmailLiveSync(record);
+                    const isOutlookLive = hasOutlookLiveSync(record);
+                    const isAnyLiveSync = hasLiveSync(record) || ['gmail', 'outlook_live'].includes(record.mailbox_type);
+                    const isArchiveType = ['mbox', 'pst', 'olm'].includes(record.mailbox_type);
+                    const actionCfg = (record.connection_config || {}) as Record<string, unknown>;
+                    const gmailAuthExpired = actionCfg.gmail_sync_status === 'auth_expired';
+                    const outlookAuthExpired = actionCfg.outlook_sync_status === 'auth_expired';
+
+                    // Guardrail 1: Mutual exclusivity - don't allow linking to both providers
+                    const isAlreadyLinked = isGmailLive || isOutlookLive;
+
+                    // Guardrail 2: Email domain validation - only show appropriate Link button
+                    const emailProvider = getEmailProvider(record.email_address);
+                    const canLinkGmail = isArchiveType && !isAlreadyLinked && gmailConnected &&
+                      (emailProvider === 'gmail' || emailProvider === 'unknown');
+                    const canLinkOutlook = isArchiveType && !isAlreadyLinked && outlookConnected &&
+                      (emailProvider === 'outlook' || emailProvider === 'unknown');
+
+                    const displayType = (record.connection_config as any)?.original_type || record.mailbox_type;
+                    const cfg = (record.connection_config || {}) as Record<string, unknown>;
+                    const isAuthExpired = cfg.gmail_sync_status === 'auth_expired' || cfg.outlook_sync_status === 'auth_expired';
+                    const isLiveEnabled = hasGmailLiveSync(record);
+
+                    const tc = typeConfig[displayType] || { label: displayType.toUpperCase(), variant: 'neutral' as const };
+
+                    // Count failed jobs for this mailbox
+                    const failedJobs = processingJobs.filter(
+                      j => j.mailbox_id === record.id && (j.status === 'failed' || j.failed_records > 0)
+                    );
+                    const totalFailed = failedJobs.reduce((sum: number, j: any) => sum + (j.failed_records || 0), 0);
+
+                    return (
+                      <tr key={record.id} className="hover:bg-slate-50/50">
+                        {/* Name */}
+                        <td className="px-4 py-2.5">
+                          <div className="flex items-center gap-2">
+                            <Mail className="h-4 w-4 text-slate-400 shrink-0" />
+                            <div>
+                              <div className="font-medium text-slate-900">{record.name}</div>
+                              <div className="text-xs text-slate-500">{record.email_address}</div>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Type */}
+                        <td className="px-4 py-2.5">
+                          <div className="flex items-center gap-1">
+                            <StatusBadge variant={tc.variant} size="sm">{tc.label}</StatusBadge>
+                            {isLiveEnabled && !isAuthExpired && (
+                              <StatusBadge variant="info" size="sm">
+                                <Zap className="h-3 w-3 mr-0.5" />LIVE
+                              </StatusBadge>
+                            )}
+                            {isAuthExpired && (
+                              <StatusBadge variant="warning" size="sm">
+                                <AlertCircle className="h-3 w-3 mr-0.5" />Reconnect
+                              </StatusBadge>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Status */}
+                        <td className="px-4 py-2.5">
+                          <StatusBadge variant={record.is_active ? 'success' : 'neutral'} size="sm">
+                            {record.is_active ? 'Active' : 'Inactive'}
+                          </StatusBadge>
+                        </td>
+
+                        {/* Sync Status */}
+                        <td className="px-4 py-2.5">
+                          <ProcessingStatusBadge
+                            mailboxId={record.id}
+                            jobs={processingJobs}
+                            showProgress={false}
+                            onClick={() => navigate(`/processing/${record.id}`)}
+                          />
+                        </td>
+
+                        {/* Errors */}
+                        <td className="px-4 py-2.5">
+                          {totalFailed === 0 && failedJobs.length === 0 ? (
+                            <span className="text-slate-400">-</span>
+                          ) : (
+                            <button
+                              className="text-xs text-red-600 hover:text-red-700 inline-flex items-center gap-1"
+                              onClick={() => navigate(`/manage/errors/${record.id}`)}
+                            >
+                              <AlertCircle className="h-3.5 w-3.5" />
+                              {totalFailed > 0 ? totalFailed : failedJobs.length}
+                            </button>
+                          )}
+                        </td>
+
+                        {/* Client (admin only) */}
+                        {isAdmin && (
+                          <td className="px-4 py-2.5">
+                            {clientsUsersLoading ? (
+                              <Skeleton className="h-4 w-24" />
+                            ) : (() => {
+                              const client = clients.find(c => c.id === record.client_id);
+                              return client ? (
+                                <div className="flex items-center gap-1.5 text-sm text-slate-700">
+                                  <Users className="h-3.5 w-3.5 text-slate-400" />
+                                  {client.client_name}
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => handleOpenAssignment(record, 'client')}
+                                  className="text-xs text-primary hover:underline inline-flex items-center gap-1"
+                                >
+                                  <Users className="h-3.5 w-3.5" />
+                                  Assign Client
+                                </button>
+                              );
+                            })()}
+                          </td>
+                        )}
+
+                        {/* Account Manager (admin only) */}
+                        {isAdmin && (
+                          <td className="px-4 py-2.5">
+                            {clientsUsersLoading ? (
+                              <Skeleton className="h-4 w-24" />
+                            ) : (() => {
+                              const user = users.find(u => u.id === record.user_id);
+                              return user ? (
+                                <div className="flex items-center gap-1.5 text-sm text-slate-700">
+                                  <User className="h-3.5 w-3.5 text-slate-400" />
+                                  {user.name}
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => handleOpenAssignment(record, 'user')}
+                                  className="text-xs text-primary hover:underline inline-flex items-center gap-1"
+                                >
+                                  <User className="h-3.5 w-3.5" />
+                                  Assign User
+                                </button>
+                              );
+                            })()}
+                          </td>
+                        )}
+
+                        {/* Emails */}
+                        <td className="px-4 py-2.5 text-right">
+                          <button
+                            onClick={() => navigate(`/emails/${record.id}`)}
+                            className="text-sm text-primary hover:underline inline-flex items-center gap-1 tabular-nums"
+                          >
+                            <Mail className="h-3.5 w-3.5" />
+                            {record.total_emails.toLocaleString('en-AU')}
+                          </button>
+                        </td>
+
+                        {/* Last Sync */}
+                        <td className="px-4 py-2.5 text-sm text-slate-600">
+                          {record.last_sync_at ? formatDate(record.last_sync_at) : 'Never'}
+                        </td>
+
+                        {/* Actions */}
+                        <td className="px-4 py-2.5">
+                          <div className="flex items-center gap-1 flex-wrap">
+                            {/* Sync dropdown button */}
+                            <div className="relative" data-sync-dropdown>
+                              <div className="inline-flex rounded-md shadow-sm">
+                                <button
+                                  onClick={() => handleSync(record.id, record.name)}
+                                  disabled={!record.is_active}
+                                  className={cn(
+                                    'h-7 px-2.5 text-xs font-medium rounded-l-md border inline-flex items-center gap-1',
+                                    record.is_active
+                                      ? 'bg-primary text-white border-primary hover:bg-primary-dark'
+                                      : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                                  )}
+                                >
+                                  <RefreshCw className="h-3 w-3" /> Sync
+                                </button>
+                                <button
+                                  onClick={() => setOpenSyncDropdown(openSyncDropdown === record.id ? null : record.id)}
+                                  disabled={!record.is_active}
+                                  className={cn(
+                                    'h-7 px-1.5 text-xs rounded-r-md border-t border-r border-b inline-flex items-center',
+                                    record.is_active
+                                      ? 'bg-primary text-white border-primary hover:bg-primary-dark'
+                                      : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                                  )}
+                                >
+                                  <ChevronDown className="h-3 w-3" />
+                                </button>
+                              </div>
+                              {openSyncDropdown === record.id && (
+                                <div className="absolute right-0 mt-1 w-48 rounded-md border bg-white shadow-lg z-20">
+                                  <div className="py-1">
+                                    <button
+                                      onClick={() => { handleSync(record.id, record.name); setOpenSyncDropdown(null); }}
+                                      className="w-full px-3 py-1.5 text-left text-xs hover:bg-slate-50 flex items-center gap-2"
+                                    >
+                                      <RefreshCw className="h-3.5 w-3.5 text-slate-400" /> Sync Now
+                                    </button>
+                                    {isAnyLiveSync && (
+                                      <button
+                                        onClick={() => { handleOpenDateRangeFetch(record); setOpenSyncDropdown(null); }}
+                                        className="w-full px-3 py-1.5 text-left text-xs hover:bg-slate-50 flex items-center gap-2"
+                                      >
+                                        <Calendar className="h-3.5 w-3.5 text-slate-400" /> Fetch Date Range
+                                      </button>
+                                    )}
+                                    <button
+                                      onClick={() => { navigate(`/processing/${record.id}`); setOpenSyncDropdown(null); }}
+                                      className="w-full px-3 py-1.5 text-left text-xs hover:bg-slate-50 flex items-center gap-2"
+                                    >
+                                      <Eye className="h-3.5 w-3.5 text-slate-400" /> View Sync History
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Reconnect buttons - shown when OAuth token has expired */}
+                            {gmailAuthExpired && (
+                              <button
+                                onClick={() => handleReconnectGmail(record.id, record.name)}
+                                disabled={linkingMailboxId === record.id}
+                                className="h-7 px-2.5 text-xs font-medium rounded-md border border-red-300 text-red-600 hover:bg-red-50 inline-flex items-center gap-1 disabled:opacity-50"
+                              >
+                                {linkingMailboxId === record.id ? <Spinner className="h-3 w-3 animate-spin" /> : null}
+                                Reconnect Gmail
+                              </button>
+                            )}
+                            {outlookAuthExpired && (
+                              <button
+                                onClick={() => handleReconnectOutlook(record.id, record.name)}
+                                disabled={linkingMailboxId === record.id}
+                                className="h-7 px-2.5 text-xs font-medium rounded-md border border-red-300 text-red-600 hover:bg-red-50 inline-flex items-center gap-1 disabled:opacity-50"
+                              >
+                                {linkingMailboxId === record.id ? <Spinner className="h-3 w-3 animate-spin" /> : null}
+                                Reconnect Outlook
+                              </button>
+                            )}
+
+                            {/* Link Gmail - enforces mutual exclusivity and email domain validation */}
+                            {canLinkGmail && (
+                              <button
+                                onClick={() => handleLinkGmail(record.id, record.name)}
+                                disabled={linkingMailboxId === record.id}
+                                title="Link Gmail account for LIVE sync"
+                                className="h-7 px-2.5 text-xs font-medium rounded-md border border-blue-300 text-blue-600 hover:bg-blue-50 inline-flex items-center gap-1 disabled:opacity-50"
+                              >
+                                {linkingMailboxId === record.id ? <Spinner className="h-3 w-3 animate-spin" /> : <LinkIcon className="h-3 w-3" />}
+                                Link Gmail
+                              </button>
+                            )}
+
+                            {/* Link Outlook - enforces mutual exclusivity and email domain validation */}
+                            {canLinkOutlook && (
+                              <button
+                                onClick={() => handleLinkOutlook(record.id, record.name)}
+                                disabled={linkingMailboxId === record.id}
+                                title="Link Outlook account for LIVE sync"
+                                className="h-7 px-2.5 text-xs font-medium rounded-md border border-sky-300 text-sky-700 hover:bg-sky-50 inline-flex items-center gap-1 disabled:opacity-50"
+                              >
+                                {linkingMailboxId === record.id ? <Spinner className="h-3 w-3 animate-spin" /> : <LinkIcon className="h-3 w-3" />}
+                                Link Outlook
+                              </button>
+                            )}
+
+                            <button
+                              onClick={() => navigate(`/mailboxes/edit/${record.id}`)}
+                              className="p-1.5 rounded hover:bg-slate-100"
+                              title="Edit"
+                            >
+                              <Pencil className="h-3.5 w-3.5 text-slate-400" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(record.id)}
+                              className="p-1.5 rounded hover:bg-red-50"
+                              title="Delete"
+                            >
+                              <Trash2 className="h-3.5 w-3.5 text-red-400" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {mailboxes.length === 0 && !loading && (
+              <div className="py-12 text-center text-sm text-slate-400">
+                No mailboxes found. Click "Add Mailbox" to create one.
+              </div>
+            )}
+          </>
         )}
       </div>
 
       {/* Date Range Fetch Modal */}
-      <Modal
-        title={
-          <Space>
-            <CalendarOutlined style={{ color: '#52c41a' }} />
-            <span>Fetch Historical Emails</span>
-          </Space>
-        }
-        open={dateRangeModalVisible}
-        onCancel={() => setDateRangeModalVisible(false)}
-        footer={null}
-        destroyOnClose
-      >
-        {(() => {
-          const syncType = selectedMailboxForFetch ? getLiveSyncType(selectedMailboxForFetch) : null;
-          const providerName = syncType === 'outlook' ? 'Outlook' : 'Gmail';
-          const providerIcon = syncType === 'outlook' ? <WindowsOutlined style={{ color: '#0078d4' }} /> : <GoogleOutlined style={{ color: '#4285f4' }} />;
-          return (
-            <div style={{ marginBottom: 16 }}>
-              <Text type="secondary">
-                Pull historical emails from {providerIcon} <strong>{providerName}</strong> for <strong>{selectedMailboxForFetch?.name}</strong> within a specific date range.
+      <Dialog open={dateRangeModalVisible} onOpenChange={setDateRangeModalVisible}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5 text-green-500" />
+              Fetch Historical Emails
+            </DialogTitle>
+          </DialogHeader>
+
+          {(() => {
+            const syncType = selectedMailboxForFetch ? getLiveSyncType(selectedMailboxForFetch) : null;
+            const providerName = syncType === 'outlook' ? 'Outlook' : 'Gmail';
+            return (
+              <p className="text-sm text-slate-500 -mt-2">
+                Pull historical emails from <strong>{providerName}</strong> for <strong>{selectedMailboxForFetch?.name}</strong> within a specific date range.
                 This uses the LIVE sync connection to fetch older emails on-demand.
-              </Text>
+              </p>
+            );
+          })()}
+
+          <form onSubmit={handleDateRangeFetch} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Date Range</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  value={fetchStartDate}
+                  onChange={e => setFetchStartDate(e.target.value)}
+                  max={dayjs().format('YYYY-MM-DD')}
+                  required
+                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 flex-1"
+                />
+                <span className="text-sm text-slate-400">to</span>
+                <input
+                  type="date"
+                  value={fetchEndDate}
+                  onChange={e => setFetchEndDate(e.target.value)}
+                  max={dayjs().format('YYYY-MM-DD')}
+                  required
+                  className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 flex-1"
+                />
+              </div>
+              <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                <span className="text-xs text-slate-400">Quick:</span>
+                {[
+                  { label: '7d', days: 7 },
+                  { label: '30d', days: 30 },
+                  { label: '3mo', days: 90 },
+                  { label: '6mo', days: 180 },
+                  { label: '1yr', days: 365 },
+                ].map(preset => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => applyDatePreset(preset.days)}
+                    className="px-2 py-0.5 text-xs rounded border border-slate-200 hover:bg-slate-50 text-slate-600"
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
             </div>
-          );
-        })()}
 
-        <Form
-          form={dateRangeForm}
-          layout="vertical"
-          onFinish={handleDateRangeFetch}
-        >
-          <Form.Item
-            name="dateRange"
-            label="Date Range"
-            rules={[{ required: true, message: 'Please select a date range' }]}
-          >
-            <RangePicker
-              style={{ width: '100%' }}
-              disabledDate={(current) => current && current > dayjs().endOf('day')}
-              presets={[
-                { label: 'Last 7 Days', value: [dayjs().subtract(7, 'day'), dayjs()] },
-                { label: 'Last 30 Days', value: [dayjs().subtract(30, 'day'), dayjs()] },
-                { label: 'Last 3 Months', value: [dayjs().subtract(3, 'month'), dayjs()] },
-                { label: 'Last 6 Months', value: [dayjs().subtract(6, 'month'), dayjs()] },
-                { label: 'Last Year', value: [dayjs().subtract(1, 'year'), dayjs()] },
-              ]}
-            />
-          </Form.Item>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Maximum Emails (optional)
+              </label>
+              <input
+                type="number"
+                value={fetchMaxEmails}
+                onChange={e => setFetchMaxEmails(e.target.value ? parseInt(e.target.value) : '')}
+                min={1}
+                max={10000}
+                placeholder="No limit"
+                className="h-9 w-full px-3 text-sm rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20"
+              />
+              <p className="text-xs text-slate-400 mt-1">Leave empty to fetch all emails in the date range</p>
+            </div>
 
-          <Form.Item
-            name="maxEmails"
-            label="Maximum Emails (optional)"
-            tooltip="Leave empty to fetch all emails in the date range"
-          >
-            <InputNumber
-              style={{ width: '100%' }}
-              min={1}
-              max={10000}
-              placeholder="No limit"
-            />
-          </Form.Item>
-
-          <Form.Item style={{ marginBottom: 0, marginTop: 24 }}>
-            <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
-              <Button onClick={() => setDateRangeModalVisible(false)}>
-                Cancel
-              </Button>
-              <Button
-                type="primary"
-                htmlType="submit"
-                loading={fetchingEmails}
-                icon={<HistoryOutlined />}
-                style={{ background: '#52c41a', borderColor: '#52c41a' }}
+            <DialogFooter>
+              <button
+                type="button"
+                onClick={() => setDateRangeModalVisible(false)}
+                className="h-8 px-3 text-sm rounded-md border border-slate-200 hover:bg-slate-50"
               >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={fetchingEmails}
+                className="h-8 px-3 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 inline-flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {fetchingEmails ? <Spinner className="h-3.5 w-3.5 animate-spin" /> : <History className="h-3.5 w-3.5" />}
                 Start Fetch
-              </Button>
-            </Space>
-          </Form.Item>
-        </Form>
-      </Modal>
+              </button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Assignment Modal */}
       {isAdmin && (
-        <Modal
-          title={
-            <Space>
-              {assignmentType === 'client' ? <TeamOutlined /> : <UserOutlined />}
-              <span>
+        <Dialog open={assignmentModalVisible} onOpenChange={setAssignmentModalVisible}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                {assignmentType === 'client' ? <Users className="h-5 w-5" /> : <User className="h-5 w-5" />}
                 Assign {assignmentType === 'client' ? 'Client' : 'Account Manager'} to {selectedMailboxForAssignment?.name}
-              </span>
-            </Space>
-          }
-          open={assignmentModalVisible}
-          onCancel={() => setAssignmentModalVisible(false)}
-          footer={null}
-          destroyOnClose
-        >
-          <div style={{ marginTop: 24 }}>
-            <Select
-              style={{ width: '100%' }}
-              placeholder={`Select ${assignmentType === 'client' ? 'client' : 'account manager'}`}
-              onChange={(value) => handleAssignmentSubmit(value)}
-              loading={assignmentLoading}
-              showSearch
-              optionFilterProp="label"
-              allowClear
-              options={
-                assignmentType === 'client'
-                  ? clients.map(c => ({ label: c.client_name, value: c.id }))
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              <select
+                className="h-9 w-full px-3 text-sm rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20"
+                onChange={(e) => handleAssignmentSubmit(e.target.value || null)}
+                disabled={assignmentLoading}
+                defaultValue=""
+              >
+                <option value="">
+                  Select {assignmentType === 'client' ? 'client' : 'account manager'}
+                </option>
+                {assignmentType === 'client'
+                  ? clients.map(c => (
+                    <option key={c.id} value={c.id}>{c.client_name}</option>
+                  ))
                   : (() => {
-                      // Filter users based on mailbox's client assignment
-                      const mailboxClientId = selectedMailboxForAssignment?.client_id;
-                      let filteredUsers = users;
+                    // Filter users based on mailbox's client assignment
+                    const mailboxClientId = selectedMailboxForAssignment?.client_id;
+                    let filteredUsers = users;
 
-                      if (mailboxClientId) {
-                        // Show only account_managers assigned to this mailbox's client
-                        filteredUsers = users.filter((u: any) => {
-                          const hasAccountManagerRole = u.roles?.includes('account_manager');
-                          const isAssignedToClient = u.assigned_clients?.some((c: any) => c.id === mailboxClientId);
-                          return hasAccountManagerRole && isAssignedToClient;
-                        });
-                      }
+                    if (mailboxClientId) {
+                      // Show only account_managers assigned to this mailbox's client
+                      filteredUsers = users.filter((u: any) => {
+                        const hasAccountManagerRole = u.roles?.includes('account_manager');
+                        const isAssignedToClient = u.assigned_clients?.some((c: any) => c.id === mailboxClientId);
+                        return hasAccountManagerRole && isAssignedToClient;
+                      });
+                    }
 
-                      return filteredUsers.map(u => ({ label: `${u.name} (${u.email})`, value: u.id }));
-                    })()
-              }
-            />
-            <div style={{ marginTop: 16 }}>
-              <Text type="secondary" style={{ fontSize: 12 }}>
+                    return filteredUsers.map(u => (
+                      <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
+                    ));
+                  })()
+                }
+              </select>
+
+              <p className="text-xs text-slate-500">
                 {assignmentType === 'client'
                   ? 'Assign this mailbox to a client. Client Managers assigned to this client will be able to access it.'
                   : selectedMailboxForAssignment?.client_id
                     ? 'Assign this mailbox to an account manager who is assigned to this client.'
                     : 'First assign this mailbox to a client, then assign an account manager.'}
-              </Text>
+              </p>
             </div>
-          </div>
-        </Modal>
+          </DialogContent>
+        </Dialog>
       )}
-    </div>
+    </PageShell>
   );
 };
 
@@ -1095,14 +1014,14 @@ export const MailboxCreate: React.FC = () => {
 
 export const MailboxEdit: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  
+
   if (!id) {
     return (
-      <div style={{ textAlign: 'center', padding: '50px' }}>
-        <div>Invalid mailbox ID</div>
+      <div className="text-center py-12">
+        <p className="text-sm text-slate-500">Invalid mailbox ID</p>
       </div>
     );
   }
-  
+
   return <MailboxEditForm mailboxId={id} />;
 };

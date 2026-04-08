@@ -2,27 +2,24 @@
  * AI Playground — Test and tune AI prompts against real endpoints.
  *
  * No new backend endpoints — calls the same APIs as the intelligence pages.
- * Shows: prompt used → context sent → raw LLM output for rapid iteration.
+ * Shows: prompt used -> context sent -> raw LLM output for rapid iteration.
  */
 
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Card, Row, Col, Typography, Select, Button, Input, Space, Tag,
-  Spin, Alert, Tabs, Descriptions, message, Empty, DatePicker, InputNumber,
-} from 'antd';
-import {
-  ExperimentOutlined, SendOutlined, SaveOutlined, UndoOutlined,
-  CodeOutlined, ClockCircleOutlined,
-} from '@ant-design/icons';
+  FlaskConical, Send, Save, RotateCcw, Code, Clock,
+} from 'lucide-react';
 import dayjs from 'dayjs';
-import { ClientSelector } from '../../components/analytics/ClientSelector';
+import { useClient } from '../../contexts/ClientContext';
 import { MailboxSelector } from '../../components/MailboxSelector';
+import { PageShell, PageHeader } from '@/components/ui/page-shell';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Spinner } from '@/lib/icons';
+import { notify } from '@/lib/toast';
 import api from '../../services/apiClient';
 import { intelligenceApi, digestApi, bucketApi } from '../../services/aiService';
 import { strategicDigestApi, insightsApi } from '../../services/strategicDigestService';
-
-const { Title, Text } = Typography;
-const { TextArea } = Input;
 
 type TestType =
   | 'email_analysis'
@@ -46,51 +43,51 @@ const TEST_OPTIONS: { value: TestType; label: string; needs: string; promptKeys:
 ];
 
 // Per-key hints shown below the prompt editor so editors know what context the LLM receives.
-const PROMPT_HINTS: Record<string, { label: string; color: string; detail: string; requiredVars?: string[] }> = {
+const PROMPT_HINTS: Record<string, { label: string; variant: 'info' | 'warning' | 'purple' | 'neutral'; detail: string; requiredVars?: string[] }> = {
   email_analysis_system: {
     label: 'System prompt',
-    color: 'blue',
+    variant: 'info',
     detail: 'No variables needed. Sets classification rules and persona. Data is passed separately.',
   },
   email_analysis_user: {
     label: 'User template',
-    color: 'orange',
+    variant: 'warning',
     detail: 'Must keep {emails_json} — replaced at runtime with the JSON batch of emails to classify.',
     requiredVars: ['{emails_json}'],
   },
   daily_digest: {
     label: 'System prompt',
-    color: 'blue',
+    variant: 'info',
     detail: 'No variables needed. Backend auto-injects: time window, email stats, business context (QB), relationship context (90d), signal emails, priority emails, active threads.',
   },
   weekly_digest: {
     label: 'System prompt',
-    color: 'blue',
+    variant: 'info',
     detail: 'No variables needed. Same auto-injected data as daily digest, covering the full prior week.',
   },
   strategic_digest: {
     label: 'System prompt — agent',
-    color: 'purple',
+    variant: 'purple',
     detail: 'No variables needed. LangGraph agent uses tool calls to look up customer data, quotes, threads at runtime. Define analysis approach and output schema here.',
   },
   insight_company: {
     label: 'System prompt',
-    color: 'blue',
+    variant: 'info',
     detail: 'No variables needed. Auto-injected: company revenue (TY/LY), QB profile, email stats (30/90d), engagement score, open threads.',
   },
   insight_contact: {
     label: 'System prompt',
-    color: 'blue',
+    variant: 'info',
     detail: 'No variables needed. Auto-injected: contact email history, response times, quote behaviour, engagement score.',
   },
   insight_thread: {
     label: 'System prompt',
-    color: 'blue',
+    variant: 'info',
     detail: 'No variables needed. Auto-injected: thread messages, participants, quote/job context, hours since last reply, SLA status.',
   },
 };
 
-/** Suggest the next minor version: "v1.3" → "v1.4", anything unparseable → "v1.0" */
+/** Suggest the next minor version: "v1.3" -> "v1.4", anything unparseable -> "v1.0" */
 function bumpVersion(current?: string): string {
   const m = (current || '').match(/^v(\d+)\.(\d+)$/);
   if (!m) return 'v1.0';
@@ -98,7 +95,7 @@ function bumpVersion(current?: string): string {
 }
 
 const PlaygroundPage: React.FC = () => {
-  const [clientId, setClientId] = useState('');
+  const { clientId } = useClient();
   const [mailboxIds, setMailboxIds] = useState<string[]>([]);
   const mailboxId = mailboxIds[0] || '';
   const [entityId, setEntityId] = useState('');
@@ -127,6 +124,9 @@ const PlaygroundPage: React.FC = () => {
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState('');
   const [elapsed, setElapsed] = useState(0);
+
+  // Output tabs
+  const [outputTab, setOutputTab] = useState<'formatted' | 'raw'>('formatted');
 
   // Load default prompts + client overrides
   const loadPrompts = useCallback(async () => {
@@ -184,13 +184,13 @@ const PlaygroundPage: React.FC = () => {
   };
 
   const handleSavePrompt = async () => {
-    if (!clientId) { message.warning('Select a client first'); return; }
+    if (!clientId) { notify.warning('Select a client first'); return; }
     if (!selectedPromptKey) return;
     // Validate required template variables
     const hint = PROMPT_HINTS[selectedPromptKey];
     for (const v of hint?.requiredVars || []) {
       if (!editedPrompt.includes(v)) {
-        message.error(`Prompt must include ${v} — it is replaced at runtime with the email data.`);
+        notify.error(`Prompt must include ${v} — it is replaced at runtime with the email data.`);
         return;
       }
     }
@@ -203,13 +203,13 @@ const PlaygroundPage: React.FC = () => {
         description: `Updated from Playground`,
         version: saveVersion,
       });
-      message.success(`Prompt "${selectedPromptKey}" saved as ${saveVersion}`);
+      notify.success(`Prompt "${selectedPromptKey}" saved as ${saveVersion}`);
       setActivePrompt(editedPrompt);
       setIsEdited(false);
       setPromptUpdatedAt(new Date().toISOString());
       setOverrides(prev => ({ ...prev, [selectedPromptKey]: { prompt_text: editedPrompt, updated_at: new Date().toISOString(), version: saveVersion } }));
     } catch {
-      message.error('Failed to save prompt');
+      notify.error('Failed to save prompt');
     }
     setSaving(false);
   };
@@ -305,311 +305,395 @@ const PlaygroundPage: React.FC = () => {
   const hasPrompt = (testConfig?.promptKeys.length || 0) > 0;
 
   return (
-    <div style={{ padding: 24, maxWidth: 1600, margin: '0 auto' }}>
+    <PageShell maxWidth="1600px">
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <Title level={3} style={{ margin: 0 }}>
-          <ExperimentOutlined style={{ color: '#667eea', marginRight: 8 }} />
-          AI Playground
-        </Title>
-        <Space wrap>
-          <ClientSelector value={clientId} onChange={setClientId} />
-          <Select
-            value={testType}
-            onChange={(v) => { setTestType(v); setResult(null); setError(''); }}
-            style={{ width: 200 }}
-            options={TEST_OPTIONS.map(t => ({ value: t.value, label: t.label }))}
-          />
-          {testConfig?.needs === 'mailbox' && (
-            <MailboxSelector value={mailboxIds} onChange={setMailboxIds} mode="single" style={{ width: 250 }} />
-          )}
-          {testConfig?.needs === 'entity_id' && (
-            <Input
-              placeholder="Entity UUID"
-              value={entityId}
-              onChange={e => setEntityId(e.target.value)}
-              style={{ width: 320 }}
-            />
-          )}
-          <Button
-            type="primary"
-            icon={<SendOutlined />}
-            onClick={handleRun}
-            loading={running}
-          >
-            Run Test
-          </Button>
-        </Space>
-      </div>
+      <PageHeader
+        title="AI Playground"
+        actions={
+          <div className="flex items-center gap-2 flex-wrap">
+            <select
+              value={testType}
+              onChange={(e) => { setTestType(e.target.value as TestType); setResult(null); setError(''); }}
+              className="h-8 px-2 text-sm rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20"
+            >
+              {TEST_OPTIONS.map(t => (
+                <option key={t.value} value={t.value}>{t.label}</option>
+              ))}
+            </select>
+            {testConfig?.needs === 'mailbox' && (
+              <MailboxSelector value={mailboxIds} onChange={setMailboxIds} mode="single" />
+            )}
+            {testConfig?.needs === 'entity_id' && (
+              <input
+                type="text"
+                placeholder="Entity UUID"
+                value={entityId}
+                onChange={e => setEntityId(e.target.value)}
+                className="h-8 px-3 text-sm rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 w-80"
+              />
+            )}
+            <button
+              onClick={handleRun}
+              disabled={running}
+              className="inline-flex items-center gap-1.5 h-8 px-4 text-sm font-medium rounded-md bg-primary text-white hover:bg-primary/90 disabled:opacity-50 transition-colors"
+            >
+              {running ? <Spinner className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+              Run Test
+            </button>
+          </div>
+        }
+      />
 
       {/* Parameters Row */}
-      <Card className="glass-card" size="small" style={{ marginBottom: 16 }}>
-        <Space wrap size="middle">
+      <div className="rounded-lg border bg-white shadow-sm p-3 mb-4">
+        <div className="flex items-center gap-4 flex-wrap">
           {(testConfig?.needs === 'mailbox' && ['email_analysis'].includes(testType)) && (
             <>
               <div>
-                <Text type="secondary" style={{ fontSize: 11, display: 'block' }}>Date From</Text>
-                <DatePicker value={dayjs(dateFrom)} onChange={d => d && setDateFrom(d.format('YYYY-MM-DD'))} size="small" />
+                <label className="block text-[11px] text-slate-500 mb-0.5">Date From</label>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={e => setDateFrom(e.target.value)}
+                  className="h-7 px-2 text-xs rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
               </div>
               <div>
-                <Text type="secondary" style={{ fontSize: 11, display: 'block' }}>Date To</Text>
-                <DatePicker value={dayjs(dateTo)} onChange={d => d && setDateTo(d.format('YYYY-MM-DD'))} size="small" />
+                <label className="block text-[11px] text-slate-500 mb-0.5">Date To</label>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={e => setDateTo(e.target.value)}
+                  className="h-7 px-2 text-xs rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
               </div>
               <div>
-                <Text type="secondary" style={{ fontSize: 11, display: 'block' }}>Max Emails</Text>
-                <InputNumber value={maxEmails} onChange={v => setMaxEmails(v || 5)} min={1} max={50} size="small" style={{ width: 80 }} />
+                <label className="block text-[11px] text-slate-500 mb-0.5">Max Emails</label>
+                <input
+                  type="number"
+                  value={maxEmails}
+                  onChange={e => setMaxEmails(Math.max(1, Math.min(50, parseInt(e.target.value) || 5)))}
+                  min={1}
+                  max={50}
+                  className="h-7 px-2 text-xs rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 w-20"
+                />
               </div>
             </>
           )}
           {['daily_digest', 'weekly_digest'].includes(testType) && (
             <div>
-              <Text type="secondary" style={{ fontSize: 11, display: 'block' }}>Digest Date</Text>
-              <DatePicker value={dayjs(dateTo)} onChange={d => d && setDateTo(d.format('YYYY-MM-DD'))} size="small" />
+              <label className="block text-[11px] text-slate-500 mb-0.5">Digest Date</label>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={e => setDateTo(e.target.value)}
+                className="h-7 px-2 text-xs rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20"
+              />
             </div>
           )}
           {testType === 'strategic_digest' && (
             <div>
-              <Text type="secondary" style={{ fontSize: 11, display: 'block' }}>Period</Text>
-              <Select value={periodType} onChange={setPeriodType} size="small" style={{ width: 120 }}
-                options={[
-                  { value: 'weekly', label: 'Weekly' },
-                  { value: 'monthly', label: 'Monthly' },
-                  { value: 'quarterly', label: 'Quarterly' },
-                ]}
-              />
+              <label className="block text-[11px] text-slate-500 mb-0.5">Period</label>
+              <select
+                value={periodType}
+                onChange={e => setPeriodType(e.target.value as 'weekly' | 'monthly' | 'quarterly')}
+                className="h-7 px-2 text-xs rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 w-28"
+              >
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+                <option value="quarterly">Quarterly</option>
+              </select>
             </div>
           )}
-          {promptUpdatedAt && (
-            <Tag icon={<ClockCircleOutlined />} color="blue" style={{ marginLeft: 'auto' }}>
-              Prompt updated: {new Date(promptUpdatedAt).toLocaleString()}
-            </Tag>
-          )}
-          {!promptUpdatedAt && !overrides[selectedPromptKey] && selectedPromptKey && (
-            <Tag color="default" style={{ marginLeft: 'auto' }}>Using default prompt</Tag>
-          )}
-        </Space>
-      </Card>
+          <div className="ml-auto">
+            {promptUpdatedAt && (
+              <StatusBadge variant="info" size="sm">
+                <Clock className="h-3 w-3 mr-1" />
+                Prompt updated: {new Date(promptUpdatedAt).toLocaleString()}
+              </StatusBadge>
+            )}
+            {!promptUpdatedAt && !overrides[selectedPromptKey] && selectedPromptKey && (
+              <StatusBadge variant="neutral" size="sm">Using default prompt</StatusBadge>
+            )}
+          </div>
+        </div>
+      </div>
 
-      {error && <Alert type="error" message={error} showIcon closable onClose={() => setError('')} style={{ marginBottom: 16 }} />}
+      {/* Error banner */}
+      {error && (
+        <div className="flex items-center gap-2 p-3 mb-4 rounded-lg border border-red-200 bg-red-50 text-red-700 text-sm">
+          <span className="font-medium">Error:</span>
+          <span className="flex-1">{error}</span>
+          <button onClick={() => setError('')} className="text-red-400 hover:text-red-600 text-lg leading-none">&times;</button>
+        </div>
+      )}
 
-      <Row gutter={[16, 16]}>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Left: Prompt Editor */}
-        <Col xs={24} lg={hasPrompt ? 12 : 0}>
-          {hasPrompt && (
-            <Card
-              title={
-                <Space>
-                  <CodeOutlined />
-                  {(testConfig?.promptKeys.length || 0) > 1 ? (
-                    <Select
-                      value={selectedPromptKey}
-                      onChange={handlePromptKeySwitch}
-                      size="small"
-                      style={{ width: 220 }}
-                      options={testConfig?.promptKeys.map(k => ({
-                        value: k,
-                        label: k.replace(/_/g, ' '),
-                      }))}
-                    />
-                  ) : (
-                    <Text strong>{selectedPromptKey.replace(/_/g, ' ')}</Text>
-                  )}
-                  {isEdited && <Tag color="orange">Unsaved</Tag>}
-                  {overrides[selectedPromptKey] && <Tag color="blue">Custom</Tag>}
-                </Space>
-              }
-              extra={
-                <Space>
-                  <Button size="small" icon={<UndoOutlined />} onClick={handleResetPrompt}>
-                    Reset to Default
-                  </Button>
-                  <Input
-                    size="small"
-                    value={saveVersion}
-                    onChange={e => setSaveVersion(e.target.value)}
-                    style={{ width: 72, fontFamily: 'monospace', fontSize: 11 }}
-                    placeholder="v1.0"
-                  />
-                  <Button size="small" type="primary" icon={<SaveOutlined />} onClick={handleSavePrompt} loading={saving} disabled={!isEdited}>
-                    Save
-                  </Button>
-                </Space>
-              }
-              className="glass-card"
-              styles={{ body: { padding: 0 } }}
-            >
-              <TextArea
-                value={editedPrompt}
-                onChange={e => handlePromptChange(e.target.value)}
-                rows={24}
-                style={{ fontFamily: 'monospace', fontSize: 11, border: 'none', borderRadius: 0, resize: 'vertical' }}
-              />
-              <div style={{ padding: '8px 12px', background: '#fafafa', borderTop: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Text type="secondary" style={{ fontSize: 11 }}>{editedPrompt.length} chars</Text>
-                {PROMPT_HINTS[selectedPromptKey] && (
-                  <>
-                    <Tag color={PROMPT_HINTS[selectedPromptKey].color} style={{ margin: 0, fontSize: 10 }}>
-                      {PROMPT_HINTS[selectedPromptKey].label}
-                    </Tag>
-                    <Text type="secondary" style={{ fontSize: 11 }}>
-                      {PROMPT_HINTS[selectedPromptKey].detail}
-                    </Text>
-                  </>
+        {hasPrompt && (
+          <div className="rounded-lg border bg-white shadow-sm flex flex-col">
+            {/* Card header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <Code className="h-4 w-4 text-slate-400" />
+                {(testConfig?.promptKeys.length || 0) > 1 ? (
+                  <select
+                    value={selectedPromptKey}
+                    onChange={e => handlePromptKeySwitch(e.target.value)}
+                    className="h-7 px-2 text-xs rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 w-52"
+                  >
+                    {testConfig?.promptKeys.map(k => (
+                      <option key={k} value={k}>{k.replace(/_/g, ' ')}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <span className="text-sm font-medium text-slate-700">{selectedPromptKey.replace(/_/g, ' ')}</span>
                 )}
+                {isEdited && <StatusBadge variant="warning" size="sm">Unsaved</StatusBadge>}
+                {overrides[selectedPromptKey] && <StatusBadge variant="info" size="sm">Custom</StatusBadge>}
               </div>
-            </Card>
-          )}
-        </Col>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleResetPrompt}
+                  className="inline-flex items-center gap-1 h-7 px-2 text-xs rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+                >
+                  <RotateCcw className="h-3 w-3" />
+                  Reset to Default
+                </button>
+                <input
+                  type="text"
+                  value={saveVersion}
+                  onChange={e => setSaveVersion(e.target.value)}
+                  placeholder="v1.0"
+                  className="h-7 px-2 text-[11px] font-mono rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 w-[72px]"
+                />
+                <button
+                  onClick={handleSavePrompt}
+                  disabled={!isEdited || saving}
+                  className="inline-flex items-center gap-1 h-7 px-3 text-xs font-medium rounded-md bg-primary text-white hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                >
+                  {saving ? <Spinner className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+                  Save
+                </button>
+              </div>
+            </div>
+            {/* Prompt textarea */}
+            <textarea
+              value={editedPrompt}
+              onChange={e => handlePromptChange(e.target.value)}
+              rows={24}
+              className="flex-1 w-full px-4 py-3 font-mono text-[11px] leading-relaxed resize-y border-none focus:outline-none"
+            />
+            {/* Footer with hints */}
+            <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 border-t border-slate-100 rounded-b-lg">
+              <span className="text-[11px] text-slate-400">{editedPrompt.length} chars</span>
+              {PROMPT_HINTS[selectedPromptKey] && (
+                <>
+                  <StatusBadge variant={PROMPT_HINTS[selectedPromptKey].variant} size="sm">
+                    {PROMPT_HINTS[selectedPromptKey].label}
+                  </StatusBadge>
+                  <span className="text-[11px] text-slate-500">
+                    {PROMPT_HINTS[selectedPromptKey].detail}
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Right: Output */}
-        <Col xs={24} lg={hasPrompt ? 12 : 24}>
-          <Card
-            title={
-              <Space>
-                <Text strong>Output</Text>
-                {elapsed > 0 && <Tag>{(elapsed / 1000).toFixed(1)}s</Tag>}
-                {running && <Spin size="small" />}
-              </Space>
-            }
-            className="glass-card"
-          >
+        <div className={`rounded-lg border bg-white shadow-sm ${!hasPrompt ? 'lg:col-span-2' : ''}`}>
+          {/* Card header */}
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100">
+            <span className="text-sm font-medium text-slate-700">Output</span>
+            {elapsed > 0 && (
+              <StatusBadge variant="neutral" size="sm">{(elapsed / 1000).toFixed(1)}s</StatusBadge>
+            )}
+            {running && <Spinner className="h-4 w-4 animate-spin text-primary" />}
+          </div>
+          {/* Card body */}
+          <div className="p-4">
             {running && !result && (
-              <div style={{ textAlign: 'center', padding: 48 }}>
-                <Spin size="large" />
-                <div style={{ marginTop: 16 }}><Text type="secondary">Running {testConfig?.label}...</Text></div>
+              <div className="text-center py-12">
+                <Spinner className="h-8 w-8 animate-spin text-primary mx-auto" />
+                <p className="mt-4 text-sm text-slate-500">Running {testConfig?.label}...</p>
                 {testType === 'strategic_digest' && (
-                  <div style={{ marginTop: 8 }}><Text type="secondary">This may take a few minutes</Text></div>
+                  <p className="mt-2 text-xs text-slate-400">This may take a few minutes</p>
                 )}
               </div>
             )}
 
             {!running && !result && !error && (
-              <Empty description="Click 'Run Test' to execute" />
+              <EmptyState
+                icon={<FlaskConical className="h-10 w-10" />}
+                title="Click 'Run Test' to execute"
+              />
             )}
 
             {result && (
-              <Tabs
-                defaultActiveKey="formatted"
-                items={[
-                  {
-                    key: 'formatted',
-                    label: 'Formatted',
-                    children: <FormattedOutput data={result} testType={testType} />,
-                  },
-                  {
-                    key: 'raw',
-                    label: 'Raw JSON',
-                    children: (
-                      <pre style={{
-                        background: '#1e1e1e', color: '#d4d4d4', padding: 16,
-                        borderRadius: 8, maxHeight: 600, overflow: 'auto',
-                        fontSize: 11, lineHeight: 1.5,
-                      }}>
-                        {JSON.stringify(result, null, 2)}
-                      </pre>
-                    ),
-                  },
-                ]}
-              />
+              <div>
+                {/* Tab bar */}
+                <div className="flex border-b border-slate-200 mb-4">
+                  <button
+                    onClick={() => setOutputTab('formatted')}
+                    className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
+                      outputTab === 'formatted'
+                        ? 'border-primary text-primary'
+                        : 'border-transparent text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    Formatted
+                  </button>
+                  <button
+                    onClick={() => setOutputTab('raw')}
+                    className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
+                      outputTab === 'raw'
+                        ? 'border-primary text-primary'
+                        : 'border-transparent text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    Raw JSON
+                  </button>
+                </div>
+
+                {outputTab === 'formatted' && (
+                  <FormattedOutput data={result} testType={testType} />
+                )}
+                {outputTab === 'raw' && (
+                  <pre className="bg-slate-900 text-slate-200 p-4 rounded-lg max-h-[600px] overflow-auto text-[11px] leading-relaxed">
+                    {JSON.stringify(result, null, 2)}
+                  </pre>
+                )}
+              </div>
             )}
-          </Card>
-        </Col>
-      </Row>
-    </div>
+          </div>
+        </div>
+      </div>
+    </PageShell>
   );
 };
 
 
 // Formatted output renderer
 const FormattedOutput: React.FC<{ data: any; testType: TestType }> = ({ data, testType }) => {
-  if (!data) return <Empty />;
+  if (!data) return <EmptyState title="No data" />;
 
   // For digest types, show the key sections
   if (['daily_digest', 'weekly_digest'].includes(testType)) {
     return (
-      <Space direction="vertical" size={12} style={{ width: '100%' }}>
+      <div className="space-y-3">
         {data.summary && (
-          <Card size="small" title="Summary">
-            <Text>{data.summary}</Text>
-          </Card>
+          <div className="rounded-lg border bg-white shadow-sm p-3">
+            <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Summary</h4>
+            <p className="text-sm text-slate-700">{data.summary}</p>
+          </div>
         )}
         {data.headline && (
-          <Card size="small" title="Headline">
+          <div className="rounded-lg border bg-white shadow-sm p-3">
+            <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Headline</h4>
             {typeof data.headline === 'string' ? (
-              <Text>{data.headline}</Text>
+              <p className="text-sm text-slate-700">{data.headline}</p>
             ) : (
-              <Descriptions size="small" column={1}>
+              <div className="grid grid-cols-1 gap-1">
                 {Object.entries(data.headline).map(([k, v]) => (
-                  <Descriptions.Item key={k} label={k.replace(/_/g, ' ')}>{String(v || '-')}</Descriptions.Item>
+                  <div key={k} className="flex gap-2 text-sm py-0.5">
+                    <span className="text-slate-500 min-w-[120px]">{k.replace(/_/g, ' ')}</span>
+                    <span className="text-slate-700">{String(v || '-')}</span>
+                  </div>
                 ))}
-              </Descriptions>
+              </div>
             )}
-          </Card>
+          </div>
         )}
         {data.action_items?.length > 0 && (
-          <Card size="small" title={`Action Items (${data.action_items.length})`}>
+          <div className="rounded-lg border bg-white shadow-sm p-3">
+            <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+              Action Items ({data.action_items.length})
+            </h4>
             {data.action_items.map((item: any, i: number) => (
-              <div key={i} style={{ marginBottom: 8, padding: '4px 0', borderBottom: '1px solid #f5f5f5' }}>
-                <Tag color="red">P{item.priority || i + 1}</Tag>
-                <Text strong>{item.customer || item.contact_name || ''}</Text>
-                <div><Text>{item.action || JSON.stringify(item)}</Text></div>
+              <div key={i} className="py-2 border-b border-slate-50 last:border-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <StatusBadge variant="danger" size="sm">P{item.priority || i + 1}</StatusBadge>
+                  <span className="text-sm font-medium text-slate-700">{item.customer || item.contact_name || ''}</span>
+                </div>
+                <p className="text-sm text-slate-600">{item.action || JSON.stringify(item)}</p>
               </div>
             ))}
-          </Card>
+          </div>
         )}
         {data.urgent_today?.length > 0 && (
-          <Card size="small" title={`Urgent Today (${data.urgent_today.length})`}>
+          <div className="rounded-lg border bg-white shadow-sm p-3">
+            <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+              Urgent Today ({data.urgent_today.length})
+            </h4>
             {data.urgent_today.map((item: any, i: number) => (
-              <div key={i} style={{ marginBottom: 8, padding: '4px 0', borderBottom: '1px solid #f5f5f5' }}>
-                <Tag color="red">{item.customer}</Tag> <Text type="secondary">{item.am}</Text>
-                <div><Text>{item.action}</Text></div>
-                <div><Text type="secondary" style={{ fontSize: 11 }}>{item.reason} | {item.revenue_context}</Text></div>
+              <div key={i} className="py-2 border-b border-slate-50 last:border-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <StatusBadge variant="danger" size="sm">{item.customer}</StatusBadge>
+                  <span className="text-xs text-slate-400">{item.am}</span>
+                </div>
+                <p className="text-sm text-slate-600">{item.action}</p>
+                <p className="text-[11px] text-slate-400">{item.reason} | {item.revenue_context}</p>
               </div>
             ))}
-          </Card>
+          </div>
         )}
         {data.at_risk?.length > 0 && (
-          <Card size="small" title={`At Risk (${data.at_risk.length})`}>
+          <div className="rounded-lg border bg-white shadow-sm p-3">
+            <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+              At Risk ({data.at_risk.length})
+            </h4>
             {data.at_risk.map((item: any, i: number) => (
-              <div key={i} style={{ marginBottom: 8 }}>
-                <Tag color="orange">{item.customer}</Tag> <Tag>{item.tier}</Tag>
-                <div><Text>{item.specific_risk || item.risk || JSON.stringify(item)}</Text></div>
+              <div key={i} className="py-2 border-b border-slate-50 last:border-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <StatusBadge variant="warning" size="sm">{item.customer}</StatusBadge>
+                  <StatusBadge variant="neutral" size="sm">{item.tier}</StatusBadge>
+                </div>
+                <p className="text-sm text-slate-600">{item.specific_risk || item.risk || JSON.stringify(item)}</p>
               </div>
             ))}
-          </Card>
+          </div>
         )}
         {data.stats && (
-          <Card size="small" title="Context Stats">
-            <Space wrap>
+          <div className="rounded-lg border bg-white shadow-sm p-3">
+            <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Context Stats</h4>
+            <div className="flex flex-wrap gap-1.5">
               {Object.entries(data.stats).map(([k, v]) => (
-                <Tag key={k}>{k.replace(/_/g, ' ')}: {String(v)}</Tag>
+                <StatusBadge key={k} variant="neutral" size="sm">
+                  {k.replace(/_/g, ' ')}: {String(v)}
+                </StatusBadge>
               ))}
-            </Space>
-          </Card>
+            </div>
+          </div>
         )}
-      </Space>
+      </div>
     );
   }
 
   // For email analysis, show the classified results
   if (testType === 'email_analysis' && data.results) {
     return (
-      <Space direction="vertical" size={8} style={{ width: '100%' }}>
-        <Text type="secondary">{data.results.length} emails classified</Text>
+      <div className="space-y-2">
+        <p className="text-xs text-slate-400">{data.results.length} emails classified</p>
         {data.results.map((r: any, i: number) => (
-          <Card key={i} size="small">
-            <Space wrap>
-              <Tag color="blue">{r.intent}</Tag>
-              <Tag color={r.urgency === 'critical' ? 'red' : r.urgency === 'high' ? 'orange' : 'default'}>{r.urgency}</Tag>
-              <Tag>{r.sentiment}</Tag>
-              {r.business_signal && <Tag color="purple">{r.business_signal}</Tag>}
-              {r.confidence && <Tag>conf: {Math.round(r.confidence * 100)}%</Tag>}
-            </Space>
-            <div style={{ marginTop: 4 }}><Text>{r.summary || r.email_subject}</Text></div>
-            {r.suggested_action && <div><Text type="secondary" style={{ fontSize: 12 }}>{r.suggested_action}</Text></div>}
-          </Card>
+          <div key={i} className="rounded-lg border bg-white shadow-sm p-3">
+            <div className="flex flex-wrap gap-1.5 mb-1">
+              <StatusBadge variant="info" size="sm">{r.intent}</StatusBadge>
+              <StatusBadge
+                variant={r.urgency === 'critical' ? 'danger' : r.urgency === 'high' ? 'warning' : 'neutral'}
+                size="sm"
+              >
+                {r.urgency}
+              </StatusBadge>
+              <StatusBadge variant="neutral" size="sm">{r.sentiment}</StatusBadge>
+              {r.business_signal && <StatusBadge variant="purple" size="sm">{r.business_signal}</StatusBadge>}
+              {r.confidence && <StatusBadge variant="neutral" size="sm">conf: {Math.round(r.confidence * 100)}%</StatusBadge>}
+            </div>
+            <p className="text-sm text-slate-700">{r.summary || r.email_subject}</p>
+            {r.suggested_action && <p className="text-xs text-slate-400 mt-0.5">{r.suggested_action}</p>}
+          </div>
         ))}
-      </Space>
+      </div>
     );
   }
 
@@ -617,32 +701,56 @@ const FormattedOutput: React.FC<{ data: any; testType: TestType }> = ({ data, te
   if (testType.startsWith('insight_')) {
     const insight = data.insight || data;
     return (
-      <Space direction="vertical" size={8} style={{ width: '100%' }}>
-        {insight.headline && <Title level={5}>{insight.headline}</Title>}
-        {insight.health_summary && <Text>{insight.health_summary}</Text>}
-        {insight.key_insight && <Text>{insight.key_insight}</Text>}
-        {insight.engagement_summary && <Text>{insight.engagement_summary}</Text>}
-        {insight.thread_summary && <Text>{insight.thread_summary}</Text>}
-        <Descriptions size="small" column={2} bordered>
-          {Object.entries(insight).filter(([k]) => !['headline', 'health_summary', 'key_insight', 'engagement_summary', 'thread_summary'].includes(k)).map(([k, v]) => (
-            <Descriptions.Item key={k} label={k.replace(/_/g, ' ')}>
-              {Array.isArray(v) ? v.join(', ') : String(v ?? '-')}
-            </Descriptions.Item>
-          ))}
-        </Descriptions>
-      </Space>
+      <div className="space-y-3">
+        {insight.headline && <h3 className="text-base font-semibold text-slate-800">{insight.headline}</h3>}
+        {insight.health_summary && <p className="text-sm text-slate-600">{insight.health_summary}</p>}
+        {insight.key_insight && <p className="text-sm text-slate-600">{insight.key_insight}</p>}
+        {insight.engagement_summary && <p className="text-sm text-slate-600">{insight.engagement_summary}</p>}
+        {insight.thread_summary && <p className="text-sm text-slate-600">{insight.thread_summary}</p>}
+        <div className="rounded-lg border overflow-hidden">
+          <table className="w-full text-sm">
+            <tbody>
+              {Object.entries(insight)
+                .filter(([k]) => !['headline', 'health_summary', 'key_insight', 'engagement_summary', 'thread_summary'].includes(k))
+                .map(([k, v], i) => (
+                  <tr key={k} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
+                    <td className="px-3 py-2 text-slate-500 font-medium whitespace-nowrap border-r border-slate-100 w-48">
+                      {k.replace(/_/g, ' ')}
+                    </td>
+                    <td className="px-3 py-2 text-slate-700">
+                      {Array.isArray(v) ? v.join(', ') : String(v ?? '-')}
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     );
   }
 
   // Default: show as key-value
   return (
-    <Descriptions size="small" column={1} bordered>
-      {Object.entries(data).map(([k, v]) => (
-        <Descriptions.Item key={k} label={k}>
-          {typeof v === 'object' ? JSON.stringify(v, null, 2) : String(v ?? '-')}
-        </Descriptions.Item>
-      ))}
-    </Descriptions>
+    <div className="rounded-lg border overflow-hidden">
+      <table className="w-full text-sm">
+        <tbody>
+          {Object.entries(data).map(([k, v], i) => (
+            <tr key={k} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
+              <td className="px-3 py-2 text-slate-500 font-medium whitespace-nowrap border-r border-slate-100 w-48">
+                {k}
+              </td>
+              <td className="px-3 py-2 text-slate-700">
+                {typeof v === 'object' ? (
+                  <pre className="text-[11px] font-mono whitespace-pre-wrap">{JSON.stringify(v, null, 2)}</pre>
+                ) : (
+                  String(v ?? '-')
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 };
 

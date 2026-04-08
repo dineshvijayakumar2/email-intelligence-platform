@@ -3,21 +3,22 @@
  *
  * Full-featured QB integration config: connection settings, table IDs,
  * and per-table field mappings with live QB field lookup.
+ *
+ * Migrated from Ant Design to Tailwind CSS + native HTML.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  Card, Form, Input, InputNumber, Button, Table, Tabs, AutoComplete,
-  Space, Typography, Alert, Divider, Spin, message, Tag, Tooltip, Switch, Row, Col, Dropdown,
-} from 'antd';
-import {
-  PlusOutlined, DeleteOutlined, SyncOutlined, SaveOutlined, ArrowRightOutlined,
-  HolderOutlined, CheckCircleFilled, DownOutlined,
-} from '@ant-design/icons';
+  Plus, Trash2, RefreshCw, Save, ArrowRight, GripVertical,
+  CheckCircle2, ChevronDown, Info,
+} from 'lucide-react';
+import { Spinner } from '@/lib/icons';
+import { toast } from '@/lib/toast';
 import api from '../../services/apiClient';
-import { ClientSelector } from '../../components/analytics/ClientSelector';
-
-const { Title, Text } = Typography;
+import { useClient } from '../../contexts/ClientContext';
+import { PageShell, PageHeader } from '@/components/ui/page-shell';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { ContentSkeleton } from '@/components/ui/empty-state';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -178,6 +179,34 @@ interface QBSyncStatus {
   table_logs: QBTableSyncLog[];
 }
 
+interface FormFields {
+  realm_hostname: string;
+  app_id: string;
+  user_token: string;
+  customers_table_id: string;
+  contacts_table_id: string;
+  quotes_table_id: string;
+  jobs_table_id: string;
+  sales_line_items_table_id: string;
+  operations_table_id: string;
+  unique_emails_table_id: string;
+  sync_interval_hours: number;
+}
+
+const INITIAL_FORM: FormFields = {
+  realm_hostname: '',
+  app_id: '',
+  user_token: '',
+  customers_table_id: '',
+  contacts_table_id: '',
+  quotes_table_id: '',
+  jobs_table_id: '',
+  sales_line_items_table_id: '',
+  operations_table_id: '',
+  unique_emails_table_id: '',
+  sync_interval_hours: 6,
+};
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -208,16 +237,153 @@ function initDefaultMappings(): FieldMappings {
 }
 
 // ---------------------------------------------------------------------------
+// AutoComplete component (native replacement for antd AutoComplete)
+// ---------------------------------------------------------------------------
+
+function AutoCompleteInput({
+  value,
+  onChange,
+  options,
+  placeholder,
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  options: string[];
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  const filtered = options.filter(opt =>
+    opt.toLowerCase().includes((value || '').toLowerCase())
+  );
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  return (
+    <div ref={wrapperRef} className="relative">
+      <input
+        type="text"
+        value={value}
+        placeholder={placeholder}
+        className="w-[200px] rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-800 outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
+        onChange={e => {
+          onChange(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => { setFocused(true); setOpen(true); }}
+        onBlur={() => setFocused(false)}
+      />
+      {open && filtered.length > 0 && (
+        <div className="absolute top-full left-0 z-50 mt-1 max-h-48 w-[200px] overflow-y-auto rounded border border-slate-200 bg-white shadow-lg">
+          {filtered.map(opt => (
+            <button
+              key={opt}
+              type="button"
+              className="w-full px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-slate-50"
+              onMouseDown={e => {
+                e.preventDefault();
+                onChange(opt);
+                setOpen(false);
+              }}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// SyncDropdown component (native replacement for antd Dropdown.Button)
+// ---------------------------------------------------------------------------
+
+function SyncDropdown({
+  loading,
+  onSync,
+  onFullSync,
+  size = 'sm',
+  className,
+}: {
+  loading: boolean;
+  onSync: () => void;
+  onFullSync: () => void;
+  size?: 'sm' | 'xs';
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const btnClass = size === 'xs'
+    ? 'px-2 py-1 text-[11px]'
+    : 'px-3 py-1.5 text-xs';
+
+  return (
+    <div ref={ref} className={`relative inline-flex ${className || ''}`}>
+      <button
+        type="button"
+        disabled={loading}
+        onClick={onSync}
+        className={`${btnClass} inline-flex items-center gap-1.5 rounded-l border border-primary bg-primary font-medium text-white hover:bg-primary/90 disabled:opacity-60`}
+      >
+        {loading ? <Spinner className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+        Sync
+      </button>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className={`${btnClass} inline-flex items-center rounded-r border border-l-0 border-primary bg-primary text-white hover:bg-primary/90`}
+      >
+        <ChevronDown className="h-3 w-3" />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full z-50 mt-1 min-w-[180px] rounded border border-slate-200 bg-white shadow-lg">
+          <button
+            type="button"
+            className="w-full px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50"
+            onClick={() => { onFullSync(); setOpen(false); }}
+          >
+            Full Sync (re-fetch all)
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Page component
 // ---------------------------------------------------------------------------
 
 const QuickbaseConfigPage: React.FC = () => {
+  const { clientId } = useClient();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [clientId, setClientId] = useState<string | null>(null);
-  const [form] = Form.useForm();
+  const [formFields, setFormFields] = useState<FormFields>(INITIAL_FORM);
+  const [formErrors, setFormErrors] = useState<Partial<Record<keyof FormFields, string>>>({});
   const [fieldMappings, setFieldMappings] = useState<FieldMappings>(initDefaultMappings);
-  const [syncAuto, setSyncAuto] = useState(false);  // false = manual, true = automatic
+  const [syncAuto, setSyncAuto] = useState(false);
   const [qbFields, setQbFields] = useState<QBFields>({});
   const [qbFieldsSyncedAt, setQbFieldsSyncedAt] = useState<QBFieldsSyncedAt>({});
   const [fetchingFields, setFetchingFields] = useState<FetchingFields>({});
@@ -226,6 +392,17 @@ const QuickbaseConfigPage: React.FC = () => {
   const [qbStatus, setQbStatus] = useState<QBSyncStatus | null>(null);
   const [qbSyncing, setQbSyncing] = useState(false);
   const [tableSyncing, setTableSyncing] = useState<Record<string, boolean>>({});
+  const [activeTab, setActiveTab] = useState(TABLES[0].key);
+  const [showPassword, setShowPassword] = useState(false);
+
+  // Form field updater
+  const updateField = <K extends keyof FormFields>(key: K, value: FormFields[K]) => {
+    setFormFields(prev => ({ ...prev, [key]: value }));
+    // Clear error when user types
+    if (formErrors[key]) {
+      setFormErrors(prev => { const n = { ...prev }; delete n[key]; return n; });
+    }
+  };
 
   // -------------------------------------------------------------------------
   // Data loading
@@ -238,17 +415,17 @@ const QuickbaseConfigPage: React.FC = () => {
 
       const hasAutoSync = cfg.sync_interval_hours != null;
       setSyncAuto(hasAutoSync);
-      form.setFieldsValue({
-        realm_hostname: cfg.realm_hostname,
-        app_id: cfg.app_id,
+      setFormFields({
+        realm_hostname: cfg.realm_hostname || '',
+        app_id: cfg.app_id || '',
         user_token: cfg.user_token || '',
-        customers_table_id: cfg.customers_table_id,
-        contacts_table_id: cfg.contacts_table_id,
-        quotes_table_id: cfg.quotes_table_id,
-        jobs_table_id: cfg.jobs_table_id,
-        sales_line_items_table_id: cfg.sales_line_items_table_id,
-        operations_table_id: cfg.operations_table_id,
-        unique_emails_table_id: cfg.unique_emails_table_id,
+        customers_table_id: cfg.customers_table_id || '',
+        contacts_table_id: cfg.contacts_table_id || '',
+        quotes_table_id: cfg.quotes_table_id || '',
+        jobs_table_id: cfg.jobs_table_id || '',
+        sales_line_items_table_id: cfg.sales_line_items_table_id || '',
+        operations_table_id: cfg.operations_table_id || '',
+        unique_emails_table_id: cfg.unique_emails_table_id || '',
         sync_interval_hours: cfg.sync_interval_hours ?? 6,
       });
 
@@ -266,9 +443,9 @@ const QuickbaseConfigPage: React.FC = () => {
       setFieldMappings(loaded);
     } catch (err: any) {
       if (err?.status === 404 || err?.response?.status === 404) {
-        // No config yet — pre-fill Carbon8 defaults
+        // No config yet -- pre-fill Carbon8 defaults
         setSyncAuto(false);
-        form.setFieldsValue({
+        setFormFields({
           realm_hostname: 'dc.quickbase.com',
           app_id: 'buzfemk4f',
           user_token: '',
@@ -283,31 +460,11 @@ const QuickbaseConfigPage: React.FC = () => {
         });
         setFieldMappings(initDefaultMappings());
       } else {
-        message.error(err?.message || 'Failed to load Quickbase config');
+        toast.error(err?.message || 'Failed to load Quickbase config');
       }
     } finally {
       setLoading(false);
     }
-  }, [form]);
-
-  // Resolve initial client ID on mount (localStorage → assigned → admin list)
-  useEffect(() => {
-    const stored = localStorage.getItem('analytics_client_id');
-    if (stored) { setClientId(stored); return; }
-    (async () => {
-      try {
-        const assigned = await api.get<any>('/auth/me/clients');
-        const id = Array.isArray(assigned) ? assigned[0]?.client_id : null;
-        if (id) { setClientId(id); return; }
-      } catch { /* ignore */ }
-      try {
-        const all = await api.get<any>('/clients/');
-        const id = all?.clients?.[0]?.id || all?.[0]?.id || null;
-        if (id) setClientId(id);
-        else { message.warning('No client found — using defaults'); setLoading(false); }
-      } catch { setLoading(false); }
-    })();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadQBStatus = useCallback(async (id: string) => {
@@ -315,7 +472,7 @@ const QuickbaseConfigPage: React.FC = () => {
       const status = await api.get<QBSyncStatus>(`/v1/quickbase/sync-status?client_id=${id}`);
       setQbStatus(status);
     } catch {
-      // No config yet — status stays null
+      // No config yet -- status stays null
     }
   }, []);
 
@@ -325,10 +482,10 @@ const QuickbaseConfigPage: React.FC = () => {
     try {
       const params = full ? `client_id=${clientId}&full=true` : `client_id=${clientId}`;
       await api.post<any>(`/v1/quickbase/sync?${params}`);
-      message.success(full ? 'Full sync started — re-fetching all records' : 'Sync started — fetching recent changes');
+      toast.success(full ? 'Full sync started -- re-fetching all records' : 'Sync started -- fetching recent changes');
       setTimeout(() => loadQBStatus(clientId), 3000);
     } catch (err: any) {
-      message.error(err?.message || 'Sync failed');
+      toast.error(err?.message || 'Sync failed');
     } finally {
       setQbSyncing(false);
     }
@@ -341,10 +498,10 @@ const QuickbaseConfigPage: React.FC = () => {
     setRematching(true);
     try {
       await api.post<any>(`/v1/quickbase/rematch?client_id=${clientId}`);
-      message.success('Re-matching started — matching QB records to email companies/contacts');
+      toast.success('Re-matching started -- matching QB records to email companies/contacts');
       setTimeout(() => loadQBStatus(clientId), 5000);
     } catch (err: any) {
-      message.error(err?.message || 'Re-match failed');
+      toast.error(err?.message || 'Re-match failed');
     } finally {
       setRematching(false);
     }
@@ -357,10 +514,10 @@ const QuickbaseConfigPage: React.FC = () => {
       const params = new URLSearchParams({ client_id: clientId, tables: tableKey });
       if (full) params.set('full', 'true');
       await api.post<any>(`/v1/quickbase/sync?${params}`);
-      message.success(`${full ? 'Full' : 'Incremental'} sync started for ${tableKey}`);
+      toast.success(`${full ? 'Full' : 'Incremental'} sync started for ${tableKey}`);
       setTimeout(() => loadQBStatus(clientId), 3000);
     } catch (err: any) {
-      message.error(err?.message || 'Sync failed');
+      toast.error(err?.message || 'Sync failed');
     } finally {
       setTableSyncing(prev => ({ ...prev, [tableKey]: false }));
     }
@@ -379,19 +536,33 @@ const QuickbaseConfigPage: React.FC = () => {
   }, [clientId]);
 
   // -------------------------------------------------------------------------
+  // Validation
+  // -------------------------------------------------------------------------
+
+  const validateForm = (): boolean => {
+    const errors: Partial<Record<keyof FormFields, string>> = {};
+    if (!formFields.realm_hostname) errors.realm_hostname = 'Realm hostname is required';
+    if (!formFields.app_id) errors.app_id = 'App ID is required';
+    TABLES.forEach(t => {
+      const field = t.configField as keyof FormFields;
+      if (!formFields[field]) errors[field] = `${t.label} table ID is required`;
+    });
+    if (syncAuto && !formFields.sync_interval_hours) {
+      errors.sync_interval_hours = 'Interval required';
+    }
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  // -------------------------------------------------------------------------
   // Save
   // -------------------------------------------------------------------------
 
   const handleSaveAll = async () => {
-    let values: any;
-    try {
-      values = await form.validateFields();
-    } catch {
-      return; // form shows validation errors
-    }
+    if (!validateForm()) return;
 
     if (!clientId) {
-      message.error('No client ID found');
+      toast.error('No client ID found');
       return;
     }
 
@@ -404,14 +575,14 @@ const QuickbaseConfigPage: React.FC = () => {
       });
 
       await api.put<any>(`/v1/quickbase/config?client_id=${clientId}`, {
-        ...values,
-        sync_interval_hours: syncAuto ? (values.sync_interval_hours ?? 6) : null,
+        ...formFields,
+        sync_interval_hours: syncAuto ? (formFields.sync_interval_hours ?? 6) : null,
         field_mappings,
       });
 
-      message.success('Quickbase configuration saved');
+      toast.success('Quickbase configuration saved');
     } catch (err: any) {
-      message.error(err?.message || 'Failed to save config');
+      toast.error(err?.message || 'Failed to save config');
     } finally {
       setSaving(false);
     }
@@ -423,7 +594,7 @@ const QuickbaseConfigPage: React.FC = () => {
 
   const handleFetchFields = async (tableKey: string, force = false) => {
     if (!clientId) {
-      message.error('No client ID');
+      toast.error('No client ID');
       return;
     }
     setFetchingFields(prev => ({ ...prev, [tableKey]: true }));
@@ -446,10 +617,10 @@ const QuickbaseConfigPage: React.FC = () => {
         return { ...prev, [tableKey]: updated };
       });
 
-      if (force) message.success(`Refreshed ${fetched.length} fields from QB`);
+      if (force) toast.success(`Refreshed ${fetched.length} fields from QB`);
     } catch (err: any) {
       // Silently skip on background load (no config yet); show error on manual fetch
-      if (force) message.error(err?.message || 'Failed to fetch QB fields');
+      if (force) toast.error(err?.message || 'Failed to fetch QB fields');
     } finally {
       setFetchingFields(prev => ({ ...prev, [tableKey]: false }));
     }
@@ -489,84 +660,7 @@ const QuickbaseConfigPage: React.FC = () => {
   };
 
   // -------------------------------------------------------------------------
-  // Mapping table columns factory
-  // -------------------------------------------------------------------------
-
-  const buildColumns = (tableKey: string) => [
-    {
-      title: 'QB Field ID',
-      dataIndex: 'fieldId',
-      key: 'fieldId',
-      width: 120,
-      render: (_: string, record: MappingRow) => (
-        <Input
-          value={record.fieldId}
-          size="small"
-          style={{ width: 100 }}
-          onChange={e => {
-            const newId = e.target.value;
-            const match = (qbFields[tableKey] || []).find(f => String(f.id) === newId);
-            updateRow(tableKey, record.key, {
-              fieldId: newId,
-              fieldName: match ? match.label : '',
-            });
-          }}
-        />
-      ),
-    },
-    {
-      title: 'QB Field Name',
-      dataIndex: 'fieldName',
-      key: 'fieldName',
-      render: (val: string) => (
-        <Text type={val ? undefined : 'secondary'} style={{ fontSize: 13 }}>
-          {val || <span style={{ fontStyle: 'italic' }}>— unknown field ID —</span>}
-        </Text>
-      ),
-    },
-    {
-      title: '',
-      key: 'arrow',
-      width: 40,
-      render: () => <ArrowRightOutlined style={{ color: '#999' }} />,
-    },
-    {
-      title: 'Destination Column',
-      dataIndex: 'destColumn',
-      key: 'destColumn',
-      width: 220,
-      render: (_: string, record: MappingRow) => (
-        <AutoComplete
-          value={record.destColumn}
-          size="small"
-          style={{ width: 200 }}
-          options={(DEST_COLUMNS[tableKey] || []).map(col => ({ value: col }))}
-          filterOption={(input, option) =>
-            (option?.value as string)?.toLowerCase().includes(input.toLowerCase())
-          }
-          onChange={val => updateRow(tableKey, record.key, { destColumn: val })}
-          placeholder="Select or type column"
-        />
-      ),
-    },
-    {
-      title: '',
-      key: 'action',
-      width: 50,
-      render: (_: any, record: MappingRow) => (
-        <Button
-          type="text"
-          size="small"
-          danger
-          icon={<DeleteOutlined />}
-          onClick={() => deleteRow(tableKey, record.key)}
-        />
-      ),
-    },
-  ];
-
-  // -------------------------------------------------------------------------
-  // Tab items — two-panel layout: field palette (left) + mapping table (right)
+  // Add field to mapping from palette
   // -------------------------------------------------------------------------
 
   const addFieldToMapping = (tableKey: string, fieldId: string, fieldName: string) => {
@@ -581,7 +675,24 @@ const QuickbaseConfigPage: React.FC = () => {
     }));
   };
 
-  const tabItems = TABLES.map(t => {
+  // -------------------------------------------------------------------------
+  // Render: Loading
+  // -------------------------------------------------------------------------
+
+  if (loading) {
+    return (
+      <PageShell>
+        <ContentSkeleton rows={8} />
+      </PageShell>
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Render: Tab content builder
+  // -------------------------------------------------------------------------
+
+  const renderTabContent = (tableKey: string) => {
+    const t = TABLES.find(tb => tb.key === tableKey)!;
     const mappedIds = new Set((fieldMappings[t.key] || []).map(r => r.fieldId));
     const allFields = [...(qbFields[t.key] || [])].sort((a, b) => a.id - b.id);
     const searchTerm = (fieldSearch[t.key] || '').toLowerCase();
@@ -597,294 +708,279 @@ const QuickbaseConfigPage: React.FC = () => {
         const data = JSON.parse(e.dataTransfer.getData('application/json'));
         if (data.tableKey !== t.key) return;
         if (mappedIds.has(data.fieldId)) {
-          message.info(`Field "${data.fieldName}" is already mapped`);
+          toast.info(`Field "${data.fieldName}" is already mapped`);
           return;
         }
         addFieldToMapping(t.key, data.fieldId, data.fieldName);
       } catch { /* ignore */ }
     };
 
-    const mappedCount = mappedIds.size;
-    const unmappedCount = allFields.filter(f => !mappedIds.has(String(f.id))).length;
+    const rows = fieldMappings[t.key] || [];
 
-    return {
-      key: t.key,
-      label: (
-        <span>
-          {t.label}
-          {allFields.length > 0 && (
-            <Tag
-              color={unmappedCount > 0 ? 'blue' : 'green'}
-              style={{ marginLeft: 6, fontSize: 11, lineHeight: '16px', padding: '0 5px' }}
-            >
-              {mappedCount}/{allFields.length}
-            </Tag>
-          )}
-        </span>
-      ),
-      children: (
-        <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+    return (
+      <div className="flex gap-4 items-start">
 
-          {/* ── LEFT PANEL: QB field palette ── */}
-          <div style={{
-            width: 260,
-            flexShrink: 0,
-            border: '1px solid rgba(255,255,255,0.1)',
-            borderRadius: 8,
-            overflow: 'hidden',
-            background: 'rgba(255,255,255,0.03)',
-          }}>
-            {/* Panel header */}
-            <div style={{
-              padding: '10px 14px',
-              borderBottom: '1px solid rgba(255,255,255,0.08)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              background: 'rgba(255,255,255,0.04)',
-            }}>
-              <div>
-                <Text strong style={{ fontSize: 13 }}>QB Fields</Text>
-                {qbFieldsSyncedAt[t.key] && (
-                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 1 }}>
-                    Synced {new Date(qbFieldsSyncedAt[t.key]!).toLocaleString()}
-                  </div>
-                )}
-              </div>
-              <Tooltip title={allFields.length > 0 ? 'Re-fetch from QB and update cache' : 'Fetch from QB and cache'}>
-                <Button
-                  size="small"
-                  type="text"
-                  icon={<SyncOutlined spin={fetchingFields[t.key]} />}
-                  loading={fetchingFields[t.key]}
-                  onClick={() => handleFetchFields(t.key, true)}
-                  style={{ fontSize: 12 }}
-                >
-                  {allFields.length > 0 ? 'Refresh' : 'Fetch'}
-                </Button>
-              </Tooltip>
-            </div>
-
-            {/* Search */}
-            {allFields.length > 0 && (
-              <div style={{ padding: '8px 10px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                <Input
-                  size="small"
-                  placeholder="Search fields…"
-                  allowClear
-                  value={fieldSearch[t.key] || ''}
-                  onChange={e => setFieldSearch(prev => ({ ...prev, [t.key]: e.target.value }))}
-                />
-              </div>
-            )}
-
-            {/* Field list */}
-            {allFields.length === 0 ? (
-              <div style={{
-                padding: '32px 16px',
-                textAlign: 'center',
-                color: 'rgba(255,255,255,0.3)',
-              }}>
-                <SyncOutlined style={{ fontSize: 24, marginBottom: 8, display: 'block' }} />
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  Click Fetch to load<br />available QB fields
-                </Text>
-              </div>
-            ) : availableFields.length === 0 ? (
-              <div style={{ padding: '20px 16px', textAlign: 'center' }}>
-                <Text type="secondary" style={{ fontSize: 12 }}>No fields match "{fieldSearch[t.key]}"</Text>
-              </div>
-            ) : (
-              <div style={{ maxHeight: 420, overflowY: 'auto', padding: '6px 0' }}>
-                {availableFields.map(f => {
-                  const isMapped = mappedIds.has(String(f.id));
-                  return (
-                    <Tooltip
-                      key={f.id}
-                      title={isMapped ? 'Already mapped' : 'Drag or click to add'}
-                      placement="right"
-                      mouseEnterDelay={0.6}
-                    >
-                      <div
-                        draggable={!isMapped}
-                        onClick={() => {
-                          if (!isMapped) addFieldToMapping(t.key, String(f.id), f.label);
-                        }}
-                        onDragStart={e => {
-                          e.dataTransfer.setData('application/json', JSON.stringify({
-                            tableKey: t.key,
-                            fieldId: String(f.id),
-                            fieldName: f.label,
-                          }));
-                          e.dataTransfer.effectAllowed = 'copy';
-                        }}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 8,
-                          padding: '6px 14px',
-                          cursor: isMapped ? 'default' : 'grab',
-                          opacity: isMapped ? 0.4 : 1,
-                          transition: 'background 0.15s',
-                          userSelect: 'none',
-                        }}
-                        onMouseEnter={e => {
-                          if (!isMapped) (e.currentTarget as HTMLDivElement).style.background = 'rgba(24,144,255,0.1)';
-                        }}
-                        onMouseLeave={e => {
-                          (e.currentTarget as HTMLDivElement).style.background = 'transparent';
-                        }}
-                      >
-                        {isMapped
-                          ? <CheckCircleFilled style={{ fontSize: 13, color: '#52c41a', flexShrink: 0 }} />
-                          : <HolderOutlined style={{ fontSize: 13, color: 'rgba(255,255,255,0.3)', flexShrink: 0 }} />
-                        }
-                        <span style={{ fontSize: 12, minWidth: 0 }}>
-                          <Text type="secondary" style={{ fontSize: 11, marginRight: 4 }}>#{f.id}</Text>
-                          <Text style={{ fontSize: 12 }}>{f.label}</Text>
-                        </span>
-                      </div>
-                    </Tooltip>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* ── RIGHT PANEL: mapping table + drop zone ── */}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div
-              onDragOver={e => {
-                e.preventDefault();
-                if (!isOver) setDragOver(prev => ({ ...prev, [t.key]: true }));
-              }}
-              onDragLeave={e => {
-                // only fire when leaving the container itself
-                if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-                  setDragOver(prev => ({ ...prev, [t.key]: false }));
-                }
-              }}
-              onDrop={onDrop}
-              style={{
-                borderRadius: 8,
-                border: isOver
-                  ? '2px dashed #1677ff'
-                  : '2px dashed transparent',
-                background: isOver ? 'rgba(22,119,255,0.06)' : 'transparent',
-                transition: 'border-color 0.2s, background 0.2s',
-                padding: isOver ? 4 : 0,
-              }}
-            >
-              <Table
-                dataSource={fieldMappings[t.key] || []}
-                columns={buildColumns(t.key)}
-                rowKey="key"
-                size="small"
-                pagination={false}
-                scroll={{ y: 360 }}
-                locale={{
-                  emptyText: (
-                    <div style={{ padding: '32px 0', color: 'rgba(255,255,255,0.3)' }}>
-                      <ArrowRightOutlined style={{ fontSize: 20, marginBottom: 8, display: 'block', transform: 'rotate(270deg)' }} />
-                      <div style={{ fontSize: 13 }}>
-                        {availableFields.length > 0
-                          ? 'Drag fields from the left panel — or click them to add'
-                          : 'Fetch QB fields first, then drag them here'}
-                      </div>
-                    </div>
-                  ),
-                }}
-              />
-            </div>
-            <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Button
-                size="small"
-                icon={<PlusOutlined />}
-                onClick={() => addRow(t.key)}
-              >
-                Add Row Manually
-              </Button>
-              {mappedIds.size > 0 && (
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  {mappedIds.size} field{mappedIds.size !== 1 ? 's' : ''} mapped
-                </Text>
+        {/* -- LEFT PANEL: QB field palette -- */}
+        <div className="w-[260px] flex-shrink-0 rounded-lg border bg-white shadow-sm overflow-hidden">
+          {/* Panel header */}
+          <div className="flex items-center justify-between border-b bg-slate-50 px-3.5 py-2.5">
+            <div>
+              <span className="text-[13px] font-semibold text-slate-800">QB Fields</span>
+              {qbFieldsSyncedAt[t.key] && (
+                <div className="text-[11px] text-slate-400 mt-0.5">
+                  Synced {new Date(qbFieldsSyncedAt[t.key]!).toLocaleString('en-AU')}
+                </div>
               )}
             </div>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+              disabled={fetchingFields[t.key]}
+              onClick={() => handleFetchFields(t.key, true)}
+              title={allFields.length > 0 ? 'Re-fetch from QB and update cache' : 'Fetch from QB and cache'}
+            >
+              {fetchingFields[t.key]
+                ? <Spinner className="h-3 w-3 animate-spin" />
+                : <RefreshCw className="h-3 w-3" />
+              }
+              {allFields.length > 0 ? 'Refresh' : 'Fetch'}
+            </button>
+          </div>
+
+          {/* Search */}
+          {allFields.length > 0 && (
+            <div className="border-b px-2.5 py-2">
+              <input
+                type="text"
+                placeholder="Search fields..."
+                className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 outline-none placeholder:text-slate-400 focus:border-primary focus:ring-1 focus:ring-primary/30"
+                value={fieldSearch[t.key] || ''}
+                onChange={e => setFieldSearch(prev => ({ ...prev, [t.key]: e.target.value }))}
+              />
+            </div>
+          )}
+
+          {/* Field list */}
+          {allFields.length === 0 ? (
+            <div className="py-8 px-4 text-center">
+              <RefreshCw className="mx-auto mb-2 h-6 w-6 text-slate-300" />
+              <p className="text-xs text-slate-400">
+                Click Fetch to load<br />available QB fields
+              </p>
+            </div>
+          ) : availableFields.length === 0 ? (
+            <div className="py-5 px-4 text-center">
+              <p className="text-xs text-slate-400">No fields match "{fieldSearch[t.key]}"</p>
+            </div>
+          ) : (
+            <div className="max-h-[420px] overflow-y-auto py-1.5">
+              {availableFields.map(f => {
+                const isMapped = mappedIds.has(String(f.id));
+                return (
+                  <div
+                    key={f.id}
+                    draggable={!isMapped}
+                    onClick={() => {
+                      if (!isMapped) addFieldToMapping(t.key, String(f.id), f.label);
+                    }}
+                    onDragStart={e => {
+                      e.dataTransfer.setData('application/json', JSON.stringify({
+                        tableKey: t.key,
+                        fieldId: String(f.id),
+                        fieldName: f.label,
+                      }));
+                      e.dataTransfer.effectAllowed = 'copy';
+                    }}
+                    className={`flex items-center gap-2 px-3.5 py-1.5 select-none transition-colors ${
+                      isMapped
+                        ? 'opacity-40 cursor-default'
+                        : 'cursor-grab hover:bg-primary/5'
+                    }`}
+                    title={isMapped ? 'Already mapped' : 'Drag or click to add'}
+                  >
+                    {isMapped
+                      ? <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0 text-emerald-500" />
+                      : <GripVertical className="h-3.5 w-3.5 flex-shrink-0 text-slate-300" />
+                    }
+                    <span className="text-xs min-w-0">
+                      <span className="text-[11px] text-slate-400 mr-1">#{f.id}</span>
+                      <span className="text-slate-700">{f.label}</span>
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* -- RIGHT PANEL: mapping table + drop zone -- */}
+        <div className="flex-1 min-w-0">
+          <div
+            onDragOver={e => {
+              e.preventDefault();
+              if (!isOver) setDragOver(prev => ({ ...prev, [t.key]: true }));
+            }}
+            onDragLeave={e => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                setDragOver(prev => ({ ...prev, [t.key]: false }));
+              }
+            }}
+            onDrop={onDrop}
+            className={`rounded-lg transition-all ${
+              isOver
+                ? 'border-2 border-dashed border-primary bg-primary/5 p-1'
+                : 'border-2 border-dashed border-transparent'
+            }`}
+          >
+            {rows.length === 0 ? (
+              <div className="py-8 text-center text-slate-400">
+                <ArrowRight className="mx-auto mb-2 h-5 w-5 -rotate-90" />
+                <p className="text-[13px]">
+                  {availableFields.length > 0
+                    ? 'Drag fields from the left panel -- or click them to add'
+                    : 'Fetch QB fields first, then drag them here'}
+                </p>
+              </div>
+            ) : (
+              <div className="max-h-[360px] overflow-y-auto rounded-lg border bg-white shadow-sm">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="border-b bg-slate-50">
+                      <th className="px-3 py-2 text-xs font-bold uppercase tracking-wider text-slate-600 w-[120px]">
+                        QB Field ID
+                      </th>
+                      <th className="px-3 py-2 text-xs font-bold uppercase tracking-wider text-slate-600">
+                        QB Field Name
+                      </th>
+                      <th className="px-3 py-2 w-10"></th>
+                      <th className="px-3 py-2 text-xs font-bold uppercase tracking-wider text-slate-600 w-[220px]">
+                        Destination Column
+                      </th>
+                      <th className="px-3 py-2 w-10"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {rows.map(record => (
+                      <tr key={record.key} className="hover:bg-slate-50/50">
+                        <td className="px-3 py-1.5">
+                          <input
+                            type="text"
+                            value={record.fieldId}
+                            className="w-[100px] rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-800 outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
+                            onChange={e => {
+                              const newId = e.target.value;
+                              const match = (qbFields[t.key] || []).find(f => String(f.id) === newId);
+                              updateRow(t.key, record.key, {
+                                fieldId: newId,
+                                fieldName: match ? match.label : '',
+                              });
+                            }}
+                          />
+                        </td>
+                        <td className="px-3 py-1.5">
+                          {record.fieldName ? (
+                            <span className="text-[13px] text-slate-700">{record.fieldName}</span>
+                          ) : (
+                            <span className="text-[13px] italic text-slate-400">-- unknown field ID --</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-1.5">
+                          <ArrowRight className="h-3.5 w-3.5 text-slate-400" />
+                        </td>
+                        <td className="px-3 py-1.5">
+                          <AutoCompleteInput
+                            value={record.destColumn}
+                            options={DEST_COLUMNS[t.key] || []}
+                            onChange={val => updateRow(t.key, record.key, { destColumn: val })}
+                            placeholder="Select or type column"
+                          />
+                        </td>
+                        <td className="px-3 py-1.5">
+                          <button
+                            type="button"
+                            className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-500"
+                            onClick={() => deleteRow(t.key, record.key)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+          <div className="mt-2.5 flex items-center gap-2">
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
+              onClick={() => addRow(t.key)}
+            >
+              <Plus className="h-3 w-3" />
+              Add Row Manually
+            </button>
+            {mappedIds.size > 0 && (
+              <span className="text-xs text-slate-400">
+                {mappedIds.size} field{mappedIds.size !== 1 ? 's' : ''} mapped
+              </span>
+            )}
           </div>
         </div>
-      ),
-    };
-  });
+      </div>
+    );
+  };
 
   // -------------------------------------------------------------------------
   // Render
   // -------------------------------------------------------------------------
 
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}>
-        <Spin size="large" />
-      </div>
-    );
-  }
-
   return (
-    <div style={{ padding: '24px', maxWidth: 1200, margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <Space align="center" size={16}>
-          <Title level={3} style={{ margin: 0 }}>Quickbase Configuration</Title>
-          <ClientSelector value={clientId || ''} onChange={id => setClientId(id)} />
-        </Space>
-        <Button
-          type="primary"
-          icon={<SaveOutlined />}
-          loading={saving}
-          onClick={handleSaveAll}
-        >
-          Save All
-        </Button>
-      </div>
+    <PageShell>
+      <PageHeader
+        title="Quickbase Configuration"
+        actions={
+          <button
+            type="button"
+            disabled={saving}
+            onClick={handleSaveAll}
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-60"
+          >
+            {saving ? <Spinner className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            Save All
+          </button>
+        }
+      />
 
       {/* QB Synced Data Status */}
       {qbStatus && (
-        <Card
-          className="glass-card"
-          style={{ marginBottom: 16 }}
-          title={<span style={{ fontSize: 14 }}>Quickbase Synced Data</span>}
-          extra={
-            <Space>
+        <div className="mb-4 rounded-lg border bg-white shadow-sm">
+          <div className="flex items-center justify-between border-b px-4 py-3">
+            <span className="text-sm font-semibold text-slate-800">Quickbase Synced Data</span>
+            <div className="flex items-center gap-3">
               {qbStatus.last_sync_at && (
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  Last sync: {new Date(qbStatus.last_sync_at).toLocaleString()}
-                </Text>
+                <span className="text-xs text-slate-400">
+                  Last sync: {new Date(qbStatus.last_sync_at).toLocaleString('en-AU')}
+                </span>
               )}
-              <Dropdown.Button
-                type="primary"
-                icon={<DownOutlined />}
+              <SyncDropdown
                 loading={qbSyncing}
-                onClick={() => handleQBSync(false)}
-                size="small"
-                menu={{
-                  items: [
-                    { key: 'full', label: 'Full Sync (re-fetch all)', onClick: () => handleQBSync(true) },
-                  ],
-                }}
-              >
-                <SyncOutlined spin={qbSyncing} /> Sync
-              </Dropdown.Button>
-              <Button
-                icon={<ArrowRightOutlined />}
-                loading={rematching}
+                onSync={() => handleQBSync(false)}
+                onFullSync={() => handleQBSync(true)}
+                size="sm"
+              />
+              <button
+                type="button"
+                disabled={rematching}
                 onClick={handleRematch}
-                size="small"
+                className="inline-flex items-center gap-1.5 rounded border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-60"
               >
+                {rematching ? <Spinner className="h-3 w-3 animate-spin" /> : <ArrowRight className="h-3 w-3" />}
                 Re-match
-              </Button>
-            </Space>
-          }
-        >
-          <Row gutter={[16, 12]}>
+              </button>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7">
             {[
               { label: 'Customers', key: 'customers' },
               { label: 'Contacts', key: 'contacts' },
@@ -897,167 +993,260 @@ const QuickbaseConfigPage: React.FC = () => {
               const log = qbStatus.table_logs.find(l => l.table_name === key);
               const hasError = log?.status === 'error';
               return (
-                <Col key={key} xs={12} sm={8} md={6} lg={4}>
-                  <div style={{
-                    padding: '10px 14px',
-                    borderRadius: 8,
-                    border: `1px solid ${hasError ? 'rgba(255,77,79,0.3)' : 'rgba(255,255,255,0.08)'}`,
-                    background: hasError ? 'rgba(255,77,79,0.06)' : 'rgba(255,255,255,0.03)',
-                  }}>
-                    <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 2 }}>
-                      {label}
-                    </Text>
-                    <div style={{ fontSize: 20, fontWeight: 600, lineHeight: 1.2 }}>
-                      {(qbStatus.record_counts[key] ?? 0).toLocaleString()}
-                    </div>
-                    {log?.table_id && (
-                      <Tooltip title="QB Table ID (cross-ref: Field Definitions)">
-                        <Tag style={{ fontSize: 10, marginTop: 4, cursor: 'default' }}>
-                          {log.table_id}
-                        </Tag>
-                      </Tooltip>
-                    )}
-                    {log?.synced_at ? (
-                      <div style={{ fontSize: 10, color: hasError ? '#ff4d4f' : 'rgba(255,255,255,0.3)', marginTop: 3 }}>
-                        {hasError ? (log.error_message || 'Error') : new Date(log.synced_at).toLocaleString()}
-                      </div>
-                    ) : (
-                      <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', marginTop: 3 }}>
-                        Not synced yet
-                      </div>
-                    )}
-                    <Dropdown.Button
-                      size="small"
-                      icon={<DownOutlined />}
-                      loading={tableSyncing[key]}
-                      onClick={() => handleTableSync(key, false)}
-                      style={{ marginTop: 8, width: '100%', fontSize: 11 }}
-                      menu={{
-                        items: [
-                          { key: 'full', label: 'Full Sync (re-fetch all)', onClick: () => handleTableSync(key, true) },
-                        ],
-                      }}
-                    >
-                      <SyncOutlined spin={tableSyncing[key]} /> Sync
-                    </Dropdown.Button>
+                <div
+                  key={key}
+                  className={`rounded-lg border p-2.5 ${
+                    hasError
+                      ? 'border-red-200 bg-red-50/50'
+                      : 'border-slate-100 bg-slate-50/50'
+                  }`}
+                >
+                  <span className="text-[11px] text-slate-500 block mb-0.5">{label}</span>
+                  <div className="text-xl font-semibold text-slate-800 leading-tight">
+                    {(qbStatus.record_counts[key] ?? 0).toLocaleString('en-AU')}
                   </div>
-                </Col>
+                  {log?.table_id && (
+                    <StatusBadge
+                      variant="neutral"
+                      size="sm"
+                      className="mt-1 cursor-default"
+                      title="QB Table ID (cross-ref: Field Definitions)"
+                    >
+                      {log.table_id}
+                    </StatusBadge>
+                  )}
+                  {log?.synced_at ? (
+                    <div className={`text-[10px] mt-1 ${hasError ? 'text-red-500' : 'text-slate-400'}`}>
+                      {hasError ? (log.error_message || 'Error') : new Date(log.synced_at).toLocaleString('en-AU')}
+                    </div>
+                  ) : (
+                    <div className="text-[10px] text-slate-300 mt-1">Not synced yet</div>
+                  )}
+                  <div className="mt-2">
+                    <SyncDropdown
+                      loading={tableSyncing[key] || false}
+                      onSync={() => handleTableSync(key, false)}
+                      onFullSync={() => handleTableSync(key, true)}
+                      size="xs"
+                      className="w-full"
+                    />
+                  </div>
+                </div>
               );
             })}
-          </Row>
-        </Card>
+          </div>
+        </div>
       )}
 
       {/* Info alert */}
-      <Alert
-        type="info"
-        showIcon
-        style={{ marginBottom: 24 }}
-        message="Field mappings override the default Carbon8 field mappings. Only configure if your QB schema differs from the defaults."
-      />
+      <div className="mb-6 flex items-start gap-2.5 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
+        <Info className="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-500" />
+        <span className="text-sm text-blue-700">
+          Field mappings override the default Carbon8 field mappings. Only configure if your QB schema differs from the defaults.
+        </span>
+      </div>
 
-      {/* Single Form wraps both Connection + Table IDs so all fields register together */}
-      <Form form={form} layout="vertical">
-        {/* Connection Settings */}
-        <Card title="Connection Settings" className="glass-card" style={{ marginBottom: 24 }}>
-          <Space wrap size={16} style={{ width: '100%' }}>
-            <Form.Item
-              label="Realm Hostname"
-              name="realm_hostname"
-              rules={[{ required: true, message: 'Realm hostname is required' }]}
-              style={{ marginBottom: 0, minWidth: 220 }}
-            >
-              <Input placeholder="dc.quickbase.com" style={{ width: 220 }} />
-            </Form.Item>
-            <Form.Item
-              label="App ID"
-              name="app_id"
-              rules={[{ required: true, message: 'App ID is required' }]}
-              style={{ marginBottom: 0, minWidth: 140 }}
-            >
-              <Input placeholder="buzfemk4f" style={{ width: 140 }} />
-            </Form.Item>
-            <Form.Item
-              label="User Token"
-              name="user_token"
-              extra="Clear to remove token and disable sync"
-              style={{ marginBottom: 0, minWidth: 260 }}
-            >
-              <Input.Password
+      {/* Connection Settings */}
+      <div className="mb-6 rounded-lg border bg-white shadow-sm">
+        <div className="border-b px-4 py-3">
+          <span className="text-sm font-semibold text-slate-800">Connection Settings</span>
+        </div>
+        <div className="flex flex-wrap gap-4 p-4">
+          {/* Realm Hostname */}
+          <div className="min-w-[220px]">
+            <label className="mb-1 block text-xs font-medium text-slate-600">
+              Realm Hostname <span className="text-red-400">*</span>
+            </label>
+            <input
+              type="text"
+              value={formFields.realm_hostname}
+              placeholder="dc.quickbase.com"
+              className={`w-[220px] rounded border bg-white px-3 py-1.5 text-sm text-slate-800 outline-none focus:ring-1 focus:ring-primary/30 ${
+                formErrors.realm_hostname ? 'border-red-300 focus:border-red-400' : 'border-slate-200 focus:border-primary'
+              }`}
+              onChange={e => updateField('realm_hostname', e.target.value)}
+            />
+            {formErrors.realm_hostname && (
+              <p className="mt-0.5 text-[11px] text-red-500">{formErrors.realm_hostname}</p>
+            )}
+          </div>
+
+          {/* App ID */}
+          <div className="min-w-[140px]">
+            <label className="mb-1 block text-xs font-medium text-slate-600">
+              App ID <span className="text-red-400">*</span>
+            </label>
+            <input
+              type="text"
+              value={formFields.app_id}
+              placeholder="buzfemk4f"
+              className={`w-[140px] rounded border bg-white px-3 py-1.5 text-sm text-slate-800 outline-none focus:ring-1 focus:ring-primary/30 ${
+                formErrors.app_id ? 'border-red-300 focus:border-red-400' : 'border-slate-200 focus:border-primary'
+              }`}
+              onChange={e => updateField('app_id', e.target.value)}
+            />
+            {formErrors.app_id && (
+              <p className="mt-0.5 text-[11px] text-red-500">{formErrors.app_id}</p>
+            )}
+          </div>
+
+          {/* User Token */}
+          <div className="min-w-[260px]">
+            <label className="mb-1 block text-xs font-medium text-slate-600">User Token</label>
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={formFields.user_token}
                 placeholder="QB user token"
-                style={{ width: 260 }}
-                visibilityToggle
+                className="w-[260px] rounded border border-slate-200 bg-white px-3 py-1.5 pr-8 text-sm text-slate-800 outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
+                onChange={e => updateField('user_token', e.target.value)}
               />
-            </Form.Item>
-            <Form.Item
-              label="Sync Mode"
-              style={{ marginBottom: 0 }}
-            >
-              <Space>
-                <Switch
-                  checked={syncAuto}
-                  onChange={setSyncAuto}
-                  checkedChildren="Auto"
-                  unCheckedChildren="Manual"
-                />
-                {syncAuto && (
-                  <Form.Item
-                    name="sync_interval_hours"
-                    noStyle
-                    rules={[{ required: true, message: 'Interval required' }]}
-                  >
-                    <InputNumber
-                      min={1} max={168} step={1}
-                      style={{ width: 90 }}
-                      placeholder="6"
-                    />
-                  </Form.Item>
-                )}
-              </Space>
-            </Form.Item>
-          </Space>
-          <div style={{ marginTop: 12 }}>
-            <Button
-              size="small"
-              onClick={async () => {
-                if (!clientId) { message.error('No client ID'); return; }
-                try {
-                  await api.get<any>(`/v1/quickbase/config?client_id=${clientId}`);
-                  message.success('Connection config found');
-                } catch {
-                  message.error('No QB config found for this client');
-                }
-              }}
-            >
-              Test Connection
-            </Button>
-          </div>
-        </Card>
-
-        {/* Table IDs */}
-        <Card title="Table IDs" className="glass-card" style={{ marginBottom: 24 }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
-            {TABLES.map(t => (
-              <Form.Item
-                key={t.key}
-                label={t.label}
-                name={t.configField}
-                rules={[{ required: true, message: `${t.label} table ID is required` }]}
-                style={{ marginBottom: 0, flex: '1 1 180px' }}
+              <button
+                type="button"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600"
+                onClick={() => setShowPassword(!showPassword)}
               >
-                <Input placeholder="QB table ID" style={{ width: '100%' }} />
-              </Form.Item>
-            ))}
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
+            </div>
+            <p className="mt-0.5 text-[11px] text-slate-400">Clear to remove token and disable sync</p>
           </div>
-        </Card>
-      </Form>
+
+          {/* Sync Mode */}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Sync Mode</label>
+            <div className="flex items-center gap-3">
+              <label className="relative inline-flex cursor-pointer items-center">
+                <input
+                  type="checkbox"
+                  role="switch"
+                  checked={syncAuto}
+                  onChange={e => setSyncAuto(e.target.checked)}
+                  className="peer sr-only"
+                />
+                <div className="h-6 w-11 rounded-full bg-slate-200 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow after:transition-all after:content-[''] peer-checked:bg-primary peer-checked:after:translate-x-full peer-focus:ring-2 peer-focus:ring-primary/30" />
+                <span className="ml-2 text-xs font-medium text-slate-600">
+                  {syncAuto ? 'Auto' : 'Manual'}
+                </span>
+              </label>
+              {syncAuto && (
+                <div>
+                  <input
+                    type="number"
+                    min={1}
+                    max={168}
+                    step={1}
+                    value={formFields.sync_interval_hours}
+                    placeholder="6"
+                    className={`w-[90px] rounded border bg-white px-3 py-1.5 text-sm text-slate-800 outline-none focus:ring-1 focus:ring-primary/30 ${
+                      formErrors.sync_interval_hours ? 'border-red-300 focus:border-red-400' : 'border-slate-200 focus:border-primary'
+                    }`}
+                    onChange={e => updateField('sync_interval_hours', Number(e.target.value) || 0)}
+                  />
+                  {formErrors.sync_interval_hours && (
+                    <p className="mt-0.5 text-[11px] text-red-500">{formErrors.sync_interval_hours}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="border-t px-4 py-3">
+          <button
+            type="button"
+            className="inline-flex items-center gap-1.5 rounded border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+            onClick={async () => {
+              if (!clientId) { toast.error('No client ID'); return; }
+              try {
+                await api.get<any>(`/v1/quickbase/config?client_id=${clientId}`);
+                toast.success('Connection config found');
+              } catch {
+                toast.error('No QB config found for this client');
+              }
+            }}
+          >
+            Test Connection
+          </button>
+        </div>
+      </div>
+
+      {/* Table IDs */}
+      <div className="mb-6 rounded-lg border bg-white shadow-sm">
+        <div className="border-b px-4 py-3">
+          <span className="text-sm font-semibold text-slate-800">Table IDs</span>
+        </div>
+        <div className="flex flex-wrap gap-4 p-4">
+          {TABLES.map(t => {
+            const field = t.configField as keyof FormFields;
+            return (
+              <div key={t.key} className="flex-1 min-w-[180px]">
+                <label className="mb-1 block text-xs font-medium text-slate-600">
+                  {t.label} <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={formFields[field] as string}
+                  placeholder="QB table ID"
+                  className={`w-full rounded border bg-white px-3 py-1.5 text-sm text-slate-800 outline-none focus:ring-1 focus:ring-primary/30 ${
+                    formErrors[field] ? 'border-red-300 focus:border-red-400' : 'border-slate-200 focus:border-primary'
+                  }`}
+                  onChange={e => updateField(field, e.target.value)}
+                />
+                {formErrors[field] && (
+                  <p className="mt-0.5 text-[11px] text-red-500">{formErrors[field]}</p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       {/* Field Mappings */}
-      <Card title="Field Mappings" className="glass-card">
-        <Divider style={{ marginTop: 0, marginBottom: 16 }} />
-        <Tabs items={tabItems} type="card" />
-      </Card>
-    </div>
+      <div className="rounded-lg border bg-white shadow-sm">
+        <div className="border-b px-4 py-3">
+          <span className="text-sm font-semibold text-slate-800">Field Mappings</span>
+        </div>
+        <div className="px-4 pt-3">
+          {/* Tab bar */}
+          <div className="flex gap-0 border-b border-slate-200 overflow-x-auto">
+            {TABLES.map(t => {
+              const mappedIds = new Set((fieldMappings[t.key] || []).map(r => r.fieldId));
+              const allFields = qbFields[t.key] || [];
+              const unmappedCount = allFields.filter(f => !mappedIds.has(String(f.id))).length;
+              const mappedCount = mappedIds.size;
+              const isActive = activeTab === t.key;
+
+              return (
+                <button
+                  key={t.key}
+                  type="button"
+                  className={`whitespace-nowrap px-4 py-2.5 text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'border-b-2 border-primary text-primary'
+                      : 'border-b-2 border-transparent text-slate-500 hover:text-slate-700'
+                  }`}
+                  onClick={() => setActiveTab(t.key)}
+                >
+                  {t.label}
+                  {allFields.length > 0 && (
+                    <StatusBadge
+                      variant={unmappedCount > 0 ? 'info' : 'success'}
+                      size="sm"
+                      className="ml-1.5"
+                    >
+                      {mappedCount}/{allFields.length}
+                    </StatusBadge>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div className="p-4">
+          {renderTabContent(activeTab)}
+        </div>
+      </div>
+    </PageShell>
   );
 };
 

@@ -1,22 +1,18 @@
 /**
  * ActionBucketTag — Confidence-based colored tag with justification tooltip.
- *
- * Layer 3 confidence gating:
- *  - >= 0.8: full tag
- *  - 0.5-0.8: "Review" tag (muted)
- *  - < 0.5: hidden
+ * Zero antd.
  */
 
 import React from 'react';
-import { Tag, Tooltip } from 'antd';
+import { StatusBadge } from '@/components/ui/status-badge';
 
-const BUCKET_DISPLAY: Record<string, { label: string; color: string }> = {
-  response_urgency:   { label: 'Response Urgency',    color: 'red' },
-  deal_at_risk:       { label: 'Deal at Risk',        color: 'orange' },
-  retention_risk:     { label: 'Retention Risk',      color: 'red' },
-  revenue_opportunity:{ label: 'Revenue Opportunity',  color: 'green' },
-  new_relationship:   { label: 'New Relationship',    color: 'blue' },
-  account_neglect:    { label: 'Account Neglect',     color: 'gold' },
+const BUCKET_DISPLAY: Record<string, { label: string; variant: 'danger' | 'warning' | 'success' | 'info' | 'neutral' | 'purple' }> = {
+  response_urgency:    { label: 'Response Urgency',   variant: 'danger' },
+  deal_at_risk:        { label: 'Deal at Risk',       variant: 'warning' },
+  retention_risk:      { label: 'Retention Risk',     variant: 'danger' },
+  revenue_opportunity: { label: 'Revenue Opportunity', variant: 'success' },
+  new_relationship:    { label: 'New Relationship',   variant: 'info' },
+  account_neglect:     { label: 'Account Neglect',    variant: 'warning' },
 };
 
 interface ActionBucketTagProps {
@@ -30,30 +26,21 @@ export const ActionBucketTag: React.FC<ActionBucketTagProps> = ({
   confidence,
   justification,
 }) => {
-  // Confidence gating: hide below 0.5
   if (confidence < 0.5) return null;
 
-  const display = BUCKET_DISPLAY[bucket] || { label: bucket, color: 'default' };
+  const display = BUCKET_DISPLAY[bucket] || { label: bucket, variant: 'neutral' as const };
   const isReview = confidence < 0.8;
 
-  const tag = (
-    <Tag
-      color={isReview ? 'default' : display.color}
-      style={isReview ? { opacity: 0.7, borderStyle: 'dashed' } : undefined}
-    >
-      {isReview ? `${display.label} (Review)` : display.label}
-    </Tag>
+  return (
+    <span title={justification ? `${justification} (${Math.round(confidence * 100)}%)` : undefined}>
+      <StatusBadge
+        variant={isReview ? 'neutral' : display.variant}
+        size="sm"
+      >
+        {isReview ? `${display.label} (Review)` : display.label}
+      </StatusBadge>
+    </span>
   );
-
-  if (justification) {
-    return (
-      <Tooltip title={`${justification} (${Math.round(confidence * 100)}%)`}>
-        {tag}
-      </Tooltip>
-    );
-  }
-
-  return tag;
 };
 
 export default ActionBucketTag;

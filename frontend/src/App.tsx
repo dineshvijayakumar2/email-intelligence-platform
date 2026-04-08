@@ -18,7 +18,6 @@ const RedirectWithParams: React.FC<{ to: string }> = ({ to }) => {
   const { mailboxId } = useParams();
   return <Navigate to={`${to}/${mailboxId}`} replace />;
 };
-import { ConfigProvider } from 'antd';
 
 // Auth
 import { AuthProvider } from './contexts/AuthContext';
@@ -76,16 +75,13 @@ import SettingsPage from './pages/settings';
 // Audit
 import AuditLogsPage from './pages/audit-logs';
 
-// Theme and styles
-import { antTheme } from './theme/glassTheme';
-import './styles/glass.css';
+// Styles
 import './App.css';
 
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
     <BrowserRouter>
-      <ConfigProvider theme={antTheme}>
         <AuthProvider>
           <ClientProvider>
           <WebSocketProvider>
@@ -183,7 +179,6 @@ function App() {
           </WebSocketProvider>
           </ClientProvider>
         </AuthProvider>
-      </ConfigProvider>
     </BrowserRouter>
     </QueryClientProvider>
   );

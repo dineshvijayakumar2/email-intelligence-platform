@@ -1,7 +1,5 @@
 import React from 'react';
-import { Typography, Skeleton } from 'antd';
-
-const { Text } = Typography;
+import { ContentSkeleton } from '@/components/ui/empty-state';
 
 interface ChartCardProps {
   title: string;
@@ -19,17 +17,15 @@ export const ChartCard: React.FC<ChartCardProps> = ({
   extra,
 }) => {
   return (
-    <div className="glass-card" style={{ padding: 20 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <Text strong style={{ fontSize: 16 }}>{title}</Text>
+    <div className="rounded-lg border bg-white shadow-sm p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
         {extra}
       </div>
       {loading ? (
-        <Skeleton active paragraph={{ rows: 6 }} />
+        <ContentSkeleton rows={6} />
       ) : (
-        <div style={{ height }}>
-          {children}
-        </div>
+        <div style={{ height }}>{children}</div>
       )}
     </div>
   );

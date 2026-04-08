@@ -1,6 +1,6 @@
 # Email Intelligence Platform — Consolidated Implementation Progress
 
-**Last Updated:** 5 April 2026
+**Last Updated:** 8 April 2026
 **Purpose:** Consolidated reference — completed work, architecture, database schema, and next priorities.
 
 ---
@@ -11,7 +11,7 @@ A commercial intelligence platform for B2B account management teams. It syncs em
 
 **Deployment:** Production on Railway.
 **Backend:** FastAPI (Python 3.13), 16 registered routers, ~170+ API endpoints.
-**Frontend:** React/TypeScript (Vite), 35+ pages.
+**Frontend:** React/TypeScript (Vite), shadcn/ui + Tailwind CSS, 35+ pages.
 **Database:** Supabase PostgreSQL, ~40 tables (incl. pgvector).
 **Queue:** Redis (required for real-time job progress).
 
@@ -36,6 +36,7 @@ A commercial intelligence platform for B2B account management teams. It syncs em
 | CC/BCC Email Linking | Junction table, all-recipient linking, company/contact count RPCs | ✅ Complete | 1 Apr 2026 |
 | Canonical Thread Resolution | 4-tier signal stack, cross-mailbox merging, thread_status overhaul | ✅ Complete | 3-5 Apr 2026 |
 | Frontend Stabilisation | TanStack Query + Table, SSE streaming, terminology cleanup | ✅ Complete | 5 Apr 2026 |
+| Premium UI Overhaul | Ant Design → shadcn/ui + Tailwind CSS, 35+ files, zero antd | ✅ Complete | 7-8 Apr 2026 |
 | Invite User System | Admin-controlled onboarding, restrict open sign-up | 🔲 Planned | Not started |
 
 ---
@@ -1236,6 +1237,56 @@ Surgical upgrades to the existing React + Vite + Ant Design frontend — no migr
 - Companies page: dynamic Tier/AM filters from backend, QB Matched toggle, Company column width fixed
 - Thread tables: removed QB Type/Tier columns (low utility)
 - All filter counts server-side (no client-side count mismatch)
+
+---
+
+## ✅ COMPLETE — Premium UI Overhaul: Ant Design → shadcn/ui + Tailwind CSS (7-8 Apr 2026)
+
+Full migration from Ant Design to a premium B2B SaaS aesthetic (Linear, Vercel, Raycast style). **Zero antd imports remain.**
+
+### Migration Scope
+
+| Metric | Value |
+|--------|-------|
+| Files migrated | 35+ (18 pages, 12 shared components, 6 connection/form components) |
+| Lines of antd CSS deleted | 1,855 (glass.css) + 114 (glassTheme.ts) + 78 (AnalyticsTable.tsx) |
+| TypeScript errors | 0 |
+| Production build | Clean (93KB CSS, down from ~150KB+) |
+
+### New Design System
+
+- **Component library:** shadcn/ui (new-york style) — Button, Card, Badge, Dialog, Sheet, DropdownMenu, Tabs, Tooltip, Avatar, Skeleton, Table, Select, Popover
+- **Custom UI primitives:** StatusBadge (CVA variants), KPICard, PageShell, PageHeader, ContentSkeleton, EmptyState
+- **Styling:** Tailwind CSS v3.4 with semantic color tokens (primary, destructive, warning, success, risk)
+- **Icons:** Lucide React (37 mappings from @ant-design/icons)
+- **Toasts:** Sonner (replaced 263 `message.*` calls)
+- **Typography:** Inter via Google Fonts preconnect
+- **Risk pattern:** Global `getRiskClass()` for consistent at-risk visual treatment
+
+### Pages Migrated (zero antd)
+
+| Category | Pages |
+|----------|-------|
+| Customers | companies, company-detail, contacts, contact-detail, threads |
+| Insights | inbox, digest, opportunities, strategic-digest, vector-search, agent, email-rules |
+| Manage | response-times, patterns, data-health, processing, errors, intelligence-config |
+| Admin | users, clients, settings, extraction, admin-data, audit-logs, log-monitor |
+| QuickBase | quickbase-config, quickbase-data, quickbase-matches |
+| Mailbox | mailboxes, mailbox-process, mailbox create/edit forms |
+| AI Usage | usage, playground |
+| Auth | login, reset-password, oauth-callback |
+
+### Components Migrated (zero antd)
+
+ProtectedRoute, EmailDetailPanel, DataTable, AIInsightsCard, StrikeRateCard, SeasonalityChart, CapabilityRhythmCard, ContactCapabilitiesCard, ProductProfileCard, RecommendationsPanel, OrderHistoryTable, EngagementBadge, LifecycleBadge, ClientSelector, MailboxSelector, QBLinkWidget, ProcessingStatusBadge, SyncStatusBar, ErrorDisplay, FeedbackButtons, ActionBucketTag, ChartCard, MetricCard, GmailConnection, OutlookConnection, GoogleDriveConnection, GoogleDrivePicker, MailboxCreateForm, MailboxEditForm
+
+### Infrastructure Changes
+
+- **App.tsx:** Removed `ConfigProvider`, antd theme, glass.css import
+- **Deleted:** `glass.css` (1,855 lines), `glassTheme.ts` (114 lines), `AnalyticsTable.tsx` (unused)
+- **Global client context:** `useClient()` hook replaced per-page ClientSelector on admin/manage pages
+- **TanStack Query for mailboxes:** `useMailboxes()` + `useProcessingJobs()` hooks replace manual polling
+- **Number formatting:** `'en-AU'` locale enforced globally via `formatNumber()` utility
 
 ---
 

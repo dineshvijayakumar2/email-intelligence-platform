@@ -1,20 +1,12 @@
 /**
- * Mailbox Selector Component
- *
- * A dropdown component for selecting mailboxes.
- * Supports single and multi-select modes.
- * Only shows mailboxes accessible to the current user.
+ * Mailbox Selector Component — Zero antd.
  */
 
 import React, { useState, useEffect } from 'react';
-import { Select, Space, Typography, Badge, Tooltip } from 'antd';
-import { InboxOutlined, SyncOutlined, CloudOutlined } from '@ant-design/icons';
+import { Inbox, RefreshCw, Cloud } from 'lucide-react';
 import { mailboxService, Mailbox, hasGmailLiveSync } from '../services/mailboxService';
 
-// Re-export hook from its dedicated file for backwards compatibility
 export { useMailboxSelection } from '../hooks/useMailboxSelection';
-
-const { Text } = Typography;
 
 interface MailboxSelectorProps {
   value?: string[];
@@ -24,8 +16,6 @@ interface MailboxSelectorProps {
   style?: React.CSSProperties;
   className?: string;
   disabled?: boolean;
-  allowClear?: boolean;
-  maxTagCount?: number;
   size?: 'small' | 'middle' | 'large';
 }
 
@@ -34,57 +24,29 @@ export const MailboxSelector: React.FC<MailboxSelectorProps> = ({
   onChange,
   mode = 'multiple',
   placeholder = 'Select mailbox(es)',
-  style,
   className,
   disabled = false,
-  allowClear = true,
-  maxTagCount = 2,
   size = 'middle',
 }) => {
   const [mailboxes, setMailboxes] = useState<Mailbox[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadMailboxes();
-  }, []);
-
-  const loadMailboxes = async () => {
-    try {
-      console.log('[MailboxSelector] Loading mailboxes...');
-      setLoading(true);
-      const data = await mailboxService.getMailboxes();
-      console.log('[MailboxSelector] Received mailboxes:', data);
-
-      // Only update if we got valid data (don't overwrite with empty due to React Strict Mode remounts)
-      if (data && data.length > 0) {
-        // Filter to active mailboxes only
-        const active = data.filter((m) => m.is_active);
-        console.log('[MailboxSelector] Active mailboxes:', active.length);
-        setMailboxes(active);
-      } else {
-        console.warn('[MailboxSelector] Received empty/null data, keeping existing mailboxes');
+    const load = async () => {
+      try {
+        setLoading(true);
+        const data = await mailboxService.getMailboxes();
+        if (data && data.length > 0) {
+          setMailboxes(data.filter(m => m.is_active));
+        }
+      } catch {
+        // keep existing data on error
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error('[MailboxSelector] Failed to load mailboxes:', error);
-      // Don't clear mailboxes on error - keep existing data
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const getMailboxIcon = (mailbox: Mailbox) => {
-    if (hasGmailLiveSync(mailbox)) {
-      return <SyncOutlined spin style={{ color: '#52c41a' }} />;
-    }
-    switch (mailbox.mailbox_type) {
-      case 'gmail':
-        return <CloudOutlined style={{ color: '#ea4335' }} />;
-      case 'outlook_live':
-        return <CloudOutlined style={{ color: '#0078d4' }} />;
-      default:
-        return <InboxOutlined style={{ color: '#667eea' }} />;
-    }
-  };
+    };
+    load();
+  }, []);
 
   const getMailboxLabel = (mailbox: Mailbox) => {
     const label = mailbox.name;
@@ -94,68 +56,74 @@ export const MailboxSelector: React.FC<MailboxSelectorProps> = ({
     return label;
   };
 
-  const handleChange = (selectedValues: string | string[]) => {
-    if (onChange) {
-      if (mode === 'single') {
-        onChange(selectedValues ? [selectedValues as string] : []);
-      } else {
-        onChange(selectedValues as string[]);
-      }
-    }
-  };
+  const sizeClass = size === 'small' ? 'h-7 text-xs' : 'h-8 text-sm';
 
-  const selectValue = mode === 'single' ? (value.length > 0 ? value[0] : undefined) : value;
+  if (mode === 'single') {
+    return (
+      <select
+        value={value[0] || ''}
+        onChange={e => onChange?.(e.target.value ? [e.target.value] : [])}
+        disabled={disabled || loading}
+        className={`${sizeClass} px-2 rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 min-w-[240px] ${className || ''}`}
+      >
+        <option value="">{loading ? 'Loading...' : placeholder}</option>
+        {mailboxes.map(m => (
+          <option key={m.id} value={m.id}>
+            {getMailboxLabel(m)} ({m.total_emails.toLocaleString('en-AU')} emails)
+          </option>
+        ))}
+      </select>
+    );
+  }
 
+  // Multiple mode: checkboxes in a dropdown-like list
   return (
-    <Select
-      mode={mode === 'multiple' ? 'multiple' : undefined}
-      value={selectValue}
-      onChange={handleChange}
-      placeholder={placeholder}
-      loading={loading}
-      disabled={disabled}
-      allowClear={allowClear}
-      style={{ minWidth: 240, ...style }}
-      className={`mailbox-select ${className || ''}`}
-      maxTagCount={maxTagCount}
-      maxTagPlaceholder={(omitted) => `+${omitted.length} more`}
-      optionFilterProp="label"
-      showSearch
-      size={size}
-      notFoundContent={loading ? 'Loading...' : 'No mailboxes found'}
-      optionLabelProp="label"
-    >
-      {mailboxes.map((mailbox) => (
-        <Select.Option key={mailbox.id} value={mailbox.id} label={getMailboxLabel(mailbox)}>
-          <div
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}
-          >
-            <Space size={8}>
-              {getMailboxIcon(mailbox)}
-              <span style={{ fontWeight: 500 }}>{mailbox.name}</span>
-              {mailbox.email_address && mailbox.email_address !== mailbox.name && (
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  {mailbox.email_address}
-                </Text>
+    <div className={`inline-flex flex-col ${className || ''}`}>
+      <div className="flex flex-wrap gap-1.5">
+        {mailboxes.map(m => {
+          const isSelected = value.includes(m.id);
+          return (
+            <label
+              key={m.id}
+              className={`inline-flex items-center gap-1.5 px-2 py-1 text-xs rounded-md border cursor-pointer transition-colors ${
+                isSelected
+                  ? 'border-primary bg-primary/5 text-primary'
+                  : 'border-slate-200 text-slate-600 hover:border-slate-300'
+              } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <input
+                type="checkbox"
+                checked={isSelected}
+                disabled={disabled}
+                onChange={() => {
+                  if (!onChange) return;
+                  if (isSelected) {
+                    onChange(value.filter(v => v !== m.id));
+                  } else {
+                    onChange([...value, m.id]);
+                  }
+                }}
+                className="sr-only"
+              />
+              {hasGmailLiveSync(m) ? (
+                <RefreshCw className="h-3 w-3 text-success" />
+              ) : m.mailbox_type === 'gmail' ? (
+                <Cloud className="h-3 w-3 text-red-500" />
+              ) : m.mailbox_type === 'outlook_live' ? (
+                <Cloud className="h-3 w-3 text-blue-500" />
+              ) : (
+                <Inbox className="h-3 w-3" />
               )}
-            </Space>
-            <Space size={4}>
-              {hasGmailLiveSync(mailbox) && (
-                <Tooltip title="Gmail LIVE sync enabled">
-                  <Badge
-                    status="success"
-                    text={<Text type="secondary" style={{ fontSize: 11 }}>LIVE</Text>}
-                  />
-                </Tooltip>
-              )}
-              <Text type="secondary" style={{ fontSize: 11 }}>
-                {mailbox.total_emails.toLocaleString()} emails
-              </Text>
-            </Space>
-          </div>
-        </Select.Option>
-      ))}
-    </Select>
+              <span className="font-medium">{m.name}</span>
+              {hasGmailLiveSync(m) && <span className="text-[10px] text-success font-medium">LIVE</span>}
+              <span className="text-slate-400">{m.total_emails.toLocaleString('en-AU')}</span>
+            </label>
+          );
+        })}
+        {loading && <span className="text-xs text-slate-400">Loading...</span>}
+        {!loading && mailboxes.length === 0 && <span className="text-xs text-slate-400">No mailboxes found</span>}
+      </div>
+    </div>
   );
 };
 

@@ -1,13 +1,10 @@
 /**
- * FeedbackButtons — Thumbs up/down with structured override.
- *
- * On "incorrect", shows a dropdown to select which field was wrong
- * + optional correct value. Stores structured feedback (not just "bad").
+ * FeedbackButtons — Thumbs up/down with structured override. Zero antd.
  */
 
 import React, { useState } from 'react';
-import { Button, Space, Select, Input, message, Tooltip } from 'antd';
-import { LikeOutlined, DislikeOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { ThumbsUp, ThumbsDown, CheckCircle } from 'lucide-react';
+import { toast } from '@/lib/toast';
 import { feedbackApi } from '../../services/aiService';
 import type { FeedbackType } from '../../types/ai';
 
@@ -30,7 +27,7 @@ export const FeedbackButtons: React.FC<FeedbackButtonsProps> = ({
   onFeedbackSubmitted,
 }) => {
   const [showOverride, setShowOverride] = useState(false);
-  const [feedbackField, setFeedbackField] = useState<string | undefined>();
+  const [feedbackField, setFeedbackField] = useState('');
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -39,96 +36,96 @@ export const FeedbackButtons: React.FC<FeedbackButtonsProps> = ({
     const result = await feedbackApi.submit(emailId, { feedback: 'correct' });
     setSubmitting(false);
     if (result) {
-      message.success('Feedback saved');
+      toast.success('Feedback saved');
       onFeedbackSubmitted?.('correct');
     } else {
-      message.error('Failed to save feedback');
+      toast.error('Failed to save feedback');
     }
-  };
-
-  const handleIncorrect = () => {
-    setShowOverride(true);
   };
 
   const submitIncorrect = async () => {
     setSubmitting(true);
     const result = await feedbackApi.submit(emailId, {
       feedback: 'incorrect',
-      feedback_field: feedbackField,
+      feedback_field: feedbackField || undefined,
       note: note || undefined,
     });
     setSubmitting(false);
     if (result) {
-      message.success('Feedback saved');
+      toast.success('Feedback saved');
       setShowOverride(false);
       onFeedbackSubmitted?.('incorrect');
     } else {
-      message.error('Failed to save feedback');
+      toast.error('Failed to save feedback');
     }
   };
 
-  // Already submitted
   if (currentFeedback) {
     return (
-      <Space>
-        <CheckCircleOutlined style={{ color: '#52c41a' }} />
-        <span style={{ fontSize: 12, color: '#999' }}>
-          Marked as {currentFeedback}
-        </span>
-      </Space>
+      <span className="inline-flex items-center gap-1.5 text-xs text-slate-400">
+        <CheckCircle className="h-3.5 w-3.5 text-success" />
+        Marked as {currentFeedback}
+      </span>
     );
   }
 
   if (showOverride) {
     return (
-      <Space direction="vertical" size="small" style={{ width: '100%' }}>
-        <Space>
-          <Select
-            placeholder="What was wrong?"
-            options={FIELD_OPTIONS}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <select
             value={feedbackField}
-            onChange={setFeedbackField}
-            style={{ width: 140 }}
-            size="small"
-          />
-          <Input
+            onChange={e => setFeedbackField(e.target.value)}
+            className="h-7 px-2 text-xs rounded border border-slate-200 bg-white"
+          >
+            <option value="">What was wrong?</option>
+            {FIELD_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+          <input
+            type="text"
             placeholder="Optional note"
             value={note}
-            onChange={(e) => setNote(e.target.value)}
-            size="small"
-            style={{ width: 200 }}
+            onChange={e => setNote(e.target.value)}
+            className="h-7 px-2 text-xs rounded border border-slate-200 bg-white w-40"
           />
-        </Space>
-        <Space>
-          <Button size="small" type="primary" onClick={submitIncorrect} loading={submitting}>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={submitIncorrect}
+            disabled={submitting}
+            className="h-7 px-3 text-xs font-medium text-white bg-primary rounded hover:bg-primary-dark disabled:opacity-50"
+          >
             Submit
-          </Button>
-          <Button size="small" onClick={() => setShowOverride(false)}>
+          </button>
+          <button
+            onClick={() => setShowOverride(false)}
+            className="h-7 px-3 text-xs rounded border border-slate-200 hover:bg-slate-50"
+          >
             Cancel
-          </Button>
-        </Space>
-      </Space>
+          </button>
+        </div>
+      </div>
     );
   }
 
   return (
-    <Space>
-      <Tooltip title="Correct classification">
-        <Button
-          icon={<LikeOutlined />}
-          size="small"
-          onClick={handleCorrect}
-          loading={submitting}
-        />
-      </Tooltip>
-      <Tooltip title="Incorrect — tell us what's wrong">
-        <Button
-          icon={<DislikeOutlined />}
-          size="small"
-          onClick={handleIncorrect}
-        />
-      </Tooltip>
-    </Space>
+    <div className="inline-flex items-center gap-1">
+      <button
+        onClick={handleCorrect}
+        disabled={submitting}
+        className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-success disabled:opacity-50"
+        title="Correct classification"
+      >
+        <ThumbsUp className="h-3.5 w-3.5" />
+      </button>
+      <button
+        onClick={() => setShowOverride(true)}
+        className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-destructive"
+        title="Incorrect — tell us what's wrong"
+      >
+        <ThumbsDown className="h-3.5 w-3.5" />
+      </button>
+    </div>
   );
 };
 

@@ -1,33 +1,32 @@
 /**
- * QBLinkWidget — Inline widget to view/update QB links on company or contact detail pages.
- * Supports two modes: 'company' (search QB customers) and 'contact' (search QB contacts).
+ * QBLinkWidget — Inline widget to view/update QB links. Zero antd.
  */
 
 import React, { useState, useRef } from 'react';
-import { Space, Typography, Tag, Select, Button, Spin, message, Tooltip } from 'antd';
-import { LinkOutlined, CheckCircleOutlined, SearchOutlined, DisconnectOutlined } from '@ant-design/icons';
+import { Link2, CheckCircle, Search, Unlink } from 'lucide-react';
+import { Spinner } from '@/lib/icons';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { toast } from '@/lib/toast';
 import api from '../services/apiClient';
-
-const { Text } = Typography;
 
 interface Props {
   mode: 'company' | 'contact';
-  entityId: string;              // SB customer_companies.id or customer_contacts.id
+  entityId: string;
   clientId: string;
-  qbLinkedId?: string;           // Current qb_customer_id or qb_contact matched status
-  qbMatchMethod?: string;        // 'exact_name' | 'domain_root' | 'fuzzy' | 'manual' | 'email'
-  qbDisplayName?: string;        // Display name of linked QB record
+  qbLinkedId?: string;
+  qbMatchMethod?: string;
+  qbDisplayName?: string;
   onLinked?: () => void;
 }
 
 interface QBOption { value: string; label: string }
 
-const methodColors: Record<string, string> = {
-  exact_name: 'green',
-  domain_root: 'blue',
-  fuzzy: 'orange',
+const methodVariant: Record<string, 'success' | 'info' | 'warning' | 'purple' | 'neutral'> = {
+  exact_name: 'success',
+  domain_root: 'info',
+  fuzzy: 'warning',
   manual: 'purple',
-  email: 'cyan',
+  email: 'info',
 };
 
 export default function QBLinkWidget({
@@ -38,12 +37,14 @@ export default function QBLinkWidget({
   const [searching, setSearching] = useState(false);
   const [selectedQbId, setSelectedQbId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [searchText, setSearchText] = useState('');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isCompany = mode === 'company';
   const entityLabel = isCompany ? 'QB Customer' : 'QB Contact';
 
   const handleSearch = (query: string) => {
+    setSearchText(query);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!query || query.length < 2) { setOptions([]); return; }
     debounceRef.current = setTimeout(async () => {
@@ -55,7 +56,7 @@ export default function QBLinkWidget({
           ) as { customers: any[] };
           setOptions((data.customers || []).map((c: any) => ({
             value: c.qb_record_id,
-            label: `${c.customer_name}${c.total_invoiced ? ` ($${Number(c.total_invoiced).toLocaleString()})` : ''}`,
+            label: `${c.customer_name}${c.total_invoiced ? ` ($${Number(c.total_invoiced).toLocaleString('en-AU')})` : ''}`,
           })));
         } else {
           const data = await api.get(
@@ -76,82 +77,82 @@ export default function QBLinkWidget({
     setSaving(true);
     try {
       if (isCompany) {
-        const params = new URLSearchParams({
-          client_id: clientId, sb_company_id: entityId, qb_record_id: selectedQbId,
-        });
+        const params = new URLSearchParams({ client_id: clientId, sb_company_id: entityId, qb_record_id: selectedQbId });
         await api.post(`/v1/quickbase/link-company?${params}`);
       } else {
-        const params = new URLSearchParams({
-          client_id: clientId, sb_contact_id: entityId, qb_record_id: selectedQbId,
-        });
+        const params = new URLSearchParams({ client_id: clientId, sb_contact_id: entityId, qb_record_id: selectedQbId });
         await api.post(`/v1/quickbase/link-contact?${params}`);
       }
-      message.success(`${entityLabel} linked`);
+      toast.success(`${entityLabel} linked`);
       setEditing(false);
       setSelectedQbId(null);
       onLinked?.();
     } catch {
-      message.error('Failed to link');
+      toast.error('Failed to link');
     }
     setSaving(false);
   };
 
   if (!editing) {
     return (
-      <Space size={4} wrap>
+      <div className="inline-flex items-center gap-2 flex-wrap">
         {qbLinkedId ? (
           <>
-            <Tooltip title={`Matched via ${qbMatchMethod || 'unknown'}`}>
-              <Tag color={methodColors[qbMatchMethod || ''] || 'default'} icon={<LinkOutlined />}>
+            <span title={`Matched via ${qbMatchMethod || 'unknown'}`}>
+              <StatusBadge variant={methodVariant[qbMatchMethod || ''] || 'neutral'} size="sm">
+                <Link2 className="h-3 w-3 mr-1 inline" />
                 {qbDisplayName || qbLinkedId}
-              </Tag>
-            </Tooltip>
-            <Button type="link" size="small" onClick={() => setEditing(true)} style={{ padding: 0, fontSize: 12 }}>
-              Change
-            </Button>
+              </StatusBadge>
+            </span>
+            <button onClick={() => setEditing(true)} className="text-xs text-primary hover:underline">Change</button>
           </>
         ) : (
-          <Button
-            type="dashed"
-            size="small"
-            icon={<DisconnectOutlined />}
+          <button
             onClick={() => setEditing(true)}
+            className="inline-flex items-center gap-1.5 h-7 px-2.5 text-xs rounded-md border border-dashed border-slate-300 text-slate-500 hover:border-primary hover:text-primary transition-colors"
           >
-            Link to {entityLabel}
-          </Button>
+            <Unlink className="h-3 w-3" /> Link to {entityLabel}
+          </button>
         )}
-      </Space>
+      </div>
     );
   }
 
   return (
-    <Space size={4}>
-      <Select
-        showSearch
-        size="small"
-        style={{ width: 280 }}
-        placeholder={`Search ${entityLabel.toLowerCase()}...`}
-        suffixIcon={<SearchOutlined />}
-        loading={searching}
-        options={options}
-        filterOption={false}
-        onSearch={handleSearch}
-        onChange={(val) => setSelectedQbId(val)}
-        notFoundContent={searching ? <Spin size="small" /> : <Text type="secondary">Type 2+ chars</Text>}
-      />
-      <Button
-        type="primary"
-        size="small"
-        icon={<CheckCircleOutlined />}
-        loading={saving}
-        disabled={!selectedQbId}
+    <div className="inline-flex items-center gap-2">
+      <div className="relative">
+        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+        <input
+          type="text"
+          placeholder={`Search ${entityLabel.toLowerCase()}...`}
+          value={searchText}
+          onChange={e => handleSearch(e.target.value)}
+          className="h-7 pl-7 pr-2 text-xs rounded border border-slate-200 bg-white w-64 focus:outline-none focus:ring-2 focus:ring-primary/20"
+        />
+        {searching && <Spinner className="absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 animate-spin text-slate-400" />}
+      </div>
+      {options.length > 0 && (
+        <select
+          value={selectedQbId || ''}
+          onChange={e => setSelectedQbId(e.target.value || null)}
+          className="h-7 px-2 text-xs rounded border border-slate-200 bg-white max-w-[200px]"
+        >
+          <option value="">Select...</option>
+          {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      )}
+      <button
         onClick={handleLink}
+        disabled={!selectedQbId || saving}
+        className="h-7 px-2.5 text-xs font-medium text-white bg-primary rounded hover:bg-primary-dark disabled:opacity-50 inline-flex items-center gap-1"
       >
+        {saving ? <Spinner className="h-3 w-3 animate-spin" /> : <CheckCircle className="h-3 w-3" />}
         Link
-      </Button>
-      <Button size="small" type="text" onClick={() => { setEditing(false); setSelectedQbId(null); }}>
+      </button>
+      <button onClick={() => { setEditing(false); setSelectedQbId(null); setSearchText(''); setOptions([]); }}
+        className="h-7 px-2 text-xs text-slate-500 hover:text-slate-700">
         Cancel
-      </Button>
-    </Space>
+      </button>
+    </div>
   );
 }

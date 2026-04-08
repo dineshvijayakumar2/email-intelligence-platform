@@ -1,34 +1,30 @@
 /**
- * Opportunities Page — Sprint 3 Session 9
- *
+ * Opportunities Page — Zero antd.
  * 4-tab view: Action Items, Opportunities, Competitors, Entities
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import {
-  Card, Tabs, Table, Tag, Typography, Space, Spin, Empty, Tooltip, Modal,
-  DatePicker, Select, Button,
-} from 'antd';
-import {
-  ThunderboltOutlined, DollarOutlined, TrophyOutlined, TeamOutlined,
-  ReloadOutlined, FilterOutlined,
-} from '@ant-design/icons';
+import { Zap, DollarSign, Trophy, Users, RefreshCw, X } from 'lucide-react';
+import { Spinner } from '@/lib/icons';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { PageShell, PageHeader } from '@/components/ui/page-shell';
+import { ContentSkeleton } from '@/components/ui/empty-state';
 import dayjs from 'dayjs';
 import { bucketApi, entityApi, intelligenceApi } from '../../services/aiService';
 import { emailService } from '../../services/emailService';
 import { MailboxSelector } from '../../components/MailboxSelector';
-import { EmailDetailPanel } from '../../components/EmailDetailPanel';
 import { formatDate } from '../../utils/dateUtils';
 import type {
   ActionItem, BusinessEntity, OpportunitySignal, IntelligenceResult,
 } from '../../types/ai';
 import type { Email } from '../../services/emailService';
 
-const { Title, Text } = Typography;
-
-const BUCKET_COLORS: Record<string, string> = {
-  response_urgency: 'red', deal_at_risk: 'orange', retention_risk: 'red',
-  revenue_opportunity: 'green', new_relationship: 'blue', account_neglect: 'gold',
+const BUCKET_VARIANTS: Record<string, 'danger' | 'warning' | 'success' | 'info' | 'neutral'> = {
+  response_urgency: 'danger', deal_at_risk: 'warning', retention_risk: 'danger',
+  revenue_opportunity: 'success', new_relationship: 'info', account_neglect: 'warning',
+};
+const URGENCY_VARIANTS: Record<string, 'danger' | 'warning' | 'info' | 'neutral'> = {
+  critical: 'danger', high: 'warning', medium: 'info', low: 'neutral',
 };
 
 const OpportunitiesPage: React.FC = () => {
@@ -36,36 +32,28 @@ const OpportunitiesPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [mailboxIds, setMailboxIds] = useState<string[]>([]);
   const mailboxId = mailboxIds[0] || '';
-  const [clientId, setClientId] = useState<string>('');
+  const [clientId, setClientId] = useState('');
   const [activeTab, setActiveTab] = useState('actions');
-  const [dateRange, setDateRange] = useState<number>(30); // days lookback
+  const [dateRange, setDateRange] = useState(30);
 
-  // Data
   const [actionItems, setActionItems] = useState<ActionItem[]>([]);
   const [opportunities, setOpportunities] = useState<IntelligenceResult[]>([]);
   const [competitors, setCompetitors] = useState<BusinessEntity[]>([]);
   const [entities, setEntities] = useState<BusinessEntity[]>([]);
 
-  // Email preview modal
   const [previewEmail, setPreviewEmail] = useState<Email | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
 
-  // Resolve client_id from mailbox
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => { isMountedRef.current = false; };
-  }, []);
+  useEffect(() => { isMountedRef.current = true; return () => { isMountedRef.current = false; }; }, []);
 
   const loadData = useCallback(async () => {
     if (!mailboxId) return;
     setLoading(true);
     try {
-      // Compute date_from based on lookback range
       const dateFrom = new Date();
       dateFrom.setDate(dateFrom.getDate() - dateRange);
       const dateFromStr = dateFrom.toISOString().split('T')[0];
 
-      // Fire mailbox-scoped calls in parallel
       const [actionsData, intelData] = await Promise.all([
         bucketApi.getActionItems(mailboxId, clientId, 0.3, 100),
         intelligenceApi.list(mailboxId, { page_size: 100, date_from: dateFromStr } as any),
@@ -74,15 +62,11 @@ const OpportunitiesPage: React.FC = () => {
       setActionItems(actionsData.items || []);
       setOpportunities(intelData.items || []);
 
-      // Resolve client_id from results if not already set
       const resolvedClientId = clientId ||
         (actionsData.items?.[0] as any)?.client_id ||
         (intelData.items?.[0] as any)?.client_id || '';
-      if (resolvedClientId && resolvedClientId !== clientId) {
-        setClientId(resolvedClientId);
-      }
+      if (resolvedClientId && resolvedClientId !== clientId) setClientId(resolvedClientId);
 
-      // Fire entity calls in parallel (only if client_id available)
       if (resolvedClientId) {
         const [compData, entityData] = await Promise.all([
           entityApi.getCompetitors(resolvedClientId),
@@ -99,339 +83,256 @@ const OpportunitiesPage: React.FC = () => {
     }
   }, [mailboxId, clientId, dateRange]);
 
-  useEffect(() => {
-    if (mailboxId) loadData();
-  }, [mailboxId, loadData]);
+  useEffect(() => { if (mailboxId) loadData(); }, [mailboxId, loadData]);
 
-  // Handle mailbox change — client_id resolved from loadData results
-  const handleMailboxChange = (ids: string[]) => {
-    setMailboxIds(ids);
-    setClientId('');
-  };
+  const handleMailboxChange = (ids: string[]) => { setMailboxIds(ids); setClientId(''); };
 
-  const openEmailPreview = async (emailId: string | undefined) => {
+  const openEmailPreview = async (emailId?: string) => {
     if (!emailId) return;
     setPreviewLoading(true);
     setPreviewEmail(null);
     const email = await emailService.getEmail(emailId);
-    if (isMountedRef.current) {
-      setPreviewEmail(email);
-      setPreviewLoading(false);
-    }
+    if (isMountedRef.current) { setPreviewEmail(email); setPreviewLoading(false); }
   };
 
-  const closePreview = () => {
-    setPreviewEmail(null);
-    setPreviewLoading(false);
-  };
-
-  const rowClickProps = (emailId: string | undefined) => ({
-    onClick: () => openEmailPreview(emailId),
-    style: { cursor: emailId ? 'pointer' : 'default' },
-  });
-
-  // Unique bucket values for filter
-  const bucketFilters = [...new Set(actionItems.map(i => i.bucket).filter(Boolean))].map(b => ({ text: b.replace(/_/g, ' '), value: b }));
-  const severityFilters = [
-    { text: 'Critical', value: 'critical' },
-    { text: 'High', value: 'high' },
-    { text: 'Medium', value: 'medium' },
-  ];
-
-  // Action Items columns
-  const actionColumns = [
-    {
-      title: 'Bucket', dataIndex: 'bucket', key: 'bucket', width: 140,
-      filters: bucketFilters,
-      onFilter: (value: any, record: ActionItem) => record.bucket === value,
-      render: (val: string) => <Tag color={BUCKET_COLORS[val] || 'default'}>{val?.replace(/_/g, ' ')}</Tag>,
-    },
-    {
-      title: 'Severity', dataIndex: 'severity', key: 'severity', width: 90,
-      filters: severityFilters,
-      onFilter: (value: any, record: ActionItem) => record.severity === value,
-      sorter: (a: ActionItem, b: ActionItem) => {
-        const order = ['critical', 'high', 'medium'];
-        return order.indexOf(a.severity || 'medium') - order.indexOf(b.severity || 'medium');
-      },
-      render: (val: string) => {
-        const colors: Record<string, string> = { critical: 'red', high: 'orange', medium: 'blue' };
-        return <Tag color={colors[val] || 'default'}>{val}</Tag>;
-      },
-    },
-    {
-      title: 'Date', key: 'date', width: 95,
-      sorter: (a: ActionItem, b: ActionItem) => (a.email_date || '').localeCompare(b.email_date || ''),
-      defaultSortOrder: 'descend' as const,
-      render: (_: unknown, record: ActionItem) => record.email_date ? <Text type="secondary" style={{ fontSize: 12 }}>{formatDate(record.email_date)}</Text> : '—',
-    },
-    {
-      title: 'Email', key: 'email_context', ellipsis: true,
-      sorter: (a: ActionItem, b: ActionItem) => (a.email_subject || a.email_summary || '').localeCompare(b.email_subject || b.email_summary || ''),
-      render: (_: unknown, record: ActionItem) => (
-        <Tooltip title={record.email_subject || record.email_summary}>
-          <div>
-            <Text style={{ fontSize: 13, display: 'block' }} ellipsis>
-              {record.email_subject || record.email_summary || '—'}
-            </Text>
-            <Text type="secondary" style={{ fontSize: 11 }}>
-              {record.email_sender_name || record.email_sender || ''}
-            </Text>
-          </div>
-        </Tooltip>
-      ),
-    },
-    { title: 'Action', dataIndex: 'recommended_action', key: 'action', ellipsis: true },
-    {
-      title: 'Confidence', dataIndex: 'confidence', key: 'confidence', width: 95,
-      sorter: (a: ActionItem, b: ActionItem) => (a.confidence || 0) - (b.confidence || 0),
-      render: (val: number) => `${((val || 0) * 100).toFixed(0)}%`,
-    },
-    {
-      title: 'Score', dataIndex: 'business_signal_score', key: 'score', width: 70,
-      sorter: (a: ActionItem, b: ActionItem) => (a.business_signal_score || 0) - (b.business_signal_score || 0),
-      defaultSortOrder: 'descend' as const,
-    },
-  ];
-
-  // Signal filters from data
-  const signalFilters = [...new Set(opportunities.map(i => i.business_signal).filter(Boolean))].map(s => ({ text: (s as string).replace(/_/g, ' '), value: s as string }));
-  const intentFilters = [...new Set(opportunities.map(i => i.intent).filter(Boolean))].map(s => ({ text: (s as string).replace(/_/g, ' '), value: s as string }));
-  const urgencyFilters = ['critical', 'high', 'medium', 'low'].map(u => ({ text: u, value: u }));
-
-  // Opportunities columns
-  const oppColumns = [
-    {
-      title: 'Date', dataIndex: 'email_date', key: 'date', width: 100,
-      sorter: (a: IntelligenceResult, b: IntelligenceResult) =>
-        (a.email_date || '').localeCompare(b.email_date || ''),
-      defaultSortOrder: 'descend' as const,
-      render: (val: string) => val ? <Text style={{ fontSize: 12 }} type="secondary">{formatDate(val)}</Text> : '—',
-    },
-    {
-      title: 'Subject', key: 'subject', ellipsis: true,
-      sorter: (a: IntelligenceResult, b: IntelligenceResult) =>
-        (a.email_subject || '').localeCompare(b.email_subject || ''),
-      render: (_: any, record: IntelligenceResult) => (
-        <Tooltip title={record.email_sender}>
-          <Text ellipsis style={{ fontSize: 13 }}>{record.email_subject || '—'}</Text>
-          <br />
-          <Text type="secondary" style={{ fontSize: 11 }}>{record.email_sender_name || record.email_sender || ''}</Text>
-        </Tooltip>
-      ),
-    },
-    {
-      title: 'Intent', dataIndex: 'intent', key: 'intent', width: 130,
-      filters: intentFilters,
-      onFilter: (value: any, record: IntelligenceResult) => record.intent === value,
-      render: (val: string) => val ? <Tag>{val.replace(/_/g, ' ')}</Tag> : '-',
-    },
-    {
-      title: 'Urgency', dataIndex: 'urgency', key: 'urgency', width: 90,
-      filters: urgencyFilters,
-      onFilter: (value: any, record: IntelligenceResult) => record.urgency === value,
-      sorter: (a: IntelligenceResult, b: IntelligenceResult) => {
-        const order = ['critical', 'high', 'medium', 'low', 'none'];
-        return order.indexOf(a.urgency || 'none') - order.indexOf(b.urgency || 'none');
-      },
-      render: (val: string) => {
-        const colors: Record<string, string> = { critical: 'red', high: 'volcano', medium: 'orange', low: 'blue' };
-        return val ? <Tag color={colors[val] || 'default'}>{val}</Tag> : '-';
-      },
-    },
-    {
-      title: 'Signal', dataIndex: 'business_signal', key: 'signal', width: 140,
-      filters: signalFilters,
-      onFilter: (value: any, record: IntelligenceResult) => record.business_signal === value,
-      render: (val: string) => val ? <Tag color="green">{val.replace(/_/g, ' ')}</Tag> : '-',
-    },
-    { title: 'Summary', dataIndex: 'summary', key: 'summary', ellipsis: true },
-    {
-      title: 'Score', dataIndex: 'business_signal_score', key: 'score', width: 70,
-      sorter: (a: any, b: any) => (a.business_signal_score || 0) - (b.business_signal_score || 0),
-      defaultSortOrder: 'descend' as const,
-    },
-  ];
-
-  // Competitor columns
-  const compColumns = [
-    { title: 'Competitor', dataIndex: 'entity_name', key: 'name' },
-    {
-      title: 'Mentions', dataIndex: 'mention_count', key: 'mentions', width: 100,
-      sorter: (a: BusinessEntity, b: BusinessEntity) => (b.mention_count || 0) - (a.mention_count || 0),
-      defaultSortOrder: 'ascend' as const,
-    },
-    {
-      title: 'First Seen', dataIndex: 'first_seen_at', key: 'first', width: 120,
-      render: (val: string) => val ? formatDate(val) : '-',
-    },
-    {
-      title: 'Last Seen', dataIndex: 'last_seen_at', key: 'last', width: 120,
-      render: (val: string) => val ? formatDate(val) : '-',
-    },
-    {
-      title: 'Context', dataIndex: 'context_snippets', key: 'context',
-      render: (val: string[]) => val?.length ? (
-        <Tooltip title={val.join(' | ')}><Text ellipsis>{val[0]}</Text></Tooltip>
-      ) : '-',
-    },
-  ];
-
-  // Entity type filters
-  const entityTypeFilters = [...new Set(entities.map(e => e.entity_type).filter(Boolean))].map(t => ({ text: t, value: t }));
-
-  // Entity columns
-  const entityColumns = [
-    {
-      title: 'Type', dataIndex: 'entity_type', key: 'type', width: 100,
-      filters: entityTypeFilters,
-      onFilter: (value: any, record: BusinessEntity) => record.entity_type === value,
-      render: (val: string) => {
-        const colors: Record<string, string> = { competitor: 'red', product: 'blue', person: 'green' };
-        return <Tag color={colors[val] || 'default'}>{val}</Tag>;
-      },
-    },
-    {
-      title: 'Name', dataIndex: 'entity_name', key: 'name',
-      sorter: (a: BusinessEntity, b: BusinessEntity) => (a.entity_name || '').localeCompare(b.entity_name || ''),
-    },
-    {
-      title: 'Mentions', dataIndex: 'mention_count', key: 'mentions', width: 100,
-      sorter: (a: BusinessEntity, b: BusinessEntity) => (a.mention_count || 0) - (b.mention_count || 0),
-      defaultSortOrder: 'descend' as const,
-    },
-    {
-      title: 'First Seen', dataIndex: 'first_seen_at', key: 'first', width: 110,
-      sorter: (a: BusinessEntity, b: BusinessEntity) => (a.first_seen_at || '').localeCompare(b.first_seen_at || ''),
-      render: (val: string) => val ? formatDate(val) : '-',
-    },
-    {
-      title: 'Last Seen', dataIndex: 'last_seen_at', key: 'last', width: 110,
-      sorter: (a: BusinessEntity, b: BusinessEntity) => (a.last_seen_at || '').localeCompare(b.last_seen_at || ''),
-      defaultSortOrder: 'descend' as const,
-      render: (val: string) => val ? formatDate(val) : '-',
-    },
-  ];
-
-  const tabItems = [
-    {
-      key: 'actions',
-      label: <Space><ThunderboltOutlined />Action Items ({actionItems.length})</Space>,
-      children: (
-        <Table
-          dataSource={actionItems}
-          columns={actionColumns}
-          rowKey={(r) => r.email_id || `${Math.random()}`}
-          size="small"
-          pagination={{ pageSize: 20 }}
-          scroll={{ x: 800 }}
-          loading={loading}
-          onRow={(r) => rowClickProps(r.email_id)}
-        />
-      ),
-    },
-    {
-      key: 'opportunities',
-      label: <Space><DollarOutlined />Active Opportunities ({opportunities.length})</Space>,
-      children: (
-        <Table
-          dataSource={opportunities}
-          columns={oppColumns}
-          rowKey={(r) => r.email_id || `${Math.random()}`}
-          size="small"
-          pagination={{ pageSize: 20 }}
-          scroll={{ x: 900 }}
-          loading={loading}
-          onRow={(r) => rowClickProps(r.email_id)}
-        />
-      ),
-    },
-    {
-      key: 'competitors',
-      label: <Space><TrophyOutlined />Competitors ({competitors.length})</Space>,
-      children: (
-        <Table
-          dataSource={competitors}
-          columns={compColumns}
-          rowKey={(r) => r.id || r.entity_name}
-          size="small"
-          pagination={{ pageSize: 20 }}
-          scroll={{ x: 700 }}
-          loading={loading}
-        />
-      ),
-    },
-    {
-      key: 'entities',
-      label: <Space><TeamOutlined />All Entities ({entities.length})</Space>,
-      children: (
-        <Table
-          dataSource={entities}
-          columns={entityColumns}
-          rowKey={(r) => r.id || `${r.entity_type}-${r.entity_name}`}
-          size="small"
-          pagination={{ pageSize: 20 }}
-          scroll={{ x: 500 }}
-          loading={loading}
-        />
-      ),
-    },
+  const TABS = [
+    { key: 'actions', label: 'Action Items', count: actionItems.length, icon: <Zap className="h-3.5 w-3.5" /> },
+    { key: 'opportunities', label: 'Opportunities', count: opportunities.length, icon: <DollarSign className="h-3.5 w-3.5" /> },
+    { key: 'competitors', label: 'Competitors', count: competitors.length, icon: <Trophy className="h-3.5 w-3.5" /> },
+    { key: 'entities', label: 'Entities', count: entities.length, icon: <Users className="h-3.5 w-3.5" /> },
   ];
 
   return (
-    <div style={{ padding: '24px', maxWidth: 1400, margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
-        <Title level={3} style={{ margin: 0 }}>Opportunities & Signals</Title>
-        <Space wrap>
-          <MailboxSelector value={mailboxIds} onChange={handleMailboxChange} mode="single" />
-          <Select
-            value={dateRange}
-            onChange={setDateRange}
-            style={{ width: 130 }}
-            options={[
-              { value: 7, label: 'Last 7 days' },
-              { value: 14, label: 'Last 14 days' },
-              { value: 30, label: 'Last 30 days' },
-              { value: 90, label: 'Last 90 days' },
-              { value: 180, label: 'Last 6 months' },
-            ]}
-          />
-          <Button icon={<ReloadOutlined />} onClick={loadData} disabled={!mailboxId}>Refresh</Button>
-        </Space>
+    <PageShell>
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <PageHeader title="Opportunities & Signals" />
+        <div className="flex items-center gap-2 flex-wrap">
+          <MailboxSelector value={mailboxIds} onChange={handleMailboxChange} mode="single" size="small" />
+          <select value={dateRange} onChange={e => setDateRange(Number(e.target.value))}
+            className="h-8 px-2 text-sm rounded-md border border-slate-200 bg-white">
+            <option value={7}>Last 7 days</option>
+            <option value={14}>Last 14 days</option>
+            <option value={30}>Last 30 days</option>
+            <option value={90}>Last 90 days</option>
+            <option value={180}>Last 6 months</option>
+          </select>
+          <button onClick={loadData} disabled={!mailboxId}
+            className="h-8 px-3 text-sm rounded-md border border-slate-200 hover:bg-slate-50 inline-flex items-center gap-1.5 disabled:opacity-50">
+            <RefreshCw className="h-3.5 w-3.5" /> Refresh
+          </button>
+        </div>
       </div>
 
       {!mailboxId ? (
-        <Card className="glass-card"><Empty description="Select a mailbox to view opportunities" /></Card>
+        <div className="rounded-lg border bg-white shadow-sm p-12 text-center">
+          <p className="text-sm text-slate-400">Select a mailbox to view opportunities</p>
+        </div>
       ) : (
-        <Card className="glass-card">
-          <Tabs activeKey={activeTab} onChange={setActiveTab} items={tabItems} />
-        </Card>
+        <>
+          {/* Tab bar */}
+          <div className="flex items-center gap-1 mb-4 border-b">
+            {TABS.map(t => (
+              <button key={t.key} onClick={() => setActiveTab(t.key)}
+                className={`inline-flex items-center gap-1.5 px-3 py-2 text-sm border-b-2 transition-colors ${
+                  activeTab === t.key
+                    ? 'border-primary text-primary font-medium'
+                    : 'border-transparent text-slate-500 hover:text-slate-700'
+                }`}>
+                {t.icon} {t.label} ({t.count})
+              </button>
+            ))}
+          </div>
+
+          {loading && <ContentSkeleton rows={8} />}
+
+          {/* Action Items */}
+          {!loading && activeTab === 'actions' && (
+            <div className="rounded-lg border bg-white shadow-sm overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-slate-50/50">
+                    <th className="px-3 py-2 text-left text-xs font-bold uppercase tracking-wider text-slate-600 w-32">Bucket</th>
+                    <th className="px-3 py-2 text-left text-xs font-bold uppercase tracking-wider text-slate-600 w-20">Severity</th>
+                    <th className="px-3 py-2 text-left text-xs font-bold uppercase tracking-wider text-slate-600 w-24">Date</th>
+                    <th className="px-3 py-2 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Email</th>
+                    <th className="px-3 py-2 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Action</th>
+                    <th className="px-3 py-2 text-right text-xs font-bold uppercase tracking-wider text-slate-600 w-16">Score</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {actionItems.map((r, i) => (
+                    <tr key={r.email_id || i} className="hover:bg-slate-50/50 cursor-pointer" onClick={() => openEmailPreview(r.email_id)}>
+                      <td className="px-3 py-2">
+                        <StatusBadge variant={BUCKET_VARIANTS[r.bucket] || 'neutral'} size="sm">
+                          {r.bucket?.replace(/_/g, ' ')}
+                        </StatusBadge>
+                      </td>
+                      <td className="px-3 py-2">
+                        <StatusBadge variant={r.severity === 'critical' ? 'danger' : r.severity === 'high' ? 'warning' : 'info'} size="sm">
+                          {r.severity}
+                        </StatusBadge>
+                      </td>
+                      <td className="px-3 py-2 text-xs text-slate-500">{r.email_date ? formatDate(r.email_date) : '—'}</td>
+                      <td className="px-3 py-2">
+                        <span className="text-sm text-slate-800 truncate block max-w-[200px]">{r.email_subject || r.email_summary || '—'}</span>
+                        <span className="text-xs text-slate-400">{r.email_sender_name || r.email_sender || ''}</span>
+                      </td>
+                      <td className="px-3 py-2 text-sm text-slate-600 truncate max-w-[200px]">{r.recommended_action}</td>
+                      <td className="px-3 py-2 text-right tabular-nums font-medium">{r.business_signal_score}</td>
+                    </tr>
+                  ))}
+                  {actionItems.length === 0 && (
+                    <tr><td colSpan={6} className="text-center py-8 text-sm text-slate-400">No action items</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Opportunities */}
+          {!loading && activeTab === 'opportunities' && (
+            <div className="rounded-lg border bg-white shadow-sm overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-slate-50/50">
+                    <th className="px-3 py-2 text-left text-xs font-bold uppercase tracking-wider text-slate-600 w-24">Date</th>
+                    <th className="px-3 py-2 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Subject</th>
+                    <th className="px-3 py-2 text-left text-xs font-bold uppercase tracking-wider text-slate-600 w-28">Intent</th>
+                    <th className="px-3 py-2 text-left text-xs font-bold uppercase tracking-wider text-slate-600 w-20">Urgency</th>
+                    <th className="px-3 py-2 text-left text-xs font-bold uppercase tracking-wider text-slate-600 w-32">Signal</th>
+                    <th className="px-3 py-2 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Summary</th>
+                    <th className="px-3 py-2 text-right text-xs font-bold uppercase tracking-wider text-slate-600 w-16">Score</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {opportunities.map((r, i) => (
+                    <tr key={r.email_id || i} className="hover:bg-slate-50/50 cursor-pointer" onClick={() => openEmailPreview(r.email_id)}>
+                      <td className="px-3 py-2 text-xs text-slate-500">{r.email_date ? formatDate(r.email_date) : '—'}</td>
+                      <td className="px-3 py-2">
+                        <span className="text-sm truncate block max-w-[200px]">{r.email_subject || '—'}</span>
+                        <span className="text-xs text-slate-400">{r.email_sender_name || r.email_sender || ''}</span>
+                      </td>
+                      <td className="px-3 py-2">{r.intent ? <StatusBadge variant="neutral" size="sm">{r.intent.replace(/_/g, ' ')}</StatusBadge> : '—'}</td>
+                      <td className="px-3 py-2">{r.urgency ? <StatusBadge variant={URGENCY_VARIANTS[r.urgency] || 'neutral'} size="sm">{r.urgency}</StatusBadge> : '—'}</td>
+                      <td className="px-3 py-2">{r.business_signal ? <StatusBadge variant="success" size="sm">{(r.business_signal as string).replace(/_/g, ' ')}</StatusBadge> : '—'}</td>
+                      <td className="px-3 py-2 text-xs text-slate-500 truncate max-w-[200px]">{r.summary}</td>
+                      <td className="px-3 py-2 text-right tabular-nums font-medium">{(r as any).business_signal_score}</td>
+                    </tr>
+                  ))}
+                  {opportunities.length === 0 && (
+                    <tr><td colSpan={7} className="text-center py-8 text-sm text-slate-400">No opportunities</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Competitors */}
+          {!loading && activeTab === 'competitors' && (
+            <div className="rounded-lg border bg-white shadow-sm overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-slate-50/50">
+                    <th className="px-3 py-2 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Competitor</th>
+                    <th className="px-3 py-2 text-right text-xs font-bold uppercase tracking-wider text-slate-600 w-24">Mentions</th>
+                    <th className="px-3 py-2 text-left text-xs font-bold uppercase tracking-wider text-slate-600 w-28">First Seen</th>
+                    <th className="px-3 py-2 text-left text-xs font-bold uppercase tracking-wider text-slate-600 w-28">Last Seen</th>
+                    <th className="px-3 py-2 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Context</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {competitors.map(r => (
+                    <tr key={r.id || r.entity_name}>
+                      <td className="px-3 py-2 font-medium">{r.entity_name}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{r.mention_count || 0}</td>
+                      <td className="px-3 py-2 text-xs text-slate-500">{r.first_seen_at ? formatDate(r.first_seen_at) : '—'}</td>
+                      <td className="px-3 py-2 text-xs text-slate-500">{r.last_seen_at ? formatDate(r.last_seen_at) : '—'}</td>
+                      <td className="px-3 py-2 text-xs text-slate-400 truncate max-w-[300px]">{r.context_snippets?.[0] || '—'}</td>
+                    </tr>
+                  ))}
+                  {competitors.length === 0 && (
+                    <tr><td colSpan={5} className="text-center py-8 text-sm text-slate-400">No competitors detected</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Entities */}
+          {!loading && activeTab === 'entities' && (
+            <div className="rounded-lg border bg-white shadow-sm overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-slate-50/50">
+                    <th className="px-3 py-2 text-left text-xs font-bold uppercase tracking-wider text-slate-600 w-24">Type</th>
+                    <th className="px-3 py-2 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Name</th>
+                    <th className="px-3 py-2 text-right text-xs font-bold uppercase tracking-wider text-slate-600 w-24">Mentions</th>
+                    <th className="px-3 py-2 text-left text-xs font-bold uppercase tracking-wider text-slate-600 w-28">First Seen</th>
+                    <th className="px-3 py-2 text-left text-xs font-bold uppercase tracking-wider text-slate-600 w-28">Last Seen</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {entities.map(r => (
+                    <tr key={r.id || `${r.entity_type}-${r.entity_name}`}>
+                      <td className="px-3 py-2">
+                        <StatusBadge variant={r.entity_type === 'competitor' ? 'danger' : r.entity_type === 'product' ? 'info' : 'success'} size="sm">
+                          {r.entity_type}
+                        </StatusBadge>
+                      </td>
+                      <td className="px-3 py-2 font-medium">{r.entity_name}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{r.mention_count || 0}</td>
+                      <td className="px-3 py-2 text-xs text-slate-500">{r.first_seen_at ? formatDate(r.first_seen_at) : '—'}</td>
+                      <td className="px-3 py-2 text-xs text-slate-500">{r.last_seen_at ? formatDate(r.last_seen_at) : '—'}</td>
+                    </tr>
+                  ))}
+                  {entities.length === 0 && (
+                    <tr><td colSpan={5} className="text-center py-8 text-sm text-slate-400">No entities detected</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
       )}
 
       {/* Email preview modal */}
-      <Modal
-        open={previewLoading || previewEmail !== null}
-        onCancel={closePreview}
-        footer={null}
-        width={860}
-        styles={{ body: { padding: 0, maxHeight: '80vh', overflowY: 'auto' } }}
-        destroyOnClose
-      >
-        {previewLoading ? (
-          <div style={{ padding: 48, textAlign: 'center' }}>
-            <Spin tip="Loading email…" />
+      {(previewLoading || previewEmail) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => { setPreviewEmail(null); setPreviewLoading(false); }}>
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl mx-4 max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            {previewLoading ? (
+              <div className="flex items-center justify-center py-16">
+                <Spinner className="h-6 w-6 animate-spin text-primary" />
+              </div>
+            ) : previewEmail ? (
+              <div className="p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-slate-900 truncate">{previewEmail.subject || '(No Subject)'}</h3>
+                  <button onClick={() => setPreviewEmail(null)} className="p-1 rounded hover:bg-slate-100">
+                    <X className="h-4 w-4 text-slate-400" />
+                  </button>
+                </div>
+                <div className="text-xs text-slate-500 mb-3">
+                  <p><span className="font-medium">From:</span> {previewEmail.sender_name || previewEmail.sender_email}</p>
+                  {previewEmail.recipients?.length ? <p><span className="font-medium">To:</span> {previewEmail.recipients.map(r => r.email).join(', ')}</p> : null}
+                  <p><span className="font-medium">Date:</span> {previewEmail.sent_date ? formatDate(previewEmail.sent_date) : '—'}</p>
+                </div>
+                {previewEmail.body_html ? (
+                  <iframe
+                    srcDoc={`<!DOCTYPE html><html><head><meta charset="UTF-8"><base target="_blank"><style>body{font-family:system-ui;font-size:14px;line-height:1.6;color:#333;padding:16px;margin:0}img{max-width:100%}a{color:#667eea}blockquote{border-left:3px solid #d9d9d9;padding-left:16px;margin-left:0;color:#666}</style></head><body>${previewEmail.body_html}</body></html>`}
+                    className="w-full min-h-[300px] border rounded"
+                    sandbox="allow-same-origin"
+                  />
+                ) : (
+                  <div className="p-3 bg-slate-50 rounded text-sm whitespace-pre-wrap max-h-[400px] overflow-y-auto">
+                    {previewEmail.body_text || 'No content available'}
+                  </div>
+                )}
+              </div>
+            ) : null}
           </div>
-        ) : (
-          <EmailDetailPanel
-            email={previewEmail}
-            loading={false}
-            onClose={closePreview}
-            expanded={false}
-            onToggleExpand={() => {}}
-          />
-        )}
-      </Modal>
-    </div>
+        </div>
+      )}
+    </PageShell>
   );
 };
 

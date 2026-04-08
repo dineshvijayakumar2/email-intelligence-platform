@@ -1,15 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { Badge, Tooltip, Progress, Space, Typography } from 'antd';
-import {
-  SyncOutlined,
-  CheckCircleOutlined,
-  CloseCircleOutlined,
-  ClockCircleOutlined,
-  DownloadOutlined,
-  PauseCircleOutlined
-} from '@ant-design/icons';
+/**
+ * ProcessingStatusBadge — Zero antd.
+ */
 
-const { Text } = Typography;
+import React from 'react';
+import { RefreshCw, CheckCircle, XCircle, Clock, Download, Pause } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface ProcessingJob {
   id: string;
@@ -39,133 +34,100 @@ export const ProcessingStatusBadge: React.FC<ProcessingStatusBadgeProps> = ({
   jobs = [],
   showProgress = false,
   size = 'default',
-  onClick
+  onClick,
 }) => {
-  // Find active job for this mailbox
   const activeJob = jobs.find(
     job => job.mailbox_id === mailboxId && ['running', 'downloading', 'pending'].includes(job.status)
   );
-
-  // Find most recent completed job
   const lastCompletedJob = jobs
     .filter(job => job.mailbox_id === mailboxId && job.status === 'completed')
     .sort((a, b) => new Date(b.completed_at || 0).getTime() - new Date(a.completed_at || 0).getTime())[0];
-
-  // Find any failed jobs
   const failedJob = jobs.find(
     job => job.mailbox_id === mailboxId && job.status === 'failed'
   );
 
-  const getStatusConfig = () => {
+  const getTimeAgo = (timestamp?: string): string => {
+    if (!timestamp) return 'never';
+    const diffMs = Date.now() - new Date(timestamp).getTime();
+    const mins = Math.floor(diffMs / 60000);
+    const hrs = Math.floor(mins / 60);
+    const days = Math.floor(hrs / 24);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    if (hrs < 24) return `${hrs}h ago`;
+    return `${days}d ago`;
+  };
+
+  const getConfig = () => {
     if (activeJob) {
       if (activeJob.status === 'downloading') {
         return {
-          status: 'processing' as const,
-          icon: <DownloadOutlined spin />,
-          color: 'purple',
+          icon: <Download className={cn('h-3.5 w-3.5 animate-pulse', size === 'small' && 'h-3 w-3')} />,
           text: `Downloading${activeJob.progress ? ` ${activeJob.progress}%` : ''}`,
-          tooltip: `Downloading emails${activeJob.estimated_time_remaining ? ` - ETA: ${activeJob.estimated_time_remaining}` : ''}`
+          tooltip: `Downloading emails${activeJob.estimated_time_remaining ? ` — ETA: ${activeJob.estimated_time_remaining}` : ''}`,
+          color: 'text-purple-600',
         };
       }
       return {
-        status: 'processing' as const,
-        icon: <SyncOutlined spin />,
-        color: 'blue',
+        icon: <RefreshCw className={cn('h-3.5 w-3.5 animate-spin', size === 'small' && 'h-3 w-3')} />,
         text: `Syncing${activeJob.progress ? ` ${activeJob.progress}%` : ''}`,
-        tooltip: `Processing emails${activeJob.estimated_time_remaining ? ` - ETA: ${activeJob.estimated_time_remaining}` : ''}`
+        tooltip: `Processing emails${activeJob.estimated_time_remaining ? ` — ETA: ${activeJob.estimated_time_remaining}` : ''}`,
+        color: 'text-primary',
       };
     }
-
     if (failedJob) {
       return {
-        status: 'error' as const,
-        icon: <CloseCircleOutlined />,
-        color: 'red',
+        icon: <XCircle className={cn('h-3.5 w-3.5', size === 'small' && 'h-3 w-3')} />,
         text: 'Failed',
-        tooltip: 'Sync failed - click to view details'
+        tooltip: 'Sync failed — click to view details',
+        color: 'text-destructive',
       };
     }
-
     if (lastCompletedJob) {
       const timeAgo = getTimeAgo(lastCompletedJob.completed_at);
       return {
-        status: 'success' as const,
-        icon: <CheckCircleOutlined />,
-        color: 'green',
+        icon: <CheckCircle className={cn('h-3.5 w-3.5', size === 'small' && 'h-3 w-3')} />,
         text: timeAgo,
-        tooltip: `Last synced ${timeAgo}${lastCompletedJob.duration ? ` - took ${lastCompletedJob.duration}` : ''}`
+        tooltip: `Last synced ${timeAgo}${lastCompletedJob.duration ? ` — took ${lastCompletedJob.duration}` : ''}`,
+        color: 'text-success',
       };
     }
-
     return {
-      status: 'default' as const,
-      icon: <ClockCircleOutlined />,
-      color: 'default',
+      icon: <Clock className={cn('h-3.5 w-3.5', size === 'small' && 'h-3 w-3')} />,
       text: 'No sync yet',
-      tooltip: 'This mailbox has not been synced yet'
+      tooltip: 'This mailbox has not been synced yet',
+      color: 'text-slate-400',
     };
   };
 
-  const getTimeAgo = (timestamp?: string): string => {
-    if (!timestamp) return 'never';
+  const config = getConfig();
+  const textSize = size === 'small' ? 'text-xs' : 'text-sm';
 
-    const now = new Date();
-    const then = new Date(timestamp);
-    const diffMs = now.getTime() - then.getTime();
-    const diffSeconds = Math.floor(diffMs / 1000);
-    const diffMinutes = Math.floor(diffSeconds / 60);
-    const diffHours = Math.floor(diffMinutes / 60);
-    const diffDays = Math.floor(diffHours / 24);
-
-    if (diffSeconds < 60) return 'just now';
-    if (diffMinutes < 60) return `${diffMinutes}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    return `${diffDays}d ago`;
-  };
-
-  const config = getStatusConfig();
-
-  const badgeContent = (
+  return (
     <div
       onClick={onClick}
-      style={{
-        cursor: onClick ? 'pointer' : 'default',
-        display: 'inline-block'
-      }}
+      className={cn('inline-flex items-center gap-1.5', onClick && 'cursor-pointer')}
+      title={config.tooltip}
     >
-      <Badge
-        status={config.status}
-        text={
-          <Space size={4} style={{ fontSize: size === 'small' ? 12 : 14 }}>
-            {config.icon}
-            <Text
-              type={config.status === 'error' ? 'danger' : 'secondary'}
-              style={{ fontSize: size === 'small' ? 12 : 14 }}
-            >
-              {config.text}
-            </Text>
-          </Space>
-        }
-      />
-      {showProgress && activeJob && activeJob.progress !== undefined && (
-        <div style={{ marginTop: 4, width: 200 }}>
-          <Progress
-            percent={activeJob.progress}
-            size="small"
-            status={activeJob.progress === 100 ? 'success' : 'active'}
-            format={percent => `${percent}%${activeJob.estimated_time_remaining ? ` · ${activeJob.estimated_time_remaining}` : ''}`}
-          />
-          {activeJob.emails_per_second && activeJob.emails_per_second > 0 && (
-            <Text type="secondary" style={{ fontSize: 11 }}>
-              {activeJob.emails_per_second.toFixed(1)} emails/s
-            </Text>
+      <span className={config.color}>{config.icon}</span>
+      <span className={cn(textSize, config.color === 'text-destructive' ? 'text-destructive' : 'text-slate-500')}>
+        {config.text}
+      </span>
+      {showProgress && activeJob && activeJob.progress != null && (
+        <div className="ml-2 w-32">
+          <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-primary transition-all"
+              style={{ width: `${activeJob.progress}%` }}
+            />
+          </div>
+          {activeJob.emails_per_second != null && activeJob.emails_per_second > 0 && (
+            <span className="text-[11px] text-slate-400">{activeJob.emails_per_second.toFixed(1)} emails/s</span>
           )}
         </div>
       )}
     </div>
   );
-
-  return <Tooltip title={config.tooltip}>{badgeContent}</Tooltip>;
 };
 
 export default ProcessingStatusBadge;

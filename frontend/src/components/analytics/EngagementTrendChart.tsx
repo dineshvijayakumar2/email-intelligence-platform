@@ -1,14 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Spin, Empty } from 'antd';
 import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  CartesianGrid,
+  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts';
+import { Spinner } from '@/lib/icons';
 import { metricHistoryApi, type MetricHistoryEntry } from '../../services/analyticsService';
 import { formatDate } from '../../utils/dateUtils';
 
@@ -24,24 +18,20 @@ export const EngagementTrendChart: React.FC<Props> = ({ entityType, entityId }) 
   useEffect(() => {
     if (!entityId) return;
     let cancelled = false;
-
     const load = async () => {
       setLoading(true);
       try {
         const history = await metricHistoryApi.get(entityType, entityId, 30);
         if (!cancelled) setData(history);
-      } catch {
-        // silently fail — chart simply won't render
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+      } catch { /* silent */ }
+      finally { if (!cancelled) setLoading(false); }
     };
     load();
     return () => { cancelled = true; };
   }, [entityType, entityId]);
 
-  if (loading) return <Spin size="small" style={{ display: 'block', margin: '20px auto' }} />;
-  if (!data.length) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No score history yet" />;
+  if (loading) return <div className="flex justify-center py-5"><Spinner className="h-5 w-5 text-primary animate-spin" /></div>;
+  if (!data.length) return <p className="text-sm text-slate-400 text-center py-6">No score history yet</p>;
 
   const chartData = data.map((d) => ({
     date: formatDate(d.calculated_at),

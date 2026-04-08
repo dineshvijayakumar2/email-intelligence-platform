@@ -1,24 +1,16 @@
 /**
- * Daily Digest Page — Sprint 3 Session 7
- *
- * Shows AI-generated daily intelligence digest with bucket summary,
- * action items, and highlights.
+ * Daily Digest Page — Zero antd.
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import {
-  Card, Row, Col, Typography, Select, DatePicker, Spin, Empty,
-  Tag, List, Space, Alert, Button,
-} from 'antd';
-import {
-  CalendarOutlined, BulbOutlined, ReloadOutlined,
-} from '@ant-design/icons';
 import dayjs from 'dayjs';
+import { RefreshCw, Lightbulb } from 'lucide-react';
+import { Spinner } from '@/lib/icons';
 import { digestApi, bucketApi } from '../../services/aiService';
 import { MailboxSelector } from '../../components/MailboxSelector';
+import { PageShell, PageHeader } from '@/components/ui/page-shell';
+import { StatusBadge } from '@/components/ui/status-badge';
 import type { DailyDigest, BucketSummary } from '../../types/ai';
-
-const { Title, Text, Paragraph } = Typography;
 
 const DigestPage: React.FC = () => {
   const isMountedRef = useRef(true);
@@ -28,21 +20,16 @@ const DigestPage: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<string>(dayjs().format('YYYY-MM-DD'));
   const [digestType, setDigestType] = useState<'daily' | 'weekly'>('daily');
   const [digest, setDigest] = useState<DailyDigest | null>(null);
-  const [_bucketSummary, setBucketSummary] = useState<BucketSummary | null>(null);
-  const [error, setError] = useState<string>('');
+  const [error, setError] = useState('');
 
   const loadDigest = useCallback(async (force = false) => {
     if (!mailboxId) return;
     setLoading(true);
     setError('');
     try {
-      const [digestData, summaryData] = await Promise.all([
-        digestApi.get(mailboxId, selectedDate, undefined, force, digestType),
-        bucketApi.getSummary(mailboxId),
-      ]);
+      const digestData = await digestApi.get(mailboxId, selectedDate, undefined, force, digestType);
       if (!isMountedRef.current) return;
       setDigest(digestData);
-      setBucketSummary(summaryData);
       if (!digestData) setError('No digest available. Try analyzing emails first.');
     } catch (err: any) {
       if (isMountedRef.current) setError(err?.message || 'Failed to load digest');
@@ -51,172 +38,119 @@ const DigestPage: React.FC = () => {
     }
   }, [mailboxId, selectedDate, digestType]);
 
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => { isMountedRef.current = false; };
-  }, []);
-
-  useEffect(() => {
-    if (mailboxId) loadDigest();
-  }, [mailboxId, selectedDate, digestType, loadDigest]);
+  useEffect(() => { isMountedRef.current = true; return () => { isMountedRef.current = false; }; }, []);
+  useEffect(() => { if (mailboxId) loadDigest(); }, [mailboxId, selectedDate, digestType, loadDigest]);
 
   return (
-    <div style={{ padding: '24px', maxWidth: 1200, margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <Title level={3} style={{ margin: 0 }}>
-          {digestType === 'weekly' ? 'Weekly' : 'Daily'} Intelligence Digest
-        </Title>
-        <Space>
-          <MailboxSelector value={mailboxIds} onChange={setMailboxIds} mode="single" />
-          <Select
-            value={digestType}
-            onChange={setDigestType}
-            style={{ width: 110 }}
-            options={[
-              { value: 'daily', label: 'Daily' },
-              { value: 'weekly', label: 'Weekly' },
-            ]}
-          />
-          <DatePicker
-            value={dayjs(selectedDate)}
-            onChange={(d) => d && setSelectedDate(d.format('YYYY-MM-DD'))}
-            allowClear={false}
-          />
-          <Button icon={<ReloadOutlined />} onClick={() => loadDigest(true)} loading={loading}>
-            Regenerate
-          </Button>
-        </Space>
+    <PageShell>
+      <PageHeader title={`${digestType === 'weekly' ? 'Weekly' : 'Daily'} Intelligence Digest`} />
+
+      {/* Controls */}
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <MailboxSelector value={mailboxIds} onChange={setMailboxIds} mode="single" size="small" />
+        <select value={digestType} onChange={e => setDigestType(e.target.value as any)}
+          className="h-8 px-2 text-sm rounded-md border border-slate-200 bg-white">
+          <option value="daily">Daily</option>
+          <option value="weekly">Weekly</option>
+        </select>
+        <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
+          className="h-8 px-2 text-sm rounded-md border border-slate-200 bg-white" />
+        <button onClick={() => loadDigest(true)} disabled={loading}
+          className="h-8 px-3 text-sm rounded-md border border-slate-200 hover:bg-slate-50 inline-flex items-center gap-1.5">
+          <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} /> Regenerate
+        </button>
       </div>
 
       {!mailboxId && (
-        <Card className="glass-card">
-          <Empty description="Select a mailbox to view the daily digest" />
-        </Card>
+        <div className="rounded-lg border bg-white shadow-sm p-8 text-center">
+          <p className="text-sm text-slate-400">Select a mailbox to view the daily digest</p>
+        </div>
       )}
 
-      {error && <Alert message={error} type="warning" showIcon style={{ marginBottom: 16 }} />}
+      {error && (
+        <div className="rounded-lg border border-warning/30 bg-warning/5 p-3 mb-4 text-sm">{error}</div>
+      )}
 
       {loading && (
-        <div style={{ textAlign: 'center', padding: 60 }}>
-          <Spin size="large" />
-          <div style={{ marginTop: 16 }}><Text type="secondary">Generating digest...</Text></div>
+        <div className="flex flex-col items-center py-16 gap-4">
+          <Spinner className="h-8 w-8 text-primary animate-spin" />
+          <p className="text-sm text-slate-400">Generating digest...</p>
         </div>
       )}
 
       {!loading && mailboxId && digest && (
         <>
-          {/* Digest Context Stats */}
+          {/* Stats */}
           {digest.stats && (
-            <Card className="glass-card" size="small" style={{ marginBottom: 16 }}>
-              <Space wrap size="large">
-                <span><Text strong>Inbound:</Text> {digest.stats.in_count ?? 0}</span>
-                <span><Text strong>Outbound:</Text> {digest.stats.out_count ?? 0}</span>
-                <span><Text strong>Open Threads:</Text> {digest.stats.open_threads ?? 0}</span>
-                {digest.stats.overdue_threads > 0 && (
-                  <Tag color="red">Overdue: {digest.stats.overdue_threads}</Tag>
-                )}
-                {/* Show custom summary_stats from LLM if available */}
-                {(() => {
-                  const custom = (digest as any).summary_stats || (digest as any).raw_ai_response?.summary_stats;
-                  if (!custom) return null;
-                  return Object.entries(custom).filter(([, v]) => v && v !== 0).map(([k, v]) => (
-                    <Tag key={k} color="blue" style={{ fontSize: 12 }}>
-                      {k.replace(/_/g, ' ')}: {String(v)}
-                    </Tag>
-                  ));
-                })()}
-              </Space>
-            </Card>
+            <div className="flex items-center gap-4 flex-wrap rounded-lg border bg-white shadow-sm px-4 py-2.5 mb-4 text-sm">
+              <span><span className="font-medium text-slate-500">Inbound:</span> {digest.stats.in_count ?? 0}</span>
+              <span><span className="font-medium text-slate-500">Outbound:</span> {digest.stats.out_count ?? 0}</span>
+              <span><span className="font-medium text-slate-500">Open Threads:</span> {digest.stats.open_threads ?? 0}</span>
+              {digest.stats.overdue_threads > 0 && <StatusBadge variant="danger" size="sm">Overdue: {digest.stats.overdue_threads}</StatusBadge>}
+              {(() => {
+                const custom = (digest as any).summary_stats || (digest as any).raw_ai_response?.summary_stats;
+                if (!custom) return null;
+                return Object.entries(custom).filter(([, v]) => v && v !== 0).map(([k, v]) => (
+                  <StatusBadge key={k} variant="info" size="sm">{k.replace(/_/g, ' ')}: {String(v)}</StatusBadge>
+                ));
+              })()}
+            </div>
           )}
 
-          {/* Digest Summary */}
-          <Card
-            className="glass-card"
-            style={{ marginBottom: 16 }}
-            title={
-              <Space>
-                <BulbOutlined style={{ color: '#667eea' }} />
-                <span>Executive Summary</span>
-                <Text type="secondary" style={{ fontSize: 12, fontWeight: 400 }}>
-                  {selectedDate} | {digest.emails_analyzed || 0} emails analyzed
-                </Text>
-              </Space>
-            }
-          >
-            <Paragraph style={{ fontSize: 15, lineHeight: 1.8, marginBottom: 0 }}>
-              {digest.summary || 'No summary available.'}
-            </Paragraph>
-          </Card>
+          {/* Executive Summary */}
+          <div className="rounded-lg border bg-white shadow-sm p-4 mb-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Lightbulb className="h-4 w-4 text-primary" />
+              <h3 className="text-sm font-semibold text-slate-900">Executive Summary</h3>
+              <span className="text-xs text-slate-400">{selectedDate} | {digest.emails_analyzed || 0} emails analyzed</span>
+            </div>
+            <p className="text-sm text-slate-700 leading-relaxed">{digest.summary || 'No summary available.'}</p>
+          </div>
 
-          <Row gutter={[16, 16]}>
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
             {/* Action Items */}
-            <Col xs={24} lg={14}>
-              <Card className="glass-card" title="Action Items">
-                {digest.action_items && digest.action_items.length > 0 ? (
-                  <List
-                    dataSource={digest.action_items}
-                    renderItem={(item: any) => (
-                      <List.Item>
-                        <Space direction="vertical" style={{ width: '100%' }} size={2}>
-                          <Space>
-                            <Tag color={item.priority <= 2 ? 'red' : item.priority <= 3 ? 'orange' : 'blue'}>
-                              P{item.priority}
-                            </Tag>
-                            {item.bucket && (
-                              <Tag>{item.bucket.replace(/_/g, ' ')}</Tag>
-                            )}
-                            {item.contact_name && <Text type="secondary">{item.contact_name}</Text>}
-                          </Space>
-                          <Text>{item.action}</Text>
-                        </Space>
-                      </List.Item>
-                    )}
-                  />
-                ) : (
-                  <Empty description="No action items" />
-                )}
-              </Card>
-            </Col>
+            <div className="lg:col-span-3 rounded-lg border bg-white shadow-sm overflow-hidden">
+              <div className="px-4 py-3 border-b"><h3 className="text-sm font-semibold text-slate-900">Action Items</h3></div>
+              {digest.action_items && digest.action_items.length > 0 ? (
+                <div className="divide-y">
+                  {digest.action_items.map((item: any, i: number) => (
+                    <div key={i} className="px-4 py-3">
+                      <div className="flex items-center gap-2 mb-1">
+                        <StatusBadge variant={item.priority <= 2 ? 'danger' : item.priority <= 3 ? 'warning' : 'info'} size="sm">
+                          P{item.priority}
+                        </StatusBadge>
+                        {item.bucket && <StatusBadge variant="neutral" size="sm">{item.bucket.replace(/_/g, ' ')}</StatusBadge>}
+                        {item.contact_name && <span className="text-xs text-slate-400">{item.contact_name}</span>}
+                      </div>
+                      <p className="text-sm text-slate-700">{item.action}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-400 text-center py-8">No action items</p>
+              )}
+            </div>
 
             {/* Highlights */}
-            <Col xs={24} lg={10}>
-              <Card className="glass-card" title="Highlights">
-                {digest.highlights && digest.highlights.length > 0 ? (
-                  <List
-                    dataSource={digest.highlights}
-                    renderItem={(item: any) => (
-                      <List.Item>
-                        <Space direction="vertical" size={2}>
-                          <Tag color="geekblue">{item.label || item.type || 'Info'}</Tag>
-                          <Text>{item.detail || item.description}</Text>
-                        </Space>
-                      </List.Item>
-                    )}
-                  />
-                ) : (
-                  <Empty description="No highlights" />
-                )}
-              </Card>
-            </Col>
-          </Row>
-
-          {/* Stats Row — removed, shown in top banner now */}
-          {false && digest.stats && Object.keys(digest.stats).length > 0 && (
-            <Card className="glass-card" size="small" style={{ marginTop: 16 }}>
-              <Space wrap size="large">
-                {Object.entries(digest.stats).map(([key, value]) => (
-                  <div key={key} style={{ textAlign: 'center' }}>
-                    <Text type="secondary" style={{ fontSize: 11 }}>{key.replace(/_/g, ' ')}</Text>
-                    <div><Text strong>{String(value)}</Text></div>
-                  </div>
-                ))}
-              </Space>
-            </Card>
-          )}
+            <div className="lg:col-span-2 rounded-lg border bg-white shadow-sm overflow-hidden">
+              <div className="px-4 py-3 border-b"><h3 className="text-sm font-semibold text-slate-900">Highlights</h3></div>
+              {digest.highlights && digest.highlights.length > 0 ? (
+                <div className="divide-y">
+                  {digest.highlights.map((item: any, i: number) => (
+                    <div key={i} className="px-4 py-3">
+                      <StatusBadge variant="purple" size="sm">{item.label || item.type || 'Info'}</StatusBadge>
+                      <p className="text-sm text-slate-700 mt-1">{item.detail || item.description}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-400 text-center py-8">No highlights</p>
+              )}
+            </div>
+          </div>
         </>
       )}
-    </div>
+    </PageShell>
   );
 };
 

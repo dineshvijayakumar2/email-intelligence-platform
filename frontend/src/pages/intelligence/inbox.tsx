@@ -5,44 +5,43 @@
  * - Mailbox selector + "Analyze New Emails" button
  * - Filter bar: bucket chips, intent/urgency/sentiment dropdowns, confidence slider
  * - Table with bucket tags, urgency, subject, sender, sentiment, summary, date
- * - Detail drawer: full classification, entities, suggested action, feedback
+ * - Detail slide-over: full classification, entities, suggested action, feedback
  *
  * All business logic server-side — frontend only displays + confidence gating.
+ *
+ * Zero antd — Tailwind CSS + shadcn/ui + lucide-react
  */
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Row, Col, Typography, Button, Table, Tag, Space, Select,
-  Drawer, Descriptions, message, Empty, Alert, Progress,
-} from 'antd';
-import type { TableProps } from 'antd';
-import {
-  ReloadOutlined,
-  RocketOutlined,
-  SyncOutlined,
-} from '@ant-design/icons';
+  RefreshCw, Rocket, ArrowUpDown, X, ChevronLeft, ChevronRight,
+  Inbox as InboxIcon, AlertCircle, CheckCircle2, Info, Loader2,
+} from 'lucide-react';
 import { formatDate, localDateToISOStart, formatDateForApi } from '../../utils/dateUtils';
 import { MailboxSelector } from '../../components/MailboxSelector';
 import { ActionBucketTag } from '../../components/ai/ActionBucketTag';
 import { FeedbackButtons } from '../../components/ai/FeedbackButtons';
 import { intelligenceApi, bucketApi } from '../../services/aiService';
 import api from '../../services/apiClient';
+import { PageShell } from '@/components/ui/page-shell';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { EmptyState, ContentSkeleton } from '@/components/ui/empty-state';
+import { notify } from '@/lib/toast';
+import { cn } from '@/lib/utils';
 import type {
   IntelligenceResult, IntelligenceFilterParams,
   BucketSummary, IntentType, UrgencyLevel, SentimentType, BucketType,
 } from '../../types/ai';
 
-const { Text } = Typography;
-
-// Urgency color map
-const URGENCY_COLORS: Record<string, string> = {
-  critical: 'red', high: 'volcano', medium: 'orange', low: 'blue', none: 'default',
+// Urgency variant map for StatusBadge
+const URGENCY_VARIANT: Record<string, 'danger' | 'warning' | 'info' | 'neutral'> = {
+  critical: 'danger', high: 'danger', medium: 'warning', low: 'info', none: 'neutral',
 };
 
-// Sentiment color map
-const SENTIMENT_COLORS: Record<string, string> = {
-  very_positive: 'green', positive: 'cyan', neutral: 'default',
-  negative: 'orange', very_negative: 'red',
+// Sentiment variant map for StatusBadge
+const SENTIMENT_VARIANT: Record<string, 'success' | 'info' | 'neutral' | 'warning' | 'danger'> = {
+  very_positive: 'success', positive: 'success', neutral: 'neutral',
+  negative: 'warning', very_negative: 'danger',
 };
 
 // Intent labels
@@ -52,6 +51,20 @@ const INTENT_LABELS: Record<string, string> = {
   pricing_inquiry: 'Pricing', feature_request: 'Feature', expansion_signal: 'Expansion',
   churn_risk: 'Churn Risk', follow_up: 'Follow-up', introduction: 'Intro', other: 'Other',
 };
+
+// Bucket chip color mapping for border / bg tinting
+const BUCKET_CHIP_STYLE: Record<string, { bg: string; border: string; text: string; activeBg: string }> = {
+  response_urgency:    { bg: 'bg-red-50',    border: 'border-red-200',    text: 'text-red-700',    activeBg: 'bg-red-100' },
+  deal_at_risk:        { bg: 'bg-orange-50',  border: 'border-orange-200',  text: 'text-orange-700',  activeBg: 'bg-orange-100' },
+  retention_risk:      { bg: 'bg-red-50',    border: 'border-red-200',    text: 'text-red-700',    activeBg: 'bg-red-100' },
+  revenue_opportunity: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700', activeBg: 'bg-emerald-100' },
+  new_relationship:    { bg: 'bg-blue-50',   border: 'border-blue-200',   text: 'text-blue-700',   activeBg: 'bg-blue-100' },
+  account_neglect:     { bg: 'bg-amber-50',  border: 'border-amber-200',  text: 'text-amber-700',  activeBg: 'bg-amber-100' },
+};
+
+// Sort column type
+type SortKey = 'urgency' | 'subject' | 'sender' | 'intent' | 'sentiment' | 'date' | null;
+type SortDir = 'asc' | 'desc';
 
 export const InboxPage: React.FC = () => {
   const isMountedRef = useRef(true);
@@ -76,6 +89,10 @@ export const InboxPage: React.FC = () => {
 
   // Analysis date range (days lookback)
   const [analysisRange, setAnalysisRange] = useState<number>(7);
+
+  // Sort
+  const [sortKey, setSortKey] = useState<SortKey>(null);
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
 
   // Drawer
   const [drawerItem, setDrawerItem] = useState<IntelligenceResult | null>(null);
@@ -199,11 +216,11 @@ export const InboxPage: React.FC = () => {
     setRebucketing(true);
     try {
       await bucketApi.rebucket(mailboxId);
-      message.success('Re-bucketing started — signals will refresh shortly');
+      notify.success('Re-bucketing started -- signals will refresh shortly');
       // Reload after a short delay to pick up new buckets
       setTimeout(() => { loadData(); bucketApi.getSummary(mailboxId).then(setBucketSummary); }, 3000);
     } catch {
-      message.error('Failed to start re-bucketing');
+      notify.error('Failed to start re-bucketing');
     } finally {
       setRebucketing(false);
     }
@@ -222,294 +239,384 @@ export const InboxPage: React.FC = () => {
     }
   };
 
-  const handleTableFilters = (_pagination: any, tableFilters: any) => {
-    // Sync column filters with our filter state
-    const newFilters = { ...filters };
-    if (tableFilters.urgency) {
-      newFilters.urgency = tableFilters.urgency[0] as UrgencyLevel;
+  // Sorting
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
     } else {
-      newFilters.urgency = undefined;
+      setSortKey(key);
+      setSortDir('asc');
     }
-    if (tableFilters.intent) {
-      newFilters.intent = tableFilters.intent[0] as IntentType;
-    } else {
-      newFilters.intent = undefined;
-    }
-    if (tableFilters.sentiment) {
-      newFilters.sentiment = tableFilters.sentiment[0] as SentimentType;
-    } else {
-      newFilters.sentiment = undefined;
-    }
-    if (tableFilters.bucket) {
-      newFilters.primary_bucket = tableFilters.bucket[0] as BucketType;
-    } else {
-      newFilters.primary_bucket = undefined;
-    }
-    setFilters(newFilters);
-    setPage(1);
   };
 
-  const BUCKET_FILTER_OPTIONS = [
-    { text: 'Response Urgency', value: 'response_urgency' },
-    { text: 'Deal at Risk', value: 'deal_at_risk' },
-    { text: 'Retention Risk', value: 'retention_risk' },
-    { text: 'Revenue Opportunity', value: 'revenue_opportunity' },
-    { text: 'New Relationship', value: 'new_relationship' },
-    { text: 'Account Neglect', value: 'account_neglect' },
-  ];
-
-  const columns: TableProps<IntelligenceResult>['columns'] = [
-    {
-      title: 'Bucket',
-      key: 'bucket',
-      width: 160,
-      filters: BUCKET_FILTER_OPTIONS,
-      filteredValue: filters.primary_bucket ? [filters.primary_bucket] : null,
-      filterMultiple: false,
-      render: (_: any, r: IntelligenceResult) => {
-        if (!r.action_buckets?.length) return <Tag>None</Tag>;
-        return (
-          <Space size={4} wrap>
-            {r.action_buckets.slice(0, 2).map((b, i) => (
-              <ActionBucketTag
-                key={i}
-                bucket={b.bucket}
-                confidence={b.confidence}
-                justification={b.justification}
-              />
-            ))}
-          </Space>
-        );
-      },
-    },
-    {
-      title: 'Urgency',
-      dataIndex: 'urgency',
-      key: 'urgency',
-      width: 90,
-      filters: ['critical', 'high', 'medium', 'low', 'none'].map(v => ({ text: v, value: v })),
-      filteredValue: filters.urgency ? [filters.urgency] : null,
-      filterMultiple: false,
-      sorter: (a: IntelligenceResult, b: IntelligenceResult) => {
-        const order = ['critical', 'high', 'medium', 'low', 'none'];
-        return order.indexOf(a.urgency || 'none') - order.indexOf(b.urgency || 'none');
-      },
-      render: (v: string) => v ? <Tag color={URGENCY_COLORS[v] || 'default'}>{v}</Tag> : null,
-    },
-    {
-      title: 'Subject',
-      key: 'subject',
-      ellipsis: true,
-      sorter: (a: IntelligenceResult, b: IntelligenceResult) =>
-        (a.email_subject || '').localeCompare(b.email_subject || ''),
-      render: (_: any, r: IntelligenceResult) => (
-        <a onClick={() => setDrawerItem(r)}>{r.email_subject || '(no subject)'}</a>
-      ),
-    },
-    {
-      title: 'Sender',
-      key: 'sender',
-      width: 180,
-      ellipsis: true,
-      sorter: (a: IntelligenceResult, b: IntelligenceResult) =>
-        (a.email_sender_name || a.email_sender || '').localeCompare(b.email_sender_name || b.email_sender || ''),
-      render: (_: any, r: IntelligenceResult) => r.email_sender_name || r.email_sender || '',
-    },
-    {
-      title: 'Intent',
-      dataIndex: 'intent',
-      key: 'intent',
-      width: 120,
-      filters: Object.entries(INTENT_LABELS).map(([k, v]) => ({ text: v, value: k })),
-      filteredValue: filters.intent ? [filters.intent] : null,
-      filterMultiple: false,
-      sorter: (a: IntelligenceResult, b: IntelligenceResult) =>
-        (a.intent || '').localeCompare(b.intent || ''),
-      render: (v: string) => v ? <Tag>{INTENT_LABELS[v] || v}</Tag> : null,
-    },
-    {
-      title: 'Sentiment',
-      dataIndex: 'sentiment',
-      key: 'sentiment',
-      width: 110,
-      filters: ['very_positive', 'positive', 'neutral', 'negative', 'very_negative'].map(v => ({ text: v.replace('_', ' '), value: v })),
-      filteredValue: filters.sentiment ? [filters.sentiment] : null,
-      filterMultiple: false,
-      sorter: (a: IntelligenceResult, b: IntelligenceResult) => {
-        const order = ['very_positive', 'positive', 'neutral', 'negative', 'very_negative'];
-        return order.indexOf(a.sentiment || 'neutral') - order.indexOf(b.sentiment || 'neutral');
-      },
-      render: (v: string) => v ? <Tag color={SENTIMENT_COLORS[v] || 'default'}>{v?.replace('_', ' ')}</Tag> : null,
-    },
-    {
-      title: 'Date',
-      key: 'date',
-      width: 100,
-      sorter: (a: IntelligenceResult, b: IntelligenceResult) =>
-        (a.email_date || '').localeCompare(b.email_date || ''),
-      render: (_: any, r: IntelligenceResult) => {
-        if (!r.email_date) return null;
-        return <Text type="secondary">{formatDate(r.email_date)}</Text>;
-      },
-    },
-  ];
+  const sortedItems = React.useMemo(() => {
+    if (!sortKey) return items;
+    const sorted = [...items].sort((a, b) => {
+      switch (sortKey) {
+        case 'urgency': {
+          const order = ['critical', 'high', 'medium', 'low', 'none'];
+          return order.indexOf(a.urgency || 'none') - order.indexOf(b.urgency || 'none');
+        }
+        case 'subject':
+          return (a.email_subject || '').localeCompare(b.email_subject || '');
+        case 'sender':
+          return (a.email_sender_name || a.email_sender || '').localeCompare(b.email_sender_name || b.email_sender || '');
+        case 'intent':
+          return (a.intent || '').localeCompare(b.intent || '');
+        case 'sentiment': {
+          const order = ['very_positive', 'positive', 'neutral', 'negative', 'very_negative'];
+          return order.indexOf(a.sentiment || 'neutral') - order.indexOf(b.sentiment || 'neutral');
+        }
+        case 'date':
+          return (a.email_date || '').localeCompare(b.email_date || '');
+        default:
+          return 0;
+      }
+    });
+    return sortDir === 'desc' ? sorted.reverse() : sorted;
+  }, [items, sortKey, sortDir]);
 
   // Signal summary bar (AM-centric v3)
   const bucketChips = bucketSummary ? [
-    { key: 'response_urgency', label: 'Response Urgency', count: bucketSummary.response_urgency, color: 'red' },
-    { key: 'deal_at_risk', label: 'Deal at Risk', count: bucketSummary.deal_at_risk, color: 'orange' },
-    { key: 'retention_risk', label: 'Retention Risk', count: bucketSummary.retention_risk, color: 'red' },
-    { key: 'revenue_opportunity', label: 'Revenue Opp.', count: bucketSummary.revenue_opportunity, color: 'green' },
-    { key: 'new_relationship', label: 'New Relationship', count: bucketSummary.new_relationship, color: 'blue' },
-    { key: 'account_neglect', label: 'Account Neglect', count: bucketSummary.account_neglect, color: 'gold' },
+    { key: 'response_urgency', label: 'Response Urgency', count: bucketSummary.response_urgency },
+    { key: 'deal_at_risk', label: 'Deal at Risk', count: bucketSummary.deal_at_risk },
+    { key: 'retention_risk', label: 'Retention Risk', count: bucketSummary.retention_risk },
+    { key: 'revenue_opportunity', label: 'Revenue Opp.', count: bucketSummary.revenue_opportunity },
+    { key: 'new_relationship', label: 'New Relationship', count: bucketSummary.new_relationship },
+    { key: 'account_neglect', label: 'Account Neglect', count: bucketSummary.account_neglect },
   ] : [];
 
+  // Analysis status banner
+  const statusBannerType = analysisStatus?.status === 'failed' ? 'error'
+    : analysisStatus?.status === 'completed' ? 'success'
+    : 'info';
+
+  const StatusIcon = statusBannerType === 'error' ? AlertCircle
+    : statusBannerType === 'success' ? CheckCircle2
+    : Info;
+
+  const statusBannerBorder = statusBannerType === 'error' ? 'border-red-200 bg-red-50'
+    : statusBannerType === 'success' ? 'border-emerald-200 bg-emerald-50'
+    : 'border-blue-200 bg-blue-50';
+
+  const statusIconColor = statusBannerType === 'error' ? 'text-red-500'
+    : statusBannerType === 'success' ? 'text-emerald-500'
+    : 'text-blue-500';
+
+  // Column header helper
+  const SortHeader = ({ label, sortField }: { label: string; sortField: SortKey }) => (
+    <button
+      className="inline-flex items-center gap-1 group"
+      onClick={() => handleSort(sortField)}
+    >
+      {label}
+      <ArrowUpDown className={cn(
+        'h-3 w-3 transition-colors',
+        sortKey === sortField ? 'text-slate-900' : 'text-slate-300 group-hover:text-slate-500',
+      )} />
+    </button>
+  );
+
   return (
-    <div className="glass-page-bg" style={{ padding: 24 }}>
-      {/* Header */}
-      <Row gutter={[16, 16]} align="middle" style={{ marginBottom: 16 }}>
-        <Col flex="auto">
+    <PageShell>
+      {/* Header row */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div className="flex-1 min-w-[280px] max-w-[380px]">
           <MailboxSelector
             value={mailboxIds}
             onChange={setMailboxIds}
             mode="single"
             placeholder="Select a mailbox"
-            style={{ width: 350 }}
           />
-        </Col>
-        <Col>
-          <Space>
-            <Button
-              icon={<ReloadOutlined />}
-              onClick={loadData}
-              disabled={!mailboxId}
-            >
-              Refresh
-            </Button>
-            <Select
-              value={analysisRange}
-              onChange={setAnalysisRange}
-              style={{ width: 130 }}
-              options={[
-                { value: 7, label: 'Last 7 days' },
-                { value: 14, label: 'Last 14 days' },
-                { value: 30, label: 'Last 30 days' },
-                { value: 90, label: 'Last 90 days' },
-              ]}
-            />
-            <Button
-              icon={<SyncOutlined />}
-              onClick={handleRebucket}
-              loading={rebucketing}
-              disabled={!mailboxId}
-            >
-              Re-bucket
-            </Button>
-            <Button
-              type="primary"
-              icon={<RocketOutlined />}
-              onClick={handleAnalyze}
-              loading={analyzing}
-              disabled={!mailboxId}
-            >
-              Analyze New Emails
-            </Button>
-          </Space>
-        </Col>
-      </Row>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={loadData}
+            disabled={!mailboxId}
+            className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-medium rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            Refresh
+          </button>
+
+          <select
+            value={analysisRange}
+            onChange={(e) => setAnalysisRange(Number(e.target.value))}
+            className="h-8 px-2 text-xs rounded-md border border-slate-200 bg-white text-slate-700"
+          >
+            <option value={7}>Last 7 days</option>
+            <option value={14}>Last 14 days</option>
+            <option value={30}>Last 30 days</option>
+            <option value={90}>Last 90 days</option>
+          </select>
+
+          <button
+            onClick={handleRebucket}
+            disabled={!mailboxId || rebucketing}
+            className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-medium rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            {rebucketing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+            Re-bucket
+          </button>
+
+          <button
+            onClick={handleAnalyze}
+            disabled={!mailboxId || analyzing}
+            className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-medium rounded-md bg-primary text-white hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            {analyzing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Rocket className="h-3.5 w-3.5" />}
+            Analyze New Emails
+          </button>
+        </div>
+      </div>
 
       {/* Analysis status banner */}
       {analysisStatus && (
-        <Alert
-          type={analysisStatus.status === 'failed' ? 'error' : analysisStatus.status === 'completed' ? 'success' : 'info'}
-          showIcon
-          closable={['completed', 'failed'].includes(analysisStatus.status)}
-          onClose={() => setAnalysisStatus(null)}
-          style={{ marginBottom: 16 }}
-          message={
-            <Space direction="vertical" size={4} style={{ width: '100%' }}>
-              <span>{analysisStatus.message}</span>
-              {analyzing && analysisStatus.pct != null && (
-                <Progress
-                  percent={analysisStatus.pct}
-                  size="small"
-                  status={analysisStatus.status === 'failed' ? 'exception' : 'active'}
-                  strokeColor={analysisStatus.status === 'running' ? '#667eea' : undefined}
+        <div className={cn('rounded-lg border px-4 py-3 mb-4 flex items-start gap-3', statusBannerBorder)}>
+          <StatusIcon className={cn('h-4 w-4 mt-0.5 shrink-0', statusIconColor)} />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-slate-700">{analysisStatus.message}</p>
+            {analyzing && analysisStatus.pct != null && (
+              <div className="mt-2 w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                <div
+                  className={cn(
+                    'h-full rounded-full transition-all duration-500',
+                    analysisStatus.status === 'failed' ? 'bg-red-500' : 'bg-primary',
+                  )}
+                  style={{ width: `${Math.min(analysisStatus.pct, 100)}%` }}
                 />
-              )}
-            </Space>
-          }
-        />
+              </div>
+            )}
+          </div>
+          {['completed', 'failed'].includes(analysisStatus.status) && (
+            <button
+              onClick={() => setAnalysisStatus(null)}
+              className="p-0.5 rounded hover:bg-black/5 text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
       )}
 
       {/* Bucket summary chips */}
       {bucketChips.length > 0 && (
-        <div className="glass-card fade-in-up" style={{ padding: '12px 16px', marginBottom: 16 }}>
-          <Space size={8} wrap>
-            <Text strong style={{ marginRight: 8 }}>Buckets:</Text>
-            {bucketChips.map((chip) => (
-              <Tag
-                key={chip.key}
-                color={filters.primary_bucket === chip.key ? chip.color : undefined}
-                style={{
-                  cursor: 'pointer',
-                  borderStyle: filters.primary_bucket === chip.key ? 'solid' : 'dashed',
-                  opacity: chip.count === 0 ? 0.4 : 1,
-                }}
-                onClick={() => handleBucketClick(chip.key as BucketType)}
-              >
-                {chip.label}: {chip.count}
-              </Tag>
-            ))}
-          </Space>
+        <div className="rounded-lg border bg-white shadow-sm px-4 py-3 mb-4">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-semibold text-slate-700 mr-1">Buckets:</span>
+            {bucketChips.map((chip) => {
+              const isActive = filters.primary_bucket === chip.key;
+              const style = BUCKET_CHIP_STYLE[chip.key] || { bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-600', activeBg: 'bg-slate-100' };
+              return (
+                <button
+                  key={chip.key}
+                  onClick={() => handleBucketClick(chip.key as BucketType)}
+                  className={cn(
+                    'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-all',
+                    isActive
+                      ? `${style.activeBg} ${style.border} ${style.text}`
+                      : 'bg-white border-dashed border-slate-200 text-slate-500 hover:border-slate-300',
+                    chip.count === 0 && 'opacity-40',
+                  )}
+                >
+                  {chip.label}: {chip.count.toLocaleString('en-AU')}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
       {/* Main table */}
       {!mailboxId ? (
-        <div className="glass-card" style={{ padding: 60, textAlign: 'center' }}>
-          <Empty description="Select a mailbox to view AI intelligence" />
+        <div className="rounded-lg border bg-white shadow-sm">
+          <EmptyState
+            icon={<InboxIcon className="h-10 w-10" />}
+            title="Select a mailbox to view AI intelligence"
+            description="Choose a mailbox from the selector above to see analyzed emails."
+          />
+        </div>
+      ) : loading ? (
+        <div className="rounded-lg border bg-white shadow-sm">
+          <ContentSkeleton rows={8} />
+        </div>
+      ) : items.length === 0 ? (
+        <div className="rounded-lg border bg-white shadow-sm">
+          <EmptyState
+            icon={<InboxIcon className="h-10 w-10" />}
+            title="No intelligence results"
+            description="Run an analysis to classify emails in this mailbox."
+          />
         </div>
       ) : (
-        <div className="glass-card fade-in-up" style={{ padding: 0 }}>
-          <Table<IntelligenceResult>
-            columns={columns}
-            dataSource={items}
-            loading={loading}
-            rowKey={(r) => r.id || r.email_id || Math.random().toString()}
-            pagination={{
-              current: page,
-              pageSize,
-              onChange: setPage,
-              showSizeChanger: false,
-              showTotal: (total) => `${total} results`,
-            }}
-            size="small"
-            scroll={{ x: 1100 }}
-            onChange={handleTableFilters}
-            onRow={(record) => ({
-              onClick: () => setDrawerItem(record),
-              style: { cursor: 'pointer' },
-            })}
-          />
+        <div className="rounded-lg border bg-white shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1000px]">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50/60">
+                  <th className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-600 w-[160px]">
+                    Bucket
+                  </th>
+                  <th className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-600 w-[90px]">
+                    <SortHeader label="Urgency" sortField="urgency" />
+                  </th>
+                  <th className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-600">
+                    <SortHeader label="Subject" sortField="subject" />
+                  </th>
+                  <th className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-600 w-[180px]">
+                    <SortHeader label="Sender" sortField="sender" />
+                  </th>
+                  <th className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-600 w-[120px]">
+                    <SortHeader label="Intent" sortField="intent" />
+                  </th>
+                  <th className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-600 w-[110px]">
+                    <SortHeader label="Sentiment" sortField="sentiment" />
+                  </th>
+                  <th className="text-left px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-600 w-[100px]">
+                    <SortHeader label="Date" sortField="date" />
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {sortedItems.map((r) => (
+                  <tr
+                    key={r.id || r.email_id || Math.random().toString()}
+                    onClick={() => setDrawerItem(r)}
+                    className="hover:bg-slate-50/60 cursor-pointer transition-colors"
+                  >
+                    {/* Bucket */}
+                    <td className="px-4 py-2.5">
+                      {!r.action_buckets?.length ? (
+                        <span className="text-xs text-slate-400">None</span>
+                      ) : (
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {r.action_buckets.slice(0, 2).map((b, i) => (
+                            <ActionBucketTag
+                              key={i}
+                              bucket={b.bucket}
+                              confidence={b.confidence}
+                              justification={b.justification}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </td>
+
+                    {/* Urgency */}
+                    <td className="px-4 py-2.5">
+                      {r.urgency && (
+                        <StatusBadge variant={URGENCY_VARIANT[r.urgency] || 'neutral'} size="sm">
+                          {r.urgency}
+                        </StatusBadge>
+                      )}
+                    </td>
+
+                    {/* Subject */}
+                    <td className="px-4 py-2.5">
+                      <span className="text-sm text-primary hover:underline truncate block max-w-[360px]">
+                        {r.email_subject || '(no subject)'}
+                      </span>
+                    </td>
+
+                    {/* Sender */}
+                    <td className="px-4 py-2.5">
+                      <span className="text-sm text-slate-600 truncate block max-w-[170px]">
+                        {r.email_sender_name || r.email_sender || ''}
+                      </span>
+                    </td>
+
+                    {/* Intent */}
+                    <td className="px-4 py-2.5">
+                      {r.intent && (
+                        <StatusBadge variant="neutral" size="sm">
+                          {INTENT_LABELS[r.intent] || r.intent}
+                        </StatusBadge>
+                      )}
+                    </td>
+
+                    {/* Sentiment */}
+                    <td className="px-4 py-2.5">
+                      {r.sentiment && (
+                        <StatusBadge variant={SENTIMENT_VARIANT[r.sentiment] || 'neutral'} size="sm">
+                          {r.sentiment?.replace('_', ' ')}
+                        </StatusBadge>
+                      )}
+                    </td>
+
+                    {/* Date */}
+                    <td className="px-4 py-2.5">
+                      {r.email_date && (
+                        <span className="text-xs text-slate-500">{formatDate(r.email_date)}</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100">
+            <span className="text-xs text-slate-500">
+              {items.length.toLocaleString('en-AU')} results
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="p-1.5 rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="h-4 w-4 text-slate-600" />
+              </button>
+              <span className="text-xs text-slate-600 px-2">Page {page}</span>
+              <button
+                onClick={() => setPage((p) => p + 1)}
+                disabled={items.length < pageSize}
+                className="p-1.5 rounded hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight className="h-4 w-4 text-slate-600" />
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Detail drawer */}
-      <Drawer
-        title={drawerItem?.email_subject || 'Email Intelligence'}
-        open={!!drawerItem}
-        onClose={() => setDrawerItem(null)}
-        width={560}
-      >
-        {drawerItem && <IntelligenceDetail item={drawerItem} />}
-      </Drawer>
-    </div>
+      {/* Detail slide-over panel */}
+      {drawerItem && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/20 z-40 transition-opacity"
+            onClick={() => setDrawerItem(null)}
+          />
+          {/* Panel */}
+          <div className="fixed inset-y-0 right-0 z-50 w-full max-w-[560px] bg-white shadow-xl border-l border-slate-200 flex flex-col animate-in slide-in-from-right duration-200">
+            {/* Panel header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 shrink-0">
+              <h2 className="text-sm font-semibold text-slate-900 truncate pr-4">
+                {drawerItem.email_subject || 'Email Intelligence'}
+              </h2>
+              <button
+                onClick={() => setDrawerItem(null)}
+                className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            {/* Panel body */}
+            <div className="flex-1 overflow-y-auto px-5 py-4">
+              <IntelligenceDetail item={drawerItem} />
+            </div>
+          </div>
+        </>
+      )}
+    </PageShell>
   );
 };
 
 // ============================================================================
-// Detail panel inside drawer
+// Detail panel inside slide-over
 // ============================================================================
 
 const IntelligenceDetail: React.FC<{ item: IntelligenceResult }> = ({ item }) => {
@@ -528,39 +635,68 @@ const IntelligenceDetail: React.FC<{ item: IntelligenceResult }> = ({ item }) =>
   const hasText = !!item.email_body;
 
   return (
-    <div>
+    <div className="space-y-4">
       {/* Email Header */}
-      <Descriptions column={1} size="small" style={{ marginBottom: 12 }}>
-        <Descriptions.Item label="From">
-          <Text strong>{item.email_sender_name || item.email_sender}</Text>
-          {item.email_sender_name && <Text type="secondary"> &lt;{item.email_sender}&gt;</Text>}
-        </Descriptions.Item>
+      <div className="space-y-2">
+        <div className="flex gap-2">
+          <span className="text-xs font-medium text-slate-500 w-10 shrink-0 pt-0.5">From</span>
+          <div className="text-sm">
+            <span className="font-medium text-slate-900">{item.email_sender_name || item.email_sender}</span>
+            {item.email_sender_name && (
+              <span className="text-slate-500"> &lt;{item.email_sender}&gt;</span>
+            )}
+          </div>
+        </div>
         {recipients.length > 0 && (
-          <Descriptions.Item label="To">
-            <Text type="secondary">{recipients.join(', ')}</Text>
-          </Descriptions.Item>
+          <div className="flex gap-2">
+            <span className="text-xs font-medium text-slate-500 w-10 shrink-0 pt-0.5">To</span>
+            <span className="text-sm text-slate-600">{recipients.join(', ')}</span>
+          </div>
         )}
         {ccList.length > 0 && (
-          <Descriptions.Item label="CC">
-            <Text type="secondary">{ccList.join(', ')}</Text>
-          </Descriptions.Item>
+          <div className="flex gap-2">
+            <span className="text-xs font-medium text-slate-500 w-10 shrink-0 pt-0.5">CC</span>
+            <span className="text-sm text-slate-600">{ccList.join(', ')}</span>
+          </div>
         )}
         {bccList.length > 0 && (
-          <Descriptions.Item label="BCC">
-            <Text type="secondary">{bccList.join(', ')}</Text>
-          </Descriptions.Item>
+          <div className="flex gap-2">
+            <span className="text-xs font-medium text-slate-500 w-10 shrink-0 pt-0.5">BCC</span>
+            <span className="text-sm text-slate-600">{bccList.join(', ')}</span>
+          </div>
         )}
-        <Descriptions.Item label="Date">
-          {item.email_date ? formatDate(item.email_date) : 'N/A'}
-        </Descriptions.Item>
-      </Descriptions>
+        <div className="flex gap-2">
+          <span className="text-xs font-medium text-slate-500 w-10 shrink-0 pt-0.5">Date</span>
+          <span className="text-sm text-slate-600">{item.email_date ? formatDate(item.email_date) : 'N/A'}</span>
+        </div>
+      </div>
 
       {/* View toggle */}
       {hasHtml && hasText && (
-        <Space size={4} style={{ marginBottom: 8 }}>
-          <Button size="small" type={bodyView === 'html' ? 'primary' : 'default'} onClick={() => setBodyView('html')}>HTML</Button>
-          <Button size="small" type={bodyView === 'text' ? 'primary' : 'default'} onClick={() => setBodyView('text')}>Plain Text</Button>
-        </Space>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setBodyView('html')}
+            className={cn(
+              'h-7 px-2.5 text-xs font-medium rounded-md transition-colors',
+              bodyView === 'html'
+                ? 'bg-primary text-white'
+                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50',
+            )}
+          >
+            HTML
+          </button>
+          <button
+            onClick={() => setBodyView('text')}
+            className={cn(
+              'h-7 px-2.5 text-xs font-medium rounded-md transition-colors',
+              bodyView === 'text'
+                ? 'bg-primary text-white'
+                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50',
+            )}
+          >
+            Plain Text
+          </button>
+        </div>
       )}
 
       {/* Email Body */}
@@ -574,92 +710,121 @@ const IntelligenceDetail: React.FC<{ item: IntelligenceResult }> = ({ item }) =>
             blockquote { border-left: 3px solid #d9d9d9; padding-left: 16px; margin-left: 0; color: #666; }
             pre { background: #f5f5f5; padding: 12px; border-radius: 4px; overflow-x: auto; }
           </style></head><body>${item.email_body_html}</body></html>`}
-          style={{ width: '100%', minHeight: 300, border: '1px solid #f0f0f0', borderRadius: 6, marginBottom: 16 }}
+          className="w-full min-h-[300px] border border-slate-100 rounded-md"
           sandbox="allow-same-origin"
         />
       ) : hasText ? (
-        <div style={{
-          marginBottom: 16, padding: 12, background: '#fafafa', borderRadius: 6,
-          border: '1px solid #f0f0f0', maxHeight: 400, overflowY: 'auto',
-          whiteSpace: 'pre-wrap', fontSize: 13, lineHeight: 1.6,
-        }}>
+        <div className="p-3 bg-slate-50 border border-slate-100 rounded-md max-h-[400px] overflow-y-auto whitespace-pre-wrap text-[13px] leading-relaxed text-slate-700">
           {item.email_body}
         </div>
       ) : (
-        <div style={{ marginBottom: 16, padding: 12, background: '#fafafa', borderRadius: 6, border: '1px solid #f0f0f0' }}>
-          <Text type="secondary">No email content available</Text>
+        <div className="p-3 bg-slate-50 border border-slate-100 rounded-md">
+          <span className="text-sm text-slate-400">No email content available</span>
         </div>
       )}
 
       {/* AI Classification */}
-      <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 12, marginBottom: 12 }}>
-        <Text strong style={{ fontSize: 14, display: 'block', marginBottom: 8 }}>AI Classification</Text>
-        <Space wrap size={6}>
-          <Tag>{INTENT_LABELS[item.intent || ''] || item.intent}</Tag>
-          <Tag color={URGENCY_COLORS[item.urgency || ''] || 'default'}>{item.urgency}</Tag>
-          <Tag color={SENTIMENT_COLORS[item.sentiment || ''] || 'default'}>{item.sentiment?.replace('_', ' ')}</Tag>
-          {item.confidence != null && <Tag>Confidence: {Math.round(item.confidence * 100)}%</Tag>}
-        </Space>
+      <div className="border-t border-slate-100 pt-4">
+        <h4 className="text-sm font-semibold text-slate-900 mb-2">AI Classification</h4>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <StatusBadge variant="neutral">
+            {INTENT_LABELS[item.intent || ''] || item.intent}
+          </StatusBadge>
+          <StatusBadge variant={URGENCY_VARIANT[item.urgency || ''] || 'neutral'}>
+            {item.urgency}
+          </StatusBadge>
+          <StatusBadge variant={SENTIMENT_VARIANT[item.sentiment || ''] || 'neutral'}>
+            {item.sentiment?.replace('_', ' ')}
+          </StatusBadge>
+          {item.confidence != null && (
+            <StatusBadge variant="info">
+              Confidence: {Math.round(item.confidence * 100)}%
+            </StatusBadge>
+          )}
+        </div>
       </div>
 
       {/* Buckets */}
       {item.action_buckets?.length > 0 && (
-        <div style={{ marginBottom: 12 }}>
-          <Text strong>Action Buckets:</Text>
-          <div style={{ marginTop: 4 }}>
-            <Space wrap>
-              {item.action_buckets.map((b, i) => (
-                <ActionBucketTag key={i} bucket={b.bucket} confidence={b.confidence} justification={b.justification} />
-              ))}
-            </Space>
+        <div>
+          <h4 className="text-sm font-semibold text-slate-900 mb-2">Action Buckets</h4>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {item.action_buckets.map((b, i) => (
+              <ActionBucketTag key={i} bucket={b.bucket} confidence={b.confidence} justification={b.justification} />
+            ))}
           </div>
         </div>
       )}
 
       {/* Suggested Action */}
       {item.suggested_action && (
-        <div style={{ marginBottom: 12 }}>
-          <Text strong>Suggested Action:</Text>
-          <p style={{ margin: '4px 0' }}>{item.suggested_action}</p>
+        <div>
+          <h4 className="text-sm font-semibold text-slate-900 mb-1">Suggested Action</h4>
+          <p className="text-sm text-slate-600">{item.suggested_action}</p>
         </div>
       )}
 
       {/* Key Topics */}
       {item.key_topics?.length > 0 && (
-        <div style={{ marginBottom: 12 }}>
-          <Text strong>Key Topics:</Text>
-          <div style={{ marginTop: 4 }}>
-            <Space wrap>
-              {item.key_topics.map((t, i) => <Tag key={i}>{t}</Tag>)}
-            </Space>
+        <div>
+          <h4 className="text-sm font-semibold text-slate-900 mb-2">Key Topics</h4>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {item.key_topics.map((t, i) => (
+              <StatusBadge key={i} variant="neutral" size="sm">{t}</StatusBadge>
+            ))}
           </div>
         </div>
       )}
 
       {/* Entities */}
       {(item.competitors_mentioned?.length > 0 || item.products_mentioned?.length > 0 || item.buying_signals?.length > 0) && (
-        <Descriptions column={1} size="small" bordered style={{ marginBottom: 12 }}>
-          {item.competitors_mentioned?.length > 0 && (
-            <Descriptions.Item label="Competitors">
-              <Space wrap>{item.competitors_mentioned.map((c, i) => <Tag key={i} color="volcano">{c}</Tag>)}</Space>
-            </Descriptions.Item>
-          )}
-          {item.products_mentioned?.length > 0 && (
-            <Descriptions.Item label="Products">
-              <Space wrap>{item.products_mentioned.map((p, i) => <Tag key={i} color="blue">{p}</Tag>)}</Space>
-            </Descriptions.Item>
-          )}
-          {item.buying_signals?.length > 0 && (
-            <Descriptions.Item label="Buying Signals">
-              <Space wrap>{item.buying_signals.map((s, i) => <Tag key={i} color="green">{s}</Tag>)}</Space>
-            </Descriptions.Item>
-          )}
-        </Descriptions>
+        <div className="rounded-lg border border-slate-100 overflow-hidden">
+          <table className="w-full text-sm">
+            <tbody className="divide-y divide-slate-100">
+              {item.competitors_mentioned?.length > 0 && (
+                <tr>
+                  <td className="px-3 py-2 font-medium text-slate-600 bg-slate-50/60 w-[110px] align-top text-xs">Competitors</td>
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {item.competitors_mentioned.map((c, i) => (
+                        <StatusBadge key={i} variant="warning" size="sm">{c}</StatusBadge>
+                      ))}
+                    </div>
+                  </td>
+                </tr>
+              )}
+              {item.products_mentioned?.length > 0 && (
+                <tr>
+                  <td className="px-3 py-2 font-medium text-slate-600 bg-slate-50/60 w-[110px] align-top text-xs">Products</td>
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {item.products_mentioned.map((p, i) => (
+                        <StatusBadge key={i} variant="info" size="sm">{p}</StatusBadge>
+                      ))}
+                    </div>
+                  </td>
+                </tr>
+              )}
+              {item.buying_signals?.length > 0 && (
+                <tr>
+                  <td className="px-3 py-2 font-medium text-slate-600 bg-slate-50/60 w-[110px] align-top text-xs">Buying Signals</td>
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {item.buying_signals.map((s, i) => (
+                        <StatusBadge key={i} variant="success" size="sm">{s}</StatusBadge>
+                      ))}
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {/* Feedback */}
-      <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 12 }}>
-        <Text strong style={{ marginBottom: 8, display: 'block' }}>Was this classification correct?</Text>
+      <div className="border-t border-slate-100 pt-4">
+        <h4 className="text-sm font-semibold text-slate-900 mb-2">Was this classification correct?</h4>
         <FeedbackButtons
           emailId={item.email_id || ''}
           currentFeedback={item.human_feedback || undefined}

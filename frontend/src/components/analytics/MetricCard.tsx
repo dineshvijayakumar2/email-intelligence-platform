@@ -1,5 +1,5 @@
 import React from 'react';
-import { Statistic, Skeleton } from 'antd';
+import { ContentSkeleton } from '@/components/ui/empty-state';
 
 interface MetricCardProps {
   title: string;
@@ -19,31 +19,29 @@ export const MetricCard: React.FC<MetricCardProps> = ({
   suffix,
   precision,
   loading = false,
-  valueStyle,
   onClick,
 }) => {
   if (loading) {
     return (
-      <div className="glass-card" style={{ padding: 20, textAlign: 'center' }}>
-        <Skeleton active paragraph={{ rows: 1 }} />
+      <div className="rounded-lg border bg-white shadow-sm p-5 text-center">
+        <ContentSkeleton rows={1} />
       </div>
     );
   }
 
+  const formatted = precision != null && typeof value === 'number'
+    ? value.toFixed(precision)
+    : (value ?? 0);
+
   return (
     <div
-      className="glass-card"
-      style={{ padding: 20, textAlign: 'center', ...(onClick ? { cursor: 'pointer' } : {}) }}
+      className={`rounded-lg border bg-white shadow-sm p-5 text-center ${onClick ? 'cursor-pointer hover:border-primary/30 transition-colors' : ''}`}
       onClick={onClick}
     >
-      <Statistic
-        title={title}
-        value={value ?? 0}
-        prefix={prefix}
-        suffix={suffix}
-        precision={precision}
-        valueStyle={{ fontSize: 28, fontWeight: 600, ...valueStyle }}
-      />
+      <p className="text-xs font-medium text-slate-500 mb-1">{title}</p>
+      <p className="text-2xl font-semibold tabular-nums text-slate-900">
+        {prefix}{formatted}{suffix}
+      </p>
     </div>
   );
 };

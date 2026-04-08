@@ -1,14 +1,10 @@
-import React from 'react';
-import { Alert, Space, Typography, Progress, Button } from 'antd';
-import {
-  SyncOutlined,
-  CheckCircleOutlined,
-  CloseCircleOutlined,
-  DownloadOutlined,
-  ThunderboltOutlined
-} from '@ant-design/icons';
+/**
+ * SyncStatusBar — Shows active sync progress inline. Zero antd.
+ */
 
-const { Text } = Typography;
+import React from 'react';
+import { RefreshCw, XCircle, Download, Zap } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface ProcessingJob {
   id: string;
@@ -35,180 +31,93 @@ interface SyncStatusBarProps {
 export const SyncStatusBar: React.FC<SyncStatusBarProps> = ({
   selectedMailboxIds,
   jobs,
-  onViewDetails
+  onViewDetails,
 }) => {
-  // Find active jobs for selected mailboxes
   const activeJobs = jobs.filter(
     job => selectedMailboxIds.includes(job.mailbox_id) &&
            ['running', 'downloading', 'pending'].includes(job.status)
   );
 
-  // Find relevant failed jobs - only show if there's no more recent successful job for the same mailbox
   const failedJobs = jobs.filter(job => {
-    if (!selectedMailboxIds.includes(job.mailbox_id) || job.status !== 'failed') {
-      return false;
-    }
-
-    // Check if there's a more recent completed job for the same mailbox
-    const hasMoreRecentSuccess = jobs.some(otherJob =>
-      otherJob.mailbox_id === job.mailbox_id &&
-      otherJob.status === 'completed' &&
-      otherJob.completed_at &&
-      job.completed_at &&
-      new Date(otherJob.completed_at).getTime() > new Date(job.completed_at).getTime()
+    if (!selectedMailboxIds.includes(job.mailbox_id) || job.status !== 'failed') return false;
+    const hasMoreRecentSuccess = jobs.some(o =>
+      o.mailbox_id === job.mailbox_id && o.status === 'completed' &&
+      o.completed_at && job.completed_at &&
+      new Date(o.completed_at).getTime() > new Date(job.completed_at).getTime()
     );
-
-    // Don't show this failure if there's a more recent success
-    if (hasMoreRecentSuccess) {
-      return false;
-    }
-
-    // Only show recent failures (last hour)
+    if (hasMoreRecentSuccess) return false;
     if (job.completed_at) {
-      const completedTime = new Date(job.completed_at).getTime();
-      const oneHourAgo = Date.now() - (60 * 60 * 1000);
-      return completedTime > oneHourAgo;
+      return new Date(job.completed_at).getTime() > Date.now() - 3600000;
     }
-
     return true;
   });
 
-  if (activeJobs.length === 0 && failedJobs.length === 0) {
-    return null; // Don't show anything if no active/failed jobs
+  if (activeJobs.length === 0 && failedJobs.length === 0) return null;
+
+  const displayJob = activeJobs[0] || failedJobs[0];
+  const isFailed = displayJob.status === 'failed';
+  const mailboxName = displayJob.mailbox_name || 'Unknown Mailbox';
+
+  const infoItems: string[] = [];
+  if (displayJob.processed_records != null && displayJob.total_records) {
+    infoItems.push(`${displayJob.processed_records.toLocaleString('en-AU')} / ${displayJob.total_records.toLocaleString('en-AU')} emails`);
+  }
+  if (displayJob.emails_per_second && displayJob.emails_per_second > 0) {
+    infoItems.push(`${displayJob.emails_per_second.toFixed(1)} emails/s`);
+  }
+  if (displayJob.estimated_time_remaining) {
+    infoItems.push(`ETA: ${displayJob.estimated_time_remaining}`);
   }
 
-  // Show most relevant job (prioritize active over failed)
-  const displayJob = activeJobs[0] || failedJobs[0];
-
-  const getAlertType = () => {
-    if (displayJob.status === 'failed') return 'error';
-    if (displayJob.status === 'downloading') return 'info';
-    return 'info';
-  };
-
-  const getMessage = () => {
-    const mailboxName = displayJob.mailbox_name || 'Unknown Mailbox';
-
-    if (displayJob.status === 'downloading') {
-      return (
-        <Space size="middle" style={{ width: '100%' }}>
-          <Space>
-            <DownloadOutlined spin />
-            <Text strong>Downloading from {mailboxName}</Text>
-          </Space>
-          {activeJobs.length > 1 && (
-            <Text type="secondary">+{activeJobs.length - 1} more syncing</Text>
-          )}
-        </Space>
-      );
-    }
-
-    if (displayJob.status === 'running') {
-      return (
-        <Space size="middle" style={{ width: '100%' }}>
-          <Space>
-            <SyncOutlined spin />
-            <Text strong>Syncing {mailboxName}</Text>
-          </Space>
-          {activeJobs.length > 1 && (
-            <Text type="secondary">+{activeJobs.length - 1} more syncing</Text>
-          )}
-        </Space>
-      );
-    }
-
-    if (displayJob.status === 'pending') {
-      return (
-        <Space>
-          <ThunderboltOutlined />
-          <Text strong>Queued: {mailboxName}</Text>
-        </Space>
-      );
-    }
-
-    if (displayJob.status === 'failed') {
-      return (
-        <Space>
-          <CloseCircleOutlined />
-          <Text strong>Sync failed for {mailboxName}</Text>
-          {failedJobs.length > 1 && (
-            <Text type="secondary">+{failedJobs.length - 1} more failed</Text>
-          )}
-        </Space>
-      );
-    }
-
-    return <Text strong>Processing {mailboxName}</Text>;
-  };
-
-  const getDescription = () => {
-    if (displayJob.status === 'failed') {
-      return 'Click "View Details" to see error information and retry';
-    }
-
-    const parts: React.ReactNode[] = [];
-
-    if (displayJob.progress !== undefined) {
-      parts.push(
-        <div key="progress" style={{ marginTop: 8, marginBottom: 4 }}>
-          <Progress
-            percent={displayJob.progress}
-            size="small"
-            status={displayJob.progress === 100 ? 'success' : 'active'}
-            strokeColor={{
-              '0%': '#667eea',
-              '100%': '#764ba2'
-            }}
-          />
-        </div>
-      );
-    }
-
-    const infoItems: string[] = [];
-
-    if (displayJob.processed_records !== undefined && displayJob.total_records) {
-      infoItems.push(`${displayJob.processed_records.toLocaleString()} / ${displayJob.total_records.toLocaleString()} emails`);
-    }
-
-    if (displayJob.emails_per_second && displayJob.emails_per_second > 0) {
-      infoItems.push(`${displayJob.emails_per_second.toFixed(1)} emails/s`);
-    }
-
-    if (displayJob.estimated_time_remaining) {
-      infoItems.push(`ETA: ${displayJob.estimated_time_remaining}`);
-    }
-
-    if (infoItems.length > 0) {
-      parts.push(
-        <Text key="info" type="secondary" style={{ fontSize: 12 }}>
-          {infoItems.join(' • ')}
-        </Text>
-      );
-    }
-
-    return parts.length > 0 ? <Space direction="vertical" size={0}>{parts}</Space> : null;
-  };
-
   return (
-    <div style={{ padding: '0 16px', marginBottom: 8 }}>
-      <Alert
-        type={getAlertType()}
-        message={getMessage()}
-        description={getDescription()}
-        showIcon
-        closable={false}
-        action={
-          onViewDetails && (
-            <Button size="small" onClick={onViewDetails}>
+    <div className="px-4 mb-2">
+      <div className={cn(
+        'rounded-lg border p-3',
+        isFailed ? 'border-destructive/30 bg-destructive/5' : 'border-primary/30 bg-primary/5'
+      )}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {isFailed ? (
+              <XCircle className="h-4 w-4 text-destructive" />
+            ) : displayJob.status === 'downloading' ? (
+              <Download className="h-4 w-4 text-primary animate-pulse" />
+            ) : displayJob.status === 'pending' ? (
+              <Zap className="h-4 w-4 text-primary" />
+            ) : (
+              <RefreshCw className="h-4 w-4 text-primary animate-spin" />
+            )}
+            <span className="text-sm font-medium text-slate-900">
+              {isFailed ? `Sync failed for ${mailboxName}` :
+               displayJob.status === 'downloading' ? `Downloading from ${mailboxName}` :
+               displayJob.status === 'pending' ? `Queued: ${mailboxName}` :
+               `Syncing ${mailboxName}`}
+            </span>
+            {activeJobs.length > 1 && (
+              <span className="text-xs text-slate-500">+{activeJobs.length - 1} more syncing</span>
+            )}
+          </div>
+          {onViewDetails && (
+            <button onClick={onViewDetails} className="text-xs text-primary hover:underline">
               View Details
-            </Button>
-          )
-        }
-        style={{
-          borderRadius: 8,
-          border: displayJob.status === 'failed' ? '1px solid #ff4d4f' : '1px solid #667eea'
-        }}
-      />
+            </button>
+          )}
+        </div>
+
+        {!isFailed && displayJob.progress != null && (
+          <div className="mt-2">
+            <div className="h-1.5 rounded-full bg-white/50 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-primary to-accent transition-all"
+                style={{ width: `${displayJob.progress}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {infoItems.length > 0 && (
+          <p className="text-xs text-slate-500 mt-1.5">{infoItems.join(' \u00b7 ')}</p>
+        )}
+      </div>
     </div>
   );
 };

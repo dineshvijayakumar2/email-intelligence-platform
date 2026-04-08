@@ -3,26 +3,26 @@
  *
  * Real-time cost tracking, monitoring metrics, and AI control switches.
  * Admin-level controls for budget caps, kill switches, and feature toggles.
+ *
+ * Migrated from Ant Design to Tailwind CSS + Lucide icons.
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  Card, Row, Col, Statistic, Switch, InputNumber, Button, Table, Select,
-  Tag, Space, Progress, Alert, Divider, Tooltip, Badge, Typography,
-  Spin, message, Form, Input, Checkbox, Empty, Skeleton, Collapse,
-} from 'antd';
-import {
-  DollarOutlined, ThunderboltOutlined, WarningOutlined,
-  ReloadOutlined, PauseCircleOutlined, PlayCircleOutlined,
-  ClockCircleOutlined, CheckCircleOutlined, CloseCircleOutlined,
-  ExclamationCircleOutlined, SyncOutlined, MailOutlined,
-  BankOutlined, ToolOutlined, SearchOutlined,
-} from '@ant-design/icons';
+  DollarSign, Zap, AlertTriangle, RefreshCw, PauseCircle, PlayCircle,
+  Clock, CheckCircle2, X, AlertCircle, Mail, Building2,
+  Wrench, Search, RotateCw,
+} from 'lucide-react';
+import { Spinner } from '@/lib/icons';
+import { toast } from '@/lib/toast';
+import { PageShell, PageHeader } from '@/components/ui/page-shell';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { ContentSkeleton } from '@/components/ui/empty-state';
+import { useClient } from '../../contexts/ClientContext';
 import * as vectorApi from '../../services/vectorService';
 import { controlsApi, intelligenceApi } from '../../services/aiService';
 import { modelsApi } from '../../services/strategicDigestService';
 import { MailboxSelector } from '../../components/MailboxSelector';
-import { ClientSelector } from '../../components/analytics/ClientSelector';
 import api from '../../services/apiClient';
 import { formatTime } from '../../utils/dateUtils';
 import {
@@ -32,12 +32,54 @@ import {
 import type { UsageSummary, MonitoringStats, AIControlSettings, UsageLogEntry } from '../../types/ai';
 import type { AIModel } from '../../types/strategic-digest';
 
-const { Title, Text } = Typography;
+/* ------------------------------------------------------------------ */
+/* Toggle Switch — native checkbox styled as switch                    */
+/* ------------------------------------------------------------------ */
+const Toggle: React.FC<{
+  checked: boolean;
+  onChange: (val: boolean) => void;
+  disabled?: boolean;
+  size?: 'sm' | 'default';
+}> = ({ checked, onChange, disabled, size = 'default' }) => {
+  const w = size === 'sm' ? 'w-8' : 'w-10';
+  const h = size === 'sm' ? 'h-4' : 'h-5';
+  const dot = size === 'sm' ? 'h-3 w-3' : 'h-4 w-4';
+  const translate = size === 'sm' ? 'translate-x-4' : 'translate-x-5';
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={() => !disabled && onChange(!checked)}
+      className={`
+        relative inline-flex ${w} ${h} shrink-0 cursor-pointer rounded-full
+        border-2 border-transparent transition-colors duration-200 ease-in-out
+        focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2
+        ${checked ? 'bg-indigo-600' : 'bg-slate-200'}
+        ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
+      `}
+    >
+      <span className="sr-only">Toggle</span>
+      <span
+        className={`
+          pointer-events-none inline-block ${dot} transform rounded-full bg-white shadow ring-0
+          transition duration-200 ease-in-out
+          ${checked ? translate : 'translate-x-0'}
+        `}
+      />
+    </button>
+  );
+};
 
 const UsagePage: React.FC = () => {
-  const [clientId, setClientId] = useState(() => localStorage.getItem('analytics_client_id') || '');
+  const { clientId } = useClient();
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const [apiKeysForm] = Form.useForm();
+
+  // API keys form state (replaces Form.useForm())
+  const [anthropicKey, setAnthropicKey] = useState('');
+  const [googleKey, setGoogleKey] = useState('');
+  const [openaiKey, setOpenaiKey] = useState('');
   const [apiKeysSaving, setApiKeysSaving] = useState(false);
 
   // Re-analyze state
@@ -64,7 +106,7 @@ const UsagePage: React.FC = () => {
   const apiKeys = apiKeysQuery.data || null;
   const loading = costsQuery.isLoading;
 
-  // Derive model selections from client settings → controls → defaults
+  // Derive model selections from client settings -> controls -> defaults
   const clientSettings = clientSettingsQuery.data || {};
   const cheapModel = clientSettings['ai_cheap_model'] || controls?.cheap_model || 'haiku';
   const strategicModel = clientSettings['ai_strategic_model'] || controls?.strategic_model || 'sonnet';
@@ -85,35 +127,41 @@ const UsagePage: React.FC = () => {
       const result = await controlsApi.update({ [key]: value });
       if (result?.settings) {
         controlsQuery.refetch();
-        message.success(`Updated ${key.replace(/_/g, ' ')}`);
+        toast.success(`Updated ${key.replace(/_/g, ' ')}`);
       }
     } catch {
-      message.error('Failed to update setting');
+      toast.error('Failed to update setting');
     }
   };
 
   const handleResetSpend = async () => {
     const result = await controlsApi.resetSessionSpend();
     if (result) {
-      message.success(`Session spend reset (was $${result.previous_spend_usd})`);
+      toast.success(`Session spend reset (was $${result.previous_spend_usd})`);
       loadData();
     }
   };
 
   const handleApiKeysSave = async () => {
-    const values = apiKeysForm.getFieldsValue();
-    if (!values.anthropic_api_key && !values.google_api_key && !values.openai_api_key) {
-      message.warning('Enter at least one key to update');
+    if (!anthropicKey && !googleKey && !openaiKey) {
+      toast.warning('Enter at least one key to update');
       return;
     }
     setApiKeysSaving(true);
     try {
-      const result = await api.put<any>('/v1/ai/api-keys', { ...values, client_id: clientId || undefined });
-      message.success(`Keys updated: ${result.updated?.join(', ')}`);
-      apiKeysForm.resetFields();
+      const result = await api.put<any>('/v1/ai/api-keys', {
+        anthropic_api_key: anthropicKey || undefined,
+        google_api_key: googleKey || undefined,
+        openai_api_key: openaiKey || undefined,
+        client_id: clientId || undefined,
+      });
+      toast.success(`Keys updated: ${result.updated?.join(', ')}`);
+      setAnthropicKey('');
+      setGoogleKey('');
+      setOpenaiKey('');
       apiKeysQuery.refetch();
     } catch (err: any) {
-      message.error(err?.message || 'Failed to update keys');
+      toast.error(err?.message || 'Failed to update keys');
     } finally {
       setApiKeysSaving(false);
     }
@@ -121,18 +169,18 @@ const UsagePage: React.FC = () => {
 
   const handleReanalyze = async () => {
     const mailboxId = reanalyzeMailbox[0];
-    if (!mailboxId) { message.warning('Select a mailbox'); return; }
-    if (!reanalyzeVersion.trim()) { message.warning('Enter a prompt version to target'); return; }
+    if (!mailboxId) { toast.warning('Select a mailbox'); return; }
+    if (!reanalyzeVersion.trim()) { toast.warning('Enter a prompt version to target'); return; }
     setReanalyzeLoading(true);
     try {
       const result = await intelligenceApi.reanalyze(mailboxId, reanalyzeVersion, reanalyzeMax, reanalyzeIncludeFailed);
       if (result?.status === 'no_candidates') {
-        message.info(result.message);
+        toast.info(result.message);
       } else if (result) {
-        message.success(`${result.message} — ${result.emails_queued} emails queued`);
+        toast.success(`${result.message} — ${result.emails_queued} emails queued`);
       }
     } catch (err: any) {
-      message.error(err?.message || 'Re-analysis failed');
+      toast.error(err?.message || 'Re-analysis failed');
     } finally {
       setReanalyzeLoading(false);
     }
@@ -144,9 +192,9 @@ const UsagePage: React.FC = () => {
     try {
       await modelsApi.updateDefaults(newCheap, newStrategic, clientId || undefined);
       clientSettingsQuery.refetch();
-      message.success(`${type === 'cheap' ? 'Fast' : 'Strategic'} model set to ${value}`);
+      toast.success(`${type === 'cheap' ? 'Fast' : 'Strategic'} model set to ${value}`);
     } catch (err) {
-      message.error('Failed to update model');
+      toast.error('Failed to update model');
     }
   };
 
@@ -156,600 +204,666 @@ const UsagePage: React.FC = () => {
     ? Math.min((controls.session_spend_usd / controls.daily_budget_usd) * 100, 100)
     : 0;
 
-  const budgetColor = budgetUsedPct >= 90 ? '#ff4d4f' : budgetUsedPct >= 70 ? '#faad14' : '#52c41a';
+  const budgetColor = budgetUsedPct >= 90 ? 'text-red-500' : budgetUsedPct >= 70 ? 'text-amber-500' : 'text-emerald-500';
+  const budgetBarColor = budgetUsedPct >= 90 ? 'bg-red-500' : budgetUsedPct >= 70 ? 'bg-amber-500' : 'bg-emerald-500';
 
-  // Recent logs table columns
-  const logColumns = [
-    {
-      title: 'Time',
-      dataIndex: 'created_at',
-      key: 'time',
-      width: 160,
-      render: (val: string) => val ? formatTime(val) : '-',
-    },
-    {
-      title: 'Operation',
-      dataIndex: 'operation',
-      key: 'operation',
-      width: 140,
-      render: (val: string) => <Tag>{val || 'unknown'}</Tag>,
-    },
-    {
-      title: 'Model',
-      dataIndex: 'model',
-      key: 'model',
-      width: 200,
-      render: (val: string) => {
-        const short = val?.includes('haiku') ? 'Haiku' : val?.includes('sonnet') ? 'Sonnet' : val || '-';
-        return <Tag color={short === 'Haiku' ? 'blue' : 'purple'}>{short}</Tag>;
-      },
-    },
-    {
-      title: 'Tokens (in/out)',
-      key: 'tokens',
-      width: 140,
-      render: (_: any, r: UsageLogEntry) => (
-        <span>{(r.input_tokens || 0).toLocaleString()} / {(r.output_tokens || 0).toLocaleString()}</span>
-      ),
-    },
-    {
-      title: 'Cost',
-      dataIndex: 'estimated_cost_usd',
-      key: 'cost',
-      width: 100,
-      render: (val: number) => <Text strong>${(val || 0).toFixed(4)}</Text>,
-    },
-    {
-      title: 'Latency',
-      dataIndex: 'processing_time_ms',
-      key: 'latency',
-      width: 90,
-      render: (val: number) => val ? `${(val / 1000).toFixed(1)}s` : '-',
-    },
-    {
-      title: 'Status',
-      dataIndex: 'success',
-      key: 'success',
-      width: 80,
-      render: (val: boolean, r: UsageLogEntry) => val
-        ? <CheckCircleOutlined style={{ color: '#52c41a' }} />
-        : <Tooltip title={r.error_detail || r.error_type || 'Failed'}><CloseCircleOutlined style={{ color: '#ff4d4f' }} /></Tooltip>,
-    },
-  ];
+  /* ------------------------------------------------------------------ */
+  /* Pagination state for Recent API Calls table                        */
+  /* ------------------------------------------------------------------ */
+  const [logPage, setLogPage] = useState(1);
+  const logsPerPage = 15;
+  const totalLogPages = Math.ceil(recentLogs.length / logsPerPage);
+  const pagedLogs = recentLogs.slice((logPage - 1) * logsPerPage, logPage * logsPerPage);
 
   return (
-    <div style={{ padding: '24px', maxWidth: 1400, margin: '0 auto' }}>
+    <PageShell>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <Title level={3} style={{ margin: 0 }}>AI Usage & Monitoring</Title>
-        <Space>
-          <ClientSelector value={clientId} onChange={setClientId} />
-          <Text type="secondary">Auto-refresh</Text>
-          <Switch
-            checked={autoRefresh}
-            onChange={setAutoRefresh}
-            checkedChildren="ON"
-            unCheckedChildren="OFF"
-            size="small"
-          />
-          <Button icon={<ReloadOutlined />} onClick={loadData}>
-            Refresh
-          </Button>
-        </Space>
-      </div>
+      <PageHeader
+        title="AI Usage & Monitoring"
+        actions={
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-slate-500">Auto-refresh</span>
+            <Toggle checked={autoRefresh} onChange={setAutoRefresh} size="sm" />
+            <button
+              onClick={loadData}
+              className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50 transition"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              Refresh
+            </button>
+          </div>
+        }
+      />
 
       {/* Credit Balance / API Error Alert */}
       {monitoring && monitoring.total_failures_24h > 0 && monitoring.api_failure_rate > 50 && (
-        <Alert
-          message="API Errors Detected"
-          description="High API failure rate in the last 24 hours. This may indicate insufficient Anthropic credits or an API key issue. Check your Anthropic account balance and update the API key if needed."
-          type="error"
-          showIcon
-          style={{ marginBottom: 16 }}
-        />
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 flex items-start gap-3">
+          <AlertCircle className="h-5 w-5 text-red-500 mt-0.5 shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-red-800">API Errors Detected</p>
+            <p className="text-xs text-red-700 mt-1">
+              High API failure rate in the last 24 hours. This may indicate insufficient Anthropic credits or an API key issue. Check your Anthropic account balance and update the API key if needed.
+            </p>
+          </div>
+        </div>
       )}
 
       {/* Budget Alert */}
-      {controls && controls.session_spend_usd >= controls.daily_budget_usd * 0.8 && (
-        <Alert
-          message="Budget Warning"
-          description={`Session spend ($${controls.session_spend_usd.toFixed(4)}) is approaching the daily budget cap ($${controls.daily_budget_usd.toFixed(2)}). API calls will be blocked when the cap is reached.`}
-          type={controls.session_spend_usd >= controls.daily_budget_usd ? 'error' : 'warning'}
-          showIcon
-          style={{ marginBottom: 16 }}
-        />
-      )}
+      {controls && controls.session_spend_usd >= controls.daily_budget_usd * 0.8 && (() => {
+        const isOver = controls.session_spend_usd >= controls.daily_budget_usd;
+        const borderCls = isOver ? 'border-red-200 bg-red-50' : 'border-amber-200 bg-amber-50';
+        const iconCls = isOver ? 'text-red-500' : 'text-amber-500';
+        const titleCls = isOver ? 'text-red-800' : 'text-amber-800';
+        const bodyCls = isOver ? 'text-red-700' : 'text-amber-700';
+        return (
+          <div className={`mb-4 rounded-lg border ${borderCls} p-4 flex items-start gap-3`}>
+            <AlertTriangle className={`h-5 w-5 ${iconCls} mt-0.5 shrink-0`} />
+            <div>
+              <p className={`text-sm font-semibold ${titleCls}`}>Budget Warning</p>
+              <p className={`text-xs ${bodyCls} mt-1`}>
+                Session spend (${controls.session_spend_usd.toFixed(4)}) is approaching the daily budget cap (${controls.daily_budget_usd.toFixed(2)}). API calls will be blocked when the cap is reached.
+              </p>
+            </div>
+          </div>
+        );
+      })()}
 
       {!clientId && (
-        <Card className="glass-card" style={{ marginBottom: 24 }}><Empty description="Select a client to view AI usage" /></Card>
+        <div className="rounded-lg border bg-white shadow-sm mb-6 p-12 text-center">
+          <p className="text-sm text-slate-400">Select a client to view AI usage</p>
+        </div>
       )}
 
       {/* Row 1: Key Metrics */}
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        <Col xs={24} sm={12} md={6}>
-          <Card className="glass-card" size="small">
-            {showSkeleton ? <Skeleton active paragraph={{ rows: 1 }} /> : (
-              <Statistic
-                title="Total Spend (30d)"
-                value={costs?.total_cost_usd || 0}
-                prefix={<DollarOutlined />}
-                precision={4}
-                valueStyle={{ color: '#667eea' }}
-              />
-            )}
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card className="glass-card" size="small">
-            {showSkeleton ? <Skeleton active paragraph={{ rows: 2 }} /> : (
-              <>
-                <Statistic
-                  title="Session Spend"
-                  value={controls?.session_spend_usd || 0}
-                  prefix={<DollarOutlined />}
-                  precision={4}
-                  valueStyle={{ color: budgetColor }}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        {/* Total Spend (30d) */}
+        <div className="rounded-lg border bg-white shadow-sm p-4">
+          {showSkeleton ? <ContentSkeleton rows={1} /> : (
+            <div>
+              <p className="text-xs font-medium text-slate-500 mb-1">Total Spend (30d)</p>
+              <div className="flex items-center gap-2">
+                <DollarSign className="h-4 w-4 text-indigo-500" />
+                <span className="text-xl font-semibold text-indigo-500">
+                  ${(costs?.total_cost_usd || 0).toFixed(4)}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Session Spend */}
+        <div className="rounded-lg border bg-white shadow-sm p-4">
+          {showSkeleton ? <ContentSkeleton rows={2} /> : (
+            <div>
+              <p className="text-xs font-medium text-slate-500 mb-1">Session Spend</p>
+              <div className="flex items-center gap-2 mb-2">
+                <DollarSign className={`h-4 w-4 ${budgetColor}`} />
+                <span className={`text-xl font-semibold ${budgetColor}`}>
+                  ${(controls?.session_spend_usd || 0).toFixed(4)}
+                </span>
+              </div>
+              {/* Progress bar */}
+              <div className="w-full bg-slate-100 rounded-full h-1.5">
+                <div
+                  className={`${budgetBarColor} h-1.5 rounded-full transition-all`}
+                  style={{ width: `${Math.round(budgetUsedPct)}%` }}
                 />
-                <Progress
-                  percent={Math.round(budgetUsedPct)}
-                  strokeColor={budgetColor}
-                  size="small"
-                  format={(pct) => `${pct}% of $${controls?.daily_budget_usd || 0}`}
-                />
-              </>
-            )}
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card className="glass-card" size="small">
-            {showSkeleton ? <Skeleton active paragraph={{ rows: 1 }} /> : (
-              <>
-                <Statistic
-                  title="Requests (24h)"
-                  value={monitoring?.total_requests_24h || 0}
-                  prefix={<ThunderboltOutlined />}
-                />
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  {monitoring?.total_failures_24h || 0} failures
-                </Text>
-              </>
-            )}
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card className="glass-card" size="small">
-            {showSkeleton ? <Skeleton active paragraph={{ rows: 1 }} /> : (() => {
-              const dailyRemaining = Math.max((controls?.daily_budget_usd || 0) - (controls?.session_spend_usd || 0), 0);
-              const monthlyRemaining = Math.max((controls?.monthly_budget_usd || 0) - (costs?.total_cost_usd || 0), 0);
-              const dailyPct = controls?.daily_budget_usd ? (dailyRemaining / controls.daily_budget_usd) * 100 : 100;
-              const creditColor = dailyPct <= 10 ? '#ff4d4f' : dailyPct <= 30 ? '#faad14' : '#52c41a';
-              return (
-                <>
-                  <Statistic
-                    title="Daily Credit Remaining"
-                    value={dailyRemaining}
-                    prefix={<DollarOutlined />}
-                    precision={4}
-                    valueStyle={{ color: creditColor }}
-                  />
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    Monthly: ${monthlyRemaining.toFixed(2)} / ${controls?.monthly_budget_usd?.toFixed(2) || '0'}
-                  </Text>
-                </>
-              );
-            })()}
-          </Card>
-        </Col>
-      </Row>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1">
+                {Math.round(budgetUsedPct)}% of ${controls?.daily_budget_usd || 0}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Requests (24h) */}
+        <div className="rounded-lg border bg-white shadow-sm p-4">
+          {showSkeleton ? <ContentSkeleton rows={1} /> : (
+            <div>
+              <p className="text-xs font-medium text-slate-500 mb-1">Requests (24h)</p>
+              <div className="flex items-center gap-2">
+                <Zap className="h-4 w-4 text-slate-500" />
+                <span className="text-xl font-semibold text-slate-900">
+                  {(monitoring?.total_requests_24h || 0).toLocaleString('en-AU')}
+                </span>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1">
+                {(monitoring?.total_failures_24h || 0).toLocaleString('en-AU')} failures
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Daily Credit Remaining */}
+        <div className="rounded-lg border bg-white shadow-sm p-4">
+          {showSkeleton ? <ContentSkeleton rows={1} /> : (() => {
+            const dailyRemaining = Math.max((controls?.daily_budget_usd || 0) - (controls?.session_spend_usd || 0), 0);
+            const monthlyRemaining = Math.max((controls?.monthly_budget_usd || 0) - (costs?.total_cost_usd || 0), 0);
+            const dailyPct = controls?.daily_budget_usd ? (dailyRemaining / controls.daily_budget_usd) * 100 : 100;
+            const creditColor = dailyPct <= 10 ? 'text-red-500' : dailyPct <= 30 ? 'text-amber-500' : 'text-emerald-500';
+            return (
+              <div>
+                <p className="text-xs font-medium text-slate-500 mb-1">Daily Credit Remaining</p>
+                <div className="flex items-center gap-2">
+                  <DollarSign className={`h-4 w-4 ${creditColor}`} />
+                  <span className={`text-xl font-semibold ${creditColor}`}>
+                    ${dailyRemaining.toFixed(4)}
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Monthly: ${monthlyRemaining.toFixed(2)} / ${controls?.monthly_budget_usd?.toFixed(2) || '0'}
+                </p>
+              </div>
+            );
+          })()}
+        </div>
+      </div>
 
       {/* Row 2: Controls + Monitoring */}
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
         {/* AI Controls */}
-        <Col xs={24} lg={12}>
-          <Card
-            title={
-              <Space>
-                {controls?.ai_enabled
-                  ? <Badge status="success" text="AI Controls" />
-                  : <Badge status="error" text="AI Controls (DISABLED)" />
-                }
-              </Space>
-            }
-            className="glass-card"
-            extra={
-              <Button size="small" onClick={handleResetSpend}>
-                Reset Spend
-              </Button>
-            }
-          >
+        <div className="rounded-lg border bg-white shadow-sm">
+          <div className="flex items-center justify-between border-b px-5 py-3">
+            <div className="flex items-center gap-2">
+              <span className={`inline-block h-2 w-2 rounded-full ${controls?.ai_enabled ? 'bg-emerald-500' : 'bg-red-500'}`} />
+              <h3 className="text-sm font-semibold text-slate-900">
+                AI Controls{!controls?.ai_enabled && ' (DISABLED)'}
+              </h3>
+            </div>
+            <button
+              onClick={handleResetSpend}
+              className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600 shadow-sm hover:bg-slate-50 transition"
+            >
+              Reset Spend
+            </button>
+          </div>
+          <div className="p-5 space-y-4">
             {/* Master Kill Switch */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, padding: '12px 16px', background: controls?.ai_enabled ? 'rgba(82,196,26,0.06)' : 'rgba(255,77,79,0.06)', borderRadius: 8 }}>
+            <div className={`flex items-center justify-between rounded-lg p-3 ${controls?.ai_enabled ? 'bg-emerald-50' : 'bg-red-50'}`}>
               <div>
-                <Text strong style={{ fontSize: 15 }}>Master AI Switch</Text>
-                <br />
-                <Text type="secondary" style={{ fontSize: 12 }}>Disables ALL AI API calls immediately</Text>
+                <p className="text-sm font-semibold text-slate-800">Master AI Switch</p>
+                <p className="text-[11px] text-slate-500">Disables ALL AI API calls immediately</p>
               </div>
-              <Switch
+              <Toggle
                 checked={controls?.ai_enabled ?? false}
                 onChange={(val) => handleControlChange('ai_enabled', val)}
-                checkedChildren={<PlayCircleOutlined />}
-                unCheckedChildren={<PauseCircleOutlined />}
               />
             </div>
 
-            <Divider style={{ margin: '12px 0' }} />
+            <hr className="border-slate-100" />
 
             {/* Feature Toggles */}
-            <Title level={5} style={{ marginBottom: 12, marginTop: 0 }}>Feature Toggles</Title>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text>Email Analysis (Haiku)</Text>
-                <Switch
+            <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Feature Toggles</h4>
+            <div className="flex flex-col gap-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-700">Email Analysis (Haiku)</span>
+                <Toggle
                   checked={controls?.email_analysis_enabled ?? false}
                   onChange={(val) => handleControlChange('email_analysis_enabled', val)}
-                  size="small"
+                  size="sm"
                   disabled={!controls?.ai_enabled}
                 />
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text>Daily Digest (Sonnet)</Text>
-                <Switch
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-700">Daily Digest (Sonnet)</span>
+                <Toggle
                   checked={controls?.digest_enabled ?? false}
                   onChange={(val) => handleControlChange('digest_enabled', val)}
-                  size="small"
+                  size="sm"
                   disabled={!controls?.ai_enabled}
                 />
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text>Relationship Summaries (Sonnet)</Text>
-                <Switch
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-700">Relationship Summaries (Sonnet)</span>
+                <Toggle
                   checked={controls?.relationship_summary_enabled ?? false}
                   onChange={(val) => handleControlChange('relationship_summary_enabled', val)}
-                  size="small"
+                  size="sm"
                   disabled={!controls?.ai_enabled}
                 />
               </div>
             </div>
 
-            <Divider style={{ margin: '12px 0' }} />
+            <hr className="border-slate-100" />
 
             {/* Model Selection */}
             {models.length > 0 && (
               <>
-                <Title level={5} style={{ marginBottom: 12, marginTop: 0 }}>AI Model Selection</Title>
-                <Row gutter={16}>
-                  <Col span={12}>
-                    <Text type="secondary" style={{ fontSize: 12 }}>Fast tasks (email analysis, insights)</Text>
-                    <Select
+                <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">AI Model Selection</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-[11px] text-slate-500 mb-1">Fast tasks (email analysis, insights)</p>
+                    <select
                       value={cheapModel}
-                      onChange={(v) => handleModelChange('cheap', v)}
-                      style={{ width: '100%', marginTop: 4 }}
+                      onChange={(e) => handleModelChange('cheap', e.target.value)}
                       disabled={!controls?.ai_enabled}
+                      className="w-full rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700 shadow-sm focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {models.map(m => (
-                        <Select.Option key={m.name} value={m.name} disabled={!m.available}>
+                        <option key={m.name} value={m.name} disabled={!m.available}>
                           {m.label} {m.cost_input_per_mtok === 0 ? '(free)' : `($${m.cost_input_per_mtok}/MTok)`}
-                        </Select.Option>
+                        </option>
                       ))}
-                    </Select>
-                  </Col>
-                  <Col span={12}>
-                    <Text type="secondary" style={{ fontSize: 12 }}>Strategic tasks (digest, reports)</Text>
-                    <Select
+                    </select>
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-slate-500 mb-1">Strategic tasks (digest, reports)</p>
+                    <select
                       value={strategicModel}
-                      onChange={(v) => handleModelChange('strategic', v)}
-                      style={{ width: '100%', marginTop: 4 }}
+                      onChange={(e) => handleModelChange('strategic', e.target.value)}
                       disabled={!controls?.ai_enabled}
+                      className="w-full rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700 shadow-sm focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {models.map(m => (
-                        <Select.Option key={m.name} value={m.name} disabled={!m.available}>
+                        <option key={m.name} value={m.name} disabled={!m.available}>
                           {m.label} {m.cost_input_per_mtok === 0 ? '(free)' : `($${m.cost_input_per_mtok}/MTok)`}
-                        </Select.Option>
+                        </option>
                       ))}
-                    </Select>
-                  </Col>
-                </Row>
-                <Divider style={{ margin: '12px 0' }} />
+                    </select>
+                  </div>
+                </div>
+
+                <hr className="border-slate-100" />
               </>
             )}
 
             {/* Budget Controls */}
-            <Title level={5} style={{ marginBottom: 12, marginTop: 0 }}>Budget Limits</Title>
-            <Row gutter={16}>
-              <Col span={12}>
-                <Text type="secondary" style={{ fontSize: 12 }}>Daily Cap (USD)</Text>
-                <InputNumber
-                  value={controls?.daily_budget_usd}
+            <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Budget Limits</h4>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-[11px] text-slate-500 mb-1">Daily Cap (USD)</p>
+                <input
+                  type="number"
+                  defaultValue={controls?.daily_budget_usd}
                   min={0.01}
                   max={100}
                   step={0.5}
-                  prefix="$"
-                  style={{ width: '100%', marginTop: 4 }}
+                  className="w-full rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700 shadow-sm focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400"
                   onBlur={(e) => {
-                    const val = parseFloat(e.target.value.replace('$', ''));
+                    const val = parseFloat(e.target.value);
                     if (!isNaN(val) && val > 0) handleControlChange('daily_budget_usd', val);
                   }}
                 />
-              </Col>
-              <Col span={12}>
-                <Text type="secondary" style={{ fontSize: 12 }}>Monthly Cap (USD)</Text>
-                <InputNumber
-                  value={controls?.monthly_budget_usd}
+              </div>
+              <div>
+                <p className="text-[11px] text-slate-500 mb-1">Monthly Cap (USD)</p>
+                <input
+                  type="number"
+                  defaultValue={controls?.monthly_budget_usd}
                   min={1}
                   max={500}
                   step={1}
-                  prefix="$"
-                  style={{ width: '100%', marginTop: 4 }}
+                  className="w-full rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700 shadow-sm focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400"
                   onBlur={(e) => {
-                    const val = parseFloat(e.target.value.replace('$', ''));
+                    const val = parseFloat(e.target.value);
                     if (!isNaN(val) && val > 0) handleControlChange('monthly_budget_usd', val);
                   }}
                 />
-              </Col>
-            </Row>
+              </div>
+            </div>
 
-            <Divider style={{ margin: '12px 0' }} />
+            <hr className="border-slate-100" />
 
             {/* Batch Controls */}
-            <Title level={5} style={{ marginBottom: 12, marginTop: 0 }}>Processing Limits</Title>
-            <Row gutter={16}>
-              <Col span={12}>
-                <Text type="secondary" style={{ fontSize: 12 }}>Emails per batch</Text>
-                <InputNumber
-                  value={controls?.batch_size}
+            <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Processing Limits</h4>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-[11px] text-slate-500 mb-1">Emails per batch</p>
+                <input
+                  type="number"
+                  defaultValue={controls?.batch_size}
                   min={1}
                   max={25}
                   step={1}
-                  style={{ width: '100%', marginTop: 4 }}
+                  className="w-full rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700 shadow-sm focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400"
                   onBlur={(e) => {
                     const val = parseInt(e.target.value);
                     if (!isNaN(val) && val > 0) handleControlChange('batch_size', val);
                   }}
                 />
-              </Col>
-              <Col span={12}>
-                <Text type="secondary" style={{ fontSize: 12 }}>Max emails per run</Text>
-                <InputNumber
-                  value={controls?.max_emails_per_run}
+              </div>
+              <div>
+                <p className="text-[11px] text-slate-500 mb-1">Max emails per run</p>
+                <input
+                  type="number"
+                  defaultValue={controls?.max_emails_per_run}
                   min={10}
                   max={5000}
                   step={50}
-                  style={{ width: '100%', marginTop: 4 }}
+                  className="w-full rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700 shadow-sm focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400"
                   onBlur={(e) => {
                     const val = parseInt(e.target.value);
                     if (!isNaN(val) && val > 0) handleControlChange('max_emails_per_run', val);
                   }}
                 />
-              </Col>
-            </Row>
-
-            <Divider style={{ margin: '12px 0' }} />
-
-            {/* API Keys */}
-            <Title level={5} style={{ marginBottom: 12, marginTop: 0 }}>API Keys</Title>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <Text>Anthropic (Claude)</Text>
-                <Text type={apiKeys?.anthropic_set ? 'success' : 'danger'}>
-                  {apiKeys?.anthropic_set ? apiKeys.anthropic_masked : 'Not set'}
-                </Text>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <Text>Google (Gemini)</Text>
-                <Text type={apiKeys?.google_set ? 'success' : 'secondary'}>
-                  {apiKeys?.google_set ? apiKeys.google_masked : 'Not set'}
-                </Text>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <Text>OpenAI (GPT-4o)</Text>
-                <Text type={apiKeys?.openai_set ? 'success' : 'secondary'}>
-                  {apiKeys?.openai_set ? apiKeys.openai_masked : 'Not set'}
-                </Text>
               </div>
             </div>
-            <Form form={apiKeysForm} layout="vertical">
-              <Row gutter={16}>
-                <Col span={8}>
-                  <Form.Item label="Anthropic API Key" name="anthropic_api_key" style={{ marginBottom: 8 }}>
-                    <Input.Password placeholder="sk-ant-..." size="small" />
-                  </Form.Item>
-                </Col>
-                <Col span={8}>
-                  <Form.Item label="Google API Key" name="google_api_key" style={{ marginBottom: 8 }}>
-                    <Input.Password placeholder="AIza..." size="small" />
-                  </Form.Item>
-                </Col>
-                <Col span={8}>
-                  <Form.Item label="OpenAI API Key" name="openai_api_key" style={{ marginBottom: 8 }}>
-                    <Input.Password placeholder="sk-..." size="small" />
-                  </Form.Item>
-                </Col>
-              </Row>
-            </Form>
-            <Button size="small" loading={apiKeysSaving} onClick={handleApiKeysSave}>
-              Update Keys
-            </Button>
-            <Text type="secondary" style={{ fontSize: 11, marginLeft: 8 }}>
-              Runtime only — add to .env for persistence
-            </Text>
-          </Card>
-        </Col>
+
+            <hr className="border-slate-100" />
+
+            {/* API Keys */}
+            <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">API Keys</h4>
+            <div className="flex flex-col gap-1.5 mb-3">
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-700">Anthropic (Claude)</span>
+                <span className={apiKeys?.anthropic_set ? 'text-emerald-600' : 'text-red-500'}>
+                  {apiKeys?.anthropic_set ? apiKeys.anthropic_masked : 'Not set'}
+                </span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-700">Google (Gemini)</span>
+                <span className={apiKeys?.google_set ? 'text-emerald-600' : 'text-slate-400'}>
+                  {apiKeys?.google_set ? apiKeys.google_masked : 'Not set'}
+                </span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-700">OpenAI (GPT-4o)</span>
+                <span className={apiKeys?.openai_set ? 'text-emerald-600' : 'text-slate-400'}>
+                  {apiKeys?.openai_set ? apiKeys.openai_masked : 'Not set'}
+                </span>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3 mb-3">
+              <div>
+                <label className="block text-[11px] text-slate-500 mb-1">Anthropic API Key</label>
+                <input
+                  type="password"
+                  placeholder="sk-ant-..."
+                  value={anthropicKey}
+                  onChange={(e) => setAnthropicKey(e.target.value)}
+                  className="w-full rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700 shadow-sm focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] text-slate-500 mb-1">Google API Key</label>
+                <input
+                  type="password"
+                  placeholder="AIza..."
+                  value={googleKey}
+                  onChange={(e) => setGoogleKey(e.target.value)}
+                  className="w-full rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700 shadow-sm focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] text-slate-500 mb-1">OpenAI API Key</label>
+                <input
+                  type="password"
+                  placeholder="sk-..."
+                  value={openaiKey}
+                  onChange={(e) => setOpenaiKey(e.target.value)}
+                  className="w-full rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700 shadow-sm focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400"
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleApiKeysSave}
+                disabled={apiKeysSaving}
+                className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50 transition disabled:opacity-50"
+              >
+                {apiKeysSaving && <Spinner className="h-3 w-3 animate-spin" />}
+                Update Keys
+              </button>
+              <span className="text-[10px] text-slate-400">Runtime only — add to .env for persistence</span>
+            </div>
+          </div>
+        </div>
 
         {/* Monitoring Health */}
-        <Col xs={24} lg={12}>
-          <Card title="Health Monitoring (24h)" className="glass-card">
-            <Row gutter={[16, 16]}>
-              <Col span={12}>
-                <Statistic
-                  title="API Failure Rate"
-                  value={(monitoring?.api_failure_rate || 0) * 100}
-                  suffix="%"
-                  precision={1}
-                  prefix={monitoring && monitoring.api_failure_rate > 0.1
-                    ? <WarningOutlined style={{ color: '#ff4d4f' }} />
-                    : <CheckCircleOutlined style={{ color: '#52c41a' }} />
+        <div className="rounded-lg border bg-white shadow-sm">
+          <div className="border-b px-5 py-3">
+            <h3 className="text-sm font-semibold text-slate-900">Health Monitoring (24h)</h3>
+          </div>
+          <div className="p-5">
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              {/* API Failure Rate */}
+              <div>
+                <p className="text-xs font-medium text-slate-500 mb-1">API Failure Rate</p>
+                <div className="flex items-center gap-2">
+                  {monitoring && monitoring.api_failure_rate > 0.1
+                    ? <AlertTriangle className="h-4 w-4 text-red-500" />
+                    : <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                   }
-                  valueStyle={{
-                    color: monitoring && monitoring.api_failure_rate > 0.1 ? '#ff4d4f' : '#52c41a',
-                  }}
-                />
-              </Col>
-              <Col span={12}>
-                <Statistic
-                  title="Parse Failure Rate"
-                  value={(monitoring?.parse_failure_rate || 0) * 100}
-                  suffix="%"
-                  precision={1}
-                  prefix={monitoring && monitoring.parse_failure_rate > 0.05
-                    ? <ExclamationCircleOutlined style={{ color: '#faad14' }} />
-                    : <CheckCircleOutlined style={{ color: '#52c41a' }} />
+                  <span className={`text-lg font-semibold ${monitoring && monitoring.api_failure_rate > 0.1 ? 'text-red-500' : 'text-emerald-500'}`}>
+                    {((monitoring?.api_failure_rate || 0) * 100).toFixed(1)}%
+                  </span>
+                </div>
+              </div>
+              {/* Parse Failure Rate */}
+              <div>
+                <p className="text-xs font-medium text-slate-500 mb-1">Parse Failure Rate</p>
+                <div className="flex items-center gap-2">
+                  {monitoring && monitoring.parse_failure_rate > 0.05
+                    ? <AlertCircle className="h-4 w-4 text-amber-500" />
+                    : <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                   }
-                  valueStyle={{
-                    color: monitoring && monitoring.parse_failure_rate > 0.05 ? '#faad14' : '#52c41a',
-                  }}
-                />
-              </Col>
-              <Col span={12}>
-                <Statistic
-                  title="Avg Retry Count"
-                  value={monitoring?.avg_retry_count || 0}
-                  precision={2}
-                  prefix={<ClockCircleOutlined />}
-                />
-              </Col>
-              <Col span={12}>
-                <Statistic
-                  title="Total Failures (24h)"
-                  value={monitoring?.total_failures_24h || 0}
-                  valueStyle={{
-                    color: (monitoring?.total_failures_24h || 0) > 0 ? '#ff4d4f' : '#52c41a',
-                  }}
-                />
-              </Col>
-            </Row>
+                  <span className={`text-lg font-semibold ${monitoring && monitoring.parse_failure_rate > 0.05 ? 'text-amber-500' : 'text-emerald-500'}`}>
+                    {((monitoring?.parse_failure_rate || 0) * 100).toFixed(1)}%
+                  </span>
+                </div>
+              </div>
+              {/* Avg Retry Count */}
+              <div>
+                <p className="text-xs font-medium text-slate-500 mb-1">Avg Retry Count</p>
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-slate-400" />
+                  <span className="text-lg font-semibold text-slate-900">
+                    {(monitoring?.avg_retry_count || 0).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+              {/* Total Failures */}
+              <div>
+                <p className="text-xs font-medium text-slate-500 mb-1">Total Failures (24h)</p>
+                <span className={`text-lg font-semibold ${(monitoring?.total_failures_24h || 0) > 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+                  {(monitoring?.total_failures_24h || 0).toLocaleString('en-AU')}
+                </span>
+              </div>
+            </div>
 
-            <Divider style={{ margin: '16px 0' }} />
+            <hr className="border-slate-100 my-4" />
 
-            {/* Cost Breakdown */}
-            <Title level={5} style={{ marginTop: 0, marginBottom: 12 }}>Cost by Operation (30d)</Title>
+            {/* Cost by Operation */}
+            <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider mb-3">Cost by Operation (30d)</h4>
             {costs?.by_operation && Object.entries(costs.by_operation).length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div className="flex flex-col gap-2 mb-4">
                 {Object.entries(costs.by_operation).map(([op, data]) => (
-                  <div key={op} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Tag>{op}</Tag>
-                    <Space>
-                      <Text type="secondary">{data.count} calls</Text>
-                      <Text strong>${data.cost.toFixed(4)}</Text>
-                    </Space>
+                  <div key={op} className="flex items-center justify-between">
+                    <StatusBadge variant="neutral">{op}</StatusBadge>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-slate-400">{data.count} calls</span>
+                      <span className="text-xs font-semibold text-slate-900">${data.cost.toFixed(4)}</span>
+                    </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <Text type="secondary">No usage data yet</Text>
+              <p className="text-xs text-slate-400 mb-4">No usage data yet</p>
             )}
 
-            <Divider style={{ margin: '16px 0' }} />
+            <hr className="border-slate-100 my-4" />
 
-            <Title level={5} style={{ marginTop: 0, marginBottom: 12 }}>Cost by Model (30d)</Title>
+            <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider mb-3">Cost by Model (30d)</h4>
             {costs?.by_model && Object.entries(costs.by_model).length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div className="flex flex-col gap-2">
                 {Object.entries(costs.by_model).map(([model, data]) => {
                   const short = model.includes('haiku') ? 'Haiku' : model.includes('sonnet') ? 'Sonnet' : model;
                   return (
-                    <div key={model} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Tag color={short === 'Haiku' ? 'blue' : 'purple'}>{short}</Tag>
-                      <Space>
-                        <Text type="secondary">{data.count} calls</Text>
-                        <Text strong>${data.cost.toFixed(4)}</Text>
-                      </Space>
+                    <div key={model} className="flex items-center justify-between">
+                      <StatusBadge variant={short === 'Haiku' ? 'info' : 'purple'}>{short}</StatusBadge>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs text-slate-400">{data.count} calls</span>
+                        <span className="text-xs font-semibold text-slate-900">${data.cost.toFixed(4)}</span>
+                      </div>
                     </div>
                   );
                 })}
               </div>
             ) : (
-              <Text type="secondary">No usage data yet</Text>
+              <p className="text-xs text-slate-400">No usage data yet</p>
             )}
-          </Card>
-        </Col>
-      </Row>
+          </div>
+        </div>
+      </div>
 
       {/* Row 3: Re-analyze */}
-      <Card
-        title={<Space><SyncOutlined />Re-analyze Emails</Space>}
-        className="glass-card"
-        style={{ marginBottom: 24 }}
-      >
-        <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
-          Reset emails analyzed with an older prompt version so they are re-processed with the current prompt.
-          Runs in the background — check Recent API Calls below for progress.
-        </Text>
-        <Row gutter={16} align="bottom">
-          <Col xs={24} sm={8} md={6}>
-            <Text type="secondary" style={{ fontSize: 12 }}>Mailbox</Text>
-            <div style={{ marginTop: 4 }}>
+      <div className="rounded-lg border bg-white shadow-sm mb-6">
+        <div className="flex items-center gap-2 border-b px-5 py-3">
+          <RotateCw className="h-4 w-4 text-slate-500" />
+          <h3 className="text-sm font-semibold text-slate-900">Re-analyze Emails</h3>
+        </div>
+        <div className="p-5">
+          <p className="text-xs text-slate-500 mb-4">
+            Reset emails analyzed with an older prompt version so they are re-processed with the current prompt.
+            Runs in the background — check Recent API Calls below for progress.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+            <div>
+              <p className="text-[11px] text-slate-500 mb-1">Mailbox</p>
               <MailboxSelector value={reanalyzeMailbox} onChange={setReanalyzeMailbox} mode="single" />
             </div>
-          </Col>
-          <Col xs={24} sm={6} md={4}>
-            <Text type="secondary" style={{ fontSize: 12 }}>Old prompt version</Text>
-            <Input
-              value={reanalyzeVersion}
-              onChange={(e) => setReanalyzeVersion(e.target.value)}
-              placeholder="e.g. v1.3"
-              style={{ width: '100%', marginTop: 4 }}
-            />
-          </Col>
-          <Col xs={24} sm={6} md={4}>
-            <Text type="secondary" style={{ fontSize: 12 }}>Max emails</Text>
-            <InputNumber
-              value={reanalyzeMax}
-              min={10}
-              max={5000}
-              step={100}
-              style={{ width: '100%', marginTop: 4 }}
-              onChange={(v) => setReanalyzeMax(v || 500)}
-            />
-          </Col>
-          <Col xs={24} sm={4} md={3} style={{ paddingTop: 20 }}>
-            <Checkbox
-              checked={reanalyzeIncludeFailed}
-              onChange={(e) => setReanalyzeIncludeFailed(e.target.checked)}
-            >
-              Include failed
-            </Checkbox>
-          </Col>
-          <Col xs={24} sm={24} md={4} style={{ paddingTop: 20 }}>
-            <Button
-              type="primary"
-              icon={<SyncOutlined />}
-              loading={reanalyzeLoading}
-              onClick={handleReanalyze}
-              disabled={!reanalyzeMailbox[0]}
-            >
-              Start Re-analysis
-            </Button>
-          </Col>
-        </Row>
-      </Card>
+            <div>
+              <p className="text-[11px] text-slate-500 mb-1">Old prompt version</p>
+              <input
+                type="text"
+                value={reanalyzeVersion}
+                onChange={(e) => setReanalyzeVersion(e.target.value)}
+                placeholder="e.g. v1.3"
+                className="w-full rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700 shadow-sm focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400"
+              />
+            </div>
+            <div>
+              <p className="text-[11px] text-slate-500 mb-1">Max emails</p>
+              <input
+                type="number"
+                value={reanalyzeMax}
+                min={10}
+                max={5000}
+                step={100}
+                onChange={(e) => setReanalyzeMax(parseInt(e.target.value) || 500)}
+                className="w-full rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700 shadow-sm focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400"
+              />
+            </div>
+            <div className="flex items-center gap-2 pt-4">
+              <input
+                id="include-failed"
+                type="checkbox"
+                checked={reanalyzeIncludeFailed}
+                onChange={(e) => setReanalyzeIncludeFailed(e.target.checked)}
+                className="h-3.5 w-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+              />
+              <label htmlFor="include-failed" className="text-xs text-slate-700">Include failed</label>
+            </div>
+            <div className="pt-4">
+              <button
+                onClick={handleReanalyze}
+                disabled={!reanalyzeMailbox[0] || reanalyzeLoading}
+                className="inline-flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {reanalyzeLoading ? <Spinner className="h-3.5 w-3.5 animate-spin" /> : <RotateCw className="h-3.5 w-3.5" />}
+                Start Re-analysis
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Row 4: Recent API Calls */}
-      <Card title="Recent API Calls" className="glass-card" style={{ marginBottom: 24 }}>
-        {showSkeleton ? <Skeleton active paragraph={{ rows: 5 }} /> : (
-          <Table
-            dataSource={recentLogs}
-            columns={logColumns}
-            rowKey={(r) => r.id || `${r.created_at}-${Math.random()}`}
-            size="small"
-            pagination={{ pageSize: 15, size: 'small' }}
-            scroll={{ x: 900 }}
-          />
-        )}
-      </Card>
+      <div className="rounded-lg border bg-white shadow-sm mb-6">
+        <div className="border-b px-5 py-3">
+          <h3 className="text-sm font-semibold text-slate-900">Recent API Calls</h3>
+        </div>
+        <div className="p-5">
+          {showSkeleton ? <ContentSkeleton rows={5} /> : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[900px]">
+                  <thead>
+                    <tr className="border-b border-slate-100">
+                      <th className="text-left text-xs font-bold uppercase tracking-wider text-slate-600 px-3 py-2 w-[160px]">Time</th>
+                      <th className="text-left text-xs font-bold uppercase tracking-wider text-slate-600 px-3 py-2 w-[140px]">Operation</th>
+                      <th className="text-left text-xs font-bold uppercase tracking-wider text-slate-600 px-3 py-2 w-[200px]">Model</th>
+                      <th className="text-left text-xs font-bold uppercase tracking-wider text-slate-600 px-3 py-2 w-[140px]">Tokens (in/out)</th>
+                      <th className="text-left text-xs font-bold uppercase tracking-wider text-slate-600 px-3 py-2 w-[100px]">Cost</th>
+                      <th className="text-left text-xs font-bold uppercase tracking-wider text-slate-600 px-3 py-2 w-[90px]">Latency</th>
+                      <th className="text-center text-xs font-bold uppercase tracking-wider text-slate-600 px-3 py-2 w-[80px]">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {pagedLogs.map((r, idx) => {
+                      const modelShort = r.model?.includes('haiku') ? 'Haiku' : r.model?.includes('sonnet') ? 'Sonnet' : r.model || '-';
+                      return (
+                        <tr key={r.id || `${r.created_at}-${idx}`} className="hover:bg-slate-25">
+                          <td className="px-3 py-2 text-xs text-slate-600">{r.created_at ? formatTime(r.created_at) : '-'}</td>
+                          <td className="px-3 py-2">
+                            <StatusBadge variant="neutral" size="sm">{r.operation || 'unknown'}</StatusBadge>
+                          </td>
+                          <td className="px-3 py-2">
+                            <StatusBadge variant={modelShort === 'Haiku' ? 'info' : 'purple'} size="sm">{modelShort}</StatusBadge>
+                          </td>
+                          <td className="px-3 py-2 text-xs text-slate-600">
+                            {(r.input_tokens || 0).toLocaleString('en-AU')} / {(r.output_tokens || 0).toLocaleString('en-AU')}
+                          </td>
+                          <td className="px-3 py-2 text-xs font-semibold text-slate-900">
+                            ${(r.estimated_cost_usd || 0).toFixed(4)}
+                          </td>
+                          <td className="px-3 py-2 text-xs text-slate-600">
+                            {r.processing_time_ms ? `${(r.processing_time_ms / 1000).toFixed(1)}s` : '-'}
+                          </td>
+                          <td className="px-3 py-2 text-center">
+                            {r.success
+                              ? <CheckCircle2 className="h-4 w-4 text-emerald-500 mx-auto" />
+                              : (
+                                <span title={r.error_detail || r.error_type || 'Failed'}>
+                                  <X className="h-4 w-4 text-red-500 mx-auto" />
+                                </span>
+                              )
+                            }
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {pagedLogs.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="px-3 py-8 text-center text-xs text-slate-400">No recent API calls</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              {/* Pagination */}
+              {totalLogPages > 1 && (
+                <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100">
+                  <span className="text-[11px] text-slate-400">
+                    {recentLogs.length.toLocaleString('en-AU')} total entries
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      disabled={logPage <= 1}
+                      onClick={() => setLogPage(p => p - 1)}
+                      className="rounded px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+                    >
+                      Prev
+                    </button>
+                    <span className="text-[11px] text-slate-500 px-2">{logPage} / {totalLogPages}</span>
+                    <button
+                      disabled={logPage >= totalLogPages}
+                      onClick={() => setLogPage(p => p + 1)}
+                      className="rounded px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
 
       {/* Row 5: Embedding Coverage & Management */}
       <EmbeddingManagement clientId={clientId} />
-
-    </div>
+    </PageShell>
   );
 };
 
@@ -767,7 +881,7 @@ const EmbeddingManagement: React.FC<{ clientId: string }> = ({ clientId }) => {
   const backfillCancelRef = useRef(false);
 
   const loadStats = useCallback(async () => {
-    if (!clientId) return; // Don't query without client_id
+    if (!clientId) return;
     setStatsLoading(true);
     try {
       const s = await vectorApi.getVectorStats(clientId);
@@ -781,12 +895,10 @@ const EmbeddingManagement: React.FC<{ clientId: string }> = ({ clientId }) => {
   useEffect(() => {
     if (!clientId) return;
     loadStats();
-    // Check if embedding is already running (survives page navigation)
     vectorApi.getReembedStatus(clientId).then(status => {
       if (status?.status === 'running') {
-        setReembedStatus(status); // Starts polling
+        setReembedStatus(status);
       }
-      // Don't set stopped/complete/error — let user see the embed buttons
     }).catch(() => {});
   }, [clientId, loadStats]);
 
@@ -799,15 +911,14 @@ const EmbeddingManagement: React.FC<{ clientId: string }> = ({ clientId }) => {
         const status = await vectorApi.getReembedStatus(clientId);
         setReembedStatus(status);
         pollCount++;
-        // Refresh stats every 5 polls (~15s) for live count updates
         if (pollCount % 5 === 0 && clientId) {
           vectorApi.getVectorStats(clientId).then(s => setStats(s)).catch(() => {});
         }
         if (status.status !== 'running') {
           clearInterval(interval);
           loadStats();
-          if (status.status === 'complete') message.success(`Embedding complete: ${status.result?.total_embedded} records`);
-          else if (status.status === 'error') message.error(`Embedding failed: ${status.error}`);
+          if (status.status === 'complete') toast.success(`Embedding complete: ${status.result?.total_embedded} records`);
+          else if (status.status === 'error') toast.error(`Embedding failed: ${status.error}`);
         }
       } catch { /* ignore */ }
     }, 3000);
@@ -817,23 +928,22 @@ const EmbeddingManagement: React.FC<{ clientId: string }> = ({ clientId }) => {
   const handleReembed = async (tables?: string[]) => {
     try {
       const resp = await vectorApi.triggerReembed(clientId, tables);
-      if (resp.status === 'already_running') message.info('Embedding already in progress');
-      else message.success(`Embedding ${tables ? tables.join(' + ') : 'all tables'} in background`);
+      if (resp.status === 'already_running') toast.info('Embedding already in progress');
+      else toast.success(`Embedding ${tables ? tables.join(' + ') : 'all tables'} in background`);
       setReembedStatus({ status: 'running', started_at: Date.now() / 1000 });
     } catch (err: any) {
-      message.error(err?.message || 'Failed to start embedding');
+      toast.error(err?.message || 'Failed to start embedding');
     }
   };
 
   const handleStopReembed = async () => {
     try {
       await vectorApi.stopReembed(clientId);
-      message.info('Stopping — already embedded records are kept');
-      // Immediately update UI — don't wait for the background task to finish
+      toast.info('Stopping — already embedded records are kept');
       setReembedStatus(prev => prev ? { ...prev, status: 'stopped' } : null);
       loadStats();
     } catch (err: any) {
-      message.error(err?.message || 'Failed to stop');
+      toast.error(err?.message || 'Failed to stop');
     }
   };
 
@@ -849,13 +959,13 @@ const EmbeddingManagement: React.FC<{ clientId: string }> = ({ clientId }) => {
         total += resp.updated || 0;
         setBackfillTotal(total);
         if (resp.done || resp.updated === 0) {
-          message.success(`Search index built: ${total.toLocaleString()} emails indexed`);
+          toast.success(`Search index built: ${total.toLocaleString('en-AU')} emails indexed`);
           break;
         }
       }
-      if (backfillCancelRef.current) message.info(`Stopped — ${total.toLocaleString()} indexed`);
+      if (backfillCancelRef.current) toast.info(`Stopped — ${total.toLocaleString('en-AU')} indexed`);
     } catch (err: any) {
-      message.error(err?.message || 'Backfill failed');
+      toast.error(err?.message || 'Backfill failed');
     } finally {
       setBackfillRunning(false);
     }
@@ -864,62 +974,127 @@ const EmbeddingManagement: React.FC<{ clientId: string }> = ({ clientId }) => {
   if (!clientId) return null;
 
   return (
-    <Card
-      title={<Space><ThunderboltOutlined style={{ color: '#667eea' }} /> Embedding Coverage & Management</Space>}
-      className="glass-card"
-    >
-      {statsLoading ? <Skeleton active paragraph={{ rows: 3 }} /> : stats ? (
-        <>
-          <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-            {[
-              { label: 'Emails', icon: <MailOutlined />, data: stats.emails },
-              { label: 'Companies', icon: <BankOutlined />, data: stats.companies },
-              { label: 'Operations', icon: <ToolOutlined />, data: stats.operations },
-            ].map(s => {
-              const pct = s.data.total > 0 ? Math.round((s.data.embedded / s.data.total) * 100) : 0;
-              return (
-                <Col key={s.label} xs={24} sm={8}>
-                  <Card size="small" className="glass-card">
-                    <Statistic
-                      title={<Space>{s.icon} {s.label}</Space>}
-                      value={s.data.embedded}
-                      suffix={<Text type="secondary">/ {s.data.total.toLocaleString()}</Text>}
-                    />
-                    <Progress percent={pct} size="small" status={pct === 100 ? 'success' : 'active'}
-                      strokeColor={pct === 100 ? '#52c41a' : '#667eea'} />
-                  </Card>
-                </Col>
-              );
-            })}
-          </Row>
-          <Space wrap>
-            {reembedStatus?.status === 'running' ? (
-              <Button danger icon={<SyncOutlined spin />} onClick={handleStopReembed}>Stop Embedding</Button>
-            ) : (
-              <>
-                <Button type="primary" icon={<MailOutlined />} onClick={() => handleReembed(['emails'])}>Embed Emails</Button>
-                <Button icon={<BankOutlined />} onClick={() => handleReembed(['companies'])}>Embed Companies</Button>
-                <Button icon={<ToolOutlined />} onClick={() => handleReembed(['operations'])}>Embed Operations</Button>
-                <Button icon={<ThunderboltOutlined />} onClick={() => handleReembed()}>Embed All</Button>
-              </>
-            )}
-            <Button icon={<ReloadOutlined />} onClick={loadStats}>Refresh Stats</Button>
-            {backfillRunning ? (
-              <Button danger icon={<SyncOutlined spin />} onClick={() => { backfillCancelRef.current = true; }}>
-                Stop Indexing ({backfillTotal.toLocaleString()})
-              </Button>
-            ) : (
-              <Button icon={<SearchOutlined />} onClick={handleBackfill}>Build Search Index</Button>
-            )}
-            {reembedStatus?.status === 'complete' && reembedStatus.result && (
-              <Text type="success"><CheckCircleOutlined /> {reembedStatus.result.total_embedded} embedded</Text>
-            )}
-          </Space>
-        </>
-      ) : (
-        <Empty description="Select a client to view embedding stats" />
-      )}
-    </Card>
+    <div className="rounded-lg border bg-white shadow-sm">
+      <div className="flex items-center gap-2 border-b px-5 py-3">
+        <Zap className="h-4 w-4 text-indigo-500" />
+        <h3 className="text-sm font-semibold text-slate-900">Embedding Coverage & Management</h3>
+      </div>
+      <div className="p-5">
+        {statsLoading ? <ContentSkeleton rows={3} /> : stats ? (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
+              {[
+                { label: 'Emails', icon: <Mail className="h-4 w-4 text-slate-400" />, data: stats.emails },
+                { label: 'Companies', icon: <Building2 className="h-4 w-4 text-slate-400" />, data: stats.companies },
+                { label: 'Operations', icon: <Wrench className="h-4 w-4 text-slate-400" />, data: stats.operations },
+              ].map(s => {
+                const pct = s.data.total > 0 ? Math.round((s.data.embedded / s.data.total) * 100) : 0;
+                const barColor = pct === 100 ? 'bg-emerald-500' : 'bg-indigo-500';
+                return (
+                  <div key={s.label} className="rounded-lg border bg-white shadow-sm p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      {s.icon}
+                      <span className="text-xs font-medium text-slate-500">{s.label}</span>
+                    </div>
+                    <div className="flex items-baseline gap-1.5 mb-2">
+                      <span className="text-lg font-semibold text-slate-900">
+                        {s.data.embedded.toLocaleString('en-AU')}
+                      </span>
+                      <span className="text-xs text-slate-400">
+                        / {s.data.total.toLocaleString('en-AU')}
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-100 rounded-full h-1.5">
+                      <div
+                        className={`${barColor} h-1.5 rounded-full transition-all`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1">{pct}%</p>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {reembedStatus?.status === 'running' ? (
+                <button
+                  onClick={handleStopReembed}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 shadow-sm hover:bg-red-100 transition"
+                >
+                  <Spinner className="h-3.5 w-3.5 animate-spin" />
+                  Stop Embedding
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => handleReembed(['emails'])}
+                    className="inline-flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-indigo-700 transition"
+                  >
+                    <Mail className="h-3.5 w-3.5" />
+                    Embed Emails
+                  </button>
+                  <button
+                    onClick={() => handleReembed(['companies'])}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50 transition"
+                  >
+                    <Building2 className="h-3.5 w-3.5" />
+                    Embed Companies
+                  </button>
+                  <button
+                    onClick={() => handleReembed(['operations'])}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50 transition"
+                  >
+                    <Wrench className="h-3.5 w-3.5" />
+                    Embed Operations
+                  </button>
+                  <button
+                    onClick={() => handleReembed()}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50 transition"
+                  >
+                    <Zap className="h-3.5 w-3.5" />
+                    Embed All
+                  </button>
+                </>
+              )}
+              <button
+                onClick={loadStats}
+                className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50 transition"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                Refresh Stats
+              </button>
+              {backfillRunning ? (
+                <button
+                  onClick={() => { backfillCancelRef.current = true; }}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 shadow-sm hover:bg-red-100 transition"
+                >
+                  <Spinner className="h-3.5 w-3.5 animate-spin" />
+                  Stop Indexing ({backfillTotal.toLocaleString('en-AU')})
+                </button>
+              ) : (
+                <button
+                  onClick={handleBackfill}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50 transition"
+                >
+                  <Search className="h-3.5 w-3.5" />
+                  Build Search Index
+                </button>
+              )}
+              {reembedStatus?.status === 'complete' && reembedStatus.result && (
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  {reembedStatus.result.total_embedded} embedded
+                </span>
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="py-12 text-center">
+            <p className="text-sm text-slate-400">Select a client to view embedding stats</p>
+          </div>
+        )}
+      </div>
+    </div>
   );
 };
 
