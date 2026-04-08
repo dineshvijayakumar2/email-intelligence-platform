@@ -87,24 +87,31 @@ class CustomerAnalyticsService:
             if cached:
                 return cached
 
-        # Resolve QB customer key ID (quotes link via qb_customer_id, not matched_company_id)
+        # Resolve ALL QB customer key IDs (a company can have multiple QB records)
+        qb_key_ids: list[str] = []
         try:
             cust_result = self._sb.table('qb_customers').select(
                 'customer_key_id'
             ).eq('matched_company_id', company_id).eq(
                 'client_id', self._client_id
-            ).limit(1).execute()
-            qb_key_id = cust_result.data[0].get('customer_key_id') if cust_result.data else None
+            ).execute()
+            qb_key_ids = [
+                r['customer_key_id'] for r in (cust_result.data or [])
+                if r.get('customer_key_id')
+            ]
         except Exception:
-            qb_key_id = None
+            pass
 
-        # Fetch all quotes for this company via QB customer key
-        if qb_key_id:
-            quotes = self._fetch_all_paginated(
-                'qb_quotes',
-                'quote_no, has_job, contact_email, contact_name, date_created',
-                {'qb_customer_id': qb_key_id},
-            )
+        # Fetch all quotes for this company via ALL QB customer keys
+        quotes: list[dict] = []
+        if qb_key_ids:
+            for key_id in qb_key_ids:
+                batch = self._fetch_all_paginated(
+                    'qb_quotes',
+                    'quote_no, has_job, contact_email, contact_name, date_created',
+                    {'qb_customer_id': key_id},
+                )
+                quotes.extend(batch)
         else:
             # Fallback: try matched_company_id (if propagated)
             quotes = self._fetch_all_paginated(

@@ -104,13 +104,14 @@ export const CompanyDetail: React.FC = () => {
               subtitle={`${company.total_inbound || 0} in / ${company.total_outbound || 0} out`} />
             <KPICard title="Contacts" value={company.contact_count} onClick={() => navigate(`/customers/contacts?company_id=${companyId}&client_id=${company.client_id}&name=${encodeURIComponent(company.company_name)}`)}
               subtitle={company.decision_maker_count > 0 ? `${company.decision_maker_count} DMs` : undefined} />
-            <KPICard title="Threads" value={threads.length} onClick={() => navigate(`/customers/threads?company_id=${companyId}`)}
+            <KPICard title="Threads" value={threadsQuery.isLoading ? 0 : threads.length} loading={threadsQuery.isLoading}
+              onClick={() => navigate(`/customers/threads?company_id=${companyId}`)}
               danger={overdueCount > 0}
               subtitle={threadSubtitle} />
-            <KPICard title="Quotes" value={orderHistoryQuery.data?.quote_count || 0}
+            <KPICard title="Quotes" value={orderHistoryQuery.data?.quote_count || 0} loading={orderHistoryQuery.isLoading}
               onClick={() => setShowOrderHistory(true)}
               subtitle={orderHistoryQuery.data?.accepted_quotes ? `${orderHistoryQuery.data.accepted_quotes} converted` : undefined} />
-            <KPICard title="Jobs" value={orderHistoryQuery.data?.job_count || 0}
+            <KPICard title="Jobs" value={orderHistoryQuery.data?.job_count || 0} loading={orderHistoryQuery.isLoading}
               onClick={() => setShowOrderHistory(true)}
               subtitle={orderHistoryQuery.data?.active_jobs ? `${orderHistoryQuery.data.active_jobs} active` : undefined} />
           </div>
@@ -128,7 +129,9 @@ export const CompanyDetail: React.FC = () => {
             onLinked={() => window.location.reload()}
           />
         </div>
-        {(company.qb_total_revenue != null || liveRevenue != null) ? (
+        {orderHistoryQuery.isLoading && company.qb_customer_id ? (
+          <ContentSkeleton rows={3} />
+        ) : (company.qb_total_revenue != null || liveRevenue != null) ? (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-2 text-sm">
             {company.qb_customer_type && <div><span className="text-slate-500">Type</span><div className="font-medium">{company.qb_customer_type}</div></div>}
             {company.qb_tier && <div><span className="text-slate-500">Tier</span><div><StatusBadge variant="purple" size="sm">{company.qb_tier}</StatusBadge></div></div>}
