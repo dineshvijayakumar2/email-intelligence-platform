@@ -50,6 +50,7 @@ export const DataHealthDashboard: React.FC = () => {
   const [classificationHealth, setClassificationHealth] = useState<any>(null);
   const [threadHealth, setThreadHealth] = useState<any>(null);
   const [backfilling, setBackfilling] = useState(false);
+  const [relinking, setRelinking] = useState(false);
 
   useEffect(() => { isMountedRef.current = true; return () => { isMountedRef.current = false; }; }, []);
 
@@ -85,6 +86,19 @@ export const DataHealthDashboard: React.FC = () => {
       toast.error(err?.message || 'Failed to start backfill');
     } finally {
       setBackfilling(false);
+    }
+  };
+
+  const startRelink = async () => {
+    if (!clientId || relinking) return;
+    setRelinking(true);
+    try {
+      await api.post(`/v1/analytics/extraction/backfill-email-links?client_id=${clientId}`);
+      toast.success('Email re-linking started — this processes all emails for CC/BCC links');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to start re-link');
+    } finally {
+      setRelinking(false);
     }
   };
 
@@ -174,6 +188,40 @@ export const DataHealthDashboard: React.FC = () => {
           {data.identity_resolution.unresolved_emails > 0 && (
             <p className="text-xs text-slate-400 mt-1">{data.identity_resolution.unresolved_emails.toLocaleString('en-AU')} emails not linked to any contact</p>
           )}
+        </div>
+      )}
+
+      {/* Contact Links (junction table) coverage */}
+      {data && (data as any).junction_coverage && (
+        <div className="rounded-lg border bg-white shadow-sm p-4 mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold text-slate-900">Contact Links (CC/BCC)</h3>
+            <button
+              onClick={startRelink}
+              disabled={relinking || !clientId}
+              className="h-7 px-3 text-xs font-medium rounded-md border border-slate-200 hover:bg-slate-50 inline-flex items-center gap-1.5 disabled:opacity-50"
+            >
+              {relinking ? <Spinner className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+              Re-link Emails
+            </button>
+          </div>
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <p className="text-xs text-slate-500">Total Contact Links</p>
+              <p className="text-lg font-semibold tabular-nums">{formatNumber((data as any).junction_coverage.total_links)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500">Total Emails</p>
+              <p className="text-lg font-semibold tabular-nums">{formatNumber((data as any).junction_coverage.total_emails)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500">Avg Links / Email</p>
+              <p className="text-lg font-semibold tabular-nums">{(data as any).junction_coverage.avg_links_per_email}</p>
+            </div>
+          </div>
+          <p className="text-xs text-slate-400 mt-2">
+            Each email can have multiple contact links (sender + recipients + CC/BCC). Re-link rebuilds all junction rows.
+          </p>
         </div>
       )}
 

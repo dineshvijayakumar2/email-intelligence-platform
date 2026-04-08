@@ -3413,6 +3413,34 @@ async def get_data_health(client_id: Optional[str] = Query(default=None)):
             'coverage_percent': round((resolved_emails / total_emails * 100), 1) if total_emails > 0 else 0,
         }
 
+        # ---------- 2c. Junction table (email_contact_links) coverage ----------
+        logger.info("data-health: step 2c - junction table coverage")
+        junction_coverage = {'emails_with_links': 0, 'emails_without_links': 0, 'total_links': 0, 'coverage_percent': 0}
+        try:
+            # Count distinct email_ids in junction table
+            ecl_query = _supabase.table('email_contact_links').select('email_id', count='exact')
+            if client_id:
+                ecl_query = ecl_query.eq('client_id', client_id)
+            ecl_result = ecl_query.execute()
+            total_links = ecl_result.count or 0
+
+            # Distinct emails with at least one link — use a different approach:
+            # Count emails that have NO junction row
+            # Supabase doesn't support COUNT(DISTINCT) easily, so approximate:
+            # emails_with_links ≈ total_emails - emails_without_any_link
+            # But that's expensive. Instead, just report total_links and coverage based on
+            # the ratio: if links > emails, coverage is high (CC/BCC create multiple links per email)
+            emails_with_links = min(total_links, total_emails)  # Conservative: can't have more linked emails than total
+            # Better approach: total_links / total_emails gives avg links per email, not coverage.
+            # Just report the raw numbers and let the frontend display them.
+            junction_coverage = {
+                'total_links': total_links,
+                'total_emails': total_emails,
+                'avg_links_per_email': round(total_links / total_emails, 1) if total_emails > 0 else 0,
+            }
+        except Exception as ecl_err:
+            logger.warning(f"Junction coverage check failed: {ecl_err}")
+
         # ---------- 3. Thread confidence distribution ----------
         logger.info("data-health: step 3 - thread distribution")
         # thread_status has no client_id — filter via mailbox_ids (include NULL for client-wide threads)
@@ -3524,6 +3552,7 @@ async def get_data_health(client_id: Optional[str] = Query(default=None)):
         return {
             'mailbox_health': mailbox_health,
             'identity_resolution': identity_resolution,
+            'junction_coverage': junction_coverage,
             'thread_distribution': thread_distribution,
             'thread_health': thread_health,
             'missing_weekdays': missing_weekdays,
