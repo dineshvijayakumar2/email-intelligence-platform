@@ -18,6 +18,7 @@ import { PageShell, PageHeader } from '@/components/ui/page-shell';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Search, X } from 'lucide-react';
 import type { CompanyAnalytics } from '../../types/analytics';
+import { formatCurrency } from '../../utils/numberFormat';
 
 const PAGE_SIZE = 25;
 const col = createColumnHelper<CompanyAnalytics>();
@@ -97,7 +98,7 @@ export const CompaniesAnalytics: React.FC = () => {
       cell: info => {
         const v = info.getValue();
         return v != null
-          ? <span className="tabular-nums font-medium">${Number(v).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+          ? <span className="tabular-nums font-medium">{formatCurrency(Number(v))}</span>
           : <span className="text-slate-300">—</span>;
       },
     }),

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { companiesApi } from '../services/analyticsService';
 import { RefreshCw, Calendar, TrendingUp, TrendingDown } from 'lucide-react';
 import { ContentSkeleton } from '@/components/ui/empty-state';
+import { formatCurrency } from '../utils/numberFormat';
 
 const MONTHS = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -66,7 +67,7 @@ const SeasonalityChart: React.FC<Props> = ({ companyId }) => {
                     {troughSet.has(m.month) && <TrendingDown className="inline h-3 w-3 text-slate-300 ml-1.5" />}
                   </td>
                   <td className="px-4 py-1.5 text-right tabular-nums text-slate-600 w-20">{m.order_count}</td>
-                  <td className="px-4 py-1.5 text-right tabular-nums font-medium text-slate-800">${Number(m.revenue).toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
+                  <td className="px-4 py-1.5 text-right tabular-nums font-medium text-slate-800">{formatCurrency(Number(m.revenue))}</td>
                 </tr>
               ))}
             </tbody>
@@ -85,7 +86,7 @@ const SeasonalityChart: React.FC<Props> = ({ companyId }) => {
                   <tr key={q.quarter} className="hover:bg-slate-50/30">
                     <td className="px-4 py-2.5 font-bold text-slate-800">Q{q.quarter}</td>
                     <td className="px-4 py-2.5 text-right tabular-nums text-slate-600">{q.order_count}</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums font-bold text-slate-900">${Number(q.revenue).toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums font-bold text-slate-900">{formatCurrency(Number(q.revenue))}</td>
                   </tr>
                 ))}
               </tbody>
