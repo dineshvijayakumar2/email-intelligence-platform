@@ -36,13 +36,18 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/', icon: <LayoutDashboard className="h-4 w-4" /> },
-  { label: 'Emails', href: '/emails', icon: <Mail className="h-4 w-4" /> },
+  {
+    label: 'Emails', icon: <Mail className="h-4 w-4" />,
+    children: [
+      { label: 'All Emails', href: '/emails', icon: <Mail className="h-3.5 w-3.5" /> },
+      { label: 'Threads', href: '/customers/threads', icon: <FolderOpen className="h-3.5 w-3.5" /> },
+    ],
+  },
   {
     label: 'Customers', icon: <Building2 className="h-4 w-4" />,
     children: [
       { label: 'Companies', href: '/customers', icon: <Building2 className="h-3.5 w-3.5" /> },
       { label: 'Contacts', href: '/customers/contacts', icon: <Users className="h-3.5 w-3.5" /> },
-      { label: 'Threads', href: '/customers/threads', icon: <FolderOpen className="h-3.5 w-3.5" /> },
     ],
   },
   {

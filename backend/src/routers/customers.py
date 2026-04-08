@@ -616,6 +616,74 @@ async def get_order_history(
         active_jobs = sum(1 for i in items if i['type'] == 'job' and i.get('status') not in ('R-Complete', 'Complete', 'Cancelled'))
         accepted_quotes = sum(1 for i in items if i['type'] == 'quote' and i.get('status') == 'Accepted')
 
+        # ── Compute live revenue summaries from actual order data ──────────
+        from datetime import datetime, date as date_type
+        now = datetime.utcnow()
+        current_year = now.year
+        last_year = current_year - 1
+
+        # Revenue from accepted quotes (has_job=True) + jobs with invoiced_margin
+        total_revenue = 0.0
+        invoiced_ty = 0.0
+        invoiced_ly = 0.0
+        most_recent_order_date: str | None = None
+
+        for q in all_quotes:
+            val = q.get('sell_ex_tax') or 0
+            if not q.get('has_job'):
+                continue  # only count accepted quotes
+            total_revenue += float(val)
+            dt = q.get('date_created') or ''
+            if dt:
+                try:
+                    yr = int(dt[:4])
+                    if yr == current_year:
+                        invoiced_ty += float(val)
+                    elif yr == last_year:
+                        invoiced_ly += float(val)
+                except (ValueError, IndexError):
+                    pass
+
+        for j in all_jobs:
+            val = j.get('invoiced_margin') or 0
+            total_revenue += float(val)
+            dt = j.get('accepted_date') or ''
+            if dt:
+                try:
+                    yr = int(dt[:4])
+                    if yr == current_year:
+                        invoiced_ty += float(val)
+                    elif yr == last_year:
+                        invoiced_ly += float(val)
+                except (ValueError, IndexError):
+                    pass
+
+        # Most recent order date from either quotes or jobs
+        all_dates = []
+        for q in all_quotes:
+            if q.get('date_created'):
+                all_dates.append(q['date_created'])
+        for j in all_jobs:
+            if j.get('accepted_date'):
+                all_dates.append(j['accepted_date'])
+        if all_dates:
+            all_dates.sort(reverse=True)
+            most_recent_order_date = all_dates[0]
+
+        # Days since last order
+        days_since_last_order: int | None = None
+        if most_recent_order_date:
+            try:
+                last_dt = datetime.fromisoformat(most_recent_order_date.replace('Z', '+00:00'))
+                days_since_last_order = (now - last_dt.replace(tzinfo=None)).days
+            except Exception:
+                pass
+
+        # Growth
+        computed_growth_90d: float | None = None
+        if invoiced_ly and invoiced_ly > 0:
+            computed_growth_90d = round((invoiced_ty - invoiced_ly) / invoiced_ly * 100, 1)
+
         return {
             'items': items[:limit],
             'company_id': company_id,
@@ -624,6 +692,12 @@ async def get_order_history(
             'job_count': job_count,
             'active_jobs': active_jobs,
             'accepted_quotes': accepted_quotes,
+            # Live-computed revenue (overrides stale QB fields)
+            'computed_revenue': round(total_revenue, 2) if total_revenue else None,
+            'computed_invoiced_ty': round(invoiced_ty, 2) if invoiced_ty else None,
+            'computed_invoiced_ly': round(invoiced_ly, 2) if invoiced_ly else None,
+            'computed_growth_90d': computed_growth_90d,
+            'computed_days_since_last_order': days_since_last_order,
         }
 
     except Exception as e:

@@ -60,7 +60,10 @@ export function useCompanyEngagementGroups(clientId: string) {
 }
 
 export function useOrderHistory(companyId: string | undefined) {
-  return useQuery<{ items: any[]; total: number; quote_count?: number; job_count?: number; active_jobs?: number; accepted_quotes?: number }>({
+  return useQuery<{
+    items: any[]; total: number; quote_count?: number; job_count?: number; active_jobs?: number; accepted_quotes?: number;
+    computed_revenue?: number; computed_invoiced_ty?: number; computed_invoiced_ly?: number; computed_growth_90d?: number; computed_days_since_last_order?: number;
+  }>({
     queryKey: ['order-history', companyId],
     queryFn: () => companiesApi.getOrderHistory(companyId!),
     enabled: !!companyId,
