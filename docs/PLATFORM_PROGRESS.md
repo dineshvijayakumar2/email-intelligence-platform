@@ -1286,7 +1286,9 @@ ProtectedRoute, EmailDetailPanel, DataTable, AIInsightsCard, StrikeRateCard, Sea
 - **Deleted:** `glass.css` (1,855 lines), `glassTheme.ts` (114 lines), `AnalyticsTable.tsx` (unused)
 - **Global client context:** `useClient()` hook replaced per-page ClientSelector on admin/manage pages
 - **TanStack Query for mailboxes:** `useMailboxes()` + `useProcessingJobs()` hooks replace manual polling
-- **Number formatting:** `'en-AU'` locale enforced globally via `formatNumber()` utility
+- **Number formatting:** `'en-AU'` locale enforced globally via `formatNumber()` utility — zero bare `.toLocaleString()` calls remain
+- **Live revenue computation:** Company detail Business Data now computes revenue from actual order history (accepted quotes + jobs) instead of stale QB `total_invoiced` field; `days_since_last_invoice=9999` sentinel hidden
+- **Nav restructure:** Threads moved to Emails dropdown (All Emails + Threads); Customers simplified to Companies + Contacts
 
 ---
 
