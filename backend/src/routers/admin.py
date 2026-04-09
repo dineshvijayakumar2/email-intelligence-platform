@@ -192,6 +192,200 @@ TABLE_CONFIG: Dict[str, Dict[str, Any]] = {
         "default_sort": "created_at",
         "count_column": "id",
     },
+
+    # ── QuickBase Sync Tables ────────────────────────────────────────────
+    "qb_customers": {
+        "display_name": "QB Customers",
+        "exclude_columns": [],
+        "search_columns": ["customer_name", "customer_code", "qb_record_id"],
+        "default_sort": "customer_name",
+        "count_column": "id",
+    },
+    "qb_contacts": {
+        "display_name": "QB Contacts",
+        "exclude_columns": [],
+        "search_columns": ["full_name", "email", "company_name"],
+        "default_sort": "full_name",
+        "count_column": "id",
+    },
+    "qb_quotes": {
+        "display_name": "QB Quotes",
+        "exclude_columns": [],
+        "search_columns": ["quote_no", "job_no", "customer_name"],
+        "default_sort": "created_at",
+        "count_column": "id",
+    },
+    "qb_jobs": {
+        "display_name": "QB Jobs",
+        "exclude_columns": [],
+        "search_columns": ["job_no", "job_title", "customer_name"],
+        "default_sort": "created_at",
+        "count_column": "id",
+    },
+    "qb_sales_line_items": {
+        "display_name": "QB Sales Line Items",
+        "exclude_columns": [],
+        "search_columns": ["product_group", "industry", "customer_name"],
+        "default_sort": "created_at",
+        "count_column": "id",
+    },
+    "qb_operations": {
+        "display_name": "QB Operations",
+        "exclude_columns": ["embedding"],
+        "search_columns": ["operation_name", "department", "customer_name", "job_no"],
+        "default_sort": "created_at",
+        "count_column": "id",
+    },
+    "qb_unique_emails": {
+        "display_name": "QB Unique Emails",
+        "exclude_columns": [],
+        "search_columns": ["email_address", "customer_name"],
+        "default_sort": "created_at",
+        "count_column": "id",
+    },
+    "qb_sync_config": {
+        "display_name": "QB Sync Config",
+        "exclude_columns": [],
+        "search_columns": ["table_name"],
+        "default_sort": "table_name",
+        "count_column": "id",
+    },
+
+    # ── AI Intelligence Tables ───────────────────────────────────────────
+    "ai_email_intelligence": {
+        "display_name": "AI Email Intelligence",
+        "exclude_columns": ["raw_ai_response", "embedding"],
+        "search_columns": ["intent", "primary_bucket", "urgency", "sentiment"],
+        "default_sort": "processed_at",
+        "count_column": "id",
+    },
+    "ai_business_entities": {
+        "display_name": "AI Business Entities",
+        "exclude_columns": [],
+        "search_columns": ["entity_name", "entity_type"],
+        "default_sort": "created_at",
+        "count_column": "id",
+    },
+    "ai_usage_log": {
+        "display_name": "AI Usage Log",
+        "exclude_columns": [],
+        "search_columns": ["operation", "model_used"],
+        "default_sort": "created_at",
+        "count_column": "id",
+    },
+    "ai_daily_digests": {
+        "display_name": "AI Daily Digests",
+        "exclude_columns": ["raw_response"],
+        "search_columns": [],
+        "default_sort": "created_at",
+        "count_column": "id",
+    },
+    "ai_strategic_digests": {
+        "display_name": "AI Strategic Digests",
+        "exclude_columns": ["raw_response"],
+        "search_columns": [],
+        "default_sort": "created_at",
+        "count_column": "id",
+    },
+    "ai_prompt_config": {
+        "display_name": "AI Prompt Config",
+        "exclude_columns": [],
+        "search_columns": ["prompt_key", "description"],
+        "default_sort": "updated_at",
+        "count_column": "id",
+    },
+
+    # ── Settings & Config ────────────────────────────────────────────────
+    "system_settings": {
+        "display_name": "System Settings",
+        "exclude_columns": ["value"],  # Hide values (contains base64 API keys)
+        "search_columns": ["key"],
+        "default_sort": "updated_at",
+        "count_column": "id",
+    },
+    "client_taxonomy_config": {
+        "display_name": "Taxonomy Config",
+        "exclude_columns": [],
+        "search_columns": ["config_type"],
+        "default_sort": "updated_at",
+        "count_column": "id",
+    },
+
+    # ── Matching & Linking ───────────────────────────────────────────────
+    "email_contact_links": {
+        "display_name": "Email Contact Links",
+        "exclude_columns": [],
+        "search_columns": [],
+        "default_sort": "created_at",
+        "count_column": "id",
+    },
+    "qb_match_candidates": {
+        "display_name": "QB Match Candidates",
+        "exclude_columns": [],
+        "search_columns": ["company_name", "match_method"],
+        "default_sort": "created_at",
+        "count_column": "id",
+    },
+    "thread_merges": {
+        "display_name": "Thread Merges",
+        "exclude_columns": [],
+        "search_columns": [],
+        "default_sort": "created_at",
+        "count_column": "id",
+    },
+
+    # ── Recommendations & Intelligence Cache ─────────────────────────────
+    "customer_recommendations": {
+        "display_name": "Customer Recommendations",
+        "exclude_columns": [],
+        "search_columns": [],
+        "default_sort": "computed_at",
+        "count_column": "id",
+    },
+    "product_affinities": {
+        "display_name": "Product Affinities",
+        "exclude_columns": [],
+        "search_columns": ["product_a", "product_b"],
+        "default_sort": "confidence",
+        "count_column": "id",
+    },
+    "customer_intelligence_cache": {
+        "display_name": "Intelligence Cache",
+        "exclude_columns": [],
+        "search_columns": ["cache_type"],
+        "default_sort": "updated_at",
+        "count_column": "id",
+    },
+
+    # ── Analytics & History ──────────────────────────────────────────────
+    "am_performance_snapshots": {
+        "display_name": "AM Performance Snapshots",
+        "exclude_columns": [],
+        "search_columns": [],
+        "default_sort": "created_at",
+        "count_column": "id",
+    },
+    "metric_history": {
+        "display_name": "Metric History",
+        "exclude_columns": [],
+        "search_columns": ["entity_type"],
+        "default_sort": "recorded_at",
+        "count_column": "id",
+    },
+    "audit_log": {
+        "display_name": "Audit Log",
+        "exclude_columns": [],
+        "search_columns": ["action", "resource_type"],
+        "default_sort": "created_at",
+        "count_column": "id",
+    },
+    "relationship_context_cache": {
+        "display_name": "Relationship Context Cache",
+        "exclude_columns": [],
+        "search_columns": [],
+        "default_sort": "updated_at",
+        "count_column": "id",
+    },
 }
 
 ALLOWED_TABLES = set(TABLE_CONFIG.keys())
