@@ -23,7 +23,6 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Embedding model config
 # ---------------------------------------------------------------------------
-EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "google").lower()  # "google" or "openai"
 EMBEDDING_DIMS = 768   # Force 768 dims (pgvector HNSW/IVFFlat max = 2000)
 EMBED_BATCH_SIZE = 50   # Texts per API call
 EMBED_DELAY_SECONDS = 5  # Base delay between batches (Google rate limits)
@@ -36,19 +35,46 @@ OPENAI_EMBEDDING_MODEL = "text-embedding-3-small"
 
 # Cache the model instance to avoid re-init on every call
 _embedding_model_cache = None
+_embedding_provider_resolved = None  # Tracks which provider the cache was built for
+
+
+def _resolve_embedding_provider() -> str:
+    """Resolve embedding provider: DB setting > env var > default 'google'.
+
+    Reads from system_settings table (per any client — embedding provider is global).
+    Falls back to EMBEDDING_PROVIDER env var, then 'google'.
+    """
+    # Try DB first
+    try:
+        from ..database.supabase_client import SupabaseClient
+        client = SupabaseClient.get_client(use_service_key=True)
+        resp = client.table('system_settings').select('value').eq(
+            'key', 'embedding_provider'
+        ).limit(1).execute()
+        if resp.data and resp.data[0].get('value'):
+            provider = resp.data[0]['value'].lower()
+            logger.debug(f"Embedding provider from DB: {provider}")
+            return provider
+    except Exception as e:
+        logger.debug(f"Could not read embedding_provider from DB (using env fallback): {e}")
+
+    return os.getenv("EMBEDDING_PROVIDER", "google").lower()
 
 
 def _get_embedding_model():
-    """Lazy-init embedding model based on EMBEDDING_PROVIDER env var.
+    """Lazy-init embedding model. Provider resolved from DB > env var > 'google'.
 
     Returns a LangChain Embeddings instance (Google or OpenAI).
     Both produce 768-dim vectors compatible with pgvector.
     """
-    global _embedding_model_cache
+    global _embedding_model_cache, _embedding_provider_resolved
     if _embedding_model_cache is not None:
         return _embedding_model_cache
 
-    if EMBEDDING_PROVIDER == "openai":
+    provider = _resolve_embedding_provider()
+    _embedding_provider_resolved = provider
+
+    if provider == "openai":
         from langchain_openai import OpenAIEmbeddings
 
         api_key = os.getenv("OPENAI_API_KEY")
@@ -85,11 +111,11 @@ def _get_embedding_model():
 
 # ---------------------------------------------------------------------------
 def reset_embedding_model():
-    """Clear the cached embedding model so next call picks up new provider/config."""
-    global _embedding_model_cache, EMBEDDING_PROVIDER
+    """Clear the cached embedding model so next call picks up new provider/config from DB."""
+    global _embedding_model_cache, _embedding_provider_resolved
     _embedding_model_cache = None
-    EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "google").lower()
-    logger.info(f"Embedding model cache cleared. Provider will be resolved on next call.")
+    _embedding_provider_resolved = None
+    logger.info("Embedding model cache cleared. Provider will be resolved from DB on next call.")
 
 
 # ---------------------------------------------------------------------------
@@ -116,7 +142,7 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
     batch_count = 0
 
     # OpenAI has higher rate limits — less aggressive delays needed
-    is_openai = EMBEDDING_PROVIDER == "openai"
+    is_openai = _embedding_provider_resolved == "openai"
     base_delay = 1 if is_openai else EMBED_DELAY_SECONDS
 
     for i in range(0, len(texts), EMBED_BATCH_SIZE):
@@ -135,7 +161,7 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
                 if _is_rate_limit_error(e):
                     was_rate_limited = True
                     wait = base_delay * (2 ** attempt)
-                    logger.info(f"[Vector] Rate limited ({EMBEDDING_PROVIDER}), waiting {wait}s (attempt {attempt + 1}/5)")
+                    logger.info(f"[Vector] Rate limited ({_embedding_provider_resolved}), waiting {wait}s (attempt {attempt + 1}/5)")
                     await asyncio.sleep(wait)
                 else:
                     raise
