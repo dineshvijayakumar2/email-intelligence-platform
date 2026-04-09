@@ -37,6 +37,7 @@ A commercial intelligence platform for B2B account management teams. It syncs em
 | Canonical Thread Resolution | 4-tier signal stack, cross-mailbox merging, thread_status overhaul | ✅ Complete | 3-5 Apr 2026 |
 | Frontend Stabilisation | TanStack Query + Table, SSE streaming, terminology cleanup | ✅ Complete | 5 Apr 2026 |
 | Premium UI Overhaul | Ant Design → shadcn/ui + Tailwind CSS, 35+ files, zero antd | ✅ Complete | 7-8 Apr 2026 |
+| Data Accuracy & Thread Stability | QB revenue accuracy, thread dedup root fix, Data Health page, intent status | ✅ Complete | 8 Apr 2026 |
 | Invite User System | Admin-controlled onboarding, restrict open sign-up | 🔲 Planned | Not started |
 
 ---
@@ -1289,6 +1290,56 @@ ProtectedRoute, EmailDetailPanel, DataTable, AIInsightsCard, StrikeRateCard, Sea
 - **Number formatting:** `'en-AU'` locale enforced globally via `formatNumber()` utility — zero bare `.toLocaleString()` calls remain
 - **Live revenue computation:** Company detail Business Data now computes revenue from actual order history (accepted quotes + jobs) instead of stale QB `total_invoiced` field; `days_since_last_invoice=9999` sentinel hidden
 - **Nav restructure:** Threads moved to Emails dropdown (All Emails + Threads); Customers simplified to Companies + Contacts
+
+---
+
+## ✅ COMPLETE — Data Accuracy & Thread Stability Fixes (8 Apr 2026)
+
+Targeted fixes for QB revenue accuracy, thread deduplication root causes, and UI correctness.
+
+### Revenue & QB Data Accuracy
+
+| Fix | Detail |
+|-----|--------|
+| Live revenue computation | Company Business Data computes revenue from actual accepted quotes + jobs (not stale `total_invoiced` QB field). Artis: displayed $410 → corrected to ~$500K |
+| 9999 sentinel hidden | `days_since_last_invoice = 9999` (QB placeholder for "no order") no longer displayed |
+| Strike rate — all QB keys | Strike rate now fetches ALL QB customer records for a company; was `limit(1)`, silently missing quotes tied to secondary QB customer records |
+
+### Thread Deduplication (Root Cause Fix)
+
+| Fix | Detail |
+|-----|--------|
+| Delete-then-insert | `save_thread_statuses` replaced broken upsert with delete-then-insert to prevent ghost duplicate rows |
+| Migration 060 | `UNIQUE(thread_id)` constraint on `thread_status` — prevents future duplicates at the DB level |
+| Two-pass server dedup | Query-time dedup: first collapse by `canonical_thread_id`, then by subject+contact for threads still unresolved |
+| Outlook UUID5 hashing | Outlook base64 thread IDs deterministically hashed to UUID5 values for stable cross-request identity |
+| Page size 200 → 500 | Extraction page size increased to reduce API timeouts on large mailboxes |
+
+### Threads Page UI Fixes
+
+- **Count query** — fixed `or_()` filter mismatch that was returning 0 for all thread count queries
+- **Nav highlight** — `/customers/threads` now correctly highlights only the Emails menu item (not Customers)
+- **Contact names** — strip `"| Company"` suffix from contact display names in thread list
+
+### Data Health Page Additions
+
+- **Thread Health card** — shows total thread count, unique threads, and duplicate count
+- **Recompute Threads button** — triggers full thread recompute with real-time Redis progress bar
+- **Mailbox error tracking** — displays which mailbox timed out during thread computation with a per-mailbox retry button
+
+### Intent-Based Thread Status (Migration 062)
+
+New columns on `thread_status` wired for future AI-driven status overrides:
+
+| Column | Purpose |
+|--------|---------|
+| `intent_status` | AI override: `urgent`, `revenue_opportunity`, `closing`, `escalation`, `informational`. NULL = use timing status |
+| `intent_override_reason` | Human-readable reason for the override |
+| `last_email_intent` | Intent class of the most recent email in thread |
+| `last_email_urgency` | Urgency level of most recent email |
+| `last_email_sentiment` | Sentiment of most recent email |
+
+Indexes: `idx_thread_status_intent` (WHERE intent_status IS NOT NULL) + `idx_thread_status_last_intent` (WHERE last_email_intent IS NOT NULL).
 
 ---
 

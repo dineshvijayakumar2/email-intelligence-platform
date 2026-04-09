@@ -169,11 +169,13 @@ class ExtractionOrchestrator:
             except Exception as e:
                 last_error = e
                 error_str = str(e)
-                # Retry on transient errors: SSL, network, 5xx codes
-                is_transient = any(keyword in error_str for keyword in [
+                # Retry on transient errors: SSL, network, 5xx, socket exhaustion
+                is_transient = isinstance(e, OSError) or any(keyword in error_str for keyword in [
                     'SSL handshake failed', '525', '502', '503', '504',
                     'Connection reset', 'Connection refused', 'timed out',
                     'JSON could not be generated', 'ECONNRESET', 'ETIMEDOUT',
+                    'Resource temporarily unavailable', 'ConnectionTerminated',
+                    'PROTOCOL_ERROR',
                 ])
                 if is_transient and attempt < max_retries:
                     delay = base_delay * (2 ** attempt)
@@ -1531,25 +1533,35 @@ class ExtractionOrchestrator:
                 if not qb_cust:
                     continue
 
-                try:
-                    # Link qb_customers → company
-                    self._execute_with_retry(
-                        self.client.table('qb_customers').update({
-                            'matched_company_id': company_id
-                        }).eq('id', qb_cust['id'])
-                    )
-                    # Write match metadata on company
-                    self._execute_with_retry(
-                        self.client.table('customer_companies').update({
-                            'qb_customer_id': qb_cust.get('qb_record_id'),
-                            'qb_customer_code': qb_cust.get('customer_code'),
-                            'qb_match_method': 'email_lookup',
-                            'qb_matched_at': now_iso,
-                        }).eq('id', company_id)
-                    )
-                    matched += 1
-                except Exception as e:
-                    logger.warning(f"Step 6 QB match write failed for company {company_id}: {e}")
+                for write_attempt in range(3):
+                    try:
+                        # Link qb_customers → company
+                        self._execute_with_retry(
+                            self.client.table('qb_customers').update({
+                                'matched_company_id': company_id
+                            }).eq('id', qb_cust['id'])
+                        )
+                        # Write match metadata on company
+                        self._execute_with_retry(
+                            self.client.table('customer_companies').update({
+                                'qb_customer_id': qb_cust.get('qb_record_id'),
+                                'qb_customer_code': qb_cust.get('customer_code'),
+                                'qb_match_method': 'email_lookup',
+                                'qb_matched_at': now_iso,
+                            }).eq('id', company_id)
+                        )
+                        matched += 1
+                        break
+                    except OSError as e:
+                        # Socket exhaustion (errno 11) — back off and retry
+                        if write_attempt < 2:
+                            time.sleep(2 * (write_attempt + 1))
+                            logger.info(f"Step 6 socket pressure, retrying company {company_id} (attempt {write_attempt + 2}/3)")
+                        else:
+                            logger.warning(f"Step 6 QB match write failed for company {company_id} after 3 attempts: {e}")
+                    except Exception as e:
+                        logger.warning(f"Step 6 QB match write failed for company {company_id}: {e}")
+                        break
 
             # ── Step 6: Match contacts by name against QB contacts ──
             # For each matched company, find its QB contacts and match by name

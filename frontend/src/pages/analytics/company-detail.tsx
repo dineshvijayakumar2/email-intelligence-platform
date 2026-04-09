@@ -39,13 +39,6 @@ export const CompanyDetail: React.FC = () => {
   const orderHistory = orderHistoryQuery.data?.items || [];
   const productProfile = productProfileQuery.data || { categories: [], operations: [], capability_breakdown: [], process_tags: [], embellishment_tags: [] };
 
-  // Use live-computed revenue from order history (overrides stale QB fields)
-  const oh = orderHistoryQuery.data;
-  const liveRevenue = oh?.computed_revenue ?? company?.qb_total_revenue;
-  const liveInvoicedTY = oh?.computed_invoiced_ty ?? company?.qb_invoiced_ty;
-  const liveInvoicedLY = oh?.computed_invoiced_ly ?? company?.qb_invoiced_ly;
-  const liveGrowth = oh?.computed_growth_90d ?? company?.qb_growth_90d;
-  const liveDaysSinceOrder = oh?.computed_days_since_last_order ?? company?.qb_days_since_last_invoice;
 
   if (companyQuery.isLoading) {
     return <PageShell><ContentSkeleton rows={8} /></PageShell>;
@@ -129,34 +122,32 @@ export const CompanyDetail: React.FC = () => {
             onLinked={() => window.location.reload()}
           />
         </div>
-        {orderHistoryQuery.isLoading && company.qb_customer_id ? (
-          <ContentSkeleton rows={3} />
-        ) : (company.qb_total_revenue != null || liveRevenue != null) ? (
+        {company.qb_total_revenue != null ? (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-2 text-sm">
             {company.qb_customer_type && <div><span className="text-slate-500">Type</span><div className="font-medium">{company.qb_customer_type}</div></div>}
             {company.qb_tier && <div><span className="text-slate-500">Tier</span><div><StatusBadge variant="purple" size="sm">{company.qb_tier}</StatusBadge></div></div>}
             {company.qb_account_manager && <div><span className="text-slate-500">AM</span><div className="font-medium">{company.qb_account_manager}</div></div>}
             {company.industry && <div><span className="text-slate-500">Industry</span><div className="font-medium">{company.industry}</div></div>}
-            {liveRevenue != null && <div><span className="text-slate-500">Revenue</span><div className="font-semibold tabular-nums">{formatCurrency(liveRevenue)}</div></div>}
-            {liveInvoicedTY != null && (
+            <div><span className="text-slate-500">Revenue</span><div className="font-semibold tabular-nums">{formatCurrency(company.qb_total_revenue)}</div></div>
+            {company.qb_invoiced_ty != null && (
               <div>
                 <span className="text-slate-500">This Year</span>
                 <div className="font-medium tabular-nums inline-flex items-center gap-1">
-                  {formatCurrency(liveInvoicedTY)}
-                  {liveInvoicedLY != null && liveInvoicedTY > liveInvoicedLY && <ArrowUp className="h-3 w-3 text-success" />}
-                  {liveInvoicedLY != null && liveInvoicedTY < liveInvoicedLY && <ArrowDown className="h-3 w-3 text-destructive" />}
+                  {formatCurrency(company.qb_invoiced_ty)}
+                  {company.qb_invoiced_ly != null && company.qb_invoiced_ty > company.qb_invoiced_ly && <ArrowUp className="h-3 w-3 text-success" />}
+                  {company.qb_invoiced_ly != null && company.qb_invoiced_ty < company.qb_invoiced_ly && <ArrowDown className="h-3 w-3 text-destructive" />}
                 </div>
               </div>
             )}
-            {liveInvoicedLY != null && <div><span className="text-slate-500">Last Year</span><div className="font-medium tabular-nums">{formatCurrency(liveInvoicedLY)}</div></div>}
-            {liveGrowth != null && (
+            {company.qb_invoiced_ly != null && <div><span className="text-slate-500">Last Year</span><div className="font-medium tabular-nums">{formatCurrency(company.qb_invoiced_ly)}</div></div>}
+            {company.qb_growth_90d != null && (
               <div><span className="text-slate-500">Growth YoY</span>
-                <div className={cn('font-medium tabular-nums', Number(liveGrowth) > 0 ? 'text-success' : Number(liveGrowth) < 0 ? 'text-destructive' : '')}>
-                  {Number(liveGrowth) > 0 ? '+' : ''}{Number(liveGrowth).toFixed(1)}%
+                <div className={cn('font-medium tabular-nums', Number(company.qb_growth_90d) > 0 ? 'text-success' : Number(company.qb_growth_90d) < 0 ? 'text-destructive' : '')}>
+                  {Number(company.qb_growth_90d) > 0 ? '+' : ''}{Number(company.qb_growth_90d).toFixed(1)}%
                 </div>
               </div>
             )}
-            {liveDaysSinceOrder != null && liveDaysSinceOrder < 9999 && <div><span className="text-slate-500">Days Since Order</span><div className="font-medium tabular-nums">{liveDaysSinceOrder}</div></div>}
+            {company.qb_days_since_last_invoice != null && company.qb_days_since_last_invoice < 9999 && <div><span className="text-slate-500">Days Since Order</span><div className="font-medium tabular-nums">{company.qb_days_since_last_invoice}</div></div>}
             <div><span className="text-slate-500">First Contact</span><div className="text-xs text-slate-600">{formatRelativeTime(company.first_contact_date)}</div></div>
             <div><span className="text-slate-500">Last Contact</span><div className="text-xs text-slate-600">{formatRelativeTime(company.last_contact_date)}</div></div>
           </div>
