@@ -17,7 +17,7 @@ Author: Sprint 2 Phase 5A Implementation
 
 from fastapi import APIRouter, HTTPException, Query, BackgroundTasks, Depends
 from typing import List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 
 from ..dependencies.auth import get_current_user
@@ -3547,6 +3547,98 @@ async def get_data_health(client_id: Optional[str] = Query(default=None)):
     except Exception as e:
         logger.error(f"Failed to get data health: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/data-health/fetch-missing-dates")
+async def fetch_missing_dates(
+    data: dict,
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(require_role('admin')),
+):
+    """
+    Trigger date-range email fetch for all active mailboxes of a client.
+    Dispatches a background job per mailbox (Gmail or Outlook) to pull
+    emails for the specified date range — useful for filling sync gaps.
+    """
+    from datetime import datetime as dt
+    client_id = data.get('client_id')
+    start_date = data.get('start_date')
+    end_date = data.get('end_date')
+
+    if not client_id or not start_date or not end_date:
+        raise HTTPException(status_code=400, detail="client_id, start_date, end_date required")
+
+    try:
+        dt.strptime(start_date, '%Y-%m-%d')
+        dt.strptime(end_date, '%Y-%m-%d')
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Dates must be YYYY-MM-DD")
+
+    # Fetch all active mailboxes for this client
+    mb_result = _supabase.table('mailboxes').select(
+        'id, email_address, mailbox_type, connection_config, user_id'
+    ).eq('client_id', client_id).eq('is_active', True).execute()
+    mailboxes = mb_result.data or []
+
+    if not mailboxes:
+        raise HTTPException(status_code=404, detail="No active mailboxes found for client")
+
+    now = datetime.now(timezone.utc).isoformat()
+    jobs = []
+    skipped = []
+
+    for mb in mailboxes:
+        mb_id = mb['id']
+        connection_config = mb.get('connection_config') or {}
+        has_gmail = connection_config.get('gmail_sync_enabled')
+        has_outlook = connection_config.get('outlook_sync_enabled')
+
+        if not has_gmail and not has_outlook:
+            skipped.append({'mailbox_id': mb_id, 'email': mb.get('email_address'), 'reason': 'no live sync'})
+            continue
+
+        provider = 'gmail' if has_gmail else 'outlook'
+        job_type = f'{provider}_date_range_fetch'
+        user_id = connection_config.get('gmail_user_id') or connection_config.get('outlook_user_id') or mb.get('user_id')
+
+        # Create processing job
+        job_data = {
+            'mailbox_id': mb_id,
+            'job_type': job_type,
+            'status': 'pending',
+            'processed_records': 0,
+            'failed_records': 0,
+            'total_records': 0,
+            'filter_start_date': f"{start_date}T00:00:00Z",
+            'filter_end_date': f"{end_date}T23:59:59Z",
+            'created_at': now,
+        }
+        job_result = _supabase.table('processing_jobs').insert(job_data).execute()
+        job_id = job_result.data[0]['id']
+
+        # Dispatch background fetch
+        if provider == 'gmail':
+            from ..routers.gmail import _run_date_range_fetch as _gmail_fetch
+            background_tasks.add_task(_gmail_fetch, job_id, mb_id, user_id, start_date, end_date, None)
+        else:
+            from ..routers.outlook import _run_date_range_fetch as _outlook_fetch
+            background_tasks.add_task(_outlook_fetch, job_id, mb_id, user_id, start_date, end_date, None)
+
+        jobs.append({
+            'mailbox_id': mb_id,
+            'email': mb.get('email_address'),
+            'provider': provider,
+            'job_id': job_id,
+        })
+
+    return {
+        'status': 'started',
+        'start_date': start_date,
+        'end_date': end_date,
+        'jobs_started': len(jobs),
+        'jobs': jobs,
+        'skipped': skipped,
+    }
 
 
 @router.get("/data-health/classification")

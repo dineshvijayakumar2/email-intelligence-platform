@@ -16,7 +16,7 @@ import {
   type ExtractionJobHealth,
 } from '../../services/analyticsService';
 import api from '../../services/apiClient';
-import { CheckCircle, AlertTriangle, XCircle, RefreshCw, Database, GitMerge, Brain, Zap } from 'lucide-react';
+import { CheckCircle, AlertTriangle, XCircle, RefreshCw, Database, GitMerge, Brain, Zap, Download } from 'lucide-react';
 
 const THREAD_COLORS: Record<string, string> = {
   complete: '#10b981', awaiting_response: '#667eea', awaiting_our_response: '#f59e0b',
@@ -51,6 +51,8 @@ export const DataHealthDashboard: React.FC = () => {
   const [threadHealth, setThreadHealth] = useState<any>(null);
   const [backfilling, setBackfilling] = useState(false);
   const [relinking, setRelinking] = useState(false);
+  const [fetchingMissing, setFetchingMissing] = useState(false);
+  const [fetchMissingResult, setFetchMissingResult] = useState<any>(null);
 
   useEffect(() => { isMountedRef.current = true; return () => { isMountedRef.current = false; }; }, []);
 
@@ -99,6 +101,25 @@ export const DataHealthDashboard: React.FC = () => {
       toast.error(err?.message || 'Failed to start re-link');
     } finally {
       setRelinking(false);
+    }
+  };
+
+  const fetchMissingDates = async (startDate: string, endDate: string) => {
+    if (!clientId || fetchingMissing) return;
+    setFetchingMissing(true);
+    setFetchMissingResult(null);
+    try {
+      const result = await api.post<any>('/v1/analytics/data-health/fetch-missing-dates', {
+        client_id: clientId,
+        start_date: startDate,
+        end_date: endDate,
+      });
+      setFetchMissingResult(result);
+      toast.success(`Fetch started — ${result.jobs_started} mailbox job(s) queued`);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to start fetch');
+    } finally {
+      setFetchingMissing(false);
     }
   };
 
@@ -518,14 +539,53 @@ export const DataHealthDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Missing weekdays alert */}
+      {/* Missing weekdays alert + fetch action */}
       {data && data.missing_weekdays.length > 0 && (
-        <div className="rounded-lg border border-warning/30 bg-warning/5 p-3 mb-4">
-          <div className="flex items-center gap-2 mb-1">
-            <AlertTriangle className="h-4 w-4 text-warning" />
-            <span className="text-sm font-medium">{data.missing_weekdays.length} weekday(s) with no email data in the last 30 days</span>
+        <div className="rounded-lg border border-warning/30 bg-warning/5 p-4 mb-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
+                <span className="text-sm font-medium">{data.missing_weekdays.length} weekday(s) with no email data in the last 30 days</span>
+              </div>
+              <p className="text-xs text-slate-600 mb-2">{data.missing_weekdays.join(', ')}</p>
+              <p className="text-xs text-slate-400">
+                These dates may have emails in Gmail/Outlook that were never fetched. Click "Fetch Missing" to pull them for all mailboxes.
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                const sorted = [...data.missing_weekdays].sort();
+                fetchMissingDates(sorted[0], sorted[sorted.length - 1]);
+              }}
+              disabled={fetchingMissing || !clientId}
+              className="h-8 px-3 text-xs font-medium rounded-md bg-warning text-white hover:bg-warning/90 inline-flex items-center gap-1.5 disabled:opacity-50 shrink-0"
+            >
+              {fetchingMissing ? <Spinner className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
+              Fetch Missing
+            </button>
           </div>
-          <p className="text-xs text-slate-600">{data.missing_weekdays.join(', ')}</p>
+
+          {/* Result summary */}
+          {fetchMissingResult && (
+            <div className="mt-3 pt-3 border-t border-warning/20">
+              <p className="text-xs font-medium text-slate-700 mb-1">
+                {fetchMissingResult.jobs_started} job(s) started for {fetchMissingResult.start_date} → {fetchMissingResult.end_date}
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {(fetchMissingResult.jobs || []).map((j: any) => (
+                  <StatusBadge key={j.job_id} variant="info" size="sm">
+                    {j.email} ({j.provider})
+                  </StatusBadge>
+                ))}
+                {(fetchMissingResult.skipped || []).map((s: any) => (
+                  <StatusBadge key={s.mailbox_id} variant="neutral" size="sm">
+                    {s.email} — {s.reason}
+                  </StatusBadge>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
