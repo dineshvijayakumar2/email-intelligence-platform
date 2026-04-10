@@ -1696,14 +1696,21 @@ async def get_api_keys(
     def mask(k: str) -> str:
         return k[:4] + "****" + k[-4:] if len(k) > 8 else ("****" if k else "")
 
-    # Load from DB (client → global) then env
-    db_anthropic = _get_client_setting('api_key_anthropic', client_id)
-    db_google = _get_client_setting('api_key_google', client_id)
+    def _decode_db_key(db_value: Optional[str]) -> Optional[str]:
+        """Safely decode a base64-encoded API key from DB."""
+        if not db_value:
+            return None
+        try:
+            return base64.b64decode(db_value).decode()
+        except Exception:
+            return None
 
+    # Load from DB (client → global) then env
     anthropic = ""
     anthropic_source = "none"
-    if db_anthropic:
-        anthropic = base64.b64decode(db_anthropic).decode()
+    db_val = _decode_db_key(_get_client_setting('api_key_anthropic', client_id))
+    if db_val:
+        anthropic = db_val
         anthropic_source = "db"
     elif os.environ.get("ANTHROPIC_API_KEY"):
         anthropic = os.environ["ANTHROPIC_API_KEY"]
@@ -1711,22 +1718,25 @@ async def get_api_keys(
 
     google = ""
     google_source = "none"
-    if db_google:
-        google = base64.b64decode(db_google).decode()
+    db_val = _decode_db_key(_get_client_setting('api_key_google', client_id))
+    if db_val:
+        google = db_val
         google_source = "db"
     elif os.environ.get("GOOGLE_GENAI_API_KEY") or os.environ.get("GEMINI_API_KEY"):
         google = os.environ.get("GOOGLE_GENAI_API_KEY") or os.environ.get("GEMINI_API_KEY") or ""
         google_source = "env"
 
-    db_openai = _get_client_setting('api_key_openai', client_id)
     openai_key = ""
     openai_source = "none"
-    if db_openai:
-        openai_key = base64.b64decode(db_openai).decode()
+    db_val = _decode_db_key(_get_client_setting('api_key_openai', client_id))
+    if db_val:
+        openai_key = db_val
         openai_source = "db"
     elif os.environ.get("OPENAI_API_KEY"):
         openai_key = os.environ["OPENAI_API_KEY"]
         openai_source = "env"
+
+    logger.debug(f"API keys status: anthropic={anthropic_source}, google={google_source}, openai={openai_source} (client_id={client_id})")
 
     return {
         "anthropic_set": bool(anthropic),
