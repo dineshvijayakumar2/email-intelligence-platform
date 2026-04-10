@@ -3473,23 +3473,24 @@ async def get_data_health(client_id: Optional[str] = Query(default=None)):
 
         logger.info("data-health: step 4 - missing days")
         # ---------- 4. Missing days (gaps in email data, last 30 days) ----------
-        # Check which of the last 30 days have at least one email — one COUNT query per day
-        # (avoids fetching all rows; 30 queries × fast index scan = much faster than 50K+ row fetch)
+        # Fetch only sent_date for last 30 days — single column, fast index scan
+        # Even at 100K emails, sent_date is ~20 bytes each so 100K = ~2MB, well within timeout
         thirty_days_ago = (now - timedelta(days=30)).isoformat()
         all_dates = set()
-        for i in range(30):
-            day = (now - timedelta(days=i)).date()
-            day_start = day.isoformat()
-            day_end = (day + timedelta(days=1)).isoformat()
-            try:
-                q = _supabase.table('emails').select('id', count='exact').gte('sent_date', day_start).lt('sent_date', day_end)
-                if client_id:
-                    q = q.eq('client_id', client_id)
-                r = q.limit(1).execute()
-                if (r.count or 0) > 0:
-                    all_dates.add(day)
-            except Exception:
-                pass
+        try:
+            recent_q = _supabase.table('emails').select('sent_date').gte('sent_date', thirty_days_ago).limit(200000)
+            if client_id:
+                recent_q = recent_q.eq('client_id', client_id)
+            recent_result = recent_q.execute()
+            for r in (recent_result.data or []):
+                if r.get('sent_date'):
+                    try:
+                        d = datetime.fromisoformat(r['sent_date'].replace('Z', '+00:00')).date()
+                        all_dates.add(d)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
 
         expected_dates = set()
         for i in range(30):
@@ -3562,6 +3563,48 @@ async def get_classification_health(client_id: Optional[str] = Query(default=Non
         mb_result = mb_query.execute()
         mailboxes = mb_result.data or []
 
+        # Batch fetch all mailbox email counts in 2 queries (not N×5 queries)
+        mb_ids = [mb['id'] for mb in mailboxes]
+
+        # 1. Total emails per mailbox
+        email_counts: dict[str, int] = {}
+        if mb_ids:
+            offset_e = 0
+            while True:
+                batch = _supabase.table('emails').select('mailbox_id', count='exact').in_(
+                    'mailbox_id', mb_ids
+                ).range(offset_e, offset_e + 999).execute()
+                for row in (batch.data or []):
+                    mid = row.get('mailbox_id')
+                    if mid:
+                        email_counts[mid] = email_counts.get(mid, 0) + 1
+                if len(batch.data or []) < 1000:
+                    break
+                offset_e += 1000
+
+        # 2. Classification status counts per mailbox — fetch processing_status field, count in Python
+        status_counts: dict[str, dict[str, int]] = {mid: {'completed': 0, 'failed': 0, 'skipped': 0} for mid in mb_ids}
+        last_analysis_map: dict[str, str] = {}
+        if mb_ids:
+            offset_ai = 0
+            while True:
+                batch = _supabase.table('ai_email_intelligence').select(
+                    'mailbox_id, processing_status, processed_at'
+                ).in_('mailbox_id', mb_ids).range(offset_ai, offset_ai + 999).execute()
+                rows = batch.data or []
+                for row in rows:
+                    mid = row.get('mailbox_id')
+                    status = row.get('processing_status', '')
+                    if mid and status in status_counts.get(mid, {}):
+                        status_counts[mid][status] += 1
+                    if mid and status == 'completed' and row.get('processed_at'):
+                        existing = last_analysis_map.get(mid)
+                        if not existing or row['processed_at'] > existing:
+                            last_analysis_map[mid] = row['processed_at']
+                if len(rows) < 1000:
+                    break
+                offset_ai += 1000
+
         per_mailbox = []
         total_emails_all = 0
         total_classified_all = 0
@@ -3571,46 +3614,11 @@ async def get_classification_health(client_id: Optional[str] = Query(default=Non
 
         for mb in mailboxes:
             mb_id = mb['id']
-
-            # Total emails in mailbox
-            email_count_r = _supabase.table('emails').select(
-                'id', count='exact'
-            ).eq('mailbox_id', mb_id).execute()
-            total_emails = email_count_r.count or 0
-
-            # Classified (completed)
-            classified_r = _supabase.table('ai_email_intelligence').select(
-                'id', count='exact'
-            ).eq('mailbox_id', mb_id).eq('processing_status', 'completed').execute()
-            classified = classified_r.count or 0
-
-            # Failed
-            failed_r = _supabase.table('ai_email_intelligence').select(
-                'id', count='exact'
-            ).eq('mailbox_id', mb_id).eq('processing_status', 'failed').execute()
-            failed = failed_r.count or 0
-
-            # Skipped
-            skipped_r = _supabase.table('ai_email_intelligence').select(
-                'id', count='exact'
-            ).eq('mailbox_id', mb_id).eq('processing_status', 'skipped').execute()
-            skipped = skipped_r.count or 0
-
+            total_emails = email_counts.get(mb_id, 0)
+            classified = status_counts.get(mb_id, {}).get('completed', 0)
+            failed = status_counts.get(mb_id, {}).get('failed', 0)
+            skipped = status_counts.get(mb_id, {}).get('skipped', 0)
             pending = max(0, total_emails - classified - failed - skipped)
-
-            # Last analysis timestamp
-            last_analysis = None
-            try:
-                last_r = _supabase.table('ai_email_intelligence').select(
-                    'processed_at'
-                ).eq('mailbox_id', mb_id).eq(
-                    'processing_status', 'completed'
-                ).order('processed_at', desc=True).limit(1).execute()
-                if last_r.data:
-                    last_analysis = last_r.data[0].get('processed_at')
-            except Exception:
-                pass
-
             coverage_pct = round(classified / total_emails * 100, 1) if total_emails > 0 else 0.0
 
             per_mailbox.append({
@@ -3622,7 +3630,7 @@ async def get_classification_health(client_id: Optional[str] = Query(default=Non
                 'failed': failed,
                 'skipped': skipped,
                 'coverage_pct': coverage_pct,
-                'last_analysis_at': last_analysis,
+                'last_analysis_at': last_analysis_map.get(mb_id),
             })
 
             total_emails_all += total_emails
