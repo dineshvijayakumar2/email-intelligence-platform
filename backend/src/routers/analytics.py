@@ -3473,21 +3473,23 @@ async def get_data_health(client_id: Optional[str] = Query(default=None)):
 
         logger.info("data-health: step 4 - missing days")
         # ---------- 4. Missing days (gaps in email data, last 30 days) ----------
-        # Fetch up to 10000 rows (enough to cover 30 days of dates) — no pagination needed
+        # Check which of the last 30 days have at least one email — one COUNT query per day
+        # (avoids fetching all rows; 30 queries × fast index scan = much faster than 50K+ row fetch)
         thirty_days_ago = (now - timedelta(days=30)).isoformat()
-        recent_query = _supabase.table('emails').select('sent_date')
-        if client_id:
-            recent_query = recent_query.eq('client_id', client_id)
-        recent_result = recent_query.gte('sent_date', thirty_days_ago).order('sent_date', desc=False).limit(10000).execute()
-
         all_dates = set()
-        for r in (recent_result.data or []):
-            if r.get('sent_date'):
-                try:
-                    d = datetime.fromisoformat(r['sent_date'].replace('Z', '+00:00')).date()
-                    all_dates.add(d)
-                except Exception:
-                    pass
+        for i in range(30):
+            day = (now - timedelta(days=i)).date()
+            day_start = day.isoformat()
+            day_end = (day + timedelta(days=1)).isoformat()
+            try:
+                q = _supabase.table('emails').select('id', count='exact').gte('sent_date', day_start).lt('sent_date', day_end)
+                if client_id:
+                    q = q.eq('client_id', client_id)
+                r = q.limit(1).execute()
+                if (r.count or 0) > 0:
+                    all_dates.add(day)
+            except Exception:
+                pass
 
         expected_dates = set()
         for i in range(30):
