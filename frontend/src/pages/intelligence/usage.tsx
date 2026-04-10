@@ -659,7 +659,7 @@ const UsagePage: React.FC = () => {
                 {apiKeysSaving && <Spinner className="h-3 w-3 animate-spin" />}
                 Update Keys
               </button>
-              <span className="text-[10px] text-slate-400">Runtime only — add to .env for persistence</span>
+              <span className="text-[10px] text-slate-400">Saves to DB — persists across restarts. Env vars used as fallback.</span>
             </div>
           </div>
         </div>

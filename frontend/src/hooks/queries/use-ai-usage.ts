@@ -54,10 +54,25 @@ export function useAIRecentLogs(limit = 30) {
   });
 }
 
+// Static fallback models — ensures the model assignment section always renders
+const FALLBACK_MODELS: AIModel[] = [
+  { name: 'haiku', label: 'Claude Haiku (fast, cheap)', provider: 'anthropic', cost_input_per_mtok: 0.80, cost_output_per_mtok: 4.00, available: true },
+  { name: 'sonnet', label: 'Claude Sonnet (strategic)', provider: 'anthropic', cost_input_per_mtok: 3.00, cost_output_per_mtok: 15.00, available: true },
+  { name: 'gemini', label: 'Gemini 2.5 Flash', provider: 'google', cost_input_per_mtok: 0.15, cost_output_per_mtok: 0.60, available: true },
+  { name: 'gpt4o-mini', label: 'GPT-4o Mini (cheap)', provider: 'openai', cost_input_per_mtok: 0.15, cost_output_per_mtok: 0.60, available: true },
+  { name: 'gpt4o', label: 'GPT-4o (strategic)', provider: 'openai', cost_input_per_mtok: 2.50, cost_output_per_mtok: 10.00, available: true },
+];
+
 export function useAIModels() {
   return useQuery<{ models: AIModel[] }>({
     queryKey: ['ai-models'],
-    queryFn: () => modelsApi.getAvailable().catch(() => ({ models: [] })),
+    queryFn: async () => {
+      try {
+        const result = await modelsApi.getAvailable();
+        if (result?.models?.length) return result;
+      } catch { /* fallback below */ }
+      return { models: FALLBACK_MODELS };
+    },
     staleTime: 5 * 60_000,
   });
 }
