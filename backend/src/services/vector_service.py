@@ -38,8 +38,26 @@ _embedding_model_cache = None
 _embedding_provider_override = None  # Set explicitly by reset_embedding_model()
 
 
+def _resolve_provider() -> str:
+    """Resolve embedding provider: in-memory override > DB > env var > 'google'."""
+    if _embedding_provider_override:
+        return _embedding_provider_override
+    # Read from DB (no client_id filter — embedding provider is a global setting)
+    try:
+        from ..database.supabase_client import SupabaseClient
+        client = SupabaseClient.get_client(use_service_key=True)
+        resp = client.table('system_settings').select('value').eq(
+            'key', 'embedding_provider'
+        ).limit(1).execute()
+        if resp.data and resp.data[0].get('value'):
+            return resp.data[0]['value'].lower()
+    except Exception as e:
+        logger.debug(f"Could not read embedding_provider from DB: {e}")
+    return os.getenv("EMBEDDING_PROVIDER", "google").lower()
+
+
 def _get_embedding_model():
-    """Lazy-init embedding model. Provider from explicit override > env var > 'google'.
+    """Lazy-init embedding model. Provider from in-memory override > DB > env var > 'google'.
 
     Returns a LangChain Embeddings instance (Google or OpenAI).
     Both produce 768-dim vectors compatible with pgvector.
@@ -48,7 +66,7 @@ def _get_embedding_model():
     if _embedding_model_cache is not None:
         return _embedding_model_cache
 
-    provider = _embedding_provider_override or os.getenv("EMBEDDING_PROVIDER", "google").lower()
+    provider = _resolve_provider()
 
     if provider == "openai":
         from langchain_openai import OpenAIEmbeddings
