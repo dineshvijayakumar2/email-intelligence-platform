@@ -414,7 +414,7 @@ const UsagePage: React.FC = () => {
                 <p className="text-[11px] text-slate-500">Disables ALL AI API calls immediately</p>
               </div>
               <Toggle
-                checked={controls?.ai_enabled ?? false}
+                checked={controls?.ai_enabled !== false}
                 onChange={(val) => handleControlChange('ai_enabled', val)}
               />
             </div>
@@ -425,27 +425,36 @@ const UsagePage: React.FC = () => {
             <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Feature Toggles</h4>
             <div className="flex flex-col gap-2.5">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-700">Email Analysis (Haiku)</span>
+                <span className="text-sm text-slate-700">
+                  Email Analysis
+                  <span className="text-slate-400 text-xs ml-1">({taskModels['email_analysis']?.model || 'haiku'})</span>
+                </span>
                 <Toggle
-                  checked={controls?.email_analysis_enabled ?? false}
+                  checked={controls?.email_analysis_enabled !== false}
                   onChange={(val) => handleControlChange('email_analysis_enabled', val)}
                   size="sm"
                   disabled={!controls?.ai_enabled}
                 />
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-700">Daily Digest (Sonnet)</span>
+                <span className="text-sm text-slate-700">
+                  Daily Digest
+                  <span className="text-slate-400 text-xs ml-1">({taskModels['daily_digest']?.model || 'sonnet'})</span>
+                </span>
                 <Toggle
-                  checked={controls?.digest_enabled ?? false}
+                  checked={controls?.digest_enabled !== false}
                   onChange={(val) => handleControlChange('digest_enabled', val)}
                   size="sm"
                   disabled={!controls?.ai_enabled}
                 />
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-700">Relationship Summaries (Sonnet)</span>
+                <span className="text-sm text-slate-700">
+                  Relationship Summaries
+                  <span className="text-slate-400 text-xs ml-1">({taskModels['entity_insights']?.model || 'haiku'})</span>
+                </span>
                 <Toggle
-                  checked={controls?.relationship_summary_enabled ?? false}
+                  checked={controls?.relationship_summary_enabled !== false}
                   onChange={(val) => handleControlChange('relationship_summary_enabled', val)}
                   size="sm"
                   disabled={!controls?.ai_enabled}

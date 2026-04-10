@@ -435,8 +435,8 @@ export const usageApi = {
 
 function _defaultControls(): AIControlSettings {
   return {
-    ai_enabled: false, email_analysis_enabled: false, digest_enabled: false,
-    relationship_summary_enabled: false, daily_budget_usd: 2, monthly_budget_usd: 16,
+    ai_enabled: true, email_analysis_enabled: true, digest_enabled: true,
+    relationship_summary_enabled: true, daily_budget_usd: 2, monthly_budget_usd: 16,
     batch_size: 10, max_emails_per_run: 500, max_requests_per_second: 10,
   } as AIControlSettings;
 }
