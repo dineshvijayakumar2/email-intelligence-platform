@@ -35,44 +35,20 @@ OPENAI_EMBEDDING_MODEL = "text-embedding-3-small"
 
 # Cache the model instance to avoid re-init on every call
 _embedding_model_cache = None
-_embedding_provider_resolved = None  # Tracks which provider the cache was built for
-
-
-def _resolve_embedding_provider() -> str:
-    """Resolve embedding provider: DB setting > env var > default 'google'.
-
-    Reads from system_settings table (per any client — embedding provider is global).
-    Falls back to EMBEDDING_PROVIDER env var, then 'google'.
-    """
-    # Try DB first
-    try:
-        from ..database.supabase_client import SupabaseClient
-        client = SupabaseClient.get_client(use_service_key=True)
-        resp = client.table('system_settings').select('value').eq(
-            'key', 'embedding_provider'
-        ).limit(1).execute()
-        if resp.data and resp.data[0].get('value'):
-            provider = resp.data[0]['value'].lower()
-            logger.debug(f"Embedding provider from DB: {provider}")
-            return provider
-    except Exception as e:
-        logger.debug(f"Could not read embedding_provider from DB (using env fallback): {e}")
-
-    return os.getenv("EMBEDDING_PROVIDER", "google").lower()
+_embedding_provider_override = None  # Set explicitly by reset_embedding_model()
 
 
 def _get_embedding_model():
-    """Lazy-init embedding model. Provider resolved from DB > env var > 'google'.
+    """Lazy-init embedding model. Provider from explicit override > env var > 'google'.
 
     Returns a LangChain Embeddings instance (Google or OpenAI).
     Both produce 768-dim vectors compatible with pgvector.
     """
-    global _embedding_model_cache, _embedding_provider_resolved
+    global _embedding_model_cache
     if _embedding_model_cache is not None:
         return _embedding_model_cache
 
-    provider = _resolve_embedding_provider()
-    _embedding_provider_resolved = provider
+    provider = _embedding_provider_override or os.getenv("EMBEDDING_PROVIDER", "google").lower()
 
     if provider == "openai":
         from langchain_openai import OpenAIEmbeddings
@@ -110,12 +86,12 @@ def _get_embedding_model():
 
 
 # ---------------------------------------------------------------------------
-def reset_embedding_model():
-    """Clear the cached embedding model so next call picks up new provider/config from DB."""
-    global _embedding_model_cache, _embedding_provider_resolved
+def reset_embedding_model(provider: str = None):
+    """Clear the cached embedding model and set the new provider explicitly."""
+    global _embedding_model_cache, _embedding_provider_override
     _embedding_model_cache = None
-    _embedding_provider_resolved = None
-    logger.info("Embedding model cache cleared. Provider will be resolved from DB on next call.")
+    _embedding_provider_override = provider.lower() if provider else None
+    logger.info(f"Embedding model cache cleared. Provider set to: {_embedding_provider_override or 'env/default'}")
 
 
 # ---------------------------------------------------------------------------
@@ -142,7 +118,7 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
     batch_count = 0
 
     # OpenAI has higher rate limits — less aggressive delays needed
-    is_openai = _embedding_provider_resolved == "openai"
+    is_openai = _embedding_provider_override == "openai"
     base_delay = 1 if is_openai else EMBED_DELAY_SECONDS
 
     for i in range(0, len(texts), EMBED_BATCH_SIZE):
@@ -161,7 +137,7 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
                 if _is_rate_limit_error(e):
                     was_rate_limited = True
                     wait = base_delay * (2 ** attempt)
-                    logger.info(f"[Vector] Rate limited ({_embedding_provider_resolved}), waiting {wait}s (attempt {attempt + 1}/5)")
+                    logger.info(f"[Vector] Rate limited ({_embedding_provider_override or 'google'}), waiting {wait}s (attempt {attempt + 1}/5)")
                     await asyncio.sleep(wait)
                 else:
                     raise

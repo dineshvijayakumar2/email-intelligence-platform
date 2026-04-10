@@ -1846,13 +1846,9 @@ async def update_embedding_config(
     if model:
         _upsert_client_setting('embedding_model', model, client_id)
 
-    # Clear the cached model so next embed call picks up the new provider
+    # Clear the cached model and pass the new provider explicitly
     from ..services.vector_service import reset_embedding_model
-    reset_embedding_model()
-
-    # Also set env var for immediate use
-    import os
-    os.environ["EMBEDDING_PROVIDER"] = provider
+    reset_embedding_model(provider=provider)
 
     return {"status": "ok", "provider": provider, "model": model, "client_id": client_id}
 
