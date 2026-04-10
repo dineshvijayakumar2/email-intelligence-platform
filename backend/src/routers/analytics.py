@@ -3443,34 +3443,23 @@ async def get_data_health(client_id: Optional[str] = Query(default=None)):
 
         # ---------- 3. Thread confidence distribution ----------
         logger.info("data-health: step 3 - thread distribution")
-        # thread_status has no client_id — filter via mailbox_ids (include NULL for client-wide threads)
+        # Use per-status COUNT queries instead of paginating all rows (52K+ rows = timeout)
         mailbox_ids = [m['mailbox_id'] for m in mailbox_health]
-        thread_data = []
+        THREAD_STATUSES = ['ongoing', 'awaiting_response', 'awaiting_our_response', 'overdue', 'dropped', 'complete']
+        status_counts = {}
+        mb_filter = None
         if mailbox_ids:
             mb_filter = ','.join(f"mailbox_id.eq.{mid}" for mid in mailbox_ids[:100])
             or_filter = f"{mb_filter},mailbox_id.is.null"
-            offset_t = 0
-            while True:
-                thread_batch = _supabase.table('thread_status').select('status').or_(or_filter).range(offset_t, offset_t + 999).execute()
-                rows = thread_batch.data or []
-                thread_data.extend(rows)
-                if len(rows) == 0:
-                    break
-                offset_t += len(rows)
-        else:
-            # Paginate fallback — no mailbox filter
-            offset = 0
-            while True:
-                page = _supabase.table('thread_status').select('status').range(offset, offset + 999).execute()
-                rows = page.data or []
-                thread_data.extend(rows)
-                if len(rows) == 0:
-                    break
-                offset += len(rows)
-
-        logger.info("data-health: step 3b - counting statuses")
-        from collections import Counter
-        status_counts = Counter(t.get('status', 'unknown') for t in thread_data)
+        for s in THREAD_STATUSES:
+            try:
+                q = _supabase.table('thread_status').select('id', count='exact').eq('status', s)
+                if mb_filter:
+                    q = q.or_(or_filter)
+                r = q.execute()
+                status_counts[s] = r.count or 0
+            except Exception:
+                status_counts[s] = 0
         thread_total = sum(status_counts.values())
         thread_distribution = [
             {
@@ -3479,34 +3468,26 @@ async def get_data_health(client_id: Optional[str] = Query(default=None)):
                 'percent': round(count / thread_total * 100, 1) if thread_total > 0 else 0,
             }
             for status, count in sorted(status_counts.items(), key=lambda x: -x[1])
+            if count > 0
         ]
 
         logger.info("data-health: step 4 - missing days")
         # ---------- 4. Missing days (gaps in email data, last 30 days) ----------
+        # Fetch up to 10000 rows (enough to cover 30 days of dates) — no pagination needed
         thirty_days_ago = (now - timedelta(days=30)).isoformat()
         recent_query = _supabase.table('emails').select('sent_date')
         if client_id:
             recent_query = recent_query.eq('client_id', client_id)
-        recent_query = recent_query.gte('sent_date', thirty_days_ago).order('sent_date', desc=False)
+        recent_result = recent_query.gte('sent_date', thirty_days_ago).order('sent_date', desc=False).limit(10000).execute()
 
-        # Paginate to get all dates
         all_dates = set()
-        offset_val = 0
-        while True:
-            batch = recent_query.range(offset_val, offset_val + 499).execute()
-            rows = batch.data or []
-            if not rows:
-                break
-            for r in rows:
-                if r.get('sent_date'):
-                    try:
-                        d = datetime.fromisoformat(r['sent_date'].replace('Z', '+00:00')).date()
-                        all_dates.add(d)
-                    except Exception:
-                        pass
-            offset_val += len(rows)
-            if len(rows) < 500:
-                break
+        for r in (recent_result.data or []):
+            if r.get('sent_date'):
+                try:
+                    d = datetime.fromisoformat(r['sent_date'].replace('Z', '+00:00')).date()
+                    all_dates.add(d)
+                except Exception:
+                    pass
 
         expected_dates = set()
         for i in range(30):
