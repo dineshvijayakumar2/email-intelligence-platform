@@ -20,7 +20,7 @@ from typing import List, Optional
 from datetime import datetime, timedelta, timezone
 import logging
 
-from ..dependencies.auth import get_current_user
+from ..dependencies.auth import get_current_user, require_role
 from ..utils.audit import log_audit, audit_from_user
 from ..models.analytics import (
     # Enums
@@ -3655,47 +3655,34 @@ async def get_classification_health(client_id: Optional[str] = Query(default=Non
         mb_result = mb_query.execute()
         mailboxes = mb_result.data or []
 
-        # Batch fetch all mailbox email counts in 2 queries (not N×5 queries)
+        # COUNT queries per mailbox — fast index scans, no row fetching
         mb_ids = [mb['id'] for mb in mailboxes]
-
-        # 1. Total emails per mailbox
         email_counts: dict[str, int] = {}
-        if mb_ids:
-            offset_e = 0
-            while True:
-                batch = _supabase.table('emails').select('mailbox_id', count='exact').in_(
-                    'mailbox_id', mb_ids
-                ).range(offset_e, offset_e + 999).execute()
-                for row in (batch.data or []):
-                    mid = row.get('mailbox_id')
-                    if mid:
-                        email_counts[mid] = email_counts.get(mid, 0) + 1
-                if len(batch.data or []) < 1000:
-                    break
-                offset_e += 1000
-
-        # 2. Classification status counts per mailbox — fetch processing_status field, count in Python
-        status_counts: dict[str, dict[str, int]] = {mid: {'completed': 0, 'failed': 0, 'skipped': 0} for mid in mb_ids}
+        status_counts: dict[str, dict[str, int]] = {}
         last_analysis_map: dict[str, str] = {}
-        if mb_ids:
-            offset_ai = 0
-            while True:
-                batch = _supabase.table('ai_email_intelligence').select(
-                    'mailbox_id, processing_status, processed_at'
-                ).in_('mailbox_id', mb_ids).range(offset_ai, offset_ai + 999).execute()
-                rows = batch.data or []
-                for row in rows:
-                    mid = row.get('mailbox_id')
-                    status = row.get('processing_status', '')
-                    if mid and status in status_counts.get(mid, {}):
-                        status_counts[mid][status] += 1
-                    if mid and status == 'completed' and row.get('processed_at'):
-                        existing = last_analysis_map.get(mid)
-                        if not existing or row['processed_at'] > existing:
-                            last_analysis_map[mid] = row['processed_at']
-                if len(rows) < 1000:
-                    break
-                offset_ai += 1000
+
+        for mb_id in mb_ids:
+            # Total emails
+            r = _supabase.table('emails').select('id', count='exact').eq('mailbox_id', mb_id).execute()
+            email_counts[mb_id] = r.count or 0
+
+            # Per-status counts
+            counts = {}
+            for status in ('completed', 'failed', 'skipped'):
+                r = _supabase.table('ai_email_intelligence').select('id', count='exact').eq(
+                    'mailbox_id', mb_id).eq('processing_status', status).execute()
+                counts[status] = r.count or 0
+            status_counts[mb_id] = counts
+
+            # Last completed timestamp
+            try:
+                r = _supabase.table('ai_email_intelligence').select('processed_at').eq(
+                    'mailbox_id', mb_id).eq('processing_status', 'completed').order(
+                    'processed_at', desc=True).limit(1).execute()
+                if r.data:
+                    last_analysis_map[mb_id] = r.data[0]['processed_at']
+            except Exception:
+                pass
 
         per_mailbox = []
         total_emails_all = 0
