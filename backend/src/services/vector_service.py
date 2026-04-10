@@ -39,7 +39,7 @@ _embedding_provider_override = None  # Set explicitly by reset_embedding_model()
 
 
 def _resolve_provider() -> str:
-    """Resolve embedding provider: in-memory override > DB > env var > 'google'."""
+    """Resolve embedding provider: in-memory override > DB > 'google'."""
     if _embedding_provider_override:
         return _embedding_provider_override
     # Read from DB (no client_id filter — embedding provider is a global setting)
@@ -53,7 +53,7 @@ def _resolve_provider() -> str:
             return resp.data[0]['value'].lower()
     except Exception as e:
         logger.debug(f"Could not read embedding_provider from DB: {e}")
-    return os.getenv("EMBEDDING_PROVIDER", "google").lower()
+    return "google"
 
 
 def _get_embedding_model():
