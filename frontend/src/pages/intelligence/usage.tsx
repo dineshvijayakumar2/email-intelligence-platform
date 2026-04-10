@@ -27,7 +27,7 @@ import api from '../../services/apiClient';
 import { formatTime } from '../../utils/dateUtils';
 import {
   useAICosts, useAIMonitoring, useAIControls, useAIRecentLogs,
-  useAIModels, useAIApiKeys, useClientAISettings,
+  useAIModels, useAIApiKeys, useAITaskModels,
 } from '../../hooks/queries';
 import type { UsageSummary, MonitoringStats, AIControlSettings, UsageLogEntry } from '../../types/ai';
 import type { AIModel } from '../../types/strategic-digest';
@@ -97,11 +97,11 @@ const UsagePage: React.FC = () => {
   // All data via TanStack Query — auto-refresh every 60s when enabled
   const costsQuery = useAICosts(clientId, 30);
   const monitoringQuery = useAIMonitoring(clientId);
-  const controlsQuery = useAIControls();
+  const controlsQuery = useAIControls(clientId);
   const logsQuery = useAIRecentLogs(30);
   const modelsQuery = useAIModels();
   const apiKeysQuery = useAIApiKeys(clientId);
-  const clientSettingsQuery = useClientAISettings(clientId);
+  const taskModelsQuery = useAITaskModels(clientId);
 
   const costs = costsQuery.data || null;
   const monitoring = monitoringQuery.data || null;
@@ -109,12 +109,8 @@ const UsagePage: React.FC = () => {
   const recentLogs = logsQuery.data?.items || [];
   const models = modelsQuery.data?.models || [];
   const apiKeys = apiKeysQuery.data || null;
+  const taskModels = taskModelsQuery.data?.task_models || {};
   const loading = costsQuery.isLoading;
-
-  // Derive model selections from client settings -> controls -> defaults
-  const clientSettings = clientSettingsQuery.data || {};
-  const cheapModel = clientSettings['ai_cheap_model'] || controls?.cheap_model || 'haiku';
-  const strategicModel = clientSettings['ai_strategic_model'] || controls?.strategic_model || 'sonnet';
 
   // Load embedding config
   React.useEffect(() => {
@@ -149,13 +145,13 @@ const UsagePage: React.FC = () => {
     controlsQuery.refetch();
     logsQuery.refetch();
     apiKeysQuery.refetch();
-    clientSettingsQuery.refetch();
+    taskModelsQuery.refetch();
   };
 
-  // Control update handler
+  // Control update handler — passes client_id for DB persistence
   const handleControlChange = async (key: string, value: any) => {
     try {
-      const result = await controlsApi.update({ [key]: value });
+      const result = await controlsApi.update({ [key]: value, client_id: clientId });
       if (result?.settings) {
         controlsQuery.refetch();
         toast.success(`Updated ${key.replace(/_/g, ' ')}`);
@@ -165,10 +161,21 @@ const UsagePage: React.FC = () => {
     }
   };
 
+  // Task model update handler
+  const handleTaskModelChange = async (task: string, model: string) => {
+    try {
+      await api.put('/v1/ai/task-models', { [task]: model, client_id: clientId });
+      taskModelsQuery.refetch();
+      toast.success(`${task.replace(/_/g, ' ')} model set to ${model}`);
+    } catch {
+      toast.error('Failed to update model');
+    }
+  };
+
   const handleResetSpend = async () => {
     const result = await controlsApi.resetSessionSpend();
     if (result) {
-      toast.success(`Session spend reset (was $${result.previous_spend_usd})`);
+      toast.success('Spend cache cleared');
       loadData();
     }
   };
@@ -217,22 +224,13 @@ const UsagePage: React.FC = () => {
     }
   };
 
-  const handleModelChange = async (type: 'cheap' | 'strategic', value: string) => {
-    const newCheap = type === 'cheap' ? value : cheapModel;
-    const newStrategic = type === 'strategic' ? value : strategicModel;
-    try {
-      await modelsApi.updateDefaults(newCheap, newStrategic, clientId || undefined);
-      clientSettingsQuery.refetch();
-      toast.success(`${type === 'cheap' ? 'Fast' : 'Strategic'} model set to ${value}`);
-    } catch (err) {
-      toast.error('Failed to update model');
-    }
-  };
-
   const showSkeleton = loading || !costs;
 
+  // Use DB-sourced daily spend (from ai_usage_log), not in-memory session_spend
+  const dailySpend = (controls as any)?.daily_spend_usd || 0;
+  const monthlySpend = (controls as any)?.monthly_spend_usd || 0;
   const budgetUsedPct = controls
-    ? Math.min((controls.session_spend_usd / controls.daily_budget_usd) * 100, 100)
+    ? Math.min((dailySpend / controls.daily_budget_usd) * 100, 100)
     : 0;
 
   const budgetColor = budgetUsedPct >= 90 ? 'text-red-500' : budgetUsedPct >= 70 ? 'text-amber-500' : 'text-emerald-500';
@@ -280,8 +278,8 @@ const UsagePage: React.FC = () => {
       )}
 
       {/* Budget Alert */}
-      {controls && controls.session_spend_usd >= controls.daily_budget_usd * 0.8 && (() => {
-        const isOver = controls.session_spend_usd >= controls.daily_budget_usd;
+      {controls && dailySpend >= controls.daily_budget_usd * 0.8 && (() => {
+        const isOver = dailySpend >= controls.daily_budget_usd;
         const borderCls = isOver ? 'border-red-200 bg-red-50' : 'border-amber-200 bg-amber-50';
         const iconCls = isOver ? 'text-red-500' : 'text-amber-500';
         const titleCls = isOver ? 'text-red-800' : 'text-amber-800';
@@ -292,7 +290,7 @@ const UsagePage: React.FC = () => {
             <div>
               <p className={`text-sm font-semibold ${titleCls}`}>Budget Warning</p>
               <p className={`text-xs ${bodyCls} mt-1`}>
-                Session spend (${controls.session_spend_usd.toFixed(4)}) is approaching the daily budget cap (${controls.daily_budget_usd.toFixed(2)}). API calls will be blocked when the cap is reached.
+                Today's spend ($${dailySpend.toFixed(4)}) is approaching the daily budget cap ($${controls.daily_budget_usd.toFixed(2)}). API calls will be blocked when the cap is reached.
               </p>
             </div>
           </div>
@@ -322,15 +320,15 @@ const UsagePage: React.FC = () => {
           )}
         </div>
 
-        {/* Session Spend */}
+        {/* Today's Spend (from DB) */}
         <div className="rounded-lg border bg-white shadow-sm p-4">
           {showSkeleton ? <ContentSkeleton rows={2} /> : (
             <div>
-              <p className="text-xs font-medium text-slate-500 mb-1">Session Spend</p>
+              <p className="text-xs font-medium text-slate-500 mb-1">Today's Spend</p>
               <div className="flex items-center gap-2 mb-2">
                 <DollarSign className={`h-4 w-4 ${budgetColor}`} />
                 <span className={`text-xl font-semibold ${budgetColor}`}>
-                  ${(controls?.session_spend_usd || 0).toFixed(4)}
+                  ${dailySpend.toFixed(4)}
                 </span>
               </div>
               {/* Progress bar */}
@@ -341,7 +339,7 @@ const UsagePage: React.FC = () => {
                 />
               </div>
               <p className="text-[10px] text-slate-400 mt-1">
-                {Math.round(budgetUsedPct)}% of ${controls?.daily_budget_usd || 0}
+                {Math.round(budgetUsedPct)}% of ${controls?.daily_budget_usd || 0} daily cap
               </p>
             </div>
           )}
@@ -368,8 +366,8 @@ const UsagePage: React.FC = () => {
         {/* Daily Credit Remaining */}
         <div className="rounded-lg border bg-white shadow-sm p-4">
           {showSkeleton ? <ContentSkeleton rows={1} /> : (() => {
-            const dailyRemaining = Math.max((controls?.daily_budget_usd || 0) - (controls?.session_spend_usd || 0), 0);
-            const monthlyRemaining = Math.max((controls?.monthly_budget_usd || 0) - (costs?.total_cost_usd || 0), 0);
+            const dailyRemaining = Math.max((controls?.daily_budget_usd || 0) - dailySpend, 0);
+            const monthlyRemaining = Math.max((controls?.monthly_budget_usd || 0) - monthlySpend, 0);
             const dailyPct = controls?.daily_budget_usd ? (dailyRemaining / controls.daily_budget_usd) * 100 : 100;
             const creditColor = dailyPct <= 10 ? 'text-red-500' : dailyPct <= 30 ? 'text-amber-500' : 'text-emerald-500';
             return (
@@ -457,92 +455,72 @@ const UsagePage: React.FC = () => {
 
             <hr className="border-slate-100" />
 
-            {/* Model Selection */}
+            {/* Per-Task Model Assignment */}
             {models.length > 0 && (
               <>
-                <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">AI Model Selection</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-[11px] text-slate-500 mb-1">Fast tasks (email analysis, insights)</p>
+                <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">AI Model Assignment</h4>
+                <div className="space-y-2">
+                  {[
+                    { task: 'email_analysis', label: 'Email Analysis', desc: 'Intent, urgency, sentiment classification' },
+                    { task: 'daily_digest', label: 'Daily Digest', desc: 'Daily briefing synthesis' },
+                    { task: 'strategic_digest', label: 'Strategic Digest', desc: 'Strategic reports, ReAct agent' },
+                    { task: 'entity_insights', label: 'Entity Insights', desc: 'Company/contact/thread analysis' },
+                  ].map(({ task, label, desc }) => {
+                    const current = taskModels[task]?.model || 'haiku';
+                    const source = taskModels[task]?.source || 'default';
+                    const modelConfig = models.find(m => m.name === current);
+                    const providerReady = modelConfig?.available !== false;
+                    return (
+                      <div key={task} className="flex items-center gap-3">
+                        <div className="w-40 shrink-0">
+                          <p className="text-xs font-medium text-slate-700">{label}</p>
+                          <p className="text-[10px] text-slate-400">{desc}</p>
+                        </div>
+                        <select
+                          value={current}
+                          onChange={(e) => handleTaskModelChange(task, e.target.value)}
+                          disabled={!controls?.ai_enabled}
+                          className="flex-1 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700 shadow-sm focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 disabled:opacity-50"
+                        >
+                          {models.map(m => (
+                            <option key={m.name} value={m.name} disabled={!m.available}>
+                              {m.label} {m.cost_input_per_mtok === 0 ? '(free)' : `($${m.cost_input_per_mtok}/MTok)`}
+                            </option>
+                          ))}
+                        </select>
+                        <span className={`h-2 w-2 rounded-full shrink-0 ${providerReady ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                        <span className="text-[10px] text-slate-400 w-12 shrink-0">{source}</span>
+                      </div>
+                    );
+                  })}
+                  {/* Embedding — separate provider */}
+                  <div className="flex items-center gap-3">
+                    <div className="w-40 shrink-0">
+                      <p className="text-xs font-medium text-slate-700">Embedding</p>
+                      <p className="text-[10px] text-slate-400">Vector search (768-dim)</p>
+                    </div>
                     <select
-                      value={cheapModel}
-                      onChange={(e) => handleModelChange('cheap', e.target.value)}
-                      disabled={!controls?.ai_enabled}
-                      className="w-full rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700 shadow-sm focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                      value={embeddingProvider}
+                      onChange={(e) => handleEmbeddingProviderChange(e.target.value)}
+                      disabled={embeddingSaving}
+                      className="flex-1 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700 shadow-sm focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 disabled:opacity-50"
                     >
-                      {models.map(m => (
-                        <option key={m.name} value={m.name} disabled={!m.available}>
-                          {m.label} {m.cost_input_per_mtok === 0 ? '(free)' : `($${m.cost_input_per_mtok}/MTok)`}
-                        </option>
-                      ))}
+                      <option value="google">Google Gemini (gemini-embedding-001)</option>
+                      <option value="openai">OpenAI (text-embedding-3-small)</option>
                     </select>
-                  </div>
-                  <div>
-                    <p className="text-[11px] text-slate-500 mb-1">Strategic tasks (digest, reports)</p>
-                    <select
-                      value={strategicModel}
-                      onChange={(e) => handleModelChange('strategic', e.target.value)}
-                      disabled={!controls?.ai_enabled}
-                      className="w-full rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700 shadow-sm focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {models.map(m => (
-                        <option key={m.name} value={m.name} disabled={!m.available}>
-                          {m.label} {m.cost_input_per_mtok === 0 ? '(free)' : `($${m.cost_input_per_mtok}/MTok)`}
-                        </option>
-                      ))}
-                    </select>
+                    <span className={`h-2 w-2 rounded-full shrink-0 ${
+                      embeddingProvider === 'openai' ? (apiKeys?.openai_set ? 'bg-emerald-500' : 'bg-red-500')
+                      : (apiKeys?.google_set ? 'bg-emerald-500' : 'bg-amber-500')
+                    }`} />
+                    <span className="text-[10px] text-slate-400 w-12 shrink-0">
+                      {embeddingConfig?.provider_source || 'env'}
+                    </span>
                   </div>
                 </div>
 
                 <hr className="border-slate-100" />
               </>
             )}
-
-            {/* Embedding Configuration */}
-            <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Embedding Provider</h4>
-            <div className="grid grid-cols-2 gap-4 mb-1">
-              <div>
-                <p className="text-[11px] text-slate-500 mb-1">Vector embedding model for semantic search</p>
-                <select
-                  value={embeddingProvider}
-                  onChange={(e) => handleEmbeddingProviderChange(e.target.value)}
-                  disabled={embeddingSaving}
-                  className="w-full rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700 shadow-sm focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 disabled:opacity-50"
-                >
-                  <option value="google">Google Gemini (gemini-embedding-001)</option>
-                  <option value="openai">OpenAI (text-embedding-3-small)</option>
-                </select>
-              </div>
-              <div>
-                <p className="text-[11px] text-slate-500 mb-1">Status</p>
-                <div className="flex items-center gap-2 h-[30px]">
-                  {embeddingConfig ? (
-                    <>
-                      <span className={`inline-block h-2 w-2 rounded-full ${
-                        embeddingProvider === 'openai'
-                          ? (apiKeys?.openai_set ? 'bg-emerald-500' : 'bg-red-500')
-                          : (apiKeys?.google_set ? 'bg-emerald-500' : 'bg-amber-500')
-                      }`} />
-                      <span className="text-xs text-slate-600">
-                        {embeddingProvider === 'openai'
-                          ? (apiKeys?.openai_set ? 'OpenAI key configured' : 'OpenAI key required — set above')
-                          : (apiKeys?.google_set ? 'Google key configured' : 'Using env var')}
-                      </span>
-                      {embeddingConfig.provider_source === 'db' && (
-                        <span className="text-[10px] text-slate-400 ml-auto">saved in DB</span>
-                      )}
-                    </>
-                  ) : (
-                    <span className="text-xs text-slate-400">Loading...</span>
-                  )}
-                </div>
-              </div>
-            </div>
-            <p className="text-[10px] text-slate-400 mb-2">
-              Both produce 768-dim vectors. Switch to OpenAI if Google hits 503 errors. Existing embeddings remain valid.
-            </p>
-
-            <hr className="border-slate-100" />
 
             {/* Budget Controls */}
             <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Budget Limits</h4>

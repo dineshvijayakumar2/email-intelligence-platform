@@ -27,10 +27,20 @@ export function useAIMonitoring(clientId: string) {
   });
 }
 
-export function useAIControls() {
+export function useAIControls(clientId?: string) {
   return useQuery<AIControlSettings | null>({
-    queryKey: ['ai-controls'],
-    queryFn: () => controlsApi.get(),
+    queryKey: ['ai-controls', clientId],
+    queryFn: () => clientId ? controlsApi.getWithClient(clientId) : controlsApi.get(),
+    staleTime: 30_000,
+    enabled: !!clientId,
+  });
+}
+
+export function useAITaskModels(clientId: string) {
+  return useQuery<any>({
+    queryKey: ['ai-task-models', clientId],
+    queryFn: () => api.get<any>(`/v1/ai/task-models?client_id=${clientId}`).catch(() => null),
+    enabled: !!clientId,
     staleTime: 30_000,
   });
 }

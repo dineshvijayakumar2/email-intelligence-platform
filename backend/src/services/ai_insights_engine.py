@@ -302,7 +302,8 @@ class AIInsightsEngine:
                 from .ai_email_analyzer import _apply_client_model_settings
                 _apply_client_model_settings(self._supabase, self._client_id)
 
-            llm = get_cheap_llm(temperature=0.1)
+            from .langchain_core import get_task_model
+            llm = get_task_model('entity_insights', self._client_id, temperature=0.1)
 
             messages = [
                 SystemMessage(content=system_prompt),

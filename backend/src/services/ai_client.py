@@ -44,7 +44,7 @@ BASE_RETRY_DELAY = 2.0  # seconds, doubles each retry
 # ---------------------------------------------------------------------------
 @dataclass
 class AIControlSettings:
-    """Runtime controls for AI features. Adjustable via admin API."""
+    """Runtime controls for AI features. Persisted to system_settings DB table."""
     # Master kill switch — disables ALL AI calls
     ai_enabled: bool = True
     # Per-feature toggles
@@ -59,16 +59,108 @@ class AIControlSettings:
     max_emails_per_run: int = 500        # Max emails per analysis trigger
     # Rate controls
     max_requests_per_second: float = 10.0
-    # Session spend tracking (resets on server restart)
-    session_spend_usd: float = 0.0
-    session_requests: int = 0
-    # Model preferences — default from env so Railway config persists across restarts
+    # Model preferences — default from env, overridden by DB
     cheap_model: str = field(default_factory=lambda: os.getenv("AI_CHEAP_MODEL", "haiku"))
     strategic_model: str = field(default_factory=lambda: os.getenv("AI_STRATEGIC_MODEL", "sonnet"))
 
 
 # Global settings singleton
 _ai_settings = AIControlSettings()
+_settings_loaded_from_db = False
+
+# Spend cache — avoids hitting DB on every AI call (60s TTL)
+_spend_cache: dict = {}
+
+
+# ---------------------------------------------------------------------------
+# DB key mapping: dataclass field name → system_settings key
+# ---------------------------------------------------------------------------
+_SETTINGS_DB_KEYS = {
+    'ai_enabled': 'ai_enabled',
+    'email_analysis_enabled': 'email_analysis_enabled',
+    'digest_enabled': 'digest_enabled',
+    'relationship_summary_enabled': 'relationship_summary_enabled',
+    'daily_budget_usd': 'daily_budget_usd',
+    'monthly_budget_usd': 'monthly_budget_usd',
+    'batch_size': 'batch_size',
+    'max_emails_per_run': 'max_emails_per_run',
+    'max_requests_per_second': 'max_requests_per_second',
+    'cheap_model': 'ai_cheap_model',
+    'strategic_model': 'ai_strategic_model',
+}
+
+_BOOL_FIELDS = {'ai_enabled', 'email_analysis_enabled', 'digest_enabled', 'relationship_summary_enabled'}
+_FLOAT_FIELDS = {'daily_budget_usd', 'monthly_budget_usd', 'max_requests_per_second'}
+_INT_FIELDS = {'batch_size', 'max_emails_per_run'}
+
+
+def load_ai_settings_from_db(client_id: Optional[str] = None):
+    """Load AI control settings from system_settings DB table.
+
+    Called on startup and after settings updates. Falls back to env vars then defaults.
+    """
+    global _ai_settings, _settings_loaded_from_db
+    if not client_id:
+        logger.info("No client_id for AI settings — using defaults + env vars")
+        _settings_loaded_from_db = True
+        return
+
+    try:
+        from ..database.supabase_client import SupabaseClient
+        sb = SupabaseClient.get_client(use_service_key=True)
+
+        resp = sb.table('system_settings').select('key, value').eq(
+            'client_id', client_id
+        ).execute()
+        db_map = {r['key']: r['value'] for r in (resp.data or [])}
+
+        for field_name, db_key in _SETTINGS_DB_KEYS.items():
+            if db_key in db_map:
+                raw = db_map[db_key]
+                if field_name in _BOOL_FIELDS:
+                    setattr(_ai_settings, field_name, raw.lower() in ('true', '1', 'yes'))
+                elif field_name in _FLOAT_FIELDS:
+                    setattr(_ai_settings, field_name, float(raw))
+                elif field_name in _INT_FIELDS:
+                    setattr(_ai_settings, field_name, int(raw))
+                else:
+                    setattr(_ai_settings, field_name, raw)
+
+        _settings_loaded_from_db = True
+        logger.info(f"AI settings loaded from DB for client {client_id}: ai_enabled={_ai_settings.ai_enabled}, "
+                     f"budget=${_ai_settings.daily_budget_usd}")
+    except Exception as e:
+        logger.warning(f"Failed to load AI settings from DB (using defaults): {e}")
+        _settings_loaded_from_db = True
+
+
+def save_ai_setting_to_db(field_name: str, value, client_id: Optional[str] = None):
+    """Persist a single AI setting to system_settings DB table."""
+    if not client_id:
+        return
+    db_key = _SETTINGS_DB_KEYS.get(field_name)
+    if not db_key:
+        return
+    try:
+        from ..database.supabase_client import SupabaseClient
+        sb = SupabaseClient.get_client(use_service_key=True)
+
+        str_value = str(value).lower() if isinstance(value, bool) else str(value)
+
+        existing = sb.table('system_settings').select('id').eq(
+            'key', db_key
+        ).eq('client_id', client_id).limit(1).execute()
+
+        from datetime import datetime
+        row = {'key': db_key, 'value': str_value, 'client_id': client_id,
+               'updated_at': datetime.utcnow().isoformat()}
+
+        if existing.data:
+            sb.table('system_settings').update(row).eq('id', existing.data[0]['id']).execute()
+        else:
+            sb.table('system_settings').insert(row).execute()
+    except Exception as e:
+        logger.warning(f"Failed to save AI setting {field_name}={value} to DB: {e}")
 
 
 def get_ai_settings() -> AIControlSettings:
@@ -76,14 +168,65 @@ def get_ai_settings() -> AIControlSettings:
     return _ai_settings
 
 
-def update_ai_settings(**kwargs) -> AIControlSettings:
-    """Update AI control settings. Only updates provided fields."""
+def update_ai_settings(client_id: Optional[str] = None, **kwargs) -> AIControlSettings:
+    """Update AI control settings in memory AND persist to DB."""
     global _ai_settings
     for key, value in kwargs.items():
         if hasattr(_ai_settings, key):
             setattr(_ai_settings, key, value)
+            # Persist to DB
+            if client_id:
+                save_ai_setting_to_db(key, value, client_id)
     logger.info(f"AI settings updated: {kwargs}")
     return _ai_settings
+
+
+def get_actual_spend(client_id: Optional[str] = None, period: str = 'daily') -> float:
+    """Query ai_usage_log for actual spend. Cached 60s in-memory.
+
+    Args:
+        client_id: Client UUID (optional — if None, returns all clients' spend)
+        period: 'daily' (since midnight UTC) or 'monthly' (since 1st of month)
+    """
+    import time as _time
+    cache_key = f"spend_{client_id or 'all'}_{period}"
+    cached = _spend_cache.get(cache_key)
+    if cached and cached['expires'] > _time.time():
+        return cached['value']
+
+    try:
+        from ..database.supabase_client import SupabaseClient
+        from datetime import datetime, timezone
+        sb = SupabaseClient.get_client(use_service_key=True)
+
+        now = datetime.now(timezone.utc)
+        if period == 'daily':
+            since = now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+        else:
+            since = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
+
+        query = sb.table('ai_usage_log').select('estimated_cost_usd').gte(
+            'created_at', since
+        ).eq('success', 'true')
+        if client_id:
+            query = query.eq('client_id', client_id)
+
+        total = 0.0
+        offset = 0
+        while True:
+            resp = query.range(offset, offset + 499).execute()
+            rows = resp.data or []
+            if not rows:
+                break
+            for r in rows:
+                total += float(r.get('estimated_cost_usd') or 0)
+            offset += len(rows)
+
+        _spend_cache[cache_key] = {'value': round(total, 4), 'expires': _time.time() + 60}
+        return round(total, 4)
+    except Exception as e:
+        logger.warning(f"Failed to query actual spend: {e}")
+        return 0.0
 
 
 @dataclass
@@ -155,10 +298,11 @@ class AIClient:
             logger.warning("AI is disabled via kill switch")
             return None
 
-        # Check daily budget
-        if settings.session_spend_usd >= settings.daily_budget_usd:
+        # Check daily budget against actual DB spend (cached 60s)
+        actual_daily = get_actual_spend(period='daily')
+        if actual_daily >= settings.daily_budget_usd:
             logger.warning(
-                f"Daily budget exceeded: ${settings.session_spend_usd:.4f} >= "
+                f"Daily budget exceeded: ${actual_daily:.4f} >= "
                 f"${settings.daily_budget_usd:.2f}. Blocking API call."
             )
             return None
@@ -185,10 +329,6 @@ class AIClient:
                 output_tokens = response.usage.output_tokens
 
                 cost = self._calculate_cost(model, input_tokens, output_tokens)
-
-                # Track session spend
-                settings.session_spend_usd += cost
-                settings.session_requests += 1
 
                 return AIResponse(
                     content=content,

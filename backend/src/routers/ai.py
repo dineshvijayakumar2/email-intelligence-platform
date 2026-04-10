@@ -68,6 +68,16 @@ def init_ai_router(supabase_client):
     _load_persisted_api_keys()
     _load_persisted_model_settings()
 
+    # Load AI control settings from DB for the first client found
+    # (single-tenant: typically one client)
+    try:
+        from ..services.ai_client import load_ai_settings_from_db
+        clients_resp = supabase_client.table('clients').select('id').limit(1).execute()
+        if clients_resp.data:
+            load_ai_settings_from_db(clients_resp.data[0]['id'])
+    except Exception as e:
+        logger.warning(f"Could not load AI settings from DB on startup: {e}")
+
     logger.info("AI router and services initialized")
 
 
@@ -993,15 +1003,27 @@ async def get_recent_usage(
 
 @router.get("/controls")
 async def get_ai_controls(
+    client_id: Optional[str] = Query(default=None),
     current_user: dict = Depends(require_role('admin')),
 ):
     """
-    Get current AI control settings. Admin only.
+    Get current AI control settings. All persisted to DB.
 
     Returns: kill switch, feature toggles, budget caps, batch settings,
-    session spend tracking.
+    actual daily/monthly spend from ai_usage_log.
     """
+    from ..services.ai_client import load_ai_settings_from_db, get_actual_spend
+
+    # Ensure settings are loaded from DB
+    if client_id:
+        load_ai_settings_from_db(client_id)
+
     settings = get_ai_settings()
+
+    # Get actual spend from DB (not in-memory)
+    daily_spend = get_actual_spend(client_id, 'daily')
+    monthly_spend = get_actual_spend(client_id, 'monthly')
+
     return {
         # Master switch
         "ai_enabled": settings.ai_enabled,
@@ -1012,15 +1034,15 @@ async def get_ai_controls(
         # Budget controls
         "daily_budget_usd": settings.daily_budget_usd,
         "monthly_budget_usd": settings.monthly_budget_usd,
+        # Actual spend (from ai_usage_log DB)
+        "daily_spend_usd": daily_spend,
+        "monthly_spend_usd": monthly_spend,
         # Batch controls
         "batch_size": settings.batch_size,
         "max_emails_per_run": settings.max_emails_per_run,
         # Rate controls
         "max_requests_per_second": settings.max_requests_per_second,
-        # Session tracking (live)
-        "session_spend_usd": round(settings.session_spend_usd, 6),
-        "session_requests": settings.session_requests,
-        # Model preferences
+        # Model preferences (legacy)
         "cheap_model": settings.cheap_model,
         "strategic_model": settings.strategic_model,
     }
@@ -1032,19 +1054,11 @@ async def update_ai_controls(
     current_user: dict = Depends(require_role('admin')),
 ):
     """
-    Update AI control settings. Admin only.
-
-    Accepts any combination of:
-    - ai_enabled: bool — master kill switch
-    - email_analysis_enabled: bool
-    - digest_enabled: bool
-    - relationship_summary_enabled: bool
-    - daily_budget_usd: float
-    - monthly_budget_usd: float
-    - batch_size: int
-    - max_emails_per_run: int
-    - max_requests_per_second: float
+    Update AI control settings. Persists to system_settings DB table.
+    Survives server restarts.
     """
+    client_id = data.pop("client_id", None)
+
     # Whitelist allowed fields
     allowed = {
         "ai_enabled", "email_analysis_enabled", "digest_enabled",
@@ -1057,8 +1071,9 @@ async def update_ai_controls(
     if not updates:
         raise HTTPException(status_code=400, detail="No valid fields provided")
 
-    settings = update_ai_settings(**updates)
-    logger.info(f"AI controls updated: {updates}")
+    # Update in-memory AND persist to DB
+    settings = update_ai_settings(client_id=client_id, **updates)
+    logger.info(f"AI controls updated (persisted to DB): {updates}")
 
     return {
         "status": "updated",
@@ -1072,23 +1087,54 @@ async def update_ai_controls(
             "batch_size": settings.batch_size,
             "max_emails_per_run": settings.max_emails_per_run,
             "max_requests_per_second": settings.max_requests_per_second,
-            "session_spend_usd": round(settings.session_spend_usd, 6),
-            "session_requests": settings.session_requests,
         },
     }
+
+
+@router.get("/task-models")
+async def get_task_models(
+    client_id: Optional[str] = Query(default=None),
+    current_user: dict = Depends(require_role('admin')),
+):
+    """Get current model assignment per AI task (DB > env > default)."""
+    from ..services.langchain_core import get_all_task_models, get_available_models as _get_models
+    task_models = get_all_task_models(client_id)
+    models = _get_models()
+    return {"task_models": task_models, "available_models": models}
+
+
+@router.put("/task-models")
+async def update_task_models(
+    data: dict,
+    current_user: dict = Depends(require_role('admin')),
+):
+    """Update model assignment for one or more AI tasks. Persists to DB."""
+    from ..services.langchain_core import set_task_model, TASK_MODEL_DEFAULTS
+    client_id = data.get("client_id")
+    if not client_id:
+        raise HTTPException(status_code=400, detail="client_id required")
+
+    updated = []
+    for task in TASK_MODEL_DEFAULTS:
+        if task in data and data[task]:
+            try:
+                set_task_model(task, data[task], client_id)
+                updated.append(f"{task}={data[task]}")
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e))
+
+    return {"status": "ok", "updated": updated, "client_id": client_id}
 
 
 @router.post("/controls/reset-session-spend")
 async def reset_session_spend(
     current_user: dict = Depends(require_role('admin')),
 ):
-    """Reset the session spend counter (e.g., at start of new day). Admin only."""
-    settings = get_ai_settings()
-    old_spend = settings.session_spend_usd
-    settings.session_spend_usd = 0.0
-    settings.session_requests = 0
-    logger.info(f"Session spend reset from ${old_spend:.6f} to $0.00")
-    return {"status": "reset", "previous_spend_usd": round(old_spend, 6)}
+    """Reset spend cache — forces next budget check to re-query the DB."""
+    from ..services.ai_client import _spend_cache
+    _spend_cache.clear()
+    logger.info("Spend cache cleared — next budget check will re-query DB")
+    return {"status": "reset", "message": "Spend cache cleared"}
 
 
 # ============================================================================

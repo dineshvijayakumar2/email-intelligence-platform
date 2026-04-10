@@ -170,6 +170,156 @@ def get_model_config(model_name: ModelName) -> dict:
     return MODEL_CONFIGS[model_name]
 
 
+# ---------------------------------------------------------------------------
+# Per-task model resolution (reads from DB > env > defaults)
+# ---------------------------------------------------------------------------
+TASK_MODEL_DEFAULTS = {
+    'email_analysis': 'haiku',
+    'daily_digest': 'sonnet',
+    'strategic_digest': 'sonnet',
+    'entity_insights': 'haiku',
+}
+
+# Legacy mapping: task → which tier it belonged to
+_TASK_LEGACY_TIER = {
+    'email_analysis': 'cheap',
+    'daily_digest': 'strategic',
+    'strategic_digest': 'strategic',
+    'entity_insights': 'cheap',
+}
+
+# In-memory cache for task models (loaded from DB)
+_task_model_cache: dict = {}
+_task_model_cache_expires: float = 0
+
+
+def get_task_model(task: str, client_id: str = None, temperature: float = 0.0, json_mode: bool = False) -> BaseChatModel:
+    """Get a LangChain LLM for a specific AI task.
+
+    Priority: DB setting (ai_model_{task}) > legacy cheap/strategic > env var > default.
+
+    Args:
+        task: 'email_analysis', 'daily_digest', 'strategic_digest', 'entity_insights'
+        client_id: Client UUID for per-client settings
+        temperature: LLM temperature
+        json_mode: Force JSON output (Gemini only)
+    """
+    model_name = resolve_task_model_name(task, client_id)
+    return get_llm(model_name, temperature, json_mode)
+
+
+def resolve_task_model_name(task: str, client_id: str = None) -> ModelName:
+    """Resolve the model name for a task. DB > legacy tier > env > default."""
+    import time as _time
+    global _task_model_cache, _task_model_cache_expires
+
+    # Check cache (60s TTL)
+    cache_key = f"{client_id or 'none'}_{task}"
+    if cache_key in _task_model_cache and _task_model_cache_expires > _time.time():
+        return _task_model_cache[cache_key]
+
+    model_name = None
+    db_key = f"ai_model_{task}"
+
+    # Try DB
+    if client_id:
+        try:
+            from ..database.supabase_client import SupabaseClient
+            sb = SupabaseClient.get_client(use_service_key=True)
+            resp = sb.table('system_settings').select('value').eq(
+                'key', db_key
+            ).eq('client_id', client_id).limit(1).execute()
+            if resp.data and resp.data[0].get('value'):
+                model_name = resp.data[0]['value']
+        except Exception:
+            pass
+
+    # Fallback to legacy cheap/strategic tier
+    if not model_name:
+        tier = _TASK_LEGACY_TIER.get(task, 'cheap')
+        if tier == 'cheap':
+            model_name = _default_cheap_model
+        else:
+            model_name = _default_strategic_model
+
+    # Validate model exists
+    if model_name not in MODEL_CONFIGS:
+        model_name = TASK_MODEL_DEFAULTS.get(task, 'haiku')
+
+    # Cache
+    _task_model_cache[cache_key] = model_name
+    _task_model_cache_expires = _time.time() + 60
+
+    return model_name
+
+
+def get_all_task_models(client_id: str = None) -> dict:
+    """Get current model assignment for all tasks. Used by GET /ai/task-models."""
+    result = {}
+    for task in TASK_MODEL_DEFAULTS:
+        db_key = f"ai_model_{task}"
+        source = 'default'
+        model = TASK_MODEL_DEFAULTS[task]
+
+        # Check DB
+        if client_id:
+            try:
+                from ..database.supabase_client import SupabaseClient
+                sb = SupabaseClient.get_client(use_service_key=True)
+                resp = sb.table('system_settings').select('value').eq(
+                    'key', db_key
+                ).eq('client_id', client_id).limit(1).execute()
+                if resp.data and resp.data[0].get('value'):
+                    model = resp.data[0]['value']
+                    source = 'db'
+            except Exception:
+                pass
+
+        # If not in DB, check legacy tier settings
+        if source == 'default':
+            tier = _TASK_LEGACY_TIER.get(task, 'cheap')
+            tier_model = _default_cheap_model if tier == 'cheap' else _default_strategic_model
+            if tier_model != TASK_MODEL_DEFAULTS[task]:
+                model = tier_model
+                source = 'env'
+
+        result[task] = {'model': model, 'source': source}
+
+    return result
+
+
+def set_task_model(task: str, model_name: str, client_id: str):
+    """Save a task model assignment to DB."""
+    if task not in TASK_MODEL_DEFAULTS:
+        raise ValueError(f"Unknown task: {task}")
+    if model_name not in MODEL_CONFIGS:
+        raise ValueError(f"Unknown model: {model_name}")
+    try:
+        from ..database.supabase_client import SupabaseClient
+        from datetime import datetime
+        sb = SupabaseClient.get_client(use_service_key=True)
+        db_key = f"ai_model_{task}"
+
+        existing = sb.table('system_settings').select('id').eq(
+            'key', db_key
+        ).eq('client_id', client_id).limit(1).execute()
+
+        row = {'key': db_key, 'value': model_name, 'client_id': client_id,
+               'updated_at': datetime.utcnow().isoformat()}
+
+        if existing.data:
+            sb.table('system_settings').update(row).eq('id', existing.data[0]['id']).execute()
+        else:
+            sb.table('system_settings').insert(row).execute()
+
+        # Invalidate cache
+        global _task_model_cache_expires
+        _task_model_cache_expires = 0
+    except Exception as e:
+        logger.warning(f"Failed to save task model {task}={model_name}: {e}")
+        raise
+
+
 def get_available_models() -> list[dict]:
     """Return list of available models with their configs (for frontend)."""
     models = []

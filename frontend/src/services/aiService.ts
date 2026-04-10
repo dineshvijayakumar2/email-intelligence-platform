@@ -433,31 +433,41 @@ export const usageApi = {
 // G) AI CONTROLS (3 endpoints)
 // ============================================================================
 
+function _defaultControls(): AIControlSettings {
+  return {
+    ai_enabled: false, email_analysis_enabled: false, digest_enabled: false,
+    relationship_summary_enabled: false, daily_budget_usd: 2, monthly_budget_usd: 16,
+    batch_size: 10, max_emails_per_run: 500, max_requests_per_second: 10,
+  } as AIControlSettings;
+}
+
 export const controlsApi = {
-  /** GET /ai/controls — Get current settings */
+  /** GET /ai/controls — Get current settings (no client_id, legacy) */
   async get(): Promise<AIControlSettings> {
     try {
       const result = await api.get<AIControlSettings>(
         `${API_PREFIX}/controls`, { timeout: 5000 }
       );
-      return result || {
-        ai_enabled: false, email_analysis_enabled: false, digest_enabled: false,
-        relationship_summary_enabled: false, daily_budget_usd: 2, monthly_budget_usd: 16,
-        batch_size: 10, max_emails_per_run: 500, max_requests_per_second: 10,
-        session_spend_usd: 0, session_requests: 0,
-      };
+      return result || _defaultControls();
     } catch {
-      return {
-        ai_enabled: false, email_analysis_enabled: false, digest_enabled: false,
-        relationship_summary_enabled: false, daily_budget_usd: 2, monthly_budget_usd: 16,
-        batch_size: 10, max_emails_per_run: 500, max_requests_per_second: 10,
-        session_spend_usd: 0, session_requests: 0,
-      };
+      return _defaultControls();
     }
   },
 
-  /** PUT /ai/controls — Update settings */
-  async update(settings: Partial<AIControlSettings>): Promise<any> {
+  /** GET /ai/controls?client_id=... — Get settings with DB persistence */
+  async getWithClient(clientId: string): Promise<AIControlSettings> {
+    try {
+      const result = await api.get<AIControlSettings>(
+        `${API_PREFIX}/controls?client_id=${clientId}`, { timeout: 10000 }
+      );
+      return result || _defaultControls();
+    } catch {
+      return _defaultControls();
+    }
+  },
+
+  /** PUT /ai/controls — Update settings (persisted to DB) */
+  async update(settings: Partial<AIControlSettings> & { client_id?: string }): Promise<any> {
     try {
       invalidateCache('usage');
       return await api.put(`${API_PREFIX}/controls`, settings, { timeout: 5000 });

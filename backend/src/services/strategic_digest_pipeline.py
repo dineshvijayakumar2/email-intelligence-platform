@@ -284,7 +284,8 @@ class StrategicDigestPipeline:
             # -----------------------------------------------------------------
             # Step 5: Create LangGraph agent with tools
             # -----------------------------------------------------------------
-            llm = get_strategic_llm(temperature=0.1)
+            from .langchain_core import get_task_model
+            llm = get_task_model('strategic_digest', self.client_id, temperature=0.1)
             tools = [
                 lookup_company_detail,
                 lookup_contact_history,
