@@ -1685,6 +1685,40 @@ def _upsert_client_setting(key: str, value: str, client_id: str):
         logger.warning(f"Failed to save setting {key} for client {client_id}: {e}")
 
 
+def _upsert_global_setting(key: str, value: str):
+    """Save a global setting (no client_id)."""
+    if not _supabase:
+        return
+    try:
+        existing = _supabase.table('system_settings').select('id').eq(
+            'key', key
+        ).is_('client_id', 'null').limit(1).execute()
+
+        row = {'key': key, 'value': value, 'updated_at': datetime.utcnow().isoformat()}
+
+        if existing.data:
+            _supabase.table('system_settings').update(row).eq('id', existing.data[0]['id']).execute()
+        else:
+            _supabase.table('system_settings').insert(row).execute()
+    except Exception as e:
+        logger.warning(f"Failed to save global setting {key}: {e}")
+
+
+def _get_global_setting(key: str) -> Optional[str]:
+    """Read a global setting (no client_id)."""
+    if not _supabase:
+        return None
+    try:
+        resp = _supabase.table('system_settings').select('value').eq(
+            'key', key
+        ).is_('client_id', 'null').limit(1).execute()
+        if resp.data:
+            return resp.data[0]['value']
+    except Exception:
+        pass
+    return None
+
+
 @router.get("/api-keys")
 async def get_api_keys(
     client_id: Optional[str] = Query(default=None),
@@ -1806,19 +1840,16 @@ async def get_embedding_config(
     client_id: Optional[str] = Query(default=None),
     current_user: dict = Depends(require_role('admin')),
 ):
-    """Get current embedding provider configuration. DB > env var fallback."""
-    import os
-    db_provider = _get_client_setting('embedding_provider', client_id)
-    db_model = _get_client_setting('embedding_model', client_id)
+    """Get current embedding provider configuration. DB > 'google' default."""
+    db_provider = _get_global_setting('embedding_provider')
+    db_model = _get_global_setting('embedding_model')
 
-    provider = db_provider or os.getenv("EMBEDDING_PROVIDER", "google")
-    model = db_model
-    if not model:
-        model = "text-embedding-3-small" if provider == "openai" else "models/gemini-embedding-001"
+    provider = db_provider or "google"
+    model = db_model or ("text-embedding-3-small" if provider == "openai" else "models/gemini-embedding-001")
 
     return {
         "provider": provider,
-        "provider_source": "db" if db_provider else "env",
+        "provider_source": "db" if db_provider else "default",
         "model": model,
         "model_source": "db" if db_model else "default",
         "available_providers": [
@@ -1840,11 +1871,11 @@ async def update_embedding_config(
     if provider not in ("google", "openai"):
         raise HTTPException(status_code=400, detail=f"Invalid provider: {provider}. Must be 'google' or 'openai'.")
 
-    _upsert_client_setting('embedding_provider', provider, client_id)
+    _upsert_global_setting('embedding_provider', provider)
 
     model = data.get("model")
     if model:
-        _upsert_client_setting('embedding_model', model, client_id)
+        _upsert_global_setting('embedding_model', model)
 
     # Clear the cached model and pass the new provider explicitly
     from ..services.vector_service import reset_embedding_model

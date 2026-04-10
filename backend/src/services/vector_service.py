@@ -48,7 +48,7 @@ def _resolve_provider() -> str:
         client = SupabaseClient.get_client(use_service_key=True)
         resp = client.table('system_settings').select('value').eq(
             'key', 'embedding_provider'
-        ).limit(1).execute()
+        ).is_('client_id', 'null').limit(1).execute()
         if resp.data and resp.data[0].get('value'):
             return resp.data[0]['value'].lower()
     except Exception as e:
