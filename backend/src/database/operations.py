@@ -169,11 +169,7 @@ class EmailOperations:
                 errors.append(error_msg)
                 logger.error(error_msg)
         
-        # Update folder counts after batch insert
-        try:
-            self.update_folder_counts()
-        except Exception as e:
-            logger.warning(f"Failed to update folder counts: {e}")
+        # Folder count update skipped here — called once at end of full extraction
         
         return {
             'total': total,
