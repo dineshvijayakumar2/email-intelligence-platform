@@ -19,7 +19,7 @@ BEGIN
         SELECT COALESCE(jsonb_agg(row_data), '[]'::jsonb)
         FROM (
             SELECT jsonb_build_object(
-                'query',         LEFT(query, 200),
+                'query',         LEFT(query, 300),
                 'calls',         calls,
                 'total_time_s',  ROUND((total_exec_time / 1000)::numeric, 1),
                 'mean_time_ms',  ROUND(mean_exec_time::numeric, 2),

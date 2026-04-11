@@ -720,16 +720,22 @@ const DbPerformancePanel: React.FC = () => {
 
   /** Extract a human-readable label from PostgREST-wrapped SQL */
   const queryLabel = (q: string): { name: string; op: string } => {
-    // RPC call — extract function name
-    const funcMatch = q.match(/"public"\."(\w+)"\(/);
+    // RPC call — look for function invocation patterns
+    const funcMatch = q.match(/"public"\."(\w+)"\(/) || q.match(/\.\"(\w+)"\(/);
     if (funcMatch) return { name: funcMatch[1].replace(/_/g, ' '), op: 'RPC' };
-    // Table operation — extract table + detect SELECT/INSERT/UPDATE
+    // PostgREST scalar RPC — "pgrst_call.pgrst_scalar" wrapping
+    if (q.includes('pgrst_call.pgrst_scalar') || q.includes('pgrst_call')) {
+      // Try to extract the function name from the lateral join
+      const lateralFunc = q.match(/"public"\."(\w+)"/);
+      if (lateralFunc) return { name: lateralFunc[1].replace(/_/g, ' '), op: 'RPC' };
+    }
+    // Table operation — extract table + detect operation type
     const tableMatch = q.match(/"public"\."(\w+)"/);
-    const table = tableMatch ? tableMatch[1] : '?';
+    const table = tableMatch ? tableMatch[1] : q.slice(0, 50).replace(/[^a-zA-Z_ ]/g, '').trim() || 'unknown';
     if (q.includes('INSERT')) return { name: table, op: 'INSERT' };
     if (q.includes('UPDATE')) return { name: table, op: 'UPDATE' };
     if (q.includes('DELETE')) return { name: table, op: 'DELETE' };
-    if (q.includes('count')) return { name: table, op: 'COUNT' };
+    if (q.includes('count(') || q.includes('COUNT(') || q.includes('count_t')) return { name: table, op: 'COUNT' };
     return { name: table, op: 'SELECT' };
   };
 
