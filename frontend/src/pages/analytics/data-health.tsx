@@ -708,12 +708,45 @@ const DbPerformancePanel: React.FC = () => {
   const heapColor = heapPct >= 99 ? 'text-emerald-600' : heapPct >= 95 ? 'text-amber-600' : 'text-red-600';
   const idxColor = idxPct >= 99 ? 'text-emerald-600' : idxPct >= 95 ? 'text-amber-600' : 'text-red-600';
 
-  const truncateQuery = (q: string) => {
-    // Extract meaningful part from PostgREST-wrapped queries
-    const tableMatch = q.match(/"public"\."(\w+)"/);
+  /** Turn raw seconds into "9.5h", "12m", "3.2s" */
+  const fmtTime = (s: number) => {
+    if (s >= 3600) return `${(s / 3600).toFixed(1)}h`;
+    if (s >= 60) return `${(s / 60).toFixed(1)}m`;
+    return `${s.toFixed(1)}s`;
+  };
+
+  /** Turn avg ms into "1.4s", "467ms" */
+  const fmtMs = (ms: number) => ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.round(ms)}ms`;
+
+  /** Extract a human-readable label from PostgREST-wrapped SQL */
+  const queryLabel = (q: string): { name: string; op: string } => {
+    // RPC call — extract function name
     const funcMatch = q.match(/"public"\."(\w+)"\(/);
-    const label = funcMatch ? `rpc: ${funcMatch[1]}` : tableMatch ? tableMatch[1] : q.slice(0, 80);
-    return label.length > 60 ? label.slice(0, 57) + '...' : label;
+    if (funcMatch) return { name: funcMatch[1].replace(/_/g, ' '), op: 'RPC' };
+    // Table operation — extract table + detect SELECT/INSERT/UPDATE
+    const tableMatch = q.match(/"public"\."(\w+)"/);
+    const table = tableMatch ? tableMatch[1] : '?';
+    if (q.includes('INSERT')) return { name: table, op: 'INSERT' };
+    if (q.includes('UPDATE')) return { name: table, op: 'UPDATE' };
+    if (q.includes('DELETE')) return { name: table, op: 'DELETE' };
+    if (q.includes('count')) return { name: table, op: 'COUNT' };
+    return { name: table, op: 'SELECT' };
+  };
+
+  /** Severity badge for total cumulative time */
+  const timeBadge = (s: number) => {
+    if (s >= 3600) return 'bg-red-100 text-red-700';
+    if (s >= 600) return 'bg-amber-100 text-amber-700';
+    if (s >= 60) return 'bg-blue-50 text-blue-700';
+    return 'bg-slate-50 text-slate-600';
+  };
+
+  /** Operation type badge color */
+  const opColor = (op: string) => {
+    if (op === 'RPC') return 'bg-purple-100 text-purple-700';
+    if (op === 'INSERT' || op === 'UPDATE') return 'bg-amber-50 text-amber-700';
+    if (op === 'COUNT') return 'bg-cyan-50 text-cyan-700';
+    return 'bg-slate-50 text-slate-600';
   };
 
   return (
@@ -726,8 +759,12 @@ const DbPerformancePanel: React.FC = () => {
         <div className="flex items-center gap-3">
           {cache && (
             <div className="flex items-center gap-4 text-xs">
-              <span className="text-slate-500">Cache hit: <span className={`font-semibold ${heapColor}`}>{heapPct}%</span></span>
-              <span className="text-slate-500">Index hit: <span className={`font-semibold ${idxColor}`}>{idxPct}%</span></span>
+              <span className="text-slate-500" title="Data pages served from RAM vs disk. Below 95% means heavy disk reads.">
+                Data from RAM: <span className={`font-semibold ${heapColor}`}>{heapPct}%</span>
+              </span>
+              <span className="text-slate-500" title="Index lookups served from RAM vs disk. Below 95% means indexes don't fit in memory.">
+                Index from RAM: <span className={`font-semibold ${idxColor}`}>{idxPct}%</span>
+              </span>
               <span className="text-slate-500">DB: <span className="font-semibold text-slate-700">{cache.db_size}</span></span>
             </div>
           )}
@@ -741,6 +778,15 @@ const DbPerformancePanel: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Cache health alert */}
+      {cache && (heapPct < 95 || idxPct < 95) && (
+        <div className="px-4 py-2 bg-amber-50 border-b border-amber-100 text-xs text-amber-800">
+          <AlertTriangle className="h-3.5 w-3.5 inline mr-1.5 -mt-0.5" />
+          {heapPct < 95 && <>Only {heapPct}% of data reads come from RAM (target: 99%+). Your DB is reading heavily from disk — this burns Supabase IO budget. </>}
+          {idxPct < 95 && <>Only {idxPct}% of index lookups are cached (target: 99%+). Consider adding missing indexes or upgrading compute. </>}
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex border-b">
@@ -763,29 +809,39 @@ const DbPerformancePanel: React.FC = () => {
         {loading && !data ? (
           <div className="p-4"><ContentSkeleton rows={5} /></div>
         ) : tab === 'queries' ? (
+          <>
+          <p className="px-3 py-2 text-[11px] text-slate-400 border-b border-slate-50">
+            Cumulative query time since last DB restart. Red = over 1 hour total, amber = over 10 minutes. High "calls" with high "avg" = optimization target.
+          </p>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b bg-slate-50/50">
-                  <th className="px-3 py-2 text-left font-bold uppercase tracking-wider text-slate-600">Query</th>
+                  <th className="px-3 py-2 text-left font-bold uppercase tracking-wider text-slate-600 w-14">Type</th>
+                  <th className="px-3 py-2 text-left font-bold uppercase tracking-wider text-slate-600">Target</th>
                   <th className="px-3 py-2 text-right font-bold uppercase tracking-wider text-slate-600 w-20">Calls</th>
-                  <th className="px-3 py-2 text-right font-bold uppercase tracking-wider text-slate-600 w-24">Total (s)</th>
-                  <th className="px-3 py-2 text-right font-bold uppercase tracking-wider text-slate-600 w-24">Avg (ms)</th>
-                  <th className="px-3 py-2 text-right font-bold uppercase tracking-wider text-slate-600 w-24">Max (ms)</th>
-                  <th className="px-3 py-2 text-right font-bold uppercase tracking-wider text-slate-600 w-20">Rows/call</th>
+                  <th className="px-3 py-2 text-right font-bold uppercase tracking-wider text-slate-600 w-24">Total Time</th>
+                  <th className="px-3 py-2 text-right font-bold uppercase tracking-wider text-slate-600 w-20">Avg</th>
+                  <th className="px-3 py-2 text-right font-bold uppercase tracking-wider text-slate-600 w-20">Max</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {(data?.slow_queries || []).map((q, i) => {
-                  const severity = q.total_time_s > 3600 ? 'text-red-600 font-semibold' : q.total_time_s > 600 ? 'text-amber-600' : 'text-slate-700';
+                  const { name, op } = queryLabel(q.query);
                   return (
                     <tr key={i} className="hover:bg-slate-25" title={q.query}>
-                      <td className="px-3 py-1.5 font-mono text-slate-600 truncate max-w-[300px]">{truncateQuery(q.query)}</td>
+                      <td className="px-3 py-1.5">
+                        <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${opColor(op)}`}>{op}</span>
+                      </td>
+                      <td className="px-3 py-1.5 text-slate-700 font-medium truncate max-w-[280px]">{name}</td>
                       <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{q.calls.toLocaleString()}</td>
-                      <td className={`px-3 py-1.5 text-right tabular-nums ${severity}`}>{q.total_time_s.toLocaleString()}</td>
-                      <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{q.mean_time_ms}</td>
-                      <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{q.max_time_ms.toLocaleString()}</td>
-                      <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{q.rows_per_call}</td>
+                      <td className="px-3 py-1.5 text-right">
+                        <span className={`inline-block px-1.5 py-0.5 rounded text-[11px] font-semibold tabular-nums ${timeBadge(q.total_time_s)}`}>
+                          {fmtTime(q.total_time_s)}
+                        </span>
+                      </td>
+                      <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{fmtMs(q.mean_time_ms)}</td>
+                      <td className="px-3 py-1.5 text-right tabular-nums text-slate-500">{fmtMs(q.max_time_ms)}</td>
                     </tr>
                   );
                 })}
@@ -795,6 +851,7 @@ const DbPerformancePanel: React.FC = () => {
               </tbody>
             </table>
           </div>
+          </>
         ) : tab === 'tables' ? (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
@@ -803,7 +860,7 @@ const DbPerformancePanel: React.FC = () => {
                   <th className="px-3 py-2 text-left font-bold uppercase tracking-wider text-slate-600">Table</th>
                   <th className="px-3 py-2 text-right font-bold uppercase tracking-wider text-slate-600 w-28">Rows (est.)</th>
                   <th className="px-3 py-2 text-right font-bold uppercase tracking-wider text-slate-600 w-24">Total Size</th>
-                  <th className="px-3 py-2 text-right font-bold uppercase tracking-wider text-slate-600 w-24">Table</th>
+                  <th className="px-3 py-2 text-right font-bold uppercase tracking-wider text-slate-600 w-24">Data</th>
                   <th className="px-3 py-2 text-right font-bold uppercase tracking-wider text-slate-600 w-24">Indexes</th>
                 </tr>
               </thead>
@@ -821,6 +878,10 @@ const DbPerformancePanel: React.FC = () => {
             </table>
           </div>
         ) : (
+          <>
+          <p className="px-3 py-2 text-[11px] text-slate-400 border-b border-slate-50">
+            Indexes sorted by usage (least used first). Unused indexes waste disk space and slow down writes. Heavily used indexes are working well.
+          </p>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
@@ -853,6 +914,7 @@ const DbPerformancePanel: React.FC = () => {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
     </div>
