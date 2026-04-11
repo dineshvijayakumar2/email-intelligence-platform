@@ -309,9 +309,8 @@ class VectorService:
                     v_ids, v_embs = zip(*valid)
                     v_ids, v_embs = list(v_ids), list(v_embs)
                     total_skipped += len(ids) - len(v_ids)
-                    # Write to DB in chunks — 50 triggers statement timeouts on
-                    # Supabase free/pro tier; 20 is the safe ceiling
-                    DB_CHUNK = 20
+                    # Write to DB in chunks — keep small to avoid Supabase statement timeouts
+                    DB_CHUNK = 10
                     for ci in range(0, len(v_ids), DB_CHUNK):
                         chunk_ids = v_ids[ci:ci + DB_CHUNK]
                         chunk_embs = v_embs[ci:ci + DB_CHUNK]
