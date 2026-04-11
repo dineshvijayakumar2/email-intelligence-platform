@@ -10,11 +10,11 @@ import { Spinner } from '@/lib/icons';
 import { toast } from '@/lib/toast';
 import { formatNumber } from '../../utils/numberFormat';
 import {
-  dataHealthApi,
   type MailboxHealth,
   type DataHealthResponse,
   type ExtractionJobHealth,
 } from '../../services/analyticsService';
+import { useDataHealth, useClassificationHealth, useThreadHealth } from '../../hooks/queries';
 import api from '../../services/apiClient';
 import { CheckCircle, AlertTriangle, XCircle, RefreshCw, Database, GitMerge, Brain, Zap, Download } from 'lucide-react';
 
@@ -43,40 +43,22 @@ function jobStatusBadge(status: string) {
 }
 
 export const DataHealthDashboard: React.FC = () => {
-  const isMountedRef = useRef(true);
   const { clientId } = useClient();
-  const [data, setData] = useState<DataHealthResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [classificationHealth, setClassificationHealth] = useState<any>(null);
-  const [threadHealth, setThreadHealth] = useState<any>(null);
+
+  // All data via TanStack Query — auto-refresh, dedup, caching
+  const healthQuery = useDataHealth(clientId);
+  const classQuery = useClassificationHealth(clientId);
+  const threadQuery = useThreadHealth(clientId);
+
+  const data = healthQuery.data || null;
+  const loading = healthQuery.isLoading;
+  const classificationHealth = classQuery.data || null;
+  const threadHealth = threadQuery.data || null;
+
   const [backfilling, setBackfilling] = useState(false);
   const [relinking, setRelinking] = useState(false);
   const [fetchingMissing, setFetchingMissing] = useState(false);
   const [fetchMissingResult, setFetchMissingResult] = useState<any>(null);
-
-  useEffect(() => { isMountedRef.current = true; return () => { isMountedRef.current = false; }; }, []);
-
-  useEffect(() => {
-    if (!clientId) return;
-    const load = async () => {
-      setLoading(true);
-      try {
-        const result = await dataHealthApi.get(clientId);
-        if (isMountedRef.current) setData(result);
-      } catch { /* silent */ }
-      finally { if (isMountedRef.current) setLoading(false); }
-      // Load new health sections independently — don't block main data render
-      try {
-        const classHealth = await api.get<any>(`/v1/analytics/data-health/classification?client_id=${clientId}`);
-        if (isMountedRef.current) setClassificationHealth(classHealth);
-      } catch { /* silent */ }
-      try {
-        const thHealth = await api.get<any>(`/v1/analytics/data-health/threads?client_id=${clientId}`);
-        if (isMountedRef.current) setThreadHealth(thHealth);
-      } catch { /* silent */ }
-    };
-    load();
-  }, [clientId]);
 
   const startBackfill = async () => {
     if (!clientId || backfilling) return;
@@ -147,8 +129,8 @@ export const DataHealthDashboard: React.FC = () => {
             } else {
               toast.success(prog.message || 'Thread recompute complete');
             }
-            const result = await dataHealthApi.get(clientId);
-            if (isMountedRef.current) setData(result);
+            healthQuery.refetch();
+            threadQuery.refetch();
             return;
           }
           if (prog.phase === 'failed') {
