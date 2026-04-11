@@ -3645,79 +3645,29 @@ async def fetch_missing_dates(
 async def get_classification_health(client_id: Optional[str] = Query(default=None)):
     """
     AI classification coverage — how many emails have intent/urgency/sentiment.
-    Shows per-mailbox breakdown + total coverage percentage.
+    Single RPC call replaces the previous N+1 per-mailbox loop (was 5×N queries).
     """
     try:
-        # Get mailboxes
-        mb_query = _supabase.table('mailboxes').select('id, email_address, name')
+        params: dict = {}
         if client_id:
-            mb_query = mb_query.eq('client_id', client_id)
-        mb_result = mb_query.execute()
-        mailboxes = mb_result.data or []
+            params['p_client_id'] = client_id
 
-        # COUNT queries per mailbox — fast index scans, no row fetching
-        mb_ids = [mb['id'] for mb in mailboxes]
-        email_counts: dict[str, int] = {}
-        status_counts: dict[str, dict[str, int]] = {}
-        last_analysis_map: dict[str, str] = {}
+        resp = _supabase.rpc('get_classification_health', params).execute()
+        per_mailbox = resp.data or []
 
-        for mb_id in mb_ids:
-            # Total emails
-            r = _supabase.table('emails').select('id', count='exact').eq('mailbox_id', mb_id).execute()
-            email_counts[mb_id] = r.count or 0
+        # Ensure numeric types from JSONB
+        for mb in per_mailbox:
+            for k in ('total_emails', 'classified', 'pending', 'failed', 'skipped'):
+                mb[k] = int(mb.get(k, 0))
+            mb['coverage_pct'] = round(
+                mb['classified'] / mb['total_emails'] * 100, 1
+            ) if mb['total_emails'] > 0 else 0.0
 
-            # Per-status counts
-            counts = {}
-            for status in ('completed', 'failed', 'skipped'):
-                r = _supabase.table('ai_email_intelligence').select('id', count='exact').eq(
-                    'mailbox_id', mb_id).eq('processing_status', status).execute()
-                counts[status] = r.count or 0
-            status_counts[mb_id] = counts
-
-            # Last completed timestamp
-            try:
-                r = _supabase.table('ai_email_intelligence').select('processed_at').eq(
-                    'mailbox_id', mb_id).eq('processing_status', 'completed').order(
-                    'processed_at', desc=True).limit(1).execute()
-                if r.data:
-                    last_analysis_map[mb_id] = r.data[0]['processed_at']
-            except Exception:
-                pass
-
-        per_mailbox = []
-        total_emails_all = 0
-        total_classified_all = 0
-        total_pending_all = 0
-        total_failed_all = 0
-        total_skipped_all = 0
-
-        for mb in mailboxes:
-            mb_id = mb['id']
-            total_emails = email_counts.get(mb_id, 0)
-            classified = status_counts.get(mb_id, {}).get('completed', 0)
-            failed = status_counts.get(mb_id, {}).get('failed', 0)
-            skipped = status_counts.get(mb_id, {}).get('skipped', 0)
-            pending = max(0, total_emails - classified - failed - skipped)
-            coverage_pct = round(classified / total_emails * 100, 1) if total_emails > 0 else 0.0
-
-            per_mailbox.append({
-                'mailbox_id': mb_id,
-                'email_address': mb.get('email_address') or mb.get('name', 'Unknown'),
-                'total_emails': total_emails,
-                'classified': classified,
-                'pending': pending,
-                'failed': failed,
-                'skipped': skipped,
-                'coverage_pct': coverage_pct,
-                'last_analysis_at': last_analysis_map.get(mb_id),
-            })
-
-            total_emails_all += total_emails
-            total_classified_all += classified
-            total_pending_all += pending
-            total_failed_all += failed
-            total_skipped_all += skipped
-
+        total_emails_all = sum(m['total_emails'] for m in per_mailbox)
+        total_classified_all = sum(m['classified'] for m in per_mailbox)
+        total_pending_all = sum(m['pending'] for m in per_mailbox)
+        total_failed_all = sum(m['failed'] for m in per_mailbox)
+        total_skipped_all = sum(m['skipped'] for m in per_mailbox)
         overall_coverage = round(
             total_classified_all / total_emails_all * 100, 1
         ) if total_emails_all > 0 else 0.0
@@ -3742,98 +3692,56 @@ async def get_classification_health(client_id: Optional[str] = Query(default=Non
 @router.get("/data-health/threads")
 async def get_thread_health(client_id: Optional[str] = Query(default=None)):
     """
-    Thread processing health — per-mailbox fetch status, intent coverage,
-    and status distribution. Shows which mailboxes had errors during thread evaluation.
+    Thread processing health — per-mailbox intent coverage and status distribution.
+    Single RPC call replaces the previous N+1 loop + pagination (was 2N+pagination queries).
     """
     try:
-        # Get mailbox IDs for this client (needed for all subsequent queries)
-        mb_query = _supabase.table('mailboxes').select('id, email_address')
+        # RPC returns mailboxes + status/intent distributions in one call
+        params: dict = {}
         if client_id:
-            mb_query = mb_query.eq('client_id', client_id)
-        mb_result = mb_query.execute()
-        mailboxes = {m['id']: (m.get('email_address') or m.get('name', 'Unknown')) for m in (mb_result.data or [])}
-        mailbox_ids = list(mailboxes.keys())
+            params['p_client_id'] = client_id
 
-        # Get last thread evaluation job (processing_jobs has no client_id — filter via mailbox_id)
-        last_job = None
-        try:
-            jobs_query = _supabase.table('processing_jobs').select(
-                'id, status, started_at, completed_at, error_summary, error_log'
-            ).eq('job_type', 'thread_recompute').order('started_at', desc=True).limit(1)
-            if mailbox_ids:
-                jobs_query = jobs_query.in_('mailbox_id', mailbox_ids[:500])
-            job_result = jobs_query.execute()
-            last_job = job_result.data[0] if job_result.data else None
-        except Exception as job_err:
-            logger.warning(f"Could not fetch thread recompute job: {job_err}")
+        rpc_resp = _supabase.rpc('get_thread_health', params).execute()
+        rpc_data = rpc_resp.data or {}
+        if isinstance(rpc_data, list) and len(rpc_data) > 0:
+            rpc_data = rpc_data[0]
 
-        # Thread count per mailbox + client-wide (NULL mailbox_id) threads
-        mailbox_stats = []
-        for mb_id in mailbox_ids:
-            count_r = _supabase.table('thread_status').select(
-                'id', count='exact'
-            ).eq('mailbox_id', mb_id).execute()
-            thread_count = count_r.count or 0
+        mailbox_stats = rpc_data.get('mailboxes', [])
+        status_counts = rpc_data.get('status_distribution', {})
+        intent_counts = rpc_data.get('intent_distribution', {})
 
-            # Intent coverage for this mailbox
-            with_intent_r = _supabase.table('thread_status').select(
-                'id', count='exact'
-            ).eq('mailbox_id', mb_id).not_.is_('last_email_intent', 'null').execute()
-            with_intent = with_intent_r.count or 0
+        # Ensure numeric types from JSONB
+        for mb in mailbox_stats:
+            mb['thread_count'] = int(mb.get('thread_count', 0))
+            mb['with_intent'] = int(mb.get('with_intent', 0))
+            mb['intent_coverage_pct'] = float(mb.get('intent_coverage_pct', 0))
 
-            mailbox_stats.append({
-                'mailbox_id': mb_id,
-                'email_address': mailboxes.get(mb_id, 'Unknown'),
-                'thread_count': thread_count,
-                'with_intent': with_intent,
-                'intent_coverage_pct': round(with_intent / thread_count * 100, 1) if thread_count > 0 else 0.0,
-                'status': 'success',
-            })
-
-        # Client-wide threads (mailbox_id IS NULL) — created by client-wide thread evaluation
-        null_count_r = _supabase.table('thread_status').select(
-            'id', count='exact'
-        ).is_('mailbox_id', 'null').execute()
-        null_thread_count = null_count_r.count or 0
-        if null_thread_count > 0:
-            null_intent_r = _supabase.table('thread_status').select(
-                'id', count='exact'
-            ).is_('mailbox_id', 'null').not_.is_('last_email_intent', 'null').execute()
-            null_with_intent = null_intent_r.count or 0
-            mailbox_stats.append({
-                'mailbox_id': None,
-                'email_address': 'Client-wide threads',
-                'thread_count': null_thread_count,
-                'with_intent': null_with_intent,
-                'intent_coverage_pct': round(null_with_intent / null_thread_count * 100, 1) if null_thread_count > 0 else 0.0,
-                'status': 'success',
-            })
-
-        # Intent coverage totals
+        # Totals
         total_threads = sum(m['thread_count'] for m in mailbox_stats)
         total_with_intent = sum(m['with_intent'] for m in mailbox_stats)
 
-        # Status distribution (include NULL-mailbox threads)
-        status_counts = {}
-        intent_counts = {}
-        if mailbox_ids:
-            mb_or_filter = ','.join(f"mailbox_id.eq.{mid}" for mid in mailbox_ids[:100])
-            or_filter = f"{mb_or_filter},mailbox_id.is.null"
-            offset_sd = 0
-            while True:
-                rows = _supabase.table('thread_status').select(
-                    'status, intent_status'
-                ).or_(or_filter).range(offset_sd, offset_sd + 999).execute()
-                batch = rows.data or []
-                if not batch:
-                    break
-                for r in batch:
-                    s = r.get('status', 'unknown')
-                    status_counts[s] = status_counts.get(s, 0) + 1
-                    intent_s = r.get('intent_status')
-                    if intent_s:
-                        intent_counts[intent_s] = intent_counts.get(intent_s, 0) + 1
-                offset_sd += len(batch)
+        # Last thread evaluation job (cheap — single indexed query)
+        last_job = None
+        try:
+            mb_query = _supabase.table('mailboxes').select('id')
+            if client_id:
+                mb_query = mb_query.eq('client_id', client_id)
+            mb_result = mb_query.execute()
+            mailbox_ids = [m['id'] for m in (mb_result.data or [])]
+
+            if mailbox_ids:
+                jobs_query = _supabase.table('processing_jobs').select(
+                    'id, status, started_at, completed_at, error_summary, error_log'
+                ).eq('job_type', 'thread_recompute').order('started_at', desc=True).limit(1)
+                jobs_query = jobs_query.in_('mailbox_id', mailbox_ids[:500])
+                job_result = jobs_query.execute()
+                last_job = job_result.data[0] if job_result.data else None
+        except Exception as job_err:
+            logger.warning(f"Could not fetch thread recompute job: {job_err}")
+
+        # Convert status/intent counts to int values
+        status_counts = {k: int(v) for k, v in status_counts.items()}
+        intent_counts = {k: int(v) for k, v in intent_counts.items()}
 
         return {
             'last_evaluation': {

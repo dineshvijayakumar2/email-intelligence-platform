@@ -135,12 +135,19 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
     all_embeddings: list[list[float]] = []
     batch_count = 0
 
-    # OpenAI has higher rate limits — less aggressive delays needed
-    is_openai = _embedding_provider_override == "openai"
+    # Resolve provider via full chain (in-memory > DB > default)
+    # Do NOT rely on _embedding_provider_override alone — it may be None if
+    # provider was loaded from DB on restart rather than set via reset_embedding_model()
+    resolved = _resolve_provider()
+    is_openai = resolved == "openai"
+
+    # OpenAI supports large batches (up to 2048) — use 500 to stay safe
+    # Google has stricter quota limits — keep small batches
+    api_batch_size = 500 if is_openai else EMBED_BATCH_SIZE
     base_delay = 1 if is_openai else EMBED_DELAY_SECONDS
 
-    for i in range(0, len(texts), EMBED_BATCH_SIZE):
-        batch = texts[i:i + EMBED_BATCH_SIZE]
+    for i in range(0, len(texts), api_batch_size):
+        batch = texts[i:i + api_batch_size]
 
         # Retry with exponential backoff on rate limit / availability errors
         was_rate_limited = False
@@ -155,7 +162,7 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
                 if _is_rate_limit_error(e):
                     was_rate_limited = True
                     wait = base_delay * (2 ** attempt)
-                    logger.info(f"[Vector] Rate limited ({_embedding_provider_override or 'google'}), waiting {wait}s (attempt {attempt + 1}/5)")
+                    logger.info(f"[Vector] Rate limited ({resolved}), waiting {wait}s (attempt {attempt + 1}/5)")
                     await asyncio.sleep(wait)
                 else:
                     raise
@@ -173,7 +180,7 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
 
         # Progressive delay strategy to stay under rate limits:
         # OpenAI: minimal delays (higher quota), Google: aggressive delays (free tier)
-        if i + EMBED_BATCH_SIZE < len(texts):
+        if i + api_batch_size < len(texts):
             if was_rate_limited:
                 cooldown = 10 if is_openai else 30
             elif batch_count % 5 == 0:
@@ -213,7 +220,7 @@ class VectorService:
     # ── Embed: Emails (from raw emails table) ─────────────────────────────
 
     async def embed_emails_batch(
-        self, client_id: str, batch_size: int = 200, limit: int | None = None
+        self, client_id: str, batch_size: int = 500, limit: int | None = None
     ) -> dict:
         """Embed all un-embedded emails for a client.
 
@@ -257,8 +264,8 @@ class VectorService:
                     v_ids, v_embs = zip(*valid)
                     v_ids, v_embs = list(v_ids), list(v_embs)
                     total_skipped += len(ids) - len(v_ids)
-                    # Write to DB in small chunks to avoid statement timeout
-                    DB_CHUNK = 10
+                    # Write to DB in chunks — 50 is safe for Supabase statement size
+                    DB_CHUNK = 50
                     for ci in range(0, len(v_ids), DB_CHUNK):
                         chunk_ids = v_ids[ci:ci + DB_CHUNK]
                         chunk_embs = v_embs[ci:ci + DB_CHUNK]

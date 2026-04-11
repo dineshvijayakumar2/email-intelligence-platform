@@ -165,83 +165,52 @@ class AIUsageTracker:
         """
         Get aggregated usage summary over a time period.
 
-        Fetches all rows and computes aggregates in Python
-        (Supabase client lacks GROUP BY).
+        Uses get_usage_summary() RPC — single DB round-trip instead of
+        paginating all rows into Python.
         """
-        since = (datetime.utcnow() - timedelta(days=days)).isoformat()
+        try:
+            params: dict = {'p_days': days}
+            if client_id:
+                params['p_client_id'] = client_id
 
-        query = (
-            self.client.table("ai_usage_log")
-            .select("*")
-            .gte("created_at", since)
-            .order("created_at", desc=True)
-        )
-        if client_id:
-            query = query.eq("client_id", client_id)
-
-        # Paginate
-        all_rows = []
-        offset = 0
-        PAGE_SIZE = 500
-        while True:
-            batch_resp = self._execute_with_retry(
-                query.range(offset, offset + PAGE_SIZE - 1)
+            resp = self._execute_with_retry(
+                self.client.rpc('get_usage_summary', params)
             )
-            batch = batch_resp.data or []
-            all_rows.extend(batch)
-            if len(batch) == 0:
-                break
-            offset += len(batch)
+            data = resp.data if resp.data else {}
+            # RPC returns JSONB — may come as dict or need indexing
+            if isinstance(data, list) and len(data) > 0:
+                data = data[0]
 
-        # Aggregate in Python
-        total_cost = 0.0
-        total_input = 0
-        total_output = 0
-        total_latency = 0
-        latency_count = 0
-        failures = 0
-        by_operation = {}
-        by_model = {}
+            by_op_raw = data.get('by_operation', {})
+            by_model_raw = data.get('by_model', {})
 
-        for row in all_rows:
-            cost = float(row.get("estimated_cost_usd") or 0)
-            total_cost += cost
-            total_input += row.get("input_tokens", 0)
-            total_output += row.get("output_tokens", 0)
+            # Ensure numeric types (JSONB returns them as numbers already)
+            by_operation = {
+                k: {'cost': float(v.get('cost', 0)), 'count': int(v.get('count', 0))}
+                for k, v in by_op_raw.items()
+            }
+            by_model = {
+                k: {'cost': float(v.get('cost', 0)), 'count': int(v.get('count', 0))}
+                for k, v in by_model_raw.items()
+            }
 
-            if row.get("processing_time_ms"):
-                total_latency += row["processing_time_ms"]
-                latency_count += 1
-
-            if not row.get("success", True):
-                failures += 1
-
-            # By operation
-            op = row.get("operation", "unknown")
-            if op not in by_operation:
-                by_operation[op] = {"cost": 0.0, "count": 0}
-            by_operation[op]["cost"] += cost
-            by_operation[op]["count"] += 1
-
-            # By model
-            mdl = row.get("model", "unknown")
-            if mdl not in by_model:
-                by_model[mdl] = {"cost": 0.0, "count": 0}
-            by_model[mdl]["cost"] += cost
-            by_model[mdl]["count"] += 1
-
-        total_requests = len(all_rows)
-
-        return UsageSummary(
-            total_cost_usd=round(total_cost, 4),
-            total_input_tokens=total_input,
-            total_output_tokens=total_output,
-            total_requests=total_requests,
-            by_operation=by_operation,
-            by_model=by_model,
-            failure_rate=round(failures / total_requests, 4) if total_requests > 0 else 0.0,
-            avg_latency_ms=round(total_latency / latency_count, 1) if latency_count > 0 else 0.0,
-        )
+            return UsageSummary(
+                total_cost_usd=float(data.get('total_cost_usd', 0)),
+                total_input_tokens=int(data.get('total_input_tokens', 0)),
+                total_output_tokens=int(data.get('total_output_tokens', 0)),
+                total_requests=int(data.get('total_requests', 0)),
+                by_operation=by_operation,
+                by_model=by_model,
+                failure_rate=float(data.get('failure_rate', 0)),
+                avg_latency_ms=float(data.get('avg_latency_ms', 0)),
+            )
+        except Exception as e:
+            logger.error(f"get_usage_summary RPC failed, returning empty: {e}")
+            return UsageSummary(
+                total_cost_usd=0, total_input_tokens=0, total_output_tokens=0,
+                total_requests=0, by_operation={}, by_model={},
+                failure_rate=0, avg_latency_ms=0,
+            )
 
     def get_monitoring_stats(
         self,
@@ -250,73 +219,35 @@ class AIUsageTracker:
         """
         Get real-time monitoring metrics (last 24 hours).
 
-        Used by the admin monitoring dashboard to track health.
+        Uses get_monitoring_stats() RPC — single DB round-trip instead of
+        paginating all 24h rows into Python.
         """
-        since = (datetime.utcnow() - timedelta(hours=24)).isoformat()
+        try:
+            params: dict = {}
+            if client_id:
+                params['p_client_id'] = client_id
 
-        query = (
-            self.client.table("ai_usage_log")
-            .select("*")
-            .gte("created_at", since)
-        )
-        if client_id:
-            query = query.eq("client_id", client_id)
-
-        # Paginate
-        all_rows = []
-        offset = 0
-        PAGE_SIZE = 500
-        while True:
-            batch_resp = self._execute_with_retry(
-                query.range(offset, offset + PAGE_SIZE - 1)
+            resp = self._execute_with_retry(
+                self.client.rpc('get_monitoring_stats', params)
             )
-            batch = batch_resp.data or []
-            all_rows.extend(batch)
-            if len(batch) == 0:
-                break
-            offset += len(batch)
+            data = resp.data if resp.data else {}
+            if isinstance(data, list) and len(data) > 0:
+                data = data[0]
 
-        total = len(all_rows)
-        if total == 0:
             return MonitoringStats(
-                parse_failure_rate=0.0,
-                api_failure_rate=0.0,
-                avg_retry_count=0.0,
-                cost_per_1000_emails=0.0,
-                total_failures_24h=0,
-                total_requests_24h=0,
+                parse_failure_rate=float(data.get('parse_failure_rate', 0)),
+                api_failure_rate=float(data.get('api_failure_rate', 0)),
+                avg_retry_count=float(data.get('avg_retry_count', 0)),
+                cost_per_1000_emails=float(data.get('cost_per_1000_emails', 0)),
+                total_failures_24h=int(data.get('total_failures_24h', 0)),
+                total_requests_24h=int(data.get('total_requests_24h', 0)),
             )
-
-        parse_failures = 0
-        api_failures = 0
-        total_retries = 0
-        total_cost = 0.0
-        total_batch_size = 0
-        total_failures = 0
-
-        for row in all_rows:
-            error_type = row.get("error_type")
-            if error_type in ("json_parse", "validation"):
-                parse_failures += 1
-            if error_type in ("api_timeout", "rate_limit", "api_unavailable"):
-                api_failures += 1
-            if not row.get("success", True):
-                total_failures += 1
-
-            total_retries += row.get("retry_count", 0)
-            total_cost += float(row.get("estimated_cost_usd") or 0)
-            total_batch_size += row.get("batch_size", 1)
-
-        cost_per_1000 = (total_cost / total_batch_size * 1000) if total_batch_size > 0 else 0.0
-
-        return MonitoringStats(
-            parse_failure_rate=round(parse_failures / total, 4) if total > 0 else 0.0,
-            api_failure_rate=round(api_failures / total, 4) if total > 0 else 0.0,
-            avg_retry_count=round(total_retries / total, 2) if total > 0 else 0.0,
-            cost_per_1000_emails=round(cost_per_1000, 4),
-            total_failures_24h=total_failures,
-            total_requests_24h=total,
-        )
+        except Exception as e:
+            logger.error(f"get_monitoring_stats RPC failed, returning empty: {e}")
+            return MonitoringStats(
+                parse_failure_rate=0, api_failure_rate=0, avg_retry_count=0,
+                cost_per_1000_emails=0, total_failures_24h=0, total_requests_24h=0,
+            )
 
 
 # ---------------------------------------------------------------------------

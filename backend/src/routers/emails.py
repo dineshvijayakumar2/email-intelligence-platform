@@ -643,33 +643,19 @@ async def get_folder_names(mailbox_id: Optional[str] = None):
 
         if mailbox_id:
             logger.info(f"Fetching distinct folder names for mailbox {mailbox_id}...")
-            # Paginate through ALL emails (selecting only folder_path) to find every folder
-            # Without this, .limit(10000) could miss custom folders with few emails
-            all_folders = set()
-            offset = 0
-            batch_size = 5000
-            while True:
-                result = await asyncio.get_running_loop().run_in_executor(
-                    None,
-                    lambda off=offset: sb.table('emails')
-                        .select('folder_path')
-                        .eq('mailbox_id', mailbox_id)
-                        .range(off, off + batch_size - 1)
-                        .execute()
-                )
-                if not result.data:
-                    break
-                for row in result.data:
-                    folder = row.get('folder_path')
-                    if folder:
-                        all_folders.add(_normalize_folder_name(folder))
-                if len(result.data) < batch_size:
-                    break
-                offset += len(result.data)
-
-            folders_list = sorted(list(all_folders))
-            logger.info(f"Found {len(folders_list)} unique folders for mailbox {mailbox_id}: {folders_list}")
-            return folders_list
+            # Use RPC for DB-side DISTINCT — avoids paginating 245K+ email rows
+            result = await asyncio.get_running_loop().run_in_executor(
+                None,
+                lambda: sb.rpc('get_distinct_folders_for_mailbox', {'p_mailbox_id': mailbox_id}).execute()
+            )
+            if result.data:
+                folders_list = sorted(set(
+                    _normalize_folder_name(f['folder_path'])
+                    for f in result.data if f.get('folder_path')
+                ))
+                logger.info(f"Found {len(folders_list)} unique folders for mailbox {mailbox_id}: {folders_list}")
+                return folders_list
+            return []
 
         logger.info("Fetching distinct folder names (optimized)...")
 
@@ -688,33 +674,9 @@ async def get_folder_names(mailbox_id: Optional[str] = None):
             logger.info(f"Found {len(folders_list)} unique folders: {folders_list}")
             return folders_list
 
-        # Fallback: If RPC function doesn't exist, use regular query with limit
-        # This will only work if there aren't too many unique folders
-        logger.warning("RPC function not found, using fallback method")
-        all_folders = set()
-        offset = 0
-        batch_size = 5000
-        while True:
-            result = await asyncio.get_running_loop().run_in_executor(
-                None,
-                lambda off=offset: sb.table('emails')
-                    .select('folder_path')
-                    .range(off, off + batch_size - 1)
-                    .execute()
-            )
-            if not result.data:
-                break
-            for row in result.data:
-                folder = row.get('folder_path')
-                if folder:
-                    all_folders.add(_normalize_folder_name(folder))
-            if len(result.data) < batch_size:
-                break
-            offset += len(result.data)
-
-        folders_list = sorted(list(all_folders))
-        logger.info(f"Found {len(folders_list)} unique folders (fallback): {folders_list}")
-        return folders_list
+        # RPC returned no data — empty table
+        logger.info("No folder data returned from RPC")
+        return []
 
     except Exception as e:
         logger.error(f"Error fetching folder names: {e}", exc_info=True)
