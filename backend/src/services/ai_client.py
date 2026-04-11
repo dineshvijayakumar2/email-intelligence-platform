@@ -289,12 +289,14 @@ class AIClient:
         # Check AI control switches
         settings = get_ai_settings()
         if not settings.ai_enabled:
+            self.last_error = "ai_disabled: master kill switch is OFF"
             logger.warning("AI is disabled via kill switch")
             return None
 
         # Check daily budget against actual DB spend (cached 60s)
         actual_daily = get_actual_spend(period='daily')
         if actual_daily >= settings.daily_budget_usd:
+            self.last_error = f"budget_exceeded: ${actual_daily:.4f} >= ${settings.daily_budget_usd:.2f} daily cap"
             logger.warning(
                 f"Daily budget exceeded: ${actual_daily:.4f} >= "
                 f"${settings.daily_budget_usd:.2f}. Blocking API call."
@@ -410,11 +412,13 @@ class AIClient:
         # Budget check — same enforcement as _call_model (uses DB spend, cached 60s)
         settings = get_ai_settings()
         if not settings.ai_enabled:
+            self.last_error = "ai_disabled: master kill switch is OFF"
             logger.warning("AI is disabled via kill switch")
             return None
 
         actual_daily = get_actual_spend(period='daily')
         if actual_daily >= settings.daily_budget_usd:
+            self.last_error = f"budget_exceeded: ${actual_daily:.4f} >= ${settings.daily_budget_usd:.2f} daily cap"
             logger.warning(
                 f"Daily budget exceeded: ${actual_daily:.4f} >= "
                 f"${settings.daily_budget_usd:.2f}. Blocking LangChain call."

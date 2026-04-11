@@ -1489,7 +1489,15 @@ class AIEmailAnalyzer:
                 self._save_failed(eid, mailbox_id, client_id, fail_msg, prompt_version=effective_prompt_version)
             # Log to unified job_errors table
             self._log_to_job_errors(job_id, mailbox_id, "api_error", fail_msg, email_ids)
-            error_type = "credit_balance" if "credit balance" in (error_detail or "").lower() else "api_timeout"
+            error_lower = (error_detail or "").lower()
+            if "budget_exceeded" in error_lower:
+                error_type = "budget_exceeded"
+            elif "ai_disabled" in error_lower:
+                error_type = "ai_disabled"
+            elif "credit balance" in error_lower:
+                error_type = "credit_balance"
+            else:
+                error_type = "api_timeout"
 
             usage_tracker = get_usage_tracker()
             if usage_tracker:

@@ -184,7 +184,7 @@ const UsagePage: React.FC = () => {
   const handleResetSpend = async () => {
     const result = await controlsApi.resetSessionSpend();
     if (result) {
-      toast.success('Spend cache cleared');
+      toast.success('Spend cache refreshed — budget check will re-query the DB');
       loadData();
     }
   };
@@ -415,7 +415,7 @@ const UsagePage: React.FC = () => {
               onClick={handleResetSpend}
               className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600 shadow-sm hover:bg-slate-50 transition"
             >
-              Reset Spend
+              Refresh Cache
             </button>
           </div>
           <div className="p-5 space-y-4">
