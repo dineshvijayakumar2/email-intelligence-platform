@@ -96,7 +96,8 @@ Both pages fully migrated from raw `useEffect` + `useState` to TanStack Query ho
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
 | **6** | Data Health Expansion | **Done** | Thread health, classification, embeddings, DB perf dashboard |
-| **1** | Seasonality Engine | **In Progress** | RPC migration 068 created, backend service next |
+| **1** | Seasonality Engine | **Done** | Multi-year analysis, outreach windows, YTD comparison, industry seasonality |
+| **—** | IO Budget + Bulk Ops | **Done** | BulkIndexManager, 10 migrations, 12 RPCs, 7 operations optimized |
 | **3** | Thread Intelligence | Partial | `intent_status` column exists, override logic not wired |
 | **2** | Gap Analysis Engine | Not started | |
 | **4** | Action Items Engine | Not started | Depends on 1-3 |
@@ -153,6 +154,51 @@ Target:
 
 ---
 
+## Session 1 — Continued: Embedding Pipeline + Bulk Operation Optimization
+
+### Completed: Embedding Pipeline Fixes
+| Bug | Root Cause | Fix | Commit |
+|-----|-----------|-----|--------|
+| Reembed uses wrong provider | `_resolve_provider()` fetched first client via LIMIT 1, not active client | Thread `client_id` through entire chain | `244ad9e` |
+| API keys not read from DB | Vector service only read env vars | `_resolve_api_key()` reads base64 keys from system_settings | `b81f7f4` |
+| Embedding writes timeout | HNSW index rebuild on every UPDATE | Drop indexes before bulk, recreate after | `ec885d8` |
+| Batch RPC was FOR LOOP | `batch_update_embeddings_emails` did N individual UPDATEs | Rewrite with `unnest()` — 1 UPDATE per batch | `9f921f5` |
+
+**Result:** 20K emails embedded in 14 minutes (was 2+ hours)
+
+### Completed: BulkIndexManager — Platform-Wide Bulk Write Optimization
+
+**New class:** `backend/src/database/bulk_index_manager.py`
+
+Centralized index management for all bulk database operations. Registry of 60+ indexes across 12 tables. Drops non-essential indexes before bulk writes, recreates in `finally` block.
+
+**Key features:**
+- UNIQUE/ON CONFLICT indexes never dropped
+- Two-tier recreation: btree (30s timeout), HNSW/GIN (5min via `exec_sql_extended`)
+- Threshold: only engages for 500+ rows
+- Both sync (`@contextmanager`) and async (`@asynccontextmanager`) support
+- Graceful degradation if `exec_sql` RPC unavailable
+
+**Integrated into 7 operations:**
+
+| Operation | File | Tables |
+|-----------|------|--------|
+| Email batch insert | `database/operations.py` | `emails` |
+| QB sync upsert | `quickbase_sync.py` | `qb_operations`, `qb_quotes`, `qb_jobs`, `qb_sales_line_items`, `qb_customers`, `qb_unique_emails` |
+| Email contact links | `email_linker.py` | `email_contact_links` |
+| Thread status | `thread_tracker.py` | `thread_status` |
+| Canonical thread resolution | `canonical_thread_resolver.py` | `emails` |
+| Vector embedding (refactored) | `vector_service.py` | `emails`, `customer_companies`, `qb_operations` |
+
+**Commits:** `dfb1f21`
+
+### Pending: Tier 3 — QB 1-by-1 Update Loop Fixes
+- `_enrich_capabilities()` — convert to batch via `batch_update_qb_capabilities` RPC
+- `_join_contact_email()` — convert to batch via `batch_update_qb_contact_emails` RPC
+- RPCs created in migration 072, Python refactor pending
+
+---
+
 ## Migrations to Run
 
 | Migration | Status | Description |
@@ -162,4 +208,8 @@ Target:
 | 065 | Run | Data health RPCs (classification, thread) |
 | 066 | Run | Missing indexes (qb_quotes, qb_jobs, qb_ops, emails, folder_counts rewrite) |
 | 067 | Run | DB performance dashboard RPCs (slow queries, tables, indexes, cache, reset) |
-| 068 | Pending | Seasonality engine RPCs + index |
+| 068 | Run | Seasonality engine RPCs + index |
+| 069 | Run | Fast batch embedding (unnest replaces FOR LOOP) |
+| 070 | Run | Vector stats RPC (replaces 6 COUNT queries) |
+| 071 | Run | exec_sql RPC for DDL from application |
+| 072 | Pending | exec_sql_extended + batch update RPCs for Tier 3 |
