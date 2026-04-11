@@ -41,6 +41,7 @@ _embedding_provider_override = None  # Set explicitly by reset_embedding_model()
 def _resolve_provider() -> str:
     """Resolve embedding provider: in-memory override > DB (client-scoped) > 'google'."""
     if _embedding_provider_override:
+        logger.info(f"Embedding provider from override: {_embedding_provider_override}")
         return _embedding_provider_override
     # Read from DB — must filter by client_id (system_settings is per-client)
     try:
@@ -54,9 +55,15 @@ def _resolve_provider() -> str:
                 'key', 'embedding_provider'
             ).eq('client_id', cid).limit(1).execute()
             if resp.data and resp.data[0].get('value'):
-                return resp.data[0]['value'].lower()
+                provider = resp.data[0]['value'].lower()
+                logger.info(f"Embedding provider from DB: {provider} (client={cid})")
+                return provider
+            else:
+                logger.info(f"No embedding_provider row in DB for client={cid}, defaulting to google")
+        else:
+            logger.warning("No clients found in DB — defaulting to google")
     except Exception as e:
-        logger.debug(f"Could not read embedding_provider from DB: {e}")
+        logger.warning(f"Could not read embedding_provider from DB: {e}")
     return "google"
 
 
