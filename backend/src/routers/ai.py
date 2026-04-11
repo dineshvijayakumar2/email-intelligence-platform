@@ -2025,6 +2025,11 @@ async def trigger_reembed(
     if not client_id:
         raise HTTPException(status_code=400, detail="client_id required")
 
+    # Respect the master AI kill switch — embedding is an AI operation
+    settings = get_ai_settings()
+    if not settings.ai_enabled:
+        raise HTTPException(status_code=409, detail="AI is disabled via kill switch. Enable AI first.")
+
     if _reembed_progress.get(client_id, {}).get("status") == "running":
         return {"status": "already_running", "progress": _reembed_progress[client_id]}
 

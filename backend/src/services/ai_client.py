@@ -166,8 +166,9 @@ def save_ai_setting_to_db(field_name: str, value, client_id: Optional[str] = Non
             sb.table('system_settings').update(row).eq('id', existing.data[0]['id']).execute()
         else:
             sb.table('system_settings').insert(row).execute()
+        logger.info(f"AI setting persisted to DB: {db_key}={str_value} (client={client_id})")
     except Exception as e:
-        logger.warning(f"Failed to save AI setting {field_name}={value} to DB: {e}")
+        logger.error(f"FAILED to save AI setting {field_name}={value} to DB: {e}")
 
 
 def get_ai_settings() -> AIControlSettings:

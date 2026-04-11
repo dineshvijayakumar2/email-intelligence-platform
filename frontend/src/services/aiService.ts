@@ -434,8 +434,11 @@ export const usageApi = {
 // ============================================================================
 
 function _defaultControls(): AIControlSettings {
+  // Default ai_enabled to false so a timeout doesn't make the UI show ON
+  // when the actual DB state may be OFF. Better to show OFF and let the
+  // next successful fetch correct it than to silently re-enable.
   return {
-    ai_enabled: true, email_analysis_enabled: true, digest_enabled: true,
+    ai_enabled: false, email_analysis_enabled: true, digest_enabled: true,
     relationship_summary_enabled: true, daily_budget_usd: 2, monthly_budget_usd: 16,
     batch_size: 10, max_emails_per_run: 500, max_requests_per_second: 10,
   } as AIControlSettings;
@@ -470,7 +473,7 @@ export const controlsApi = {
   async update(settings: Partial<AIControlSettings> & { client_id?: string }): Promise<any> {
     try {
       invalidateCache('usage');
-      return await api.put(`${API_PREFIX}/controls`, settings, { timeout: 5000 });
+      return await api.put(`${API_PREFIX}/controls`, settings, { timeout: 15000 });
     } catch (error: any) {
       console.error('[AI] Failed to update controls:', error?.message);
       return null;
