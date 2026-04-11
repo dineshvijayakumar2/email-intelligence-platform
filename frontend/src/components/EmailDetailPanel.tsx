@@ -118,9 +118,9 @@ export const EmailDetailPanel: React.FC<EmailDetailPanelProps> = ({
   const contentTags = filterContentTags(email.tags || []);
 
   return (
-    <div className={`email-detail-panel ${expanded ? 'expanded' : ''}`}>
+    <div className={`email-detail-panel flex flex-col h-full overflow-hidden ${expanded ? 'expanded' : ''}`}>
       {/* Header */}
-      <div className="email-detail-header">
+      <div className="email-detail-header shrink-0 overflow-y-auto max-h-[40%] px-4 py-3">
         <div className="email-detail-header-top flex items-center justify-between">
           <button onClick={onClose} className="mobile-back-btn p-1 rounded hover:bg-slate-100 lg:hidden">
             <ArrowLeft className="h-4 w-4 text-slate-500" />
@@ -261,7 +261,7 @@ export const EmailDetailPanel: React.FC<EmailDetailPanelProps> = ({
       )}
 
       {/* Body */}
-      <div className="email-detail-body">
+      <div className="email-detail-body flex-1 min-h-0 overflow-y-auto">
         {email.body_html && bodyView === 'html' ? (
           <iframe
             srcDoc={`<!DOCTYPE html><html><head><meta charset="UTF-8"><base target="_blank"><style>
@@ -272,12 +272,12 @@ export const EmailDetailPanel: React.FC<EmailDetailPanelProps> = ({
               blockquote { border-left: 3px solid #d9d9d9; padding-left: 16px; margin-left: 0; color: #666; }
               pre { background: #f5f5f5; padding: 12px; border-radius: 4px; overflow-x: auto; }
             </style></head><body>${email.body_html}</body></html>`}
-            className="email-body-iframe"
+            className="email-body-iframe w-full h-full min-h-[400px] border-0"
             sandbox="allow-same-origin allow-scripts allow-popups"
             title="Email Content"
           />
         ) : email.body_text ? (
-          <div className="email-body-text">{email.body_text}</div>
+          <div className="email-body-text p-4 text-sm text-slate-700 whitespace-pre-wrap">{email.body_text}</div>
         ) : (
           <div className="email-body-empty">
             <p className="text-sm text-slate-400">No email content available</p>
