@@ -129,7 +129,9 @@ class CanonicalThreadResolver:
                 try:
                     resp = self.client.table('emails').select(
                         COLUMNS
-                    ).eq('mailbox_id', mb_id).order(
+                    ).eq('mailbox_id', mb_id).is_(
+                        'canonical_thread_id', 'null'
+                    ).order(
                         'sent_date', desc=False
                     ).range(offset, offset + PAGE_SIZE - 1).execute()
                 except Exception as e:
@@ -138,7 +140,9 @@ class CanonicalThreadResolver:
                     try:
                         resp = self.client.table('emails').select(
                             COLUMNS
-                        ).eq('mailbox_id', mb_id).order(
+                        ).eq('mailbox_id', mb_id).is_(
+                            'canonical_thread_id', 'null'
+                        ).order(
                             'sent_date', desc=False
                         ).range(offset, offset + PAGE_SIZE - 1).execute()
                     except Exception:
