@@ -315,67 +315,86 @@ class CustomerAnalyticsService:
     # ------------------------------------------------------------------
 
     def get_seasonality(self, company_id: str, force: bool = False) -> dict:
-        """Monthly/quarterly ordering patterns from QB operations."""
+        """Multi-year seasonality with year-over-year breakdown, outreach windows,
+        and YTD comparison. Uses DB-side aggregation via get_company_seasonality RPC.
+        """
         if not force:
             cached = self._get_cached(company_id, 'seasonality_profile')
             if cached:
                 return cached
 
-        ops = self._fetch_all_paginated(
-            'qb_operations',
-            'date_accepted, cost_plus_price, capability_tags, qb_capability_tag',
-            {'matched_company_id': company_id},
-            extra_filters=[('not_.is_', 'date_accepted', 'null')],
-        )
+        # Single RPC call replaces the old _fetch_all_paginated loop
+        try:
+            resp = self._sb.rpc('get_company_seasonality', {
+                'p_company_id': company_id,
+                'p_client_id': self._client_id,
+            }).execute()
+            raw = resp.data
+            if isinstance(raw, list) and len(raw) == 1 and isinstance(raw[0], list):
+                rows = raw[0]  # Unwrap [[...]] from JSONB
+            elif isinstance(raw, list):
+                rows = raw
+            else:
+                rows = []
+        except Exception as e:
+            logger.warning(f"Seasonality RPC failed for {company_id}: {e}")
+            rows = []
 
-        if not ops:
-            result = {'monthly': [], 'quarterly': [], 'peak_months': [], 'trough_months': [], 'total_orders': 0}
+        if not rows:
+            result = {
+                'monthly': [], 'quarterly': [], 'yearly': {},
+                'peak_months': [], 'trough_months': [],
+                'outreach_windows': [], 'ytd_comparison': None,
+                'total_orders': 0, 'date_range': None,
+            }
             self._save_cache(company_id, 'seasonality_profile', result)
             return result
 
-        # Aggregate by month and quarter
-        monthly = defaultdict(lambda: {'order_count': 0, 'revenue': 0, 'capability_count': 0})
-        quarterly = defaultdict(lambda: {'order_count': 0, 'revenue': 0})
-        dates = []
+        # Build year-over-year breakdown
+        yearly: dict[int, list] = {}
+        monthly_agg = defaultdict(lambda: {'order_count': 0, 'revenue': 0.0})
+        quarterly_agg = defaultdict(lambda: {'order_count': 0, 'revenue': 0.0})
+        total_orders = 0
+        all_years = set()
 
-        for op in ops:
-            da = op.get('date_accepted')
-            if not da:
-                continue
-            try:
-                d = datetime.strptime(str(da)[:10], '%Y-%m-%d')
-                month = d.month
-                quarter = (month - 1) // 3 + 1
-                price = float(op.get('cost_plus_price') or 0)
-                # Prefer QB capability tag over classifier tags
-                qb_cap = (op.get('qb_capability_tag') or '').strip()
-                raw_tags = op.get('capability_tags') or []
-                if isinstance(raw_tags, str):
-                    import json as _json
-                    try:
-                        raw_tags = _json.loads(raw_tags)
-                    except (ValueError, TypeError):
-                        raw_tags = []
-                has_capability = bool(qb_cap) or bool(raw_tags)
-
-                monthly[month]['order_count'] += 1
-                monthly[month]['revenue'] += price
-                if has_capability:
-                    monthly[month]['capability_count'] += 1
-
-                quarterly[quarter]['order_count'] += 1
-                quarterly[quarter]['revenue'] += price
-
-                dates.append(d)
-            except (ValueError, TypeError):
+        for r in rows:
+            yr = int(r.get('year', 0))
+            mo = int(r.get('month', 0))
+            cnt = int(r.get('order_count', 0))
+            rev = float(r.get('revenue', 0))
+            if not yr or not mo:
                 continue
 
-        # Build monthly output
-        avg_count = sum(m['order_count'] for m in monthly.values()) / max(len(monthly), 1)
+            all_years.add(yr)
+            total_orders += cnt
+
+            # Per-year monthly data
+            if yr not in yearly:
+                yearly[yr] = []
+            yearly[yr].append({
+                'month': mo,
+                'month_name': MONTH_NAMES[mo],
+                'order_count': cnt,
+                'revenue': rev,
+            })
+
+            # Aggregate across all years
+            monthly_agg[mo]['order_count'] += cnt
+            monthly_agg[mo]['revenue'] += rev
+
+            quarter = (mo - 1) // 3 + 1
+            quarterly_agg[quarter]['order_count'] += cnt
+            quarterly_agg[quarter]['revenue'] += rev
+
+        # Sort each year's months
+        for yr in yearly:
+            yearly[yr].sort(key=lambda x: x['month'])
+
+        # Build monthly output (all-years aggregate)
         monthly_list = []
         for m in range(1, 13):
-            data = monthly.get(m)
-            if data:
+            data = monthly_agg.get(m)
+            if data and data['order_count'] > 0:
                 monthly_list.append({
                     'month': m,
                     'month_name': MONTH_NAMES[m],
@@ -383,39 +402,90 @@ class CustomerAnalyticsService:
                     'revenue': round(data['revenue'], 2),
                 })
 
-        # Peak/trough detection using standard deviation
-        # More robust than fixed multiplier — accounts for actual data spread
+        # Peak/trough detection
+        import statistics
         counts = [m['order_count'] for m in monthly_list if m['order_count'] > 0]
         if len(counts) >= 3:
-            import statistics
             mean = statistics.mean(counts)
             stdev = statistics.stdev(counts) if len(counts) > 1 else 0
-            threshold = max(stdev * 0.5, mean * 0.15)  # At least 15% above/below mean
+            threshold = max(stdev * 0.5, mean * 0.15)
             peak_months = [m['month'] for m in monthly_list if m['order_count'] > mean + threshold]
             trough_months = [m['month'] for m in monthly_list if 0 < m['order_count'] < mean - threshold]
         else:
             peak_months = []
             trough_months = []
 
+        # Quarterly
         quarterly_list = sorted([
-            {
-                'quarter': q,
-                'order_count': data['order_count'],
-                'revenue': round(data['revenue'], 2),
-            }
-            for q, data in quarterly.items()
+            {'quarter': q, 'order_count': d['order_count'], 'revenue': round(d['revenue'], 2)}
+            for q, d in quarterly_agg.items()
         ], key=lambda x: x['quarter'])
 
-        earliest = min(dates).strftime('%Y-%m-%d') if dates else None
-        latest = max(dates).strftime('%Y-%m-%d') if dates else None
+        # Outreach windows — 4-6 weeks before each peak month
+        now = datetime.now(timezone.utc)
+        current_month = now.month
+        current_year = now.year
+        num_years = len(all_years) if all_years else 1
+        outreach_windows = []
+        for pm in peak_months:
+            # Approach window = 1-2 months before the peak
+            approach_month = pm - 1 if pm > 1 else 12
+            approach_year = current_year if approach_month >= current_month else current_year + 1
+            approach_start = date(approach_year, approach_month, 1)
+            approach_end = date(approach_year, approach_month, 28)  # Safe end-of-month
+
+            avg_peak_revenue = round(monthly_agg[pm]['revenue'] / num_years, 2)
+            outreach_windows.append({
+                'peak_month': pm,
+                'peak_month_name': MONTH_NAMES[pm],
+                'approach_month': approach_month,
+                'approach_month_name': MONTH_NAMES[approach_month],
+                'approach_start': approach_start.isoformat(),
+                'approach_end': approach_end.isoformat(),
+                'avg_peak_revenue': avg_peak_revenue,
+                'avg_peak_orders': round(monthly_agg[pm]['order_count'] / num_years, 1),
+                'is_approaching': approach_month == current_month or (
+                    approach_month == current_month + 1 and now.day >= 15
+                ),
+            })
+
+        # YTD comparison — current year vs prior year
+        sorted_years = sorted(all_years, reverse=True)
+        ytd_comparison = None
+        if len(sorted_years) >= 2:
+            cy = sorted_years[0]
+            py = sorted_years[1]
+            cy_months = {r['month']: r for r in (yearly.get(cy) or [])}
+            py_months = {r['month']: r for r in (yearly.get(py) or [])}
+            # Only compare up to current month
+            max_month = current_month if cy == current_year else 12
+            cy_rev = sum(cy_months.get(m, {}).get('revenue', 0) for m in range(1, max_month + 1))
+            py_rev = sum(py_months.get(m, {}).get('revenue', 0) for m in range(1, max_month + 1))
+            growth_pct = round((cy_rev - py_rev) / py_rev * 100, 1) if py_rev > 0 else 0
+            ytd_comparison = {
+                'current_year': cy,
+                'prior_year': py,
+                'current_ytd_revenue': round(cy_rev, 2),
+                'prior_ytd_revenue': round(py_rev, 2),
+                'growth_pct': growth_pct,
+                'months_compared': max_month,
+            }
+
+        # Date range
+        min_yr = min(all_years) if all_years else None
+        max_yr = max(all_years) if all_years else None
+        date_range = {'earliest_year': min_yr, 'latest_year': max_yr} if min_yr else None
 
         result = {
             'monthly': monthly_list,
             'quarterly': quarterly_list,
+            'yearly': {str(yr): data for yr, data in sorted(yearly.items())},
             'peak_months': peak_months,
             'trough_months': trough_months,
-            'total_orders': len(ops),
-            'date_range': {'earliest': earliest, 'latest': latest},
+            'outreach_windows': outreach_windows,
+            'ytd_comparison': ytd_comparison,
+            'total_orders': total_orders,
+            'date_range': date_range,
         }
         self._save_cache(company_id, 'seasonality_profile', result)
         return result

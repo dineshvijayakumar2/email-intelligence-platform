@@ -3843,3 +3843,86 @@ async def reset_db_performance_stats(
     except Exception as e:
         logger.error(f"Failed to reset DB stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# SEASONALITY & OUTREACH INTELLIGENCE
+# ============================================================================
+
+@router.get("/outreach-windows")
+async def get_outreach_windows(
+    client_id: Optional[str] = Query(default=None),
+    weeks_ahead: int = Query(default=8, ge=2, le=16),
+    current_user: dict = Depends(get_current_user),
+):
+    """Upcoming outreach windows — companies with historical peak months approaching.
+
+    Returns companies where a seasonal revenue peak is 4-8 weeks away,
+    sorted by historical peak revenue. Use this to prioritise proactive outreach.
+    """
+    if not client_id:
+        raise HTTPException(status_code=400, detail="client_id required")
+    try:
+        resp = _supabase.rpc('get_outreach_windows', {
+            'p_client_id': client_id,
+            'p_weeks_ahead': weeks_ahead,
+        }).execute()
+        raw = resp.data
+        if isinstance(raw, list) and len(raw) == 1 and isinstance(raw[0], list):
+            windows = raw[0]
+        elif isinstance(raw, list):
+            windows = raw
+        else:
+            windows = []
+
+        # Ensure numeric types
+        for w in windows:
+            w['revenue_in_peak'] = float(w.get('revenue_in_peak', 0))
+            w['order_count'] = int(w.get('order_count', 0))
+            w['years_active'] = int(w.get('years_active', 0))
+            w['avg_annual_peak'] = float(w.get('avg_annual_peak', 0))
+
+        return {'windows': windows, 'weeks_ahead': weeks_ahead, 'total': len(windows)}
+    except Exception as e:
+        logger.error(f"Failed to get outreach windows: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/seasonality/industry/{industry}")
+async def get_industry_seasonality(
+    industry: str,
+    client_id: Optional[str] = Query(default=None),
+    current_user: dict = Depends(get_current_user),
+):
+    """Industry-level seasonality — monthly revenue patterns aggregated across all
+    companies in the specified industry.
+    """
+    try:
+        params: dict = {'p_industry': industry}
+        if client_id:
+            params['p_client_id'] = client_id
+
+        resp = _supabase.rpc('get_industry_seasonality', params).execute()
+        raw = resp.data
+        if isinstance(raw, list) and len(raw) == 1 and isinstance(raw[0], list):
+            monthly = raw[0]
+        elif isinstance(raw, list):
+            monthly = raw
+        else:
+            monthly = []
+
+        # Ensure numeric types + add month names
+        month_names = ['', 'January', 'February', 'March', 'April', 'May', 'June',
+                       'July', 'August', 'September', 'October', 'November', 'December']
+        for m in monthly:
+            mo = int(m.get('month', 0))
+            m['month'] = mo
+            m['month_name'] = month_names[mo] if 0 < mo <= 12 else '?'
+            m['order_count'] = int(m.get('order_count', 0))
+            m['revenue'] = float(m.get('revenue', 0))
+            m['company_count'] = int(m.get('company_count', 0))
+
+        return {'industry': industry, 'monthly': monthly}
+    except Exception as e:
+        logger.error(f"Failed to get industry seasonality: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
