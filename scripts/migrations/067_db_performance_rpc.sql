@@ -132,3 +132,16 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION get_db_cache_stats() TO authenticated;
+
+-- 5. Reset pg_stat_statements for fresh baseline measurement
+CREATE OR REPLACE FUNCTION reset_db_stats()
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+    PERFORM pg_stat_statements_reset();
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION reset_db_stats() TO authenticated;

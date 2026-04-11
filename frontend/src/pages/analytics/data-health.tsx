@@ -700,6 +700,17 @@ const DbPerformancePanel: React.FC = () => {
     }
   };
 
+  const handleReset = async () => {
+    if (!confirm('Reset all query stats? This clears cumulative totals so you can measure from a clean baseline.')) return;
+    try {
+      await api.post('/v1/analytics/data-health/db-performance/reset', {});
+      toast.success('Stats reset — refresh in a few minutes to see fresh data');
+      await load();
+    } catch {
+      toast.error('Failed to reset stats');
+    }
+  };
+
   useEffect(() => { load(); }, []);
 
   const cache = data?.cache_stats;
@@ -774,6 +785,13 @@ const DbPerformancePanel: React.FC = () => {
               <span className="text-slate-500">DB: <span className="font-semibold text-slate-700">{cache.db_size}</span></span>
             </div>
           )}
+          <button
+            onClick={handleReset}
+            className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-500 shadow-sm hover:bg-slate-50 transition"
+            title="Clear cumulative stats to measure from a clean baseline"
+          >
+            Reset Stats
+          </button>
           <button
             onClick={load}
             disabled={loading}

@@ -3821,3 +3821,16 @@ async def get_db_performance(
     except Exception as e:
         logger.error(f"Failed to get DB performance: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/data-health/db-performance/reset")
+async def reset_db_performance_stats(
+    current_user: dict = Depends(require_role('admin')),
+):
+    """Reset pg_stat_statements — clears cumulative query stats for a fresh baseline."""
+    try:
+        _supabase.rpc('reset_db_stats', {}).execute()
+        return {"status": "ok", "message": "Query stats reset"}
+    except Exception as e:
+        logger.error(f"Failed to reset DB stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
