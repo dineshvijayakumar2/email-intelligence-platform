@@ -39,18 +39,22 @@ _embedding_provider_override = None  # Set explicitly by reset_embedding_model()
 
 
 def _resolve_provider() -> str:
-    """Resolve embedding provider: in-memory override > DB > 'google'."""
+    """Resolve embedding provider: in-memory override > DB (client-scoped) > 'google'."""
     if _embedding_provider_override:
         return _embedding_provider_override
-    # Read from DB (no client_id filter — embedding provider is a global setting)
+    # Read from DB — must filter by client_id (system_settings is per-client)
     try:
         from ..database.supabase_client import SupabaseClient
-        client = SupabaseClient.get_client(use_service_key=True)
-        resp = client.table('system_settings').select('value').eq(
-            'key', 'embedding_provider'
-        ).limit(1).execute()
-        if resp.data and resp.data[0].get('value'):
-            return resp.data[0]['value'].lower()
+        sb = SupabaseClient.get_client(use_service_key=True)
+        # Get the first client (single-tenant)
+        client_resp = sb.table('clients').select('id').limit(1).execute()
+        if client_resp.data:
+            cid = client_resp.data[0]['id']
+            resp = sb.table('system_settings').select('value').eq(
+                'key', 'embedding_provider'
+            ).eq('client_id', cid).limit(1).execute()
+            if resp.data and resp.data[0].get('value'):
+                return resp.data[0]['value'].lower()
     except Exception as e:
         logger.debug(f"Could not read embedding_provider from DB: {e}")
     return "google"
@@ -72,11 +76,10 @@ def _get_embedding_model():
         try:
             from langchain_openai import OpenAIEmbeddings
         except ImportError:
-            logger.warning("langchain-openai not installed — falling back to Google embeddings")
-            provider = "google"  # Fall through to Google below
-
-    if provider == "openai":
-        from langchain_openai import OpenAIEmbeddings  # noqa: already imported above
+            raise RuntimeError(
+                "langchain-openai package not installed but embedding_provider is set to 'openai'. "
+                "Either install langchain-openai or change the embedding provider to 'google' in AI Usage settings."
+            )
 
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
