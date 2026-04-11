@@ -591,11 +591,6 @@ class EmailLinker:
         This enables many-to-many email↔contact/company relationships so that
         CC/BCC recipients are properly counted in per-company email stats.
         """
-        # Drop indexes for bulk insert (avg ~3 links per email)
-        from ..database.bulk_index_manager import BulkIndexManager
-        _mgr = BulkIndexManager(self.client)
-        _dropped = _mgr.drop_indexes(['email_contact_links']) if len(emails) >= 150 else 0
-
         total_links = 0
         batch: list[dict] = []
         BATCH_SIZE = 100
@@ -664,8 +659,6 @@ class EmailLinker:
                     _resolve_and_add(eid, addr, 'bcc')
 
         _flush_batch()
-        if _dropped:
-            _mgr.recreate_indexes(['email_contact_links'])
         logger.info(f"Junction links created: {total_links} links for {len(emails)} emails")
         return total_links
 

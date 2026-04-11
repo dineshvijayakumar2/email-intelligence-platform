@@ -727,12 +727,7 @@ class ThreadTracker:
         created_count = 0
         errors = []
 
-        # Drop indexes for bulk write performance (recreated in finally)
-        from ..database.bulk_index_manager import BulkIndexManager
-        _mgr = BulkIndexManager(self.client)
-        _dropped = _mgr.drop_indexes(['thread_status']) if len(records) >= 500 else 0
-        try:
-         for i in range(0, len(records), batch_size):
+        for i in range(0, len(records), batch_size):
             batch = records[i:i + batch_size]
             batch_thread_ids = [r['thread_id'] for r in batch]
             try:
@@ -752,10 +747,6 @@ class ThreadTracker:
             except Exception as e:
                 logger.error(f"Failed to save batch {i//batch_size + 1}: {e}")
                 errors.append({'batch': i//batch_size + 1, 'error': str(e)})
-
-        finally:
-         if _dropped:
-             _mgr.recreate_indexes(['thread_status'])
 
         logger.info(f"Thread statuses saved: {created_count} records, {len(errors)} errors")
 

@@ -36,6 +36,7 @@ class IndexDef:
     name: str           # e.g. 'idx_emails_embedding'
     table: str          # e.g. 'emails'
     create_sql: str     # Full CREATE INDEX IF NOT EXISTS statement
+    index_type: str = 'btree'  # 'btree', 'hnsw', 'gin'
     timeout_s: int = 30 # Recreation timeout: 30 for btree, 300 for HNSW/GIN
 
 
@@ -71,14 +72,14 @@ INDEX_REGISTRY: dict[str, list[IndexDef]] = {
                  'CREATE INDEX IF NOT EXISTS idx_emails_customer_contact ON emails(customer_contact_id)'),
         IndexDef('idx_emails_client', 'emails',
                  'CREATE INDEX IF NOT EXISTS idx_emails_client ON emails(client_id)'),
-        # HNSW — slow rebuild (5 min timeout)
+        # HNSW — only dropped for embedding operations (slow rebuild, 5 min timeout)
         IndexDef('idx_emails_embedding', 'emails',
                  'CREATE INDEX IF NOT EXISTS idx_emails_embedding ON emails USING hnsw (embedding vector_cosine_ops) WITH (m = 16, ef_construction = 64)',
-                 timeout_s=300),
-        # GIN — slow rebuild
+                 index_type='hnsw', timeout_s=300),
+        # GIN — only dropped for search reindex operations
         IndexDef('idx_emails_search_text', 'emails',
                  "CREATE INDEX IF NOT EXISTS idx_emails_search_text ON emails USING gin(search_text) WHERE search_text IS NOT NULL",
-                 timeout_s=300),
+                 index_type='gin', timeout_s=300),
     ],
 
     # ── qb_operations ──────────────────────────────────────────────────
@@ -97,10 +98,10 @@ INDEX_REGISTRY: dict[str, list[IndexDef]] = {
                  'CREATE INDEX IF NOT EXISTS idx_qb_operations_client_customer ON qb_operations(client_id, qb_customer_id)'),
         IndexDef('idx_qb_operations_company_date', 'qb_operations',
                  'CREATE INDEX IF NOT EXISTS idx_qb_operations_company_date ON qb_operations(matched_company_id, date_accepted) WHERE date_accepted IS NOT NULL'),
-        # HNSW — slow rebuild
+        # HNSW — only dropped for embedding operations
         IndexDef('idx_qb_operations_embedding', 'qb_operations',
                  'CREATE INDEX IF NOT EXISTS idx_qb_operations_embedding ON qb_operations USING hnsw (embedding vector_cosine_ops) WITH (m = 16, ef_construction = 64)',
-                 timeout_s=300),
+                 index_type='hnsw', timeout_s=300),
     ],
 
     # ── customer_companies ─────────────────────────────────────────────
@@ -123,14 +124,14 @@ INDEX_REGISTRY: dict[str, list[IndexDef]] = {
                  'CREATE INDEX IF NOT EXISTS idx_companies_qb_tier ON customer_companies(qb_tier)'),
         IndexDef('idx_companies_qb_total_revenue', 'customer_companies',
                  'CREATE INDEX IF NOT EXISTS idx_companies_qb_total_revenue ON customer_companies(qb_total_revenue DESC NULLS LAST)'),
-        # HNSW — slow rebuild
+        # HNSW — only dropped for embedding operations
         IndexDef('idx_companies_embedding', 'customer_companies',
                  'CREATE INDEX IF NOT EXISTS idx_companies_embedding ON customer_companies USING hnsw (embedding vector_cosine_ops) WITH (m = 16, ef_construction = 64)',
-                 timeout_s=300),
-        # GIN — slow rebuild
+                 index_type='hnsw', timeout_s=300),
+        # GIN — only dropped for domain reindex operations
         IndexDef('idx_customer_companies_domains_gin', 'customer_companies',
                  'CREATE INDEX IF NOT EXISTS idx_customer_companies_domains_gin ON customer_companies USING gin(email_domains)',
-                 timeout_s=300),
+                 index_type='gin', timeout_s=300),
     ],
 
     # ── qb_quotes ──────────────────────────────────────────────────────
@@ -224,105 +225,106 @@ MIN_ROWS = 500
 
 
 class BulkIndexManager:
-    """Drop indexes before bulk writes, recreate after. Supports sync and async."""
+    """Drop heavy indexes before bulk writes, recreate after.
+
+    By default, only HNSW indexes are dropped — they cause ~50-100ms overhead
+    per row on large tables. Btree indexes (~0.1ms/row) are left in place so
+    all queries keep working at full speed during the operation.
+
+    Use index_types=['hnsw', 'gin'] to also drop GIN indexes, or
+    index_types=['hnsw', 'gin', 'btree'] to drop everything (risky).
+    """
 
     def __init__(self, supabase_client):
         self._sb = supabase_client
-        self._exec_sql_available = True  # Assume available; set False on first failure
+        self._exec_sql_available = True
 
     # ── Public API ─────────────────────────────────────────────────────
 
     @contextmanager
-    def bulk_operation(self, tables: Union[str, list[str]], row_count: int = 0):
-        """Sync context manager for bulk write operations."""
+    def bulk_operation(self, tables: Union[str, list[str]], row_count: int = 0,
+                       index_types: list[str] = None):
+        """Sync context manager. Only drops HNSW indexes by default."""
         tables = [tables] if isinstance(tables, str) else tables
+        types = index_types or ['hnsw']
         if row_count < MIN_ROWS:
             yield
             return
 
-        dropped = self.drop_indexes(tables)
+        dropped = self.drop_indexes(tables, types)
         try:
             yield
         finally:
-            recreated = self.recreate_indexes(tables)
-            if recreated < dropped:
-                logger.warning(
-                    f"[BulkIndex] Only recreated {recreated}/{dropped} indexes — "
-                    f"check logs for failed DDL statements"
-                )
+            self.recreate_indexes(tables, types)
 
     @asynccontextmanager
-    async def async_bulk_operation(self, tables: Union[str, list[str]], row_count: int = 0):
-        """Async context manager for bulk write operations."""
+    async def async_bulk_operation(self, tables: Union[str, list[str]], row_count: int = 0,
+                                    index_types: list[str] = None):
+        """Async context manager. Only drops HNSW indexes by default."""
         tables = [tables] if isinstance(tables, str) else tables
+        types = index_types or ['hnsw']
         if row_count < MIN_ROWS:
             yield
             return
 
-        dropped = await asyncio.to_thread(self.drop_indexes, tables)
+        await asyncio.to_thread(self.drop_indexes, tables, types)
         try:
             yield
         finally:
-            recreated = await asyncio.to_thread(self.recreate_indexes, tables)
-            if recreated < dropped:
-                logger.warning(
-                    f"[BulkIndex] Only recreated {recreated}/{dropped} indexes — "
-                    f"check logs for failed DDL statements"
-                )
+            await asyncio.to_thread(self.recreate_indexes, tables, types)
 
     # ── Drop / Recreate ────────────────────────────────────────────────
 
-    def drop_indexes(self, tables: list[str]) -> int:
-        """Drop all droppable indexes for the given tables. Returns count dropped."""
+    def drop_indexes(self, tables: list[str], index_types: list[str] = None) -> int:
+        """Drop indexes of the specified types. Returns count dropped."""
         if not self._exec_sql_available:
             return 0
+        types = set(index_types or ['hnsw'])
 
         dropped = 0
         for table in tables:
             indexes = INDEX_REGISTRY.get(table, [])
             for idx in indexes:
+                if idx.index_type not in types:
+                    continue
                 try:
                     self._exec_sql(f'DROP INDEX IF EXISTS {idx.name}')
                     dropped += 1
                 except Exception as e:
-                    if 'function' in str(e).lower() and 'does not exist' in str(e).lower():
-                        logger.warning("[BulkIndex] exec_sql RPC not available — skipping index management")
+                    if 'does not exist' in str(e).lower():
+                        logger.warning("[BulkIndex] exec_sql RPC not available — skipping")
                         self._exec_sql_available = False
                         return 0
                     logger.warning(f"[BulkIndex] Failed to drop {idx.name}: {e}")
 
         if dropped:
-            table_names = ', '.join(tables)
-            logger.info(f"[BulkIndex] Dropped {dropped} indexes for bulk write on [{table_names}]")
+            logger.info(f"[BulkIndex] Dropped {dropped} {'/'.join(types)} indexes on [{', '.join(tables)}]")
         return dropped
 
-    def recreate_indexes(self, tables: list[str]) -> int:
-        """Recreate all indexes for the given tables. Returns count recreated."""
+    def recreate_indexes(self, tables: list[str], index_types: list[str] = None) -> int:
+        """Recreate indexes of the specified types. Returns count recreated."""
         if not self._exec_sql_available:
             return 0
+        types = set(index_types or ['hnsw'])
 
         recreated = 0
         for table in tables:
             indexes = INDEX_REGISTRY.get(table, [])
-            # Recreate fast indexes first (btree), then slow ones (HNSW, GIN)
-            sorted_indexes = sorted(indexes, key=lambda x: x.timeout_s)
-            for idx in sorted_indexes:
+            for idx in indexes:
+                if idx.index_type not in types:
+                    continue
                 try:
                     if idx.timeout_s > 30:
-                        # Slow index — use extended timeout
                         self._exec_sql_extended(idx.create_sql, idx.timeout_s)
                     else:
                         self._exec_sql(idx.create_sql)
                     recreated += 1
                 except Exception as e:
-                    logger.error(
-                        f"[BulkIndex] Failed to recreate {idx.name}: {e}"
-                    )
+                    logger.error(f"[BulkIndex] Failed to recreate {idx.name}: {e}")
                     logger.error(f"[BulkIndex] Run manually: {idx.create_sql}")
 
         if recreated:
-            table_names = ', '.join(tables)
-            logger.info(f"[BulkIndex] Recreated {recreated} indexes on [{table_names}]")
+            logger.info(f"[BulkIndex] Recreated {recreated} {'/'.join(types)} indexes on [{', '.join(tables)}]")
         return recreated
 
     # ── SQL execution helpers ──────────────────────────────────────────

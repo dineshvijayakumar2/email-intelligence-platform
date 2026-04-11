@@ -799,16 +799,11 @@ class QuickbaseSync:
         # async event loop is not blocked during large syncs (e.g. 80K SLIs)
         def _do_upsert():
             import time as _time
-            from ..database.bulk_index_manager import BulkIndexManager
-            mgr = BulkIndexManager(self._supabase)
-            _dropped = mgr.drop_indexes([table_name]) if len(rows) >= 500 else 0
-
             total = 0
             consecutive_failures = 0
             MAX_CONSECUTIVE_FAILURES = 3
             num_batches = (len(rows) + UPSERT_BATCH_SIZE - 1) // UPSERT_BATCH_SIZE
-            try:
-              for i in range(0, len(rows), UPSERT_BATCH_SIZE):
+            for i in range(0, len(rows), UPSERT_BATCH_SIZE):
                 batch = rows[i:i + UPSERT_BATCH_SIZE]
                 batch_num = i // UPSERT_BATCH_SIZE + 1
                 try:
@@ -840,10 +835,7 @@ class QuickbaseSync:
                     _time.sleep(0.5)
                     if batch_num % 100 == 0:
                         logger.info(f"  {table_name}: {total}/{len(rows)} upserted...")
-              return total
-            finally:
-              if _dropped:
-                  mgr.recreate_indexes([table_name])
+            return total
 
         total = await asyncio.to_thread(_do_upsert)
         logger.info(f"Upserted {total} records into {table_name}")
