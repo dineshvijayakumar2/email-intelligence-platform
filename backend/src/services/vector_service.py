@@ -66,6 +66,38 @@ def _resolve_provider(client_id: str = None) -> str:
 _last_client_id: str | None = None
 
 
+def _resolve_api_key(provider: str, client_id: str = None) -> str | None:
+    """Resolve API key: DB (base64-encoded, per-client) > env var."""
+    import base64
+
+    # Try DB first (same source as the AI Usage page API Keys section)
+    if client_id:
+        try:
+            from ..database.supabase_client import SupabaseClient
+            sb = SupabaseClient.get_client(use_service_key=True)
+            db_key_name = 'api_key_openai' if provider == 'openai' else 'api_key_google'
+            resp = sb.table('system_settings').select('value').eq(
+                'key', db_key_name
+            ).eq('client_id', client_id).limit(1).execute()
+            if resp.data and resp.data[0].get('value'):
+                decoded = base64.b64decode(resp.data[0]['value']).decode()
+                if decoded:
+                    logger.info(f"API key for {provider} loaded from DB (client={client_id})")
+                    return decoded
+        except Exception as e:
+            logger.debug(f"Could not read {provider} API key from DB: {e}")
+
+    # Fall back to env vars
+    if provider == 'openai':
+        return os.getenv('OPENAI_API_KEY')
+    else:
+        return (
+            os.getenv('GOOGLE_GENAI_API_KEY')
+            or os.getenv('GOOGLE_API_KEY')
+            or os.getenv('GOOGLE_GENERATIVE_AI_API_KEY')
+        )
+
+
 def _get_embedding_model(client_id: str = None):
     """Lazy-init embedding model. Provider from in-memory override > DB > 'google'.
 
@@ -80,6 +112,9 @@ def _get_embedding_model(client_id: str = None):
 
     provider = _resolve_provider(client_id)
 
+    # Resolve API key: DB (base64-encoded) > env var
+    api_key = _resolve_api_key(provider, client_id)
+
     if provider == "openai":
         try:
             from langchain_openai import OpenAIEmbeddings
@@ -89,9 +124,8 @@ def _get_embedding_model(client_id: str = None):
                 "Either install langchain-openai or change the embedding provider to 'google' in AI Usage settings."
             )
 
-        api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
-            raise RuntimeError("OPENAI_API_KEY env var required for OpenAI embeddings")
+            raise RuntimeError("OpenAI API key not found — set it in the AI Usage page or OPENAI_API_KEY env var")
 
         _embedding_model_cache = OpenAIEmbeddings(
             model=OPENAI_EMBEDDING_MODEL,
@@ -102,15 +136,9 @@ def _get_embedding_model(client_id: str = None):
     else:
         from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
-        api_key = (
-            os.getenv("GOOGLE_GENAI_API_KEY")
-            or os.getenv("GOOGLE_API_KEY")
-            or os.getenv("GOOGLE_GENERATIVE_AI_API_KEY")
-        )
         if not api_key:
-            raise RuntimeError(
-                "GOOGLE_GENAI_API_KEY (or GOOGLE_API_KEY) env var required for embeddings"
-            )
+            raise RuntimeError("Google API key not found — set it in the AI Usage page or GOOGLE_GENAI_API_KEY env var")
+
         _embedding_model_cache = GoogleGenerativeAIEmbeddings(
             model=GOOGLE_EMBEDDING_MODEL,
             google_api_key=api_key,
