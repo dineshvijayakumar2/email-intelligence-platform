@@ -26,3 +26,42 @@ CREATE INDEX IF NOT EXISTS idx_emails_unresolved_threads
 CREATE INDEX IF NOT EXISTS idx_emails_resolved_msgid
     ON emails(mailbox_id)
     WHERE canonical_thread_id IS NOT NULL AND internet_message_id IS NOT NULL;
+
+-- 5. qb_operations: company detail lookups (346 calls × 3.1s avg = 17.6m total)
+CREATE INDEX IF NOT EXISTS idx_qb_operations_client_customer
+    ON qb_operations(client_id, qb_customer_id);
+
+-- 6. emails: folder_path + mailbox_id for update_folder_counts correlated subquery
+CREATE INDEX IF NOT EXISTS idx_emails_folder_mailbox
+    ON emails(mailbox_id, folder_path);
+
+-- 7. Rewrite update_folder_counts to use GROUP BY instead of correlated subqueries
+--    Old version: correlated COUNT(*) per folder row = sequential scan per folder
+--    New version: single GROUP BY scan + batch UPDATE
+CREATE OR REPLACE FUNCTION update_folder_counts()
+RETURNS void AS $$
+BEGIN
+    -- Per-folder counts via single GROUP BY (no correlated subquery)
+    UPDATE folders f
+    SET message_count = agg.cnt
+    FROM (
+        SELECT mailbox_id, folder_path, COUNT(*) AS cnt
+        FROM emails
+        GROUP BY mailbox_id, folder_path
+    ) agg
+    WHERE f.mailbox_id = agg.mailbox_id
+      AND f.folder_path = agg.folder_path;
+
+    -- Per-mailbox totals via single GROUP BY
+    UPDATE mailboxes m
+    SET total_emails = agg.cnt
+    FROM (
+        SELECT mailbox_id, COUNT(*) AS cnt
+        FROM emails
+        GROUP BY mailbox_id
+    ) agg
+    WHERE m.id = agg.mailbox_id;
+END;
+$$ LANGUAGE plpgsql;
+
+GRANT EXECUTE ON FUNCTION update_folder_counts() TO anon, authenticated;
