@@ -3653,7 +3653,16 @@ async def get_classification_health(client_id: Optional[str] = Query(default=Non
             params['p_client_id'] = client_id
 
         resp = _supabase.rpc('get_classification_health', params).execute()
-        per_mailbox = resp.data or []
+        raw = resp.data
+        # RETURNS JSONB → PostgREST returns the JSON array directly as a Python list,
+        # or sometimes wraps scalar JSONB in a single-element list
+        if isinstance(raw, list) and len(raw) > 0 and isinstance(raw[0], list):
+            per_mailbox = raw[0]  # Unwrap [[...]]
+        elif isinstance(raw, list):
+            per_mailbox = raw
+        else:
+            per_mailbox = []
+        logger.debug(f"Classification health RPC returned {type(raw).__name__}, {len(per_mailbox)} mailboxes")
 
         # Ensure numeric types from JSONB
         for mb in per_mailbox:
@@ -3685,7 +3694,7 @@ async def get_classification_health(client_id: Optional[str] = Query(default=Non
         }
 
     except Exception as e:
-        logger.error(f"Failed to get classification health: {e}")
+        logger.error(f"Failed to get classification health: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
