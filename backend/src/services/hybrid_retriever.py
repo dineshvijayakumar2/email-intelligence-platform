@@ -250,7 +250,7 @@ class HybridRetriever:
         """Semantic vector search over emails."""
         try:
             from .vector_service import embed_query
-            query_emb = await embed_query(query)
+            query_emb = await embed_query(query, client_id)
             params: dict = {
                 "query_embedding": query_emb,
                 "match_threshold": threshold,
@@ -297,7 +297,7 @@ class HybridRetriever:
         """Semantic vector search over companies."""
         try:
             from .vector_service import embed_query
-            query_emb = await embed_query(query)
+            query_emb = await embed_query(query, client_id)
             params: dict = {
                 "query_embedding": query_emb,
                 "match_threshold": threshold,
@@ -321,7 +321,7 @@ class HybridRetriever:
         """Semantic vector search over QB operations."""
         try:
             from .vector_service import embed_query
-            query_emb = await embed_query(query)
+            query_emb = await embed_query(query, client_id)
             result = self._sb.rpc("search_operations", {
                 "query_embedding": query_emb,
                 "match_threshold": threshold,

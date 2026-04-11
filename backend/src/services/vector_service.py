@@ -36,6 +36,7 @@ OPENAI_EMBEDDING_MODEL = "text-embedding-3-small"
 # Cache the model instance to avoid re-init on every call
 _embedding_model_cache = None
 _embedding_provider_override = None  # Set explicitly by reset_embedding_model()
+_cached_provider = None              # Track which provider the cached model is for
 
 
 def _resolve_provider(client_id: str = None) -> str:
@@ -104,13 +105,19 @@ def _get_embedding_model(client_id: str = None):
     Returns a LangChain Embeddings instance (Google or OpenAI).
     Both produce 768-dim vectors compatible with pgvector.
     """
-    global _embedding_model_cache, _last_client_id
+    global _embedding_model_cache, _last_client_id, _cached_provider
     if client_id:
         _last_client_id = client_id
-    if _embedding_model_cache is not None:
-        return _embedding_model_cache
 
     provider = _resolve_provider(client_id)
+
+    # Return cached model only if provider hasn't changed
+    if _embedding_model_cache is not None and _cached_provider == provider:
+        return _embedding_model_cache
+    # Provider changed — clear cache and reinitialize
+    if _embedding_model_cache is not None and _cached_provider != provider:
+        logger.info(f"Embedding provider changed from {_cached_provider} to {provider} — reinitializing")
+        _embedding_model_cache = None
 
     # Resolve API key: DB (base64-encoded) > env var
     api_key = _resolve_api_key(provider, client_id)
@@ -132,6 +139,7 @@ def _get_embedding_model(client_id: str = None):
             openai_api_key=api_key,
             dimensions=EMBEDDING_DIMS,
         )
+        _cached_provider = 'openai'
         logger.info(f"Embedding provider: OpenAI ({OPENAI_EMBEDDING_MODEL}, {EMBEDDING_DIMS} dims)")
     else:
         from langchain_google_genai import GoogleGenerativeAIEmbeddings
@@ -144,6 +152,7 @@ def _get_embedding_model(client_id: str = None):
             google_api_key=api_key,
             output_dimensionality=EMBEDDING_DIMS,
         )
+        _cached_provider = 'google'
         logger.info(f"Embedding provider: Google ({GOOGLE_EMBEDDING_MODEL}, {EMBEDDING_DIMS} dims)")
 
     return _embedding_model_cache
@@ -152,8 +161,9 @@ def _get_embedding_model(client_id: str = None):
 # ---------------------------------------------------------------------------
 def reset_embedding_model(provider: str = None):
     """Clear the cached embedding model and set the new provider explicitly."""
-    global _embedding_model_cache, _embedding_provider_override
+    global _embedding_model_cache, _embedding_provider_override, _cached_provider
     _embedding_model_cache = None
+    _cached_provider = None
     _embedding_provider_override = provider.lower() if provider else None
     logger.info(f"Embedding model cache cleared. Provider set to: {_embedding_provider_override or 'env/default'}")
 
@@ -237,9 +247,9 @@ async def embed_texts(texts: list[str], client_id: str = None) -> list[list[floa
     return all_embeddings
 
 
-async def embed_query(text: str) -> list[float]:
+async def embed_query(text: str, client_id: str = None) -> list[float]:
     """Embed a single query text. Uses embed_query (optimised for retrieval queries)."""
-    model = _get_embedding_model()
+    model = _get_embedding_model(client_id)
     return await asyncio.to_thread(model.embed_query, text)
 
 
@@ -558,7 +568,7 @@ class VectorService:
         date_from: str | None = None, date_to: str | None = None,
     ) -> list[dict]:
         """Semantic search over emails, optionally bounded by date range."""
-        query_emb = await embed_query(query)
+        query_emb = await embed_query(query, client_id)
         params: dict = {
             "query_embedding": query_emb,
             "match_threshold": threshold,
@@ -578,7 +588,7 @@ class VectorService:
         date_from: str | None = None, date_to: str | None = None,
     ) -> list[dict]:
         """Semantic search over companies, optionally bounded by date range."""
-        query_emb = await embed_query(query)
+        query_emb = await embed_query(query, client_id)
         params: dict = {
             "query_embedding": query_emb,
             "match_threshold": threshold,
@@ -597,7 +607,7 @@ class VectorService:
         threshold: float = 0.65, limit: int = 10,
     ) -> list[dict]:
         """Semantic search over QB operations."""
-        query_emb = await embed_query(query)
+        query_emb = await embed_query(query, client_id)
         result = await self._db(lambda: self._sb.rpc("search_operations", {
             "query_embedding": query_emb,
             "match_threshold": threshold,
