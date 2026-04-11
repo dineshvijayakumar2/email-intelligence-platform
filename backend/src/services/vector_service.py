@@ -142,11 +142,10 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
     all_embeddings: list[list[float]] = []
     batch_count = 0
 
-    # Resolve provider via full chain (in-memory > DB > default)
-    # Do NOT rely on _embedding_provider_override alone — it may be None if
-    # provider was loaded from DB on restart rather than set via reset_embedding_model()
-    resolved = _resolve_provider()
-    is_openai = resolved == "openai"
+    # Detect actual provider from the model instance (not the config —
+    # config may say 'openai' but model fell back to Google if langchain-openai is missing)
+    model_class = type(model).__name__
+    is_openai = 'OpenAI' in model_class
 
     # OpenAI supports large batches (up to 2048) — use 500 to stay safe
     # Google has stricter quota limits — keep small batches
@@ -169,7 +168,7 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
                 if _is_rate_limit_error(e):
                     was_rate_limited = True
                     wait = base_delay * (2 ** attempt)
-                    logger.info(f"[Vector] Rate limited ({resolved}), waiting {wait}s (attempt {attempt + 1}/5)")
+                    logger.info(f"[Vector] Rate limited ({'openai' if is_openai else 'google'}), waiting {wait}s (attempt {attempt + 1}/5)")
                     await asyncio.sleep(wait)
                 else:
                     raise
