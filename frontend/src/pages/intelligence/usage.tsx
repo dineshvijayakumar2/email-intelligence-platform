@@ -951,7 +951,7 @@ const UsagePage: React.FC = () => {
 const EmbeddingManagement: React.FC<{ clientId: string }> = ({ clientId }) => {
   const statsQuery = useVectorStats(clientId);
   const stats = statsQuery.data || null;
-  const statsLoading = statsQuery.isLoading;
+  const statsLoading = statsQuery.isLoading || (statsQuery.isFetching && !stats);
   const [reembedStatus, setReembedStatus] = useState<vectorApi.ReembedStatus | null>(null);
   const [backfillRunning, setBackfillRunning] = useState(false);
   const [backfillTotal, setBackfillTotal] = useState(0);
@@ -1156,9 +1156,7 @@ const EmbeddingManagement: React.FC<{ clientId: string }> = ({ clientId }) => {
             </div>
           </>
         ) : (
-          <div className="py-12 text-center">
-            <p className="text-sm text-slate-400">Select a client to view embedding stats</p>
-          </div>
+          <ContentSkeleton rows={3} />
         )}
       </div>
     </div>
