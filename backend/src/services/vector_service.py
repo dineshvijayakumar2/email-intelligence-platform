@@ -651,12 +651,17 @@ class VectorService:
 
         logger.info(f"[Vector] Starting reembed for client {client_id}, tables={tables}" + (f" (limit={limit})" if limit else ""))
 
-        # Drop HNSW indexes before bulk embedding — the index rebuild on every
-        # UPDATE is what causes statement timeouts. Recreated after completion.
-        await self._drop_embedding_indexes(tables)
+        # Map friendly names to actual table names for BulkIndexManager
+        table_map = {'emails': 'emails', 'companies': 'customer_companies', 'operations': 'qb_operations'}
+        db_tables = [table_map[t] for t in tables if t in table_map]
+
+        from ..database.bulk_index_manager import BulkIndexManager
+        manager = BulkIndexManager(self._sb)
 
         skip = {"embedded": 0, "skipped": 0, "elapsed_s": 0}
-        try:
+
+        # BulkIndexManager handles drop → yield → recreate (including HNSW with extended timeout)
+        async with manager.async_bulk_operation(db_tables, row_count=999999):
             emails = await self.embed_emails_batch(client_id, limit=limit) if "emails" in tables else skip
             if self._cancel_check():
                 logger.info(f"[Vector] Stopped after emails ({emails['embedded']} embedded)")
@@ -671,64 +676,13 @@ class VectorService:
 
             operations = await self.embed_operations(client_id, limit=limit) if "operations" in tables else skip
 
-            total = {
-                "emails": emails,
-                "companies": companies,
-                "operations": operations,
-                "total_embedded": (
-                    emails["embedded"] + companies["embedded"] + operations["embedded"]
-                ),
-            }
-            logger.info(f"[Vector] Reembed complete for client {client_id}: {total}")
-            return total
-        finally:
-            # Always recreate indexes — even on cancel or error
-            await self._recreate_embedding_indexes(tables)
-
-    # Index management for bulk embedding operations
-    _INDEX_MAP = {
-        'emails': ('idx_emails_embedding', 'emails', 'embedding'),
-        'companies': ('idx_companies_embedding', 'customer_companies', 'embedding'),
-        'operations': ('idx_operations_embedding', 'qb_operations', 'embedding'),
-    }
-
-    async def _drop_embedding_indexes(self, tables: list[str]):
-        """Drop HNSW indexes to avoid per-row index maintenance during bulk writes."""
-        for tbl in tables:
-            entry = self._INDEX_MAP.get(tbl)
-            if not entry:
-                continue
-            idx_name = entry[0]
-            try:
-                await self._db(lambda n=idx_name: self._sb.rpc('exec_sql', {
-                    'query': f'DROP INDEX IF EXISTS {n}'
-                }).execute())
-                logger.info(f"[Vector] Dropped HNSW index {idx_name} for bulk embedding")
-            except Exception as e:
-                # exec_sql RPC may not exist — try direct SQL via postgrest
-                logger.warning(f"[Vector] Could not drop index {idx_name} via RPC: {e}")
-                try:
-                    await self._db(lambda n=idx_name: self._sb.postgrest.rpc('exec_sql', {
-                        'query': f'DROP INDEX IF EXISTS {n}'
-                    }).execute())
-                except Exception:
-                    logger.warning(f"[Vector] Index {idx_name} drop failed — embedding will be slower but still work")
-
-    async def _recreate_embedding_indexes(self, tables: list[str]):
-        """Recreate HNSW indexes after bulk embedding completes."""
-        for tbl in tables:
-            entry = self._INDEX_MAP.get(tbl)
-            if not entry:
-                continue
-            idx_name, table_name, col_name = entry
-            sql = (
-                f'CREATE INDEX IF NOT EXISTS {idx_name} ON {table_name} '
-                f'USING hnsw ({col_name} vector_cosine_ops) '
-                f'WITH (m = 16, ef_construction = 64)'
-            )
-            try:
-                await self._db(lambda s=sql: self._sb.rpc('exec_sql', {'query': s}).execute())
-                logger.info(f"[Vector] Recreated HNSW index {idx_name}")
-            except Exception as e:
-                logger.error(f"[Vector] Failed to recreate index {idx_name}: {e}")
-                logger.error(f"[Vector] Run manually in SQL Editor: {sql}")
+        total = {
+            "emails": emails,
+            "companies": companies,
+            "operations": operations,
+            "total_embedded": (
+                emails["embedded"] + companies["embedded"] + operations["embedded"]
+            ),
+        }
+        logger.info(f"[Vector] Reembed complete for client {client_id}: {total}")
+        return total

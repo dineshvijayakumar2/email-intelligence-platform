@@ -186,7 +186,12 @@ class CanonicalThreadResolver:
         saved = 0
         SAVE_BATCH = 200
 
-        for i in range(0, len(items), SAVE_BATCH):
+        # Drop indexes on canonical_thread_id columns for bulk update performance
+        from ..database.bulk_index_manager import BulkIndexManager
+        _mgr = BulkIndexManager(self.client)
+        _dropped = _mgr.drop_indexes(['emails']) if len(items) >= 500 else 0
+        try:
+         for i in range(0, len(items), SAVE_BATCH):
             batch = items[i:i + SAVE_BATCH]
             payload = [
                 {
@@ -216,6 +221,10 @@ class CanonicalThreadResolver:
 
             if saved % 5000 == 0 and saved > 0:
                 logger.info(f"Phase 2 save progress: {saved}/{total_processed}")
+
+        finally:
+         if _dropped:
+             _mgr.recreate_indexes(['emails'])
 
         logger.info(f"Phase 2 complete: {saved}/{total_processed} emails saved")
 

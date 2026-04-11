@@ -186,7 +186,8 @@ class EmailOperations:
         batch_size: int = 5000,
         checkpoint_callback=None,
         skip_duplicates: bool = True,  # Now handled by database upsert
-        job_id: str = None
+        job_id: str = None,
+        expected_total: int = 0,
     ) -> Dict:
         """
         Insert emails from an iterator/generator with streaming support.
@@ -218,10 +219,16 @@ class EmailOperations:
         was_stopped = False
 
         logger.debug(f"Starting streaming insert with batch_size={batch_size} (using database upsert for deduplication)")
-        
+
         # Performance tracking for time estimation
         start_time = time.time()
         emails_per_second = 0
+
+        # Drop non-essential indexes for bulk insert performance.
+        # UNIQUE index on (mailbox_id, message_id) is kept for ON CONFLICT.
+        from .bulk_index_manager import BulkIndexManager
+        _bulk_mgr = BulkIndexManager(self.client)
+        _indexes_dropped = _bulk_mgr.drop_indexes(['emails']) if expected_total >= 500 else 0
 
         try:
             for email in emails:
@@ -408,6 +415,9 @@ class EmailOperations:
         except Exception as e:
             logger.error(f"Streaming insert failed at email {total}: {e}")
             raise
+        finally:
+            if _indexes_dropped:
+                _bulk_mgr.recreate_indexes(['emails'])
 
     def _insert_batch(self, batch: List[Dict], mailbox_id: str, batch_num: int) -> Dict:
         """
