@@ -106,11 +106,15 @@ const UsagePage: React.FC = () => {
   const costs = costsQuery.data || null;
   const monitoring = monitoringQuery.data || null;
   const controls = controlsQuery.data || null;
+  const controlsLoading = controlsQuery.isLoading || controlsQuery.isFetching;
   const recentLogs = logsQuery.data?.items || [];
   const models = modelsQuery.data?.models || [];
   const apiKeys = apiKeysQuery.data || null;
   const taskModels = taskModelsQuery.data?.task_models || {};
   const loading = costsQuery.isLoading;
+
+  // Track in-flight control updates to disable toggles during save
+  const [controlSaving, setControlSaving] = useState<string | null>(null);
 
   // Load embedding config
   React.useEffect(() => {
@@ -150,14 +154,19 @@ const UsagePage: React.FC = () => {
 
   // Control update handler — passes client_id for DB persistence
   const handleControlChange = async (key: string, value: any) => {
+    setControlSaving(key);
     try {
       const result = await controlsApi.update({ [key]: value, client_id: clientId });
       if (result?.settings) {
-        controlsQuery.refetch();
+        await controlsQuery.refetch();
         toast.success(`Updated ${key.replace(/_/g, ' ')}`);
+      } else {
+        toast.error('Setting update may not have saved — check logs');
       }
     } catch {
       toast.error('Failed to update setting');
+    } finally {
+      setControlSaving(null);
     }
   };
 
@@ -394,9 +403,12 @@ const UsagePage: React.FC = () => {
         <div className="rounded-lg border bg-white shadow-sm">
           <div className="flex items-center justify-between border-b px-5 py-3">
             <div className="flex items-center gap-2">
-              <span className={`inline-block h-2 w-2 rounded-full ${controls?.ai_enabled ? 'bg-emerald-500' : 'bg-red-500'}`} />
+              {controlsLoading
+                ? <Spinner className="h-2.5 w-2.5 animate-spin text-slate-400" />
+                : <span className={`inline-block h-2 w-2 rounded-full ${controls?.ai_enabled ? 'bg-emerald-500' : 'bg-red-500'}`} />
+              }
               <h3 className="text-sm font-semibold text-slate-900">
-                AI Controls{!controls?.ai_enabled && ' (DISABLED)'}
+                AI Controls{!controlsLoading && !controls?.ai_enabled && ' (DISABLED)'}
               </h3>
             </div>
             <button
@@ -407,16 +419,24 @@ const UsagePage: React.FC = () => {
             </button>
           </div>
           <div className="p-5 space-y-4">
+            {controlsLoading ? (
+              <ContentSkeleton rows={6} />
+            ) : (
+            <>
             {/* Master Kill Switch */}
             <div className={`flex items-center justify-between rounded-lg p-3 ${controls?.ai_enabled ? 'bg-emerald-50' : 'bg-red-50'}`}>
               <div>
                 <p className="text-sm font-semibold text-slate-800">Master AI Switch</p>
                 <p className="text-[11px] text-slate-500">Disables ALL AI API calls immediately</p>
               </div>
-              <Toggle
-                checked={controls?.ai_enabled !== false}
-                onChange={(val) => handleControlChange('ai_enabled', val)}
-              />
+              {controlSaving === 'ai_enabled'
+                ? <Spinner className="h-5 w-5 animate-spin text-indigo-500" />
+                : <Toggle
+                    checked={controls?.ai_enabled !== false}
+                    onChange={(val) => handleControlChange('ai_enabled', val)}
+                    disabled={!!controlSaving}
+                  />
+              }
             </div>
 
             <hr className="border-slate-100" />
@@ -433,7 +453,7 @@ const UsagePage: React.FC = () => {
                   checked={controls?.email_analysis_enabled !== false}
                   onChange={(val) => handleControlChange('email_analysis_enabled', val)}
                   size="sm"
-                  disabled={!controls?.ai_enabled}
+                  disabled={!controls?.ai_enabled || !!controlSaving}
                 />
               </div>
               <div className="flex items-center justify-between">
@@ -445,7 +465,7 @@ const UsagePage: React.FC = () => {
                   checked={controls?.digest_enabled !== false}
                   onChange={(val) => handleControlChange('digest_enabled', val)}
                   size="sm"
-                  disabled={!controls?.ai_enabled}
+                  disabled={!controls?.ai_enabled || !!controlSaving}
                 />
               </div>
               <div className="flex items-center justify-between">
@@ -457,7 +477,7 @@ const UsagePage: React.FC = () => {
                   checked={controls?.relationship_summary_enabled !== false}
                   onChange={(val) => handleControlChange('relationship_summary_enabled', val)}
                   size="sm"
-                  disabled={!controls?.ai_enabled}
+                  disabled={!controls?.ai_enabled || !!controlSaving}
                 />
               </div>
             </div>
@@ -670,6 +690,8 @@ const UsagePage: React.FC = () => {
               </button>
               <span className="text-[10px] text-slate-400">Saves to DB — persists across restarts. Env vars used as fallback.</span>
             </div>
+            </>
+            )}
           </div>
         </div>
 
