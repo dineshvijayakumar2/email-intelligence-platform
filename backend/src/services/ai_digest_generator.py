@@ -437,9 +437,10 @@ ACTIVE THREADS (with recent conversation):
 
 Generate the {scope} digest now. Return ONLY valid JSON."""
 
-        # Call strategic model (respects client's model preference)
-        ai_response = self.ai_client.call_sonnet(
-            digest_system_prompt, data_context, max_tokens=8192
+        # Call per-task model (respects DB > legacy tier > env > default)
+        ai_response = self.ai_client.call_for_task(
+            'daily_digest', client_id, digest_system_prompt, data_context,
+            max_tokens=8192,
         )
 
         if ai_response is None:

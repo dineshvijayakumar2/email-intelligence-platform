@@ -415,8 +415,8 @@ export const usageApi = {
   },
 
   /** GET /ai/usage/recent — Recent log entries */
-  async getRecent(limit = 50): Promise<{ items: UsageLogEntry[]; total: number }> {
-    const qs = buildQuery({ limit });
+  async getRecent(limit = 50, clientId?: string): Promise<{ items: UsageLogEntry[]; total: number }> {
+    const qs = buildQuery({ limit, client_id: clientId });
     try {
       const result = await api.get<{ items: UsageLogEntry[]; total: number }>(
         `${API_PREFIX}/usage/recent${qs}`, { timeout: 10000 }

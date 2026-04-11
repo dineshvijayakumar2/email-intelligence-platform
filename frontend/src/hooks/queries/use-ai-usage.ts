@@ -45,10 +45,11 @@ export function useAITaskModels(clientId: string) {
   });
 }
 
-export function useAIRecentLogs(limit = 30) {
+export function useAIRecentLogs(clientId: string, limit = 30) {
   return useQuery<{ items: UsageLogEntry[] }>({
-    queryKey: ['ai-recent-logs', limit],
-    queryFn: () => usageApi.getRecent(limit),
+    queryKey: ['ai-recent-logs', clientId, limit],
+    queryFn: () => usageApi.getRecent(limit, clientId),
+    enabled: !!clientId,
     staleTime: 30_000,
     refetchInterval: 60_000,
   });

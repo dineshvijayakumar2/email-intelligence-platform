@@ -1473,9 +1473,12 @@ class AIEmailAnalyzer:
         # that .format() would try to interpret as variables
         user_message = user_template.replace("{emails_json}", emails_json)
 
-        # Call Claude Haiku — scale max_tokens with batch size (~700 tokens per email)
+        # Call per-task model (respects DB > legacy tier > env > default)
         max_tokens = max(4096, len(emails) * 700)
-        ai_response = self.ai_client.call_haiku(system_prompt, user_message, max_tokens=max_tokens, json_mode=True)
+        ai_response = self.ai_client.call_for_task(
+            'email_analysis', client_id, system_prompt, user_message,
+            max_tokens=max_tokens, json_mode=True,
+        )
 
         if ai_response is None:
             # API failure — mark all as failed with detail

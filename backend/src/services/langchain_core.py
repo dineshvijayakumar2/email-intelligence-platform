@@ -178,6 +178,12 @@ TASK_MODEL_DEFAULTS = {
     'daily_digest': 'sonnet',
     'strategic_digest': 'sonnet',
     'entity_insights': 'haiku',
+    # Future tasks — registered now so DB keys and UI dropdowns work
+    # before the services themselves are built.
+    'action_items': 'haiku',
+    'feedback_learning': 'haiku',
+    'industry_profile': 'sonnet',
+    'thread_intent': 'haiku',
 }
 
 # Legacy mapping: task → which tier it belonged to
@@ -186,6 +192,10 @@ _TASK_LEGACY_TIER = {
     'daily_digest': 'strategic',
     'strategic_digest': 'strategic',
     'entity_insights': 'cheap',
+    'action_items': 'cheap',
+    'feedback_learning': 'cheap',
+    'industry_profile': 'strategic',
+    'thread_intent': 'cheap',
 }
 
 # In-memory cache for task models (loaded from DB)

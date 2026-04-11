@@ -98,7 +98,7 @@ const UsagePage: React.FC = () => {
   const costsQuery = useAICosts(clientId, 30);
   const monitoringQuery = useAIMonitoring(clientId);
   const controlsQuery = useAIControls(clientId);
-  const logsQuery = useAIRecentLogs(30);
+  const logsQuery = useAIRecentLogs(clientId, 30);
   const modelsQuery = useAIModels();
   const apiKeysQuery = useAIApiKeys(clientId);
   const taskModelsQuery = useAITaskModels(clientId);

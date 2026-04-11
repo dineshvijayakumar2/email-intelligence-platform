@@ -971,6 +971,7 @@ async def get_monitoring_stats(
 @router.get("/usage/recent")
 async def get_recent_usage(
     limit: int = Query(default=50, ge=1, le=200),
+    client_id: Optional[str] = Query(default=None),
     current_user: dict = Depends(get_current_user),
 ):
     """Get recent AI usage log entries for real-time monitoring."""
@@ -979,11 +980,15 @@ async def get_recent_usage(
         raise HTTPException(status_code=503, detail="Usage tracker not initialized")
 
     try:
+        query = tracker.client.table("ai_usage_log").select(
+            "id, operation, model, input_tokens, output_tokens, "
+            "estimated_cost_usd, processing_time_ms, success, "
+            "error_type, error_detail, created_at"
+        )
+        if client_id:
+            query = query.eq("client_id", client_id)
         resp = tracker._execute_with_retry(
-            tracker.client.table("ai_usage_log")
-            .select("*")
-            .order("created_at", desc=True)
-            .range(0, limit - 1)
+            query.order("created_at", desc=True).range(0, limit - 1)
         )
         items = resp.data or []
         # Sanitize nulls
@@ -1758,6 +1763,11 @@ async def get_api_keys(
         "openai_set": bool(openai_key),
         "openai_masked": mask(openai_key),
         "openai_source": openai_source,
+        "providers_ready": {
+            "anthropic": bool(anthropic),
+            "google": bool(google),
+            "openai": bool(openai_key),
+        },
     }
 
 

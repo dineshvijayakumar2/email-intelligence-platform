@@ -68,7 +68,14 @@ class AIControlSettings:
 _ai_settings = AIControlSettings()
 _settings_loaded_from_db = False
 
-# Spend cache — avoids hitting DB on every AI call (60s TTL)
+# Spend cache — avoids hitting DB on every AI call (60s TTL).
+# WARNING: In multi-worker deployments (e.g. Uvicorn --workers N), each
+# worker maintains its own cache.  During the 60s window a worker may
+# approve calls against a stale spend total, allowing up to
+# (workers × budget-per-window) overspend before the next DB query
+# catches up.  For single-worker Railway deployments this is fine;
+# if you scale workers, reduce the TTL or switch to a shared cache
+# (Redis / DB advisory lock).
 _spend_cache: dict = {}
 
 
@@ -182,7 +189,10 @@ def update_ai_settings(client_id: Optional[str] = None, **kwargs) -> AIControlSe
 
 
 def get_actual_spend(client_id: Optional[str] = None, period: str = 'daily') -> float:
-    """Query ai_usage_log for actual spend. Cached 60s in-memory.
+    """Query ai_usage_log for actual spend via DB-side SUM. Cached 60s in-memory.
+
+    Uses the get_spend_total() RPC function — a single DB round-trip instead of
+    paginating hundreds of batches through Python.
 
     Args:
         client_id: Client UUID (optional — if None, returns all clients' spend)
@@ -196,31 +206,14 @@ def get_actual_spend(client_id: Optional[str] = None, period: str = 'daily') -> 
 
     try:
         from ..database.supabase_client import SupabaseClient
-        from datetime import datetime, timezone
         sb = SupabaseClient.get_client(use_service_key=True)
 
-        now = datetime.now(timezone.utc)
-        if period == 'daily':
-            since = now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
-        else:
-            since = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
-
-        query = sb.table('ai_usage_log').select('estimated_cost_usd').gte(
-            'created_at', since
-        ).eq('success', 'true')
+        params = {'p_period': period}
         if client_id:
-            query = query.eq('client_id', client_id)
+            params['p_client_id'] = client_id
 
-        total = 0.0
-        offset = 0
-        while True:
-            resp = query.range(offset, offset + 499).execute()
-            rows = resp.data or []
-            if not rows:
-                break
-            for r in rows:
-                total += float(r.get('estimated_cost_usd') or 0)
-            offset += len(rows)
+        resp = sb.rpc('get_spend_total', params).execute()
+        total = float(resp.data) if resp.data is not None else 0.0
 
         _spend_cache[cache_key] = {'value': round(total, 4), 'expires': _time.time() + 60}
         return round(total, 4)
@@ -413,6 +406,20 @@ class AIClient:
         Call a non-Anthropic model (e.g. Gemini) via LangChain and wrap the
         result in an AIResponse so existing callers need no changes.
         """
+        # Budget check — same enforcement as _call_model (uses DB spend, cached 60s)
+        settings = get_ai_settings()
+        if not settings.ai_enabled:
+            logger.warning("AI is disabled via kill switch")
+            return None
+
+        actual_daily = get_actual_spend(period='daily')
+        if actual_daily >= settings.daily_budget_usd:
+            logger.warning(
+                f"Daily budget exceeded: ${actual_daily:.4f} >= "
+                f"${settings.daily_budget_usd:.2f}. Blocking LangChain call."
+            )
+            return None
+
         try:
             from .langchain_core import get_llm, MODEL_CONFIGS
             from langchain_core.messages import HumanMessage, SystemMessage
@@ -438,11 +445,6 @@ class AIClient:
                 6,
             )
 
-            # Track session spend
-            settings = get_ai_settings()
-            settings.session_spend_usd += cost
-            settings.session_requests += 1
-
             return AIResponse(
                 content=content,
                 input_tokens=input_tokens,
@@ -456,6 +458,33 @@ class AIClient:
             self.last_error = str(e)
             logger.error(f"LangChain call failed for model '{model_name}': {e}")
             return None
+
+    def call_for_task(
+        self,
+        task: str,
+        client_id: Optional[str],
+        system_prompt: str,
+        user_message: str,
+        max_tokens: int = 4096,
+        temperature: float = 0.0,
+        json_mode: bool = False,
+    ) -> Optional[AIResponse]:
+        """Call the model assigned to a specific AI task.
+
+        Resolves the per-task model from DB > legacy tier > env > default,
+        then routes to Anthropic native SDK or LangChain as appropriate.
+
+        Tasks: email_analysis, daily_digest, strategic_digest, entity_insights, etc.
+        """
+        from .langchain_core import resolve_task_model_name
+        model_name = resolve_task_model_name(task, client_id)
+
+        if model_name == "haiku":
+            return self._call_model(HAIKU_MODEL, system_prompt, user_message, max_tokens, temperature)
+        elif model_name == "sonnet":
+            return self._call_model(SONNET_MODEL, system_prompt, user_message, max_tokens, temperature)
+        else:
+            return self._call_via_langchain(model_name, system_prompt, user_message, max_tokens, temperature, json_mode=json_mode)
 
     def call_haiku(
         self,
