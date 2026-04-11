@@ -69,7 +69,14 @@ def _get_embedding_model():
     provider = _resolve_provider()
 
     if provider == "openai":
-        from langchain_openai import OpenAIEmbeddings
+        try:
+            from langchain_openai import OpenAIEmbeddings
+        except ImportError:
+            logger.warning("langchain-openai not installed — falling back to Google embeddings")
+            provider = "google"  # Fall through to Google below
+
+    if provider == "openai":
+        from langchain_openai import OpenAIEmbeddings  # noqa: already imported above
 
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
