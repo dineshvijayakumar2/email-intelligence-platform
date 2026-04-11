@@ -38,46 +38,47 @@ _embedding_model_cache = None
 _embedding_provider_override = None  # Set explicitly by reset_embedding_model()
 
 
-def _resolve_provider() -> str:
+def _resolve_provider(client_id: str = None) -> str:
     """Resolve embedding provider: in-memory override > DB (client-scoped) > 'google'."""
     if _embedding_provider_override:
-        logger.info(f"Embedding provider from override: {_embedding_provider_override}")
         return _embedding_provider_override
-    # Read from DB — must filter by client_id (system_settings is per-client)
-    try:
-        from ..database.supabase_client import SupabaseClient
-        sb = SupabaseClient.get_client(use_service_key=True)
-        # Get the first client (single-tenant)
-        client_resp = sb.table('clients').select('id').limit(1).execute()
-        if client_resp.data:
-            cid = client_resp.data[0]['id']
+    if not client_id:
+        # No client_id — try to read from the _last_client_id used
+        client_id = _last_client_id
+    if client_id:
+        try:
+            from ..database.supabase_client import SupabaseClient
+            sb = SupabaseClient.get_client(use_service_key=True)
             resp = sb.table('system_settings').select('value').eq(
                 'key', 'embedding_provider'
-            ).eq('client_id', cid).limit(1).execute()
+            ).eq('client_id', client_id).limit(1).execute()
             if resp.data and resp.data[0].get('value'):
                 provider = resp.data[0]['value'].lower()
-                logger.info(f"Embedding provider from DB: {provider} (client={cid})")
+                logger.info(f"Embedding provider from DB: {provider} (client={client_id})")
                 return provider
-            else:
-                logger.info(f"No embedding_provider row in DB for client={cid}, defaulting to google")
-        else:
-            logger.warning("No clients found in DB — defaulting to google")
-    except Exception as e:
-        logger.warning(f"Could not read embedding_provider from DB: {e}")
+        except Exception as e:
+            logger.warning(f"Could not read embedding_provider from DB: {e}")
     return "google"
 
 
-def _get_embedding_model():
-    """Lazy-init embedding model. Provider from in-memory override > DB > env var > 'google'.
+# Track the last client_id used for embedding — so embed_texts() can
+# resolve the correct provider even when called without client context.
+_last_client_id: str | None = None
+
+
+def _get_embedding_model(client_id: str = None):
+    """Lazy-init embedding model. Provider from in-memory override > DB > 'google'.
 
     Returns a LangChain Embeddings instance (Google or OpenAI).
     Both produce 768-dim vectors compatible with pgvector.
     """
-    global _embedding_model_cache
+    global _embedding_model_cache, _last_client_id
+    if client_id:
+        _last_client_id = client_id
     if _embedding_model_cache is not None:
         return _embedding_model_cache
 
-    provider = _resolve_provider()
+    provider = _resolve_provider(client_id)
 
     if provider == "openai":
         try:
@@ -142,13 +143,13 @@ def _is_rate_limit_error(e: Exception) -> bool:
     ])
 
 
-async def embed_texts(texts: list[str]) -> list[list[float]]:
+async def embed_texts(texts: list[str], client_id: str = None) -> list[list[float]]:
     """Embed a list of texts using configured embedding provider.
 
     Returns list of 768-dim float vectors, one per input text.
     Handles batching + rate limit retries for both Google and OpenAI.
     """
-    model = _get_embedding_model()
+    model = _get_embedding_model(client_id)
     all_embeddings: list[list[float]] = []
     batch_count = 0
 
@@ -271,7 +272,7 @@ class VectorService:
                 ids.append(row["id"])
 
             if texts:
-                embeddings = await embed_texts(texts)
+                embeddings = await embed_texts(texts, client_id)
                 # Filter out None entries (skipped due to rate limits)
                 valid = [(i, e) for i, e in zip(ids, embeddings) if e is not None]
                 if not valid:
@@ -371,7 +372,7 @@ class VectorService:
                     ids.append(row["id"])
 
             if texts:
-                embeddings = await embed_texts(texts)
+                embeddings = await embed_texts(texts, client_id)
                 DB_CHUNK = 25
                 for ci in range(0, len(ids), DB_CHUNK):
                     chunk_ids = ids[ci:ci + DB_CHUNK]
@@ -448,7 +449,7 @@ class VectorService:
                     ids.append(row["id"])
 
             if texts:
-                embeddings = await embed_texts(texts)
+                embeddings = await embed_texts(texts, client_id)
                 DB_CHUNK = 25
                 for ci in range(0, len(ids), DB_CHUNK):
                     chunk_ids = ids[ci:ci + DB_CHUNK]
