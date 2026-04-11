@@ -309,8 +309,9 @@ class VectorService:
                     v_ids, v_embs = zip(*valid)
                     v_ids, v_embs = list(v_ids), list(v_embs)
                     total_skipped += len(ids) - len(v_ids)
-                    # Write to DB in chunks — keep small to avoid Supabase statement timeouts
-                    DB_CHUNK = 10
+                    # Write to DB in chunks — RPC uses bulk UPDATE with unnest
+                    # (migration 069), so 100 rows = 1 UPDATE statement, not 100
+                    DB_CHUNK = 100
                     for ci in range(0, len(v_ids), DB_CHUNK):
                         chunk_ids = v_ids[ci:ci + DB_CHUNK]
                         chunk_embs = v_embs[ci:ci + DB_CHUNK]
@@ -400,7 +401,7 @@ class VectorService:
 
             if texts:
                 embeddings = await embed_texts(texts, client_id)
-                DB_CHUNK = 25
+                DB_CHUNK = 100
                 for ci in range(0, len(ids), DB_CHUNK):
                     chunk_ids = ids[ci:ci + DB_CHUNK]
                     chunk_embs = embeddings[ci:ci + DB_CHUNK]
@@ -477,7 +478,7 @@ class VectorService:
 
             if texts:
                 embeddings = await embed_texts(texts, client_id)
-                DB_CHUNK = 25
+                DB_CHUNK = 100
                 for ci in range(0, len(ids), DB_CHUNK):
                     chunk_ids = ids[ci:ci + DB_CHUNK]
                     chunk_embs = embeddings[ci:ci + DB_CHUNK]
