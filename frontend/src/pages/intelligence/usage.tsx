@@ -27,7 +27,7 @@ import api from '../../services/apiClient';
 import { formatTime } from '../../utils/dateUtils';
 import {
   useAICosts, useAIMonitoring, useAIControls, useAIRecentLogs,
-  useAIModels, useAIApiKeys, useAITaskModels,
+  useAIModels, useAIApiKeys, useAITaskModels, useEmbeddingConfig,
 } from '../../hooks/queries';
 import type { UsageSummary, MonitoringStats, AIControlSettings, UsageLogEntry } from '../../types/ai';
 import type { AIModel } from '../../types/strategic-digest';
@@ -83,8 +83,6 @@ const UsagePage: React.FC = () => {
   const [apiKeysSaving, setApiKeysSaving] = useState(false);
 
   // Embedding config state
-  const [embeddingConfig, setEmbeddingConfig] = useState<any>(null);
-  const [embeddingProvider, setEmbeddingProvider] = useState('google');
   const [embeddingSaving, setEmbeddingSaving] = useState(false);
 
   // Re-analyze state
@@ -102,6 +100,7 @@ const UsagePage: React.FC = () => {
   const modelsQuery = useAIModels();
   const apiKeysQuery = useAIApiKeys(clientId);
   const taskModelsQuery = useAITaskModels(clientId);
+  const embeddingQuery = useEmbeddingConfig(clientId);
 
   const costs = costsQuery.data || null;
   const monitoring = monitoringQuery.data || null;
@@ -111,29 +110,18 @@ const UsagePage: React.FC = () => {
   const models = modelsQuery.data?.models || [];
   const apiKeys = apiKeysQuery.data || null;
   const taskModels = taskModelsQuery.data?.task_models || {};
+  const embeddingConfig = embeddingQuery.data || null;
+  const embeddingProvider = embeddingConfig?.provider || 'google';
   const loading = costsQuery.isLoading;
 
   // Track in-flight control updates to disable toggles during save
   const [controlSaving, setControlSaving] = useState<string | null>(null);
 
-  // Load embedding config
-  React.useEffect(() => {
-    if (!clientId) return;
-    api.get<any>(`/v1/ai/embedding-config?client_id=${clientId}`).then((cfg) => {
-      if (cfg) {
-        setEmbeddingConfig(cfg);
-        setEmbeddingProvider(cfg.provider || 'google');
-      }
-    }).catch(() => {});
-  }, [clientId]);
-
   const handleEmbeddingProviderChange = async (provider: string) => {
-    setEmbeddingProvider(provider);
     setEmbeddingSaving(true);
     try {
       await api.put('/v1/ai/embedding-config', { provider, client_id: clientId });
-      const cfg = await api.get<any>(`/v1/ai/embedding-config?client_id=${clientId}`);
-      if (cfg) setEmbeddingConfig(cfg);
+      embeddingQuery.refetch();
       toast.success(`Embedding provider set to ${provider === 'openai' ? 'OpenAI' : 'Google Gemini'}`);
     } catch (err: any) {
       toast.error(err?.message || 'Failed to update embedding provider');
@@ -150,6 +138,7 @@ const UsagePage: React.FC = () => {
     logsQuery.refetch();
     apiKeysQuery.refetch();
     taskModelsQuery.refetch();
+    embeddingQuery.refetch();
   };
 
   // Control update handler — passes client_id for DB persistence

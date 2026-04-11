@@ -87,6 +87,15 @@ export function useAIApiKeys(clientId: string) {
   });
 }
 
+export function useEmbeddingConfig(clientId: string) {
+  return useQuery<any>({
+    queryKey: ['ai-embedding-config', clientId],
+    queryFn: () => api.get<any>(`/v1/ai/embedding-config?client_id=${clientId}`).catch(() => null),
+    enabled: !!clientId,
+    staleTime: 30_000,
+  });
+}
+
 export function useClientAISettings(clientId: string) {
   return useQuery<Record<string, string>>({
     queryKey: ['ai-client-settings', clientId],
