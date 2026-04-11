@@ -179,23 +179,36 @@ Centralized index management for all bulk database operations. Registry of 60+ i
 - Both sync (`@contextmanager`) and async (`@asynccontextmanager`) support
 - Graceful degradation if `exec_sql` RPC unavailable
 
-**Integrated into 7 operations:**
+**Scoped to HNSW-only (revised `51e9691`):**
 
-| Operation | File | Tables |
-|-----------|------|--------|
-| Email batch insert | `database/operations.py` | `emails` |
-| QB sync upsert | `quickbase_sync.py` | `qb_operations`, `qb_quotes`, `qb_jobs`, `qb_sales_line_items`, `qb_customers`, `qb_unique_emails` |
-| Email contact links | `email_linker.py` | `email_contact_links` |
-| Thread status | `thread_tracker.py` | `thread_status` |
-| Canonical thread resolution | `canonical_thread_resolver.py` | `emails` |
-| Vector embedding (refactored) | `vector_service.py` | `emails`, `customer_companies`, `qb_operations` |
+The initial approach dropped ALL indexes on a table during bulk writes. This was too aggressive — dropping btree indexes broke query performance, and HNSW recreation failures caused cascading timeouts. Revised to:
+- **Only drops HNSW indexes** — the real write bottleneck (~50-100ms/row vs ~0.1ms for btree)
+- **Only used by VectorService** — embedding is the only operation that writes to HNSW-indexed columns
+- PostgreSQL only updates indexes on columns that changed, so non-embedding writes never trigger HNSW maintenance
+- Removed from: email insert, QB upsert, thread status, canonical threads, email contact links
 
-**Commits:** `dfb1f21`
+| Operation | File | Tables | Status |
+|-----------|------|--------|--------|
+| Vector embedding | `vector_service.py` | `emails`, `customer_companies`, `qb_operations` | Active — drops HNSW before, recreates after |
+| Email batch insert | `database/operations.py` | `emails` | Removed — btree-only overhead is negligible |
+| QB sync upsert | `quickbase_sync.py` | All QB tables | Removed — no HNSW columns touched |
+| Email contact links | `email_linker.py` | `email_contact_links` | Removed — no HNSW |
+| Thread status | `thread_tracker.py` | `thread_status` | Removed — no HNSW |
+| Canonical thread resolution | `canonical_thread_resolver.py` | `emails` | Removed — updates canonical_thread_id, not embedding |
+
+**Commits:** `dfb1f21` (initial), `51e9691` (scoped to HNSW-only)
 
 ### Pending: Tier 3 — QB 1-by-1 Update Loop Fixes
 - `_enrich_capabilities()` — convert to batch via `batch_update_qb_capabilities` RPC
 - `_join_contact_email()` — convert to batch via `batch_update_qb_contact_emails` RPC
 - RPCs created in migration 072, Python refactor pending
+
+### Key Lesson: Index Management Scope
+Dropping ALL indexes is dangerous on a production Supabase instance:
+- HNSW index recreation on 187K+ vectors can timeout and leave the DB degraded
+- Cascading timeouts from missing btree indexes affect all queries
+- **Only drop HNSW indexes**, and only for operations that write to embedding columns
+- Btree indexes have negligible write overhead (~0.1ms/row) — always leave them in place
 
 ---
 
