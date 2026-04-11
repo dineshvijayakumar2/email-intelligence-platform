@@ -631,6 +631,230 @@ export const DataHealthDashboard: React.FC = () => {
           </table>
         )}
       </div>
+
+      {/* Database Performance Monitor */}
+      <DbPerformancePanel />
     </PageShell>
+  );
+};
+
+
+/* ------------------------------------------------------------------ */
+/* Database Performance Monitor                                        */
+/* ------------------------------------------------------------------ */
+
+interface SlowQuery {
+  query: string;
+  calls: number;
+  total_time_s: number;
+  mean_time_ms: number;
+  max_time_ms: number;
+  rows: number;
+  rows_per_call: number;
+}
+
+interface TableStat {
+  table_name: string;
+  row_estimate: number;
+  total_size: string;
+  total_bytes: number;
+  table_size: string;
+  index_size: string;
+}
+
+interface IndexStat {
+  table_name: string;
+  index_name: string;
+  index_scans: number;
+  rows_read: number;
+  rows_fetched: number;
+  index_size: string;
+}
+
+interface CacheStats {
+  heap_hit_ratio: number;
+  index_hit_ratio: number;
+  db_size: string;
+  db_size_bytes: number;
+}
+
+interface DbPerf {
+  slow_queries: SlowQuery[];
+  table_stats: TableStat[];
+  index_stats: IndexStat[];
+  cache_stats: CacheStats;
+}
+
+const DbPerformancePanel: React.FC = () => {
+  const [data, setData] = useState<DbPerf | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [tab, setTab] = useState<'queries' | 'tables' | 'indexes'>('queries');
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const resp = await api.get<DbPerf>('/v1/analytics/data-health/db-performance');
+      if (resp) setData(resp);
+    } catch { /* silent */ } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const cache = data?.cache_stats;
+  const heapPct = cache?.heap_hit_ratio ?? 0;
+  const idxPct = cache?.index_hit_ratio ?? 0;
+  const heapColor = heapPct >= 99 ? 'text-emerald-600' : heapPct >= 95 ? 'text-amber-600' : 'text-red-600';
+  const idxColor = idxPct >= 99 ? 'text-emerald-600' : idxPct >= 95 ? 'text-amber-600' : 'text-red-600';
+
+  const truncateQuery = (q: string) => {
+    // Extract meaningful part from PostgREST-wrapped queries
+    const tableMatch = q.match(/"public"\."(\w+)"/);
+    const funcMatch = q.match(/"public"\."(\w+)"\(/);
+    const label = funcMatch ? `rpc: ${funcMatch[1]}` : tableMatch ? tableMatch[1] : q.slice(0, 80);
+    return label.length > 60 ? label.slice(0, 57) + '...' : label;
+  };
+
+  return (
+    <div className="rounded-lg border bg-white shadow-sm overflow-hidden mt-6">
+      <div className="flex items-center justify-between px-4 py-3 border-b">
+        <div className="flex items-center gap-2">
+          <Database className="h-4 w-4 text-indigo-500" />
+          <h3 className="text-sm font-semibold text-slate-900">Database Performance</h3>
+        </div>
+        <div className="flex items-center gap-3">
+          {cache && (
+            <div className="flex items-center gap-4 text-xs">
+              <span className="text-slate-500">Cache hit: <span className={`font-semibold ${heapColor}`}>{heapPct}%</span></span>
+              <span className="text-slate-500">Index hit: <span className={`font-semibold ${idxColor}`}>{idxPct}%</span></span>
+              <span className="text-slate-500">DB: <span className="font-semibold text-slate-700">{cache.db_size}</span></span>
+            </div>
+          )}
+          <button
+            onClick={load}
+            disabled={loading}
+            className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600 shadow-sm hover:bg-slate-50 transition disabled:opacity-50"
+          >
+            {loading ? <Spinner className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex border-b">
+        {(['queries', 'tables', 'indexes'] as const).map(t => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`px-4 py-2 text-xs font-medium transition ${
+              tab === t
+                ? 'text-indigo-600 border-b-2 border-indigo-600'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            {t === 'queries' ? 'Slow Queries' : t === 'tables' ? 'Table Sizes' : 'Index Usage'}
+          </button>
+        ))}
+      </div>
+
+      <div className="p-0">
+        {loading && !data ? (
+          <div className="p-4"><ContentSkeleton rows={5} /></div>
+        ) : tab === 'queries' ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b bg-slate-50/50">
+                  <th className="px-3 py-2 text-left font-bold uppercase tracking-wider text-slate-600">Query</th>
+                  <th className="px-3 py-2 text-right font-bold uppercase tracking-wider text-slate-600 w-20">Calls</th>
+                  <th className="px-3 py-2 text-right font-bold uppercase tracking-wider text-slate-600 w-24">Total (s)</th>
+                  <th className="px-3 py-2 text-right font-bold uppercase tracking-wider text-slate-600 w-24">Avg (ms)</th>
+                  <th className="px-3 py-2 text-right font-bold uppercase tracking-wider text-slate-600 w-24">Max (ms)</th>
+                  <th className="px-3 py-2 text-right font-bold uppercase tracking-wider text-slate-600 w-20">Rows/call</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {(data?.slow_queries || []).map((q, i) => {
+                  const severity = q.total_time_s > 3600 ? 'text-red-600 font-semibold' : q.total_time_s > 600 ? 'text-amber-600' : 'text-slate-700';
+                  return (
+                    <tr key={i} className="hover:bg-slate-25" title={q.query}>
+                      <td className="px-3 py-1.5 font-mono text-slate-600 truncate max-w-[300px]">{truncateQuery(q.query)}</td>
+                      <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{q.calls.toLocaleString()}</td>
+                      <td className={`px-3 py-1.5 text-right tabular-nums ${severity}`}>{q.total_time_s.toLocaleString()}</td>
+                      <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{q.mean_time_ms}</td>
+                      <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{q.max_time_ms.toLocaleString()}</td>
+                      <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{q.rows_per_call}</td>
+                    </tr>
+                  );
+                })}
+                {(!data?.slow_queries?.length) && (
+                  <tr><td colSpan={6} className="px-3 py-6 text-center text-slate-400">No query stats available — run migration 067 first</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        ) : tab === 'tables' ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b bg-slate-50/50">
+                  <th className="px-3 py-2 text-left font-bold uppercase tracking-wider text-slate-600">Table</th>
+                  <th className="px-3 py-2 text-right font-bold uppercase tracking-wider text-slate-600 w-28">Rows (est.)</th>
+                  <th className="px-3 py-2 text-right font-bold uppercase tracking-wider text-slate-600 w-24">Total Size</th>
+                  <th className="px-3 py-2 text-right font-bold uppercase tracking-wider text-slate-600 w-24">Table</th>
+                  <th className="px-3 py-2 text-right font-bold uppercase tracking-wider text-slate-600 w-24">Indexes</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {(data?.table_stats || []).map((t, i) => (
+                  <tr key={i} className="hover:bg-slate-25">
+                    <td className="px-3 py-1.5 font-mono text-slate-700">{t.table_name}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{t.row_estimate.toLocaleString()}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums font-semibold text-slate-700">{t.total_size}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{t.table_size}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{t.index_size}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b bg-slate-50/50">
+                  <th className="px-3 py-2 text-left font-bold uppercase tracking-wider text-slate-600">Table</th>
+                  <th className="px-3 py-2 text-left font-bold uppercase tracking-wider text-slate-600">Index</th>
+                  <th className="px-3 py-2 text-right font-bold uppercase tracking-wider text-slate-600 w-24">Scans</th>
+                  <th className="px-3 py-2 text-right font-bold uppercase tracking-wider text-slate-600 w-24">Rows Read</th>
+                  <th className="px-3 py-2 text-right font-bold uppercase tracking-wider text-slate-600 w-20">Size</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {(data?.index_stats || []).map((idx, i) => {
+                  const unused = idx.index_scans === 0;
+                  return (
+                    <tr key={i} className={`hover:bg-slate-25 ${unused ? 'bg-red-50/50' : ''}`}>
+                      <td className="px-3 py-1.5 font-mono text-slate-600">{idx.table_name}</td>
+                      <td className="px-3 py-1.5 font-mono text-slate-700">
+                        {idx.index_name}
+                        {unused && <span className="ml-2 text-[10px] text-red-500 font-semibold">UNUSED</span>}
+                      </td>
+                      <td className={`px-3 py-1.5 text-right tabular-nums ${unused ? 'text-red-600 font-semibold' : 'text-slate-600'}`}>
+                        {idx.index_scans.toLocaleString()}
+                      </td>
+                      <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{idx.rows_read.toLocaleString()}</td>
+                      <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{idx.index_size}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
   );
 };

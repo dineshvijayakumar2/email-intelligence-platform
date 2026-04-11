@@ -3766,3 +3766,58 @@ async def get_thread_health(client_id: Optional[str] = Query(default=None)):
     except Exception as e:
         logger.error(f"Failed to get thread health: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/data-health/db-performance")
+async def get_db_performance(
+    current_user: dict = Depends(require_role('admin')),
+):
+    """
+    Database performance metrics — top slow queries, table sizes, index usage,
+    and cache hit ratios. Used by the admin dashboard for proactive IO monitoring.
+    """
+    try:
+        slow_queries = []
+        table_stats = []
+        index_stats = []
+        cache_stats = {}
+
+        # Fire all 4 RPCs (independent, but Supabase client is sync so sequential)
+        try:
+            resp = _supabase.rpc('get_db_slow_queries', {'p_limit': 15}).execute()
+            slow_queries = resp.data if isinstance(resp.data, list) else (resp.data or [])
+        except Exception as e:
+            logger.warning(f"get_db_slow_queries RPC failed: {e}")
+
+        try:
+            resp = _supabase.rpc('get_db_table_stats', {}).execute()
+            table_stats = resp.data if isinstance(resp.data, list) else (resp.data or [])
+        except Exception as e:
+            logger.warning(f"get_db_table_stats RPC failed: {e}")
+
+        try:
+            resp = _supabase.rpc('get_db_index_stats', {}).execute()
+            index_stats = resp.data if isinstance(resp.data, list) else (resp.data or [])
+        except Exception as e:
+            logger.warning(f"get_db_index_stats RPC failed: {e}")
+
+        try:
+            resp = _supabase.rpc('get_db_cache_stats', {}).execute()
+            raw = resp.data
+            if isinstance(raw, list) and len(raw) > 0:
+                cache_stats = raw[0]
+            elif isinstance(raw, dict):
+                cache_stats = raw
+        except Exception as e:
+            logger.warning(f"get_db_cache_stats RPC failed: {e}")
+
+        return {
+            'slow_queries': slow_queries,
+            'table_stats': table_stats,
+            'index_stats': index_stats,
+            'cache_stats': cache_stats,
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to get DB performance: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
