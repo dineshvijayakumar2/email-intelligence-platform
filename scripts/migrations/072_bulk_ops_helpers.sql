@@ -10,7 +10,9 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 BEGIN
+    -- Extend timeout and increase work memory for HNSW/GIN index builds
     EXECUTE format('SET LOCAL statement_timeout = %L', (p_timeout_s * 1000) || 'ms');
+    SET LOCAL maintenance_work_mem = '256MB';
     EXECUTE p_query;
 END;
 $$;

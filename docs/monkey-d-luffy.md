@@ -203,12 +203,34 @@ The initial approach dropped ALL indexes on a table during bulk writes. This was
 - `_join_contact_email()` — convert to batch via `batch_update_qb_contact_emails` RPC
 - RPCs created in migration 072, Python refactor pending
 
-### Key Lesson: Index Management Scope
-Dropping ALL indexes is dangerous on a production Supabase instance:
-- HNSW index recreation on 187K+ vectors can timeout and leave the DB degraded
-- Cascading timeouts from missing btree indexes affect all queries
-- **Only drop HNSW indexes**, and only for operations that write to embedding columns
-- Btree indexes have negligible write overhead (~0.1ms/row) — always leave them in place
+### Key Lessons Learned
+
+**1. Index Management Scope:**
+- Dropping ALL indexes is dangerous on production Supabase
+- **Only drop HNSW indexes**, and only for embedding writes
+- Btree indexes have negligible write overhead (~0.1ms/row) — always leave in place
+- PostgreSQL only updates indexes on columns that changed
+
+**2. HNSW Index Rebuild Requirements:**
+- HNSW build on 187K vectors needs `maintenance_work_mem = '256MB'` minimum
+- Default Supabase `maintenance_work_mem` is too small — causes "no longer fits" error
+- Always `SET maintenance_work_mem = '256MB'` and `SET statement_timeout = '0'` before rebuild
+- If disk space is low, HNSW build fails with "No space left on device" — run `VACUUM FULL` first or use IVFFlat as alternative
+- IVFFlat (`WITH (lists = 200)`) builds in seconds and needs far less memory/disk
+
+**3. Cascading Failure Pattern:**
+- Missing HNSW index → sequential scans on 245K rows → every auto-refresh query slow
+- Frontend auto-refresh every 60s → constant sequential scans → instance overwhelmed
+- **Always stop the backend before rebuilding indexes** to prevent cascading load
+
+**4. HNSW Rebuild Command (save for future use):**
+```sql
+SET maintenance_work_mem = '256MB';
+SET statement_timeout = '0';
+CREATE INDEX IF NOT EXISTS idx_emails_embedding 
+ON emails USING hnsw (embedding vector_cosine_ops) 
+WITH (m = 16, ef_construction = 64);
+```
 
 ---
 
