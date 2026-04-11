@@ -28,6 +28,7 @@ import { formatTime } from '../../utils/dateUtils';
 import {
   useAICosts, useAIMonitoring, useAIControls, useAIRecentLogs,
   useAIModels, useAIApiKeys, useAITaskModels, useEmbeddingConfig,
+  useVectorStats,
 } from '../../hooks/queries';
 import type { UsageSummary, MonitoringStats, AIControlSettings, UsageLogEntry } from '../../types/ai';
 import type { AIModel } from '../../types/strategic-digest';
@@ -948,34 +949,25 @@ const UsagePage: React.FC = () => {
 // ---------------------------------------------------------------------------
 
 const EmbeddingManagement: React.FC<{ clientId: string }> = ({ clientId }) => {
-  const [stats, setStats] = useState<vectorApi.VectorStats | null>(null);
-  const [statsLoading, setStatsLoading] = useState(false);
+  const statsQuery = useVectorStats(clientId);
+  const stats = statsQuery.data || null;
+  const statsLoading = statsQuery.isLoading;
   const [reembedStatus, setReembedStatus] = useState<vectorApi.ReembedStatus | null>(null);
   const [backfillRunning, setBackfillRunning] = useState(false);
   const [backfillTotal, setBackfillTotal] = useState(0);
   const backfillCancelRef = useRef(false);
 
-  const loadStats = useCallback(async () => {
-    if (!clientId) return;
-    setStatsLoading(true);
-    try {
-      const s = await vectorApi.getVectorStats(clientId);
-      setStats(s);
-    } catch { /* keep previous */ } finally {
-      setStatsLoading(false);
-    }
-  }, [clientId]);
+  const loadStats = useCallback(() => { statsQuery.refetch(); }, [statsQuery]);
 
-  // Load stats + check for in-progress embedding when clientId is available
+  // Check for in-progress embedding when clientId is available
   useEffect(() => {
     if (!clientId) return;
-    loadStats();
     vectorApi.getReembedStatus(clientId).then(status => {
       if (status?.status === 'running') {
         setReembedStatus(status);
       }
     }).catch(() => {});
-  }, [clientId, loadStats]);
+  }, [clientId]);
 
   // Poll reembed status + live stats refresh while embedding is running
   useEffect(() => {
@@ -987,11 +979,11 @@ const EmbeddingManagement: React.FC<{ clientId: string }> = ({ clientId }) => {
         setReembedStatus(status);
         pollCount++;
         if (pollCount % 5 === 0 && clientId) {
-          vectorApi.getVectorStats(clientId).then(s => setStats(s)).catch(() => {});
+          statsQuery.refetch();
         }
         if (status.status !== 'running') {
           clearInterval(interval);
-          loadStats();
+          statsQuery.refetch();
           if (status.status === 'complete') toast.success(`Embedding complete: ${status.result?.total_embedded} records`);
           else if (status.status === 'error') toast.error(`Embedding failed: ${status.error}`);
         }

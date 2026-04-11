@@ -87,6 +87,19 @@ export function useAIApiKeys(clientId: string) {
   });
 }
 
+export function useVectorStats(clientId: string) {
+  return useQuery<any>({
+    queryKey: ['vector-stats', clientId],
+    queryFn: async () => {
+      const { getVectorStats } = await import('../../services/vectorService');
+      return getVectorStats(clientId);
+    },
+    enabled: !!clientId,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+}
+
 export function useEmbeddingConfig(clientId: string) {
   return useQuery<any>({
     queryKey: ['ai-embedding-config', clientId],
