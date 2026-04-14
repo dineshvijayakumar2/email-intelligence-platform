@@ -1,8 +1,9 @@
-# Platform Surgery: Data Display → Insights & Actions Engine
+# Insights & Actions Engine
 
-**Code name:** monkey-d-luffy
-**Started:** 2026-04-11
+**Initiative started:** 2026-04-11
 **Goal:** Transform from "here's your data" to "here's what you should do, why, and when — with a draft email ready."
+
+*(Formerly tracked under the codename "monkey-d-luffy" in early sessions.)*
 
 ---
 
@@ -202,6 +203,72 @@ The initial approach dropped ALL indexes on a table during bulk writes. This was
 - `_enrich_capabilities()` — convert to batch via `batch_update_qb_capabilities` RPC
 - `_join_contact_email()` — convert to batch via `batch_update_qb_contact_emails` RPC
 - RPCs created in migration 072, Python refactor pending
+
+### Index Audit & Bloat Prevention (2026-04-12)
+
+**Problem:** 43 indexes on `emails` table, ~6.2 GB index space vs 457 MB table data (13.5× ratio). Triggered Supabase auto-disk-expansion 10 GB → 15 GB.
+
+**Root cause:** Indexes added incrementally across 15+ migrations without cross-checking existing ones. Per-column FTS indexes never cleaned up after `search_text` tsvector migration. Ad-hoc indexes created via SQL console without migration files.
+
+**Audit results (code reachability + runtime stats):**
+
+| Category | Count | Action |
+|----------|-------|--------|
+| KEEP (confirmed used) | 14 | Retain — serves active code paths |
+| WAIT_FOR_STATS | 12 | Retain pending 30-day runtime window |
+| INVESTIGATE | 1 | `idx_emails_mailbox_sent` — ad-hoc orphan with 120 scans, trace via `pg_stat_statements` |
+| DROP (unreachable + zero scans) | 16 | Drop after confirming zero scans over 30 days (target: May 12) |
+
+**Target:** Reduce from 43 → 15 indexes (consolidated set matches BulkIndexManager registry + PK/UNIQUE).
+
+**Key correction applied:** Initial audit falsely classified 4 indexes as droppable that had non-zero runtime scans (`idx_emails_mailbox_id` 380 scans, `idx_emails_mailbox_count` 83, `idx_emails_sent_date` 54, `idx_emails_sent_date_only` 34). Introduced **Two-Signal Drop Rule**: both code-unreachability AND zero runtime scans required before any drop.
+
+**Estimated disk recovery:** ~350-450 MB in Stage 2 (biggest win: `idx_emails_body_fts` at ~298 MB, superseded by `search_text`).
+
+**Deliverables:**
+- [`docs/database/EMAILS_INDEX_CLEANUP_PLAN.md`](database/EMAILS_INDEX_CLEANUP_PLAN.md) — staged execution with SQL
+- [`docs/database/ROOT_CAUSE.md`](database/ROOT_CAUSE.md) — how 43 indexes accumulated
+- [`docs/database/INDEX_POLICY.md`](database/INDEX_POLICY.md) — governance to prevent recurrence
+- `scripts/db/index_audit.sql` + `index_audit.py` — monthly review tooling (pending)
+- `scripts/migrations/073_index_cleanup_template.sql` — migration template (pending)
+- `.github/pull_request_template.md` — PR checklist for migrations (pending)
+
+### Reembed Migration to processing_jobs + SSE (2026-04-13)
+
+**Problem:** Reembed state lived in module-level dicts (`_reembed_progress`, `_reembed_cancel` in [ai.py:2004-2006](../backend/src/routers/ai.py)). Lost on API restart, no audit trail, page-refresh on the frontend wiped the connection, no concurrency safety.
+
+**Migrated to:** persistent state in `processing_jobs` (existing table) + SSE streaming (matches digest endpoint pattern at [ai.py:1410](../backend/src/routers/ai.py#L1410)). Polling endpoint kept as fallback.
+
+**Schema additions ([scripts/migrations/073](../scripts/migrations/073_processing_jobs_for_reembed.sql) + [074](../scripts/migrations/074_processing_jobs_reembed_unique_index.sql)):**
+- `processing_jobs.client_id UUID REFERENCES clients(id)` — nullable (legacy rows untouched)
+- `processing_jobs.parameters JSONB NOT NULL DEFAULT '{}'` — stores `{tables, limit, triggered_by_user_id}`
+- `processing_jobs.current_stage TEXT` — UI-friendly stage indicator
+- Partial unique index `uq_processing_jobs_one_active_reembed_per_client` — single-flight enforcement
+- `increment_job_progress(UUID, INT, INT, TEXT)` SQL function — atomic counter increments via RPC. Typed parameters only; NEVER accepts SQL fragments. SECURITY INVOKER (default).
+
+**API surface:**
+- `POST /vector/reembed` — same signature, now returns `job_id`. 409 if active reembed exists for client.
+- `GET /vector/reembed/status` — same signature + optional `job_id`; reads from `processing_jobs`. Backward compatible.
+- `POST /vector/reembed/stop` — same + optional `job_id`. Returns immediately.
+- `GET /vector/reembed/stream/{job_id}` — **NEW SSE endpoint**. Polls table at 750ms; emits `snapshot`, `progress`, terminal events.
+
+**Helper:** [`backend/src/services/reembed_job_state.py`](../backend/src/services/reembed_job_state.py) — owns ALL processing_jobs read/write for reembed. Rest of router code does not touch the table directly.
+
+**Frontend:** [`vectorService.ts`](../frontend/src/services/vectorService.ts) gains `streamReembed()` (matches `streamDigestGeneration` pattern — fetch + getReader, NOT EventSource because EventSource can't carry Authorization headers). [`usage.tsx`](../frontend/src/pages/intelligence/usage.tsx) reembed flow now SSE-first with polling fallback on stream error.
+
+**Tests:** [`backend/test_reembed_jobs.py`](../backend/test_reembed_jobs.py) — integration script in the existing project style. Covers atomic increment, single-flight race (via `asyncio.gather`), state transitions, cancellation round-trip. Project does not use pytest; this is an executable script.
+
+**Deployment runbook:**
+1. Apply migration 073 (transactional, fast — ~seconds)
+2. Apply migration 074 separately, OUTSIDE a transaction (CONCURRENTLY index)
+3. Verify with `python scripts/db/index_registry_reconcile.py` — index should appear under `processing_jobs`
+4. Deploy backend + frontend together
+5. **In-flight reembed jobs in the old in-memory dict are lost on restart.** Confirm no reembeds running before deploy; deploy in a low-traffic window.
+
+**Known limitations (flagged for follow-up tasks):**
+- Progress granularity is one update per reembed (final count only). Per-batch updates would require modifying `vector_service.reembed_all` to accept a callback — out of scope for this task.
+- Cancellation race: `request_cancel` sets `status='stopped'` immediately, but the worker's `BulkIndexManager` finally block (which recreates HNSW indexes) may not have completed yet. A second reembed triggered in this small window would race with the first's index recreation. Documented in helper module's FLAG #1.
+- `backfill-search-text` endpoint has the same in-memory pattern but is out of scope for this task. Phase 1.5 follow-up.
 
 ### Key Lessons Learned
 

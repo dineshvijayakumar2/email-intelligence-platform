@@ -38,13 +38,33 @@ class ExtractionMode(str, Enum):
 
 
 class ThreadStatus(str, Enum):
-    """Thread status"""
+    """Thread status — effective value after intent-override engine applies.
+
+    Timing-derived values (pre-override):
+        complete, awaiting_response, awaiting_our_response, overdue,
+        dropped, ongoing, outbound_pending, stale, awaiting_reply
+
+    Override values (effective-only, produced by thread_status_override_rules):
+        urgent, revenue_opportunity, closing, escalation
+
+    Virtual/composite filter keys (not DB values — expanded in the router):
+        active, needs_attention
+    """
+    # Timing-derived
     COMPLETE = 'complete'
     AWAITING_RESPONSE = 'awaiting_response'
     AWAITING_OUR_RESPONSE = 'awaiting_our_response'
     OVERDUE = 'overdue'
     DROPPED = 'dropped'
     ONGOING = 'ongoing'
+    # Override-derived (migration 077 — thread_status_override_rules)
+    URGENT = 'urgent'
+    REVENUE_OPPORTUNITY = 'revenue_opportunity'
+    CLOSING = 'closing'
+    ESCALATION = 'escalation'
+    # Composite filter keys
+    ACTIVE = 'active'
+    NEEDS_ATTENTION = 'needs_attention'
 
 
 class ContactType(str, Enum):

@@ -15,30 +15,39 @@ import { Search, ArrowLeft, X } from 'lucide-react';
 const PAGE_SIZE = 25;
 const col = createColumnHelper<ThreadStatusSummary>();
 
+// Status options grouped by category. The `status` column on thread_status
+// now holds the EFFECTIVE post-override value (migration 077), so override
+// values (urgent, revenue_opportunity, closing, escalation) are first-class
+// filter targets — not a separate "intent" filter.
+//
+// Composite values (active, needs_attention) are expanded server-side to
+// match multiple raw status strings. See _STATUS_DB_VALUES in
+// backend/src/routers/analytics.py.
 const STATUS_OPTIONS = [
   { value: '', label: 'All Statuses' },
-  { value: 'active', label: 'Active' },
-  { value: 'complete', label: 'Complete' },
-  { value: 'awaiting_our_response', label: 'Awaiting Our Response' },
-  { value: 'overdue', label: 'Overdue' },
-  { value: 'dropped', label: 'Dropped' },
-  { value: 'ongoing', label: 'Ongoing' },
-];
-
-const INTENT_OPTIONS = [
-  { value: '', label: 'All Intents' },
+  // Composites (most useful day-to-day)
+  { value: 'active', label: 'Active (in progress + flagged)' },
+  { value: 'needs_attention', label: 'Needs Attention (urgent + escalation)' },
+  // Override values — produced by intent override rules
   { value: 'urgent', label: 'Urgent' },
   { value: 'revenue_opportunity', label: 'Revenue Opportunity' },
   { value: 'escalation', label: 'Escalation' },
   { value: 'closing', label: 'Closing' },
-  { value: 'informational', label: 'Informational' },
+  // Timing-derived
+  { value: 'awaiting_our_response', label: 'Awaiting Our Response' },
+  { value: 'awaiting_response', label: 'Awaiting Response' },
+  { value: 'ongoing', label: 'Ongoing' },
+  { value: 'complete', label: 'Complete' },
+  { value: 'overdue', label: 'Overdue' },
+  { value: 'dropped', label: 'Dropped' },
 ];
 
-const statusVariant = (s: string) => {
-  if (s === 'overdue') return 'danger';
-  if (s === 'awaiting_our_response') return 'warning';
-  if (s === 'ongoing' || s === 'active') return 'info';
-  if (s === 'complete') return 'success';
+const statusVariant = (s: string): 'danger' | 'warning' | 'success' | 'info' | 'neutral' => {
+  // Override values first (these are the "needs attention" signals)
+  if (s === 'urgent' || s === 'overdue') return 'danger';
+  if (s === 'escalation' || s === 'awaiting_our_response' || s === 'outbound_pending') return 'warning';
+  if (s === 'revenue_opportunity' || s === 'closing' || s === 'complete') return 'success';
+  if (s === 'ongoing' || s === 'active' || s === 'stale') return 'info';
   return 'neutral';
 };
 
@@ -73,7 +82,9 @@ export const ThreadAnalytics: React.FC = () => {
 
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState(() => searchParams.get('status') || '');
-  const [intentFilter, setIntentFilter] = useState(() => searchParams.get('intent_status') || '');
+  // Intent filter removed — `status` column now holds effective post-override
+  // value, so override intents (urgent / closing / etc.) are filterable via
+  // STATUS_OPTIONS directly. See migration 077.
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [sorting, setSorting] = useState<SortingState>([{ id: 'last_message_at', desc: true }]);
@@ -112,19 +123,27 @@ export const ThreadAnalytics: React.FC = () => {
   const drilldownFiltered = useMemo(() => {
     let filtered = drilldownRaw;
     if (statusFilter) {
-      const statusMap: Record<string, string[]> = { active: ['ongoing', 'awaiting_our_response'], overdue: ['overdue'], complete: ['complete'], dropped: ['dropped'] };
+      // Mirror server-side _STATUS_DB_VALUES (analytics.py) for client-side
+      // filtering in drilldown mode. Composite filters expand to multiple raw
+      // values; override values are first-class members of the `status` field
+      // post migration 077.
+      const statusMap: Record<string, string[]> = {
+        active: ['ongoing', 'awaiting_our_response', 'stale', 'outbound_pending',
+                 'urgent', 'revenue_opportunity', 'escalation'],
+        needs_attention: ['urgent', 'escalation'],
+        overdue: ['overdue'],
+        complete: ['complete', 'closing'],
+        dropped: ['dropped'],
+      };
       const allowed = statusMap[statusFilter] || [statusFilter];
       filtered = filtered.filter(t => allowed.includes(t.status));
-    }
-    if (intentFilter) {
-      filtered = filtered.filter(t => t.intent_status === intentFilter);
     }
     if (debouncedSearch) {
       const term = debouncedSearch.toLowerCase();
       filtered = filtered.filter(t => (t.subject || '').toLowerCase().includes(term));
     }
     return filtered;
-  }, [drilldownRaw, statusFilter, intentFilter, debouncedSearch]);
+  }, [drilldownRaw, statusFilter, debouncedSearch]);
 
   const threads = isDrilldownMode ? drilldownFiltered : (normalThreadsQuery.data?.threads || []);
   const threadsTotal = isDrilldownMode ? drilldownFiltered.length : (normalThreadsQuery.data?.total || 0);
@@ -198,7 +217,7 @@ export const ThreadAnalytics: React.FC = () => {
     enableSortingRemoval: false,
   });
 
-  const hasFilters = !!statusFilter || !!intentFilter || !!debouncedSearch;
+  const hasFilters = !!statusFilter || !!debouncedSearch;
 
   return (
     <PageShell>
@@ -232,15 +251,8 @@ export const ThreadAnalytics: React.FC = () => {
         >
           {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
-        <select
-          value={intentFilter}
-          onChange={e => { setIntentFilter(e.target.value); setPage(1); }}
-          className="h-8 px-2 text-sm rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20"
-        >
-          {INTENT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
         {hasFilters && (
-          <button onClick={() => { setSearch(''); setDebouncedSearch(''); setStatusFilter(''); setIntentFilter(''); setPage(1); }}
+          <button onClick={() => { setSearch(''); setDebouncedSearch(''); setStatusFilter(''); setPage(1); }}
             className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
             <X className="h-3 w-3" /> Clear
           </button>

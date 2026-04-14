@@ -616,14 +616,25 @@ export function formatRatio(ratio: number | null | undefined): string {
 // Re-export from centralized dateUtils for backward compatibility
 export { formatRelativeTime } from '../utils/dateUtils';
 
-/** Thread status display config */
+/** Thread status display config — covers both timing-derived AND override values
+ * (the `status` column now holds the EFFECTIVE post-override value).
+ */
 export const threadStatusConfig: Record<string, { label: string; color: string }> = {
+  // Timing-derived
   complete: { label: 'Complete', color: 'green' },
   awaiting_response: { label: 'Awaiting Response', color: 'blue' },
   awaiting_our_response: { label: 'Awaiting Our Response', color: 'orange' },
   overdue: { label: 'Overdue', color: 'red' },
   dropped: { label: 'Dropped', color: 'default' },
   ongoing: { label: 'Ongoing', color: 'cyan' },
+  outbound_pending: { label: 'Outbound Pending', color: 'orange' },
+  stale: { label: 'Stale', color: 'cyan' },
+  awaiting_reply: { label: 'Awaiting Response', color: 'blue' },
+  // Override-derived (intent rules; migration 077)
+  urgent: { label: 'Urgent', color: 'red' },
+  revenue_opportunity: { label: 'Revenue Opportunity', color: 'green' },
+  closing: { label: 'Closing', color: 'green' },
+  escalation: { label: 'Escalation', color: 'orange' },
 };
 
 /** Contact type display config */

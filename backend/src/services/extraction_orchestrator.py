@@ -444,8 +444,24 @@ class ExtractionOrchestrator:
             # Embed newly extracted emails (runs on un-embedded records only)
             self._embed_new_emails()
 
-            # Auto-trigger AI classification for unanalyzed emails
+            # Auto-trigger AI classification for unanalyzed emails.
+            # NOTE: AI runs AFTER the first thread evaluation in this pipeline.
+            # Without the follow-up call below, override rules (urgent, closing,
+            # revenue_opportunity, escalation) would never fire on the same run
+            # the email arrived in — they'd have to wait for the next extraction
+            # cycle. Pipeline ordering bug fixed 2026-04-13.
             self._auto_trigger_ai_analysis()
+
+            # Re-evaluate affected threads now that AI intent is available.
+            # The second pass picks up newly-classified intents and applies
+            # override rules (e.g., complaint -> urgent, thank-you -> closing).
+            # Idempotent: threads with no new AI data produce the same effective
+            # status as the first pass, so this only changes rows where it
+            # should change them.
+            try:
+                self._update_affected_threads()
+            except Exception as e:
+                logger.warning(f"Post-AI thread re-evaluation failed (non-critical): {e}")
 
             # Calculate duration
             duration = (datetime.utcnow() - start_time).total_seconds()
@@ -1393,6 +1409,14 @@ class ExtractionOrchestrator:
             tracker = ThreadTracker(client_id=self.client_id)
             tracker._junction_cache = {}  # Skip junction preload for incremental
             # Use email FK fallback since we're not preloading full cache
+
+            # Targeted intent preload — only for emails actually being evaluated.
+            # WHY: previously the incremental path didn't load AI intent at all,
+            # so override rules (urgent / closing / etc.) never fired during
+            # in-pipeline thread eval. Loading targeted intent here means
+            # threads get effective_status correctly when AI data is available.
+            all_email_ids = [e['id'] for emails in threads.values() for e in emails]
+            tracker._preload_intent_for_emails(all_email_ids)
 
             statuses = []
             for tid, emails in threads.items():

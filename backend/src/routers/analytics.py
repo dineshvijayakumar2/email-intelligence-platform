@@ -1781,16 +1781,33 @@ async def list_thread_statuses(
         elif mailbox_id:
             query = query.eq('mailbox_id', mailbox_id)
 
-        # Status filter: map frontend enum values to all possible DB values
-        # DB stores: complete, awaiting_reply, overdue, dropped, outbound_pending, stale, ongoing, awaiting_response, awaiting_our_response
+        # Status filter: map frontend enum values to all possible DB values.
+        # The `status` column holds the EFFECTIVE status post-override (migration 077).
+        # It can hold both timing-derived values (ongoing, awaiting_*, overdue, ...)
+        # AND override values (urgent, revenue_opportunity, closing, escalation).
+        # Composite keys (active, needs_attention) expand to multiple actual values.
         _STATUS_DB_VALUES = {
-            'active': ['ongoing', 'awaiting_our_response', 'stale', 'outbound_pending'],
+            # Composite: threads the user should look at (in-progress + override-flagged)
+            'active': [
+                'ongoing', 'awaiting_our_response', 'stale', 'outbound_pending',
+                'urgent', 'revenue_opportunity', 'escalation',
+            ],
+            # Composite: threads that need attention RIGHT NOW (override-flagged only)
+            'needs_attention': ['urgent', 'escalation'],
+
+            # Timing-derived
             'ongoing': ['ongoing', 'stale'],
             'awaiting_response': ['awaiting_response', 'awaiting_reply'],
             'awaiting_our_response': ['awaiting_our_response', 'outbound_pending'],
             'overdue': ['overdue'],
-            'complete': ['complete'],
+            'complete': ['complete', 'closing'],   # 'closing' = naturally concluding; folded under Complete
             'dropped': ['dropped'],
+
+            # Override-derived (each is its own filter value)
+            'urgent': ['urgent'],
+            'revenue_opportunity': ['revenue_opportunity'],
+            'closing': ['closing'],
+            'escalation': ['escalation'],
         }
         status_db_values = None
         if status:

@@ -34,9 +34,15 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ThreadStatus:
-    """Thread status evaluation result"""
+    """Thread status evaluation result.
+
+    `status` is the EFFECTIVE status consumed by downstream services — it
+    reflects the result of the override engine (intent-aware). `timing_status`
+    is the raw mechanical signal before overrides. `override_rule_id` tracks
+    which rule fired (None if no override). See thread_status_engine.py.
+    """
     thread_id: str
-    status: str  # complete, awaiting_response, awaiting_our_response, overdue, dropped, ongoing
+    status: str  # EFFECTIVE status (post-override). complete, urgent, revenue_opportunity, closing, escalation, awaiting_*, ongoing, overdue, dropped
     last_email_id: str
     last_email_date: datetime
     last_sender_is_outbound: bool
@@ -47,8 +53,11 @@ class ThreadStatus:
     primary_company_id: Optional[str]
     subject: Optional[str] = None
     message_count: int = 0
+    # New override-pipeline fields (migration 077)
+    timing_status: Optional[str] = None            # Raw timing signal pre-override (audit trail)
+    override_rule_id: Optional[str] = None          # UUID of the rule that fired, if any
     # Intent-based intelligence (from ai_email_intelligence)
-    intent_status: Optional[str] = None           # urgent, revenue_opportunity, closing, escalation, informational
+    intent_status: Optional[str] = None           # urgent, revenue_opportunity, closing, escalation, informational (kept for UI/back-compat)
     intent_override_reason: Optional[str] = None   # human-readable reason for intent override
     last_email_intent: Optional[str] = None        # cached intent from AI classification
     last_email_urgency: Optional[str] = None       # cached urgency
@@ -97,6 +106,11 @@ class ThreadTracker:
 
         mode = 'client-wide' if not mailbox_id else f'mailbox {mailbox_id}'
         logger.info(f"ThreadTracker initialized ({mode}, client {self.client_id})")
+
+        # Load override rules once per evaluator run (engine caches via Redis,
+        # so concurrent trackers on the same server don't re-hit the DB).
+        from .thread_status_engine import ThreadStatusEngine
+        self._status_engine = ThreadStatusEngine(self.client)
 
     def evaluate_threads(self, limit: Optional[int] = None) -> List[ThreadStatus]:
         """
@@ -232,57 +246,55 @@ class ThreadTracker:
             logger.warning(f"Failed to preload intent cache (threads will use timing-only status): {e}")
             self._intent_cache = {}
 
-    def _apply_intent_override(self, status: str, last_email: dict) -> tuple:
-        """Apply intent-based status override using cached AI classification.
+    def _preload_intent_for_emails(self, email_ids: List[str]) -> None:
+        """Targeted intent preload — load AI classifications only for the given
+        email_ids, not the entire client's history.
 
-        Returns: (intent_status, intent_override_reason, last_email_intent,
-                  last_email_urgency, last_email_sentiment)
+        Used by the incremental thread update path (extraction_orchestrator
+        ._update_affected_threads), which only re-evaluates a small set of
+        threads. Loading all ~7K client classifications per run was wasteful;
+        loading just the ~50-2000 emails in the affected threads is fast.
 
-        intent_status supplements (not replaces) the timing-based status.
+        Idempotent — appends to existing _intent_cache rather than replacing,
+        so this can be called multiple times for different email batches.
         """
-        intent_cache = getattr(self, '_intent_cache', {})
-        last_intent_data = intent_cache.get(last_email.get('id'))
+        if not email_ids:
+            return
+        if not hasattr(self, '_intent_cache'):
+            self._intent_cache: Dict[str, Dict] = {}
 
-        if not last_intent_data:
-            return None, None, None, None, None
+        loaded = 0
+        # Chunk to keep .in_() filter sizes within Supabase limits
+        for i in range(0, len(email_ids), 500):
+            batch = email_ids[i:i + 500]
+            try:
+                resp = self.client.table('ai_email_intelligence').select(
+                    'email_id, intent, urgency, sentiment, business_signal, action_type'
+                ).in_('email_id', batch).eq(
+                    'processing_status', 'completed'
+                ).execute()
+                for r in (resp.data or []):
+                    eid = r.get('email_id')
+                    if eid:
+                        self._intent_cache[eid] = {
+                            'intent': r.get('intent'),
+                            'urgency': r.get('urgency'),
+                            'sentiment': r.get('sentiment'),
+                            'business_signal': r.get('business_signal'),
+                            'action_type': r.get('action_type'),
+                        }
+                        loaded += 1
+            except Exception as e:
+                logger.warning(f"Targeted intent preload chunk failed (continuing): {e}")
 
-        intent = last_intent_data.get('intent')
-        urgency = last_intent_data.get('urgency')
-        sentiment = last_intent_data.get('sentiment')
+        if loaded:
+            logger.info(f"Targeted intent preload: {loaded}/{len(email_ids)} emails had AI classifications")
 
-        intent_status = None
-        reason = None
-
-        # Override rules (ordered by priority):
-
-        # 1. Complaint/churn with high urgency → urgent
-        if intent in ('complaint', 'churn_risk') or urgency in ('critical', 'high'):
-            intent_status = 'urgent'
-            reason = f"Last email intent: {intent}, urgency: {urgency}"
-
-        # 2. Pricing inquiry / expansion signal → revenue_opportunity
-        elif intent in ('pricing_inquiry', 'expansion_signal', 'feature_request'):
-            intent_status = 'revenue_opportunity'
-            reason = f"Last email shows {intent}"
-
-        # 3. Positive feedback / FYI on a thread that timing says "awaiting" → closing
-        elif intent in ('positive_feedback', 'fyi_update') and status in (
-            'awaiting_our_response', 'awaiting_response'
-        ):
-            intent_status = 'closing'
-            reason = f"Last email is {intent} — thread naturally concluding"
-
-        # 4. Action required → escalation (if we haven't responded)
-        elif intent == 'action_required' and status != 'ongoing':
-            intent_status = 'escalation'
-            reason = f"Action required by contact, current status: {status}"
-
-        # 5. Meeting/follow-up/introduction → informational
-        elif intent in ('meeting_scheduling', 'follow_up', 'introduction', 'other'):
-            intent_status = 'informational'
-            reason = None  # No override, just metadata
-
-        return intent_status, reason, intent, urgency, sentiment
+    # NOTE: The previous `_apply_intent_override` method was replaced by
+    # ThreadStatusEngine (services/thread_status_engine.py) in migration 077.
+    # Override rules now live in the thread_status_override_rules table
+    # and are evaluated by the engine in _evaluate_thread_status. Behavior is
+    # verified 1:1 against the legacy Python by test_thread_status_engine.py.
 
     def _fetch_threads(self, limit: Optional[int] = None) -> Dict[str, List[Dict]]:
         """
@@ -490,20 +502,43 @@ class ThreadTracker:
         # Determine primary contact and company (most frequent in thread)
         primary_contact_id, primary_company_id = self._get_primary_entities(emails)
 
-        # Determine thread status
-        status = self._determine_status(
+        # Determine the RAW timing-derived status (no intent applied yet).
+        timing_status = self._determine_status(
             emails=emails,
             last_is_outbound=last_is_outbound,
             days_since_last=days_since_last,
             thread_depth=thread_depth
         )
 
-        # Check if overdue
-        is_overdue = days_since_last > self.OVERDUE_DAYS and status in ['awaiting_response', 'awaiting_our_response']
+        # Check if overdue (based on raw timing — independent of intent overrides).
+        is_overdue = days_since_last > self.OVERDUE_DAYS and timing_status in ['awaiting_response', 'awaiting_our_response']
 
-        # Apply intent-based override from AI classification
-        intent_status, intent_reason, last_intent, last_urgency, last_sentiment = \
-            self._apply_intent_override(status, last_email)
+        # Fetch AI intent signals for the last email (if classified).
+        intent_cache = getattr(self, '_intent_cache', {})
+        last_intent_data = intent_cache.get(last_email.get('id')) or {}
+        last_intent = last_intent_data.get('intent')
+        last_urgency = last_intent_data.get('urgency')
+        last_sentiment = last_intent_data.get('sentiment')
+
+        # Run the override engine: timing + intent + urgency --> effective status.
+        # Data-driven: rules live in thread_status_override_rules table (migration 077).
+        engine_result = self._status_engine.evaluate(
+            timing_status=timing_status,
+            intent=last_intent,
+            urgency=last_urgency,
+            last_is_outbound=last_is_outbound,
+        )
+
+        # Derive intent_status for backward compat with UI + analytics:
+        #   - If a rule fired: intent_status mirrors the effective value.
+        #   - Elif intent is in the metadata-only set: intent_status='informational'.
+        #   - Else: None.
+        if engine_result.applied_rule_id is not None:
+            intent_status = engine_result.effective_status
+        elif last_intent in ('meeting_scheduling', 'follow_up', 'introduction', 'other'):
+            intent_status = 'informational'
+        else:
+            intent_status = None
 
         # Get subject from first email in thread
         subject = None
@@ -515,7 +550,7 @@ class ThreadTracker:
 
         return ThreadStatus(
             thread_id=thread_id,
-            status=status,
+            status=engine_result.effective_status,  # EFFECTIVE (post-override)
             last_email_id=last_email['id'],
             last_email_date=last_email_date,
             last_sender_is_outbound=last_is_outbound,
@@ -526,8 +561,12 @@ class ThreadTracker:
             primary_company_id=primary_company_id,
             subject=subject,
             message_count=len(emails),
+            # New override-pipeline fields
+            timing_status=timing_status,
+            override_rule_id=str(engine_result.applied_rule_id) if engine_result.applied_rule_id else None,
+            # Backward-compat + audit
             intent_status=intent_status,
-            intent_override_reason=intent_reason,
+            intent_override_reason=engine_result.override_reason,
             last_email_intent=last_intent,
             last_email_urgency=last_urgency,
             last_email_sentiment=last_sentiment,
@@ -697,7 +736,10 @@ class ThreadTracker:
                 'primary_company_id': status.primary_company_id,
                 'customer_contact_id': status.primary_contact_id,
                 'customer_company_id': status.primary_company_id,
-                # Intent-based intelligence
+                # Override pipeline (migration 077)
+                'timing_status': status.timing_status,
+                'override_rule_id': status.override_rule_id,
+                # Intent-based intelligence (kept for UI/back-compat)
                 'intent_status': status.intent_status,
                 'intent_override_reason': status.intent_override_reason,
                 'last_email_intent': status.last_email_intent,
