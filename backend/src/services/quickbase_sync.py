@@ -517,12 +517,29 @@ class QuickbaseSync:
         - If qb_capability_tag is blank: full classifier fallback
         - Boolean flags (has_coating, has_sewing, etc.) and am_rush always come from classifier
         - row_type: prefer qb_row_type_tag, fall back to classifier
+
+        Writes batched via batch_update_qb_capabilities RPC (migration 072) —
+        replaces per-row UPDATE calls with one RPC per 100-row chunk.
         """
         total = 0
         qb_primary = 0
         classifier_used = 0
         offset = 0
         batch_size = 500
+        WRITE_CHUNK = 100  # batch RPC chunk size
+
+        def _flush(updates: list[dict]) -> int:
+            if not updates:
+                return 0
+            try:
+                resp = _execute_with_retry(lambda u=updates: (
+                    self._supabase.rpc('batch_update_qb_capabilities', {'p_updates': u}).execute()
+                ))
+                # RPC returns INTEGER count of rows updated
+                return int(resp.data) if resp and resp.data is not None else len(updates)
+            except Exception as ex:
+                logger.warning(f"[Enrich] classify batch update failed ({len(updates)} rows): {ex}")
+                return 0
 
         while True:
             result = _execute_with_retry(lambda o=offset: self._supabase.table('qb_operations').select(
@@ -535,6 +552,7 @@ class QuickbaseSync:
             if not rows:
                 break
 
+            pending: list[dict] = []
             for row in rows:
                 # Always run classifier for boolean flags + am_rush (QB doesn't have these)
                 result_cls = capability_classifier.classify(
@@ -559,22 +577,24 @@ class QuickbaseSync:
                     if tags:
                         classifier_used += 1
 
-                update_data = {
-                    'capability_tags':         tags,
-                    'has_coating':             result_cls['has_coating'],
-                    'has_sewing':              result_cls['has_sewing'],
-                    'has_outsource_component': result_cls['has_outsource_component'],
-                    'am_rush':                 result_cls['am_rush'],
-                    'row_type':                qb_row or result_cls['row_type'],
-                }
+                # Shape for the batch RPC: all text fields; SQL function casts.
+                # capability_tags is comma-separated (the RPC splits via string_to_array).
+                pending.append({
+                    'id':                      row['id'],
+                    'capability_tags':         ','.join(tags) if tags else '',
+                    'has_coating':             str(bool(result_cls['has_coating'])).lower(),
+                    'has_sewing':              str(bool(result_cls['has_sewing'])).lower(),
+                    'has_outsource_component': str(bool(result_cls['has_outsource_component'])).lower(),
+                    'am_rush':                 str(bool(result_cls['am_rush'])).lower(),
+                    'row_type':                qb_row or result_cls['row_type'] or '',
+                })
 
-                try:
-                    _execute_with_retry(lambda rid=row['id'], ud=update_data: (
-                        self._supabase.table('qb_operations').update(ud).eq('id', rid).execute()
-                    ))
-                    total += 1
-                except Exception as e:
-                    logger.warning(f"[Enrich] classify update failed for op {row['id']}: {e}")
+                if len(pending) >= WRITE_CHUNK:
+                    total += _flush(pending)
+                    pending = []
+
+            # Flush trailing rows from this page
+            total += _flush(pending)
 
             offset += len(rows)
             if len(rows) < batch_size:
@@ -623,19 +643,26 @@ class QuickbaseSync:
                 if q.get('job_no') and q.get('contact_email') and q['job_no'] not in quote_map:
                     quote_map[q['job_no']] = q['contact_email']
 
-        updated = 0
+        # Batch writes via batch_update_qb_contact_emails RPC (migration 072)
+        # rather than 1 UPDATE per op. Chunk at 100 to keep RPC payloads small.
+        WRITE_CHUNK = 100
+        pending: list[dict] = []
         for op in ops:
             email = quote_map.get(op.get('job_no'))
             if email:
-                try:
-                    _execute_with_retry(lambda oid=op['id'], e=email: (
-                        self._supabase.table('qb_operations').update({
-                            'contact_email': e
-                        }).eq('id', oid).execute()
-                    ))
-                    updated += 1
-                except Exception as ex:
-                    logger.warning(f"[Enrich] contact_email update failed for op {op['id']}: {ex}")
+                pending.append({'id': op['id'], 'contact_email': email})
+
+        updated = 0
+        for i in range(0, len(pending), WRITE_CHUNK):
+            chunk = pending[i:i + WRITE_CHUNK]
+            try:
+                resp = _execute_with_retry(lambda c=chunk: (
+                    self._supabase.rpc('batch_update_qb_contact_emails', {'p_updates': c}).execute()
+                ))
+                # RPC returns INTEGER count
+                updated += int(resp.data) if resp and resp.data is not None else len(chunk)
+            except Exception as ex:
+                logger.warning(f"[Enrich] contact_email batch update failed ({len(chunk)} rows): {ex}")
 
         logger.info(f"[Enrich] contact_email populated for {updated}/{len(ops)} operations")
         return updated
@@ -677,18 +704,23 @@ class QuickbaseSync:
                 if j.get('job_no') and j.get('factory_rush_level'):
                     rush_job_nos.add(j['job_no'])
 
+        # Batch the update — since factory_rush is a constant TRUE for every
+        # matching op, a single PostgREST .update().in_(ids) call per chunk is
+        # equivalent to one SQL UPDATE. Does NOT need a dedicated RPC.
+        to_update_ids = [op['id'] for op in ops if op.get('job_no') in rush_job_nos]
+        CHUNK = 500  # Supabase .in_() supports large arrays but keep chunks reasonable
         updated = 0
-        for op in ops:
-            if op.get('job_no') in rush_job_nos:
-                try:
-                    _execute_with_retry(lambda oid=op['id']: (
-                        self._supabase.table('qb_operations').update({
-                            'factory_rush': True
-                        }).eq('id', oid).execute()
-                    ))
-                    updated += 1
-                except Exception as ex:
-                    logger.warning(f"[Enrich] factory_rush update failed for op {op['id']}: {ex}")
+        for i in range(0, len(to_update_ids), CHUNK):
+            ids_chunk = to_update_ids[i:i + CHUNK]
+            try:
+                _execute_with_retry(lambda ids=ids_chunk: (
+                    self._supabase.table('qb_operations').update({
+                        'factory_rush': True
+                    }).in_('id', ids).execute()
+                ))
+                updated += len(ids_chunk)
+            except Exception as ex:
+                logger.warning(f"[Enrich] factory_rush batch update failed ({len(ids_chunk)} rows): {ex}")
 
         logger.info(f"[Enrich] factory_rush set for {updated} operations")
         return updated
