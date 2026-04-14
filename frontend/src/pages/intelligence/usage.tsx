@@ -956,57 +956,136 @@ const EmbeddingManagement: React.FC<{ clientId: string }> = ({ clientId }) => {
   const [backfillRunning, setBackfillRunning] = useState(false);
   const [backfillTotal, setBackfillTotal] = useState(0);
   const backfillCancelRef = useRef(false);
+  // SSE stream lifecycle — abort signals close the stream cleanly when the
+  // component unmounts or when we want to reset.
+  const streamAbortRef = useRef<AbortController | null>(null);
+  // Keep a stable ref to statsQuery.refetch so subscribeToJob doesn't depend
+  // on the TanStack Query object (which gets a new reference every render).
+  const refetchStatsRef = useRef(statsQuery.refetch);
+  refetchStatsRef.current = statsQuery.refetch;
 
-  const loadStats = useCallback(() => { statsQuery.refetch(); }, [statsQuery]);
+  const loadStats = useCallback(() => { refetchStatsRef.current(); }, []);
 
-  // Check for in-progress embedding when clientId is available
+  // Helper: returns true for any active (non-terminal) status.
+  const isActive = useCallback((s?: string | null) =>
+    s === 'pending' || s === 'running', []);
+
+  // Subscribe to SSE for a job; falls back to polling on stream error.
+  // Deps are stable (clientId + empty-dep callbacks) so this function has a
+  // stable reference across renders.
+  const subscribeToJob = useCallback((jobId: string) => {
+    // Cancel any previous stream before starting a new one
+    streamAbortRef.current?.abort();
+    const controller = new AbortController();
+    streamAbortRef.current = controller;
+
+    let pollFallback: ReturnType<typeof setInterval> | null = null;
+
+    const startPolling = () => {
+      if (pollFallback) return;
+      pollFallback = setInterval(async () => {
+        try {
+          const s = await vectorApi.getReembedStatus(clientId, jobId);
+          setReembedStatus(s);
+          if (!isActive(s.status)) {
+            if (pollFallback) clearInterval(pollFallback);
+            refetchStatsRef.current();
+          }
+        } catch { /* ignore */ }
+      }, 3000);
+    };
+
+    vectorApi.streamReembed(jobId, {
+      onSnapshot: (s) => setReembedStatus(s),
+      onProgress: (s) => {
+        // SSE provides live processed_records from processing_jobs — the UI
+        // uses that directly. Do NOT refetch getVectorStats here: that RPC
+        // does 6x COUNT(*) against emails/companies/operations and blows the
+        // 8s statement_timeout under reembed load. Stats refetch only on
+        // terminal state.
+        setReembedStatus(s);
+      },
+      onTerminal: (eventName, s) => {
+        setReembedStatus(s);
+        refetchStatsRef.current();
+        if (eventName === 'completed') {
+          const total = s.processed_records ?? 0;
+          toast.success(`Embedding complete: ${total} records`);
+        } else if (eventName === 'failed') {
+          toast.error(`Embedding failed${s.error_summary ? `: ${s.error_summary.total_errors} errors` : ''}`);
+        } else if (eventName === 'stopped') {
+          toast.info('Embedding stopped');
+        }
+      },
+      onError: (detail) => {
+        // Stream-side error event (server sent event: error). Surface and let
+        // the polling fallback take over for further state.
+        toast.error(detail);
+        startPolling();
+      },
+    }, controller.signal).catch((err) => {
+      if (controller.signal.aborted) return; // intentional close
+      // Network or HTTP-level failure — fall back to polling.
+      console.warn('Reembed stream failed, falling back to polling', err);
+      startPolling();
+    });
+
+    return () => {
+      controller.abort();
+      if (pollFallback) clearInterval(pollFallback);
+    };
+  }, [clientId, isActive]);
+
+  // On mount / clientId change: if there's an active job, hook into it.
+  // Runs exactly once per clientId change now — subscribeToJob is stable.
   useEffect(() => {
     if (!clientId) return;
+    let cleanup: (() => void) | undefined;
     vectorApi.getReembedStatus(clientId).then(status => {
-      if (status?.status === 'running') {
+      if (status?.job_id && isActive(status.status)) {
         setReembedStatus(status);
+        cleanup = subscribeToJob(status.job_id);
       }
     }).catch(() => {});
-  }, [clientId]);
-
-  // Poll reembed status + live stats refresh while embedding is running
-  useEffect(() => {
-    if (reembedStatus?.status !== 'running') return;
-    let pollCount = 0;
-    const interval = setInterval(async () => {
-      try {
-        const status = await vectorApi.getReembedStatus(clientId);
-        setReembedStatus(status);
-        pollCount++;
-        if (pollCount % 5 === 0 && clientId) {
-          statsQuery.refetch();
-        }
-        if (status.status !== 'running') {
-          clearInterval(interval);
-          statsQuery.refetch();
-          if (status.status === 'complete') toast.success(`Embedding complete: ${status.result?.total_embedded} records`);
-          else if (status.status === 'error') toast.error(`Embedding failed: ${status.error}`);
-        }
-      } catch { /* ignore */ }
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [reembedStatus?.status, clientId, loadStats]);
+    return () => {
+      cleanup?.();
+      streamAbortRef.current?.abort();
+    };
+  }, [clientId, isActive, subscribeToJob]);
 
   const handleReembed = async (tables?: string[]) => {
     try {
       const resp = await vectorApi.triggerReembed(clientId, tables);
-      if (resp.status === 'already_running') toast.info('Embedding already in progress');
-      else toast.success(`Embedding ${tables ? tables.join(' + ') : 'all tables'} in background`);
-      setReembedStatus({ status: 'running', started_at: Date.now() / 1000 });
+      toast.success(`Embedding ${tables ? tables.join(' + ') : 'all tables'} in background`);
+      // Initialize state from the POST response so the UI shows immediately,
+      // then subscribe to SSE for live updates from the worker.
+      setReembedStatus({
+        status: 'running',
+        job_id: resp.job_id,
+        client_id: resp.client_id,
+        tables: resp.tables,
+        limit: resp.limit ?? null,
+      });
+      if (resp.job_id) subscribeToJob(resp.job_id);
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to start embedding');
+      // 409 surfaces here — the API returns the existing job's id in detail.
+      const detail = err?.response?.data?.detail || err?.detail;
+      if (detail?.status === 'already_running' && detail?.job_id) {
+        toast.info('Embedding already in progress — reattaching');
+        setReembedStatus({ status: detail.current_status || 'running', job_id: detail.job_id });
+        subscribeToJob(detail.job_id);
+      } else {
+        toast.error(err?.message || 'Failed to start embedding');
+      }
     }
   };
 
   const handleStopReembed = async () => {
     try {
-      await vectorApi.stopReembed(clientId);
+      await vectorApi.stopReembed(clientId, reembedStatus?.job_id);
       toast.info('Stopping — already embedded records are kept');
+      // Optimistic UI; the SSE stream will replace this with the persisted
+      // terminal state once the worker exits.
       setReembedStatus(prev => prev ? { ...prev, status: 'stopped' } : null);
       loadStats();
     } catch (err: any) {

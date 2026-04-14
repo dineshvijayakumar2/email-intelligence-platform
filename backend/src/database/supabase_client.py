@@ -10,6 +10,28 @@ logger = logging.getLogger(__name__)
 T = TypeVar('T')
 
 
+_RETRYABLE_ERROR_PATTERNS = (
+    'WinError 10035',  # WSAEWOULDBLOCK — Windows httpx socket exhaustion
+    'WSAEWOULDBLOCK',
+    'ReadError',
+    'ConnectError',
+    'TimeoutException',
+    'Connection reset',
+    'Connection refused',
+    'Temporary failure',
+    # Postgres statement_timeout. A RPC/query that hit the server-side timeout
+    # may finish successfully on retry when connection/cache pressure eases.
+    # Listed with a narrow-ish match to avoid over-retrying other 57xxx codes.
+    'canceling statement due to statement timeout',
+    '57014',  # statement_timeout SQLSTATE
+)
+
+
+def _is_retryable_error(err: Exception) -> bool:
+    s = str(err)
+    return any(p in s for p in _RETRYABLE_ERROR_PATTERNS)
+
+
 def with_retry(max_retries: int = 3, base_delay: float = 0.5, backoff_factor: float = 2.0):
     """
     Decorator to add retry logic for transient errors (especially Windows socket errors).
@@ -29,19 +51,7 @@ def with_retry(max_retries: int = 3, base_delay: float = 0.5, backoff_factor: fl
                 try:
                     return func(*args, **kwargs)
                 except Exception as e:
-                    error_str = str(e)
-                    # Check for transient errors that should be retried
-                    is_retryable = any(pattern in error_str for pattern in [
-                        'WinError 10035',  # WSAEWOULDBLOCK
-                        'ReadError',
-                        'ConnectError',
-                        'TimeoutException',
-                        'Connection reset',
-                        'Connection refused',
-                        'Temporary failure',
-                    ])
-
-                    if not is_retryable or attempt == max_retries:
+                    if not _is_retryable_error(e) or attempt == max_retries:
                         raise
 
                     last_exception = e
@@ -59,6 +69,46 @@ def with_retry(max_retries: int = 3, base_delay: float = 0.5, backoff_factor: fl
 
         return wrapper
     return decorator
+
+
+async def retry_async(
+    fn: Callable[[], T],
+    *,
+    max_retries: int = 3,
+    base_delay: float = 0.5,
+    backoff_factor: float = 2.0,
+    label: str = "op",
+) -> T:
+    """Async retry helper for a zero-arg callable that runs a Supabase/HTTP call.
+
+    Use this inside async code where the sync `with_retry` decorator won't work.
+    `fn` is typically a lambda that calls `await self._db(...)` or similar.
+
+    Example:
+        result = await retry_async(
+            lambda: self._db(lambda: self._sb.rpc(...).execute()),
+            label="batch_update_embeddings",
+        )
+
+    Retries on the same transient error patterns as `with_retry`. Non-retryable
+    errors are raised immediately. `asyncio.sleep` is used between attempts so
+    the event loop is not blocked.
+    """
+    import asyncio
+    delay = base_delay
+    for attempt in range(max_retries + 1):
+        try:
+            return await fn()
+        except Exception as e:
+            if not _is_retryable_error(e) or attempt == max_retries:
+                raise
+            logger.warning(
+                f"[retry_async] Transient error in {label} "
+                f"(attempt {attempt + 1}/{max_retries + 1}): {e}. Retrying in {delay:.1f}s..."
+            )
+            await asyncio.sleep(delay)
+            delay *= backoff_factor
+    raise RuntimeError("retry_async: unexpected exit")  # unreachable
 
 class SupabaseClient:
     """Wrapper for Supabase client with connection management"""

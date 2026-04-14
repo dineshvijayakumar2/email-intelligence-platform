@@ -334,13 +334,43 @@ class BulkIndexManager:
         self._sb.rpc('exec_sql', {'query': query}).execute()
 
     def _exec_sql_extended(self, query: str, timeout_s: int = 300):
-        """Execute DDL with extended timeout for slow indexes (HNSW, GIN)."""
+        """Execute DDL with extended timeout for slow indexes (HNSW, GIN).
+
+        Critical: if this RPC call fails for any reason EXCEPT the RPC literally
+        not existing in the DB, DO NOT fall back to the short-timeout exec_sql.
+        HNSW rebuilds on 200K+ vectors take minutes; the 8s exec_sql timeout
+        will hard-fail and leave the index dropped in production (observed
+        2026-04-13). Propagate the error so the caller sees a loud failure
+        instead of silently degrading.
+
+        Only fall back if the RPC itself is missing (SQLSTATE 42883 /
+        'function does not exist'). That's the ONE case where the fallback is
+        the right behavior (older DB without migration 072 applied).
+        """
         try:
             self._sb.rpc('exec_sql_extended', {
                 'p_query': query,
                 'p_timeout_s': timeout_s,
             }).execute()
-        except Exception:
-            # Fallback to regular exec_sql if exec_sql_extended doesn't exist yet
-            logger.warning(f"[BulkIndex] exec_sql_extended not available, trying exec_sql for {query[:80]}...")
-            self._exec_sql(query)
+        except Exception as e:
+            err_str = str(e).lower()
+            rpc_missing = (
+                '42883' in err_str
+                or 'function exec_sql_extended' in err_str and 'does not exist' in err_str
+            )
+            if rpc_missing:
+                logger.warning(
+                    f"[BulkIndex] exec_sql_extended RPC not deployed — falling back to "
+                    f"exec_sql (8s timeout). Apply migration 072. Query: {query[:80]}..."
+                )
+                self._exec_sql(query)
+                return
+            # Any other error — transient socket, statement_timeout, deadlock,
+            # bad DDL, permissions — surface it. Do NOT mask with a shorter-timeout
+            # fallback that is guaranteed to fail for the same reason the original
+            # call was using the extended timeout.
+            logger.error(
+                f"[BulkIndex] exec_sql_extended failed (NOT falling back): {e}. "
+                f"Query: {query[:200]}"
+            )
+            raise

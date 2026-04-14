@@ -275,14 +275,21 @@ class VectorService:
     # ── Embed: Emails (from raw emails table) ─────────────────────────────
 
     async def embed_emails_batch(
-        self, client_id: str, batch_size: int = 500, limit: int | None = None
+        self, client_id: str, batch_size: int = 500, limit: int | None = None,
+        on_progress: "callable | None" = None,
     ) -> dict:
         """Embed all un-embedded emails for a client.
 
         Reads directly from the `emails` table — no dependency on AI analysis.
         Builds embed text from: subject + body_text (truncated) + sender.
         Stores embedding on the `emails` table.
+
+        Args:
+            on_progress: Optional callback(stage: str, delta_processed: int,
+                delta_failed: int) invoked after each DB chunk write succeeds or
+                fails. Stage is always "embedding_emails" from this method.
         """
+        from ..database.supabase_client import retry_async
         t0 = time.time()
         offset = 0
         total_embedded = 0
@@ -327,15 +334,34 @@ class VectorService:
                         chunk_ids = v_ids[ci:ci + DB_CHUNK]
                         chunk_embs = v_embs[ci:ci + DB_CHUNK]
                         try:
-                            await self._db(lambda cids=chunk_ids, cembs=chunk_embs: self._sb.rpc(
-                                "batch_update_embeddings_emails", {
-                                    "p_ids": cids,
-                                    "p_embeddings": self._vecs_to_pg(cembs),
-                                }).execute())
+                            # Wrap in async retry so transient socket errors
+                            # (WinError 10035, ReadError, etc.) don't drop the
+                            # whole chunk. Previously these were caught and the
+                            # 100 emails were silently skipped.
+                            await retry_async(
+                                lambda cids=chunk_ids, cembs=chunk_embs: self._db(
+                                    lambda: self._sb.rpc(
+                                        "batch_update_embeddings_emails", {
+                                            "p_ids": cids,
+                                            "p_embeddings": self._vecs_to_pg(cembs),
+                                        }).execute()
+                                ),
+                                label="batch_update_embeddings_emails",
+                            )
                             total_embedded += len(chunk_ids)
+                            if on_progress:
+                                try:
+                                    on_progress("embedding_emails", len(chunk_ids), 0)
+                                except Exception as pe:
+                                    logger.warning(f"[Vector] on_progress raised: {pe}")
                         except Exception as e:
-                            logger.warning(f"Batch chunk failed ({len(chunk_ids)} emails): {e}")
+                            logger.warning(f"Batch chunk failed ({len(chunk_ids)} emails) after retries: {e}")
                             total_skipped += len(chunk_ids)
+                            if on_progress:
+                                try:
+                                    on_progress("embedding_emails", 0, len(chunk_ids))
+                                except Exception as pe:
+                                    logger.warning(f"[Vector] on_progress raised: {pe}")
 
             offset += batch_size
             if limit and total_embedded >= limit:
@@ -646,7 +672,8 @@ class VectorService:
     async def reembed_all(
         self, client_id: str, limit: int | None = None,
         tables: list[str] | None = None,
-        cancel_check: callable = None,
+        cancel_check: "callable | None" = None,
+        on_progress: "callable | None" = None,
     ) -> dict:
         """Bootstrap / re-embed entities for a client. Returns combined stats.
 
@@ -654,6 +681,9 @@ class VectorService:
             limit: Max records to embed per table. Pass small value (e.g. 10) for local testing.
             tables: Which tables to embed. Default: ["emails", "companies", "operations"].
             cancel_check: Callable returning True if job should stop.
+            on_progress: Optional callback(stage: str, delta_processed: int,
+                delta_failed: int) invoked at table boundaries AND from inside
+                embed_emails_batch after each chunk write. Safe to pass None.
         """
         self._cancel_check = cancel_check or (lambda: False)
         if tables is None:
@@ -670,21 +700,42 @@ class VectorService:
 
         skip = {"embedded": 0, "skipped": 0, "elapsed_s": 0}
 
+        def _safe_progress(stage: str, delta_processed: int = 0, delta_failed: int = 0):
+            if on_progress is None:
+                return
+            try:
+                on_progress(stage, delta_processed, delta_failed)
+            except Exception as pe:
+                logger.warning(f"[Vector] on_progress raised at stage={stage}: {pe}")
+
         # BulkIndexManager handles drop → yield → recreate (including HNSW with extended timeout)
+        _safe_progress("dropping_indexes")
         async with manager.async_bulk_operation(db_tables, row_count=999999):
-            emails = await self.embed_emails_batch(client_id, limit=limit) if "emails" in tables else skip
+            _safe_progress("embedding_emails")
+            emails = (await self.embed_emails_batch(
+                client_id, limit=limit, on_progress=on_progress
+            )) if "emails" in tables else skip
             if self._cancel_check():
                 logger.info(f"[Vector] Stopped after emails ({emails['embedded']} embedded)")
                 return {"emails": emails, "companies": skip, "operations": skip,
                         "total_embedded": emails["embedded"]}
 
+            _safe_progress("embedding_companies")
             companies = await self.embed_companies(client_id, limit=limit) if "companies" in tables else skip
+            if "companies" in tables:
+                _safe_progress("companies_done", companies.get("embedded", 0), companies.get("skipped", 0))
             if self._cancel_check():
                 logger.info(f"[Vector] Stopped after companies ({companies['embedded']} embedded)")
                 return {"emails": emails, "companies": companies, "operations": skip,
                         "total_embedded": emails["embedded"] + companies["embedded"]}
 
+            _safe_progress("embedding_operations")
             operations = await self.embed_operations(client_id, limit=limit) if "operations" in tables else skip
+            if "operations" in tables:
+                _safe_progress("operations_done", operations.get("embedded", 0), operations.get("skipped", 0))
+
+            _safe_progress("recreating_indexes")
+        # async with exit — indexes recreated here by BulkIndexManager
 
         total = {
             "emails": emails,

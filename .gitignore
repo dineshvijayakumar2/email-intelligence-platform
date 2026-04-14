@@ -75,10 +75,16 @@ service-account.json
 secrets/
 .secrets/
 
-# Test scripts (can be temporary/local)
+# Test scripts: default to local-only, but un-ignore tracked integration
+# test suites in the backend that are meant to be run against a real DB.
+# See feedback_testing_heuristic.md — these scripts are the project's
+# sanctioned testing pattern (no pytest yet).
 tests/
 **/test_*.py
 **/test_*.js
+!backend/test_reembed_jobs.py
+!backend/test_thread_status_engine.py
+!backend/test_extraction_api.py
 # Frontend
 frontend/node_modules/
 frontend/build/

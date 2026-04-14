@@ -14,6 +14,7 @@ from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
 import asyncio
 import logging
+import os
 import time as _time
 
 # ── In-memory progress / cancel stores (per client_id) ───────────────────────
@@ -2001,9 +2002,41 @@ def _get_vector_service():
     return _vector_service
 
 
-# ── In-memory reembed progress tracking ───────────────────────────────────
-_reembed_progress: Dict[str, Dict[str, Any]] = {}
-_reembed_cancel: Dict[str, bool] = {}  # client_id -> cancel flag
+# ── Reembed: persistent state via processing_jobs ────────────────────────────
+# Module dicts (_reembed_progress, _reembed_cancel) removed in migration 073/074.
+# State now lives in processing_jobs; helper at services/reembed_job_state.py.
+
+def _reembed_state_for(sb):
+    """Construct a fresh ReembedJobState bound to the given supabase client."""
+    from ..services.reembed_job_state import ReembedJobState
+    return ReembedJobState(sb)
+
+
+def _serialize_reembed_job(job: dict) -> dict:
+    """Shape a processing_jobs row into the response contract for the polling and
+    SSE endpoints. Designed as a SUPERSET of the legacy ReembedStatus shape so
+    existing frontend clients keep working.
+    """
+    if not job:
+        return {"status": "idle"}
+    params = job.get("parameters") or {}
+    return {
+        # legacy fields (kept for frontend compatibility)
+        "status": job.get("status"),
+        "started_at": job.get("started_at"),
+        "completed_at": job.get("completed_at"),
+        "error": (job.get("error_summary") or {}).get("sample_errors"),
+        # new fields added by the migration to processing_jobs
+        "job_id": job.get("id"),
+        "client_id": job.get("client_id"),
+        "current_stage": job.get("current_stage"),
+        "tables": params.get("tables"),
+        "limit": params.get("limit"),
+        "processed_records": job.get("processed_records"),
+        "failed_records": job.get("failed_records"),
+        "total_records": job.get("total_records"),
+        "error_summary": job.get("error_summary"),
+    }
 
 
 @router.post("/vector/reembed")
@@ -2016,9 +2049,9 @@ async def trigger_reembed(
 ):
     """Bootstrap or re-embed entities. Optionally specify which tables.
 
-    Runs in background. Poll GET /ai/vector/reembed/status for progress.
-    Pass ?limit=10 to test with a small batch locally.
-    Pass ?tables=emails,companies to skip operations.
+    Persists job state to processing_jobs. Subscribe to
+    GET /ai/vector/reembed/stream/{job_id} for live progress (SSE), or poll
+    GET /ai/vector/reembed/status?job_id=... as a fallback.
     """
     if not client_id:
         client_id = current_user.get("client_id")
@@ -2030,77 +2063,254 @@ async def trigger_reembed(
     if not settings.ai_enabled:
         raise HTTPException(status_code=409, detail="AI is disabled via kill switch. Enable AI first.")
 
-    if _reembed_progress.get(client_id, {}).get("status") == "running":
-        return {"status": "already_running", "progress": _reembed_progress[client_id]}
-
     table_list = [t.strip() for t in tables.split(",")] if tables else ["emails", "companies", "operations"]
+    triggered_by = current_user.get("user_id") or current_user.get("id") or current_user.get("sub")
 
-    _reembed_progress[client_id] = {"status": "running", "started_at": _time.time(), "limit": limit, "tables": table_list}
-    _reembed_cancel[client_id] = False
+    state = _reembed_state_for(_supabase)
+
+    # Single-flight: the partial unique index in migration 074 is the actual
+    # enforcement; ActiveJobExists wraps the unique-violation translation.
+    from ..services.reembed_job_state import ActiveJobExists
+    try:
+        job_id = state.create_job(
+            client_id=client_id,
+            tables=table_list,
+            limit=limit,
+            triggered_by_user_id=triggered_by,
+        )
+    except ActiveJobExists as e:
+        existing = e.existing_job
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "status": "already_running",
+                "job_id": existing.get("id"),
+                "current_status": existing.get("status"),
+                "started_at": existing.get("started_at"),
+            },
+        )
 
     async def _run():
+        # Worker task. Two invariants must hold across any restructure here:
+        #
+        #   (1) vs.reembed_all() owns the BulkIndexManager.async_bulk_operation
+        #       context manager. Its finally block recreates HNSW indexes. We
+        #       MUST NOT short-circuit around it. Letting exceptions propagate
+        #       through reembed_all() so the context manager exits cleanly is
+        #       what guarantees indexes get recreated.
+        #
+        #   (2) On any exit path (success, exception, cancel), the job must end
+        #       in a terminal status (completed | failed | stopped). Otherwise
+        #       single-flight blocks the next reembed indefinitely.
+        worker_state = _reembed_state_for(_supabase)
+
+        def _on_progress(stage: str, delta_processed: int = 0, delta_failed: int = 0):
+            """Thin adapter so vector_service can report progress without knowing
+            anything about processing_jobs. Called from reembed_all at table
+            boundaries and from embed_emails_batch after each DB chunk.
+            """
+            try:
+                worker_state.update_progress(
+                    job_id,
+                    delta_processed=delta_processed,
+                    delta_failed=delta_failed,
+                    current_stage=stage,
+                )
+            except Exception as pe:
+                # Progress updates must never crash the worker. Log and continue.
+                logger.warning(f"[Vector] Progress update failed for {job_id}: {pe}")
+
         try:
+            worker_state.mark_running(job_id)
+            _on_progress("starting")
+
             vs = _get_vector_service()
             result = await vs.reembed_all(
                 client_id, limit=limit, tables=table_list,
-                cancel_check=lambda: _reembed_cancel.get(client_id, False),
+                cancel_check=lambda: worker_state.check_cancelled(job_id),
+                on_progress=_on_progress,
             )
-            status = "stopped" if _reembed_cancel.get(client_id) else "complete"
-            _reembed_progress[client_id] = {
-                "status": status,
-                "result": result,
-                "completed_at": _time.time(),
-            }
+            # Progress counters are incremented incrementally via _on_progress
+            # from inside reembed_all / embed_emails_batch. No final delta here.
+            if worker_state.check_cancelled(job_id):
+                _on_progress("stopped")
+                worker_state.mark_stopped(job_id)
+                logger.info(f"[Vector] Reembed job {job_id} stopped: {result}")
+            else:
+                _on_progress("completed")
+                worker_state.mark_completed(job_id)
+                logger.info(f"[Vector] Reembed job {job_id} completed: {result}")
         except Exception as e:
-            logger.error(f"Reembed failed for {client_id}: {e}")
-            _reembed_progress[client_id] = {
-                "status": "error",
-                "error": str(e)[:500],
-            }
+            logger.error(f"Reembed job {job_id} failed: {e}", exc_info=True)
+            try:
+                worker_state.mark_failed(job_id, {
+                    "type": e.__class__.__name__,
+                    "error": str(e)[:500],
+                })
+            except Exception as inner:
+                logger.error(f"Failed to mark job {job_id} failed: {inner}")
 
-    # Run in a detached asyncio task so it doesn't block BackgroundTasks
-    # or compete with HTTP request handling
+    # Detached asyncio task — same pattern as before; survives request lifecycle
+    # for the duration of the in-process worker.
     asyncio.create_task(_run())
-    return {"status": "started", "client_id": client_id, "limit": limit}
+    return {
+        "status": "started",
+        "job_id": job_id,
+        "client_id": client_id,
+        "tables": table_list,
+        "limit": limit,
+    }
 
 
 @router.get("/vector/reembed/status")
 async def get_reembed_status(
     client_id: Optional[str] = Query(None),
+    job_id: Optional[str] = Query(None, description="Specific job to fetch; defaults to latest for the client"),
     current_user: dict = Depends(get_current_user),
 ):
-    """Poll reembed job status."""
-    if not client_id:
-        client_id = current_user.get("client_id")
-    progress = _reembed_progress.get(client_id)
-    if not progress:
+    """Poll reembed job status. Reads from processing_jobs.
+
+    Backward compatible: if no job_id is provided, returns the latest reembed
+    job for the client (matches legacy semantics). Response shape is a
+    superset of the legacy ReembedStatus contract.
+    """
+    state = _reembed_state_for(_supabase)
+    if job_id:
+        job = state.get_job(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="job not found")
+    else:
+        if not client_id:
+            client_id = current_user.get("client_id")
+        if not client_id:
+            raise HTTPException(status_code=400, detail="client_id required when job_id is not provided")
+        job = state.get_latest_job_for_client(client_id)
+
+    if not job:
         return {"status": "idle"}
-    return progress
+    return _serialize_reembed_job(job)
 
 
 @router.post("/vector/reembed/stop")
 async def stop_reembed(
     client_id: Optional[str] = Query(None),
+    job_id: Optional[str] = Query(None),
     current_user: dict = Depends(require_role("admin")),
 ):
-    """Stop a running reembed job. Already-embedded records are kept."""
-    if not client_id:
-        client_id = current_user.get("client_id")
-    if not client_id:
-        raise HTTPException(status_code=400, detail="client_id required")
+    """Request cancellation of a running reembed job.
 
-    if _reembed_progress.get(client_id, {}).get("status") != "running":
-        return {"status": "not_running"}
+    Returns immediately. The worker picks up the cancel signal on its next
+    check_cancelled poll and exits cleanly, allowing the BulkIndexManager
+    finally block to recreate dropped HNSW indexes.
+    """
+    state = _reembed_state_for(_supabase)
+    if job_id:
+        job = state.get_job(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="job not found")
+    else:
+        if not client_id:
+            client_id = current_user.get("client_id")
+        if not client_id:
+            raise HTTPException(status_code=400, detail="client_id or job_id required")
+        job = state.get_active_job_for_client(client_id)
+        if not job:
+            return {"status": "not_running"}
 
-    _reembed_cancel[client_id] = True
-    # Clear progress immediately so the next status poll sees "idle"
-    # The background task will finish on its own — embedded records are kept.
-    _reembed_progress[client_id] = {
-        "status": "stopped",
-        "stopped_at": _time.time(),
-    }
-    logger.info(f"[Vector] Stop requested for reembed job {client_id}")
-    return {"status": "stopped"}
+    state.request_cancel(job["id"])
+    return {"status": "cancellation_requested", "job_id": job["id"]}
+
+
+@router.get("/vector/reembed/stream/{job_id}")
+async def stream_reembed(
+    job_id: str,
+    request: Request,
+    current_user: dict = Depends(require_role("admin")),
+):
+    """SSE stream for live reembed progress. Mirrors the digest streaming
+    pattern (ai.py:1410) — queue + generator + disconnect detection.
+
+    Polls processing_jobs at ~750ms; emits an event whenever processed_records,
+    status, or current_stage changes. Terminates with a final event when the
+    job reaches a terminal status (completed | failed | stopped).
+    """
+    import json as _json
+
+    state = _reembed_state_for(_supabase)
+    initial = state.get_job(job_id)
+    if initial is None:
+        raise HTTPException(status_code=404, detail="job not found")
+
+    # Authorization: an admin from another client should not be able to
+    # subscribe to someone else's job stream. Allow if same client_id, OR if
+    # the user is platform-level admin (no client scoping). Match this to the
+    # project's existing access pattern if there is a stricter convention.
+    user_client = current_user.get("client_id")
+    if user_client and initial.get("client_id") and user_client != initial.get("client_id"):
+        raise HTTPException(status_code=403, detail="forbidden")
+
+    # 2s matches the digest SSE keepalive convention and is gentle on the
+    # connection pool. At ~266K emails with ~10ms reembed batches, polling
+    # faster than this doesn't buy meaningful UI responsiveness.
+    POLL_INTERVAL_S = 2.0
+    TERMINAL = {"completed", "failed", "stopped"}
+
+    async def _generator():
+        last_snapshot = None
+        # Initial snapshot event so the client gets the current state immediately.
+        snap = _serialize_reembed_job(initial)
+        yield f"event: snapshot\ndata: {_json.dumps(snap)}\n\n"
+        last_snapshot = (
+            snap.get("status"),
+            snap.get("processed_records"),
+            snap.get("current_stage"),
+        )
+
+        terminal_status = snap.get("status") if snap.get("status") in TERMINAL else None
+        try:
+            while terminal_status is None:
+                if await request.is_disconnected():
+                    # Client gone. The polling task we are IS this generator —
+                    # so simply returning ends the stream cleanly. No leaked task.
+                    return
+                await asyncio.sleep(POLL_INTERVAL_S)
+
+                job = state.get_job(job_id)
+                if job is None:
+                    yield f"event: error\ndata: {_json.dumps({'detail': 'job disappeared'})}\n\n"
+                    return
+
+                snap = _serialize_reembed_job(job)
+                key = (snap.get("status"), snap.get("processed_records"), snap.get("current_stage"))
+
+                if key != last_snapshot:
+                    yield f"event: progress\ndata: {_json.dumps(snap)}\n\n"
+                    last_snapshot = key
+                else:
+                    # Quiet keepalive every poll where nothing changed —
+                    # mirrors the digest endpoint's keepalive convention.
+                    yield ": keepalive\n\n"
+
+                if snap.get("status") in TERMINAL:
+                    terminal_status = snap.get("status")
+
+            # Emit a final event with the terminal state and close.
+            final = state.get_job(job_id) or {}
+            yield f"event: {terminal_status}\ndata: {_json.dumps(_serialize_reembed_job(final))}\n\n"
+        except asyncio.CancelledError:
+            # Server-side cancellation (shutdown, client disconnect surfaced as
+            # cancel). Just exit — no leaked work.
+            raise
+
+    return StreamingResponse(
+        _generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @router.post("/vector/backfill-search-text")
@@ -2371,12 +2581,50 @@ async def hybrid_search(
         raise HTTPException(status_code=500, detail=str(e)[:300])
 
 
+_EMPTY_VECTOR_STATS = {
+    "emails": {"total": 0, "embedded": 0},
+    "companies": {"total": 0, "embedded": 0},
+    "operations": {"total": 0, "embedded": 0},
+}
+
+
+def _vector_stats_cache_key(client_id: str) -> str:
+    return f"vector_stats:{client_id}"
+
+
+def _get_redis_client():
+    """Lazy Redis connection matching the project's existing pattern
+    (see routers/analytics.py:202). Returns None if Redis is unavailable.
+    """
+    try:
+        import redis
+        redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379")
+        return redis.from_url(redis_url, decode_responses=True)
+    except Exception as e:
+        logger.debug(f"Redis unavailable for vector_stats cache: {e}")
+        return None
+
+
 @router.get("/vector/stats")
 async def get_vector_stats(
     client_id: Optional[str] = Query(None),
     current_user: dict = Depends(get_current_user),
 ):
-    """Get embedding coverage stats — how many records have embeddings."""
+    """Get embedding coverage stats — how many records have embeddings.
+
+    Backed by a stale-while-revalidate cache because the underlying RPC does
+    COUNT(*) queries that can take >8s on large tables under memory pressure
+    (see migration 075 for the partial-index fix that addresses the root
+    cause; this cache is the application-layer safety net).
+
+    Behavior:
+      - Fresh cache hit (<60s old) → return from cache, no DB call
+      - Cache miss or expired → try RPC. On success: update cache.
+      - RPC timeout/error → return last known value from cache if any,
+        else empty zeros. The UI sees recent-but-stale data rather than zeros.
+    """
+    import json as _json
+
     if not client_id:
         client_id = current_user.get("client_id")
 
@@ -2384,23 +2632,62 @@ async def get_vector_stats(
 
     if not client_id:
         logger.warning("Vector stats: no client_id available")
-        return {"emails": {"total": 0, "embedded": 0}, "companies": {"total": 0, "embedded": 0}, "operations": {"total": 0, "embedded": 0}}
+        return dict(_EMPTY_VECTOR_STATS)
 
+    r = _get_redis_client()
+    fresh_key = _vector_stats_cache_key(client_id)
+    stale_key = f"{fresh_key}:last_known"
+
+    # 1. Fast path: fresh cached value
+    if r is not None:
+        try:
+            cached = r.get(fresh_key)
+            if cached:
+                stats = _json.loads(cached)
+                logger.debug(f"Vector stats cache hit for {client_id}")
+                return stats
+        except Exception as e:
+            logger.debug(f"Vector stats cache read failed (continuing to RPC): {e}")
+
+    # 2. Call the RPC
     try:
-        resp = _supabase.rpc('get_vector_stats', {'p_client_id': client_id}).execute()
+        resp = _supabase.rpc("get_vector_stats", {"p_client_id": client_id}).execute()
         raw = resp.data
         if isinstance(raw, list) and len(raw) > 0:
             raw = raw[0]
-        if isinstance(raw, dict) and 'emails' in raw:
+        if isinstance(raw, dict) and "emails" in raw:
             stats = raw
         else:
-            stats = {"emails": {"total": 0, "embedded": 0}, "companies": {"total": 0, "embedded": 0}, "operations": {"total": 0, "embedded": 0}}
+            stats = dict(_EMPTY_VECTOR_STATS)
+
+        # 3. Cache on success — both short-TTL fresh + long-TTL stale fallback
+        if r is not None:
+            try:
+                payload = _json.dumps(stats)
+                r.setex(fresh_key, 60, payload)           # 60s fresh window
+                r.setex(stale_key, 24 * 3600, payload)    # 24h stale fallback
+            except Exception as e:
+                logger.debug(f"Vector stats cache write failed (non-fatal): {e}")
+
+        logger.info(f"Vector stats result: {stats}")
+        return stats
     except Exception as e:
         logger.warning(f"Vector stats RPC failed: {e}")
-        stats = {"emails": {"total": 0, "embedded": 0}, "companies": {"total": 0, "embedded": 0}, "operations": {"total": 0, "embedded": 0}}
 
-    logger.info(f"Vector stats result: {stats}")
-    return stats
+        # 4. Fallback: serve last known value if we have one
+        if r is not None:
+            try:
+                cached = r.get(stale_key)
+                if cached:
+                    stats = _json.loads(cached)
+                    stats["_stale"] = True  # advisory flag for UI
+                    logger.info(f"Vector stats serving stale cache for {client_id}: {stats}")
+                    return stats
+            except Exception as inner:
+                logger.debug(f"Stale cache read failed: {inner}")
+
+        logger.info("Vector stats result: empty zeros (RPC failed + no cache)")
+        return dict(_EMPTY_VECTOR_STATS)
 
 
 # ============================================================================
