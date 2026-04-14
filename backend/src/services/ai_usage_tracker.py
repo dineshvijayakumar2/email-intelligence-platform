@@ -78,6 +78,12 @@ class AIUsageTracker:
                     'JSON could not be generated', 'ECONNRESET', 'ETIMEDOUT',
                     'ConnectionTerminated', 'PROTOCOL_ERROR', 'SEND_HEADERS',
                     'StreamInput', 'state 5',
+                    # Windows httpx socket exhaustion — common on concurrent load
+                    'WinError 10035', 'WSAEWOULDBLOCK',
+                    'ReadError', 'ConnectError', 'TimeoutException',
+                    # Postgres statement_timeout (code 57014) — under contention,
+                    # the same query may finish on retry when load drops
+                    'canceling statement due to statement timeout', '57014',
                 ])
                 if is_transient and attempt < max_retries:
                     delay = base_delay * (2 ** attempt)
