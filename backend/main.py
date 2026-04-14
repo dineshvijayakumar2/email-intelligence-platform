@@ -553,6 +553,16 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"Failed to cleanup orphaned jobs: {e}")
 
+    # Index drift check — fire-and-forget, advisory only. Surfaces any
+    # INVALID or MISSING registered indexes as WARN log entries within
+    # seconds of boot. Prevents silent degraded-state situations like the
+    # 2026-04-13 HNSW index loss going unnoticed for hours.
+    try:
+        from src.database.index_reconcile import run_startup_check
+        asyncio.create_task(run_startup_check())
+    except Exception as e:
+        logger.warning(f"Failed to schedule index drift check (non-critical): {e}")
+
 
 async def shutdown_event():
     """Cleanup on server shutdown."""

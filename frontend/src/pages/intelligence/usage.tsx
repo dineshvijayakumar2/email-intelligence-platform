@@ -1054,6 +1054,23 @@ const EmbeddingManagement: React.FC<{ clientId: string }> = ({ clientId }) => {
   }, [clientId, isActive, subscribeToJob]);
 
   const handleReembed = async (tables?: string[]) => {
+    // Guard: full re-embed is an expensive operation. On the current Supabase
+    // tier, rebuilding the HNSW index over 200K+ vectors has historically
+    // taken 4-8 hours and triggered high-CPU alerts. Require explicit user
+    // confirmation to prevent accidental clicks.
+    const tablesLabel = tables ? tables.join(' + ') : 'ALL tables (emails + companies + operations)';
+    const confirmMsg =
+      `Start reembed for: ${tablesLabel}?\n\n` +
+      `This is a long-running background operation. On the current database tier, ` +
+      `it can take SEVERAL HOURS for large datasets (200K+ emails) and will put ` +
+      `sustained load on the database during that time.\n\n` +
+      `Only confirm if you intend to run this now. The process will continue in ` +
+      `the background even if you close this page — you can monitor progress from ` +
+      `the reembed status widget below.`;
+    if (!window.confirm(confirmMsg)) {
+      return;
+    }
+
     try {
       const resp = await vectorApi.triggerReembed(clientId, tables);
       toast.success(`Embedding ${tables ? tables.join(' + ') : 'all tables'} in background`);
