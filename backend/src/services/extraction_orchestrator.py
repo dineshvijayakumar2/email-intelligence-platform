@@ -1670,19 +1670,28 @@ class ExtractionOrchestrator:
                 import asyncio
                 from .quickbase_sync import QuickbaseSync
                 syncer = QuickbaseSync(self.client, qb_config_resp.data[0])
+
+                async def _propagate_both():
+                    companies = await syncer.propagate_qb_data_to_companies()
+                    contacts = await syncer.propagate_qb_data_to_contacts()
+                    return companies, contacts
+
                 try:
                     loop = asyncio.get_event_loop()
                     if loop.is_running():
                         import concurrent.futures
                         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                            future = pool.submit(lambda: asyncio.run(syncer.propagate_qb_data_to_companies()))
-                            propagated = future.result(timeout=120)
+                            future = pool.submit(lambda: asyncio.run(_propagate_both()))
+                            propagated, propagated_contacts = future.result(timeout=180)
                     else:
-                        propagated = loop.run_until_complete(syncer.propagate_qb_data_to_companies())
+                        propagated, propagated_contacts = loop.run_until_complete(_propagate_both())
                 except RuntimeError:
-                    propagated = asyncio.run(syncer.propagate_qb_data_to_companies())
-                if propagated > 0:
-                    logger.info(f"Step 6 QB propagation: refreshed {propagated} companies")
+                    propagated, propagated_contacts = asyncio.run(_propagate_both())
+                if propagated > 0 or propagated_contacts > 0:
+                    logger.info(
+                        f"Step 6 QB propagation: refreshed {propagated} companies, "
+                        f"{propagated_contacts} contact rows"
+                    )
             except Exception as e:
                 logger.warning(f"Step 6 QB propagation failed (non-critical): {e}")
 

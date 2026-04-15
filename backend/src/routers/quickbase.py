@@ -221,6 +221,7 @@ async def trigger_sync(
                 counts = loop.run_until_complete(syncer.sync_all(tables=tables_list, full=full))
                 if not cancel_event.is_set():
                     loop.run_until_complete(syncer.propagate_qb_data_to_companies())
+                    loop.run_until_complete(syncer.propagate_qb_data_to_contacts())
                 loop.close()
                 if cancel_event.is_set():
                     logger.info(f"QB sync cancelled for client {client_id}")
@@ -779,14 +780,17 @@ async def rematch_qb_data(
                 logger.info("QB rematch — Step 5: Chain-match customers via contacts")
                 c3 = loop.run_until_complete(syncer.match_customers_via_contacts())
 
-                # Step 6: Propagate QB data
+                # Step 6: Propagate QB data (companies + contacts)
                 logger.info("QB rematch — Step 6: Propagate QB data to companies")
                 c4 = loop.run_until_complete(syncer.propagate_qb_data_to_companies())
+                logger.info("QB rematch — Step 6b: Propagate QB data to contacts")
+                c5 = loop.run_until_complete(syncer.propagate_qb_data_to_contacts())
                 loop.close()
 
                 logger.info(
                     f"QB rematch complete: email_lookup={e1}, name_based={match_stats}, "
-                    f"{c2} contacts, {c3} chain-matched, {c4} propagated"
+                    f"{c2} contacts, {c3} chain-matched, {c4} companies propagated, "
+                    f"{c5} contact rows propagated"
                 )
             except Exception as e:
                 logger.error(f"Rematch failed: {e}")
@@ -1305,6 +1309,7 @@ async def bulk_review_candidates(
                         loop = asyncio.new_event_loop()
                         syncer = QuickbaseSync(_supabase, cfg.data[0])
                         loop.run_until_complete(syncer.propagate_qb_data_to_companies())
+                        loop.run_until_complete(syncer.propagate_qb_data_to_contacts())
                         loop.close()
                 except Exception as e:
                     logger.error(f"Post-bulk-accept propagation failed: {e}")

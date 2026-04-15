@@ -1538,7 +1538,7 @@ class QuickbaseSync:
             page = _execute_with_retry(lambda o=offset: self._supabase.table('qb_customers').select(
                 'qb_record_id, customer_key_id, customer_code, matched_company_id, customer_status, '
                 'customer_tier, account_manager, total_invoiced, invoiced_ty, invoiced_ly, '
-                'growth_90d, days_since_last_invoice, recency_days'
+                'growth_90d, days_since_last_invoice, recency_days, industry'
             ).eq('client_id', self._client_id).not_.is_(
                 'matched_company_id', 'null'
             ).range(o, o + 999).execute())
@@ -1693,6 +1693,7 @@ class QuickbaseSync:
                 'qb_account_manager': qb.get('account_manager'),
                 'qb_customer_id': qb.get('qb_record_id'),
                 'qb_customer_code': qb.get('customer_code'),
+                'industry': qb.get('industry'),
             }
 
         items = list(by_company.items())
@@ -1759,3 +1760,24 @@ class QuickbaseSync:
 
         logger.info(f"Propagated QB data to {updated} customer_companies")
         return updated
+
+    async def propagate_qb_data_to_contacts(self) -> int:
+        """Push QB signals from qb_unique_emails + qb_contacts to customer_contacts.
+
+        Single RPC call — two UPDATE passes on the DB side:
+          Pass 1: qb_unique_emails (email match) → qb_customer_type, capabilities, processes
+          Pass 2: qb_contacts (matched_contact_id FK) → quotes_count, last_quote_date, recency_days
+
+        Replaces the per-row enrichment loop in extraction_orchestrator.py Step 6.
+        """
+        try:
+            result = _execute_with_retry(lambda: self._supabase.rpc(
+                'batch_propagate_qb_data_to_contacts',
+                {'p_client_id': self._client_id},
+            ).execute())
+            count = result.data if isinstance(result.data, int) else 0
+            logger.info(f"Propagated QB data to {count} customer_contacts rows")
+            return count
+        except Exception as e:
+            logger.error(f"propagate_qb_data_to_contacts failed: {e}", exc_info=True)
+            return 0
