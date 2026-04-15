@@ -84,6 +84,10 @@ const DEFAULT_MAPPINGS: Record<string, Record<string, string>> = {
     "53": "email_invalid", "70": "customer_type", "72": "customer_id_text",
     "128": "embellishments_used", "130": "processes_used", "131": "capabilities_used",
   },
+  job_status_log: {
+    "3": "qb_record_id", "16": "job_no", "8": "old_status",
+    "9": "new_status", "1": "changed_at", "10": "changed_by",
+  },
 };
 
 const DEST_COLUMNS: Record<string, string[]> = {
@@ -133,6 +137,10 @@ const DEST_COLUMNS: Record<string, string[]> = {
     'first_name', 'last_name', 'hide', 'quality', 'result', 'free',
     'email_invalid', 'customer_type', 'customer_id_text',
     'embellishments_used', 'processes_used', 'capabilities_used',
+  ],
+  job_status_log: [
+    'qb_record_id', 'job_no', 'old_status', 'new_status',
+    'changed_at', 'changed_by',
   ],
 };
 
@@ -985,7 +993,7 @@ const QuickbaseConfigPage: React.FC = () => {
               </button>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7">
+          <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8">
             {[
               { label: 'Customers', key: 'customers' },
               { label: 'Contacts', key: 'contacts' },
@@ -994,6 +1002,7 @@ const QuickbaseConfigPage: React.FC = () => {
               { label: 'Sales Line Items', key: 'sales_line_items' },
               { label: 'Operations', key: 'operations' },
               { label: 'Unique Emails', key: 'unique_emails' },
+              { label: 'Job Status Log', key: 'job_status_log' },
             ].map(({ label, key }) => {
               const log = qbStatus.table_logs.find(l => l.table_name === key);
               const hasError = log?.status === 'error';
