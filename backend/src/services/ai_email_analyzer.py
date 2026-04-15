@@ -622,34 +622,22 @@ class AIEmailAnalyzer:
                 break
         return skip_ids
 
-    def _get_unanalyzed_emails(
-        self,
-        mailbox_id: str,
-        limit: int = 50,
-        date_from: Optional[str] = None,
-        date_to: Optional[str] = None,
-    ) -> List[dict]:
+    def _prefetch_classification_state(self, mailbox_id: str) -> tuple[set, set]:
         """
-        Get emails that haven't been analyzed yet OR failed previously.
+        One-shot prefetch of the session state needed for pre-filtering.
 
-        Args:
-            mailbox_id: Target mailbox UUID
-            limit: Max emails to return
-            date_from: ISO date string — only analyze emails sent after this date
-            date_to: ISO date string — only analyze emails sent before this date
+        Returns:
+            (analyzed_ids, skip_ids) — computed once at the start of a
+            classification session and reused for every batch. The caller
+            mutates analyzed_ids as new rows are written; skip_ids is
+            immutable for the duration of the session.
 
-        Hybrid pre-filtering (4 layers, all free):
-        1. Date range filter (default: last 7 days) — avoids processing old emails
-        2. Rule-based tags from EmailTagger (email_categories: spam, marketing, system, automated)
-        3. Sprint 2 auto-replies (email_response_metrics) + noreply contacts (customer_contacts)
-        4. Local regex patterns (forward-only, automated subjects/senders)
-
-        This saves ~$0.001/email by avoiding AI calls on low-value emails.
+        This replaces the old pattern where every batch re-queried these sets,
+        producing O(N²) cost as N (rows in ai_email_intelligence) grew.
         """
-        # Step 1: Get already-analyzed email IDs (completed or skipped)
-        analyzed_ids = set()
-        offset = 0
+        analyzed_ids: set = set()
         PAGE_SIZE = 500
+        offset = 0
         while True:
             resp = self._execute_with_retry(
                 self.client.table("ai_email_intelligence")
@@ -666,14 +654,44 @@ class AIEmailAnalyzer:
                 break
             offset += len(batch)
 
-        # Step 2: Hard-skip IDs — spam only (see _get_rule_based_skip_ids)
         skip_ids = self._get_rule_based_skip_ids(mailbox_id)
-        logger.info(f"Pre-filter: {len(skip_ids)} emails to skip (spam-tagged)")
+        logger.info(
+            f"Session pre-filter state: {len(analyzed_ids)} already analyzed/skipped, "
+            f"{len(skip_ids)} spam-tagged"
+        )
+        return analyzed_ids, skip_ids
 
-        # Step 3: Fetch emails from mailbox with date filter
-        all_emails = []
+    def _get_unanalyzed_emails(
+        self,
+        mailbox_id: str,
+        *,
+        analyzed_ids: set,
+        skip_ids: set,
+        cursor: dict,
+        limit: int = 50,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+    ) -> List[dict]:
+        """
+        Fetch up to `limit` emails that still need AI classification.
+
+        Session state is owned by the caller:
+          - analyzed_ids: IDs already completed/skipped (mutated here on skip)
+          - skip_ids: spam-tagged IDs (read-only for the session)
+          - cursor: {'offset': int} — forward-only position in the emails
+            table scan; advances across calls so we never re-walk rows we
+            already examined.
+
+        Hybrid pre-filtering (4 layers, all free):
+        1. Date range filter — avoids processing old emails
+        2. Rule-based spam tags from EmailTagger (applied via skip_ids)
+        3. Folder-level skip (Drafts / Trash / Spam / Junk)
+        4. Local regex patterns (bounce/delivery-failure detection) + trivial-body
+        """
+        PAGE_SIZE = 500
+        all_emails: List[dict] = []
         skipped_count = 0
-        offset = 0
+
         while len(all_emails) < limit:
             fetch_size = min(PAGE_SIZE, limit - len(all_emails) + 200)  # overfetch to account for filtering
             query = (
@@ -686,13 +704,14 @@ class AIEmailAnalyzer:
                 query = query.gte("sent_date", date_from)
             if date_to:
                 query = query.lte("sent_date", date_to)
+            start = cursor['offset']
             resp = self._execute_with_retry(
-                query.range(offset, offset + fetch_size - 1)
+                query.range(start, start + fetch_size - 1)
             )
             batch = resp.data or []
             if len(batch) == 0:
                 break
-            offset += len(batch)
+            cursor['offset'] = start + len(batch)
 
             for email in batch:
                 eid = email.get("id")
@@ -1267,10 +1286,14 @@ class AIEmailAnalyzer:
         Analyze a batch of emails (up to BATCH_SIZE) with one Claude Haiku call.
 
         Returns:
-            {"analyzed": int, "failed": int, "skipped": int}
+            {"analyzed": int, "failed": int, "skipped": int,
+             "requeued_emails": List[dict]}
+            requeued_emails: full email dicts the LLM silently dropped from its
+            response. Their row was reset to pending; the orchestrator passes
+            them straight back into the next batch (no re-fetch from DB).
         """
         if not emails:
-            return {"analyzed": 0, "failed": 0, "skipped": 0}
+            return {"analyzed": 0, "failed": 0, "skipped": 0, "requeued_emails": []}
 
         # Load client's API keys (DB > env) — no global model-tier mutation.
         _load_client_api_keys(self.client, client_id)
@@ -1309,7 +1332,7 @@ class AIEmailAnalyzer:
                     error_type="api_unavailable",
                     prompt_version=PROMPT_VERSION,
                 )
-            return {"analyzed": 0, "failed": len(emails), "skipped": 0}
+            return {"analyzed": 0, "failed": len(emails), "skipped": 0, "requeued_emails": []}
 
         email_ids = [e["id"] for e in emails]
 
@@ -1381,14 +1404,17 @@ class AIEmailAnalyzer:
                     error_detail=error_detail[:500] if error_detail else None,
                     prompt_version=effective_prompt_version,
                 )
-            return {"analyzed": 0, "failed": len(emails), "skipped": 0}
+            return {"analyzed": 0, "failed": len(emails), "skipped": 0, "requeued_emails": []}
 
         # Parse + validate
         valid_results, failed_items = self._parse_and_validate(ai_response, email_ids)
 
-        # Separate missing_from_response (requeue) from real failures
+        # Separate missing_from_response (requeue) from real failures.
+        # We keep the original email dicts so the orchestrator can hand them
+        # straight back to the next batch without re-querying the DB.
         final_failures = []
-        requeued = 0
+        requeued_emails: List[dict] = []
+        emails_by_id = {e["id"]: e for e in emails}
         for fail in failed_items:
             if fail["error"] == "missing_from_response":
                 # Reset to pending so next batch picks it up (LLM just skipped it)
@@ -1398,13 +1424,15 @@ class AIEmailAnalyzer:
                         .update({"processing_status": "pending", "error_message": None})
                         .eq("email_id", fail["email_id"])
                     )
-                    requeued += 1
+                    original = emails_by_id.get(fail["email_id"])
+                    if original is not None:
+                        requeued_emails.append(original)
                 except Exception:
                     final_failures.append(fail)
             else:
                 final_failures.append(fail)
-        if requeued:
-            logger.info(f"Requeued {requeued} emails missing from LLM response (will retry in next batch)")
+        if requeued_emails:
+            logger.info(f"Requeued {len(requeued_emails)} emails missing from LLM response (will retry in next batch)")
 
         # Build lifecycle tier lookup from enriched emails
         lifecycle_lookup = {e["id"]: e.get("_lifecycle_tier") for e in emails}
@@ -1462,6 +1490,7 @@ class AIEmailAnalyzer:
             "analyzed": analyzed_count,
             "failed": len(final_failures),
             "skipped": 0,
+            "requeued_emails": requeued_emails,
         }
 
     # ------------------------------------------------------------------
@@ -1512,14 +1541,32 @@ class AIEmailAnalyzer:
         # Use smaller batches for Gemini (returns fewer results per call)
         effective_batch = GEMINI_BATCH_SIZE if get_ai_settings(client_id).cheap_model == "gemini" else BATCH_SIZE
 
+        # Session-level state: computed once, reused for every batch. This
+        # replaces the old per-batch scans that cost O(N²) as N grew.
+        analyzed_ids, skip_ids = self._prefetch_classification_state(mailbox_id)
+        emails_cursor: dict = {'offset': 0}
+        requeue_pool: List[dict] = []
+
         while total_analyzed + total_failed < max_emails:
-            # Fetch next batch of unanalyzed emails
             remaining = max_emails - total_analyzed - total_failed
             fetch_limit = min(effective_batch, remaining)
-            emails = self._get_unanalyzed_emails(
-                mailbox_id, limit=fetch_limit,
-                date_from=date_from, date_to=date_to,
-            )
+
+            # Prefer re-injecting emails the LLM silently dropped in the
+            # previous batch (their rows were reset to 'pending'). Cursor-based
+            # forward iteration won't revisit them on its own.
+            if requeue_pool:
+                emails = requeue_pool[:fetch_limit]
+                requeue_pool = requeue_pool[fetch_limit:]
+            else:
+                emails = self._get_unanalyzed_emails(
+                    mailbox_id,
+                    analyzed_ids=analyzed_ids,
+                    skip_ids=skip_ids,
+                    cursor=emails_cursor,
+                    limit=fetch_limit,
+                    date_from=date_from,
+                    date_to=date_to,
+                )
 
             if not emails:
                 logger.info("No more unanalyzed emails found")
@@ -1529,6 +1576,18 @@ class AIEmailAnalyzer:
             total_analyzed += result["analyzed"]
             total_failed += result["failed"]
             batch_count += 1
+
+            # Completed email_ids never come back via the cursor (they're written
+            # as 'completed' and the cursor only moves forward), but keeping
+            # analyzed_ids in sync preserves the invariant in case anything
+            # rewinds the cursor in the future.
+            for e in emails:
+                analyzed_ids.add(e["id"])
+
+            # Re-inject anything the LLM silently dropped, straight into the
+            # next iteration — no DB round-trip.
+            if result.get("requeued_emails"):
+                requeue_pool.extend(result["requeued_emails"])
 
             # Circuit breaker: stop if API is consistently failing
             if result["analyzed"] == 0 and result["failed"] > 0:
