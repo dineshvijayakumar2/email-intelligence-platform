@@ -377,44 +377,35 @@ class EmailClassificationResult(BaseModel):
 # ---------------------------------------------------------------------------
 # JSON guard layer
 # ---------------------------------------------------------------------------
-def _apply_client_model_settings(supabase_client, client_id: Optional[str]):
-    """Load client's model preferences AND API keys from DB and apply."""
+def _load_client_api_keys(supabase_client, client_id: Optional[str]) -> None:
+    """Decode per-client API keys from system_settings into env vars.
+
+    Mirrors the embedding path (vector_service._resolve_api_key): DB is the
+    single source of truth for keys. Does NOT mutate global model tiers —
+    per-task routing in call_for_task() reads the DB directly per call.
+    """
     if not client_id or not supabase_client:
         return
     try:
         resp = supabase_client.table("system_settings").select("key,value").eq(
             "client_id", client_id
-        ).execute()
+        ).in_("key", ["api_key_google", "api_key_anthropic", "api_key_openai"]).execute()
         if not resp.data:
             return
-        settings = {row["key"]: row["value"] for row in resp.data}
-
-        # Apply model preferences
-        cheap = settings.get("ai_cheap_model")
-        strategic = settings.get("ai_strategic_model")
-        if cheap or strategic:
-            from .ai_client import update_ai_settings
-            from .langchain_core import set_default_models
-            update_ai_settings(
-                cheap_model=cheap or "haiku",
-                strategic_model=strategic or "sonnet",
-            )
-            set_default_models(
-                cheap=cheap or "haiku",
-                strategic=strategic or "sonnet",
-            )
-            logger.info(f"Applied client model settings: cheap={cheap}, strategic={strategic}")
-
-        # Apply API keys from DB (base64-encoded)
         import os, base64
-        if settings.get("api_key_google"):
-            os.environ["GOOGLE_GENAI_API_KEY"] = base64.b64decode(settings["api_key_google"]).decode()
-        if settings.get("api_key_anthropic"):
-            os.environ["ANTHROPIC_API_KEY"] = base64.b64decode(settings["api_key_anthropic"]).decode()
-        if settings.get("api_key_openai"):
-            os.environ["OPENAI_API_KEY"] = base64.b64decode(settings["api_key_openai"]).decode()
+        for row in resp.data:
+            key, val = row["key"], row.get("value")
+            if not val:
+                continue
+            env_name = {
+                "api_key_google": "GOOGLE_GENAI_API_KEY",
+                "api_key_anthropic": "ANTHROPIC_API_KEY",
+                "api_key_openai": "OPENAI_API_KEY",
+            }.get(key)
+            if env_name:
+                os.environ[env_name] = base64.b64decode(val).decode()
     except Exception as e:
-        logger.debug(f"Could not load client settings: {e}")
+        logger.debug(f"Could not load client API keys: {e}")
 
 
 def clean_llm_output(text: str) -> str:
@@ -1412,27 +1403,34 @@ class AIEmailAnalyzer:
         if not emails:
             return {"analyzed": 0, "failed": 0, "skipped": 0}
 
-        # Apply client's model preferences FIRST (before availability check)
-        _apply_client_model_settings(self.client, client_id)
+        # Load client's API keys (DB > env) — no global model-tier mutation.
+        _load_client_api_keys(self.client, client_id)
 
-        # Check if AI is available — for Gemini, we only need Google key (not Anthropic)
-        cheap_model = get_ai_settings().cheap_model
-        ai_available = self.ai_client.is_available  # Anthropic key set
-        if not ai_available and cheap_model not in ("haiku", "sonnet"):
-            # Using a non-Anthropic model — check if it's usable via LangChain
-            import os
-            if cheap_model == "gemini" and (os.getenv("GOOGLE_GENAI_API_KEY") or os.getenv("GEMINI_API_KEY")):
-                ai_available = True
+        # Resolve the per-task model purely from DB and check availability
+        # against THAT model's provider. No fallback to cheap_model tier —
+        # the UI "Email Analysis" dropdown is the single source of truth.
+        from .langchain_core import resolve_task_model_name, get_model_provider
+        task_model = resolve_task_model_name("email_analysis", client_id)
+        provider = get_model_provider(task_model)
+        import os as _os
+        provider_key_present = {
+            "anthropic": bool(_os.getenv("ANTHROPIC_API_KEY")),
+            "google": bool(_os.getenv("GOOGLE_GENAI_API_KEY") or _os.getenv("GEMINI_API_KEY")),
+            "openai": bool(_os.getenv("OPENAI_API_KEY")),
+        }.get(provider, False)
 
-        if not ai_available:
+        if not provider_key_present:
+            fail_msg = (
+                f"api_unavailable: email_analysis task is set to '{task_model}' "
+                f"({provider}) but no {provider} API key is configured"
+            )
             for email in emails:
-                self._save_failed(email["id"], mailbox_id, client_id,
-                                  f"api_unavailable: no API key for model '{cheap_model}'")
+                self._save_failed(email["id"], mailbox_id, client_id, fail_msg)
             usage_tracker = get_usage_tracker()
             if usage_tracker:
                 usage_tracker.log_usage(
                     operation="email_intelligence",
-                    model="none",
+                    model=task_model,
                     input_tokens=0,
                     output_tokens=0,
                     mailbox_id=mailbox_id,

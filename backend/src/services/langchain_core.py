@@ -126,8 +126,10 @@ def get_llm(model_name: Optional[ModelName] = None, temperature: float = 0.0, js
     elif config["provider"] == "google":
         api_key = os.environ.get("GOOGLE_GENAI_API_KEY") or os.environ.get("GEMINI_API_KEY")
         if not api_key:
-            logger.warning("GOOGLE_GENAI_API_KEY not set — falling back to Haiku")
-            return get_llm("haiku", temperature)
+            raise ValueError(
+                f"GOOGLE_GENAI_API_KEY not set but model {name!r} requires it. "
+                "Save a Google key on the AI Usage page or change the task's model."
+            )
         kwargs = dict(
             model=config["model"],
             google_api_key=api_key,
@@ -139,12 +141,16 @@ def get_llm(model_name: Optional[ModelName] = None, temperature: float = 0.0, js
         return ChatGoogleGenerativeAI(**kwargs)
     elif config["provider"] == "openai":
         if not _openai_available:
-            logger.warning("langchain-openai not installed — falling back to Gemini")
-            return get_llm("gemini", temperature)
+            raise RuntimeError(
+                f"langchain-openai not installed but model {name!r} requires it. "
+                "pip install langchain-openai or change the task's model."
+            )
         api_key = os.environ.get("OPENAI_API_KEY")
         if not api_key:
-            logger.warning("OPENAI_API_KEY not set — falling back to Gemini")
-            return get_llm("gemini", temperature)
+            raise ValueError(
+                f"OPENAI_API_KEY not set but model {name!r} requires it. "
+                "Save an OpenAI key on the AI Usage page or change the task's model."
+            )
         return ChatOpenAI(
             model=config["model"],
             api_key=api_key,
@@ -219,11 +225,16 @@ def get_task_model(task: str, client_id: str = None, temperature: float = 0.0, j
 
 
 def resolve_task_model_name(task: str, client_id: str = None) -> ModelName:
-    """Resolve the model name for a task. DB > legacy tier > env > default."""
+    """Resolve per-task model purely from DB, with TASK_MODEL_DEFAULTS as final fallback.
+
+    Source of truth is `system_settings.ai_model_{task}` scoped to client_id. No
+    cascade through legacy cheap/strategic tiers — that path silently overrode
+    explicit per-task UI choices and masked missing settings. Matches the
+    embedding provider pattern: DB (client-scoped) > task default > raise.
+    """
     import time as _time
     global _task_model_cache, _task_model_cache_expires
 
-    # Check cache (60s TTL)
     cache_key = f"{client_id or 'none'}_{task}"
     if cache_key in _task_model_cache and _task_model_cache_expires > _time.time():
         return _task_model_cache[cache_key]
@@ -231,7 +242,6 @@ def resolve_task_model_name(task: str, client_id: str = None) -> ModelName:
     model_name = None
     db_key = f"ai_model_{task}"
 
-    # Try DB
     if client_id:
         try:
             from ..database.supabase_client import SupabaseClient
@@ -241,26 +251,28 @@ def resolve_task_model_name(task: str, client_id: str = None) -> ModelName:
             ).eq('client_id', client_id).limit(1).execute()
             if resp.data and resp.data[0].get('value'):
                 model_name = resp.data[0]['value']
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"resolve_task_model_name DB read failed for {task}/{client_id}: {e}")
 
-    # Fallback to legacy cheap/strategic tier
     if not model_name:
-        tier = _TASK_LEGACY_TIER.get(task, 'cheap')
-        if tier == 'cheap':
-            model_name = _default_cheap_model
-        else:
-            model_name = _default_strategic_model
-
-    # Validate model exists
-    if model_name not in MODEL_CONFIGS:
         model_name = TASK_MODEL_DEFAULTS.get(task, 'haiku')
 
-    # Cache
+    if model_name not in MODEL_CONFIGS:
+        logger.warning(f"resolve_task_model_name: invalid model {model_name!r} for task {task} — using task default")
+        model_name = TASK_MODEL_DEFAULTS.get(task, 'haiku')
+
     _task_model_cache[cache_key] = model_name
     _task_model_cache_expires = _time.time() + 60
 
     return model_name
+
+
+def get_model_provider(model_name: str) -> str:
+    """Return the provider name (anthropic/google/openai) for a model key."""
+    cfg = MODEL_CONFIGS.get(model_name)
+    if not cfg:
+        raise ValueError(f"Unknown model: {model_name}")
+    return cfg["provider"]
 
 
 def get_all_task_models(client_id: str = None) -> dict:
