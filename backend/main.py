@@ -558,6 +558,7 @@ async def startup_event():
     # seconds of boot. Prevents silent degraded-state situations like the
     # 2026-04-13 HNSW index loss going unnoticed for hours.
     try:
+        import asyncio
         from src.database.index_reconcile import run_startup_check
         asyncio.create_task(run_startup_check())
     except Exception as e:
