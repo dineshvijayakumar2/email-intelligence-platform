@@ -413,10 +413,11 @@ export const DataHealthDashboard: React.FC = () => {
                   <div className={`h-full rounded-full transition-all ${pct >= 90 ? 'bg-success' : pct >= 70 ? 'bg-warning' : 'bg-destructive'}`}
                     style={{ width: `${pct}%` }} />
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-3">
+                <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-3">
                   <div><p className="text-xs text-slate-500">Total Emails</p><p className="text-lg font-semibold tabular-nums">{formatNumber(t?.total_emails ?? 0)}</p></div>
                   <div><p className="text-xs text-slate-500">Classified</p><p className="text-lg font-semibold tabular-nums text-success">{formatNumber(t?.classified ?? 0)}</p></div>
                   <div><p className="text-xs text-slate-500">Pending</p><p className={`text-lg font-semibold tabular-nums ${(t?.pending ?? 0) > 0 ? 'text-warning' : 'text-success'}`}>{formatNumber(t?.pending ?? 0)}</p></div>
+                  <div title="Pre-filtered emails (spam, bounces, delivery failures) — skipped before AI call"><p className="text-xs text-slate-500">Filtered</p><p className="text-lg font-semibold tabular-nums text-slate-500">{formatNumber(t?.skipped ?? 0)}</p></div>
                   <div><p className="text-xs text-slate-500">Failed</p><p className={`text-lg font-semibold tabular-nums ${(t?.failed ?? 0) > 0 ? 'text-destructive' : 'text-success'}`}>{formatNumber(t?.failed ?? 0)}</p></div>
                   <div><p className="text-xs text-slate-500">Coverage</p><p className={`text-lg font-semibold tabular-nums ${pct >= 90 ? 'text-success' : pct >= 70 ? 'text-warning' : 'text-destructive'}`}>{pct}%</p></div>
                 </div>
@@ -432,6 +433,7 @@ export const DataHealthDashboard: React.FC = () => {
                 <th className="px-3 py-1.5 text-right text-xs font-bold uppercase tracking-wider text-slate-600 w-20">Total</th>
                 <th className="px-3 py-1.5 text-right text-xs font-bold uppercase tracking-wider text-slate-600 w-24">Classified</th>
                 <th className="px-3 py-1.5 text-right text-xs font-bold uppercase tracking-wider text-slate-600 w-20">Pending</th>
+                <th className="px-3 py-1.5 text-right text-xs font-bold uppercase tracking-wider text-slate-600 w-20" title="Pre-filtered (spam, bounces)">Filtered</th>
                 <th className="px-3 py-1.5 text-right text-xs font-bold uppercase tracking-wider text-slate-600 w-20">Failed</th>
                 <th className="px-3 py-1.5 text-right text-xs font-bold uppercase tracking-wider text-slate-600 w-24">Coverage</th>
               </tr>
@@ -443,6 +445,7 @@ export const DataHealthDashboard: React.FC = () => {
                   <td className="px-3 py-1.5 text-right tabular-nums">{formatNumber(mb.total_emails)}</td>
                   <td className="px-3 py-1.5 text-right tabular-nums text-success">{formatNumber(mb.classified)}</td>
                   <td className="px-3 py-1.5 text-right tabular-nums">{mb.pending > 0 ? <span className="text-warning">{formatNumber(mb.pending)}</span> : '0'}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums text-slate-500">{formatNumber(mb.skipped ?? 0)}</td>
                   <td className="px-3 py-1.5 text-right tabular-nums">{mb.failed > 0 ? <span className="text-destructive">{formatNumber(mb.failed)}</span> : '0'}</td>
                   <td className="px-3 py-1.5 text-right">
                     <StatusBadge variant={mb.coverage_pct >= 90 ? 'success' : mb.coverage_pct >= 70 ? 'warning' : 'danger'} size="sm">{mb.coverage_pct}%</StatusBadge>

@@ -24,7 +24,8 @@ export function useClassificationHealth(clientId: string) {
     queryKey: ['data-health-classification', clientId],
     queryFn: () => api.get<any>(`/v1/analytics/data-health/classification?client_id=${clientId}`).catch(() => null),
     enabled: !!clientId,
-    staleTime: 30_000,
+    staleTime: 10_000,
+    refetchInterval: 15_000,
   });
 }
 
@@ -34,5 +35,6 @@ export function useThreadHealth(clientId: string) {
     queryFn: () => api.get<any>(`/v1/analytics/data-health/threads?client_id=${clientId}`).catch(() => null),
     enabled: !!clientId,
     staleTime: 30_000,
+    refetchInterval: 30_000,
   });
 }

@@ -3682,11 +3682,13 @@ async def get_classification_health(client_id: Optional[str] = Query(default=Non
         logger.debug(f"Classification health RPC returned {type(raw).__name__}, {len(per_mailbox)} mailboxes")
 
         # Ensure numeric types from JSONB
+        # coverage_pct = "work complete" — (classified + skipped) / total.
+        # Skipped emails (spam, bounces) are intentional pre-filter hits, not gaps.
         for mb in per_mailbox:
             for k in ('total_emails', 'classified', 'pending', 'failed', 'skipped'):
                 mb[k] = int(mb.get(k, 0))
             mb['coverage_pct'] = round(
-                mb['classified'] / mb['total_emails'] * 100, 1
+                (mb['classified'] + mb['skipped']) / mb['total_emails'] * 100, 1
             ) if mb['total_emails'] > 0 else 0.0
 
         total_emails_all = sum(m['total_emails'] for m in per_mailbox)
@@ -3695,7 +3697,7 @@ async def get_classification_health(client_id: Optional[str] = Query(default=Non
         total_failed_all = sum(m['failed'] for m in per_mailbox)
         total_skipped_all = sum(m['skipped'] for m in per_mailbox)
         overall_coverage = round(
-            total_classified_all / total_emails_all * 100, 1
+            (total_classified_all + total_skipped_all) / total_emails_all * 100, 1
         ) if total_emails_all > 0 else 0.0
 
         return {
