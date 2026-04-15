@@ -2,21 +2,25 @@
  * Centralized date formatting utilities.
  *
  * All backend dates arrive as ISO 8601 UTC strings (e.g. "2026-03-09T15:42:30+00:00").
- * These helpers convert them to the user's local timezone for display.
+ * These helpers convert them to the user's local timezone for display, using
+ * Australian English locale (en-AU) so month/day order stays consistent
+ * regardless of the viewer's browser locale.
  */
 
+import { LOCALE } from '../config';
+
 // ---------------------------------------------------------------------------
-// Core formatters — all output in the browser's local timezone
+// Core formatters — all output in the browser's local timezone, en-AU format
 // ---------------------------------------------------------------------------
 
-/** Full datetime: "Mar 9, 2026, 9:12 PM" */
+/** Full datetime: "9 Mar 2026, 9:12 pm" */
 export function formatDateTime(
   dateStr: string | null | undefined
 ): string {
   if (!dateStr) return '—';
   const date = new Date(dateStr);
   if (isNaN(date.getTime())) return '—';
-  return date.toLocaleString('en-US', {
+  return date.toLocaleString(LOCALE, {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -26,41 +30,41 @@ export function formatDateTime(
   });
 }
 
-/** Date only: "Mar 9, 2026" */
+/** Date only: "9 Mar 2026" */
 export function formatDate(
   dateStr: string | null | undefined
 ): string {
   if (!dateStr) return '—';
   const date = new Date(dateStr);
   if (isNaN(date.getTime())) return '—';
-  return date.toLocaleDateString('en-US', {
+  return date.toLocaleDateString(LOCALE, {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
   });
 }
 
-/** Short date (no year): "Mar 9" */
+/** Short date (no year): "9 Mar" */
 export function formatShortDate(
   dateStr: string | null | undefined
 ): string {
   if (!dateStr) return '—';
   const date = new Date(dateStr);
   if (isNaN(date.getTime())) return '—';
-  return date.toLocaleDateString('en-US', {
+  return date.toLocaleDateString(LOCALE, {
     month: 'short',
     day: 'numeric',
   });
 }
 
-/** Time only: "9:12 PM" */
+/** Time only: "9:12 pm" */
 export function formatTime(
   dateStr: string | null | undefined
 ): string {
   if (!dateStr) return '—';
   const date = new Date(dateStr);
   if (isNaN(date.getTime())) return '—';
-  return date.toLocaleTimeString('en-US', {
+  return date.toLocaleTimeString(LOCALE, {
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,

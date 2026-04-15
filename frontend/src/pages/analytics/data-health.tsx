@@ -840,7 +840,7 @@ const DbPerformancePanel: React.FC = () => {
                         <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${opColor(op)}`}>{op}</span>
                       </td>
                       <td className="px-3 py-1.5 text-slate-700 font-medium truncate max-w-[280px]">{name}</td>
-                      <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{q.calls.toLocaleString()}</td>
+                      <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{formatNumber(q.calls)}</td>
                       <td className="px-3 py-1.5 text-right">
                         <span className={`inline-block px-1.5 py-0.5 rounded text-[11px] font-semibold tabular-nums ${timeBadge(q.total_time_s)}`}>
                           {fmtTime(q.total_time_s)}
@@ -874,7 +874,7 @@ const DbPerformancePanel: React.FC = () => {
                 {(data?.table_stats || []).map((t, i) => (
                   <tr key={i} className="hover:bg-slate-25">
                     <td className="px-3 py-1.5 font-mono text-slate-700">{t.table_name}</td>
-                    <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{t.row_estimate.toLocaleString()}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{formatNumber(t.row_estimate)}</td>
                     <td className="px-3 py-1.5 text-right tabular-nums font-semibold text-slate-700">{t.total_size}</td>
                     <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{t.table_size}</td>
                     <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{t.index_size}</td>
@@ -910,9 +910,9 @@ const DbPerformancePanel: React.FC = () => {
                         {unused && <span className="ml-2 text-[10px] text-red-500 font-semibold">UNUSED</span>}
                       </td>
                       <td className={`px-3 py-1.5 text-right tabular-nums ${unused ? 'text-red-600 font-semibold' : 'text-slate-600'}`}>
-                        {idx.index_scans.toLocaleString()}
+                        {formatNumber(idx.index_scans)}
                       </td>
-                      <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{idx.rows_read.toLocaleString()}</td>
+                      <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{formatNumber(idx.rows_read)}</td>
                       <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{idx.index_size}</td>
                     </tr>
                   );

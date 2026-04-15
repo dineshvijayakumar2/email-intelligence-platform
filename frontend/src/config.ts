@@ -1,6 +1,14 @@
 // Configuration loaded from frontend environment variables
 // All variables must be prefixed with VITE_ to be exposed to the client
 
+/**
+ * Default locale for all date/number formatting.
+ * Keep in sync with utils/numberFormat.ts formatNumber() default and with
+ * utils/dateUtils.ts core formatters. Used so formatting is consistent
+ * regardless of the viewer's browser locale.
+ */
+export const LOCALE = 'en-AU';
+
 // Helper to derive WebSocket URL from API URL
 const deriveWsUrl = (apiUrl: string): string => {
   if (import.meta.env.VITE_WS_BASE_URL) {

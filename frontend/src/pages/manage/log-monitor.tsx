@@ -3,6 +3,7 @@
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../../services/apiClient';
+import { formatTime } from '../../utils/dateUtils';
 import { PageShell } from '@/components/ui/page-shell';
 import { cn } from '@/lib/utils';
 import { RefreshCw, Play, Pause, Trash2, Search } from 'lucide-react';
@@ -122,7 +123,7 @@ export default function LogMonitorPage() {
                   (log.level === 'ERROR' || log.level === 'CRITICAL') && 'bg-destructive-subtle',
                   log.level === 'WARNING' && 'bg-warning-subtle',
                 )}>
-                  <td className="px-3 py-1.5 font-mono text-slate-500">{new Date(log.ts).toLocaleTimeString()}</td>
+                  <td className="px-3 py-1.5 font-mono text-slate-500">{formatTime(log.ts)}</td>
                   <td className="px-3 py-1.5"><StatusBadge variant={LEVEL_VARIANT[log.level] || 'neutral'} size="sm">{log.level}</StatusBadge></td>
                   <td className="px-3 py-1.5 font-mono text-slate-600">{log.service}</td>
                   <td className="px-3 py-1.5 text-slate-700">

@@ -18,6 +18,7 @@ import { ContentSkeleton } from '@/components/ui/empty-state';
 import api from '../../services/apiClient';
 import { useQBTable, useQBSyncStatus } from '../../hooks/queries';
 import { formatNumber, formatCurrency } from '../../utils/numberFormat';
+import { formatDate } from '../../utils/dateUtils';
 
 const PAGE_SIZE = 50;
 
@@ -102,7 +103,7 @@ const contactColumns: ColDef[] = [
     render: (v: number) => v != null ? `${v}d` : '-' },
   { title: 'Quotes Accepted', dataIndex: 'quotes_accepted_count', key: 'quotes_accepted_count', width: 130, align: 'right', sorter: true },
   { title: 'Last Quote', dataIndex: 'most_recent_quote_date', key: 'most_recent_quote_date', width: 130, sorter: true,
-    render: (v: string) => v ? new Date(v).toLocaleDateString() : '-' },
+    render: (v: string) => v ? formatDate(v) : '-' },
   { title: 'Matched', dataIndex: 'matched_contact_id', key: 'matched', width: 80,
     render: (v: string) => v
       ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
@@ -119,9 +120,9 @@ const quoteColumns: ColDef[] = [
   { title: 'Sell (ex tax)', dataIndex: 'sell_ex_tax', key: 'sell_ex_tax', width: 120, align: 'right', sorter: true,
     render: (v: number) => v != null ? formatCurrency(Number(v)) : '-' },
   { title: 'Created', dataIndex: 'date_created', key: 'date_created', width: 110, sorter: true,
-    render: (v: string) => v ? new Date(v).toLocaleDateString() : '-' },
+    render: (v: string) => v ? formatDate(v) : '-' },
   { title: 'Accepted', dataIndex: 'date_accepted', key: 'date_accepted', width: 110, sorter: true,
-    render: (v: string) => v ? new Date(v).toLocaleDateString() : '-' },
+    render: (v: string) => v ? formatDate(v) : '-' },
   { title: 'Has Job', dataIndex: 'has_job', key: 'has_job', width: 80,
     render: (v: any) => v ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> : '-' },
   { title: 'Qty', dataIndex: 'total_quantity', key: 'total_quantity', width: 80, align: 'right' },
@@ -139,9 +140,9 @@ const jobColumns: ColDef[] = [
   { title: 'Margin %', dataIndex: 'margin_pct', key: 'margin_pct', width: 100, align: 'right', sorter: true,
     render: (v: number) => v != null ? `${Number(v).toFixed(1)}%` : '-' },
   { title: 'Accepted', dataIndex: 'accepted_date', key: 'accepted_date', width: 110, sorter: true,
-    render: (v: string) => v ? new Date(v).toLocaleDateString() : '-' },
+    render: (v: string) => v ? formatDate(v) : '-' },
   { title: 'Due', dataIndex: 'due_date', key: 'due_date', width: 110, sorter: true,
-    render: (v: string) => v ? new Date(v).toLocaleDateString() : '-' },
+    render: (v: string) => v ? formatDate(v) : '-' },
   { title: 'Pieces', dataIndex: 'pieces_ordered', key: 'pieces_ordered', width: 80, align: 'right' },
   { title: 'Kinds', dataIndex: 'kinds_ordered', key: 'kinds_ordered', width: 80, align: 'right' },
   { title: 'Embellishments', key: 'embellishments', width: 220,
@@ -180,7 +181,7 @@ const sliColumns: ColDef[] = [
   { title: 'Total', dataIndex: 'total', key: 'total', width: 110, align: 'right', sorter: true,
     render: (v: number) => v != null ? formatCurrency(Number(v)) : '-' },
   { title: 'Date', dataIndex: 'inv_date', key: 'inv_date', width: 110, sorter: true,
-    render: (v: string) => v ? new Date(v).toLocaleDateString() : '-' },
+    render: (v: string) => v ? formatDate(v) : '-' },
 ];
 
 const operationsColumns: ColDef[] = [
@@ -215,7 +216,7 @@ const operationsColumns: ColDef[] = [
       </div>
     ) },
   { title: 'Date Accepted', dataIndex: 'date_accepted', key: 'date_accepted', width: 110, sorter: true,
-    render: (v: string) => v ? new Date(v).toLocaleDateString() : '-' },
+    render: (v: string) => v ? formatDate(v) : '-' },
   { title: 'Cost+ Price', dataIndex: 'cost_plus_price', key: 'cost_plus_price', width: 110, align: 'right', sorter: true,
     render: (v: number) => v != null ? formatCurrency(Number(v)) : '-' },
   { title: 'Profit %', dataIndex: 'profit_pct', key: 'profit_pct', width: 90, align: 'right', sorter: true,

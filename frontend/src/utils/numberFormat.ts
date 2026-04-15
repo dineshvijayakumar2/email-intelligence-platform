@@ -12,6 +12,8 @@
  *   formatCurrencyCompact(1234567, 'AUD')   // "$1.2M"
  */
 
+import { LOCALE } from '../config';
+
 /** Supported ISO 4217 currency codes and their display metadata. */
 const CURRENCY_META: Record<string, { symbol: string; locale: string }> = {
   AUD: { symbol: '$', locale: 'en-AU' },
@@ -87,12 +89,12 @@ export function formatCurrencyCompact(
 
 /**
  * Format a plain number with locale-correct thousand separators.
- * Always uses en-AU format (123,456) regardless of browser locale.
+ * Always uses the app's default locale (en-AU) regardless of browser locale.
  * Use this instead of .toLocaleString() to avoid Indian format (1,23,456).
  */
 export function formatNumber(value: number | null | undefined): string {
   if (value == null) return '0';
-  return new Intl.NumberFormat('en-AU').format(value);
+  return new Intl.NumberFormat(LOCALE).format(value);
 }
 
 /** Options list for the currency selector in the settings page. */
