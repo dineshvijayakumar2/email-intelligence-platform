@@ -533,7 +533,7 @@ class AIClient:
         else:
             return self._call_via_langchain(client_id, model_name, system_prompt, user_message, max_tokens, temperature, json_mode=json_mode)
 
-    def call_haiku(
+    def call_cheap(
         self,
         client_id: str,
         system_prompt: str,
@@ -542,10 +542,10 @@ class AIClient:
         temperature: float = 0.0,
         json_mode: bool = False,
     ) -> Optional[AIResponse]:
-        """Call cheap/fast model. Respects per-tenant cheap_model preference."""
+        """Call cheap/fast model. Resolves per-tenant cheap_model preference."""
         if not client_id:
-            raise ValueError("call_haiku requires client_id")
-        cheap = get_ai_settings(client_id).cheap_model  # "haiku" or "gemini"
+            raise ValueError("call_cheap requires client_id")
+        cheap = get_ai_settings(client_id).cheap_model
         if cheap != "haiku":
             return self._call_via_langchain(client_id, cheap, system_prompt, user_message, max_tokens, temperature, json_mode=json_mode)
         return self._call_model(
@@ -557,7 +557,7 @@ class AIClient:
             temperature=temperature,
         )
 
-    def call_sonnet(
+    def call_strategic(
         self,
         client_id: str,
         system_prompt: str,
@@ -565,10 +565,10 @@ class AIClient:
         max_tokens: int = 4096,
         temperature: float = 0.0,
     ) -> Optional[AIResponse]:
-        """Call strategic/quality model. Respects per-tenant strategic_model preference."""
+        """Call strategic/quality model. Resolves per-tenant strategic_model preference."""
         if not client_id:
-            raise ValueError("call_sonnet requires client_id")
-        strategic = get_ai_settings(client_id).strategic_model  # "sonnet" or "gemini"
+            raise ValueError("call_strategic requires client_id")
+        strategic = get_ai_settings(client_id).strategic_model
         if strategic != "sonnet":
             return self._call_via_langchain(client_id, strategic, system_prompt, user_message, max_tokens, temperature)
         return self._call_model(

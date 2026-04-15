@@ -1184,7 +1184,7 @@ Direction: {'Outbound' if email.get('is_outbound') else 'Inbound'}
 Body:
 {body_truncated}"""
 
-        response = ai.call_haiku(client_id, system_prompt, user_message, max_tokens=300)
+        response = ai.call_cheap(client_id, system_prompt, user_message, max_tokens=300)
         if not response:
             return {"summary": "Unable to generate summary at this time."}
         return {"summary": response.content}
