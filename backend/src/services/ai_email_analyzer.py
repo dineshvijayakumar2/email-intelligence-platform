@@ -42,96 +42,52 @@ GEMINI_BATCH_SIZE = 5  # Gemini needs small batches (limited JSON output tokens)
 DEFAULT_LOOKBACK_DAYS = 7  # Default: only analyze emails from last 7 days
 
 # ---------------------------------------------------------------------------
-# Pre-filter patterns — skip these emails entirely (saves ~$0.001/email)
-# Leverages Sprint 2's contact classification + response_time_tracker patterns
+# Pre-filter patterns — narrow, zero-false-positive hard skips only.
+#
+# Previously this filter also dropped OOO replies, calendar invites, receipts,
+# marketing, and noreply senders. That saved a few dollars but silently
+# suppressed emails that can carry real business content (PO numbers in
+# order confirmations, commitments in OOO replies, pricing in marketing from
+# competitors). Classifying them lets the AI decide — and at current Haiku
+# pricing the cost argument no longer justifies the false-positive risk.
+#
+# What stays: bounces and delivery failures. These are pure SMTP exhaust —
+# never business-relevant, and misclassifying one is impossible.
+#
+# Related but NOT a skip: email_response_metrics.is_auto_reply is still
+# populated by the response-time tracker and used to exclude OOO replies
+# from "responded" metrics. We just don't skip AI analysis on those emails.
 # ---------------------------------------------------------------------------
 AUTOMATED_SUBJECT_PATTERNS = [
-    # Auto-replies (mirrors response_time_tracker.py patterns)
-    r'out of office', r'out of the office', r'automatic reply',
-    r'auto reply', r'auto-reply', r'autoreply', r'vacation',
-    r'away from office', r'currently out', r'i am away', r"i'm away",
-    r'absence notification',
-    # Delivery failures
+    # Delivery failures only — nothing fuzzy
     r'delivery status notification', r'mail delivery failed',
     r'undeliverable', r'returned mail', r'delivery failure',
     r'message not delivered', r'delivery has failed',
-    # System/calendar
-    r'calendar invitation', r'meeting accepted', r'meeting declined',
-    r'meeting tentative', r'event reminder', r'invitation:',
-    # Transactional/receipts
-    r'payment received', r'payment confirmation', r'invoice #',
-    r'order confirmation', r'shipping notification', r'tracking number',
-    r'receipt for your', r'your receipt from', r'transaction alert',
-    r'statement available', r'account statement',
-    # Subscriptions/marketing
-    r'unsubscribe', r'email preferences', r'newsletter',
 ]
 
 AUTOMATED_SENDER_PATTERNS = [
-    r'^noreply@', r'^no-reply@', r'^no\.reply@',
+    # Bounce daemons only — literally never business
     r'^mailer-daemon@', r'^postmaster@',
-    r'^notifications?@', r'^alerts?@', r'^system@',
-    r'^donotreply@', r'^do-not-reply@', r'^do\.not\.reply@',
-    r'^support@.*\.noreply\.',
 ]
 
 _AUTOMATED_SUBJECT_RE = [re.compile(p, re.IGNORECASE) for p in AUTOMATED_SUBJECT_PATTERNS]
 _AUTOMATED_SENDER_RE = [re.compile(p, re.IGNORECASE) for p in AUTOMATED_SENDER_PATTERNS]
 
-# Forward-only pattern: subject starts with Fwd:/FW: and body is short (just forwarding, no commentary)
-_FORWARD_SUBJECT_RE = re.compile(r'^(?:fwd?|fw)\s*:', re.IGNORECASE)
-
 
 def is_automated_email(email: dict) -> bool:
     """
-    Detect automated/transactional emails using subject + sender patterns.
-    These emails waste AI credits with low-value classifications.
+    Detect bounces / delivery failures — the only sender+subject patterns
+    that can never carry business content. Everything else goes to the AI.
     """
     subject = (email.get("subject") or "").lower()
     sender = (email.get("sender_email") or "").lower()
 
-    # Check subject patterns
     for pattern in _AUTOMATED_SUBJECT_RE:
         if pattern.search(subject):
             return True
 
-    # Check sender patterns
     for pattern in _AUTOMATED_SENDER_RE:
         if pattern.search(sender):
-            return True
-
-    return False
-
-
-def is_forward_only_email(email: dict) -> bool:
-    """
-    Detect forward-only emails with no commentary added.
-    These are low-value for AI analysis — the original email they forwarded
-    will be analyzed separately when it arrives.
-    """
-    subject = email.get("subject") or ""
-    body = email.get("body_text") or ""
-
-    if not _FORWARD_SUBJECT_RE.match(subject):
-        return False
-
-    # Forward-only: body is very short (< 50 chars of original content)
-    # or body starts with forwarded message markers with no text before them
-    body_stripped = body.strip()
-    if len(body_stripped) < 50:
-        return True
-
-    # Check if body is just forwarded content with no added commentary
-    forward_markers = [
-        "---------- forwarded message ----------",
-        "-----original message-----",
-        "begin forwarded message",
-        "from:",  # Sometimes forwards just start with the headers
-    ]
-    body_lower = body_stripped.lower()
-    for marker in forward_markers:
-        idx = body_lower.find(marker)
-        if idx != -1 and idx < 30:  # Marker appears near the start
             return True
 
     return False
@@ -632,86 +588,17 @@ class AIEmailAnalyzer:
         raise last_error
 
     # ------------------------------------------------------------------
-    # Fetch unanalyzed emails (with Sprint 2 pre-filtering)
+    # Fetch unanalyzed emails
     # ------------------------------------------------------------------
-    def _get_auto_reply_ids(self, mailbox_id: str) -> set:
-        """
-        Get email IDs flagged as auto-replies by Sprint 2's response_time_tracker.
-        Uses email_response_metrics.is_auto_reply = true.
-        """
-        auto_reply_ids = set()
-        offset = 0
-        PAGE_SIZE = 500
-        while True:
-            try:
-                resp = self._execute_with_retry(
-                    self.client.table("email_response_metrics")
-                    .select("email_id")
-                    .eq("is_auto_reply", 'true')
-                    .range(offset, offset + PAGE_SIZE - 1)
-                )
-                batch = resp.data or []
-                for row in batch:
-                    if row.get("email_id"):
-                        auto_reply_ids.add(row["email_id"])
-                if len(batch) == 0:
-                    break
-                offset += len(batch)
-            except Exception as e:
-                logger.warning(f"Could not fetch auto-reply IDs: {e}")
-                break
-        return auto_reply_ids
-
-    def _get_noreply_contact_ids(self, mailbox_id: str) -> set:
-        """
-        Get email IDs linked to automated/mailing-list contacts (Sprint 2 classification).
-        Uses customer_contacts.contact_type IN ('automated', 'mailing_list').
-        """
-        noreply_emails = set()
-        try:
-            # Get automated + mailing_list contact IDs
-            # Supabase lacks .or_(), so fetch both types separately
-            all_noreply_ids = []
-            for ctype in ("automated", "mailing_list"):
-                resp = self._execute_with_retry(
-                    self.client.table("customer_contacts")
-                    .select("id")
-                    .eq("contact_type", ctype)
-                    .range(0, 499)
-                )
-                all_noreply_ids.extend(r["id"] for r in (resp.data or []) if r.get("id"))
-            noreply_ids = list(set(all_noreply_ids))
-            if not noreply_ids:
-                return noreply_emails
-
-            # Get emails linked to those contacts
-            for i in range(0, len(noreply_ids), 500):
-                chunk = noreply_ids[i:i + 500]
-                resp = self._execute_with_retry(
-                    self.client.table("emails")
-                    .select("id")
-                    .eq("mailbox_id", mailbox_id)
-                    .in_("customer_contact_id", chunk)
-                    .range(0, 4999)
-                )
-                for row in (resp.data or []):
-                    if row.get("id"):
-                        noreply_emails.add(row["id"])
-        except Exception as e:
-            logger.warning(f"Could not fetch noreply contact emails: {e}")
-        return noreply_emails
-
     def _get_rule_based_skip_ids(self, mailbox_id: str) -> set:
         """
-        Get email IDs that EmailTagger already classified as low-value.
-        Reads from email_categories table — zero cost, rule-based tags.
-        Skips: spam, marketing, system, automated emails.
+        Get email IDs that EmailTagger classified as spam — the only rule-based
+        category that's worth blanket-skipping. marketing/system/automated were
+        dropped from the skip set: they can carry business content (promos with
+        competitor pricing, order confirmations with PO numbers, shipping
+        notifications) so we let the AI classify and decide.
         """
-        skip_categories = [
-            'spam', 'marketing', 'system', 'automated',
-            '_meta_spam', '_meta_marketing',
-            '_meta_sender_system', '_meta_sender_marketing', '_meta_sender_automated',
-        ]
+        skip_categories = ['spam', '_meta_spam']
         skip_ids = set()
         offset = 0
         PAGE_SIZE = 500
@@ -779,17 +666,13 @@ class AIEmailAnalyzer:
                 break
             offset += len(batch)
 
-        # Step 2: Get IDs to skip (rule-based tags + Sprint 2 auto-replies + noreply contacts)
+        # Step 2: Hard-skip IDs — spam only (see _get_rule_based_skip_ids)
         skip_ids = self._get_rule_based_skip_ids(mailbox_id)
-        rule_based_count = len(skip_ids)
-        skip_ids |= self._get_auto_reply_ids(mailbox_id)
-        skip_ids |= self._get_noreply_contact_ids(mailbox_id)
-        logger.info(f"Pre-filter: {len(skip_ids)} emails to skip ({rule_based_count} rule-based tags, {len(skip_ids) - rule_based_count} auto-reply/noreply)")
+        logger.info(f"Pre-filter: {len(skip_ids)} emails to skip (spam-tagged)")
 
         # Step 3: Fetch emails from mailbox with date filter
         all_emails = []
         skipped_count = 0
-        forward_skipped = 0
         offset = 0
         while len(all_emails) < limit:
             fetch_size = min(PAGE_SIZE, limit - len(all_emails) + 200)  # overfetch to account for filtering
@@ -799,7 +682,6 @@ class AIEmailAnalyzer:
                 .eq("mailbox_id", mailbox_id)
                 .order("sent_date", desc=True)
             )
-            # Apply date range filter
             if date_from:
                 query = query.gte("sent_date", date_from)
             if date_to:
@@ -814,18 +696,16 @@ class AIEmailAnalyzer:
 
             for email in batch:
                 eid = email.get("id")
-                # Already analyzed or skipped
                 if eid in analyzed_ids:
                     continue
 
-                # Hybrid pre-filter: rule-based tags + Sprint 2 auto-replies + noreply
                 if eid in skip_ids:
-                    self._mark_skipped(eid, mailbox_id, email.get("client_id"), "rule_based_or_auto_reply")
-                    analyzed_ids.add(eid)  # Don't re-process
+                    self._mark_skipped(eid, mailbox_id, email.get("client_id"), "spam")
+                    analyzed_ids.add(eid)
                     skipped_count += 1
                     continue
 
-                # Skip Drafts, Trash, Spam — these are not actionable emails
+                # Skip Drafts, Trash, Spam folders — not actionable
                 folder = (email.get("folder_path") or "").strip()
                 if folder.lower() in ("drafts", "draft", "trash", "deleted", "spam", "junk"):
                     self._mark_skipped(eid, mailbox_id, email.get("client_id"), f"folder_{folder.lower()}")
@@ -833,18 +713,11 @@ class AIEmailAnalyzer:
                     skipped_count += 1
                     continue
 
-                # Fallback: local pattern detection for untagged emails
+                # Hard-skip bounces / delivery failures (see AUTOMATED_*_PATTERNS)
                 if is_automated_email(email):
-                    self._mark_skipped(eid, mailbox_id, email.get("client_id"), "automated_pattern")
+                    self._mark_skipped(eid, mailbox_id, email.get("client_id"), "bounce_or_delivery_failure")
                     analyzed_ids.add(eid)
                     skipped_count += 1
-                    continue
-
-                # Skip forward-only emails (no commentary added)
-                if is_forward_only_email(email):
-                    self._mark_skipped(eid, mailbox_id, email.get("client_id"), "forward_only")
-                    analyzed_ids.add(eid)
-                    forward_skipped += 1
                     continue
 
                 # Skip trivial emails — body too short for meaningful analysis
@@ -859,13 +732,8 @@ class AIEmailAnalyzer:
                 if len(all_emails) >= limit:
                     break
 
-        total_skipped = skipped_count + forward_skipped
-        if total_skipped > 0:
-            logger.info(
-                f"Pre-filtered {total_skipped} emails "
-                f"({skipped_count} automated/auto-reply, {forward_skipped} forward-only) "
-                f"— saved ~${total_skipped * 0.001:.3f}"
-            )
+        if skipped_count > 0:
+            logger.info(f"Pre-filtered {skipped_count} emails (spam + bounces + folder/trivial)")
 
         return all_emails
 
