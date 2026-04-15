@@ -64,9 +64,16 @@ class AIControlSettings:
     strategic_model: str = field(default_factory=lambda: os.getenv("AI_STRATEGIC_MODEL", "sonnet"))
 
 
-# Global settings singleton
-_ai_settings = AIControlSettings()
-_settings_loaded_from_db = False
+# Per-client settings cache. Keyed by client_id. Populated on first read,
+# invalidated on update_ai_settings(). TTL-bounded so stale entries self-heal
+# even if a worker misses an invalidation (multi-worker deployments).
+#
+# Multi-tenancy invariant: NO module-level "current settings" exists. Every
+# AI call path must carry a client_id so budget checks and feature toggles
+# resolve against that tenant's row, not whichever tenant loaded last.
+_settings_cache: dict[str, "AIControlSettings"] = {}
+_settings_cache_ts: dict[str, float] = {}
+_SETTINGS_CACHE_TTL_SEC = 60.0
 
 # Spend cache — avoids hitting DB on every AI call (60s TTL).
 # WARNING: In multi-worker deployments (e.g. Uvicorn --workers N), each
@@ -101,17 +108,12 @@ _FLOAT_FIELDS = {'daily_budget_usd', 'monthly_budget_usd', 'max_requests_per_sec
 _INT_FIELDS = {'batch_size', 'max_emails_per_run'}
 
 
-def load_ai_settings_from_db(client_id: Optional[str] = None):
-    """Load AI control settings from system_settings DB table.
-
-    Called on startup and after settings updates. Falls back to env vars then defaults.
+def _load_settings_from_db(client_id: str) -> AIControlSettings:
+    """Fetch one client's settings from system_settings. Returns an
+    AIControlSettings seeded with dataclass defaults, then overlaid with
+    whatever rows the tenant has. Never mutates shared state.
     """
-    global _ai_settings, _settings_loaded_from_db
-    if not client_id:
-        logger.info("No client_id for AI settings — using defaults + env vars")
-        _settings_loaded_from_db = True
-        return
-
+    settings = AIControlSettings()
     try:
         from ..database.supabase_client import SupabaseClient
         sb = SupabaseClient.get_client(use_service_key=True)
@@ -125,26 +127,26 @@ def load_ai_settings_from_db(client_id: Optional[str] = None):
             if db_key in db_map:
                 raw = db_map[db_key]
                 if field_name in _BOOL_FIELDS:
-                    setattr(_ai_settings, field_name, raw.lower() in ('true', '1', 'yes'))
+                    setattr(settings, field_name, raw.lower() in ('true', '1', 'yes'))
                 elif field_name in _FLOAT_FIELDS:
-                    setattr(_ai_settings, field_name, float(raw))
+                    setattr(settings, field_name, float(raw))
                 elif field_name in _INT_FIELDS:
-                    setattr(_ai_settings, field_name, int(raw))
+                    setattr(settings, field_name, int(raw))
                 else:
-                    setattr(_ai_settings, field_name, raw)
+                    setattr(settings, field_name, raw)
 
-        _settings_loaded_from_db = True
-        logger.info(f"AI settings loaded from DB for client {client_id}: ai_enabled={_ai_settings.ai_enabled}, "
-                     f"budget=${_ai_settings.daily_budget_usd}")
+        logger.debug(
+            f"AI settings loaded for client {client_id}: "
+            f"ai_enabled={settings.ai_enabled}, budget=${settings.daily_budget_usd}"
+        )
     except Exception as e:
-        logger.warning(f"Failed to load AI settings from DB (using defaults): {e}")
-        _settings_loaded_from_db = True
+        logger.warning(f"Failed to load AI settings for {client_id} (using defaults): {e}")
+    return settings
 
 
-def save_ai_setting_to_db(field_name: str, value, client_id: Optional[str] = None):
-    """Persist a single AI setting to system_settings DB table."""
-    if not client_id:
-        return
+def save_ai_setting_to_db(field_name: str, value, client_id: str):
+    """Persist a single AI setting to system_settings DB table. Requires
+    client_id — settings are always per-tenant."""
     db_key = _SETTINGS_DB_KEYS.get(field_name)
     if not db_key:
         return
@@ -171,22 +173,53 @@ def save_ai_setting_to_db(field_name: str, value, client_id: Optional[str] = Non
         logger.error(f"FAILED to save AI setting {field_name}={value} to DB: {e}")
 
 
-def get_ai_settings() -> AIControlSettings:
-    """Get the current AI control settings."""
-    return _ai_settings
+def get_ai_settings(client_id: str) -> AIControlSettings:
+    """Return the AI control settings for a specific client. Cached for 60s.
+
+    Multi-tenancy invariant: settings are ALWAYS scoped to a client_id.
+    There is no implicit "current" client. Callers that don't have a
+    client_id in scope must obtain one (e.g. from the request, the email
+    row, or the analyzer's own client_id field) before calling.
+    """
+    if not client_id:
+        raise ValueError(
+            "get_ai_settings requires client_id — AI settings are per-tenant. "
+            "Pass the client_id from the calling context."
+        )
+    now = time.time()
+    ts = _settings_cache_ts.get(client_id, 0.0)
+    if client_id in _settings_cache and (now - ts) < _SETTINGS_CACHE_TTL_SEC:
+        return _settings_cache[client_id]
+    settings = _load_settings_from_db(client_id)
+    _settings_cache[client_id] = settings
+    _settings_cache_ts[client_id] = now
+    return settings
 
 
-def update_ai_settings(client_id: Optional[str] = None, **kwargs) -> AIControlSettings:
-    """Update AI control settings in memory AND persist to DB."""
-    global _ai_settings
-    for key, value in kwargs.items():
-        if hasattr(_ai_settings, key):
-            setattr(_ai_settings, key, value)
-            # Persist to DB
-            if client_id:
-                save_ai_setting_to_db(key, value, client_id)
-    logger.info(f"AI settings updated: {kwargs}")
-    return _ai_settings
+def invalidate_ai_settings_cache(client_id: Optional[str] = None):
+    """Drop cached settings. Call after writes to system_settings or when a
+    tenant's configuration may have changed underneath us. Pass None to
+    flush all tenants (e.g. admin reset)."""
+    if client_id:
+        _settings_cache.pop(client_id, None)
+        _settings_cache_ts.pop(client_id, None)
+    else:
+        _settings_cache.clear()
+        _settings_cache_ts.clear()
+
+
+def update_ai_settings(client_id: str, **kwargs) -> AIControlSettings:
+    """Persist + invalidate cache for one tenant's AI control settings.
+    Returns the freshly-reloaded settings object."""
+    if not client_id:
+        raise ValueError("update_ai_settings requires client_id")
+    # Whitelist: only allow fields that exist on AIControlSettings
+    valid_kwargs = {k: v for k, v in kwargs.items() if hasattr(AIControlSettings, k)}
+    for key, value in valid_kwargs.items():
+        save_ai_setting_to_db(key, value, client_id)
+    invalidate_ai_settings_cache(client_id)
+    logger.info(f"AI settings updated for client {client_id}: {list(valid_kwargs.keys())}")
+    return get_ai_settings(client_id)
 
 
 def get_actual_spend(client_id: Optional[str] = None, period: str = 'daily') -> float:
@@ -270,6 +303,7 @@ class AIClient:
 
     def _call_model(
         self,
+        client_id: str,
         model: str,
         system_prompt: str,
         user_message: str,
@@ -281,25 +315,28 @@ class AIClient:
 
         Returns None if the API is unavailable or all retries fail.
         The caller should mark the item as 'failed' with error_type.
+
+        Budget and kill-switch checks resolve against this tenant's
+        system_settings row, with per-client spend from ai_usage_log.
         """
         if not self.is_available:
             logger.error("AI client not configured — ANTHROPIC_API_KEY missing")
             return None
 
-        # Check AI control switches
-        settings = get_ai_settings()
+        # Check AI control switches for THIS tenant
+        settings = get_ai_settings(client_id)
         if not settings.ai_enabled:
             self.last_error = "ai_disabled: master kill switch is OFF"
-            logger.warning("AI is disabled via kill switch")
+            logger.warning(f"AI is disabled via kill switch (client={client_id})")
             return None
 
-        # Check daily budget against actual DB spend (cached 60s)
-        actual_daily = get_actual_spend(period='daily')
+        # Check daily budget against THIS tenant's actual DB spend (cached 60s)
+        actual_daily = get_actual_spend(client_id, 'daily')
         if actual_daily >= settings.daily_budget_usd:
             self.last_error = f"budget_exceeded: ${actual_daily:.4f} >= ${settings.daily_budget_usd:.2f} daily cap"
             logger.warning(
-                f"Daily budget exceeded: ${actual_daily:.4f} >= "
-                f"${settings.daily_budget_usd:.2f}. Blocking API call."
+                f"Daily budget exceeded for client {client_id}: "
+                f"${actual_daily:.4f} >= ${settings.daily_budget_usd:.2f}. Blocking API call."
             )
             return None
 
@@ -398,6 +435,7 @@ class AIClient:
 
     def _call_via_langchain(
         self,
+        client_id: str,
         model_name: str,
         system_prompt: str,
         user_message: str,
@@ -408,20 +446,21 @@ class AIClient:
         """
         Call a non-Anthropic model (e.g. Gemini) via LangChain and wrap the
         result in an AIResponse so existing callers need no changes.
+
+        Budget and kill-switch checks mirror _call_model — per-tenant.
         """
-        # Budget check — same enforcement as _call_model (uses DB spend, cached 60s)
-        settings = get_ai_settings()
+        settings = get_ai_settings(client_id)
         if not settings.ai_enabled:
             self.last_error = "ai_disabled: master kill switch is OFF"
-            logger.warning("AI is disabled via kill switch")
+            logger.warning(f"AI is disabled via kill switch (client={client_id})")
             return None
 
-        actual_daily = get_actual_spend(period='daily')
+        actual_daily = get_actual_spend(client_id, 'daily')
         if actual_daily >= settings.daily_budget_usd:
             self.last_error = f"budget_exceeded: ${actual_daily:.4f} >= ${settings.daily_budget_usd:.2f} daily cap"
             logger.warning(
-                f"Daily budget exceeded: ${actual_daily:.4f} >= "
-                f"${settings.daily_budget_usd:.2f}. Blocking LangChain call."
+                f"Daily budget exceeded for client {client_id}: "
+                f"${actual_daily:.4f} >= ${settings.daily_budget_usd:.2f}. Blocking LangChain call."
             )
             return None
 
@@ -467,7 +506,7 @@ class AIClient:
     def call_for_task(
         self,
         task: str,
-        client_id: Optional[str],
+        client_id: str,
         system_prompt: str,
         user_message: str,
         max_tokens: int = 4096,
@@ -478,32 +517,39 @@ class AIClient:
 
         Resolves the per-task model from DB > legacy tier > env > default,
         then routes to Anthropic native SDK or LangChain as appropriate.
+        All downstream budget/kill-switch checks are scoped to client_id.
 
         Tasks: email_analysis, daily_digest, strategic_digest, entity_insights, etc.
         """
+        if not client_id:
+            raise ValueError("call_for_task requires client_id for per-tenant budget enforcement")
         from .langchain_core import resolve_task_model_name
         model_name = resolve_task_model_name(task, client_id)
 
         if model_name == "haiku":
-            return self._call_model(HAIKU_MODEL, system_prompt, user_message, max_tokens, temperature)
+            return self._call_model(client_id, HAIKU_MODEL, system_prompt, user_message, max_tokens, temperature)
         elif model_name == "sonnet":
-            return self._call_model(SONNET_MODEL, system_prompt, user_message, max_tokens, temperature)
+            return self._call_model(client_id, SONNET_MODEL, system_prompt, user_message, max_tokens, temperature)
         else:
-            return self._call_via_langchain(model_name, system_prompt, user_message, max_tokens, temperature, json_mode=json_mode)
+            return self._call_via_langchain(client_id, model_name, system_prompt, user_message, max_tokens, temperature, json_mode=json_mode)
 
     def call_haiku(
         self,
+        client_id: str,
         system_prompt: str,
         user_message: str,
         max_tokens: int = 4096,
         temperature: float = 0.0,
         json_mode: bool = False,
     ) -> Optional[AIResponse]:
-        """Call cheap/fast model. Respects configured cheap_model preference."""
-        cheap = get_ai_settings().cheap_model  # "haiku" or "gemini"
+        """Call cheap/fast model. Respects per-tenant cheap_model preference."""
+        if not client_id:
+            raise ValueError("call_haiku requires client_id")
+        cheap = get_ai_settings(client_id).cheap_model  # "haiku" or "gemini"
         if cheap != "haiku":
-            return self._call_via_langchain(cheap, system_prompt, user_message, max_tokens, temperature, json_mode=json_mode)
+            return self._call_via_langchain(client_id, cheap, system_prompt, user_message, max_tokens, temperature, json_mode=json_mode)
         return self._call_model(
+            client_id=client_id,
             model=HAIKU_MODEL,
             system_prompt=system_prompt,
             user_message=user_message,
@@ -513,16 +559,20 @@ class AIClient:
 
     def call_sonnet(
         self,
+        client_id: str,
         system_prompt: str,
         user_message: str,
         max_tokens: int = 4096,
         temperature: float = 0.0,
     ) -> Optional[AIResponse]:
-        """Call strategic/quality model. Respects configured strategic_model preference."""
-        strategic = get_ai_settings().strategic_model  # "sonnet" or "gemini"
+        """Call strategic/quality model. Respects per-tenant strategic_model preference."""
+        if not client_id:
+            raise ValueError("call_sonnet requires client_id")
+        strategic = get_ai_settings(client_id).strategic_model  # "sonnet" or "gemini"
         if strategic != "sonnet":
-            return self._call_via_langchain(strategic, system_prompt, user_message, max_tokens, temperature)
+            return self._call_via_langchain(client_id, strategic, system_prompt, user_message, max_tokens, temperature)
         return self._call_model(
+            client_id=client_id,
             model=SONNET_MODEL,
             system_prompt=system_prompt,
             user_message=user_message,

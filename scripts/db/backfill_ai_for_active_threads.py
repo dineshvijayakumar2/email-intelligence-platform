@@ -154,7 +154,7 @@ def main():
     from src.services.ai_usage_tracker import init_usage_tracker  # type: ignore
 
     sb = SupabaseClient.get_client(use_service_key=True)
-    from src.services.ai_client import load_ai_settings_from_db, get_ai_settings  # type: ignore
+    from src.services.ai_client import get_ai_settings  # type: ignore
     from src.services.langchain_core import resolve_task_model_name  # type: ignore
     init_usage_tracker(sb)   # analyzer logs usage via this tracker
     init_email_analyzer(sb)
@@ -175,8 +175,7 @@ def main():
         # process would use the $2.00 default from ai_client.py.
         # Per-task model routing reads DB directly inside analyze_batch.
         if client_id:
-            load_ai_settings_from_db(client_id=client_id)
-            cs = get_ai_settings()
+            cs = get_ai_settings(client_id)
             task_model = resolve_task_model_name("email_analysis", client_id)
             logger.info(
                 f"  client settings: daily_budget=${cs.daily_budget_usd:.2f}, "

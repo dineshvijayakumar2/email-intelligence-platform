@@ -69,15 +69,9 @@ def init_ai_router(supabase_client):
     _load_persisted_api_keys()
     _load_persisted_model_settings()
 
-    # Load AI control settings from DB for the first client found
-    # (single-tenant: typically one client)
-    try:
-        from ..services.ai_client import load_ai_settings_from_db
-        clients_resp = supabase_client.table('clients').select('id').limit(1).execute()
-        if clients_resp.data:
-            load_ai_settings_from_db(clients_resp.data[0]['id'])
-    except Exception as e:
-        logger.warning(f"Could not load AI settings from DB on startup: {e}")
+    # AI settings are now per-tenant and loaded lazily via get_ai_settings(client_id).
+    # No startup pre-load — the old single-client pre-load was the source of the
+    # "whoever loaded last wins" multi-tenancy bug.
 
     logger.info("AI router and services initialized")
 
@@ -1018,15 +1012,14 @@ async def get_ai_controls(
     Returns: kill switch, feature toggles, budget caps, batch settings,
     actual daily/monthly spend from ai_usage_log.
     """
-    from ..services.ai_client import load_ai_settings_from_db, get_actual_spend
+    from ..services.ai_client import get_actual_spend
 
-    # Ensure settings are loaded from DB
-    if client_id:
-        load_ai_settings_from_db(client_id)
+    if not client_id:
+        raise HTTPException(status_code=400, detail="client_id required — AI settings are per-tenant")
 
-    settings = get_ai_settings()
+    settings = get_ai_settings(client_id)
 
-    # Get actual spend from DB (not in-memory)
+    # Per-tenant actual spend from DB
     daily_spend = get_actual_spend(client_id, 'daily')
     monthly_spend = get_actual_spend(client_id, 'monthly')
 
@@ -1064,6 +1057,8 @@ async def update_ai_controls(
     Survives server restarts.
     """
     client_id = data.pop("client_id", None)
+    if not client_id:
+        raise HTTPException(status_code=400, detail="client_id required — AI settings are per-tenant")
 
     # Whitelist allowed fields
     allowed = {
@@ -1077,9 +1072,8 @@ async def update_ai_controls(
     if not updates:
         raise HTTPException(status_code=400, detail="No valid fields provided")
 
-    # Update in-memory AND persist to DB
     settings = update_ai_settings(client_id=client_id, **updates)
-    logger.info(f"AI controls updated (persisted to DB): {updates}")
+    logger.info(f"AI controls updated for client {client_id}: {list(updates.keys())}")
 
     return {
         "status": "updated",
@@ -1149,17 +1143,22 @@ async def reset_session_spend(
 
 @router.post("/summarize/{email_id}")
 async def summarize_email(email_id: str):
-    """Generate an on-demand AI summary for a single email using Haiku."""
+    """Generate an on-demand AI summary for a single email using Haiku.
+    client_id is derived from the email row so budget enforcement resolves
+    against the email's tenant, not the ambient process state."""
     try:
-        # Fetch the email
         result = _supabase.table('emails').select(
-            'id, subject, sender_email, sender_name, body_text, body_html, sent_date, is_outbound'
+            'id, client_id, subject, sender_email, sender_name, body_text, body_html, sent_date, is_outbound'
         ).eq('id', email_id).single().execute()
 
         if not result.data:
             raise HTTPException(status_code=404, detail="Email not found")
 
         email = result.data
+        client_id = email.get('client_id')
+        if not client_id:
+            raise HTTPException(status_code=500, detail="Email has no client_id — cannot resolve AI settings")
+
         body = email.get('body_text') or ''
         if not body and email.get('body_html'):
             import re
@@ -1169,7 +1168,6 @@ async def summarize_email(email_id: str):
         if not body or len(body.strip()) < 20:
             return {"summary": "Email has insufficient content to summarize."}
 
-        # Truncate to 2000 chars for cost efficiency
         body_truncated = body[:2000]
 
         from ..services.ai_client import get_ai_client
@@ -1186,7 +1184,7 @@ Direction: {'Outbound' if email.get('is_outbound') else 'Inbound'}
 Body:
 {body_truncated}"""
 
-        response = ai.call_haiku(system_prompt, user_message, max_tokens=300)
+        response = ai.call_haiku(client_id, system_prompt, user_message, max_tokens=300)
         if not response:
             return {"summary": "Unable to generate summary at this time."}
         return {"summary": response.content}
@@ -1810,13 +1808,14 @@ async def update_default_models(
     strategic_model: str = Query(default="sonnet"),
     client_id: Optional[str] = Query(default=None),
 ):
-    """Update default model preferences. Per-client if client_id provided."""
+    """Update default model preferences. client_id is required so the change
+    is scoped to one tenant's system_settings row + settings cache."""
+    if not client_id:
+        raise HTTPException(status_code=400, detail="client_id required — model defaults are per-tenant")
     from ..services.langchain_core import set_default_models
     try:
         set_default_models(cheap=cheap_model, strategic=strategic_model)
-        update_ai_settings(cheap_model=cheap_model, strategic_model=strategic_model)
-        _upsert_client_setting('ai_cheap_model', cheap_model, client_id)
-        _upsert_client_setting('ai_strategic_model', strategic_model, client_id)
+        update_ai_settings(client_id=client_id, cheap_model=cheap_model, strategic_model=strategic_model)
         return {"status": "ok", "cheap": cheap_model, "strategic": strategic_model, "client_id": client_id}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -2058,8 +2057,8 @@ async def trigger_reembed(
     if not client_id:
         raise HTTPException(status_code=400, detail="client_id required")
 
-    # Respect the master AI kill switch — embedding is an AI operation
-    settings = get_ai_settings()
+    # Respect this tenant's master AI kill switch — embedding is an AI operation
+    settings = get_ai_settings(client_id)
     if not settings.ai_enabled:
         raise HTTPException(status_code=409, detail="AI is disabled via kill switch. Enable AI first.")
 

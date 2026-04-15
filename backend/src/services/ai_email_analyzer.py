@@ -1323,7 +1323,8 @@ class AIEmailAnalyzer:
             logger.error(f"Failed to save intelligence for email {email_id}: {e}")
 
     def _log_to_job_errors(self, job_id: Optional[str], mailbox_id: str,
-                            error_type: str, message: str, email_ids: List[str] = None):
+                            error_type: str, message: str, email_ids: List[str] = None,
+                            client_id: Optional[str] = None):
         """Log AI errors to the unified job_errors table for visibility on the Errors page."""
         if not job_id:
             return
@@ -1348,7 +1349,7 @@ class AIEmailAnalyzer:
                 mailbox_id=mailbox_id,
                 context_type=ContextType.BATCH,
                 context_id=",".join((email_ids or [])[:5]),
-                context_details={"email_count": len(email_ids or []), "model": get_ai_settings().cheap_model},
+                context_details={"email_count": len(email_ids or []), "model": get_ai_settings(client_id).cheap_model if client_id else "unknown"},
                 is_retryable="credit" not in message.lower(),
             )
         except Exception as e:
@@ -1486,7 +1487,7 @@ class AIEmailAnalyzer:
             for eid in email_ids:
                 self._save_failed(eid, mailbox_id, client_id, fail_msg, prompt_version=effective_prompt_version)
             # Log to unified job_errors table
-            self._log_to_job_errors(job_id, mailbox_id, "api_error", fail_msg, email_ids)
+            self._log_to_job_errors(job_id, mailbox_id, "api_error", fail_msg, email_ids, client_id=client_id)
             error_lower = (error_detail or "").lower()
             if "budget_exceeded" in error_lower:
                 error_type = "budget_exceeded"
@@ -1563,7 +1564,8 @@ class AIEmailAnalyzer:
             fail_ids = [f["email_id"] for f in final_failures]
             errors_text = "; ".join(f'{f["email_id"][:8]}: {f["error"][:100]}' for f in final_failures[:5])
             self._log_to_job_errors(job_id, mailbox_id, error_type,
-                                    f"{len(final_failures)} emails failed: {errors_text}", fail_ids)
+                                    f"{len(final_failures)} emails failed: {errors_text}", fail_ids,
+                                    client_id=client_id)
 
         # Log usage
         usage_tracker = get_usage_tracker()
@@ -1640,7 +1642,7 @@ class AIEmailAnalyzer:
         MAX_CONSECUTIVE_FAILURES = 3
 
         # Use smaller batches for Gemini (returns fewer results per call)
-        effective_batch = GEMINI_BATCH_SIZE if get_ai_settings().cheap_model == "gemini" else BATCH_SIZE
+        effective_batch = GEMINI_BATCH_SIZE if get_ai_settings(client_id).cheap_model == "gemini" else BATCH_SIZE
 
         while total_analyzed + total_failed < max_emails:
             # Fetch next batch of unanalyzed emails
@@ -1667,7 +1669,7 @@ class AIEmailAnalyzer:
                     logger.error(
                         f"Circuit breaker triggered: {consecutive_failures} consecutive "
                         f"batches with 0 successes. Stopping to avoid wasting resources. "
-                        f"Check your AI API key and account credits (model: {get_ai_settings().cheap_model})."
+                        f"Check your AI API key and account credits (model: {get_ai_settings(client_id).cheap_model})."
                     )
                     break
             else:
