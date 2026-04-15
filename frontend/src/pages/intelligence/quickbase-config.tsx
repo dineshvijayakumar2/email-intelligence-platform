@@ -144,6 +144,7 @@ const TABLES = [
   { key: 'sales_line_items', label: 'Sales Line Items', configField: 'sales_line_items_table_id' },
   { key: 'operations', label: 'Operations', configField: 'operations_table_id' },
   { key: 'unique_emails', label: 'Unique Emails', configField: 'unique_emails_table_id' },
+  { key: 'job_status_log', label: 'Job Status Log', configField: 'audit_logs_table_id' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -190,6 +191,7 @@ interface FormFields {
   sales_line_items_table_id: string;
   operations_table_id: string;
   unique_emails_table_id: string;
+  audit_logs_table_id: string;
   sync_interval_hours: number;
 }
 
@@ -204,6 +206,7 @@ const INITIAL_FORM: FormFields = {
   sales_line_items_table_id: '',
   operations_table_id: '',
   unique_emails_table_id: '',
+  audit_logs_table_id: '',
   sync_interval_hours: 6,
 };
 
@@ -426,6 +429,7 @@ const QuickbaseConfigPage: React.FC = () => {
         sales_line_items_table_id: cfg.sales_line_items_table_id || '',
         operations_table_id: cfg.operations_table_id || '',
         unique_emails_table_id: cfg.unique_emails_table_id || '',
+        audit_logs_table_id: cfg.audit_logs_table_id || '',
         sync_interval_hours: cfg.sync_interval_hours ?? 6,
       });
 
@@ -456,6 +460,7 @@ const QuickbaseConfigPage: React.FC = () => {
           sales_line_items_table_id: 'bu4cwdinf',
           operations_table_id: 'bvqsudnif',
           unique_emails_table_id: 'bvmtc5re6',
+          audit_logs_table_id: 'bu9yjc3ne',
           sync_interval_hours: 6,
         });
         setFieldMappings(initDefaultMappings());

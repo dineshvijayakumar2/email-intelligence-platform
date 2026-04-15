@@ -107,6 +107,7 @@ async def get_config(client_id: str = Query(...)):
             sales_line_items_table_id=cfg['sales_line_items_table_id'],
             operations_table_id=cfg.get('operations_table_id', 'bvqsudnif'),
             unique_emails_table_id=cfg.get('unique_emails_table_id', 'bvmtc5re6'),
+            audit_logs_table_id=cfg.get('audit_logs_table_id', 'bu9yjc3ne'),
             field_mappings=cfg.get('field_mappings'),
             sync_interval_hours=cfg.get('sync_interval_hours', 6),
             last_sync_at=cfg.get('last_sync_at'),
@@ -135,6 +136,7 @@ async def upsert_config(client_id: str = Query(...), config: QBSyncConfigCreate 
             'sales_line_items_table_id': config.sales_line_items_table_id,
             'operations_table_id': config.operations_table_id or 'bvqsudnif',
             'unique_emails_table_id': config.unique_emails_table_id or 'bvmtc5re6',
+            'audit_logs_table_id': config.audit_logs_table_id or 'bu9yjc3ne',
             'field_mappings': config.field_mappings or {},
             'sync_interval_hours': config.sync_interval_hours,
             'is_active': True,
@@ -168,7 +170,7 @@ async def upsert_config(client_id: str = Query(...), config: QBSyncConfigCreate 
 
 # --- Sync endpoints ---
 
-VALID_TABLES = {'customers', 'contacts', 'quotes', 'jobs', 'sales_line_items', 'operations', 'unique_emails'}
+VALID_TABLES = {'customers', 'contacts', 'quotes', 'jobs', 'sales_line_items', 'operations', 'unique_emails', 'job_status_log'}
 
 
 @router.post("/sync", response_model=QBSyncResult)
@@ -272,7 +274,7 @@ async def get_sync_status(client_id: str = Query(...)):
 
         # Count records per table (gracefully skip tables not yet created)
         counts = {}
-        for table in ['qb_customers', 'qb_contacts', 'qb_quotes', 'qb_jobs', 'qb_sales_line_items', 'qb_operations', 'qb_unique_emails']:
+        for table in ['qb_customers', 'qb_contacts', 'qb_quotes', 'qb_jobs', 'qb_sales_line_items', 'qb_operations', 'qb_unique_emails', 'qb_job_status_log']:
             try:
                 result = _supabase.table(table).select(
                     'id', count='exact'
@@ -289,6 +291,7 @@ async def get_sync_status(client_id: str = Query(...)):
             'quotes': 'qb_quotes', 'jobs': 'qb_jobs',
             'sales_line_items': 'qb_sales_line_items',
             'operations': 'qb_operations', 'unique_emails': 'qb_unique_emails',
+            'job_status_log': 'qb_job_status_log',
         }
         try:
             for tn, cache_table in table_name_to_cache.items():
@@ -366,6 +369,7 @@ async def get_table_fields(
         'sales_line_items': 'sales_line_items_table_id',
         'operations': 'operations_table_id',
         'unique_emails': 'unique_emails_table_id',
+        'job_status_log': 'audit_logs_table_id',
     }
     if table not in table_map:
         raise HTTPException(status_code=400, detail=f"Unknown table: {table}")
@@ -465,6 +469,7 @@ _QB_DEFAULT_SORT = {
     'sales_line_items': ('inv_date', True),
     'operations': ('date_accepted', True),
     'unique_emails': ('email', False),
+    'job_status_log': ('changed_at', True),
 }
 
 
@@ -660,6 +665,34 @@ async def list_qb_unique_emails(
         return {"unique_emails": result.data or [], "total": result.count or 0}
     except Exception as e:
         logger.error(f"Failed to list QB unique emails: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/job-status-log")
+async def list_qb_job_status_log(
+    client_id: str = Query(...),
+    job_no: Optional[str] = Query(default=None, description="Filter to one job's timeline"),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    search: Optional[str] = Query(default=None),
+    sort_by: Optional[str] = Query(default=None),
+    sort_dir: Optional[str] = Query(default=None),
+):
+    """List cached QB job-status audit rows (filtered to Field Name = 'Job Status')."""
+    try:
+        query = _supabase.table('qb_job_status_log').select('*', count='exact').eq('client_id', client_id)
+        if job_no:
+            query = query.eq('job_no', job_no)
+        if search:
+            s = _sanitize_search(search)
+            query = query.or_(
+                f"job_no.ilike.%{s}%,old_status.ilike.%{s}%,new_status.ilike.%{s}%,changed_by.ilike.%{s}%"
+            )
+        col, desc = _qb_sort('job_status_log', sort_by, sort_dir)
+        result = query.order(col, desc=desc).range(offset, offset + limit - 1).execute()
+        return {"job_status_log": result.data or [], "total": result.count or 0}
+    except Exception as e:
+        logger.error(f"Failed to list QB job status log: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

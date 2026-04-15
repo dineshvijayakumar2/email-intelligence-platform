@@ -223,6 +223,17 @@ const operationsColumns: ColDef[] = [
     render: (v: number) => v != null ? `${Number(v).toFixed(1)}%` : '-' },
 ];
 
+const jobStatusLogColumns: ColDef[] = [
+  { title: 'Changed At', dataIndex: 'changed_at', key: 'changed_at', width: 170, sorter: true,
+    render: (v: string) => v ? formatDate(v) : '-' },
+  { title: 'Job No', dataIndex: 'job_no', key: 'job_no', width: 110, sorter: true },
+  { title: 'Old Status', dataIndex: 'old_status', key: 'old_status', width: 140,
+    render: (v: string) => v ? <TagPill color="slate">{v}</TagPill> : <span className="text-slate-400 text-[11px]">-</span> },
+  { title: 'New Status', dataIndex: 'new_status', key: 'new_status', width: 140,
+    render: (v: string) => v ? <TagPill color="blue">{v}</TagPill> : '-' },
+  { title: 'Changed By', dataIndex: 'changed_by', key: 'changed_by', width: 180, ellipsis: true, sorter: true },
+];
+
 const uniqueEmailColumns: ColDef[] = [
   { title: 'Email', dataIndex: 'email', key: 'email', width: 250, ellipsis: true, sorter: true },
   { title: 'Customer Name', dataIndex: 'customer_name', key: 'customer_name', width: 200, ellipsis: true, sorter: true },
@@ -264,6 +275,7 @@ const TABLE_CONFIGS: TableConfig[] = [
   { key: 'sales_line_items', label: 'Sales Line Items', endpoint: 'sales-line-items', responseKey: 'sales_line_items', columns: sliColumns },
   { key: 'operations', label: 'Operations', endpoint: 'operations', responseKey: 'operations', columns: operationsColumns },
   { key: 'unique_emails', label: 'Unique Emails', endpoint: 'unique-emails', responseKey: 'unique_emails', columns: uniqueEmailColumns },
+  { key: 'job_status_log', label: 'Job Status Log', endpoint: 'job-status-log', responseKey: 'job_status_log', columns: jobStatusLogColumns },
 ];
 
 // ---------------------------------------------------------------------------

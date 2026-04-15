@@ -148,6 +148,14 @@ DEFAULT_FIELD_MAPPINGS = {
         "130": "processes_used",
         "131": "capabilities_used",
     },
+    "job_status_log": {
+        "3":  "qb_record_id",
+        "16": "job_no",         # Related Job (FK → qb_jobs.job_no via masterTableKeyFid=7)
+        "8":  "old_status",
+        "9":  "new_status",
+        "1":  "changed_at",     # QB Date Created on the audit row = when the change happened
+        "10": "changed_by",     # User field; QB returns display name for `value`
+    },
 }
 
 

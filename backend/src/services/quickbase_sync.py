@@ -156,6 +156,7 @@ class QuickbaseSync:
         'sales_line_items': 'sales_line_items_table_id',
         'operations':       'operations_table_id',
         'unique_emails':    'unique_emails_table_id',
+        'job_status_log':   'audit_logs_table_id',
     }
 
     def _write_sync_log(self, table_name: str, record_count: int, status: str = 'success', error_message: str = None):
@@ -240,6 +241,7 @@ class QuickbaseSync:
             ('sales_line_items', self.sync_sales_line_items),
             ('operations', self.sync_operations),
             ('unique_emails', self.sync_unique_emails),
+            ('job_status_log', self.sync_job_status_log),
         ]
         to_sync = [(k, fn) for k, fn in all_fns if tables is None or k in tables]
         label = ', '.join(k for k, _ in to_sync)
@@ -305,6 +307,7 @@ class QuickbaseSync:
         mapping: dict[str, str],
         required_fields: list[str] | None = None,
         page_filter=None,
+        base_where: str | None = None,
     ) -> int:
         """Generic streamed sync: fetch from QB page-by-page and upsert each page immediately.
 
@@ -314,6 +317,9 @@ class QuickbaseSync:
             mapping: Field ID → column name mapping
             required_fields: Columns that must be non-NULL (rows without them are skipped)
             page_filter: Optional callable(page_records) → filtered_records, applied per page
+            base_where: Optional QB query clause ANDed with the incremental clause on every
+                sync (e.g. "{'7'.EX.'Job Status'}" to pull only Job Status audit rows).
+                Applied on both full and incremental syncs so filtered tables stay filtered.
         """
         table_id = self._config.get(table_key)
         if not table_id:
@@ -321,9 +327,17 @@ class QuickbaseSync:
             return 0
 
         select_fields = QuickbaseClient.get_select_fields(mapping)
-        # Resolve the logical table name from the config key (e.g. 'customers_table_id' → 'customers')
-        logical_name = table_key.replace('_table_id', '')
-        where = None if getattr(self, '_full_sync', False) else self._build_incremental_where(logical_name)
+        # Resolve the logical table name from the config key via the reverse of
+        # _TABLE_ID_CONFIG_FIELD (so e.g. 'audit_logs_table_id' → 'job_status_log',
+        # not the naïve 'audit_logs' which wouldn't match qb_sync_log.table_name).
+        _reverse = {v: k for k, v in self._TABLE_ID_CONFIG_FIELD.items()}
+        logical_name = _reverse.get(table_key, table_key.replace('_table_id', ''))
+        incremental = None if getattr(self, '_full_sync', False) else self._build_incremental_where(logical_name)
+        # Combine base + incremental with AND. QB accepts ANDed clauses as a single string.
+        if base_where and incremental:
+            where = f"{base_where}AND{incremental}"
+        else:
+            where = base_where or incremental
 
         total_count = 0
         page_num = 0
@@ -407,6 +421,20 @@ class QuickbaseSync:
         if count:
             self._write_sync_log('operations', count)
         return count
+
+    async def sync_job_status_log(self) -> int:
+        """Sync QB Audit Logs (bu9yjc3ne) filtered to Field Name = 'Job Status'.
+
+        QB user fields return the display name string for user-typed values, so
+        changed_by (fid 10) lands as TEXT without extra extraction. Date Created
+        (fid 1) is the moment of the status change, stored as changed_at.
+        """
+        return await self._sync_table_streamed(
+            'qb_job_status_log', 'audit_logs_table_id',
+            self._field_mappings.get('job_status_log', DEFAULT_FIELD_MAPPINGS['job_status_log']),
+            base_where="{'7'.EX.'Job Status'}",
+            required_fields=['job_no'],  # audit rows without a linked job aren't useful
+        )
 
     async def _post_sync_operations(self):
         """Post-sync enrichment for operations — called by sync_all after the sync log is written."""

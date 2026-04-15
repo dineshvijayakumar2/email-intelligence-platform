@@ -16,6 +16,7 @@ class QBSyncConfigCreate(BaseModel):
     sales_line_items_table_id: str
     operations_table_id: Optional[str] = 'bvqsudnif'
     unique_emails_table_id: Optional[str] = 'bvmtc5re6'
+    audit_logs_table_id: Optional[str] = 'bu9yjc3ne'
     field_mappings: Optional[dict] = None
     sync_interval_hours: Optional[int] = None  # None = manual mode (no auto-sync)
 
@@ -32,6 +33,7 @@ class QBSyncConfigResponse(BaseModel):
     sales_line_items_table_id: str
     operations_table_id: Optional[str] = 'bvqsudnif'
     unique_emails_table_id: Optional[str] = 'bvmtc5re6'
+    audit_logs_table_id: Optional[str] = 'bu9yjc3ne'
     field_mappings: Optional[dict] = None
     sync_interval_hours: Optional[int] = None  # None = manual mode
     last_sync_at: Optional[datetime] = None
