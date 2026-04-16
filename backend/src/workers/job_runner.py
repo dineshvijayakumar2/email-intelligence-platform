@@ -188,6 +188,9 @@ async def main():
         level=logging.INFO,
         format=f"%(asctime)s [{WORKER_ID}] %(name)s %(levelname)s: %(message)s",
     )
+    # Suppress noisy per-request HTTP logs
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
 
     logger.info(f"Worker {WORKER_ID} starting (poll={POLL_INTERVAL}s, heartbeat={HEARTBEAT_INTERVAL}s)")
     logger.info(f"Registered handlers: {list(JOB_HANDLERS.keys())}")
