@@ -7,6 +7,7 @@ Room naming convention:
 - "jobs:all" - All jobs (filtered by user's accessible mailboxes)
 - "jobs:{job_id}" - Specific job updates
 - "mailbox:{mailbox_id}" - All jobs for a specific mailbox
+- "notifications" - User's notification feed (auto-subscribed on connect)
 """
 
 import asyncio
@@ -115,6 +116,9 @@ class ConnectionManager:
             },
             'timestamp': datetime.utcnow().isoformat(),
         })
+
+        # Auto-subscribe to user's notification feed
+        await self.subscribe(connection_id, "notifications")
 
         return connection_id
 
@@ -232,7 +236,7 @@ class ConnectionManager:
         # - jobs:{uuid}
         # - mailbox:{uuid}
 
-        if room == 'jobs:all':
+        if room in ('jobs:all', 'notifications'):
             return True
 
         parts = room.split(':', 1)
@@ -242,12 +246,9 @@ class ConnectionManager:
         prefix, identifier = parts
 
         if prefix == 'jobs':
-            # Allow subscription to any specific job
-            # RBAC filtering happens at broadcast time
             return True
 
         if prefix == 'mailbox':
-            # Check if user has access to this mailbox
             user_info = self.connection_users.get(connection_id, {})
             accessible_ids = user_info.get('accessible_mailbox_ids', [])
             return identifier in accessible_ids
@@ -422,6 +423,27 @@ class ConnectionManager:
             'active_users': len(self.user_connections),
             'active_rooms': len(self.subscriptions),
         }
+
+    async def push_notification(self, user_id: str, notification: dict):
+        """Push a notification to all of a user's active connections.
+
+        Only sends to connections subscribed to the 'notifications' room.
+        """
+        conn_ids = self.user_connections.get(user_id, set())
+        room_conns = self.subscriptions.get("notifications", set())
+        target_conns = conn_ids & room_conns
+
+        if not target_conns:
+            return
+
+        message = {
+            "type": "notification",
+            "data": notification,
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+
+        tasks = [self.send_personal(cid, message) for cid in target_conns]
+        await asyncio.gather(*tasks, return_exceptions=True)
 
     def get_user_connection_count(self, user_id: str) -> int:
         """Get number of active connections for a user."""

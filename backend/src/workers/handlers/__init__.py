@@ -8,9 +8,11 @@ from __future__ import annotations
 from typing import Callable, Awaitable
 
 from .reembed import reembed_handler
+from .notification_dispatch import notification_dispatch_handler
 
 JOB_HANDLERS: dict[str, Callable[..., Awaitable[None]]] = {
     'reembed': reembed_handler,
+    'notification_dispatch': notification_dispatch_handler,
     # Future handlers (uncomment as implemented):
     # 'ai_analysis': ai_analysis_handler,
     # 'ai_backfill': ai_backfill_handler,

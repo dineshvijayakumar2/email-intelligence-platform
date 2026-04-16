@@ -17,6 +17,7 @@ import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { useClient } from '../contexts/ClientContext';
+import { NotificationBell } from './NotificationBell';
 
 // Role config
 const roleConfig: Record<string, { label: string; variant: 'warning' | 'info' | 'success' }> = {
@@ -304,6 +305,9 @@ export const Layout: React.FC<PropsWithChildren> = ({ children }) => {
 
           {/* Spacer */}
           <div className="flex-1" />
+
+          {/* Notifications */}
+          <NotificationBell />
 
           {/* User menu */}
           <DropdownMenu>

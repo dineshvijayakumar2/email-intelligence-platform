@@ -121,24 +121,27 @@
 **Goal:** In-app notifications via WebSocket, event-driven.
 
 ### W4.1 — Events + Notifications schema
-- [ ] Migration `086_events_notifications.sql`
-- [ ] `events` table with `dispatched_at` flag column
-- [ ] `notifications` table with per-recipient delivery tracking
+- [x] Migration `085_events_notifications.sql` (events + notifications tables)
+- [x] `events` table with `dispatched_at` flag column
+- [x] `notifications` table with per-recipient delivery tracking
 
 ### W4.2 — Event emission
-- [ ] Create `backend/src/services/events.py` — `emit_event()` function
-- [ ] Worker emits on job state changes
+- [x] Create `backend/src/services/events.py` — `emit_event()` + `emit_job_event()`
+- [x] Worker emits on job state changes (started, completed, failed, stopped)
 
 ### W4.3 — Notification dispatcher
-- [ ] Create `backend/src/workers/handlers/notification_dispatch.py`
-- [ ] Scheduled every minute via pg_cron
+- [x] Create `backend/src/workers/handlers/notification_dispatch.py`
+- [x] Registered in JOB_HANDLERS, triggered via internal endpoint or cron
 
-### W4.4 — WebSocket: user-scoped rooms
-- [ ] Add `user:{user_id}` room pattern to `backend/src/websocket/manager.py`
-- [ ] Add `GET /notifications?unread=true` endpoint
+### W4.4 — WebSocket: user-scoped rooms + notification API
+- [x] Add `notifications` room (auto-subscribed on connect) to `manager.py`
+- [x] Add `push_notification()` method for per-user delivery
+- [x] Notifications router: GET /notifications, GET /unread-count, POST /read, POST /read-all
 
 ### W4.5 — Frontend notification component
-- [ ] `NotificationBell.tsx` — bell icon, badge, toast, drawer
+- [x] `NotificationBell.tsx` — bell icon, unread badge, popover with mark-read
+- [x] `notificationService.ts` — API client for notifications
+- [x] Integrated into layout header
 
 ---
 
