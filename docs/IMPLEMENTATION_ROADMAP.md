@@ -76,21 +76,22 @@
 **Goal:** Standalone worker process that claims and executes jobs from the DB.
 
 ### W2.1 — Worker core
-- [ ] Create `backend/src/workers/job_runner.py` — main loop (claim, execute, heartbeat)
-- [ ] Claim query: `SELECT FOR UPDATE SKIP LOCKED`
-- [ ] Lease: 5 min, heartbeat every 30s
-- [ ] Graceful shutdown: SIGTERM sets flag, current job completes
+- [x] Create `backend/src/workers/job_runner.py` — main loop (claim, execute, heartbeat)
+- [x] Claim query: `SELECT FOR UPDATE SKIP LOCKED`
+- [x] Lease: 5 min, heartbeat every 30s
+- [x] Graceful shutdown: SIGTERM sets flag, current job completes
 
 ### W2.2 — Job handler registry
-- [ ] Create `backend/src/workers/handlers/__init__.py` — `JOB_HANDLERS` dict
-- [ ] Map each `job_type` to handler function
+- [x] Create `backend/src/workers/handlers/__init__.py` — `JOB_HANDLERS` dict
+- [x] Map each `job_type` to handler function
 
 ### W2.3 — Stuck-job reconciler
-- [ ] Scheduled task marking expired-lease jobs as `interrupted`
+- [x] `reconcile_stuck_jobs` RPC (migration 084) marking expired-lease jobs as `interrupted`
+- [x] Reconciler loop in worker process (runs every 10 min)
 
 ### W2.4 — Migrate first job type to worker
-- [ ] Extract `reembed` execution into worker handler
-- [ ] Keep BackgroundTasks as fallback for remaining types
+- [x] Extract `reembed` execution into worker handler (`handlers/reembed.py`)
+- [x] Keep BackgroundTasks as fallback for remaining types
 
 ---
 
@@ -110,7 +111,7 @@
 - [ ] Auth via `verify_cron_secret`
 
 ### W3.3 — pg_cron registration
-- [ ] Migration `084_pg_cron_schedules.sql`
+- [ ] Migration `085_pg_cron_schedules.sql`
 - [ ] Add QB sync cron endpoint (currently missing)
 
 ---
@@ -120,7 +121,7 @@
 **Goal:** In-app notifications via WebSocket, event-driven.
 
 ### W4.1 — Events + Notifications schema
-- [ ] Migration `085_events_notifications.sql`
+- [ ] Migration `086_events_notifications.sql`
 - [ ] `events` table with `dispatched_at` flag column
 - [ ] `notifications` table with per-recipient delivery tracking
 
@@ -261,8 +262,9 @@ C3 (Status Analytics)  <--- blocked on data (~3 months)
 | # | Name | Phase | Description |
 |---|------|-------|-------------|
 | 083 | worker_infrastructure | W1 | processing_jobs extensions + dedup indexes |
-| 084 | pg_cron_schedules | W3 | Schedule registration + internal auth |
-| 085 | events_notifications | W4 | Events + notifications tables |
+| 084 | reconcile_stuck_jobs | W2 | Stuck-job reconciler RPC |
+| 085 | pg_cron_schedules | W3 | Schedule registration + internal auth |
+| 086 | events_notifications | W4 | Events + notifications tables |
 | 086 | thread_qb_links | T1 | Thread-to-QB linking table |
 | 087 | contact_persona_views | C1 | Persona metric views (regular + materialized) |
 
