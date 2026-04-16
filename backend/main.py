@@ -301,6 +301,7 @@ from src.routers.intelligence_config import router as intelligence_config_router
 from src.routers.logs import router as logs_router, init_logs_router
 from src.routers.internal_jobs import router as internal_jobs_router, init_internal_jobs_router
 from src.routers.notifications import router as notifications_router, init_notifications_router
+from src.routers.journey import router as journey_router, init_journey_router
 from src.routers.errors import router as errors_router, init_error_router
 from src.routers.gmail import router as gmail_router, init_gmail_router
 from src.routers.outlook import router as outlook_router, init_outlook_router
@@ -411,8 +412,9 @@ app.include_router(dashboard_router, prefix="/api")
 app.include_router(google_auth_router, prefix="/api")
 app.include_router(processing_jobs_router, prefix="/api")
 
-# Notifications
+# Notifications + Journey
 app.include_router(notifications_router, prefix="/api")
+app.include_router(journey_router, prefix="/api/v1")
 
 # Internal (cron-triggered, CRON_SECRET auth)
 app.include_router(internal_jobs_router, prefix="/api")
@@ -481,6 +483,7 @@ def initialize_all_routers():
     init_intelligence_config_router(sb)
     init_internal_jobs_router(sb)
     init_notifications_router(sb)
+    init_journey_router(sb)
 
     # Log stream: attach handler to root logger + init Redis flush thread
     from src.utils.log_stream import get_log_stream_handler, init_log_stream

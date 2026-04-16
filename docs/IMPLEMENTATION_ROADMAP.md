@@ -160,9 +160,9 @@
 
 **Status:** Migration 081 committed, backfill pending.
 
-- [ ] Execute `batch_propagate_qb_data_to_contacts()` backfill
-- [ ] Verify AI prompt enrichment reads real values (not NULLs)
-- [ ] Wire propagation into QB sync pipeline (auto-run after each sync)
+- [x] Execute `batch_propagate_qb_data_to_contacts()` backfill (7,119/21,076 contacts linked)
+- [x] Verify AI prompt enrichment reads real values (not NULLs)
+- [x] Wire propagation into QB sync pipeline (auto-run in `trigger_sync` after each sync)
 
 ---
 
@@ -171,30 +171,33 @@
 **Goal:** Emails/threads trackable through to jobs, production, and invoices.
 
 ### T1.1 — Migration: thread_qb_links table
-- [ ] `scripts/migrations/086_thread_qb_links.sql`
-- [ ] Schema: `client_id`, `canonical_thread_id`, `link_type`, `qb_record_id`, `qb_reference`, `confidence`, `source`, `verified`
-- [ ] Indexes for thread lookup, job lookup, unverified suggestions
+- [x] `scripts/migrations/086_thread_qb_links.sql` (applied)
+- [x] Schema: `client_id`, `canonical_thread_id`, `link_type`, `qb_record_id`, `qb_reference`, `confidence`, `source`, `verified`
+- [x] Indexes for thread lookup, job lookup, unverified suggestions
+- [x] `extracted_references JSONB` column added to `ai_email_intelligence`
 
 ### T1.2 — Reference number extraction (regex)
-- [ ] Create `backend/src/services/reference_extractor.py`
-- [ ] Patterns: Q-\d+, J-\d+, PO-\d+, INV-\d+ (and variants)
-- [ ] Validate against `qb_quotes.quote_no` / `qb_jobs.job_no` / `qb_sales_line_items.invoice_no`
-- [ ] Run as worker job type: `reference_extraction`
+- [x] Create `backend/src/services/reference_extractor.py`
+- [x] Patterns: Q\d+, J\d+ (and Quote #, Job #, QT, JB variants)
+- [x] Validate against `qb_quotes.quote_no` / `qb_jobs.job_no`
+- [x] Run as worker job type: `reference_extraction` (handler registered)
 
 ### T1.3 — AI extraction enhancement
 - [ ] Add QB reference extraction to classification prompt
-- [ ] Add `extracted_references JSONB` to `ai_email_intelligence`
-- [ ] Feed into `thread_qb_links` with `source='ai'`
+- [ ] Feed AI-extracted refs into `thread_qb_links` with `source='ai'`
 
 ### T1.4 — Journey API endpoints
-- [ ] Create `backend/src/routers/journey.py`
-- [ ] `GET /threads/{thread_id}/journey` — thread -> quotes -> jobs -> ops -> invoices -> status log
-- [ ] `GET /jobs/{job_no}/journey` — job -> linked threads + full chain
-- [ ] `GET /companies/{company_id}/journey-timeline` — all journeys for company
+- [x] Create `backend/src/routers/journey.py`
+- [x] `GET /journey/threads/{thread_id}` — thread -> quotes -> jobs -> ops -> invoices -> status log
+- [x] `GET /journey/jobs/{job_no}` — job -> linked threads + full chain
+- [x] `GET /journey/companies/{id}/timeline` — all journeys for company
+- [x] `POST /journey/links` — manual linking
+- [x] `DELETE /journey/links/{id}` — remove link
 
 ### T1.5 — Manual linking UI
-- [ ] `ThreadJourneyPanel.tsx` — display journey timeline
-- [ ] `ManualLinkDialog.tsx` — AM associates thread with quote/job
+- [x] `ThreadJourneyPanel.tsx` — display journey with QB links, quotes, jobs, ops, invoices, status timeline
+- [x] `ManualLinkDialog.tsx` — AM associates thread with quote/job
+- [x] `journeyService.ts` — API client
 
 ---
 
