@@ -123,19 +123,15 @@ def _default_date_range(date_from: str = None, date_to: str = None, lookback_day
 async def trigger_analysis(
     mailbox_id: str,
     data: AnalyzeRequest,
-    background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user),
     accessible_ids: list = Depends(get_accessible_mailbox_ids),
 ):
     """
     Trigger AI analysis on unanalyzed emails in a mailbox.
 
-    Runs in background — returns immediately with accepted status.
+    Creates a pending job — execution happens on the worker process.
     """
     _validate_mailbox_access(mailbox_id, accessible_ids)
-    analyzer = get_email_analyzer()
-    if not analyzer:
-        raise HTTPException(status_code=503, detail="AI analyzer not initialized")
 
     # Validate mailbox exists
     try:
@@ -148,96 +144,33 @@ async def trigger_analysis(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to validate mailbox: {str(e)[:200]}")
 
-    def run_analysis():
-        from ..services.jobs import create_job, JobSpec, JobAlreadyActive
-        try:
-            job_id = create_job(_supabase, JobSpec(
-                job_type="ai_analysis",
-                mailbox_id=mailbox_id,
-                client_id=client_id,
-                initial_status="running",
-                parameters={"max_emails": data.max_emails},
-                triggered_by="user",
-            ))
-        except (JobAlreadyActive, Exception) as job_err:
-            logger.warning(f"Could not create processing job: {job_err}")
-            job_id = None
+    from ..services.jobs import create_job, JobSpec, JobAlreadyActive
+    try:
+        job_id = create_job(_supabase, JobSpec(
+            job_type="ai_analysis",
+            mailbox_id=mailbox_id,
+            client_id=client_id,
+            initial_status="pending",
+            parameters={
+                "max_emails": data.max_emails,
+                "date_from": data.date_from,
+                "date_to": data.date_to,
+            },
+            triggered_by="user",
+        ))
+    except JobAlreadyActive as e:
+        return AnalyzeResponse(
+            status="already_running",
+            message=str(e),
+            mailbox_id=mailbox_id,
+            max_emails=data.max_emails,
+        )
 
-        def _update_job(status: str, pct: int, msg: str, error_log_text: str = None):
-            if not job_id:
-                return
-            try:
-                summary = {"progress_pct": pct, "progress_message": msg}
-                update: dict = {"status": status, "error_summary": summary}
-                if error_log_text:
-                    update["error_log"] = [{"message": line} for line in error_log_text.split("\n") if line.strip()]
-                if status in ("completed", "failed"):
-                    update["completed_at"] = datetime.utcnow().isoformat()
-                _supabase.table("processing_jobs").update(update).eq("id", job_id).execute()
-            except Exception:
-                pass
-
-        try:
-            result = analyzer.analyze_all_unanalyzed(
-                mailbox_id=mailbox_id,
-                client_id=client_id,
-                max_emails=data.max_emails,
-                date_from=data.date_from,
-                job_id=job_id,
-                date_to=data.date_to,
-            )
-            logger.info(f"Analysis complete for {mailbox_id}: {result}")
-
-            analyzed = result.get("total_analyzed", 0)
-            failed = result.get("total_failed", 0)
-            batches = result.get("batches", 0)
-            _update_job("running", 60, f"Analysis done: {analyzed} analyzed, {failed} failed in {batches} batches. Running bucket engine...")
-
-            # If all failed, log the errors for troubleshooting
-            error_log = None
-            if failed > 0:
-                try:
-                    err_resp = _supabase.table("ai_email_intelligence").select(
-                        "email_id,error_message,model_used"
-                    ).eq("mailbox_id", mailbox_id).eq(
-                        "processing_status", "failed"
-                    ).order("processed_at", desc=True).range(0, 19).execute()
-                    if err_resp.data:
-                        error_log = "\n".join(
-                            f"- {r.get('email_id', '?')[:8]}...: {r.get('error_message', 'unknown')}"
-                            for r in err_resp.data
-                        )
-                except Exception:
-                    pass
-
-            # Auto-run bucket engine after analysis
-            bucket_engine = get_bucket_engine()
-            if bucket_engine:
-                bucket_result = bucket_engine.process_email_buckets(mailbox_id)
-                logger.info(f"Bucket processing complete: {bucket_result}")
-
-            _update_job("running", 80, "Running entity aggregation...")
-
-            # Auto-run entity aggregation
-            entity_agg = get_entity_aggregator()
-            if entity_agg:
-                entity_result = entity_agg.aggregate_entities(mailbox_id, client_id)
-                logger.info(f"Entity aggregation complete: {entity_result}")
-
-            summary = f"Done: {analyzed} analyzed, {failed} failed, {batches} batches"
-            final_status = "completed" if failed == 0 else ("completed" if analyzed > 0 else "failed")
-            _update_job(final_status, 100, summary, error_log)
-
-        except Exception as e:
-            logger.error(f"Background analysis failed for {mailbox_id}: {e}")
-            _update_job("failed", 0, f"Analysis failed: {str(e)[:300]}", str(e))
-
-    background_tasks.add_task(run_analysis)
     audit_from_user(current_user, "analyze", "mailbox", resource_id=mailbox_id, details={"max_emails": data.max_emails})
 
     return AnalyzeResponse(
         status="accepted",
-        message=f"Analysis started for up to {data.max_emails} emails",
+        message=f"Analysis queued for up to {data.max_emails} emails — worker will pick it up shortly",
         mailbox_id=mailbox_id,
         max_emails=data.max_emails,
     )
