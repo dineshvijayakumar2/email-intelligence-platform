@@ -12,34 +12,57 @@
 
 ---
 
-## Current State
+## Current State (Updated 2026-04-16)
 
-### What exists today
-- **14 job creation callsites** scattered across 8 files — all run via FastAPI `BackgroundTasks` (die on uvicorn reload)
-- **processing_jobs table** — basic schema (id, job_type, status, mailbox_id, records, error_log, parameters, current_stage, client_id)
-- **ReembedJobState** (`backend/src/services/reembed_job_state.py`) — most mature pattern: single-flight via partial unique index, RPC-based atomic progress, cancellation polling
-- **JobQueueManager** (`backend/src/database/redis_client.py:407-468`) — dead code, never called
-- **WebSocket** — job-scoped rooms only (`jobs:{job_id}`, `mailbox:{mailbox_id}`), no user-scoped rooms
-- **Railway** — already has `email-worker` service with 2 replicas in `deploy/railway/railway.toml`
-- **QB sync** — manual trigger only, no cron endpoint
-- **Migration 081** — Contact-QB linking committed, columns NULL (backfill not run)
-- **Migration 082** — Job Status Log table, syncing from 2026-04-15
-- **QB join chain** — fully linked: quotes -> jobs -> operations -> sales_line_items -> job_status_log (all via `job_no`)
-- **Thread-QB gap** — no `thread_qb_links` table, no reference extraction from emails
+### Worker infrastructure — LIVE
+- **Worker process** deployed on Railway as `job-worker` service (1 replica)
+- **claim_next_job RPC** — `SELECT FOR UPDATE SKIP LOCKED`, 5-min lease, 30s heartbeat
+- **Reconciler** — marks expired-lease jobs as `interrupted` every 10 min
+- **Multi-worker verified** — tested with 2 replicas, concurrent claiming works
+- **Events + Notifications tables** — created (migrations 085, 086)
+- **Thread-QB linking** — table + regex extractor + journey API + UI created
 
-### Job types in the system
-| Job Type | Callsite | Current Pattern |
-|----------|----------|-----------------|
-| `ai_analysis` | ai.py:156 | BackgroundTasks |
-| `ai_backfill` | ai.py:392 | BackgroundTasks |
-| `strategic_digest` | ai.py:1256 | BackgroundTasks |
-| `gmail_date_range_fetch` | gmail.py:634 | BackgroundTasks |
-| `outlook_date_range_fetch` | outlook.py:635 | BackgroundTasks |
-| `gmail_sync` | gmail_sync_service.py:640 | Service + BackgroundTasks |
-| `outlook_sync` | outlook_sync_service.py:578 | Service + BackgroundTasks |
-| `reprocessing` | mailboxes.py:338, processing_jobs.py:466 | BackgroundTasks |
-| `reembed` | reembed_job_state.py:103 | DB state machine + BackgroundTasks |
-| Generic extraction | processing_jobs.py:737 | BackgroundTasks |
+### Callsite migration status
+
+**Tier 1 — Migrated to worker (handler exists, router creates pending job):**
+| Job Type | Handler | Router | Verified |
+|----------|---------|--------|----------|
+| `ai_backfill` | `handlers/ai_backfill.py` | ai.py | ✅ Production verified: heartbeat, completion, worker_id |
+| `ai_analysis` | `handlers/ai_analysis.py` | ai.py | Deployed, pending verification |
+| `reembed` | `handlers/reembed.py` | — | Handler exists, router NOT migrated |
+| `notification_dispatch` | `handlers/notification_dispatch.py` | — | ✅ Verified (sub-second jobs) |
+| `reference_extraction` | `handlers/reference_extraction.py` | — | Handler exists, no UI trigger yet |
+
+**Tier 2 — Still running via BackgroundTasks (need handler + router migration):**
+| Job Type | Callsite | Complexity | Notes |
+|----------|----------|------------|-------|
+| `reprocessing` | mailboxes.py:337, processing_jobs.py:457 | High | Outlook-only, OAuth tokens, extractor |
+| `gmail_date_range_fetch` | gmail.py:633, analytics.py:3634 | High | OAuth tokens, GmailExtractor |
+| `outlook_date_range_fetch` | outlook.py:634, analytics.py:3637 | High | OAuth tokens, OutlookExtractor |
+| `strategic_digest` | ai.py:1282 | Medium | LangGraph agent, SSE streaming |
+| `gmail_sync` | gmail.py:388,811,1173 | High | OAuth, incremental historyId |
+| `outlook_sync` | outlook.py:403,504,1047 | High | OAuth, delta links |
+
+**Tier 3 — Lightweight ops (no job tracking, low priority):**
+| Operation | Callsite | Notes |
+|-----------|----------|-------|
+| Reanalysis | ai.py:333 | Re-classify emails with updated prompt |
+| Rebucket | ai.py:508 | Re-run bucket engine |
+| Thread resolve | analytics.py:182 | Resolve thread metadata |
+| Recompute engagement | analytics.py:269 | Recalculate engagement scores |
+| Backfill analytics | analytics.py:480 | Backfill response times |
+| QB sync | quickbase.py:238 | Full QB table sync |
+| QB affinity | quickbase.py:724 | Product affinity calculation |
+| QB rematch | quickbase.py:835 | Re-run company matching |
+| QB propagate | quickbase.py:1351 | Propagate QB data to contacts |
+| Internal QB sync | internal_jobs.py:66 | Cron-triggered QB sync |
+| Generic extraction | processing_jobs.py:383,735 | Email processing pipeline |
+
+### Key lessons from first migration (ai_backfill)
+1. **asyncio.to_thread() is mandatory** for sync blocking calls — without it, heartbeat starves and lease expires
+2. **max_attempts must be > 1** (now defaults to 3) — otherwise worker death permanently strands jobs
+3. **httpx INFO logs flood worker output** — suppressed to WARNING level
+4. **notification_dispatch had wrong column name** (`user_id` vs `id` on user_profiles) and wrong filter syntax (string vs Python list for `.contains()`)
 
 ---
 
