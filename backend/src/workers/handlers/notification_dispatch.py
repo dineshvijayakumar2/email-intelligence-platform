@@ -93,19 +93,19 @@ def _resolve_recipients(sb, client_id: str | None) -> list[str]:
     assigned clients.
     """
     try:
-        query = sb.table("user_profiles").select("user_id, roles")
+        query = sb.table("user_profiles").select("id, roles")
         if client_id:
             admins = query.contains("roles", '["admin"]').execute()
             assigned = sb.table("user_client_assignments").select(
                 "user_id"
             ).eq("client_id", client_id).execute()
 
-            user_ids = {r["user_id"] for r in (admins.data or [])}
+            user_ids = {r["id"] for r in (admins.data or [])}
             user_ids.update(r["user_id"] for r in (assigned.data or []))
             return list(user_ids)
         else:
             admins = query.contains("roles", '["admin"]').execute()
-            return [r["user_id"] for r in (admins.data or [])]
+            return [r["id"] for r in (admins.data or [])]
     except Exception as e:
         logger.error(f"Failed to resolve recipients: {e}")
         return []
