@@ -97,22 +97,22 @@
 
 ## Phase W3: Scheduler (Week 3-4)
 
-**Goal:** Automated job scheduling via pg_cron.
+**Goal:** Automated job scheduling via external cron (Railway/cron-job.org).
 
 ### W3.1 — Verify pg_cron + pg_net on Supabase
-- [ ] Create test schedule, watch for 1 hour
-- [ ] Document any tier limitations
+- [x] Checked: pg_cron and pg_net NOT available on current Supabase tier
+- [x] Decision: use external HTTP cron instead (same pattern as Gmail/Outlook sync)
 
 ### W3.2 — Internal endpoints
-- [ ] Create `backend/src/routers/internal_jobs.py`
-- [ ] `POST /internal/jobs/qb-sync` (hourly)
-- [ ] `POST /internal/jobs/analytics-rollup` (daily 2am)
-- [ ] `POST /internal/jobs/stuck-reconciler` (every 10 min)
-- [ ] Auth via `verify_cron_secret`
+- [x] Create `backend/src/routers/internal_jobs.py`
+- [x] `POST /internal/jobs/qb-sync` (hourly)
+- [x] `POST /internal/jobs/analytics-rollup` (daily 2am)
+- [x] `POST /internal/jobs/stuck-reconciler` (every 10 min)
+- [x] Auth via `verify_cron_secret` dependency in `auth.py`
 
-### W3.3 — pg_cron registration
-- [ ] Migration `085_pg_cron_schedules.sql`
-- [ ] Add QB sync cron endpoint (currently missing)
+### W3.3 — External cron registration
+- [ ] Configure Railway cron or cron-job.org to call internal endpoints
+- [ ] Set `CRON_SECRET` env var in production
 
 ---
 

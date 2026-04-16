@@ -216,6 +216,23 @@ async def get_optional_user(authorization: Optional[str] = Header(None)) -> Opti
         return None
 
 
+async def verify_cron_secret(authorization: Optional[str] = Header(None)) -> None:
+    """Verify that the request carries the CRON_SECRET token.
+
+    Used by internal scheduler endpoints. Raises 401 if the secret is
+    missing or doesn't match CRON_SECRET env var.
+    """
+    expected = os.environ.get("CRON_SECRET")
+    if not expected:
+        raise HTTPException(status_code=503, detail="CRON_SECRET not configured")
+    token = None
+    if authorization:
+        parts = authorization.split(" ", 1)
+        token = parts[1] if len(parts) == 2 else parts[0]
+    if not token or token != expected:
+        raise HTTPException(status_code=401, detail="Invalid cron secret")
+
+
 async def get_accessible_mailbox_ids(current_user: Dict = Depends(get_current_user)) -> list:
     """
     Get list of mailbox IDs accessible to the current user based on their role.
