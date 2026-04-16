@@ -404,8 +404,8 @@ class AIDigestGenerator:
             prompt_key = "daily_digest"
 
         # Apply client's model preferences from DB
-        from .ai_email_analyzer import _apply_client_model_settings
-        _apply_client_model_settings(self.client, client_id)
+        from .ai_email_analyzer import _load_client_api_keys
+        _load_client_api_keys(self.client, client_id)
 
         # Load configurable prompt (DB override → hardcoded default)
         from .ai_prompt_loader import get_prompt

@@ -278,8 +278,8 @@ class StrategicDigestPipeline:
             )
 
             # Apply client's model preferences from DB
-            from .ai_email_analyzer import _apply_client_model_settings
-            _apply_client_model_settings(self.supabase, self.client_id)
+            from .ai_email_analyzer import _load_client_api_keys
+            _load_client_api_keys(self.supabase, self.client_id)
 
             # -----------------------------------------------------------------
             # Step 5: Create LangGraph agent with tools

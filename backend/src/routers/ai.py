@@ -827,8 +827,8 @@ async def get_digest(
 
     # Apply client's model preferences before generating
     if client_id:
-        from ..services.ai_email_analyzer import _apply_client_model_settings
-        _apply_client_model_settings(_supabase, client_id)
+        from ..services.ai_email_analyzer import _load_client_api_keys
+        _load_client_api_keys(_supabase, client_id)
     elif mailbox_id:
         # Resolve client_id from mailbox if not provided
         try:
@@ -836,8 +836,8 @@ async def get_digest(
             if mb_resp.data and mb_resp.data[0].get("client_id"):
                 resolved_client = mb_resp.data[0]["client_id"]
                 client_id = resolved_client
-                from ..services.ai_email_analyzer import _apply_client_model_settings
-                _apply_client_model_settings(_supabase, resolved_client)
+                from ..services.ai_email_analyzer import _load_client_api_keys
+                _load_client_api_keys(_supabase, resolved_client)
         except Exception:
             pass
 
@@ -1418,8 +1418,8 @@ async def stream_digest_generation(
 
     # Apply client model settings
     try:
-        from ..services.ai_email_analyzer import _apply_client_model_settings
-        _apply_client_model_settings(_supabase, client_id)
+        from ..services.ai_email_analyzer import _load_client_api_keys
+        _load_client_api_keys(_supabase, client_id)
     except Exception:
         pass
 
@@ -1566,8 +1566,8 @@ async def get_company_insight(
     try:
         # Apply client's model preferences so insights use the right model
         if client_id:
-            from ..services.ai_email_analyzer import _apply_client_model_settings
-            _apply_client_model_settings(_supabase, client_id)
+            from ..services.ai_email_analyzer import _load_client_api_keys
+            _load_client_api_keys(_supabase, client_id)
         from ..services.ai_insights_engine import AIInsightsEngine
         engine = AIInsightsEngine(_supabase, client_id=client_id)
         result = await engine.get_company_insight(company_id, force=force)
@@ -1586,8 +1586,8 @@ async def get_contact_insight(
     """Generate AI insight for a contact (cached 24h)."""
     try:
         if client_id:
-            from ..services.ai_email_analyzer import _apply_client_model_settings
-            _apply_client_model_settings(_supabase, client_id)
+            from ..services.ai_email_analyzer import _load_client_api_keys
+            _load_client_api_keys(_supabase, client_id)
         from ..services.ai_insights_engine import AIInsightsEngine
         engine = AIInsightsEngine(_supabase, client_id=client_id)
         result = await engine.get_contact_insight(contact_id, force=force)
@@ -1606,8 +1606,8 @@ async def get_thread_insight(
     """Generate AI insight for a thread (cached 24h)."""
     try:
         if client_id:
-            from ..services.ai_email_analyzer import _apply_client_model_settings
-            _apply_client_model_settings(_supabase, client_id)
+            from ..services.ai_email_analyzer import _load_client_api_keys
+            _load_client_api_keys(_supabase, client_id)
         from ..services.ai_insights_engine import AIInsightsEngine
         engine = AIInsightsEngine(_supabase, client_id=client_id)
         result = await engine.get_thread_insight(thread_id, force=force)
@@ -2760,8 +2760,8 @@ async def agent_chat_stream(
 
             init_langchain_tools(_supabase)
 
-            from ..services.ai_email_analyzer import _apply_client_model_settings
-            _apply_client_model_settings(_supabase, data.client_id)
+            from ..services.ai_email_analyzer import _load_client_api_keys
+            _load_client_api_keys(_supabase, data.client_id)
 
             from ..services.ai_prompt_loader import get_prompt
             system_prompt = get_prompt(_supabase, PROMPT_KEY_AGENT_CHAT,

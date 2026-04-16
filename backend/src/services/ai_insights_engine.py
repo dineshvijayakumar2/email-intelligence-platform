@@ -299,8 +299,8 @@ class AIInsightsEngine:
         try:
             # Apply client model settings so we use the configured model (not hardcoded default)
             if self._supabase and self._client_id:
-                from .ai_email_analyzer import _apply_client_model_settings
-                _apply_client_model_settings(self._supabase, self._client_id)
+                from .ai_email_analyzer import _load_client_api_keys
+                _load_client_api_keys(self._supabase, self._client_id)
 
             from .langchain_core import get_task_model
             llm = get_task_model('entity_insights', self._client_id, temperature=0.1)
