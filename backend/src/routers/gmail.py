@@ -619,20 +619,15 @@ async def fetch_emails_by_date_range(
             raise HTTPException(status_code=400, detail=f"Invalid date format. Use YYYY-MM-DD. Error: {e}")
 
         # Create a processing job to track progress
-        job_data = {
-            'mailbox_id': request.mailbox_id,
-            'job_type': 'gmail_date_range_fetch',
-            'status': 'pending',
-            'processed_records': 0,
-            'failed_records': 0,
-            'total_records': 0,
-            'filter_start_date': f"{request.start_date}T00:00:00Z",
-            'filter_end_date': f"{request.end_date}T23:59:59Z",
-            'created_at': datetime.now(timezone.utc).isoformat()
-        }
-
-        job_result = _supabase.table('processing_jobs').insert(job_data).execute()
-        job_id = job_result.data[0]['id']
+        from ..services.jobs import create_job, JobSpec
+        job_id = create_job(_supabase, JobSpec(
+            job_type="gmail_date_range_fetch",
+            mailbox_id=request.mailbox_id,
+            filter_start_date=f"{request.start_date}T00:00:00Z",
+            filter_end_date=f"{request.end_date}T23:59:59Z",
+            parameters={"start_date": request.start_date, "end_date": request.end_date, "max_emails": request.max_emails},
+            triggered_by="user",
+        ))
 
         # Run the fetch in background
         background_tasks.add_task(

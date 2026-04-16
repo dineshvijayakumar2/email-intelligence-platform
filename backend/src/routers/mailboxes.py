@@ -326,17 +326,12 @@ async def resync_metadata(mailbox_id: str, background_tasks: BackgroundTasks):
         if mailbox.get('mailbox_type', '') not in ('outlook_live', 'outlook'):
             raise HTTPException(status_code=400, detail="Only Outlook mailboxes support metadata re-sync")
 
-        job_data = {
-            "job_type": "reprocessing",
-            "mailbox_id": mailbox_id,
-            "status": "pending",
-            "total_records": 0,
-            "processed_records": 0,
-            "failed_records": 0,
-            "created_at": datetime.now(timezone.utc).isoformat()
-        }
-        result = sb.table('processing_jobs').insert(job_data).execute()
-        job_id = result.data[0]['id']
+        from ..services.jobs import create_job, JobSpec
+        job_id = create_job(sb, JobSpec(
+            job_type="reprocessing",
+            mailbox_id=mailbox_id,
+            triggered_by="user",
+        ))
 
         if _run_reprocessing:
             background_tasks.add_task(_run_reprocessing, job_id, mailbox)

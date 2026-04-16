@@ -149,19 +149,17 @@ async def trigger_analysis(
         raise HTTPException(status_code=500, detail=f"Failed to validate mailbox: {str(e)[:200]}")
 
     def run_analysis():
-        import uuid
-        job_id = str(uuid.uuid4())
-        # Create a processing job for visibility
+        from ..services.jobs import create_job, JobSpec, JobAlreadyActive
         try:
-            _supabase.table("processing_jobs").insert({
-                "id": job_id,
-                "mailbox_id": mailbox_id,
-                "job_type": "ai_analysis",
-                "status": "running",
-                "started_at": datetime.utcnow().isoformat(),
-                "error_summary": {"progress_pct": 0, "progress_message": "Starting AI email analysis..."},
-            }).execute()
-        except Exception as job_err:
+            job_id = create_job(_supabase, JobSpec(
+                job_type="ai_analysis",
+                mailbox_id=mailbox_id,
+                client_id=client_id,
+                initial_status="running",
+                parameters={"max_emails": data.max_emails},
+                triggered_by="user",
+            ))
+        except (JobAlreadyActive, Exception) as job_err:
             logger.warning(f"Could not create processing job: {job_err}")
             job_id = None
 
@@ -384,20 +382,16 @@ async def trigger_backfill_intent(
     if not mailbox_ids:
         return {"status": "no_mailboxes", "message": "No mailboxes found", "mailboxes": []}
 
-    import uuid
-    job_id = str(uuid.uuid4())
-
-    # Create processing job for visibility
+    from ..services.jobs import create_job, JobSpec
     try:
-        _supabase.table("processing_jobs").insert({
-            "id": job_id,
-            "mailbox_id": mailbox_ids[0] if len(mailbox_ids) == 1 else None,
-            "client_id": client_id,
-            "job_type": "ai_backfill",
-            "status": "running",
-            "started_at": datetime.utcnow().isoformat(),
-            "error_summary": {"progress_pct": 0, "progress_message": f"Backfilling intent for {len(mailbox_ids)} mailbox(es)..."},
-        }).execute()
+        job_id = create_job(_supabase, JobSpec(
+            job_type="ai_backfill",
+            mailbox_id=mailbox_ids[0] if len(mailbox_ids) == 1 else None,
+            client_id=client_id,
+            initial_status="running",
+            parameters={"mailbox_count": len(mailbox_ids)},
+            triggered_by="user",
+        ))
     except Exception:
         job_id = None
 
@@ -1249,18 +1243,16 @@ async def generate_strategic_digest(
         pipeline = StrategicDigestPipeline(_supabase, client_id)
 
         # Create a processing job for persistent progress tracking
-        import uuid
-        job_id = str(uuid.uuid4())
+        from ..services.jobs import create_job, JobSpec
         started_at = datetime.utcnow().isoformat()
         try:
-            _supabase.table("processing_jobs").insert({
-                "id": job_id,
-                "job_type": "strategic_digest",
-                "status": "running",
-                "started_at": datetime.utcnow().isoformat(),
-                "error_summary": {"progress_pct": 0, "progress_message": "Starting strategic digest generation...",
-                                  "client_id": client_id, "period_type": period_type},
-            }).execute()
+            job_id = create_job(_supabase, JobSpec(
+                job_type="strategic_digest",
+                client_id=client_id,
+                initial_status="running",
+                parameters={"period_type": period_type, "client_id": client_id},
+                triggered_by="user",
+            ))
         except Exception as job_err:
             logger.warning(f"Could not create processing job: {job_err}")
             job_id = None

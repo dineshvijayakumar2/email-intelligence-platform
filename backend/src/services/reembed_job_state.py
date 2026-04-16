@@ -33,6 +33,8 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import UUID
 
+from src.services.jobs import JobSpec, JobAlreadyActive, create_job as factory_create_job
+
 logger = logging.getLogger(__name__)
 
 # The job_type value used to identify reembed jobs in the shared processing_jobs table.
@@ -49,14 +51,9 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-class ActiveJobExists(Exception):
-    """Raised by create_job when single-flight is violated.
-
-    Carries the existing job's record so the caller can return it in the 409.
-    """
-    def __init__(self, existing_job: dict):
-        super().__init__(f"Active reembed job already exists: {existing_job.get('id')}")
-        self.existing_job = existing_job
+# Keep ActiveJobExists as a re-export of JobAlreadyActive for backward compat
+# with the router that catches it.
+ActiveJobExists = JobAlreadyActive
 
 
 class ReembedJobState:
@@ -76,48 +73,23 @@ class ReembedJobState:
     ) -> str:
         """Insert a new pending reembed job. Returns the job id.
 
-        Raises ActiveJobExists if the partial unique index rejects the insert
-        because another active reembed exists for this client.
+        Raises ActiveJobExists (alias for JobAlreadyActive) if the partial
+        unique index rejects the insert because another active reembed exists
+        for this client.
         """
-        # Defense-in-depth: the partial unique index treats NULL client_id rows as
-        # distinct, so it does not block multiple null-client jobs. Reject at the
-        # application layer to make this constraint explicit.
         if client_id is None:
             raise ValueError("reembed jobs require a non-null client_id")
 
-        params = {
-            "tables": tables,
-            "limit": limit,
-            "triggered_by_user_id": triggered_by_user_id,
-        }
-        row = {
-            "job_type": JOB_TYPE,
-            "client_id": client_id,
-            "status": "pending",
-            "total_records": 0,
-            "processed_records": 0,
-            "failed_records": 0,
-            "parameters": params,
-        }
-        try:
-            resp = self._sb.table("processing_jobs").insert(row).execute()
-        except Exception as e:
-            err = str(e)
-            # Match SQLSTATE 23505 (unique_violation) — the established pattern in
-            # this codebase (operations.py:799, clients.py:442).
-            if "23505" in err or "duplicate key" in err.lower():
-                existing = self.get_active_job_for_client(client_id)
-                if existing:
-                    raise ActiveJobExists(existing) from e
-                # Constraint fired but no active job? Race with cleanup; surface real error.
-                raise
-            raise
-
-        if not resp.data:
-            raise RuntimeError(f"create_job returned no data: {resp}")
-        job_id = resp.data[0]["id"]
-        logger.info(f"[ReembedJob] Created job {job_id} for client {client_id}, tables={tables}")
-        return job_id
+        return factory_create_job(self._sb, JobSpec(
+            job_type=JOB_TYPE,
+            client_id=client_id,
+            parameters={
+                "tables": tables,
+                "limit": limit,
+                "triggered_by_user_id": triggered_by_user_id,
+            },
+            triggered_by="user",
+        ))
 
     def mark_running(self, job_id: str) -> None:
         """Transition pending -> running, stamp started_at."""

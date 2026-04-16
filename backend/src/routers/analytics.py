@@ -3619,19 +3619,14 @@ async def fetch_missing_dates(
         user_id = connection_config.get('gmail_user_id') or connection_config.get('outlook_user_id') or mb.get('user_id')
 
         # Create processing job
-        job_data = {
-            'mailbox_id': mb_id,
-            'job_type': job_type,
-            'status': 'pending',
-            'processed_records': 0,
-            'failed_records': 0,
-            'total_records': 0,
-            'filter_start_date': f"{start_date}T00:00:00Z",
-            'filter_end_date': f"{end_date}T23:59:59Z",
-            'created_at': now,
-        }
-        job_result = _supabase.table('processing_jobs').insert(job_data).execute()
-        job_id = job_result.data[0]['id']
+        from ..services.jobs import create_job, JobSpec
+        job_id = create_job(_supabase, JobSpec(
+            job_type=job_type,
+            mailbox_id=mb_id,
+            filter_start_date=f"{start_date}T00:00:00Z",
+            filter_end_date=f"{end_date}T23:59:59Z",
+            triggered_by="user",
+        ))
 
         # Dispatch background fetch
         if provider == 'gmail':

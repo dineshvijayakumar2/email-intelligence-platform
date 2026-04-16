@@ -346,21 +346,14 @@ async def restart_interrupted_job(job_id: str, background_tasks: BackgroundTasks
                     logger.info(f"Cached file not found, will re-download: {cached_path}")
 
         # Create new job
-        new_job_data = {
-            "job_type": original_job['job_type'],
-            "mailbox_id": mailbox_id,
-            "status": "pending",
-            "total_records": 0,
-            "processed_records": 0,
-            "failed_records": 0,
-            "filtered_records": 0,
-            "filter_start_date": original_job.get('filter_start_date'),
-            "filter_end_date": original_job.get('filter_end_date'),
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        }
-
-        result = sb.table('processing_jobs').insert(new_job_data).execute()
-        new_job_id = result.data[0]['id']
+        from ..services.jobs import create_job, JobSpec
+        new_job_id = create_job(sb, JobSpec(
+            job_type=original_job['job_type'],
+            mailbox_id=mailbox_id,
+            filter_start_date=original_job.get('filter_start_date'),
+            filter_end_date=original_job.get('filter_end_date'),
+            triggered_by="user",
+        ))
 
         # Mark old job as superseded
         sb.table('processing_jobs').update({
@@ -454,17 +447,12 @@ async def reprocess_emails(job_id: str, background_tasks: BackgroundTasks):
             )
 
         # Create a tracking job
-        reprocess_job = {
-            "job_type": "reprocessing",
-            "mailbox_id": mailbox_id,
-            "status": "pending",
-            "total_records": 0,
-            "processed_records": 0,
-            "failed_records": 0,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        }
-        result = _get_supabase().table('processing_jobs').insert(reprocess_job).execute()
-        new_job_id = result.data[0]['id']
+        from ..services.jobs import create_job, JobSpec
+        new_job_id = create_job(_get_supabase(), JobSpec(
+            job_type="reprocessing",
+            mailbox_id=mailbox_id,
+            triggered_by="user",
+        ))
 
         background_tasks.add_task(run_reprocessing, new_job_id, mailbox)
         return {"message": "Reprocessing started — re-syncing from mail provider", "job_id": new_job_id}
@@ -716,30 +704,23 @@ async def start_processing(mailbox_id: str, config: ProcessingJobConfig, backgro
             )
 
         # Create processing job with filter parameters for audit trail
-        job_data = {
-            "job_type": config.job_type,
-            "mailbox_id": mailbox_id,
-            "status": "pending",
-            "total_records": config.total_records,
-            "processed_records": 0,
-            "failed_records": 0,
-            "filtered_records": 0,  # Track emails skipped by date filter
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "started_at": None,
-            "completed_at": None,
-            "error_log": [],
-            # Stage 2: Store date filter parameters for visibility/audit
-            "filter_start_date": config.start_date if config.start_date else None,
-            "filter_end_date": config.end_date if config.end_date else None,
-        }
+        from ..services.jobs import create_job, JobSpec
+        job_id = create_job(_get_supabase(), JobSpec(
+            job_type=config.job_type,
+            mailbox_id=mailbox_id,
+            total_records=config.total_records,
+            filter_start_date=config.start_date if config.start_date else None,
+            filter_end_date=config.end_date if config.end_date else None,
+            triggered_by="user",
+        ))
 
-        # Insert job into database
-        result = _get_supabase().table('processing_jobs').insert(job_data).execute()
-        job = result.data[0]
+        # Re-fetch the full row for in-memory tracking and response
+        result = _get_supabase().table('processing_jobs').select('*').eq('id', job_id).single().execute()
+        job = result.data
 
         # Store job in memory for tracking
         with _active_jobs_lock:
-            _active_jobs[job['id']] = {
+            _active_jobs[job_id] = {
                 **job,
                 "mailbox_name": mailbox['name'],
                 "mailbox_type": mailbox['mailbox_type'],
@@ -751,9 +732,9 @@ async def start_processing(mailbox_id: str, config: ProcessingJobConfig, backgro
         config.mailbox_id = mailbox_id
 
         # Start REAL background processing (not simulated)
-        background_tasks.add_task(process_emails_real, job['id'], config)
+        background_tasks.add_task(process_emails_real, job_id, config)
 
-        logger.info(f"Started processing job {job['id']} for mailbox {mailbox['name']}")
+        logger.info(f"Started processing job {job_id} for mailbox {mailbox['name']}")
 
         return job
 

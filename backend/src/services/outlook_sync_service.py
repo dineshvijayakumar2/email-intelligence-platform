@@ -566,17 +566,16 @@ class OutlookSyncService:
 
     async def _create_sync_job(self, mailbox_id: str) -> Optional[str]:
         """Create a sync job record for tracking"""
-        job_data = {
-            'job_type': 'outlook_sync',
-            'mailbox_id': mailbox_id,
-            'status': 'running',
-            'processed_records': 0,
-            'failed_records': 0,
-            'started_at': datetime.now(timezone.utc).isoformat()
-        }
-
-        result = self.supabase.table('processing_jobs').insert(job_data).execute()
-        return result.data[0]['id'] if result.data else None
+        from .jobs import create_job, JobSpec
+        try:
+            return create_job(self.supabase, JobSpec(
+                job_type="outlook_sync",
+                mailbox_id=mailbox_id,
+                initial_status="running",
+                triggered_by="cron",
+            ))
+        except Exception:
+            return None
 
     async def _complete_sync_job(self, job_id: str, success: int, failed: int):
         """Mark sync job as completed"""
