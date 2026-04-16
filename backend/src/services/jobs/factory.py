@@ -50,7 +50,7 @@ class JobSpec(BaseModel):
     client_id: Optional[str] = None
     parameters: dict = Field(default_factory=dict)
     total_records: int = 0
-    max_attempts: int = 1
+    max_attempts: int = 3
     scheduled_for: Optional[datetime] = None
     triggered_by: str = "user"
     filter_start_date: Optional[str] = None
