@@ -148,11 +148,11 @@
 ## Phase W5: Monitoring + Deploy (Week 5)
 
 ### W5.1-W5.5
-- [ ] Health check endpoint per worker
-- [ ] "Is everything healthy?" diagnostic query
-- [ ] Railway deployment config update
-- [ ] Local dev mode (`python -m src.dev_runner`)
+- [x] Health diagnostic endpoint (`GET /internal/jobs/health`)
+- [x] Railway deployment config: `job-worker` service with 2 replicas
+- [x] Local dev mode (`python -m src.dev_runner` — API + worker in single process)
 - [ ] Staged rollout: analytics -> QB sync -> reembed -> remaining
+- [ ] Set `CRON_SECRET` and `WORKER_ID` env vars in Railway
 
 ---
 

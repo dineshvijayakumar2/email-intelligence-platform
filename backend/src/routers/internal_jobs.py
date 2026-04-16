@@ -102,3 +102,54 @@ async def cron_analytics_rollup(
     except Exception as e:
         logger.error(f"Failed to create analytics rollup job: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/health")
+async def worker_health(
+    _: None = Depends(verify_cron_secret),
+):
+    """Diagnostic: are all workers and jobs healthy?
+
+    Returns zero issues if everything is fine. Non-empty issues array
+    means something needs attention.
+    """
+    issues = []
+
+    try:
+        stuck = _supabase.rpc("exec_sql", {"query": """
+            SELECT count(*) AS cnt
+            FROM processing_jobs
+            WHERE status = 'running'
+              AND lease_expires_at IS NOT NULL
+              AND lease_expires_at < NOW();
+        """}).execute()
+        stuck_count = 0
+        if stuck.data and isinstance(stuck.data, list) and stuck.data:
+            stuck_count = stuck.data[0].get("cnt", 0)
+        if stuck_count:
+            issues.append(f"{stuck_count} stuck job(s) with expired leases")
+    except Exception as e:
+        issues.append(f"Health check query failed: {e}")
+
+    try:
+        pending = _supabase.table("processing_jobs").select(
+            "id", count="exact"
+        ).eq("status", "pending").execute()
+        pending_count = pending.count or 0
+        if pending_count > 20:
+            issues.append(f"{pending_count} pending jobs (possible worker stall)")
+    except Exception:
+        pass
+
+    try:
+        undispatched = _supabase.table("events").select(
+            "id", count="exact"
+        ).is_("dispatched_at", "null").execute()
+        undisp_count = undispatched.count or 0
+        if undisp_count > 50:
+            issues.append(f"{undisp_count} undispatched events (notification backlog)")
+    except Exception:
+        pass
+
+    status = "healthy" if not issues else "degraded"
+    return {"status": status, "issues": issues}
