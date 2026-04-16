@@ -56,7 +56,9 @@ async def ai_backfill_handler(sb, job: dict, stop_event: asyncio.Event):
         )
 
         try:
-            result = analyzer.analyze_all_unanalyzed(
+            # Run in thread so the event loop stays free for heartbeat
+            result = await asyncio.to_thread(
+                analyzer.analyze_all_unanalyzed,
                 mailbox_id=mb_id,
                 client_id=client_id,
                 max_emails=10000,
@@ -75,7 +77,9 @@ async def ai_backfill_handler(sb, job: dict, stop_event: asyncio.Event):
             # Run bucket engine after each mailbox
             if mb_analyzed > 0:
                 try:
-                    bucket_engine.process_email_buckets(mb_id)
+                    await asyncio.to_thread(
+                        bucket_engine.process_email_buckets, mb_id
+                    )
                 except Exception as be:
                     logger.warning(f"Bucket engine failed for {mb_id}: {be}")
 
