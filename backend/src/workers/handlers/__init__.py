@@ -12,6 +12,7 @@ from .notification_dispatch import notification_dispatch_handler
 from .reference_extraction import reference_extraction_handler
 from .ai_backfill import ai_backfill_handler
 from .ai_analysis import ai_analysis_handler
+from .email_pipeline import email_pipeline_handler
 
 JOB_HANDLERS: dict[str, Callable[..., Awaitable[None]]] = {
     'reembed': reembed_handler,
@@ -19,6 +20,7 @@ JOB_HANDLERS: dict[str, Callable[..., Awaitable[None]]] = {
     'reference_extraction': reference_extraction_handler,
     'ai_backfill': ai_backfill_handler,
     'ai_analysis': ai_analysis_handler,
+    'email_pipeline': email_pipeline_handler,
     # Future handlers (uncomment as implemented):
     # 'strategic_digest': digest_handler,
     # 'qb_sync_scheduled': qb_sync_handler,

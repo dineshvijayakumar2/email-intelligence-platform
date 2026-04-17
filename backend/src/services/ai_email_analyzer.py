@@ -35,7 +35,9 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Versioning constants
 # ---------------------------------------------------------------------------
-PROMPT_VERSION = "v1.3"
+# PROMPT_VERSION is a content hash of the hardcoded default prompt, used as
+# fallback when no DB row exists. Actual version comes from ai_prompt_config.version.
+import hashlib as _hashlib
 SCORING_VERSION = "v1.0"
 BATCH_SIZE = 20  # emails per Claude call (doubled from 10 for cost reduction)
 GEMINI_BATCH_SIZE = 5  # Gemini needs small batches (limited JSON output tokens)
@@ -198,12 +200,22 @@ For each email, return one JSON object with the following schema:
     "people_mentioned": [{{"name": string, "role": string or null, "context": string}}],
     "dates_mentioned": [{{"date": string, "context": string}}],
     "action_items_extracted": array of short action items explicitly mentioned
-  }}
+  }},
+  "qb_references": array of {{"type": "quote" or "job", "number": string}}
 }}
+
+QB REFERENCE EXTRACTION:
+- Look for QuickBase reference numbers mentioned in the email subject or body.
+- Quote numbers: Q followed by 4-6 digits (e.g., Q20334), or "Quote #12345", "QT-12345", "quote 12345".
+- Job numbers: J followed by 5-7 digits (e.g., J460037), or "Job #123456", "JB-123456", "job number 123456".
+- Return just the numeric part prefixed with Q or J. E.g., "Quote #20334" → {{"type": "quote", "number": "Q20334"}}.
+- If no references found, return empty array.
+- Only extract references explicitly present — do not guess or infer.
 
 Rules:
 - Do not hallucinate competitors.
 - Do not hallucinate budget amounts.
+- Do not hallucinate reference numbers.
 - Only extract information explicitly present.
 - If no entities exist, return empty arrays.
 - If no budget signal exists, return null.
@@ -213,10 +225,18 @@ EMAILS:
 
 Return ONLY a JSON array in the same order as input."""
 
+# Fallback version: content hash of the hardcoded prompt (used only when no DB row exists)
+PROMPT_VERSION = _hashlib.sha256(USER_PROMPT_TEMPLATE.encode()).hexdigest()[:8]
+
 
 # ---------------------------------------------------------------------------
 # Pydantic validation models
 # ---------------------------------------------------------------------------
+class QBReference(BaseModel):
+    type: str  # "quote" or "job"
+    number: str  # e.g. "Q20334", "J460037"
+
+
 class EntityExtraction(BaseModel):
     competitors_mentioned: list[str] = []
     products_mentioned: list[str] = []
@@ -281,6 +301,7 @@ class EmailClassificationResult(BaseModel):
     confidence: float = 0.5
     justification: str = ""
     entities: EntityExtraction = EntityExtraction()
+    qb_references: list[dict] = []
 
     @model_validator(mode="before")
     @classmethod
@@ -536,6 +557,9 @@ def post_process_classification(result: EmailClassificationResult, currency_code
         "has_competitor_mention": flags["has_competitor_mention"],
         "has_deadline": flags["has_deadline"],
         "business_signal_score": signal_score,
+
+        # AI-extracted QB references (stored as JSONB for post-classification linking)
+        "extracted_references": [ref for ref in result.qb_references] if result.qb_references else None,
     }
 
     # Derive email-level action buckets (Layer 2 — zero cost)

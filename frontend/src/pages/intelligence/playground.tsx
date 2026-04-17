@@ -87,13 +87,6 @@ const PROMPT_HINTS: Record<string, { label: string; variant: 'info' | 'warning' 
   },
 };
 
-/** Suggest the next minor version: "v1.3" -> "v1.4", anything unparseable -> "v1.0" */
-function bumpVersion(current?: string): string {
-  const m = (current || '').match(/^v(\d+)\.(\d+)$/);
-  if (!m) return 'v1.0';
-  return `v${m[1]}.${parseInt(m[2], 10) + 1}`;
-}
-
 const PlaygroundPage: React.FC = () => {
   const { clientId } = useClient();
   const [mailboxIds, setMailboxIds] = useState<string[]>([]);
@@ -118,7 +111,6 @@ const PlaygroundPage: React.FC = () => {
   const [editedPrompt, setEditedPrompt] = useState('');
   const [isEdited, setIsEdited] = useState(false);
   const [promptUpdatedAt, setPromptUpdatedAt] = useState<string | null>(null);
-  const [saveVersion, setSaveVersion] = useState('v1.0');
 
   // Results
   const [result, setResult] = useState<any>(null);
@@ -161,7 +153,6 @@ const PlaygroundPage: React.FC = () => {
       setEditedPrompt(prompt);
       setIsEdited(false);
       setPromptUpdatedAt(ov?.updated_at || null);
-      setSaveVersion(bumpVersion(ov?.version));
     } catch { /* silent */ }
   }, [clientId, testType]);
 
@@ -180,7 +171,6 @@ const PlaygroundPage: React.FC = () => {
     setEditedPrompt(prompt);
     setIsEdited(false);
     setPromptUpdatedAt(ov?.updated_at || null);
-    setSaveVersion(bumpVersion(ov?.version));
   };
 
   const handleSavePrompt = async () => {
@@ -201,13 +191,12 @@ const PlaygroundPage: React.FC = () => {
         prompt_key: selectedPromptKey,
         prompt_text: editedPrompt,
         description: `Updated from Playground`,
-        version: saveVersion,
       });
-      notify.success(`Prompt "${selectedPromptKey}" saved as ${saveVersion}`);
+      notify.success(`Prompt "${selectedPromptKey}" saved`);
       setActivePrompt(editedPrompt);
       setIsEdited(false);
       setPromptUpdatedAt(new Date().toISOString());
-      setOverrides(prev => ({ ...prev, [selectedPromptKey]: { prompt_text: editedPrompt, updated_at: new Date().toISOString(), version: saveVersion } }));
+      setOverrides(prev => ({ ...prev, [selectedPromptKey]: { prompt_text: editedPrompt, updated_at: new Date().toISOString() } }));
     } catch {
       notify.error('Failed to save prompt');
     }
@@ -460,13 +449,6 @@ const PlaygroundPage: React.FC = () => {
                   <RotateCcw className="h-3 w-3" />
                   Reset to Default
                 </button>
-                <input
-                  type="text"
-                  value={saveVersion}
-                  onChange={e => setSaveVersion(e.target.value)}
-                  placeholder="v1.0"
-                  className="h-7 px-2 text-[11px] font-mono rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 w-[72px]"
-                />
                 <button
                   onClick={handleSavePrompt}
                   disabled={!isEdited || saving}

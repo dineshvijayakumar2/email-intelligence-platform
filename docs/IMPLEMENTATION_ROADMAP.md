@@ -1,8 +1,9 @@
 # Implementation Roadmap: Multi-Worker + Contact Intelligence + Journey Tracking
 
 **Created:** 2026-04-16
+**Updated:** 2026-04-17
 **Status:** Active — tracking implementation progress
-**Source docs:** `docs/background-work-rfc.md`, `docs/contact-intelligence-design.md`
+**Source docs:** `docs/background-work-rfc.md`, `docs/contact-intelligence-design.md`, `docs/pipeline-design.md`
 
 ## Priority Order
 
@@ -12,15 +13,29 @@
 
 ---
 
-## Current State (Updated 2026-04-16)
+## Current State (Updated 2026-04-17)
 
 ### Worker infrastructure — LIVE
 - **Worker process** deployed on Railway as `job-worker` service (1 replica)
 - **claim_next_job RPC** — `SELECT FOR UPDATE SKIP LOCKED`, 5-min lease, 30s heartbeat
-- **Reconciler** — marks expired-lease jobs as `interrupted` every 10 min
+- **Reconciler** — marks expired-lease jobs as `interrupted` every 10 min; extended to handle NULL-lease BackgroundTasks jobs stuck >2 hours (migration 084 updated 2026-04-17)
 - **Multi-worker verified** — tested with 2 replicas, concurrent claiming works
 - **Events + Notifications tables** — created (migrations 085, 086)
 - **Thread-QB linking** — table + regex extractor + journey API + UI created
+
+### Critical fixes shipped (2026-04-17, commit `b7f1486`)
+
+1. **Pipeline auto-trigger fix** — Cron sync path (`_sync_user()`) in both Gmail and Outlook services was missing the `_trigger_post_sync_extraction()` call. Emails synced via cron were never classified/embedded. Now both `_sync_user()` and `_sync_mailbox()` trigger the extraction pipeline.
+2. **8 hybrid callsites protected** — Endpoints that create jobs and execute via `BackgroundTasks` now set `initial_status="running"` to prevent the worker from claiming jobs it has no handler for. Affected: `gmail_date_range_fetch` (gmail.py, analytics.py), `outlook_date_range_fetch` (outlook.py, analytics.py), `reprocessing` (mailboxes.py, processing_jobs.py ×3), `analytics_rollup_daily` (internal_jobs.py).
+3. **Reconciler extended for NULL-lease jobs** — Migration 084 updated: BackgroundTasks jobs (`lease_expires_at IS NULL`, `worker_id IS NULL`, stuck running >2 hours) are now caught and marked `interrupted`.
+4. **Embed thread safety fix** — `_embed_new_emails()` in `extraction_orchestrator.py` replaced fragile `asyncio.get_event_loop().run_until_complete()` with `asyncio.run()`, which safely creates a new event loop in ThreadPoolExecutor threads (Python 3.13 compatibility).
+
+### Email Pipeline Handler — Phase 1 Design COMPLETE
+- Design doc: `docs/pipeline-design.md`
+- 8-step pipeline: extract_and_link → assign_threads → evaluate_threads → refresh_counts → embed_emails → ai_classify → bucket_engine → evaluate_threads_final
+- Key discovery: Steps 1-2 of original spec are inseparable (in-memory state via `self.step_results`) → treated as one atomic `extract_and_link` step
+- Key discovery: Thread evaluation runs twice — before AI (metadata-only) and after AI (with override rules)
+- 4 open questions pending user decision before Phase 2 implementation
 
 ### Callsite migration status
 
@@ -33,12 +48,12 @@
 | `notification_dispatch` | `handlers/notification_dispatch.py` | — | ✅ Verified (sub-second jobs) |
 | `reference_extraction` | `handlers/reference_extraction.py` | — | Handler exists, no UI trigger yet |
 
-**Tier 2 — Still running via BackgroundTasks (need handler + router migration):**
+**Tier 2 — Still running via BackgroundTasks (protected with `initial_status="running"`):**
 | Job Type | Callsite | Complexity | Notes |
 |----------|----------|------------|-------|
-| `reprocessing` | mailboxes.py:337, processing_jobs.py:457 | High | Outlook-only, OAuth tokens, extractor |
-| `gmail_date_range_fetch` | gmail.py:633, analytics.py:3634 | High | OAuth tokens, GmailExtractor |
-| `outlook_date_range_fetch` | outlook.py:634, analytics.py:3637 | High | OAuth tokens, OutlookExtractor |
+| `reprocessing` | mailboxes.py:330, processing_jobs.py:350,451,708 | High | Outlook-only, OAuth tokens, extractor |
+| `gmail_date_range_fetch` | gmail.py:623, analytics.py:3623 | High | OAuth tokens, GmailExtractor |
+| `outlook_date_range_fetch` | outlook.py:624, analytics.py:3626 | High | OAuth tokens, OutlookExtractor |
 | `strategic_digest` | ai.py:1282 | Medium | LangGraph agent, SSE streaming |
 | `gmail_sync` | gmail.py:388,811,1173 | High | OAuth, incremental historyId |
 | `outlook_sync` | outlook.py:403,504,1047 | High | OAuth, delta links |
@@ -63,6 +78,8 @@
 2. **max_attempts must be > 1** (now defaults to 3) — otherwise worker death permanently strands jobs
 3. **httpx INFO logs flood worker output** — suppressed to WARNING level
 4. **notification_dispatch had wrong column name** (`user_id` vs `id` on user_profiles) and wrong filter syntax (string vs Python list for `.contains()`)
+5. **BackgroundTasks jobs must use `initial_status="running"`** — otherwise worker claims them and fails with "Unknown job_type"
+6. **`asyncio.run()` not `get_event_loop().run_until_complete()`** — the latter silently fails in ThreadPoolExecutor threads on Python 3.13
 
 ---
 
@@ -71,26 +88,26 @@
 **Goal:** Unified job creation and the DB schema that workers will claim from.
 
 ### W1.1 — Migration: processing_jobs extensions
-- [ ] Add columns: `last_heartbeat_at`, `worker_id`, `lease_expires_at`, `attempts`, `max_attempts`, `scheduled_for`, `triggered_by`
-- [ ] Add index: `idx_processing_jobs_claimable` (partial: pending OR expired lease)
-- [ ] Add index: `idx_processing_jobs_active_lease` (partial: running)
-- [ ] Add per-job-type dedup indexes (extend reembed pattern from migration 074)
+- [x] Add columns: `last_heartbeat_at`, `worker_id`, `lease_expires_at`, `attempts`, `max_attempts`, `scheduled_for`, `triggered_by`
+- [x] Add index: `idx_processing_jobs_claimable` (partial: pending OR expired lease)
+- [x] Add index: `idx_processing_jobs_active_lease` (partial: running)
+- [x] Add per-job-type dedup indexes (extend reembed pattern from migration 074)
 
 **File:** `scripts/migrations/083_worker_infrastructure.sql`
 
 ### W1.2 — Job Factory
-- [ ] Create `backend/src/services/jobs/factory.py` — `JobSpec` model + `create_job()` entry point
-- [ ] Handle dedup (catch unique violation -> `JobAlreadyActive`)
-- [ ] Handle defaults, validation, audit
+- [x] Create `backend/src/services/jobs/factory.py` — `JobSpec` model + `create_job()` entry point
+- [x] Handle dedup (catch unique violation -> `JobAlreadyActive`)
+- [x] Handle defaults, validation, audit
 
 ### W1.3 — Migrate callsites to factory
-- [ ] `reembed` (reembed_job_state.py)
-- [ ] `ai_analysis` / `ai_backfill` (ai.py)
-- [ ] `strategic_digest` (ai.py)
-- [ ] `reprocessing` (mailboxes.py, processing_jobs.py)
-- [ ] `gmail_sync` / `outlook_sync` (sync services)
-- [ ] `gmail_date_range_fetch` / `outlook_date_range_fetch` (gmail.py, outlook.py)
-- [ ] Generic extraction (processing_jobs.py)
+- [x] `reembed` (reembed_job_state.py)
+- [x] `ai_analysis` / `ai_backfill` (ai.py)
+- [x] `strategic_digest` (ai.py)
+- [x] `reprocessing` (mailboxes.py, processing_jobs.py) — uses factory but runs via BackgroundTasks
+- [x] `gmail_sync` / `outlook_sync` (sync services) — uses factory but runs via BackgroundTasks
+- [x] `gmail_date_range_fetch` / `outlook_date_range_fetch` — uses factory but runs via BackgroundTasks
+- [x] Generic extraction (processing_jobs.py) — uses factory but runs via BackgroundTasks
 
 ---
 
@@ -111,6 +128,7 @@
 ### W2.3 — Stuck-job reconciler
 - [x] `reconcile_stuck_jobs` RPC (migration 084) marking expired-lease jobs as `interrupted`
 - [x] Reconciler loop in worker process (runs every 10 min)
+- [x] Extended reconciler for NULL-lease BackgroundTasks jobs (stuck running >2h with no worker_id)
 
 ### W2.4 — Migrate first job type to worker
 - [x] Extract `reembed` execution into worker handler (`handlers/reembed.py`)
@@ -134,6 +152,8 @@
 - [x] Auth via `verify_cron_secret` dependency in `auth.py`
 
 ### W3.3 — External cron registration
+- [x] `POST /internal/jobs/notification-dispatch` endpoint (every 2 min)
+- [x] Cron setup documentation: `docs/CRON_SETUP.md` with full schedule and examples
 - [ ] Configure Railway cron or cron-job.org to call internal endpoints
 - [ ] Set `CRON_SECRET` env var in production
 
@@ -206,8 +226,11 @@
 - [x] Run as worker job type: `reference_extraction` (handler registered)
 
 ### T1.3 — AI extraction enhancement
-- [ ] Add QB reference extraction to classification prompt
-- [ ] Feed AI-extracted refs into `thread_qb_links` with `source='ai'`
+- [x] Add `qb_references` field + QB REFERENCE EXTRACTION instructions to classification prompt
+- [x] `QBReference` Pydantic model + `qb_references` field on `EmailClassificationResult`
+- [x] `post_process_classification()` writes `extracted_references` to `ai_email_intelligence`
+- [x] Post-classification linker in `ai_analysis` worker handler: validates AI refs against QB, writes `thread_qb_links` with `source='ai'`, `confidence=0.9`
+- [x] Updated `ai_prompt_config` DB rows (email_analysis_user + email_analysis_system) to v1.3
 
 ### T1.4 — Journey API endpoints
 - [x] Create `backend/src/routers/journey.py`
@@ -221,6 +244,61 @@
 - [x] `ThreadJourneyPanel.tsx` — display journey with QB links, quotes, jobs, ops, invoices, status timeline
 - [x] `ManualLinkDialog.tsx` — AM associates thread with quote/job
 - [x] `journeyService.ts` — API client
+
+---
+
+## Phase W6: Email Pipeline Handler (Week 6-7)
+
+**Goal:** Replace implicit post-sync chain with explicit `email_pipeline` worker job — per-step progress tracking, resume-from-failure, single-flight per mailbox.
+
+**Design doc:** `docs/pipeline-design.md` (Phase 1 complete, Phase 2 pending)
+
+### W6.1 — Pipeline handler implementation
+- [ ] Create `backend/src/workers/handlers/email_pipeline.py`
+- [ ] 8-step sequential pipeline: extract_and_link → assign_threads → evaluate_threads → refresh_counts → embed_emails → ai_classify → bucket_engine → evaluate_threads_final
+- [ ] Per-step progress updates to `processing_jobs.parameters.completed_steps`
+- [ ] Resume from last completed step on retry (skip completed steps)
+- [ ] Worker singletons: handler creates its own `ExtractionOrchestrator`, `VectorService`, `AIEmailAnalyzer`, `ActionBucketEngine` instances
+
+### W6.2 — Single-flight dedup
+- [ ] Migration: partial unique index `uq_email_pipeline_per_mailbox` on `(mailbox_id) WHERE status IN ('pending','running')`
+- [ ] Register `email_pipeline` in `JOB_HANDLERS`
+
+### W6.3 — Trigger integration
+- [ ] Gmail sync `_trigger_post_sync_extraction()` → creates `email_pipeline` pending job instead of running inline
+- [ ] Outlook sync `_trigger_post_sync_extraction()` → same
+- [ ] Manual extraction trigger → same
+- [ ] Remove BackgroundTasks fallback for extraction
+
+### W6.4 — Open questions (pending user decision)
+1. Lightweight vs full mode for sync-triggered pipelines?
+2. `client_id` resolution strategy (from mailbox lookup or passed through)?
+3. `max_attempts`: 1, 2, or 3?
+4. Zero-email sync: skip pipeline or run anyway?
+
+---
+
+## Phase W7: Operations Center UI Consolidation (Week 7-8)
+
+**Goal:** Merge Extraction page, Data Health page, and operational parts of AI Usage page into a single holistic operations dashboard.
+
+### W7.1 — Audit and plan
+- [x] Audited Extraction page: 5 features (run extraction, resync metadata, cancel job, monitor progress, job history)
+- [x] Audited Data Health page: 6 actions + extensive diagnostics
+- [x] Audited AI Usage page: AI controls + cost monitoring + embedding management + re-analysis
+- [ ] Final merge plan: which features stay, which retire, which consolidate
+
+### W7.2 — Consolidated Data Health & Operations page
+- [ ] Move operational triggers from AI Usage (re-analysis, re-embed, re-bucket) into Data Health
+- [ ] Move extraction features from Extraction page into Data Health
+- [ ] Add pipeline status monitoring (email_pipeline jobs per mailbox)
+- [ ] Retire standalone Extraction page (redirect to Data Health)
+- [ ] AI Usage page keeps only: config/model selection, cost monitoring, prompt templates
+
+### W7.3 — Holistic job orchestration
+- [ ] "Run Full Pipeline" button (creates `email_pipeline` job for selected mailbox)
+- [ ] Pipeline progress visualization (8 steps with completion status)
+- [ ] Job history timeline showing all job types for a mailbox
 
 ---
 
@@ -259,22 +337,31 @@
 ## Dependency Graph
 
 ```
-W1 (Schema + Factory)
+W1 (Schema + Factory) ✅
  |
  v
-W2 (Worker Process)
+W2 (Worker Process) ✅
  |
  v
-W3 (Scheduler)  <--- C0 (Contact Backfill) can start in parallel
+W3 (Scheduler) ✅ (endpoints + docs done, external cron config pending)
  |
  v
-W4 (Notifications)
+W4 (Notifications) ✅
  |
  v
-W5 (Deploy + Rollout)
+W5 (Deploy + Rollout) — partially done (health check ✅, staged rollout pending)
  |
  v
-T1 (Thread-QB Journey) <--- depends on W2 for worker
+W6 (Email Pipeline Handler) ← NEW — depends on W2 for worker
+ |
+ v
+W7 (Operations Center UI) ← NEW — depends on W6 for pipeline job type
+ |
+ v
+T1 (Thread-QB Journey) ✅ Complete (including AI extraction T1.3)
+ |
+ v
+C0 (Contact Backfill) ✅
  |
  v
 C1 (Persona Metrics)   <--- depends on C0 + T1
@@ -283,35 +370,38 @@ C1 (Persona Metrics)   <--- depends on C0 + T1
 C2 (Frontend UI)
  |
  v
-C3 (Status Analytics)  <--- blocked on data (~3 months)
+C3 (Status Analytics)  <--- blocked on data (~3 months from Apr 15)
 ```
 
 ## Migrations Sequence
 
-| # | Name | Phase | Description |
-|---|------|-------|-------------|
-| 083 | worker_infrastructure | W1 | processing_jobs extensions + dedup indexes |
-| 084 | reconcile_stuck_jobs | W2 | Stuck-job reconciler RPC |
-| 085 | pg_cron_schedules | W3 | Schedule registration + internal auth |
-| 086 | events_notifications | W4 | Events + notifications tables |
-| 086 | thread_qb_links | T1 | Thread-to-QB linking table |
-| 087 | contact_persona_views | C1 | Persona metric views (regular + materialized) |
+| # | Name | Phase | Status | Description |
+|---|------|-------|--------|-------------|
+| 083 | worker_infrastructure | W1 | ✅ Applied | processing_jobs extensions + dedup indexes |
+| 084 | reconcile_stuck_jobs | W2 | ✅ Applied (updated 04-17) | Stuck-job reconciler RPC — now handles NULL-lease BackgroundTasks jobs |
+| 085 | events_notifications | W4 | ✅ Applied | Events + notifications tables |
+| 086 | thread_qb_links | T1 | ✅ Applied | Thread-to-QB linking table + extracted_references on ai_email_intelligence |
+| 087 | email_pipeline_dedup | W6 | Planned | Partial unique index for email_pipeline single-flight per mailbox |
+| 088 | contact_persona_views | C1 | Planned | Persona metric views (regular + materialized) |
 
 ## Effort Summary
 
-| Phase | Description | Effort | Cumulative |
-|-------|-------------|--------|------------|
-| W1 | Schema + Factory + Callsite migration | 1.5-2 weeks | 2 weeks |
-| W2 | Worker process + first handler | 1-1.5 weeks | 3.5 weeks |
-| W3 | Scheduler (pg_cron) | 3-4 days | 4 weeks |
-| W4 | Notifications (in-app only) | 1-1.5 weeks | 5.5 weeks |
-| W5 | Monitoring + deploy + staged rollout | 1 week | 6.5 weeks |
-| C0 | Contact-QB metadata backfill | 2-3 days | 7 weeks |
-| T1 | Thread-QB journey linking | 2-2.5 weeks | 9.5 weeks |
-| C1 | Contact persona metrics | 2 weeks | 11.5 weeks |
-| C2 | Frontend persona UI | 2.5 weeks | 14 weeks |
-| C3 | Status transition analytics | 1-2 weeks | 15-16 weeks |
+| Phase | Description | Effort | Status |
+|-------|-------------|--------|--------|
+| W1 | Schema + Factory + Callsite migration | 1.5-2 weeks | ✅ Complete |
+| W2 | Worker process + first handler | 1-1.5 weeks | ✅ Complete |
+| W3 | Scheduler (external cron) | 3-4 days | ✅ Endpoints + CRON_SETUP.md done, external config pending |
+| W4 | Notifications (in-app only) | 1-1.5 weeks | ✅ Complete |
+| W5 | Monitoring + deploy + staged rollout | 1 week | 🔶 Health check done, staged rollout pending |
+| C0 | Contact-QB metadata backfill | 2-3 days | ✅ Complete |
+| T1 | Thread-QB journey linking | 2-2.5 weeks | ✅ Complete (including AI extraction T1.3) |
+| **W6** | **Email pipeline handler** | **1-1.5 weeks** | **Phase 1 design complete, Phase 2 pending** |
+| **W7** | **Operations center UI consolidation** | **1-1.5 weeks** | **Audit complete, implementation pending** |
+| C1 | Contact persona metrics | 2 weeks | Not started |
+| C2 | Frontend persona UI | 2.5 weeks | Not started |
+| C3 | Status transition analytics | 1-2 weeks | Blocked on data (~3 months from Apr 15) |
 
-**First milestone (worker in production):** ~6.5 weeks
-**Thread-QB journey queryable:** ~9.5 weeks
-**Full roadmap:** ~14-16 weeks
+**Worker in production:** ✅ Complete (ai_backfill, ai_analysis, notification_dispatch verified)
+**Thread-QB journey queryable:** ✅ Complete (regex extraction, journey API, manual linking UI)
+**Next milestone:** Email pipeline handler (W6) → Operations center (W7) → Contact persona (C1)
+**Full roadmap remaining:** ~8-10 weeks (W6 through C3)

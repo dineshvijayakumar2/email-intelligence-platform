@@ -13,7 +13,7 @@ from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 
-from ..dependencies.auth import verify_cron_secret
+from ..dependencies.auth import verify_cron_secret, require_role
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +105,30 @@ async def cron_analytics_rollup(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/notification-dispatch")
+async def cron_notification_dispatch(
+    _: None = Depends(verify_cron_secret),
+):
+    """Dispatch pending notifications from undispatched events.
+
+    Creates a notification_dispatch processing job that the worker picks up.
+    Called every 2 minutes by external cron.
+    """
+    from ..services.jobs import create_job, JobSpec, JobAlreadyActive
+    try:
+        job_id = create_job(_supabase, JobSpec(
+            job_type="notification_dispatch",
+            triggered_by="cron",
+            max_attempts=1,
+        ))
+        return {"status": "created", "job_id": job_id}
+    except JobAlreadyActive as e:
+        return {"status": "skipped", "reason": "already running", "existing_job": e.existing_job}
+    except Exception as e:
+        logger.error(f"Failed to create notification dispatch job: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/health")
 async def worker_health(
     _: None = Depends(verify_cron_secret),
@@ -154,3 +178,124 @@ async def worker_health(
 
     status = "healthy" if not issues else "degraded"
     return {"status": status, "issues": issues}
+
+
+# ── Persona Metrics Refresh ────────────────────────────────────────────────
+
+
+@router.post("/refresh-persona-metrics")
+async def refresh_persona_metrics(
+    _: None = Depends(verify_cron_secret),
+):
+    """Refresh the contact_email_metrics materialized view.
+
+    Called by external cron (daily) and after QB sync completes.
+    Uses REFRESH MATERIALIZED VIEW CONCURRENTLY so reads are not blocked.
+    """
+    import time as _time
+
+    t0 = _time.monotonic()
+    try:
+        _supabase.rpc("refresh_contact_email_metrics", {}).execute()
+        elapsed = round(_time.monotonic() - t0, 2)
+        logger.info(f"Persona metrics refreshed in {elapsed}s")
+        return {"status": "ok", "elapsed_seconds": elapsed}
+    except Exception as e:
+        elapsed = round(_time.monotonic() - t0, 2)
+        logger.error(f"Persona metrics refresh failed after {elapsed}s: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Email Pipeline endpoints (admin-facing) ──────────────────────────────
+
+
+@router.post("/mailboxes/{mailbox_id}/run-pipeline")
+async def trigger_pipeline(
+    mailbox_id: str,
+    current_user: dict = Depends(require_role("admin")),
+):
+    """Manually trigger the email pipeline for a mailbox.
+
+    Returns 200 with job_id if created, or status='already_running' if
+    a pipeline is already active for this mailbox.
+    """
+    from ..services.jobs import create_job, JobSpec, JobAlreadyActive
+
+    try:
+        job_id = create_job(_supabase, JobSpec(
+            job_type="email_pipeline",
+            mailbox_id=mailbox_id,
+            parameters={"trigger_source": "manual"},
+            triggered_by="user",
+            max_attempts=1,
+        ))
+        return {"job_id": job_id, "status": "queued"}
+    except JobAlreadyActive as e:
+        return {"job_id": e.existing_job.get("id"), "status": "already_running"}
+    except Exception as e:
+        logger.error(f"Failed to create pipeline job for mailbox {mailbox_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/jobs/{job_id}/resume-pipeline")
+async def resume_pipeline(
+    job_id: str,
+    current_user: dict = Depends(require_role("admin")),
+):
+    """Resume a failed or interrupted pipeline from where it stopped.
+
+    Creates a new pipeline job with completed_steps pre-populated from
+    the previous run's parameters.
+    """
+    from ..services.jobs import create_job, JobSpec, JobAlreadyActive
+    from ..workers.handlers.email_pipeline import PIPELINE_STAGES
+
+    # Fetch the failed/interrupted job
+    try:
+        resp = _supabase.table("processing_jobs").select("*").eq("id", job_id).single().execute()
+    except Exception:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    failed_job = resp.data
+    if not failed_job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    if failed_job["job_type"] != "email_pipeline":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot resume job of type {failed_job['job_type']}",
+        )
+
+    if failed_job["status"] not in ("failed", "interrupted"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Can only resume failed or interrupted pipelines, got status={failed_job['status']}",
+        )
+
+    # Preserve completed_steps from the failed run
+    prev_params = failed_job.get("parameters") or {}
+    completed_steps = prev_params.get("completed_steps") or []
+
+    try:
+        new_job_id = create_job(_supabase, JobSpec(
+            job_type="email_pipeline",
+            mailbox_id=failed_job["mailbox_id"],
+            parameters={
+                "trigger_source": "resume",
+                "resumed_from": job_id,
+                "completed_steps": completed_steps,
+            },
+            triggered_by="user",
+            max_attempts=1,
+        ))
+        return {
+            "job_id": new_job_id,
+            "status": "queued",
+            "resumed_from_step": completed_steps[-1] if completed_steps else None,
+            "remaining_steps": [s for s in PIPELINE_STAGES if s not in completed_steps],
+        }
+    except JobAlreadyActive as e:
+        return {"job_id": e.existing_job.get("id"), "status": "already_running"}
+    except Exception as e:
+        logger.error(f"Failed to resume pipeline job {job_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

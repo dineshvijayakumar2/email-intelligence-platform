@@ -96,6 +96,21 @@ async def ai_analysis_handler(sb, job: dict, stop_event: asyncio.Event):
     except Exception as e:
         logger.warning(f"Entity aggregation failed for {mailbox_id}: {e}")
 
+    if stop_event.is_set():
+        return
+
+    # AI-extracted QB reference linking
+    if analyzed > 0 and client_id:
+        _update_progress(sb, job_id, "Linking AI-extracted QB references...", pct=90)
+        try:
+            linked = await asyncio.to_thread(
+                _link_ai_extracted_refs, sb, client_id, mailbox_id
+            )
+            if linked:
+                logger.info(f"ai_analysis {job_id}: linked {linked} AI-extracted QB refs")
+        except Exception as e:
+            logger.warning(f"AI ref linking failed for {mailbox_id}: {e}")
+
     # Final progress — runner handles status=completed
     summary = f"Done: {analyzed} analyzed, {failed} failed, {batches} batches"
     update: dict = {
@@ -111,6 +126,67 @@ async def ai_analysis_handler(sb, job: dict, stop_event: asyncio.Event):
         pass
 
     logger.info(f"ai_analysis {job_id}: completed — {summary}")
+
+
+def _link_ai_extracted_refs(sb, client_id: str, mailbox_id: str) -> int:
+    """Validate AI-extracted QB references and write to thread_qb_links.
+
+    Reads recently-completed emails with non-null extracted_references,
+    validates each ref against qb_quotes/qb_jobs, and upserts links
+    with source='ai' and confidence=0.9.
+    """
+    from src.services.reference_extractor import _validate_refs, _upsert_links
+
+    # Fetch emails with AI-extracted refs (completed in this run)
+    resp = sb.table("ai_email_intelligence").select(
+        "email_id, extracted_references"
+    ).eq("mailbox_id", mailbox_id).eq(
+        "processing_status", "completed"
+    ).not_.is_("extracted_references", "null").execute()
+
+    if not resp.data:
+        return 0
+
+    # Build email_id -> thread_id lookup
+    email_ids = [r["email_id"] for r in resp.data]
+    thread_resp = sb.table("emails").select(
+        "id, canonical_thread_id"
+    ).in_("id", email_ids).execute()
+    thread_map = {
+        r["id"]: r.get("canonical_thread_id")
+        for r in (thread_resp.data or [])
+    }
+
+    total_linked = 0
+    for row in resp.data:
+        refs_raw = row.get("extracted_references") or []
+        if not refs_raw:
+            continue
+
+        thread_id = thread_map.get(row["email_id"])
+        if not thread_id:
+            continue
+
+        # Convert AI output [{type, number}] into {link_type: set(ref_string)}
+        refs: dict[str, set[str]] = {}
+        for ref in refs_raw:
+            ref_type = ref.get("type")  # "quote" or "job"
+            ref_number = ref.get("number")  # e.g. "Q20334"
+            if ref_type and ref_number:
+                refs.setdefault(ref_type, set()).add(ref_number)
+
+        if not refs:
+            continue
+
+        validated = _validate_refs(sb, client_id, refs)
+        if validated:
+            count = _upsert_links(
+                sb, client_id, thread_id, validated,
+                source="ai", confidence=0.9,
+            )
+            total_linked += count
+
+    return total_linked
 
 
 def _update_progress(

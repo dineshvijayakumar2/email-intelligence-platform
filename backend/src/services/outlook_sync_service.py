@@ -289,8 +289,30 @@ class OutlookSyncService:
 
             logger.info(f"Outlook sync completed for mailbox {mailbox_name}: {success_count} emails synced", extra={'mailbox_id': mailbox_id})
 
-            # Auto-trigger Sprint 2 extraction pipeline
-            await self._trigger_post_sync_extraction(mailbox_id, success_count)
+            # WORKER MIGRATION 2026-04-17: replaced inline extraction with worker pipeline job.
+            # Old code preserved below for one-week rollback window. Remove after 2026-04-24.
+            #
+            # OLD CODE:
+            # await self._trigger_post_sync_extraction(mailbox_id, success_count)
+            #
+            # NEW CODE:
+            if success_count > 0:
+                try:
+                    from ..services.jobs import create_job, JobSpec, JobAlreadyActive
+                    create_job(self.supabase, JobSpec(
+                        job_type='email_pipeline',
+                        mailbox_id=mailbox_id,
+                        client_id=None,  # handler resolves from mailbox row
+                        parameters={'trigger_source': 'sync'},
+                        triggered_by='sync',
+                        max_attempts=1,
+                    ))
+                    logger.info(f"Pipeline job created for mailbox {mailbox_id}")
+                except JobAlreadyActive:
+                    logger.info(f"Pipeline already active for mailbox {mailbox_id}, skipping")
+                except Exception as e:
+                    logger.error(f"Failed to create pipeline job for mailbox {mailbox_id}: {e}", exc_info=True)
+                    # Do NOT re-raise — sync should report success even if pipeline trigger fails.
 
         except Exception as e:
             error_str = str(e)
@@ -309,6 +331,7 @@ class OutlookSyncService:
                 logger.error(traceback.format_exc())
                 await self._update_mailbox_sync_status(mailbox_id, 'error', error=error_str)
 
+    # DEPRECATED 2026-04-17 — superseded by email_pipeline worker job. Remove after 2026-04-24 if stable.
     async def _trigger_post_sync_extraction(self, mailbox_id: str, emails_synced: int):
         """Auto-trigger Sprint 2 extraction pipeline after successful sync (fire-and-forget)."""
         if emails_synced == 0:
@@ -532,8 +555,30 @@ class OutlookSyncService:
 
             logger.info(f"Outlook sync completed for user {user_id}: {success_count} emails synced")
 
-            # Auto-trigger Sprint 2 extraction pipeline (classification + embeddings)
-            await self._trigger_post_sync_extraction(mailbox['id'], success_count)
+            # WORKER MIGRATION 2026-04-17: replaced inline extraction with worker pipeline job.
+            # Old code preserved below for one-week rollback window. Remove after 2026-04-24.
+            #
+            # OLD CODE:
+            # await self._trigger_post_sync_extraction(mailbox['id'], success_count)
+            #
+            # NEW CODE:
+            if success_count > 0:
+                try:
+                    from ..services.jobs import create_job, JobSpec, JobAlreadyActive
+                    create_job(self.supabase, JobSpec(
+                        job_type='email_pipeline',
+                        mailbox_id=mailbox['id'],
+                        client_id=None,  # handler resolves from mailbox row
+                        parameters={'trigger_source': 'sync'},
+                        triggered_by='sync',
+                        max_attempts=1,
+                    ))
+                    logger.info(f"Pipeline job created for mailbox {mailbox['id']}")
+                except JobAlreadyActive:
+                    logger.info(f"Pipeline already active for mailbox {mailbox['id']}, skipping")
+                except Exception as e:
+                    logger.error(f"Failed to create pipeline job for mailbox {mailbox['id']}: {e}", exc_info=True)
+                    # Do NOT re-raise — sync should report success even if pipeline trigger fails.
 
         except Exception as e:
             logger.error(f"Outlook sync failed for user {user_id}: {e}")

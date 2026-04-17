@@ -21,7 +21,7 @@ export const Dashboard: React.FC = () => {
   const { profile } = useAuth();
   const { clientId, clientName } = useClient();
 
-  const [stats, setStats] = useState<DashboardStats>({ totalEmails: 0, totalMailboxes: 0, todayEmails: 0, processingJobs: 0 });
+  const [stats, setStats] = useState<DashboardStats>({ totalEmails: 0, totalMailboxes: 0, todayEmails: 0, processingJobs: 0, totalCompanies: 0 });
   const [processingOverview, setProcessingOverview] = useState<ProcessingOverview>({ activeJobs: 0, completedToday: 0, failedToday: 0, totalProcessed: 0, successRate: 100 });
   const [mailboxes, setMailboxes] = useState<MailboxSummary[]>([]);
   const [recentJobs, setRecentJobs] = useState<RecentJob[]>([]);
@@ -89,8 +89,8 @@ export const Dashboard: React.FC = () => {
           subtitle={`${processingOverview.activeJobs} active jobs`} />
         {isAdmin ? (
           <>
-            <KPICard title="Companies" value={mailboxes.reduce((s, m) => s + (m.emailCount > 0 ? 1 : 0), 0)} loading={statsLoading}
-              onClick={() => navigate('/customers')} subtitle="with emails" />
+            <KPICard title="Companies" value={stats.totalCompanies} loading={statsLoading}
+              onClick={() => navigate('/customers')} subtitle="total" />
             <KPICard title="Processing" value={processingOverview.completedToday} loading={processingLoading}
               subtitle={processingOverview.failedToday > 0 ? `${processingOverview.failedToday} failed` : 'completed today'}
               danger={processingOverview.failedToday > 0} />

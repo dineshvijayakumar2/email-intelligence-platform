@@ -7,6 +7,7 @@ export interface DashboardStats {
   totalMailboxes: number;
   todayEmails: number;
   processingJobs: number;
+  totalCompanies: number;
 }
 
 export interface ProcessingOverview {
@@ -55,6 +56,7 @@ export const dashboardService = {
         totalMailboxes: 0,
         todayEmails: 0,
         processingJobs: 0,
+        totalCompanies: 0,
       };
     } catch (error) {
       console.error('Error fetching dashboard stats:', error);
@@ -63,6 +65,7 @@ export const dashboardService = {
         totalMailboxes: 0,
         todayEmails: 0,
         processingJobs: 0,
+        totalCompanies: 0,
       };
     }
   },

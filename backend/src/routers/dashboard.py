@@ -87,7 +87,8 @@ async def get_dashboard_stats(
                 "totalEmails": 0,
                 "totalMailboxes": 0,
                 "todayEmails": 0,
-                "processingJobs": 0
+                "processingJobs": 0,
+                "totalCompanies": 0
             }
 
         # Count emails in accessible mailboxes
@@ -103,11 +104,21 @@ async def get_dashboard_stats(
         # Count active processing jobs for accessible mailboxes
         processing_jobs_count = sb.table('processing_jobs').select('id', count='exact').in_('mailbox_id', accessible_mailbox_ids).in_('status', ['pending', 'running', 'downloading']).execute()
 
+        # Count companies: get client_ids from accessible mailboxes, then count customer_companies
+        client_ids_result = sb.table('mailboxes').select('client_id').in_('id', accessible_mailbox_ids).execute()
+        client_ids = list({r['client_id'] for r in (client_ids_result.data or []) if r.get('client_id')})
+        if client_ids:
+            companies_count = sb.table('customer_companies').select('id', count='exact').in_('client_id', client_ids).execute()
+            total_companies = companies_count.count or 0
+        else:
+            total_companies = 0
+
         stats = {
             "totalEmails": emails_count.count or 0,
             "totalMailboxes": mailboxes_count,
             "todayEmails": today_emails.count or 0,
-            "processingJobs": processing_jobs_count.count or 0
+            "processingJobs": processing_jobs_count.count or 0,
+            "totalCompanies": total_companies
         }
 
         logger.info(f"[Dashboard Stats] Returning stats: {stats}")
@@ -120,7 +131,8 @@ async def get_dashboard_stats(
             "totalEmails": 0,
             "totalMailboxes": 0,
             "todayEmails": 0,
-            "processingJobs": 0
+            "processingJobs": 0,
+            "totalCompanies": 0
         }
 
 

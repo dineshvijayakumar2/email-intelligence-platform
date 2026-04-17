@@ -1816,7 +1816,9 @@ async def upsert_prompt(
     data: dict,
     current_user: dict = Depends(get_current_user),
 ):
-    """Create or update a prompt. Body: {client_id, prompt_key, prompt_text, description?, version?}"""
+    """Create or update a prompt. Body: {client_id, prompt_key, prompt_text, description?}"""
+    import hashlib
+
     prompt_key = data.get("prompt_key")
     prompt_text = data.get("prompt_text")
     client_id = data.get("client_id")
@@ -1824,6 +1826,9 @@ async def upsert_prompt(
         raise HTTPException(status_code=400, detail="prompt_key and prompt_text are required")
     if not client_id:
         raise HTTPException(status_code=400, detail="client_id is required")
+
+    # Auto-compute content hash as version — no manual versioning
+    content_hash = hashlib.sha256(prompt_text.encode()).hexdigest()[:8]
 
     try:
         # Check if row already exists for this client + key
@@ -1837,7 +1842,7 @@ async def upsert_prompt(
             "prompt_text": prompt_text,
             "is_active": True,
             "description": data.get("description", ""),
-            "version": data.get("version", "v1.0"),
+            "version": content_hash,
             "updated_at": datetime.utcnow().isoformat(),
         }
 

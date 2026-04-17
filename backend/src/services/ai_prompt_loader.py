@@ -119,6 +119,8 @@ def _load_global_from_db(
 
 def _seed_global_prompt(supabase_client, prompt_key: str, prompt_text: str) -> None:
     """Insert a global (client_id IS NULL) prompt row if one doesn't already exist."""
+    import hashlib
+    content_hash = hashlib.sha256(prompt_text.encode()).hexdigest()[:8]
     try:
         supabase_client.table("ai_prompt_config").insert({
             "prompt_key": prompt_key,
@@ -126,7 +128,7 @@ def _seed_global_prompt(supabase_client, prompt_key: str, prompt_text: str) -> N
             "client_id": None,
             "is_active": True,
             "description": f"Auto-seeded default for {prompt_key}",
-            "version": "v1.0",
+            "version": content_hash,
         }).execute()
         logger.info(f"Auto-seeded global prompt '{prompt_key}' into DB")
     except Exception as e:
