@@ -83,7 +83,7 @@ class DateRangeFetchRequest(BaseModel):
     user_id: str
     start_date: str  # YYYY-MM-DD format
     end_date: str    # YYYY-MM-DD format
-    max_emails: Optional[int] = 2000  # Hard cap to prevent connection overload
+    max_emails: Optional[int] = None  # None = fetch all emails in range
 
 
 class OutlookConfigUpdate(BaseModel):
@@ -761,6 +761,24 @@ def _run_date_range_fetch(
         logger.info(f"Date range fetch completed: {processed} emails from {start_date} to {end_date}")
 
         extractor.disconnect()
+
+        # Auto-trigger pipeline if we fetched any emails
+        if processed > 0:
+            try:
+                from src.services.jobs import create_job, JobSpec, JobAlreadyActive
+                create_job(_supabase, JobSpec(
+                    job_type='email_pipeline',
+                    mailbox_id=mailbox_id,
+                    client_id=None,
+                    parameters={'trigger_source': 'date_range_fetch'},
+                    triggered_by='user',
+                    max_attempts=1,
+                ))
+                logger.info(f"Pipeline job created for mailbox {mailbox_id} after date-range fetch")
+            except JobAlreadyActive:
+                logger.info(f"Pipeline already active for mailbox {mailbox_id}, skipping")
+            except Exception as pe:
+                logger.error(f"Failed to create pipeline job for mailbox {mailbox_id}: {pe}", exc_info=True)
 
     except Exception as e:
         logger.error(f"Date range fetch failed for job {job_id}: {e}")
