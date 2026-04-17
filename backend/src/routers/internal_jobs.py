@@ -94,6 +94,7 @@ async def cron_analytics_rollup(
     try:
         job_id = create_job(_supabase, JobSpec(
             job_type="analytics_rollup_daily",
+            initial_status="running",  # No worker handler yet — prevent worker claiming
             triggered_by="cron",
         ))
         return {"status": "created", "job_id": job_id}

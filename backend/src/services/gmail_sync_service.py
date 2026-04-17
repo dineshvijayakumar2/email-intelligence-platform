@@ -535,6 +535,9 @@ class GmailSyncService:
 
             logger.info(f"Gmail sync completed for user {user_id}: {success_count} emails synced")
 
+            # Auto-trigger Sprint 2 extraction pipeline (classification + embeddings)
+            await self._trigger_post_sync_extraction(mailbox['id'], success_count)
+
         except Exception as e:
             error_str = str(e)
             is_auth_error = 'AUTH_EXPIRED:' in error_str or any(

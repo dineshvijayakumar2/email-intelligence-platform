@@ -3623,6 +3623,7 @@ async def fetch_missing_dates(
         job_id = create_job(_supabase, JobSpec(
             job_type=job_type,
             mailbox_id=mb_id,
+            initial_status="running",  # BackgroundTasks execution — prevent worker claiming
             filter_start_date=f"{start_date}T00:00:00Z",
             filter_end_date=f"{end_date}T23:59:59Z",
             triggered_by="user",

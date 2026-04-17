@@ -532,6 +532,9 @@ class OutlookSyncService:
 
             logger.info(f"Outlook sync completed for user {user_id}: {success_count} emails synced")
 
+            # Auto-trigger Sprint 2 extraction pipeline (classification + embeddings)
+            await self._trigger_post_sync_extraction(mailbox['id'], success_count)
+
         except Exception as e:
             logger.error(f"Outlook sync failed for user {user_id}: {e}")
             logger.error(traceback.format_exc())

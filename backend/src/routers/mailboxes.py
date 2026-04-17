@@ -330,6 +330,7 @@ async def resync_metadata(mailbox_id: str, background_tasks: BackgroundTasks):
         job_id = create_job(sb, JobSpec(
             job_type="reprocessing",
             mailbox_id=mailbox_id,
+            initial_status="running",  # BackgroundTasks execution — prevent worker claiming
             triggered_by="user",
         ))
 

@@ -350,6 +350,7 @@ async def restart_interrupted_job(job_id: str, background_tasks: BackgroundTasks
         new_job_id = create_job(sb, JobSpec(
             job_type=original_job['job_type'],
             mailbox_id=mailbox_id,
+            initial_status="running",  # BackgroundTasks execution — prevent worker claiming
             filter_start_date=original_job.get('filter_start_date'),
             filter_end_date=original_job.get('filter_end_date'),
             triggered_by="user",
@@ -451,6 +452,7 @@ async def reprocess_emails(job_id: str, background_tasks: BackgroundTasks):
         new_job_id = create_job(_get_supabase(), JobSpec(
             job_type="reprocessing",
             mailbox_id=mailbox_id,
+            initial_status="running",  # BackgroundTasks execution — prevent worker claiming
             triggered_by="user",
         ))
 
@@ -708,6 +710,7 @@ async def start_processing(mailbox_id: str, config: ProcessingJobConfig, backgro
         job_id = create_job(_get_supabase(), JobSpec(
             job_type=config.job_type,
             mailbox_id=mailbox_id,
+            initial_status="running",  # BackgroundTasks execution — prevent worker claiming
             total_records=config.total_records,
             filter_start_date=config.start_date if config.start_date else None,
             filter_end_date=config.end_date if config.end_date else None,

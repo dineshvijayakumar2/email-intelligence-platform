@@ -623,6 +623,7 @@ async def fetch_emails_by_date_range(
         job_id = create_job(_supabase, JobSpec(
             job_type="gmail_date_range_fetch",
             mailbox_id=request.mailbox_id,
+            initial_status="running",  # BackgroundTasks execution — prevent worker claiming
             filter_start_date=f"{request.start_date}T00:00:00Z",
             filter_end_date=f"{request.end_date}T23:59:59Z",
             parameters={"start_date": request.start_date, "end_date": request.end_date, "max_emails": request.max_emails},
