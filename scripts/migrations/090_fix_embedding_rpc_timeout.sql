@@ -1,9 +1,12 @@
 -- ============================================================================
--- Migration 090: Add statement_timeout to batch embedding RPCs
+-- Migration 090: Fix batch embedding RPC timeouts
 -- ============================================================================
--- Problem: batch_update_embeddings_emails times out at default 8s when
--- updating 100 rows with 768-dim vectors + HNSW index maintenance.
--- Fix: SET statement_timeout = '30s' on all three embedding RPCs.
+-- Problem: batch_update_embeddings_emails times out at Supabase's 8s default
+-- when updating rows with 768-dim vectors + HNSW index maintenance.
+-- Fix: SECURITY DEFINER (runs as owner, bypasses role-level timeout) +
+--       explicit SET LOCAL statement_timeout inside function body +
+--       function-level SET clause as belt-and-suspenders.
+-- App-side: DB_CHUNK reduced from 100 to 25 to stay safe within 8s anyway.
 -- ============================================================================
 
 CREATE OR REPLACE FUNCTION batch_update_embeddings_emails(
@@ -12,11 +15,13 @@ CREATE OR REPLACE FUNCTION batch_update_embeddings_emails(
 )
 RETURNS integer
 LANGUAGE plpgsql
+SECURITY DEFINER
 SET statement_timeout = '30s'
 AS $$
 DECLARE
     updated integer;
 BEGIN
+    PERFORM set_config('statement_timeout', '30000', true);
     UPDATE emails e
     SET embedding = u.emb
     FROM unnest(p_ids, p_embeddings) AS u(id, emb)
@@ -33,11 +38,13 @@ CREATE OR REPLACE FUNCTION batch_update_embeddings_companies(
 )
 RETURNS integer
 LANGUAGE plpgsql
+SECURITY DEFINER
 SET statement_timeout = '30s'
 AS $$
 DECLARE
     updated integer;
 BEGIN
+    PERFORM set_config('statement_timeout', '30000', true);
     UPDATE customer_companies c
     SET embedding = u.emb
     FROM unnest(p_ids, p_embeddings) AS u(id, emb)
@@ -54,11 +61,13 @@ CREATE OR REPLACE FUNCTION batch_update_embeddings_operations(
 )
 RETURNS integer
 LANGUAGE plpgsql
+SECURITY DEFINER
 SET statement_timeout = '30s'
 AS $$
 DECLARE
     updated integer;
 BEGIN
+    PERFORM set_config('statement_timeout', '30000', true);
     UPDATE qb_operations o
     SET embedding = u.emb
     FROM unnest(p_ids, p_embeddings) AS u(id, emb)
