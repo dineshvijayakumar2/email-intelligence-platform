@@ -121,4 +121,4 @@ def _update_progress(
             update["failed_records"] = failed
         sb.table("processing_jobs").update(update).eq("id", job_id).execute()
     except Exception as e:
-        logger.warning(f"Progress update failed for {job_id}: {e}")
+        logger.error(f"ai_backfill progress update failed for {job_id}: {e}")

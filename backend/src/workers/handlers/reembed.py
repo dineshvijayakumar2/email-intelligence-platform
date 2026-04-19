@@ -41,7 +41,7 @@ async def reembed_handler(sb, job: dict, stop_event: asyncio.Event):
                 current_stage=stage,
             )
         except Exception as pe:
-            logger.warning(f"Progress update failed for {job_id}: {pe}")
+            logger.error(f"Progress update failed for {job_id} (stage={stage}): {pe}")
 
     def _is_cancelled() -> bool:
         return stop_event.is_set() or state.check_cancelled(job_id)

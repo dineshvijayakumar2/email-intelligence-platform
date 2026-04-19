@@ -197,7 +197,11 @@ def _update_stage(sb, job_id: str, stage: str, pct: int):
             },
         }).eq("id", job_id).execute()
     except Exception as e:
-        logger.warning(f"Stage update failed for {job_id}: {e}")
+        logger.error(f"Stage update failed for {job_id} (stage={stage}): {e}")
+
+
+class ProgressPersistError(RuntimeError):
+    """Raised when completed_steps cannot be saved after retries."""
 
 
 def _persist_progress(
@@ -210,40 +214,57 @@ def _persist_progress(
     """Persist completed_steps into parameters and step_results into error_summary.
 
     Uses read-modify-write on parameters to preserve other fields.
+    Retries up to 3 times; raises ProgressPersistError on exhaustion so the
+    pipeline fails fast and preserves the last-known-good checkpoint.
     """
-    try:
-        # Read current parameters
-        resp = (
-            sb.table("processing_jobs")
-            .select("parameters, error_summary")
-            .eq("id", job_id)
-            .single()
-            .execute()
-        )
-        current_params = (resp.data or {}).get("parameters") or {}
-        current_summary = (resp.data or {}).get("error_summary") or {}
+    import time as _time
 
-        # Merge completed_steps into parameters
-        current_params["completed_steps"] = completed_steps
-
-        # Merge step_results into error_summary
-        current_summary["step_results"] = step_results
-        if stage:
-            pct = int(
-                (len(completed_steps) / len(PIPELINE_STAGES)) * 100
+    last_err = None
+    for attempt in range(3):
+        try:
+            resp = (
+                sb.table("processing_jobs")
+                .select("parameters, error_summary")
+                .eq("id", job_id)
+                .single()
+                .execute()
             )
-            current_summary["progress_pct"] = pct
-            current_summary["progress_message"] = (
-                f"Completed {stage}" if stage != "completed" else "Pipeline complete"
-            )
+            current_params = (resp.data or {}).get("parameters") or {}
+            current_summary = (resp.data or {}).get("error_summary") or {}
 
-        sb.table("processing_jobs").update({
-            "parameters": current_params,
-            "error_summary": current_summary,
-        }).eq("id", job_id).execute()
+            current_params["completed_steps"] = completed_steps
 
-    except Exception as e:
-        logger.warning(f"Progress persist failed for {job_id}: {e}")
+            current_summary["step_results"] = step_results
+            if stage:
+                pct = int(
+                    (len(completed_steps) / len(PIPELINE_STAGES)) * 100
+                )
+                current_summary["progress_pct"] = pct
+                current_summary["progress_message"] = (
+                    f"Completed {stage}" if stage != "completed" else "Pipeline complete"
+                )
+
+            sb.table("processing_jobs").update({
+                "parameters": current_params,
+                "error_summary": current_summary,
+            }).eq("id", job_id).execute()
+
+            return  # success
+
+        except Exception as e:
+            last_err = e
+            if attempt < 2:
+                logger.warning(
+                    f"Progress persist failed for {job_id} (attempt {attempt + 1}/3): {e}"
+                )
+                _time.sleep(1 * (attempt + 1))
+
+    logger.error(
+        f"Progress persist FAILED after 3 attempts for {job_id}: {last_err}"
+    )
+    raise ProgressPersistError(
+        f"Cannot save completed_steps for {job_id}: {last_err}"
+    ) from last_err
 
 
 def _sanitize_result(result) -> dict | None:

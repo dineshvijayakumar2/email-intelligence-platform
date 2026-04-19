@@ -29,8 +29,8 @@ async def reference_extraction_handler(sb, job: dict, stop_event: asyncio.Event)
                 "p_delta_failed": int(delta_failed),
                 "p_stage": stage,
             }).execute()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Progress update failed for {job['id']} (stage={stage}): {e}")
 
     result = await asyncio.to_thread(
         batch_extract_for_client,

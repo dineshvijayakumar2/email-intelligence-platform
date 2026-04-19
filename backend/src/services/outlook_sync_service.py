@@ -622,7 +622,8 @@ class OutlookSyncService:
                 initial_status="running",
                 triggered_by="cron",
             ))
-        except Exception:
+        except Exception as e:
+            logger.error(f"Failed to create sync job for mailbox {mailbox_id}: {e}")
             return None
 
     async def _complete_sync_job(self, job_id: str, success: int, failed: int):

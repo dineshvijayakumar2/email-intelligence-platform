@@ -192,10 +192,10 @@ async def _resume_interrupted_pipelines(sb):
     try:
         resp = (
             sb.table("processing_jobs")
-            .select("id, mailbox_id, parameters, updated_at")
+            .select("id, mailbox_id, parameters, created_at")
             .eq("job_type", "email_pipeline")
             .eq("status", "interrupted")
-            .gte("updated_at", (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat())
+            .gte("created_at", (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat())
             .execute()
         )
     except Exception as e:

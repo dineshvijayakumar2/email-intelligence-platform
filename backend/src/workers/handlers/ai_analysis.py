@@ -75,8 +75,8 @@ async def ai_analysis_handler(sb, job: dict, stop_event: asyncio.Event):
                     {"message": f"{r.get('email_id', '?')[:8]}...: {r.get('error_message', 'unknown')}"}
                     for r in err_resp.data
                 ]
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"ai_analysis {job_id}: failed to collect error samples: {e}")
 
     # Bucket engine
     _update_progress(sb, job_id, "Running bucket engine...", pct=60, processed=analyzed, failed=failed)
@@ -122,8 +122,8 @@ async def ai_analysis_handler(sb, job: dict, stop_event: asyncio.Event):
         update["error_log"] = error_log
     try:
         sb.table("processing_jobs").update(update).eq("id", job_id).execute()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(f"ai_analysis {job_id}: final summary persist failed: {e}")
 
     logger.info(f"ai_analysis {job_id}: completed — {summary}")
 
@@ -207,4 +207,4 @@ def _update_progress(
             update["failed_records"] = failed
         sb.table("processing_jobs").update(update).eq("id", job_id).execute()
     except Exception as e:
-        logger.warning(f"Progress update failed for {job_id}: {e}")
+        logger.error(f"ai_analysis progress update failed for {job_id}: {e}")

@@ -41,7 +41,11 @@ def emit_event(
             return resp.data[0]["id"]
         return None
     except Exception as e:
-        logger.error(f"Failed to emit event {event_type}: {e}")
+        logger.error(
+            f"Failed to emit event {event_type} "
+            f"(source={source_type}/{source_id}, client={client_id}): {e}",
+            exc_info=True,
+        )
         return None
 
 
