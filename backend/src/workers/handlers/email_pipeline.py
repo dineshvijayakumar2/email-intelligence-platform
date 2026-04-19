@@ -64,9 +64,8 @@ async def email_pipeline_handler(sb, job: dict, stop_event: asyncio.Event):
     orch = ExtractionOrchestrator(
         mailbox_id=mailbox_id,
         client_id=client_id,
-        extraction_mode="incremental",
-        lookback_days=7,
-        use_redis=False,  # Worker doesn't need Redis progress tracking
+        extraction_mode="full",
+        use_redis=False,
     )
     orch.client = sb  # Use the worker's Supabase client
 
