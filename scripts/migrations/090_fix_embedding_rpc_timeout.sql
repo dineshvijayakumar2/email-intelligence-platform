@@ -16,6 +16,7 @@ CREATE OR REPLACE FUNCTION batch_update_embeddings_emails(
 RETURNS integer
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 SET statement_timeout = '30s'
 AS $$
 DECLARE
@@ -39,6 +40,7 @@ CREATE OR REPLACE FUNCTION batch_update_embeddings_companies(
 RETURNS integer
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 SET statement_timeout = '30s'
 AS $$
 DECLARE
@@ -62,6 +64,7 @@ CREATE OR REPLACE FUNCTION batch_update_embeddings_operations(
 RETURNS integer
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 SET statement_timeout = '30s'
 AS $$
 DECLARE

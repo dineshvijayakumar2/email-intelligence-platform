@@ -12,6 +12,7 @@ CREATE OR REPLACE FUNCTION update_contact_email_counts_from_junction(p_client_id
 RETURNS INTEGER
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 SET statement_timeout = '30s'
 AS $$
 DECLARE
@@ -48,6 +49,7 @@ CREATE OR REPLACE FUNCTION update_company_email_counts_from_junction(p_client_id
 RETURNS INTEGER
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 SET statement_timeout = '30s'
 AS $$
 DECLARE
