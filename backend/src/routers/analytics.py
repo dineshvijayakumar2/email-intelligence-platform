@@ -73,17 +73,14 @@ def init_analytics_router(supabase_client):
 @router.post("/extraction/run", response_model=ExtractionJobResponse)
 async def trigger_extraction_job(data: ExtractionJobCreate, background_tasks: BackgroundTasks, current_user: dict = Depends(get_current_user)):
     """
-    Trigger a new extraction job.
+    Trigger the email pipeline for a mailbox.
 
-    Args:
-        data: Extraction job configuration
-        background_tasks: FastAPI background tasks
-
-    Returns:
-        Created extraction job record
+    Creates an email_pipeline worker job that runs all 8 stages:
+    extract_and_link, assign_threads, evaluate_threads, refresh_counts,
+    embed_emails, ai_classify, bucket_engine, evaluate_threads_final.
     """
     try:
-        from ..services.extraction_orchestrator import ExtractionOrchestrator
+        from ..services.jobs import create_job, JobSpec, JobAlreadyActive
 
         # Validate mailbox exists
         mailbox_check = _supabase.table('mailboxes').select('id, client_id').eq(
@@ -95,48 +92,45 @@ async def trigger_extraction_job(data: ExtractionJobCreate, background_tasks: Ba
 
         client_id = mailbox_check.data[0]['client_id']
 
-        # Create orchestrator with mode and lookback
-        orchestrator = ExtractionOrchestrator(
-            mailbox_id=data.mailbox_id,
-            client_id=client_id,
-            use_redis=True,
-            extraction_mode=data.mode.value,
-            lookback_days=data.lookback_days
-        )
+        try:
+            job_id = create_job(_supabase, JobSpec(
+                job_type='email_pipeline',
+                mailbox_id=data.mailbox_id,
+                client_id=client_id,
+                parameters={'trigger_source': 'manual_extraction'},
+                triggered_by='user',
+                max_attempts=1,
+            ))
+        except JobAlreadyActive as e:
+            job_id = e.existing_job.get('id', 'active')
+            return {
+                "id": job_id,
+                "client_id": client_id,
+                "mailbox_id": data.mailbox_id,
+                "status": ExtractionStatus.RUNNING,
+                "extraction_mode": data.mode.value,
+                "current_step": "Pipeline already running",
+                "current_step_number": 0,
+                "total_steps": 8
+            }
 
-        # Run extraction in background
-        def run_extraction():
-            try:
-                orchestrator.run_extraction(
-                    exclude_mailing_lists=data.exclude_mailing_lists,
-                    exclude_noreply=data.exclude_noreply,
-                    exclude_shared=data.exclude_shared,
-                    exclude_internal=data.exclude_internal,
-                    force_relink=data.force_relink,
-                    skip_role_classification=data.skip_role_classification
-                )
-            except Exception as e:
-                logger.error(f"Background extraction failed: {e}")
+        audit_from_user(current_user, "extract", "mailbox", resource_id=data.mailbox_id, details={"mode": data.mode.value, "trigger": "email_pipeline"})
 
-        background_tasks.add_task(run_extraction)
-        audit_from_user(current_user, "extract", "mailbox", resource_id=data.mailbox_id, details={"mode": data.mode.value, "lookback_days": data.lookback_days})
-
-        # Return initial job status (will be created by orchestrator)
         return {
-            "id": "pending",  # Will be replaced by actual job_id
+            "id": job_id,
             "client_id": client_id,
             "mailbox_id": data.mailbox_id,
             "status": ExtractionStatus.PENDING,
             "extraction_mode": data.mode.value,
-            "current_step": "Queued for processing",
+            "current_step": "Pipeline queued",
             "current_step_number": 0,
-            "total_steps": 13
+            "total_steps": 8
         }
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to trigger extraction job: {e}")
+        logger.error(f"Failed to trigger pipeline job: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

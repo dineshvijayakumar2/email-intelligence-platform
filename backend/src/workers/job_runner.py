@@ -18,7 +18,7 @@ import os
 import signal
 import socket
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from dotenv import load_dotenv
 
@@ -181,6 +181,64 @@ async def _reconciler_loop(sb):
         await _reconcile_stuck_jobs(sb)
 
 
+async def _resume_interrupted_pipelines(sb):
+    """On boot, find recently-interrupted pipeline jobs and auto-resume them.
+
+    Only resumes jobs that have completed_steps (progress data we can trust).
+    Leaves the interrupted job untouched as a historical record.
+    """
+    from ..services.jobs import create_job, JobSpec, JobAlreadyActive
+
+    try:
+        resp = (
+            sb.table("processing_jobs")
+            .select("id, mailbox_id, parameters, updated_at")
+            .eq("job_type", "email_pipeline")
+            .eq("status", "interrupted")
+            .gte("updated_at", (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat())
+            .execute()
+        )
+    except Exception as e:
+        logger.error(f"Startup sweep query failed: {e}")
+        return
+
+    if not resp.data:
+        logger.info("Startup sweep: no interrupted pipelines to resume")
+        return
+
+    resumed = 0
+    for job in resp.data:
+        params = job.get("parameters") or {}
+        completed_steps = params.get("completed_steps")
+        if not completed_steps:
+            logger.info(f"Startup sweep: skipping {job['id']} — no completed_steps")
+            continue
+
+        try:
+            new_id = create_job(sb, JobSpec(
+                job_type="email_pipeline",
+                mailbox_id=job["mailbox_id"],
+                parameters={
+                    "trigger_source": "resume_after_deploy",
+                    "resumed_from": job["id"],
+                    "completed_steps": completed_steps,
+                },
+                triggered_by="worker_startup",
+                max_attempts=1,
+            ))
+            resumed += 1
+            logger.info(
+                f"Startup sweep: resumed {job['id']} → {new_id} "
+                f"(skipping {len(completed_steps)} completed stages)"
+            )
+        except JobAlreadyActive:
+            logger.info(f"Startup sweep: pipeline already active for mailbox {job['mailbox_id']}, skipping")
+        except Exception as e:
+            logger.error(f"Startup sweep: failed to resume {job['id']}: {e}")
+
+    logger.info(f"Startup sweep complete: {resumed} pipeline(s) auto-resumed")
+
+
 async def main():
     """Main worker loop: claim -> execute -> repeat."""
     _setup_signals()
@@ -196,6 +254,8 @@ async def main():
     logger.info(f"Registered handlers: {list(JOB_HANDLERS.keys())}")
 
     sb = _create_supabase()
+
+    await _resume_interrupted_pipelines(sb)
 
     reconciler_task = asyncio.create_task(_reconciler_loop(sb))
 
