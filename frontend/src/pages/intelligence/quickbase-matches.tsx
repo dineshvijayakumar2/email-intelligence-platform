@@ -304,7 +304,7 @@ export default function QuickbaseMatchesPage() {
   return (
     <PageShell>
       <PageHeader
-        title="QB \u2194 Company Match Review"
+        title="QB ↔ Company Match Review"
         actions={
           <>
             {/* Re-Match split button */}

@@ -68,6 +68,7 @@ async def email_pipeline_handler(sb, job: dict, stop_event: asyncio.Event):
         use_redis=False,
     )
     orch.client = sb  # Use the worker's Supabase client
+    orch._stop_check = stop_event.is_set
 
     vector_service = VectorService(sb)
     analyzer = AIEmailAnalyzer(sb)
@@ -143,6 +144,19 @@ async def email_pipeline_handler(sb, job: dict, stop_event: asyncio.Event):
 
             # Persist after every step so resume knows where we left off
             _persist_progress(sb, job_id, completed_steps, step_results, stage)
+
+        except InterruptedError:
+            duration_s = round(time.monotonic() - step_start, 2)
+            step_results[stage] = {
+                "duration_s": duration_s,
+                "status": "interrupted",
+                "error": "stop requested",
+            }
+            logger.warning(
+                f"Pipeline {job_id}: {stage} interrupted after {duration_s}s, persisting progress"
+            )
+            _persist_progress(sb, job_id, completed_steps, step_results, stage=None)
+            return  # Clean exit — worker sees stop_event set
 
         except Exception as e:
             duration_s = round(time.monotonic() - step_start, 2)

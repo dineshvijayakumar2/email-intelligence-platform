@@ -1,7 +1,7 @@
 # Implementation Roadmap: Multi-Worker + Contact Intelligence + Journey Tracking
 
 **Created:** 2026-04-16
-**Updated:** 2026-04-17
+**Updated:** 2026-04-19
 **Status:** Active — tracking implementation progress
 **Source docs:** `docs/background-work-rfc.md`, `docs/contact-intelligence-design.md`, `docs/pipeline-design.md`
 
@@ -30,12 +30,19 @@
 3. **Reconciler extended for NULL-lease jobs** — Migration 084 updated: BackgroundTasks jobs (`lease_expires_at IS NULL`, `worker_id IS NULL`, stuck running >2 hours) are now caught and marked `interrupted`.
 4. **Embed thread safety fix** — `_embed_new_emails()` in `extraction_orchestrator.py` replaced fragile `asyncio.get_event_loop().run_until_complete()` with `asyncio.run()`, which safely creates a new event loop in ThreadPoolExecutor threads (Python 3.13 compatibility).
 
-### Email Pipeline Handler — Phase 1 Design COMPLETE
+### Email Pipeline Handler — ✅ DEPLOYED (2026-04-19)
 - Design doc: `docs/pipeline-design.md`
+- Handler: `backend/src/workers/handlers/email_pipeline.py`
 - 8-step pipeline: extract_and_link → assign_threads → evaluate_threads → refresh_counts → embed_emails → ai_classify → bucket_engine → evaluate_threads_final
-- Key discovery: Steps 1-2 of original spec are inseparable (in-memory state via `self.step_results`) → treated as one atomic `extract_and_link` step
-- Key discovery: Thread evaluation runs twice — before AI (metadata-only) and after AI (with override rules)
-- 4 open questions pending user decision before Phase 2 implementation
+- **Single-flight dedup**: partial unique index `uq_email_pipeline_per_mailbox` (migration 087)
+- **Resumable**: `completed_steps` persisted in `parameters` JSONB after every stage
+- **Startup sweep**: worker auto-resumes interrupted pipelines on boot (preserves completed_steps)
+- **Observability hardened**: `_persist_progress` retries 3x with backoff, raises `ProgressPersistError` on exhaustion (fail-fast preserves last-known-good checkpoint)
+- **max_attempts=1**: no retry-from-scratch; startup sweep is the recovery path
+- **extraction_mode='full'**: processes all unextracted emails (not limited to 7-day lookback)
+- All 4 sync trigger points replaced (Gmail + Outlook, both `_sync_mailbox` and `_sync_user`)
+- Date-range fetch auto-triggers pipeline; max_emails cap removed
+- Analytics.py "Run" button rewired to pipeline
 
 ### Callsite migration status
 
@@ -73,13 +80,15 @@
 | Internal QB sync | internal_jobs.py:66 | Cron-triggered QB sync |
 | Generic extraction | processing_jobs.py:383,735 | Email processing pipeline |
 
-### Key lessons from first migration (ai_backfill)
+### Key lessons from worker migrations
 1. **asyncio.to_thread() is mandatory** for sync blocking calls — without it, heartbeat starves and lease expires
-2. **max_attempts must be > 1** (now defaults to 3) — otherwise worker death permanently strands jobs
+2. **max_attempts=1 for long pipelines** — retry-from-scratch wastes hours of work; startup sweep with preserved `completed_steps` is the recovery path
 3. **httpx INFO logs flood worker output** — suppressed to WARNING level
 4. **notification_dispatch had wrong column name** (`user_id` vs `id` on user_profiles) and wrong filter syntax (string vs Python list for `.contains()`)
 5. **BackgroundTasks jobs must use `initial_status="running"`** — otherwise worker claims them and fails with "Unknown job_type"
 6. **`asyncio.run()` not `get_event_loop().run_until_complete()`** — the latter silently fails in ThreadPoolExecutor threads on Python 3.13
+7. **No `except Exception: pass`** — silent swallowing hides observability failures; every handler must log or raise (audit found 13 locations, all hardened 2026-04-19)
+8. **`_persist_progress` is the keystone** — if checkpoint writes fail silently, resume can't work; now retries 3x then raises `ProgressPersistError` (fail-fast)
 
 ---
 
@@ -247,34 +256,37 @@
 
 ---
 
-## Phase W6: Email Pipeline Handler (Week 6-7)
+## Phase W6: Email Pipeline Handler (Week 6-7) ✅ COMPLETE
 
 **Goal:** Replace implicit post-sync chain with explicit `email_pipeline` worker job — per-step progress tracking, resume-from-failure, single-flight per mailbox.
 
-**Design doc:** `docs/pipeline-design.md` (Phase 1 complete, Phase 2 pending)
+**Design doc:** `docs/pipeline-design.md`
 
 ### W6.1 — Pipeline handler implementation
-- [ ] Create `backend/src/workers/handlers/email_pipeline.py`
-- [ ] 8-step sequential pipeline: extract_and_link → assign_threads → evaluate_threads → refresh_counts → embed_emails → ai_classify → bucket_engine → evaluate_threads_final
-- [ ] Per-step progress updates to `processing_jobs.parameters.completed_steps`
-- [ ] Resume from last completed step on retry (skip completed steps)
-- [ ] Worker singletons: handler creates its own `ExtractionOrchestrator`, `VectorService`, `AIEmailAnalyzer`, `ActionBucketEngine` instances
+- [x] Create `backend/src/workers/handlers/email_pipeline.py`
+- [x] 8-step sequential pipeline: extract_and_link → assign_threads → evaluate_threads → refresh_counts → embed_emails → ai_classify → bucket_engine → evaluate_threads_final
+- [x] Per-step progress updates to `processing_jobs.parameters.completed_steps`
+- [x] Resume from last completed step (skip completed steps)
+- [x] Worker singletons: handler creates its own `ExtractionOrchestrator`, `VectorService`, `AIEmailAnalyzer`, `ActionBucketEngine` instances
+- [x] Startup sweep: `_resume_interrupted_pipelines()` on worker boot auto-resumes pipelines with preserved `completed_steps`
+- [x] Observability hardening: `_persist_progress` retries 3x, raises on exhaustion; all handlers log errors (no `except: pass`)
 
 ### W6.2 — Single-flight dedup
-- [ ] Migration: partial unique index `uq_email_pipeline_per_mailbox` on `(mailbox_id) WHERE status IN ('pending','running')`
-- [ ] Register `email_pipeline` in `JOB_HANDLERS`
+- [x] Migration 087: partial unique index `uq_email_pipeline_per_mailbox` on `(mailbox_id) WHERE status IN ('pending','running')`
+- [x] Register `email_pipeline` in `JOB_HANDLERS`
 
 ### W6.3 — Trigger integration
-- [ ] Gmail sync `_trigger_post_sync_extraction()` → creates `email_pipeline` pending job instead of running inline
-- [ ] Outlook sync `_trigger_post_sync_extraction()` → same
-- [ ] Manual extraction trigger → same
-- [ ] Remove BackgroundTasks fallback for extraction
+- [x] Gmail sync `_sync_mailbox()` + `_sync_user()` → creates `email_pipeline` pending job
+- [x] Outlook sync `_sync_mailbox()` + `_sync_user()` → same
+- [x] Date-range fetch (Gmail + Outlook) → auto-triggers pipeline after completion
+- [x] Manual extraction trigger (analytics.py "Run" button) → creates pipeline job
+- [x] `_trigger_post_sync_extraction()` deprecated (2026-04-17, remove after 2026-04-24)
 
-### W6.4 — Open questions (pending user decision)
-1. Lightweight vs full mode for sync-triggered pipelines?
-2. `client_id` resolution strategy (from mailbox lookup or passed through)?
-3. `max_attempts`: 1, 2, or 3?
-4. Zero-email sync: skip pipeline or run anyway?
+### W6.4 — Resolved decisions
+1. **Full mode** — `extraction_mode='full'` processes all unextracted emails (incremental+7d was silently skipping older emails from date-range fetches)
+2. **client_id from mailbox lookup** — handler resolves via `_resolve_client_id(sb, mailbox_id)`
+3. **max_attempts=1** — retry-from-scratch wastes hours; startup sweep with preserved `completed_steps` is the recovery path
+4. **Zero-email sync: skip** — pipeline only triggered when `processed > 0` (sync) or unconditionally (manual/date-range)
 
 ---
 
@@ -352,10 +364,10 @@ W4 (Notifications) ✅
 W5 (Deploy + Rollout) — partially done (health check ✅, staged rollout pending)
  |
  v
-W6 (Email Pipeline Handler) ← NEW — depends on W2 for worker
+W6 (Email Pipeline Handler) ✅ — resumable, single-flight, auto-triggered
  |
  v
-W7 (Operations Center UI) ← NEW — depends on W6 for pipeline job type
+W7 (Operations Center UI) ← NEXT — depends on W6 for pipeline job type
  |
  v
 T1 (Thread-QB Journey) ✅ Complete (including AI extraction T1.3)
@@ -381,7 +393,7 @@ C3 (Status Analytics)  <--- blocked on data (~3 months from Apr 15)
 | 084 | reconcile_stuck_jobs | W2 | ✅ Applied (updated 04-17) | Stuck-job reconciler RPC — now handles NULL-lease BackgroundTasks jobs |
 | 085 | events_notifications | W4 | ✅ Applied | Events + notifications tables |
 | 086 | thread_qb_links | T1 | ✅ Applied | Thread-to-QB linking table + extracted_references on ai_email_intelligence |
-| 087 | email_pipeline_dedup | W6 | Planned | Partial unique index for email_pipeline single-flight per mailbox |
+| 087 | email_pipeline_dedup | W6 | ✅ Applied | Partial unique index for email_pipeline single-flight per mailbox |
 | 088 | contact_persona_views | C1 | Planned | Persona metric views (regular + materialized) |
 
 ## Effort Summary
@@ -395,13 +407,14 @@ C3 (Status Analytics)  <--- blocked on data (~3 months from Apr 15)
 | W5 | Monitoring + deploy + staged rollout | 1 week | 🔶 Health check done, staged rollout pending |
 | C0 | Contact-QB metadata backfill | 2-3 days | ✅ Complete |
 | T1 | Thread-QB journey linking | 2-2.5 weeks | ✅ Complete (including AI extraction T1.3) |
-| **W6** | **Email pipeline handler** | **1-1.5 weeks** | **Phase 1 design complete, Phase 2 pending** |
+| **W6** | **Email pipeline handler** | **1-1.5 weeks** | **✅ Complete — deployed + observability hardened** |
 | **W7** | **Operations center UI consolidation** | **1-1.5 weeks** | **Audit complete, implementation pending** |
 | C1 | Contact persona metrics | 2 weeks | Not started |
 | C2 | Frontend persona UI | 2.5 weeks | Not started |
 | C3 | Status transition analytics | 1-2 weeks | Blocked on data (~3 months from Apr 15) |
 
-**Worker in production:** ✅ Complete (ai_backfill, ai_analysis, notification_dispatch verified)
+**Worker in production:** ✅ Complete (ai_backfill, ai_analysis, notification_dispatch, email_pipeline verified)
 **Thread-QB journey queryable:** ✅ Complete (regex extraction, journey API, manual linking UI)
-**Next milestone:** Email pipeline handler (W6) → Operations center (W7) → Contact persona (C1)
-**Full roadmap remaining:** ~8-10 weeks (W6 through C3)
+**Email pipeline:** ✅ Complete — 8-stage resumable pipeline, startup sweep, observability hardened
+**Next milestone:** Operations center UI (W7) → Contact persona (C1)
+**Full roadmap remaining:** ~6-8 weeks (W7 through C3)

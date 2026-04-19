@@ -199,10 +199,10 @@ The initial approach dropped ALL indexes on a table during bulk writes. This was
 
 **Commits:** `dfb1f21` (initial), `51e9691` (scoped to HNSW-only)
 
-### Pending: Tier 3 — QB 1-by-1 Update Loop Fixes
-- `_enrich_capabilities()` — convert to batch via `batch_update_qb_capabilities` RPC
-- `_join_contact_email()` — convert to batch via `batch_update_qb_contact_emails` RPC
-- RPCs created in migration 072, Python refactor pending
+### Done: Tier 3 — QB 1-by-1 Update Loop Fixes ✅
+- `_classify_operations()` (was `_enrich_capabilities`) — batched via `batch_update_qb_capabilities` RPC, 100-row chunks
+- `_join_contact_email()` — batched via `batch_update_qb_contact_emails` RPC, 100-row chunks
+- RPCs created in migration 072, Python refactored in same session
 
 ### Index Audit & Bloat Prevention (2026-04-12)
 
@@ -314,4 +314,4 @@ WITH (m = 16, ef_construction = 64);
 | 069 | Run | Fast batch embedding (unnest replaces FOR LOOP) |
 | 070 | Run | Vector stats RPC (replaces 6 COUNT queries) |
 | 071 | Run | exec_sql RPC for DDL from application |
-| 072 | Pending | exec_sql_extended + batch update RPCs for Tier 3 |
+| 072 | Run | exec_sql_extended + batch update RPCs for Tier 3 |

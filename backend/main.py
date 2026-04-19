@@ -300,6 +300,7 @@ from src.routers.quickbase import router as quickbase_router, init_quickbase_rou
 from src.routers.intelligence_config import router as intelligence_config_router, init_intelligence_config_router
 from src.routers.logs import router as logs_router, init_logs_router
 from src.routers.internal_jobs import router as internal_jobs_router, init_internal_jobs_router
+from src.routers.contacts_intelligence import router as contacts_intelligence_router, init_contacts_intelligence_router
 from src.routers.notifications import router as notifications_router, init_notifications_router
 from src.routers.journey import router as journey_router, init_journey_router
 from src.routers.errors import router as errors_router, init_error_router
@@ -416,6 +417,9 @@ app.include_router(processing_jobs_router, prefix="/api")
 app.include_router(notifications_router, prefix="/api")
 app.include_router(journey_router, prefix="/api/v1")
 
+# Contact Intelligence (persona views, read-only)
+app.include_router(contacts_intelligence_router, prefix="/api")
+
 # Internal (cron-triggered, CRON_SECRET auth)
 app.include_router(internal_jobs_router, prefix="/api")
 
@@ -484,6 +488,7 @@ def initialize_all_routers():
     init_internal_jobs_router(sb)
     init_notifications_router(sb)
     init_journey_router(sb)
+    init_contacts_intelligence_router(get_supabase)
 
     # Log stream: attach handler to root logger + init Redis flush thread
     from src.utils.log_stream import get_log_stream_handler, init_log_stream

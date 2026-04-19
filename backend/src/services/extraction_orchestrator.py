@@ -102,6 +102,9 @@ class ExtractionOrchestrator:
         self.job_id: Optional[str] = None
         self.current_step: int = 0
 
+        # Cancellation callback — set by pipeline handler to check stop_event
+        self._stop_check = None
+
         # Step results storage
         self.step_results: Dict[int, Any] = {}
 
@@ -400,10 +403,13 @@ class ExtractionOrchestrator:
 
             # Assign canonical_thread_id to new emails + update affected threads
             # Runs in both full and lightweight mode
+            self._check_stop("assign_threads")
             self._assign_canonical_threads()
+            self._check_stop("evaluate_threads")
             self._update_affected_threads()
 
             # Update email counts on contacts + companies from junction table
+            self._check_stop("refresh_counts")
             self._refresh_email_counts()
 
             if lightweight:
@@ -442,22 +448,15 @@ class ExtractionOrchestrator:
                               self._step_complete_job)
 
             # Embed newly extracted emails (runs on un-embedded records only)
+            self._check_stop("embed_emails")
             self._embed_new_emails()
 
             # Auto-trigger AI classification for unanalyzed emails.
-            # NOTE: AI runs AFTER the first thread evaluation in this pipeline.
-            # Without the follow-up call below, override rules (urgent, closing,
-            # revenue_opportunity, escalation) would never fire on the same run
-            # the email arrived in — they'd have to wait for the next extraction
-            # cycle. Pipeline ordering bug fixed 2026-04-13.
+            self._check_stop("ai_classify")
             self._auto_trigger_ai_analysis()
 
             # Re-evaluate affected threads now that AI intent is available.
-            # The second pass picks up newly-classified intents and applies
-            # override rules (e.g., complaint -> urgent, thank-you -> closing).
-            # Idempotent: threads with no new AI data produce the same effective
-            # status as the first pass, so this only changes rows where it
-            # should change them.
+            self._check_stop("evaluate_threads_final")
             try:
                 self._update_affected_threads()
             except Exception as e:
@@ -478,6 +477,14 @@ class ExtractionOrchestrator:
                 'results': self.step_results
             }
 
+        except InterruptedError:
+            logger.info(f"Extraction pipeline stopped at step {self.current_step}",
+                        extra={'mailbox_id': self.mailbox_id, 'client_id': self.client_id})
+            if self.job_id:
+                self._update_job_status('interrupted')
+            clear_log_context()
+            raise  # Let the pipeline handler catch this cleanly
+
         except Exception as e:
             logger.error(f"Extraction pipeline failed: {e}",
                         extra={'mailbox_id': self.mailbox_id, 'client_id': self.client_id})
@@ -496,6 +503,12 @@ class ExtractionOrchestrator:
                 'results': self.step_results
             }
 
+    def _check_stop(self, label: str = ""):
+        """Raise InterruptedError if the caller has requested a stop."""
+        if self._stop_check and self._stop_check():
+            logger.info(f"Stop requested before {label} — aborting extraction")
+            raise InterruptedError(f"Stop requested before {label}")
+
     def _run_step(self, step_num: int, description: str, step_function):
         """
         Run a single pipeline step with error handling and tracking
@@ -507,6 +520,10 @@ class ExtractionOrchestrator:
         """
         self.current_step = step_num
         _ctx = {'mailbox_id': self.mailbox_id, 'client_id': self.client_id, 'step': step_num}
+
+        if self._stop_check and self._stop_check():
+            logger.info(f"── Step {step_num}/{self.TOTAL_STEPS}: {description} — SKIPPED (stop requested)", extra=_ctx)
+            raise InterruptedError(f"Stop requested before step {step_num}")
 
         logger.info(f"── Step {step_num}/{self.TOTAL_STEPS}: {description}", extra=_ctx)
 

@@ -217,6 +217,34 @@ const [clientId, setClientId] = useState<string>(
 api.get(`/endpoint?client_id=${clientId}`);
 ```
 
+### Special characters in JSX
+
+JSX attribute strings and JSX children follow different encoding rules. Mixing them up causes characters to render as raw escape text.
+
+| Context | `\uXXXX` escapes | HTML entities (`&mdash;`) | Actual character |
+|---------|-------------------|---------------------------|------------------|
+| JSX attribute string `title="..."` | Literal text | Supported | Works |
+| JSX expression `title={"..."}` | Works | Literal text | Works |
+| JSX children `<p>...</p>` | Literal text | Supported | Works |
+| JS string / template literal | Works | Literal text | Works |
+
+```tsx
+// WRONG — renders as literal \u2194
+<PageHeader title="QB \u2194 Company Match Review" />
+
+// RIGHT — actual Unicode character
+<PageHeader title="QB ↔ Company Match Review" />
+
+// RIGHT — JSX expression (JS string, so \u works)
+<PageHeader title={"QB \u2194 Company Match Review"} />
+
+// RIGHT — HTML entity in JSX children
+<span>&mdash;</span>    // renders —
+<p>&rarr; Next step</p> // renders → Next step
+```
+
+**Rule of thumb:** paste the actual character into JSX attributes. Use `\uXXXX` only inside JS expressions (`{}`) or template literals. HTML entities work in JSX children and attribute strings but not inside JS expressions.
+
 ### Don't wipe data on transient errors
 
 ```typescript

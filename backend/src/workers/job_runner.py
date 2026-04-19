@@ -181,6 +181,29 @@ async def _reconciler_loop(sb):
         await _reconcile_stuck_jobs(sb)
 
 
+def _has_zombie_extraction(sb, mailbox_id: str) -> bool:
+    """Check if a zombie extraction thread is still running for this mailbox.
+
+    A zombie is an extraction_jobs row with status='processing' and
+    updated_at within the last 10 minutes — the thread is alive in a
+    previous worker process even though the pipeline job is interrupted.
+    """
+    try:
+        cutoff = (datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat()
+        resp = (
+            sb.table("extraction_jobs")
+            .select("id", count="exact")
+            .eq("mailbox_id", mailbox_id)
+            .eq("status", "processing")
+            .gte("updated_at", cutoff)
+            .execute()
+        )
+        return (resp.count or 0) > 0
+    except Exception as e:
+        logger.warning(f"Zombie check failed for mailbox {mailbox_id}: {e}")
+        return True  # err on the side of caution
+
+
 async def _resume_interrupted_pipelines(sb):
     """On boot, find recently-interrupted pipeline jobs and auto-resume them.
 
@@ -214,10 +237,20 @@ async def _resume_interrupted_pipelines(sb):
             logger.info(f"Startup sweep: skipping {job['id']} — no completed_steps")
             continue
 
+        mailbox_id = job["mailbox_id"]
+
+        # Guard: skip if a zombie extraction thread is still running for this mailbox
+        if _has_zombie_extraction(sb, mailbox_id):
+            logger.info(
+                f"Startup sweep: skipping {job['id']} — zombie extraction "
+                f"still active for mailbox {mailbox_id}"
+            )
+            continue
+
         try:
             new_id = create_job(sb, JobSpec(
                 job_type="email_pipeline",
-                mailbox_id=job["mailbox_id"],
+                mailbox_id=mailbox_id,
                 parameters={
                     "trigger_source": "resume_after_deploy",
                     "resumed_from": job["id"],
@@ -232,7 +265,7 @@ async def _resume_interrupted_pipelines(sb):
                 f"(skipping {len(completed_steps)} completed stages)"
             )
         except JobAlreadyActive:
-            logger.info(f"Startup sweep: pipeline already active for mailbox {job['mailbox_id']}, skipping")
+            logger.info(f"Startup sweep: pipeline already active for mailbox {mailbox_id}, skipping")
         except Exception as e:
             logger.error(f"Startup sweep: failed to resume {job['id']}: {e}")
 
