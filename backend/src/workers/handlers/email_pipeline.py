@@ -251,15 +251,24 @@ def _sanitize_result(result) -> dict | None:
     if result is None:
         return None
     if isinstance(result, dict):
-        # Truncate large values to keep error_summary manageable
         sanitized = {}
         for k, v in result.items():
-            if isinstance(v, (str,)) and len(v) > 500:
-                sanitized[k] = v[:500] + "..."
-            elif isinstance(v, (list,)) and len(v) > 20:
-                sanitized[k] = f"[{len(v)} items]"
-            else:
-                sanitized[k] = v
+            sanitized[k] = _sanitize_value(v)
         return sanitized
-    # For unexpected types, convert to string
     return {"raw": str(result)[:500]}
+
+
+def _sanitize_value(v):
+    """Make a single value JSON-serializable."""
+    from datetime import datetime, date
+    if v is None or isinstance(v, (bool, int, float)):
+        return v
+    if isinstance(v, (datetime, date)):
+        return v.isoformat()
+    if isinstance(v, str):
+        return v[:500] + "..." if len(v) > 500 else v
+    if isinstance(v, list):
+        return f"[{len(v)} items]" if len(v) > 20 else [_sanitize_value(i) for i in v]
+    if isinstance(v, dict):
+        return {k: _sanitize_value(val) for k, val in v.items()}
+    return str(v)[:500]
