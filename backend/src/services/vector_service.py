@@ -40,26 +40,32 @@ _cached_provider = None              # Track which provider the cached model is 
 
 
 def _resolve_provider(client_id: str = None) -> str:
-    """Resolve embedding provider: in-memory override > DB (client-scoped) > 'google'."""
+    """Resolve embedding provider: in-memory override > DB (client-scoped).
+
+    Never falls back silently — if we can't determine the configured provider,
+    raise so the caller fails visibly rather than using the wrong model.
+    """
     if _embedding_provider_override:
         return _embedding_provider_override
     if not client_id:
-        # No client_id — try to read from the _last_client_id used
         client_id = _last_client_id
-    if client_id:
-        try:
-            from ..database.supabase_client import SupabaseClient
-            sb = SupabaseClient.get_client(use_service_key=True)
-            resp = sb.table('system_settings').select('value').eq(
-                'key', 'embedding_provider'
-            ).eq('client_id', client_id).limit(1).execute()
-            if resp.data and resp.data[0].get('value'):
-                provider = resp.data[0]['value'].lower()
-                logger.info(f"Embedding provider from DB: {provider} (client={client_id})")
-                return provider
-        except Exception as e:
-            logger.warning(f"Could not read embedding_provider from DB: {e}")
-    return "google"
+    if not client_id:
+        raise RuntimeError("Cannot resolve embedding provider: no client_id available")
+    try:
+        from ..database.supabase_client import SupabaseClient
+        sb = SupabaseClient.get_client(use_service_key=True)
+        resp = sb.table('system_settings').select('value').eq(
+            'key', 'embedding_provider'
+        ).eq('client_id', client_id).limit(1).execute()
+        if resp.data and resp.data[0].get('value'):
+            return resp.data[0]['value'].lower()
+    except Exception as e:
+        raise RuntimeError(
+            f"Cannot resolve embedding provider for client {client_id}: {e}"
+        ) from e
+    raise RuntimeError(
+        f"No embedding_provider configured in system_settings for client {client_id}"
+    )
 
 
 # Track the last client_id used for embedding — so embed_texts() can
