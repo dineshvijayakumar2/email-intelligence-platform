@@ -64,7 +64,7 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
   const [syncingOutlook, setSyncingOutlook] = React.useState(false);
 
   // Sync interval configuration
-  const [syncInterval, setSyncInterval] = React.useState<number>(15);
+  const [syncInterval, setSyncInterval] = React.useState<number | null>(null);
   const [showSyncSettings, setShowSyncSettings] = React.useState(false);
   const [savingConfig, setSavingConfig] = React.useState(false);
 
@@ -110,11 +110,11 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
       await loadClientsAndUsers();
 
       if (mailboxId) {
-        await loadMailboxData();
+        const data = await loadMailboxData();
         loadMailboxGmailStatus();
         loadMailboxOutlookStatus();
+        loadSyncConfig(data?.connection_config);
       }
-      loadSyncConfig();
     };
 
     init();
@@ -137,28 +137,30 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
     }
   };
 
-  const loadSyncConfig = async () => {
-    try {
-      const config = await gmailService.getConfig();
-      setSyncInterval(config.sync_interval_minutes);
-    } catch (error) {
-      console.error('Error loading sync config:', error);
-    }
+  const loadSyncConfig = (config: Record<string, any> | undefined) => {
+    const interval = config?.sync_interval_minutes;
+    setSyncInterval(typeof interval === 'number' && interval > 0 ? interval : null);
   };
 
   const handleSaveConfig = async () => {
     try {
       setSavingConfig(true);
-      const result = await gmailService.updateConfig({
-        sync_interval_minutes: syncInterval
-      });
-
-      if (result.success) {
-        toast.success(`Sync interval updated to ${syncInterval} minutes`);
-        setShowSyncSettings(false);
+      const updatedConfig: Record<string, any> = { ...(mailboxData?.connection_config || {}) };
+      if (syncInterval && syncInterval > 0) {
+        updatedConfig.sync_interval_minutes = syncInterval;
       } else {
-        toast.error(result.message);
+        delete updatedConfig.sync_interval_minutes;
       }
+      await mailboxService.updateMailbox(mailboxId, { connection_config: updatedConfig });
+      if (mailboxData) {
+        setMailboxData({ ...mailboxData, connection_config: updatedConfig });
+      }
+      toast.success(
+        syncInterval
+          ? `Sync interval override set to ${syncInterval} minutes`
+          : 'Sync interval override removed (syncs every cron tick)'
+      );
+      setShowSyncSettings(false);
     } catch (error) {
       toast.error('Failed to save sync configuration');
     } finally {
@@ -364,7 +366,7 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
     }
   };
 
-  const loadMailboxData = async () => {
+  const loadMailboxData = async (): Promise<Mailbox | null> => {
     try {
       const data = await mailboxService.getMailbox(mailboxId);
       if (!data) {
@@ -402,10 +404,13 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
       } else {
         setFileSource('local');
       }
+
+      return data;
     } catch (error) {
       console.error('Error loading mailbox:', error);
       toast.error('Failed to load mailbox data');
       navigate('/mailboxes');
+      return null;
     } finally {
       setInitialLoading(false);
     }
@@ -827,18 +832,22 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
                       <div className="flex flex-col gap-3">
                         <div>
                           <label className="block text-xs text-slate-500 mb-1">
-                            Sync Interval (minutes)
+                            Sync Interval Override (minutes)
                           </label>
                           <div className="flex items-center gap-2">
                             <input
                               type="number"
                               min={1}
                               max={1440}
-                              value={syncInterval}
-                              onChange={(e) => setSyncInterval(parseInt(e.target.value) || 15)}
-                              className="w-20 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                              value={syncInterval ?? ''}
+                              onChange={(e) => {
+                                const v = parseInt(e.target.value);
+                                setSyncInterval(isNaN(v) || v < 1 ? null : v);
+                              }}
+                              placeholder="Every cron tick"
+                              className="w-32 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                             />
-                            <span className="text-[11px] text-slate-400">(1 min - 24 hours)</span>
+                            <span className="text-[11px] text-slate-400">min (empty = every cron tick)</span>
                           </div>
                         </div>
                         <button
@@ -966,6 +975,57 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
                         </button>
                       </div>
                     </div>
+                  </div>
+
+                  {/* Sync Settings */}
+                  <div className="rounded-lg border border-[#0078d4]/20 bg-primary/5 p-3">
+                    <div className={`flex items-center justify-between ${showSyncSettings ? 'mb-3' : ''}`}>
+                      <div className="flex items-center gap-2">
+                        <Settings className="h-4 w-4 text-slate-500" />
+                        <span className="text-[13px] font-medium text-slate-700">Sync Settings</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowSyncSettings(!showSyncSettings)}
+                        className="text-xs text-slate-500 hover:text-primary transition-colors"
+                      >
+                        {showSyncSettings ? 'Hide' : 'Configure'}
+                      </button>
+                    </div>
+
+                    {showSyncSettings && (
+                      <div className="flex flex-col gap-3">
+                        <div>
+                          <label className="block text-xs text-slate-500 mb-1">
+                            Sync Interval Override (minutes)
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              min={1}
+                              max={1440}
+                              value={syncInterval ?? ''}
+                              onChange={(e) => {
+                                const v = parseInt(e.target.value);
+                                setSyncInterval(isNaN(v) || v < 1 ? null : v);
+                              }}
+                              placeholder="Every cron tick"
+                              className="w-32 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                            />
+                            <span className="text-[11px] text-slate-400">min (empty = every cron tick)</span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleSaveConfig}
+                          disabled={savingConfig}
+                          className="inline-flex items-center gap-1.5 self-start rounded-md bg-[#0078d4] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#005a9e] transition-colors disabled:opacity-50"
+                        >
+                          {savingConfig ? <Spinner className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                          Save Settings
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               ) : (
