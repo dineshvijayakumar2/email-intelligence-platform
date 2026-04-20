@@ -1145,18 +1145,21 @@ const QuickbaseConfigPage: React.FC = () => {
               </label>
               {syncAuto && (
                 <div>
-                  <input
-                    type="number"
-                    min={1}
-                    max={168}
-                    step={1}
-                    value={formFields.sync_interval_hours}
-                    placeholder="6"
-                    className={`w-[90px] rounded border bg-white px-3 py-1.5 text-sm text-slate-800 outline-none focus:ring-1 focus:ring-primary/30 ${
-                      formErrors.sync_interval_hours ? 'border-red-300 focus:border-red-400' : 'border-slate-200 focus:border-primary'
-                    }`}
-                    onChange={e => updateField('sync_interval_hours', Number(e.target.value) || 0)}
-                  />
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      min={1}
+                      max={168}
+                      step={1}
+                      value={formFields.sync_interval_hours}
+                      placeholder="6"
+                      className={`w-[70px] rounded border bg-white px-3 py-1.5 text-sm text-slate-800 outline-none focus:ring-1 focus:ring-primary/30 ${
+                        formErrors.sync_interval_hours ? 'border-red-300 focus:border-red-400' : 'border-slate-200 focus:border-primary'
+                      }`}
+                      onChange={e => updateField('sync_interval_hours', Number(e.target.value) || 0)}
+                    />
+                    <span className="text-xs text-slate-500">hrs</span>
+                  </div>
                   {formErrors.sync_interval_hours && (
                     <p className="mt-0.5 text-[11px] text-red-500">{formErrors.sync_interval_hours}</p>
                   )}
