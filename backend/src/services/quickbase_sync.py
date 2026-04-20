@@ -418,8 +418,7 @@ class QuickbaseSync:
         # Write sync log immediately after upsert — before enrichment.
         # This ensures the timestamp is saved even if enrichment is interrupted,
         # so the next incremental sync won't re-fetch all 600K+ records.
-        if count:
-            self._write_sync_log('operations', count)
+        self._write_sync_log('operations', count)
         return count
 
     async def sync_job_status_log(self) -> int:
