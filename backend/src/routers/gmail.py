@@ -706,7 +706,7 @@ def _run_date_range_fetch(
         processed = 0
         failed = 0
         batch = []
-        BATCH_SIZE = 25
+        BATCH_SIZE = 10
 
         for email_dict in extractor.extract_emails_by_date_range(
             start_date=start_date,
