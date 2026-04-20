@@ -98,7 +98,7 @@ class EmailOperations:
                 logger.warning(f"Job {job_id} has unexpected status while paused: {status}")
                 return False
 
-    def batch_insert_emails(self, emails: List[Dict], mailbox_id: str = None, batch_size: int = 100) -> Dict:
+    def batch_insert_emails(self, emails: List[Dict], mailbox_id: str = None, batch_size: int = 25) -> Dict:
         """
         Insert emails in batches with error handling
         

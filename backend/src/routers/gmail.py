@@ -706,7 +706,7 @@ def _run_date_range_fetch(
         processed = 0
         failed = 0
         batch = []
-        BATCH_SIZE = 100
+        BATCH_SIZE = 25
 
         for email_dict in extractor.extract_emails_by_date_range(
             start_date=start_date,
@@ -736,7 +736,7 @@ def _run_date_range_fetch(
 
         # Store remaining batch
         if batch:
-            result = email_ops.batch_insert_emails(batch, mailbox_id, batch_size=len(batch))
+            result = email_ops.batch_insert_emails(batch, mailbox_id, batch_size=BATCH_SIZE)
             failed += result.get('failed', 0)
 
         # Update job as completed
