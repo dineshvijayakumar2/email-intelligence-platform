@@ -279,20 +279,24 @@ class ContactExtractor:
             estimated_pages = (total_in_db + PAGE_SIZE - 1) // PAGE_SIZE
             logger.info(f"Contact extraction: {total_in_db} total emails in mailbox, ~{estimated_pages} pages of {PAGE_SIZE}")
 
-            # Paginated fetch
+            # Keyset pagination — O(1) per page regardless of depth.
+            # OFFSET pagination times out at high offsets (64K+ rows scanned).
             all_emails = []
-            offset = 0
+            last_id = ""
             page = 0
 
             while True:
                 page += 1
-                response = self._execute_with_retry(
+                query = (
                     self.client.table('emails')
                     .select(COLUMNS)
                     .eq('mailbox_id', self.mailbox_id)
-                    .order('sent_date', desc=False)
-                    .range(offset, offset + PAGE_SIZE - 1)
+                    .order('id')
+                    .limit(PAGE_SIZE)
                 )
+                if last_id:
+                    query = query.gt('id', last_id)
+                response = self._execute_with_retry(query)
                 raw_batch = response.data or []
                 filtered = [e for e in raw_batch if e.get('processing_status') != 'failed']
                 all_emails.extend(filtered)
@@ -300,7 +304,7 @@ class ContactExtractor:
 
                 if len(raw_batch) == 0:
                     break
-                offset += len(raw_batch)
+                last_id = raw_batch[-1]["id"]
 
                 if limit and len(all_emails) >= limit:
                     return all_emails[:limit]

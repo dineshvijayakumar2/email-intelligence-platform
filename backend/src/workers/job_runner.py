@@ -181,6 +181,25 @@ async def _reconciler_loop(sb):
         await _reconcile_stuck_jobs(sb)
 
 
+def _has_existing_resume(sb, interrupted_id: str) -> bool:
+    """Check if a resume job already exists for this interrupted job.
+
+    Prevents duplicate resume creation when the worker restarts multiple times.
+    """
+    try:
+        resp = (
+            sb.table("processing_jobs")
+            .select("id", count="exact")
+            .eq("job_type", "email_pipeline")
+            .contains("parameters", {"resumed_from": interrupted_id})
+            .execute()
+        )
+        return (resp.count or 0) > 0
+    except Exception as e:
+        logger.warning(f"Resume dedup check failed for {interrupted_id}: {e}")
+        return True  # err on the side of caution — don't create duplicates
+
+
 def _has_zombie_extraction(sb, mailbox_id: str) -> bool:
     """Check if a zombie extraction thread is still running for this mailbox.
 
@@ -238,11 +257,19 @@ async def _resume_interrupted_pipelines(sb):
             continue
 
         mailbox_id = job["mailbox_id"]
+        interrupted_id = job["id"]
+
+        # Guard: skip if a resume job already exists for this interrupted job
+        if _has_existing_resume(sb, interrupted_id):
+            logger.info(
+                f"Startup sweep: skipping {interrupted_id} — resume job already exists"
+            )
+            continue
 
         # Guard: skip if a zombie extraction thread is still running for this mailbox
         if _has_zombie_extraction(sb, mailbox_id):
             logger.info(
-                f"Startup sweep: skipping {job['id']} — zombie extraction "
+                f"Startup sweep: skipping {interrupted_id} — zombie extraction "
                 f"still active for mailbox {mailbox_id}"
             )
             continue
