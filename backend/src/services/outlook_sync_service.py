@@ -155,7 +155,7 @@ class OutlookSyncService:
         success_count = 0
         failed_count = 0
         emails_batch = []
-        batch_size = 100
+        batch_size = 25
 
         for email in extractor.extract_emails(max_emails=self.MAX_EMAILS_PER_SYNC):
             emails_batch.append(email)
