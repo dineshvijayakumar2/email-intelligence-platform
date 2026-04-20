@@ -623,7 +623,7 @@ class EmailOperations:
         try:
             # Required fields validation
             if not email.get('message_id') or not email.get('sender_email'):
-                logger.warning("Email missing required fields: message_id or sender_email")
+                logger.warning(f"Email missing required fields — message_id={email.get('message_id')!r}, sender_email={email.get('sender_email')!r}, subject={email.get('subject', '')[:50]!r}")
                 return None
             
             # Derive thread_id if not set by normalizer (live sync path)

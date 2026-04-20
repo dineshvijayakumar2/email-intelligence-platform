@@ -603,8 +603,14 @@ class OutlookExtractor(BaseExtractor):
             Standardized email dict or None if parsing fails
         """
         try:
-            # Extract sender info
-            from_data = msg.get('from', {}).get('emailAddress', {})
+            # Extract sender info — skip system messages with no sender or message ID
+            from_obj = msg.get('from')
+            if not from_obj or not from_obj.get('emailAddress', {}).get('address'):
+                return None
+            if not msg.get('internetMessageId') and not msg.get('id'):
+                return None
+
+            from_data = from_obj.get('emailAddress', {})
             sender_email = from_data.get('address', '')
             sender_name = from_data.get('name', '')
 
