@@ -266,10 +266,23 @@ class OutlookSyncService:
             else:
                 logger.error(f"Outlook sync failed for mailbox {mailbox_name}: {e}", extra={'mailbox_id': mailbox_id})
                 logger.error(traceback.format_exc())
-                # Sanitize error messages — strip raw URLs and technical details
+                # If delta token expired (410), clear delta links so next sync starts fresh
                 if '410' in error_str and 'delta' in error_str.lower():
-                    user_error = "Sync token expired. Will resync automatically on next run."
-                elif 'graph.microsoft.com' in error_str:
+                    try:
+                        res = self.supabase.table('mailboxes').select('connection_config').eq('id', mailbox_id).execute()
+                        if res.data:
+                            cfg = res.data[0].get('connection_config') or {}
+                            cfg.pop('outlook_delta_links', None)
+                            cfg.pop('outlook_delta_link', None)
+                            cfg['outlook_sync_error'] = None
+                            self.supabase.table('mailboxes').update({'connection_config': cfg}).eq('id', mailbox_id).execute()
+                            logger.info(f"Cleared expired delta links for mailbox {mailbox_id} — next sync will do full resync")
+                    except Exception as delta_err:
+                        logger.error(f"Failed to clear delta links: {delta_err}")
+                    return  # Don't store error — it's auto-recoverable
+
+                # Sanitize error messages — strip raw URLs and technical details
+                if 'graph.microsoft.com' in error_str:
                     user_error = f"Microsoft Graph API error: {error_str[:100]}"
                 else:
                     user_error = error_str[:200]
