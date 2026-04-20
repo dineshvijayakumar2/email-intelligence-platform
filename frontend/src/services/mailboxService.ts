@@ -22,13 +22,22 @@ export interface Mailbox {
     gmail_sync_enabled?: boolean;
     gmail_email?: string;
     gmail_extended_at?: string;
+    gmail_sync_status?: string;
+    gmail_sync_error?: string;
+    gmail_last_sync_at?: string;
+    gmail_email_count?: number;
     original_type?: string;
     initial_history_id?: string;
+    sync_interval_minutes?: number;
     // Outlook LIVE sync fields
     outlook_user_id?: string;
     outlook_sync_enabled?: boolean;
     outlook_email?: string;
     outlook_extended_at?: string;
+    outlook_sync_status?: string;
+    outlook_sync_error?: string;
+    outlook_last_sync_at?: string;
+    outlook_email_count?: number;
   };
   sync_enabled?: boolean;
 }

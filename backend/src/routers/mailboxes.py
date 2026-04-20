@@ -45,7 +45,9 @@ async def get_mailboxes(accessible_mailbox_ids: list = Depends(get_accessible_ma
             logger.warning("[Mailboxes API] No accessible mailboxes for user")
             return []
 
-        mailboxes_result = sb.table('mailboxes').select('*').in_('id', accessible_mailbox_ids).order('created_at', desc=True).execute()
+        mailboxes_result = sb.table('mailboxes').select(
+            'id,name,email_address,mailbox_type,is_active,last_sync_at,created_at,client_id,user_id,connection_config'
+        ).in_('id', accessible_mailbox_ids).order('created_at', desc=True).execute()
 
         if not mailboxes_result.data:
             return []
@@ -68,8 +70,22 @@ async def get_mailboxes(accessible_mailbox_ids: list = Depends(get_accessible_ma
                     logger.debug(f"Count failed for {mailbox['id']}: {count_error}")
                     count_map[mailbox['id']] = 0
 
+        # Strip large/sensitive fields from connection_config for list view
+        _STRIP_KEYS = {
+            'gmail_access_token', 'gmail_refresh_token',
+            'outlook_access_token', 'outlook_refresh_token',
+            'outlook_delta_links', 'outlook_delta_link',
+            'initial_history_id',
+        }
+
+        def _slim_config(cfg: dict | None) -> dict | None:
+            if not cfg:
+                return cfg
+            return {k: v for k, v in cfg.items() if k not in _STRIP_KEYS}
+
         return [
-            {**mailbox, 'total_emails': count_map.get(mailbox['id'], 0)}
+            {**mailbox, 'total_emails': count_map.get(mailbox['id'], 0),
+             'connection_config': _slim_config(mailbox.get('connection_config'))}
             for mailbox in mailboxes_result.data
         ]
 

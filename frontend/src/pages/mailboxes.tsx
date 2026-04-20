@@ -82,9 +82,9 @@ export const MailboxList: React.FC = () => {
 
   useEffect(() => {
     isMountedRef.current = true;
-    checkGmailConnection();
-    checkOutlookConnection();
-    if (isAdmin) loadClientsAndUsers();
+    const promises: Promise<void>[] = [checkGmailConnection(), checkOutlookConnection()];
+    if (isAdmin) promises.push(loadClientsAndUsers());
+    Promise.all(promises);
     return () => { isMountedRef.current = false; };
   }, []);
 

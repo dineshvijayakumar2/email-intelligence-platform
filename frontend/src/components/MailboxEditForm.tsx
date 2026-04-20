@@ -106,14 +106,17 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
 
   useEffect(() => {
     const init = async () => {
-      // Load clients and users FIRST, then mailbox data
-      await loadClientsAndUsers();
-
       if (mailboxId) {
-        const data = await loadMailboxData();
-        loadMailboxGmailStatus();
-        loadMailboxOutlookStatus();
-        loadSyncConfig(data?.connection_config);
+        const [, data] = await Promise.all([
+          loadClientsAndUsers(),
+          loadMailboxData(),
+        ]);
+        if (data) {
+          deriveProviderStatus(data);
+          loadSyncConfig(data.connection_config);
+        }
+      } else {
+        await loadClientsAndUsers();
       }
     };
 
@@ -168,13 +171,39 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
     }
   };
 
-  // Load Gmail status for this specific mailbox
-  const loadMailboxGmailStatus = async () => {
+  const reloadMailboxStatus = async () => {
     try {
-      const status = await gmailService.getMailboxGmailStatus(mailboxId);
-      setMailboxGmailStatus(status);
+      const data = await mailboxService.getMailbox(mailboxId);
+      if (data) {
+        setMailboxData(data);
+        deriveProviderStatus(data);
+      }
     } catch (error) {
-      console.error('Error loading mailbox Gmail status:', error);
+      console.error('Error reloading mailbox status:', error);
+    }
+  };
+
+  const deriveProviderStatus = (data: Mailbox) => {
+    const cfg = data.connection_config || {};
+    if (cfg.gmail_sync_enabled) {
+      setMailboxGmailStatus({
+        connected: true,
+        gmail_email: cfg.gmail_email,
+        sync_status: (cfg.gmail_sync_status as any) || 'idle',
+        last_sync_at: cfg.gmail_last_sync_at,
+        email_count: cfg.gmail_email_count || 0,
+        error: cfg.gmail_sync_error,
+      });
+    }
+    if (cfg.outlook_sync_enabled) {
+      setMailboxOutlookStatus({
+        connected: true,
+        outlook_email: cfg.outlook_email,
+        sync_status: (cfg.outlook_sync_status as any) || 'idle',
+        last_sync_at: cfg.outlook_last_sync_at,
+        email_count: cfg.outlook_email_count || 0,
+        error: cfg.outlook_sync_error,
+      });
     }
   };
 
@@ -186,7 +215,7 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
 
       if (result.success) {
         toast.success(`Gmail ${result.gmail_email} connected to mailbox`);
-        loadMailboxGmailStatus(); // Reload status
+        reloadMailboxStatus(); // Reload status
       } else {
         toast.error(result.message);
       }
@@ -225,7 +254,7 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
       if (result.success) {
         toast.success('Sync started');
         // Poll for status update
-        setTimeout(loadMailboxGmailStatus, 2000);
+        setTimeout(reloadMailboxStatus, 2000);
       } else {
         toast.error(result.message);
       }
@@ -233,16 +262,6 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
       toast.error('Failed to trigger sync');
     } finally {
       setSyncingGmail(false);
-    }
-  };
-
-  // Load Outlook status for this specific mailbox
-  const loadMailboxOutlookStatus = async () => {
-    try {
-      const status = await outlookService.getMailboxOutlookStatus(mailboxId);
-      setMailboxOutlookStatus(status);
-    } catch (error) {
-      console.error('Error loading mailbox Outlook status:', error);
     }
   };
 
@@ -254,7 +273,7 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
 
       if (result.success) {
         toast.success(`Outlook ${result.outlook_email} connected to mailbox`);
-        loadMailboxOutlookStatus(); // Reload status
+        reloadMailboxStatus(); // Reload status
       } else {
         toast.error(result.message);
       }
@@ -293,7 +312,7 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
       if (result.success) {
         toast.success('Outlook sync started');
         // Poll for status update
-        setTimeout(loadMailboxOutlookStatus, 2000);
+        setTimeout(reloadMailboxStatus, 2000);
       } else {
         toast.error(result.message);
       }
