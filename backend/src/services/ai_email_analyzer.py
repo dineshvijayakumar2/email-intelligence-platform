@@ -1387,6 +1387,10 @@ class AIEmailAnalyzer:
         # that .format() would try to interpret as variables
         user_message = user_template.replace("{emails_json}", emails_json)
 
+        # Resolve model name before the call so it's available for failure logging
+        from .langchain_core import resolve_task_model_name
+        attempted_model = resolve_task_model_name('email_analysis', client_id)
+
         # Call per-task model (respects DB > legacy tier > env > default)
         max_tokens = max(4096, len(emails) * 700)
         ai_response = self.ai_client.call_for_task(
@@ -1395,13 +1399,11 @@ class AIEmailAnalyzer:
         )
 
         if ai_response is None:
-            # API failure — mark all as failed with detail
             error_detail = getattr(self.ai_client, 'last_error', None) or "api_timeout"
             fail_msg = f"api_call_failed: {str(error_detail)[:200]}"
-            logger.error(f"AI API call failed for batch of {len(emails)}: {error_detail}")
+            logger.error(f"AI API call failed for batch of {len(emails)} (model={attempted_model}): {error_detail}")
             for eid in email_ids:
                 self._save_failed(eid, mailbox_id, client_id, fail_msg, prompt_version=effective_prompt_version)
-            # Log to unified job_errors table
             self._log_to_job_errors(job_id, mailbox_id, "api_error", fail_msg, email_ids, client_id=client_id)
             error_lower = (error_detail or "").lower()
             if "budget_exceeded" in error_lower:
@@ -1417,7 +1419,7 @@ class AIEmailAnalyzer:
             if usage_tracker:
                 usage_tracker.log_usage(
                     operation="email_intelligence",
-                    model="none",
+                    model=attempted_model,
                     input_tokens=0,
                     output_tokens=0,
                     mailbox_id=mailbox_id,

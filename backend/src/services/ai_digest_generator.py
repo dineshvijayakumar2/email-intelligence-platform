@@ -437,15 +437,18 @@ ACTIVE THREADS (with recent conversation):
 
 Generate the {scope} digest now. Return ONLY valid JSON."""
 
-        # Call per-task model (respects DB > legacy tier > env > default)
+        # Resolve model name before call so it's available for failure logging
+        from .langchain_core import resolve_task_model_name
+        attempted_model = resolve_task_model_name('daily_digest', client_id)
+
         ai_response = self.ai_client.call_for_task(
             'daily_digest', client_id, digest_system_prompt, data_context,
             max_tokens=8192,
         )
 
         if ai_response is None:
-            logger.error("Sonnet call failed for digest generation")
-            self._log_usage(mailbox_id, client_id, None, success=False, error_type="api_timeout")
+            logger.error(f"AI call failed for digest generation (model={attempted_model})")
+            self._log_usage(mailbox_id, client_id, None, success=False, error_type="api_timeout", attempted_model=attempted_model)
             return None
 
         # Parse + validate
@@ -1152,14 +1155,18 @@ Generate the {scope} digest now. Return ONLY valid JSON."""
         ai_response: Optional[AIResponse],
         success: bool,
         error_type: Optional[str] = None,
+        attempted_model: Optional[str] = None,
     ):
         """Log digest generation to usage tracker."""
         usage_tracker = get_usage_tracker()
         if not usage_tracker:
             return
+        model = ai_response.model if ai_response else attempted_model
+        if not model:
+            raise ValueError("_log_usage requires either ai_response.model or attempted_model")
         usage_tracker.log_usage(
             operation="digest",
-            model=ai_response.model if ai_response else "none",
+            model=model,
             input_tokens=ai_response.input_tokens if ai_response else 0,
             output_tokens=ai_response.output_tokens if ai_response else 0,
             mailbox_id=mailbox_id,
