@@ -84,7 +84,12 @@ class OutlookSyncService:
         return self._supabase
 
     async def start(self):
-        """Start the sync service"""
+        """Start the sync service background loop.
+        Skipped when DISABLE_SYNC_LOOPS=true (use external cron instead)."""
+        if os.getenv("DISABLE_SYNC_LOOPS", "").lower() in ("true", "1"):
+            logger.info("Outlook sync loop disabled (DISABLE_SYNC_LOOPS). Use /internal/jobs/outlook-sync cron endpoint.")
+            return
+
         if self._running:
             logger.warning("Outlook sync service already running")
             return
@@ -162,10 +167,11 @@ class OutlookSyncService:
 
                 # Skip if synced recently enough — prevents re-syncing every mailbox
                 # on every backend restart (only sync if past the interval window)
+                mailbox_interval = config.get('sync_interval_minutes', self.sync_interval_minutes)
                 last_sync = config.get('outlook_last_sync_at') or mailbox.get('last_sync_at')
                 if last_sync:
                     last_sync_dt = datetime.fromisoformat(last_sync.replace('Z', '+00:00'))
-                    next_due_at = last_sync_dt + timedelta(minutes=self.sync_interval_minutes)
+                    next_due_at = last_sync_dt + timedelta(minutes=mailbox_interval)
                     if datetime.now(timezone.utc) < next_due_at:
                         logger.debug(
                             f"Skipping mailbox {mailbox_id} - last synced {last_sync_dt.strftime('%H:%M:%S')}, "
@@ -694,6 +700,12 @@ class OutlookSyncService:
     # =========================================================================
     # Public API Methods
     # =========================================================================
+
+    async def run_cron_sync(self) -> dict:
+        """Entry point for external cron. Syncs all due mailboxes and legacy users."""
+        await self._sync_all_mailboxes()
+        await self._sync_all_users()
+        return {"status": "ok"}
 
     async def trigger_sync(self, user_id: str):
         """

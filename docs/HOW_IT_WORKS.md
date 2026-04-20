@@ -37,7 +37,7 @@ Brings emails into the platform from multiple sources. Users connect Outlook or 
 
 #### What triggers it
 - **User action:** connects an OAuth account, uploads a file, or clicks "Sync" on a mailbox
-- **Automatic sync:** external cron calls `/outlook/cron-sync` or `/gmail/cron-sync` to trigger all active mailboxes
+- **Automatic sync:** Railway cron calls `POST /internal/jobs/gmail-sync` or `POST /internal/jobs/outlook-sync` (CRON_SECRET auth). Each endpoint checks per-mailbox intervals and only syncs mailboxes that are due. Legacy: built-in asyncio loop (disabled when `DISABLE_SYNC_LOOPS=true`)
 - **Date-range fetch:** user requests a specific date range via the extraction page
 
 #### What data it reads
@@ -54,11 +54,11 @@ Brings emails into the platform from multiple sources. Users connect Outlook or 
 Nothing — this is the entry point for all data.
 
 #### Current status
-Active in production, handling real traffic. 271,432 emails across 9 mailboxes (mix of Outlook and Gmail). Both live sync and file uploads working. Cron-triggered sync depends on external cron service (cron-job.org or similar) calling the endpoints — runs via FastAPI BackgroundTasks, not the worker.
+Active in production, handling real traffic. 271,432 emails across 9 mailboxes (mix of Outlook and Gmail). Both live sync and file uploads working. Sync uses dedicated cron endpoints (`/internal/jobs/gmail-sync`, `/internal/jobs/outlook-sync`) called by Railway cron. Per-mailbox interval checking prevents duplicate syncs. Legacy asyncio loops can be disabled via `DISABLE_SYNC_LOOPS=true` env var.
 
 #### Known limitations
 - OAuth tokens are stored in `mailboxes.connection_config` JSONB and `user_integrations` — two separate token stores that can drift if a user re-authenticates via a different path
-- Sync runs via FastAPI BackgroundTasks (not the worker process). If the API server restarts mid-sync, the sync dies silently with no retry
+- Sync runs inline when triggered by cron endpoint (not the worker process). If the API server restarts mid-sync, the sync dies silently with no retry
 - Gmail incremental sync depends on history ID continuity; if Google expires the history, a full resync is needed but not automatically triggered
 - No deduplication across mailboxes — if two mailboxes contain the same email (e.g., sender and recipient both connected), it appears twice
 - Large file uploads (OLM 65GB+) use RemoteZip streaming but depend on stable network connection throughout
@@ -116,7 +116,7 @@ Imports CRM data from QuickBase — customers, contacts, quotes, jobs, operation
 
 #### What triggers it
 - User clicks "Sync" on the QB configuration page, calling `POST /quickbase/sync`
-- External cron calls `POST /internal/jobs/qb-sync` (authenticated with CRON_SECRET) for scheduled hourly sync
+- Railway cron calls `POST /internal/jobs/qb-sync` (CRON_SECRET auth). Respects per-client `sync_interval_hours`: skips clients in manual mode (`sync_interval_hours=NULL`) and clients not yet due (`last_sync_at + interval > now`)
 - User triggers re-match or data propagation separately
 
 #### What data it reads
@@ -137,7 +137,7 @@ Email Processing Pipeline (needs companies to match against). QB API credentials
 Active in production. Carbon8 QB config is active with App ID `buzfemk4f`. All 7 QB tables are populated. Matching and data propagation run on sync.
 
 #### Known limitations
-- QB sync runs via FastAPI BackgroundTasks (not worker). Server restart kills a running sync
+- QB sync runs via FastAPI BackgroundTasks (not worker). Server restart kills a running sync. Cron endpoint now respects `sync_interval_hours` per client (Option C)
 - Fuzzy matches (pass 3) are flagged for manual review but there's no notification when new matches appear — users must check the review page
 - QB API rate limits are not explicitly handled; high-volume syncs could hit throttling
 - No incremental QB sync — every sync pulls all records from QB (though it uses upsert locally)
@@ -469,7 +469,7 @@ Built and deployed, partial traffic. The worker process is defined in `railway.t
 - `notification_dispatch` — Event-to-notification routing
 
 **Job types still on FastAPI BackgroundTasks (not worker):**
-- Email sync (Gmail, Outlook — both manual and cron-triggered)
+- Email sync (Gmail, Outlook — via cron endpoints or legacy asyncio loop)
 - 13-step extraction pipeline
 - Thread resolution and recompute
 - Contact email count backfill
@@ -659,7 +659,7 @@ All secrets are managed via environment variables: `SUPABASE_URL`, `SUPABASE_SER
 
 - **Worker migration is ~25% complete.** 5 of ~20 job types run on the worker. The other ~15 use FastAPI BackgroundTasks and die on uvicorn restart with no retry or notification. Hybrid callsites (factory record + BackgroundTasks execution) create confusing state where the worker may claim a job it can't handle.
 
-- **External cron not yet configured.** The `internal_jobs` router has endpoints for QB sync, stuck reconciliation, analytics rollup, and notification dispatch — all requiring `CRON_SECRET` auth. Endpoint code is ready, but whether an external cron service (cron-job.org or Railway cron) is actually configured and calling these endpoints is not verifiable from the codebase alone. See `docs/CRON_SETUP.md` for the full schedule and setup instructions.
+- **External cron setup pending.** The `internal_jobs` router has cron endpoints for all sync types: QB sync (`/qb-sync`), Gmail sync (`/gmail-sync`), Outlook sync (`/outlook-sync`), stuck reconciliation, analytics rollup, and notification dispatch — all requiring `CRON_SECRET` auth. Endpoints are interval-aware (check `last_sync_at + interval` per entity, skip manual-mode configs). Railway cron (Option 1: curl to endpoint) is the recommended setup. Gmail/Outlook legacy asyncio loops can be disabled via `DISABLE_SYNC_LOOPS=true` once Railway cron is confirmed. See `docs/CRON_SETUP.md`.
 
 - **`exec_sql` and `exec_sql_extended` RPCs allow arbitrary SQL from application code.** Granted to the `authenticated` role (migration 071). Any Supabase user who obtains a JWT can call this RPC directly to execute arbitrary DDL/DML. Pending security review.
 

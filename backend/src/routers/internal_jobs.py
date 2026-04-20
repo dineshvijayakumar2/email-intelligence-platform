@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
@@ -32,7 +33,7 @@ async def cron_qb_sync(
     background_tasks: BackgroundTasks,
     _: None = Depends(verify_cron_secret),
 ):
-    """Hourly QB sync for all active clients."""
+    """QB sync for active auto-sync clients. Respects per-client sync_interval_hours."""
     from ..services.quickbase_sync import QuickbaseSync
 
     configs = _supabase.table("qb_sync_config").select("*").eq(
@@ -42,9 +43,29 @@ async def cron_qb_sync(
     if not configs.data:
         return {"status": "skipped", "reason": "no active QB configs"}
 
+    now = datetime.now(timezone.utc)
     triggered = []
+    skipped = []
+
     for config in configs.data:
         client_id = config["client_id"]
+        interval_hours = config.get("sync_interval_hours")
+
+        if interval_hours is None:
+            skipped.append({"client_id": client_id, "reason": "manual_mode"})
+            continue
+
+        last_sync = config.get("last_sync_at")
+        if last_sync:
+            last_sync_dt = datetime.fromisoformat(last_sync.replace("Z", "+00:00"))
+            next_due = last_sync_dt + timedelta(hours=interval_hours)
+            if now < next_due:
+                skipped.append({
+                    "client_id": client_id,
+                    "reason": "not_due",
+                    "next_due": next_due.isoformat(),
+                })
+                continue
 
         def _run(cfg=config, cid=client_id):
             from supabase import create_client
@@ -66,7 +87,42 @@ async def cron_qb_sync(
         background_tasks.add_task(_run)
         triggered.append(client_id)
 
-    return {"status": "triggered", "clients": triggered}
+    if skipped:
+        logger.info(f"QB sync skipped {len(skipped)} client(s): {skipped}")
+
+    return {"status": "triggered", "clients": triggered, "skipped": skipped}
+
+
+@router.post("/gmail-sync")
+async def cron_gmail_sync(
+    _: None = Depends(verify_cron_secret),
+):
+    """Sync all due Gmail mailboxes. Called by Railway cron (e.g. every 15 min)."""
+    from ..services.gmail_sync_service import get_gmail_sync_service
+
+    svc = get_gmail_sync_service()
+    try:
+        await svc.run_cron_sync()
+        return {"status": "ok"}
+    except Exception as e:
+        logger.error(f"Gmail cron sync error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/outlook-sync")
+async def cron_outlook_sync(
+    _: None = Depends(verify_cron_secret),
+):
+    """Sync all due Outlook mailboxes. Called by Railway cron (e.g. every 15 min)."""
+    from ..services.outlook_sync_service import get_outlook_sync_service
+
+    svc = get_outlook_sync_service()
+    try:
+        await svc.run_cron_sync()
+        return {"status": "ok"}
+    except Exception as e:
+        logger.error(f"Outlook cron sync error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/stuck-reconciler")
