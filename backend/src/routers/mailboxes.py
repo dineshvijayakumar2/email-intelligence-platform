@@ -181,11 +181,31 @@ async def update_mailbox(mailbox_id: str, mailbox_data: MailboxConfig, current_u
                            f"Please disconnect Outlook first or use the connected email address."
                 )
 
+        # Merge connection_config: start with DB state, overlay frontend changes.
+        # This prevents stale frontend copies from overwriting sync-managed fields
+        # (tokens, delta links, sync status) updated by background sync.
+        current_config = current_mailbox.data.get('connection_config') or {}
+        incoming_config = mailbox_data.connection_config or {}
+        merged_config = {**current_config, **incoming_config}
+
+        # Preserve sync-managed fields from DB if frontend sent stale values
+        _SYNC_MANAGED = [
+            'gmail_access_token', 'gmail_refresh_token', 'gmail_sync_status',
+            'gmail_sync_error', 'gmail_last_sync_at', 'gmail_email_count',
+            'gmail_last_history_id', 'gmail_requires_reauth',
+            'outlook_access_token', 'outlook_refresh_token', 'outlook_sync_status',
+            'outlook_sync_error', 'outlook_last_sync_at', 'outlook_email_count',
+            'outlook_delta_links', 'outlook_delta_link', 'outlook_requires_reauth',
+        ]
+        for key in _SYNC_MANAGED:
+            if key in current_config:
+                merged_config[key] = current_config[key]
+
         update_data = {
             "name": mailbox_data.name,
             "mailbox_type": mailbox_data.mailbox_type,
             "is_active": mailbox_data.is_active,
-            "connection_config": mailbox_data.connection_config,
+            "connection_config": merged_config,
             "client_id": mailbox_data.client_id,
             "user_id": mailbox_data.user_id,
         }
