@@ -27,16 +27,14 @@ import traceback
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_SYNC_INTERVAL_MINUTES = 30
-
-
 class GmailSyncService:
     """
     Service for Gmail synchronization
 
     Responsibilities:
     - Sync all connected Gmail accounts when triggered by external cron
-    - Per-mailbox interval via connection_config.sync_interval_minutes (default: 30)
+    - Optional per-mailbox throttle via connection_config.sync_interval_minutes
+      (if not set, syncs on every cron tick — cron schedule is the interval)
     - Track sync state per user in user_integrations table
     - Handle rate limits and errors with exponential backoff
     - Update sync status in database
@@ -51,7 +49,6 @@ class GmailSyncService:
         self._supabase = supabase_client
         self.executor = ThreadPoolExecutor(max_workers=5, thread_name_prefix="gmail_sync")
         self._active_syncs = {}
-        self.sync_interval_minutes = DEFAULT_SYNC_INTERVAL_MINUTES
 
     @property
     def supabase(self):
@@ -99,19 +96,19 @@ class GmailSyncService:
                     logger.debug(f"Skipping mailbox {mailbox_id} - authentication expired, user reconnection required")
                     continue
 
-                # Skip if synced recently enough — prevents re-syncing every mailbox
-                # on every backend restart (only sync if past the interval window)
-                mailbox_interval = config.get('sync_interval_minutes', self.sync_interval_minutes)
-                last_sync = config.get('gmail_last_sync_at') or mailbox.get('last_sync_at')
-                if last_sync:
-                    last_sync_dt = datetime.fromisoformat(last_sync.replace('Z', '+00:00'))
-                    next_due_at = last_sync_dt + timedelta(minutes=mailbox_interval)
-                    if datetime.now(timezone.utc) < next_due_at:
-                        logger.debug(
-                            f"Skipping mailbox {mailbox_id} - last synced {last_sync_dt.strftime('%H:%M:%S')}, "
-                            f"next due at {next_due_at.strftime('%H:%M:%S')}"
-                        )
-                        continue
+                # Per-mailbox interval throttle (optional — if not set, syncs every cron tick)
+                mailbox_interval = config.get('sync_interval_minutes')
+                if mailbox_interval:
+                    last_sync = config.get('gmail_last_sync_at') or mailbox.get('last_sync_at')
+                    if last_sync:
+                        last_sync_dt = datetime.fromisoformat(last_sync.replace('Z', '+00:00'))
+                        next_due_at = last_sync_dt + timedelta(minutes=mailbox_interval)
+                        if datetime.now(timezone.utc) < next_due_at:
+                            logger.debug(
+                                f"Skipping mailbox {mailbox_id} - last synced {last_sync_dt.strftime('%H:%M:%S')}, "
+                                f"next due at {next_due_at.strftime('%H:%M:%S')}"
+                            )
+                            continue
 
                 # Skip if in transient error state and not enough time has passed
                 if config.get('gmail_sync_status') == 'error':
@@ -408,14 +405,7 @@ class GmailSyncService:
                     logger.debug(f"Skipping {user_id} - sync already in progress")
                     continue
 
-                # Skip if synced recently enough (interval check)
-                last_sync = user.get('last_sync_at')
-                if last_sync:
-                    last_sync_dt = datetime.fromisoformat(last_sync.replace('Z', '+00:00'))
-                    next_due_at = last_sync_dt + timedelta(minutes=self.sync_interval_minutes)
-                    if datetime.now(timezone.utc) < next_due_at:
-                        logger.debug(f"Skipping {user_id} - not due until {next_due_at.strftime('%H:%M:%S')}")
-                        continue
+                # Legacy users have no per-user interval — sync on every cron tick
 
                 # Skip if in error state and not enough time has passed
                 if user.get('sync_status') == 'error':
