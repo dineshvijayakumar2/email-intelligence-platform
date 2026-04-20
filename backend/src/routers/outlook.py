@@ -796,7 +796,7 @@ def _run_date_range_fetch(
 @router.get("/health")
 async def health_check():
     """Health check endpoint for Outlook sync service"""
-    service_status = "running" if _sync_service and _sync_service._running else "stopped"
+    service_status = "initialized" if _sync_service else "not_initialized"
     return {
         "status": "healthy",
         "service": "outlook-sync",
@@ -809,16 +809,11 @@ async def get_outlook_config():
     """Get current Outlook sync configuration"""
     config = _get_config_from_db()
 
-    service_interval = None
-    if _sync_service:
-        service_interval = _sync_service.sync_interval_minutes
-
     return {
         "sync_interval_minutes": config['sync_interval_minutes'],
-        "service_interval_minutes": service_interval,
         "max_emails_per_sync": 500,
-        "sync_service_running": _sync_service._running if _sync_service else False,
-        "interval_synced": service_interval == config['sync_interval_minutes'] if service_interval else False
+        "sync_service_initialized": _sync_service is not None,
+        "note": "Sync is driven by external cron. Per-mailbox override via connection_config.sync_interval_minutes."
     }
 
 
@@ -837,11 +832,7 @@ async def update_outlook_config(config: OutlookConfigUpdate):
 
             _save_config_to_db('outlook_sync_interval', config.sync_interval_minutes)
             updates['sync_interval_minutes'] = config.sync_interval_minutes
-
-            # Update running service
-            if _sync_service:
-                _sync_service.sync_interval_minutes = config.sync_interval_minutes
-                logger.info(f"Updated Outlook sync interval to {config.sync_interval_minutes} minutes")
+            logger.info(f"Updated Outlook sync interval to {config.sync_interval_minutes} minutes")
 
         return {
             "status": "success",

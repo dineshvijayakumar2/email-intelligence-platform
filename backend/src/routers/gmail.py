@@ -864,19 +864,13 @@ async def get_gmail_config():
     Returns current sync settings including interval
     """
     config = _get_config_from_db()
-    sync_interval = config['sync_interval_minutes']
-
-    # Get current service interval (may differ if not restarted)
-    service_interval = _sync_service.sync_interval_minutes if _sync_service else sync_interval
 
     return {
-        "sync_interval_minutes": sync_interval,
-        "service_interval_minutes": service_interval,
+        "sync_interval_minutes": config['sync_interval_minutes'],
         "max_emails_per_sync": 500,
         "rate_limit_backoff_minutes": 60,
-        "sync_service_running": _sync_service is not None and _sync_service._running if _sync_service else False,
-        "interval_synced": sync_interval == service_interval,
-        "note": "Use PUT /api/gmail/config to update settings. Changes apply immediately to running service."
+        "sync_service_initialized": _sync_service is not None,
+        "note": "Sync is driven by external cron. Per-mailbox override via connection_config.sync_interval_minutes."
     }
 
 
@@ -903,27 +897,9 @@ async def update_gmail_config(config: GmailConfigUpdate):
                     detail="sync_interval_minutes must be between 1 and 1440 (24 hours)"
                 )
 
-            # Save to database
-            saved = _save_config_to_db('gmail_sync_interval', interval)
-
-            if saved:
-                updated['sync_interval_minutes'] = interval
-
-                # Update running service immediately
-                if _sync_service:
-                    _sync_service.sync_interval_minutes = interval
-                    logger.info(f"Updated Gmail sync interval to {interval} minutes (live)")
-            else:
-                # Fallback: just update the running service
-                if _sync_service:
-                    _sync_service.sync_interval_minutes = interval
-                    updated['sync_interval_minutes'] = interval
-                    logger.info(f"Updated Gmail sync interval to {interval} minutes (memory only)")
-                else:
-                    raise HTTPException(
-                        status_code=500,
-                        detail="Failed to save config and no sync service running"
-                    )
+            _save_config_to_db('gmail_sync_interval', interval)
+            updated['sync_interval_minutes'] = interval
+            logger.info(f"Updated Gmail sync interval to {interval} minutes")
 
         return {
             "status": "success",
