@@ -120,8 +120,8 @@ async def get_company_contacts(
     accessible_mailbox_ids: list = Depends(get_accessible_mailbox_ids),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
-    sort_by: Optional[str] = Query(default="engagement_score", regex="^(engagement_score|quote_count|email_total|name|strike_rate)$"),
-    sort_order: Optional[str] = Query(default="desc", regex="^(asc|desc)$"),
+    sort_by: Optional[str] = Query(default="engagement_score", pattern="^(engagement_score|quote_count|email_total|name|strike_rate)$"),
+    sort_order: Optional[str] = Query(default="desc", pattern="^(asc|desc)$"),
 ):
     """Return paginated list of contacts for a company with persona data.
 

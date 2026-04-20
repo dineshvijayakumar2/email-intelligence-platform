@@ -135,6 +135,7 @@ def _link_ai_extracted_refs(sb, client_id: str, mailbox_id: str) -> int:
     validates each ref against qb_quotes/qb_jobs, and upserts links
     with source='ai' and confidence=0.9.
     """
+    import re
     from src.services.reference_extractor import _validate_refs, _upsert_links
 
     # Fetch emails with AI-extracted refs (completed in this run)
@@ -168,12 +169,17 @@ def _link_ai_extracted_refs(sb, client_id: str, mailbox_id: str) -> int:
             continue
 
         # Convert AI output [{type, number}] into {link_type: set(ref_string)}
+        # Normalize to Q/J prefix format to match regex extractor and qb_quotes/qb_jobs
         refs: dict[str, set[str]] = {}
         for ref in refs_raw:
             ref_type = ref.get("type")  # "quote" or "job"
             ref_number = ref.get("number")  # e.g. "Q20334"
             if ref_type and ref_number:
-                refs.setdefault(ref_type, set()).add(ref_number)
+                digits = re.sub(r'[^0-9]', '', str(ref_number))
+                if not digits:
+                    continue
+                prefix = "Q" if ref_type == "quote" else "J"
+                refs.setdefault(ref_type, set()).add(f"{prefix}{digits}")
 
         if not refs:
             continue

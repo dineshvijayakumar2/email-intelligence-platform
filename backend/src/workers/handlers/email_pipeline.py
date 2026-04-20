@@ -25,6 +25,8 @@ PIPELINE_STAGES = [
     "embed_emails",
     "ai_classify",
     "bucket_engine",
+    "entity_aggregation",
+    "link_ai_refs",
     "evaluate_threads_final",
 ]
 
@@ -60,6 +62,8 @@ async def email_pipeline_handler(sb, job: dict, stop_event: asyncio.Event):
     from src.services.vector_service import VectorService
     from src.services.ai_email_analyzer import AIEmailAnalyzer
     from src.services.ai_action_bucket_engine import ActionBucketEngine
+    from src.services.ai_entity_aggregator import AIEntityAggregator
+    from src.workers.handlers.ai_analysis import _link_ai_extracted_refs
 
     orch = ExtractionOrchestrator(
         mailbox_id=mailbox_id,
@@ -73,6 +77,7 @@ async def email_pipeline_handler(sb, job: dict, stop_event: asyncio.Event):
     vector_service = VectorService(sb)
     analyzer = AIEmailAnalyzer(sb)
     bucket_engine = ActionBucketEngine(sb)
+    entity_agg = AIEntityAggregator(sb)
 
     # ── Stage dispatch table ──────────────────────────────────────────
     # sync functions use asyncio.to_thread() to avoid blocking heartbeat;
@@ -102,6 +107,14 @@ async def email_pipeline_handler(sb, job: dict, stop_event: asyncio.Event):
             bucket_engine.process_email_buckets,
             mailbox_id=mailbox_id,
         ),
+        "entity_aggregation": lambda: asyncio.to_thread(
+            entity_agg.aggregate_entities,
+            mailbox_id,
+            client_id,
+        ),
+        "link_ai_refs": lambda: asyncio.to_thread(
+            _link_ai_extracted_refs, sb, client_id, mailbox_id,
+        ) if client_id else asyncio.sleep(0),
         "evaluate_threads_final": lambda: asyncio.to_thread(
             orch._update_affected_threads
         ),
