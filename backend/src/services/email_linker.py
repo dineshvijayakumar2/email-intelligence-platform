@@ -599,14 +599,20 @@ class EmailLinker:
             nonlocal total_links
             if not batch:
                 return
+            # Deduplicate within batch to prevent PostgreSQL error 21000
+            seen = {}
+            for row in batch:
+                key = (row['email_id'], row['email_address'], row['role'])
+                seen[key] = row
+            deduped = list(seen.values())
             try:
                 self._execute_with_retry(
                     self.client.table('email_contact_links')
-                    .upsert(batch, on_conflict='email_id,email_address,role')
+                    .upsert(deduped, on_conflict='email_id,email_address,role')
                 )
-                total_links += len(batch)
+                total_links += len(deduped)
             except Exception as e:
-                logger.warning(f"Junction link batch failed ({len(batch)} rows): {e}")
+                logger.warning(f"Junction link batch failed ({len(deduped)} rows): {e}")
             batch.clear()
 
         def _resolve_and_add(email_id: str, addr: str, role: str):
