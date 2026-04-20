@@ -230,7 +230,6 @@ async def verify_cron_secret(authorization: Optional[str] = Header(None)) -> Non
         parts = authorization.split(" ", 1)
         token = parts[1] if len(parts) == 2 else parts[0]
     if not token or token != expected:
-        logger.warning(f"Cron auth failed: received={repr(token[:8]+'...' if token and len(token)>8 else token)} expected={repr(expected[:8]+'...' if expected and len(expected)>8 else expected)}")
         raise HTTPException(status_code=401, detail="Invalid cron secret")
 
 
