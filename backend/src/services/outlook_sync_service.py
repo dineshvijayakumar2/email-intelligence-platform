@@ -266,7 +266,14 @@ class OutlookSyncService:
             else:
                 logger.error(f"Outlook sync failed for mailbox {mailbox_name}: {e}", extra={'mailbox_id': mailbox_id})
                 logger.error(traceback.format_exc())
-                await self._update_mailbox_sync_status(mailbox_id, 'error', error=error_str)
+                # Sanitize error messages — strip raw URLs and technical details
+                if '410' in error_str and 'delta' in error_str.lower():
+                    user_error = "Sync token expired. Will resync automatically on next run."
+                elif 'graph.microsoft.com' in error_str:
+                    user_error = f"Microsoft Graph API error: {error_str[:100]}"
+                else:
+                    user_error = error_str[:200]
+                await self._update_mailbox_sync_status(mailbox_id, 'error', error=user_error)
 
     # DEPRECATED 2026-04-17 — superseded by email_pipeline worker job. Remove after 2026-04-24 if stable.
     async def _trigger_post_sync_extraction(self, mailbox_id: str, emails_synced: int):
@@ -348,11 +355,13 @@ class OutlookSyncService:
                 current_count = config.get('outlook_email_count') or 0
                 config['outlook_email_count'] = current_count + email_count
 
-            if status == 'auth_expired':
+            if status == 'syncing':
+                config['outlook_sync_error'] = None
+            elif status == 'auth_expired':
                 config['outlook_requires_reauth'] = True
                 config['outlook_sync_error'] = error[:500] if error else 'Authentication expired'
             elif error:
-                config['outlook_sync_error'] = error[:500]  # Truncate long errors
+                config['outlook_sync_error'] = error[:500]
             elif status == 'idle':
                 config['outlook_sync_error'] = None
                 config['outlook_requires_reauth'] = False

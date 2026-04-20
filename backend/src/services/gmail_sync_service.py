@@ -265,7 +265,11 @@ class GmailSyncService:
             else:
                 logger.error(f"Gmail sync failed: {e}", extra={'mailbox_id': mailbox_id})
                 logger.error(traceback.format_exc())
-                await self._update_mailbox_sync_status(mailbox_id, 'error', error=error_str)
+                if 'googleapis.com' in error_str:
+                    user_error = f"Gmail API error: {error_str[:100]}"
+                else:
+                    user_error = error_str[:200]
+                await self._update_mailbox_sync_status(mailbox_id, 'error', error=user_error)
 
     # DEPRECATED 2026-04-17 — superseded by email_pipeline worker job. Remove after 2026-04-24 if stable.
     async def _trigger_post_sync_extraction(self, mailbox_id: str, emails_synced: int):
@@ -345,11 +349,13 @@ class GmailSyncService:
                 current_count = config.get('gmail_email_count') or 0
                 config['gmail_email_count'] = current_count + email_count
 
-            if status == 'auth_expired':
+            if status == 'syncing':
+                config['gmail_sync_error'] = None
+            elif status == 'auth_expired':
                 config['gmail_requires_reauth'] = True
                 config['gmail_sync_error'] = error[:500] if error else 'Authentication expired'
             elif error:
-                config['gmail_sync_error'] = error[:500]  # Truncate long errors
+                config['gmail_sync_error'] = error[:500]
             elif status == 'idle':
                 config['gmail_sync_error'] = None
                 config['gmail_requires_reauth'] = False
