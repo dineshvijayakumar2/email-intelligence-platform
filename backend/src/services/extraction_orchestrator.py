@@ -193,10 +193,13 @@ class ExtractionOrchestrator:
         Get email IDs to process based on extraction mode.
 
         Paginates in batches of 500 to avoid Supabase row limits.
+        Results are cached after the first call to avoid redundant 143K-row scans.
 
         Returns:
             Tuple of (email_ids, date_range_start, date_range_end)
         """
+        if hasattr(self, '_cached_scope'):
+            return self._cached_scope
         PAGE_SIZE = 500
         try:
             if self.extraction_mode == 'full':
@@ -233,7 +236,8 @@ class ExtractionOrchestrator:
                     offset += len(raw_batch)  # Use actual count returned, not PAGE_SIZE
 
                 logger.info(f"Full extraction mode: Processing {len(all_rows)} emails (from {total_in_db} total)")
-                return [email['id'] for email in all_rows], None, None
+                self._cached_scope = ([email['id'] for email in all_rows], None, None)
+                return self._cached_scope
 
             else:  # incremental
                 from datetime import timedelta
@@ -279,11 +283,12 @@ class ExtractionOrchestrator:
                     offset += len(raw_batch)
 
                 logger.info(f"Incremental mode: Processing {len(all_rows)} emails (from {total_in_range} in range)")
-                return (
+                self._cached_scope = (
                     [email['id'] for email in all_rows],
                     date_range_start.isoformat(),
                     date_range_end.isoformat()
                 )
+                return self._cached_scope
 
         except Exception as e:
             logger.error(f"Failed to get emails in scope: {e}")
