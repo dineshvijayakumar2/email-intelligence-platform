@@ -14,7 +14,7 @@ import mailboxAssignmentService from '../services/mailboxAssignmentService';
 import clientService from '../services/clientService';
 import { userService } from '../services/userService';
 import ProcessingStatusBadge from '../components/ProcessingStatusBadge';
-import { formatDate } from '../utils/dateUtils';
+import { formatDateTime } from '../utils/dateUtils';
 import { useMailboxes, useProcessingJobs, useInvalidateMailboxes } from '../hooks/queries';
 
 import { PageShell, PageHeader } from '@/components/ui/page-shell';
@@ -705,7 +705,7 @@ export const MailboxList: React.FC = () => {
 
                         {/* Last Sync */}
                         <td className="px-4 py-2.5 text-sm text-slate-600">
-                          {record.last_sync_at ? formatDate(record.last_sync_at) : 'Never'}
+                          {record.last_sync_at ? formatDateTime(record.last_sync_at) : 'Never'}
                         </td>
 
                         {/* Actions */}
