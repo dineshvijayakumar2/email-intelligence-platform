@@ -539,29 +539,21 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"Failed to initialize WebSocket: {e}")
 
-    # Gmail sync
+    # Gmail sync (triggered by external cron, no background loop)
     try:
         _gmail_sync_service = get_gmail_sync_service(get_supabase())
         init_gmail_router(get_supabase(), _gmail_sync_service)
         pj_set_gmail(_gmail_sync_service)
-        if USE_PROD_DB:
-            logger.info("Gmail sync service SKIPPED (USE_PROD_DB mode — no background polling)")
-        else:
-            await _gmail_sync_service.start()
-            logger.info("Gmail sync service started successfully")
+        logger.info("Gmail sync service initialized (cron-triggered via /api/internal/jobs/gmail-sync)")
     except Exception as e:
         logger.warning(f"Failed to initialize Gmail sync service: {e}")
 
-    # Outlook sync
+    # Outlook sync (triggered by external cron, no background loop)
     try:
         _outlook_sync_service = get_outlook_sync_service(get_supabase())
         init_outlook_router(get_supabase(), _outlook_sync_service)
         pj_set_outlook(_outlook_sync_service)
-        if USE_PROD_DB:
-            logger.info("Outlook sync service SKIPPED (USE_PROD_DB mode — no background polling)")
-        else:
-            await _outlook_sync_service.start()
-            logger.info("Outlook sync service started successfully")
+        logger.info("Outlook sync service initialized (cron-triggered via /api/internal/jobs/outlook-sync)")
     except Exception as e:
         logger.warning(f"Failed to initialize Outlook sync service: {e}")
 

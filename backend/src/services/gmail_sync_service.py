@@ -1,13 +1,15 @@
 """
-Gmail Sync Service - Handles periodic Gmail synchronization
+Gmail Sync Service - Handles Gmail synchronization via external cron
 
 Features:
-- 15-minute automatic polling interval
 - Incremental sync using Gmail historyId
 - Support for extending archive-based mailboxes with LIVE sync
 - Token refresh handling
 - Error recovery with exponential backoff
 - Sync status tracking in database
+- Per-mailbox interval checking (via connection_config.sync_interval_minutes)
+
+Triggered by: Railway cron calling POST /api/internal/jobs/gmail-sync
 
 This service supports two modes:
 1. Pure Gmail mailbox - Created fresh via OAuth connection
@@ -25,31 +27,16 @@ import traceback
 
 logger = logging.getLogger(__name__)
 
-
-def _get_sync_interval() -> int:
-    """
-    Get sync interval from environment variable
-
-    Environment variable: GMAIL_SYNC_INTERVAL_MINUTES
-    Default: 15 minutes
-    Minimum: 1 minute (for testing)
-    Maximum: 1440 minutes (24 hours)
-    """
-    try:
-        interval = int(os.getenv('GMAIL_SYNC_INTERVAL_MINUTES', '30'))
-        # Clamp to reasonable range
-        return max(1, min(1440, interval))
-    except (ValueError, TypeError):
-        return 15
+DEFAULT_SYNC_INTERVAL_MINUTES = 30
 
 
 class GmailSyncService:
     """
-    Service for periodic Gmail synchronization
+    Service for Gmail synchronization
 
     Responsibilities:
-    - Schedule periodic sync jobs for all connected Gmail accounts
-    - Sync interval configurable via GMAIL_SYNC_INTERVAL_MINUTES env var (default: 15)
+    - Sync all connected Gmail accounts when triggered by external cron
+    - Per-mailbox interval via connection_config.sync_interval_minutes (default: 30)
     - Track sync state per user in user_integrations table
     - Handle rate limits and errors with exponential backoff
     - Update sync status in database
@@ -61,74 +48,21 @@ class GmailSyncService:
     MAX_CONSECUTIVE_ERRORS = 3  # After this, skip until manual intervention
 
     def __init__(self, supabase_client=None):
-        """
-        Initialize the sync service
-
-        Args:
-            supabase_client: Supabase client instance (optional, will create if not provided)
-        """
         self._supabase = supabase_client
         self.executor = ThreadPoolExecutor(max_workers=5, thread_name_prefix="gmail_sync")
-        self._running = False
-        self._sync_task = None
-        self._active_syncs = {}  # user_id -> sync task
-        self.sync_interval_minutes = _get_sync_interval()
-        logger.info(f"Gmail sync interval set to {self.sync_interval_minutes} minutes")
+        self._active_syncs = {}
+        self.sync_interval_minutes = DEFAULT_SYNC_INTERVAL_MINUTES
 
     @property
     def supabase(self):
-        """Lazy-load Supabase client"""
         if self._supabase is None:
             from ..database.supabase_client import SupabaseClient
             self._supabase = SupabaseClient.get_client(use_service_key=True)
         return self._supabase
 
-    async def start(self):
-        """Start the sync service background loop.
-        Skipped when DISABLE_SYNC_LOOPS=true (use external cron instead)."""
-        if os.getenv("DISABLE_SYNC_LOOPS", "").lower() in ("true", "1"):
-            logger.info("Gmail sync loop disabled (DISABLE_SYNC_LOOPS). Use /internal/jobs/gmail-sync cron endpoint.")
-            return
-
-        if self._running:
-            logger.warning("Gmail sync service already running")
-            return
-
-        self._running = True
-        logger.info("Gmail sync service started")
-
-        # Start background sync loop
-        self._sync_task = asyncio.create_task(self._sync_loop())
-
     async def stop(self):
-        """Stop the sync service"""
-        self._running = False
-
-        if self._sync_task:
-            self._sync_task.cancel()
-            try:
-                await self._sync_task
-            except asyncio.CancelledError:
-                pass
-
         self.executor.shutdown(wait=False)
         logger.info("Gmail sync service stopped")
-
-    async def _sync_loop(self):
-        """Main sync loop - runs at configured interval"""
-        while self._running:
-            try:
-                # Sync mailboxes with per-mailbox Gmail tokens (new approach)
-                await self._sync_all_mailboxes()
-                # Also sync legacy user_integrations-based connections
-                await self._sync_all_users()
-            except Exception as e:
-                logger.error(f"Error in Gmail sync loop: {e}")
-                logger.error(traceback.format_exc())
-
-            # Wait for next interval
-            logger.debug(f"Next Gmail sync in {self.sync_interval_minutes} minutes")
-            await asyncio.sleep(self.sync_interval_minutes * 60)
 
     async def _sync_all_mailboxes(self):
         """
