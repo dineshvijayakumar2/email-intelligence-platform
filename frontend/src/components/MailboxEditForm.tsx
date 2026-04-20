@@ -154,7 +154,14 @@ export const MailboxEditForm: React.FC<MailboxEditFormProps> = ({ mailboxId }) =
       } else {
         delete updatedConfig.sync_interval_minutes;
       }
-      await mailboxService.updateMailbox(mailboxId, { connection_config: updatedConfig });
+      await mailboxService.updateMailbox(mailboxId, {
+        name: mailboxData?.name || '',
+        mailbox_type: mailboxData?.mailbox_type || 'mbox',
+        is_active: mailboxData?.is_active ?? true,
+        connection_config: updatedConfig,
+        client_id: mailboxData?.client_id || null,
+        user_id: mailboxData?.user_id || null,
+      });
       if (mailboxData) {
         setMailboxData({ ...mailboxData, connection_config: updatedConfig });
       }
