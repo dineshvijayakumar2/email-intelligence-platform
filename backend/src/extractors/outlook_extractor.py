@@ -565,6 +565,16 @@ class OutlookExtractor(BaseExtractor):
                 response.raise_for_status()
                 return response
 
+            except requests.exceptions.HTTPError as e:
+                # 410 Gone = delta token expired — deterministic, don't retry
+                if e.response is not None and e.response.status_code == 410:
+                    raise
+                if attempt < self.MAX_RETRIES - 1:
+                    wait_time = self.RETRY_DELAY * (2 ** attempt)
+                    logger.warning(f"Retry {attempt + 1}/{self.MAX_RETRIES}, waiting {wait_time}s: {e}")
+                    time.sleep(wait_time)
+                else:
+                    raise
             except Exception as e:
                 if attempt < self.MAX_RETRIES - 1:
                     wait_time = self.RETRY_DELAY * (2 ** attempt)

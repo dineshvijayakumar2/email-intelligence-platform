@@ -704,8 +704,37 @@ export const MailboxList: React.FC = () => {
                         </td>
 
                         {/* Last Sync */}
-                        <td className="px-4 py-2.5 text-sm text-slate-600">
-                          {record.last_sync_at ? formatDateTime(record.last_sync_at) : 'Never'}
+                        <td className="px-4 py-2.5 text-sm">
+                          {(() => {
+                            const syncStatus = cfg.gmail_sync_status || cfg.outlook_sync_status;
+                            const syncError = (cfg.gmail_sync_error || cfg.outlook_sync_error) as string | undefined;
+                            if (syncStatus === 'auth_expired') {
+                              return (
+                                <button
+                                  onClick={() => navigate(`/mailboxes/${record.id}`)}
+                                  className="text-xs text-amber-600 hover:text-amber-700 inline-flex items-center gap-1"
+                                >
+                                  <AlertCircle className="h-3.5 w-3.5" />
+                                  Re-authenticate
+                                </button>
+                              );
+                            }
+                            if (syncStatus === 'error' && syncError) {
+                              return (
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="text-slate-600">{record.last_sync_at ? formatDateTime(record.last_sync_at) : 'Never'}</span>
+                                  <button
+                                    onClick={() => navigate(`/mailboxes/${record.id}`)}
+                                    className="text-xs text-red-500 hover:text-red-600 truncate max-w-[160px]"
+                                    title={syncError}
+                                  >
+                                    Sync error
+                                  </button>
+                                </div>
+                              );
+                            }
+                            return <span className="text-slate-600">{record.last_sync_at ? formatDateTime(record.last_sync_at) : 'Never'}</span>;
+                          })()}
                         </td>
 
                         {/* Actions */}
