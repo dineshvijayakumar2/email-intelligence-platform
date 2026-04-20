@@ -65,10 +65,11 @@ async def email_pipeline_handler(sb, job: dict, stop_event: asyncio.Event):
     from src.services.ai_entity_aggregator import AIEntityAggregator
     from src.workers.handlers.ai_analysis import _link_ai_extracted_refs
 
+    extraction_mode = params.get("extraction_mode", "incremental" if trigger_source == "sync" else "full")
     orch = ExtractionOrchestrator(
         mailbox_id=mailbox_id,
         client_id=client_id,
-        extraction_mode="full",
+        extraction_mode=extraction_mode,
         use_redis=False,
     )
     orch.client = sb  # Use the worker's Supabase client
