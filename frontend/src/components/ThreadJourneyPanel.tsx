@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link2, FileText, Briefcase, Factory, Receipt, Clock, Plus } from 'lucide-react';
+import { Link2, FileText, Briefcase, Factory, Receipt, Clock, Plus, Calendar } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -14,6 +14,13 @@ import { ManualLinkDialog } from './ManualLinkDialog';
 interface Props {
   threadId: string;
   clientId: string;
+}
+
+function fmtDate(d: string | null | undefined): string {
+  if (!d) return '';
+  const date = new Date(d);
+  if (isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 const linkTypeConfig: Record<string, { icon: typeof FileText; label: string; variant: 'info' | 'success' | 'warning' }> = {
@@ -96,7 +103,10 @@ export function ThreadJourneyPanel({ threadId, clientId }: Props) {
               {!link.verified && (
                 <span className="text-[10px] text-amber-500 italic">unverified</span>
               )}
-              <span className="text-[10px] text-slate-400 ml-auto">{link.source}</span>
+              <span className="text-[10px] text-slate-400 ml-auto flex items-center gap-1">
+                {link.source}
+                {link.created_at && <span className="text-slate-300">· {fmtDate(link.created_at)}</span>}
+              </span>
             </div>
           );
         })}
@@ -104,8 +114,18 @@ export function ThreadJourneyPanel({ threadId, clientId }: Props) {
         {journey.quotes.length > 0 && (
           <Section title="Quotes" icon={FileText}>
             {journey.quotes.map((q: any) => (
-              <div key={q.id} className="text-xs text-slate-600 pl-5">
-                {q.quote_no} — {q.contact_name || 'N/A'} — ${q.sell_ex_tax?.toLocaleString() ?? '?'}
+              <div key={q.id} className="text-xs text-slate-600 pl-5 space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{q.quote_no}</span>
+                  <span>— {q.contact_name || 'N/A'}</span>
+                  <span className="font-medium">${q.sell_ex_tax?.toLocaleString() ?? '?'}</span>
+                  {q.category && <span className="text-slate-400">· {q.category}</span>}
+                </div>
+                <div className="flex items-center gap-3 text-[11px] text-slate-400">
+                  {q.date_created && <span className="flex items-center gap-0.5"><Calendar className="h-2.5 w-2.5" />Quoted {fmtDate(q.date_created)}</span>}
+                  {q.date_accepted && <span className="text-emerald-500">Accepted {fmtDate(q.date_accepted)}</span>}
+                  {q.quantity && <span>{q.quantity.toLocaleString()} qty</span>}
+                </div>
               </div>
             ))}
           </Section>
@@ -114,8 +134,16 @@ export function ThreadJourneyPanel({ threadId, clientId }: Props) {
         {journey.jobs.length > 0 && (
           <Section title="Jobs" icon={Briefcase}>
             {journey.jobs.map((j: any) => (
-              <div key={j.id} className="text-xs text-slate-600 pl-5">
-                {j.job_no} — {j.customer_name || 'N/A'}
+              <div key={j.id} className="text-xs text-slate-600 pl-5 space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{j.job_no}</span>
+                  <span>— {j.customer_name || 'N/A'}</span>
+                  {j.job_status && <StatusBadge variant={j.job_status?.toLowerCase().includes('complete') ? 'success' : 'warning'} size="sm">{j.job_status}</StatusBadge>}
+                </div>
+                <div className="flex items-center gap-3 text-[11px] text-slate-400">
+                  {j.accepted_date && <span className="flex items-center gap-0.5"><Calendar className="h-2.5 w-2.5" />Accepted {fmtDate(j.accepted_date)}</span>}
+                  {j.due_date && <span>Due {fmtDate(j.due_date)}</span>}
+                </div>
               </div>
             ))}
           </Section>
