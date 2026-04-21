@@ -12,6 +12,8 @@ import { formatRelativeDate } from '../utils/dateUtils';
 import { useEmails } from '../hooks/queries';
 import { cn } from '@/lib/utils';
 import { toast } from '@/lib/toast';
+import { useClient } from '@/contexts/ClientContext';
+import { ThreadJourneyPanel } from '@/components/ThreadJourneyPanel';
 import {
   Search, Mail, Send, Trash2, Star, Inbox, Folder, RefreshCw,
   ArrowLeft, Paperclip, Maximize2, Minimize2, LayoutGrid, X,
@@ -53,6 +55,7 @@ export const EmailList: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
+  const { clientId } = useClient();
   const analyticsContactId = searchParams.get('contact_id');
   const analyticsCompanyId = searchParams.get('company_id');
   const analyticsThreadId = searchParams.get('thread_id');
@@ -232,6 +235,13 @@ export const EmailList: React.FC = () => {
             <Mail className="h-4 w-4 text-primary" />
             <span className="text-sm font-medium text-slate-800">Emails for {analyticsLabel}</span>
             <span className="text-xs text-primary">{totalCount} email{totalCount !== 1 ? 's' : ''}</span>
+          </div>
+        )}
+
+        {/* Journey panel for thread drilldown */}
+        {analyticsThreadId && clientId && (
+          <div className="px-5 py-2 border-b bg-slate-50/50">
+            <ThreadJourneyPanel threadId={analyticsThreadId} clientId={clientId} />
           </div>
         )}
 
