@@ -30,7 +30,6 @@ PIPELINE_STAGES = [
     "evaluate_threads_final",
 ]
 
-_CRITICAL_STAGES = {"extract_and_link", "assign_threads"}
 
 
 async def email_pipeline_handler(sb, job: dict, stop_event: asyncio.Event):
@@ -182,18 +181,11 @@ async def email_pipeline_handler(sb, job: dict, stop_event: asyncio.Event):
                 "error": str(e)[:500],
             }
             _persist_progress(sb, job_id, completed_steps, step_results, stage)
-
-            if stage in _CRITICAL_STAGES:
-                logger.error(
-                    f"Pipeline {job_id}: critical stage {stage} failed after {duration_s}s: {e}",
-                    exc_info=True,
-                )
-                raise
-
-            logger.warning(
-                f"Pipeline {job_id}: {stage} failed after {duration_s}s (non-critical, continuing): {e}"
+            logger.error(
+                f"Pipeline {job_id}: {stage} failed after {duration_s}s: {e}",
+                exc_info=True,
             )
-            completed_steps.append(stage)
+            raise
 
     # All stages done — final persist with 100%
     _update_stage(sb, job_id, "completed", 100)
