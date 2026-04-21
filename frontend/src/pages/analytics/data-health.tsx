@@ -110,12 +110,13 @@ export const DataHealthDashboard: React.FC = () => {
   const [recomputeProgress, setRecomputeProgress] = useState<{ phase: string; pct: number; message: string; mailbox_errors?: any[] } | null>(null);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const startRecompute = async () => {
+  const startRecompute = async (fullResolve = false) => {
     if (!clientId || recomputing) return;
     setRecomputing(true);
-    setRecomputeProgress({ phase: 'starting', pct: 0, message: 'Starting thread recompute...' });
+    setRecomputeProgress({ phase: 'starting', pct: 0, message: fullResolve ? 'Starting full thread re-resolve...' : 'Starting thread recompute...' });
     try {
-      await api.post(`/v1/analytics/extraction/recompute-threads?client_id=${clientId}`);
+      const endpoint = fullResolve ? 're-resolve-threads' : 'recompute-threads';
+      await api.post(`/v1/analytics/extraction/${endpoint}?client_id=${clientId}`);
       // Start polling for progress
       const poll = async () => {
         try {
@@ -286,14 +287,25 @@ export const DataHealthDashboard: React.FC = () => {
               <GitMerge className="h-4 w-4 text-primary" />
               <h3 className="text-sm font-semibold text-slate-900">Thread Health</h3>
             </div>
-            <button
-              onClick={startRecompute}
-              disabled={recomputing || !clientId}
-              className="h-7 px-3 text-xs font-medium rounded-md border border-slate-200 hover:bg-slate-50 inline-flex items-center gap-1.5 disabled:opacity-50"
-            >
-              {recomputing ? <Spinner className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-              Recompute Threads
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => startRecompute(false)}
+                disabled={recomputing || !clientId}
+                className="h-7 px-3 text-xs font-medium rounded-md border border-slate-200 hover:bg-slate-50 inline-flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {recomputing ? <Spinner className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                Rebuild Statuses Only
+              </button>
+              <button
+                onClick={() => startRecompute(true)}
+                disabled={recomputing || !clientId}
+                className="h-7 px-3 text-xs font-medium rounded-md border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800 inline-flex items-center gap-1.5 disabled:opacity-50"
+                title="Clear all canonical thread IDs and re-resolve from scratch (~30-40 min)"
+              >
+                {recomputing ? <Spinner className="h-3 w-3 animate-spin" /> : <GitMerge className="h-3 w-3" />}
+                Full Re-resolve + Rebuild
+              </button>
+            </div>
           </div>
 
           {/* Progress bar */}

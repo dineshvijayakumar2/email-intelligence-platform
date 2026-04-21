@@ -81,6 +81,75 @@ class CanonicalThreadResolver:
         self._canonical_threads: Dict[str, dict] = {}      # canonical_id → {subject, participants, last_date, email_count}
         self._subject_index: Dict[str, List[str]] = {}     # subject_normalized → [canonical_ids]
 
+    def _preload_resolved_indexes(self, mailbox_ids: List[str]):
+        """Pre-load in-memory indexes from already-resolved emails.
+
+        This ensures Tier 1/2/3 can match new (unresolved) emails against
+        existing threads on incremental runs where most emails already have
+        a canonical_thread_id.
+        """
+        PRELOAD_COLS = (
+            'internet_message_id, canonical_thread_id, subject_normalized, '
+            'sender_email, recipients, cc_list, sent_date'
+        )
+        loaded = 0
+
+        for mb_id in mailbox_ids:
+            offset = 0
+            while True:
+                try:
+                    resp = self.client.table('emails').select(
+                        PRELOAD_COLS
+                    ).eq('mailbox_id', mb_id).not_.is_(
+                        'canonical_thread_id', 'null'
+                    ).range(offset, offset + PAGE_SIZE - 1).execute()
+                except Exception as e:
+                    logger.warning(f"Preload fetch failed at offset {offset}: {e}")
+                    break
+
+                rows = resp.data or []
+                if not rows:
+                    break
+
+                for row in rows:
+                    canonical_id = row['canonical_thread_id']
+                    msg_id = _clean_message_id(row.get('internet_message_id') or '')
+                    subject_norm = (row.get('subject_normalized') or '').strip()
+                    sent_date = row.get('sent_date') or ''
+                    participants = self._get_participants(row)
+
+                    if msg_id:
+                        self._msg_id_to_canonical[msg_id] = canonical_id
+
+                    if canonical_id not in self._canonical_threads:
+                        self._canonical_threads[canonical_id] = {
+                            'subject': subject_norm,
+                            'participants': set(participants),
+                            'last_date': sent_date,
+                            'email_count': 0,
+                        }
+                    thread = self._canonical_threads[canonical_id]
+                    thread['participants'].update(participants)
+                    thread['last_date'] = max(thread['last_date'], sent_date) if sent_date else thread['last_date']
+                    thread['email_count'] += 1
+
+                    if subject_norm and len(subject_norm) >= 5:
+                        if subject_norm not in self._subject_index:
+                            self._subject_index[subject_norm] = []
+                        if canonical_id not in self._subject_index[subject_norm]:
+                            self._subject_index[subject_norm].append(canonical_id)
+
+                loaded += len(rows)
+                offset += len(rows)
+
+        if loaded:
+            logger.info(
+                f"Pre-loaded indexes from {loaded} resolved emails: "
+                f"{len(self._msg_id_to_canonical)} message-IDs, "
+                f"{len(self._canonical_threads)} threads, "
+                f"{len(self._subject_index)} subjects"
+            )
+
     def resolve_all(self) -> dict:
         """Resolve canonical thread IDs for ALL emails of this client.
 
@@ -108,6 +177,10 @@ class CanonicalThreadResolver:
         if not mailbox_ids:
             logger.warning("No mailboxes found for client")
             return stats
+
+        # Phase 0: Pre-load indexes from already-resolved emails so Tier 1/2/3
+        # can match new emails against existing threads on incremental runs.
+        self._preload_resolved_indexes(mailbox_ids)
 
         COLUMNS = (
             'id, internet_message_id, in_reply_to, references_header, '

@@ -289,6 +289,126 @@ async def get_thread_recompute_progress(client_id: str = Query(...)):
         return {'phase': 'idle', 'pct': 0, 'message': 'No active recompute'}
 
 
+@router.post("/extraction/re-resolve-threads")
+async def re_resolve_threads(
+    client_id: str = Query(...),
+    background_tasks: BackgroundTasks = None,
+):
+    """Full thread re-resolve: clear canonical IDs, re-run resolver, rebuild thread_status.
+
+    Use when threads are incorrectly split (e.g., Re: variants not merged).
+    This is a heavy operation (~30-40 min for 250K+ emails).
+    Progress stored in Redis for frontend polling via GET /extraction/thread-recompute-progress.
+    """
+    try:
+        import redis, json as _json
+        redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379')
+        _redis = redis.from_url(redis_url, decode_responses=True)
+        progress_key = f"thread_recompute:{client_id}"
+
+        existing = _redis.get(progress_key)
+        if existing:
+            data = _json.loads(existing)
+            if data.get('phase') in ('clearing', 'resolving', 'evaluating', 'saving'):
+                return {"status": "already_running", "message": "Thread re-resolve already in progress"}
+
+        def _set_progress(phase: str, pct: int, message: str):
+            _redis.setex(progress_key, 1800, _json.dumps({
+                'phase': phase, 'pct': pct, 'message': message,
+                'timestamp': datetime.utcnow().isoformat(),
+            }))
+
+        def _run_re_resolve():
+            import time as _time
+            from ..services.canonical_thread_resolver import CanonicalThreadResolver
+            from ..services.thread_tracker import ThreadTracker
+
+            try:
+                _set_progress('clearing', 5, 'Clearing canonical thread IDs...')
+
+                mailboxes = _supabase.table('mailboxes').select('id').eq(
+                    'client_id', client_id
+                ).execute()
+                mb_ids = [m['id'] for m in (mailboxes.data or [])]
+
+                # Phase 1: Clear canonical_thread_ids in batches
+                CLEAR_BATCH = 2000
+                total_cleared = 0
+                for mb_id in mb_ids:
+                    while True:
+                        page = (
+                            _supabase.table("emails")
+                            .select("id")
+                            .eq("mailbox_id", mb_id)
+                            .not_.is_("canonical_thread_id", "null")
+                            .limit(CLEAR_BATCH)
+                            .execute()
+                        )
+                        rows = page.data or []
+                        if not rows:
+                            break
+                        ids = [r["id"] for r in rows]
+                        _supabase.table("emails").update({
+                            "canonical_thread_id": None,
+                            "thread_match_method": None,
+                            "thread_match_confidence": None,
+                        }).in_("id", ids).execute()
+                        total_cleared += len(ids)
+                        if total_cleared % 10000 == 0:
+                            _set_progress('clearing', min(25, 5 + int(total_cleared / 12000)),
+                                          f'Cleared {total_cleared:,} emails...')
+
+                _set_progress('resolving', 30, f'Cleared {total_cleared:,}. Running thread resolver...')
+                logger.info(f"Re-resolve: cleared {total_cleared} canonical IDs for client {client_id}")
+
+                # Phase 2: Run resolver
+                resolver = CanonicalThreadResolver(client_id=client_id)
+                stats = resolver.resolve_all()
+                _set_progress('evaluating', 70,
+                              f"Resolved {stats.get('total_emails', 0):,} emails into "
+                              f"{stats.get('canonical_threads', 0):,} threads. Rebuilding statuses...")
+                logger.info(f"Re-resolve: resolver done — {stats}")
+
+                # Phase 3: Clear and rebuild thread_status
+                for m_id in mb_ids:
+                    _supabase.table('thread_status').delete().eq('mailbox_id', m_id).execute()
+
+                tracker = ThreadTracker(client_id=client_id)
+                _original_save = tracker.save_thread_statuses
+                _saved_total = [0]
+
+                def _progress_save(statuses):
+                    result = _original_save(statuses)
+                    _saved_total[0] += len(statuses)
+                    _set_progress('saving', min(95, 70 + int(_saved_total[0] / 500)),
+                                  f'Saved {_saved_total[0]:,} thread statuses...')
+                    return result
+
+                tracker.save_thread_statuses = _progress_save
+                tracker.evaluate_threads()
+
+                _set_progress('completed', 100,
+                              f'Done — {stats.get("canonical_threads", 0):,} threads, '
+                              f'{_saved_total[0]:,} statuses. '
+                              f'T1={stats.get("tier1_message_id", 0)}, '
+                              f'T2={stats.get("tier2_references", 0)}, '
+                              f'T3={stats.get("tier3_subject", 0)}')
+                logger.info(f"Re-resolve complete for client {client_id}: "
+                            f"{_saved_total[0]} thread statuses saved")
+
+            except Exception as e:
+                _set_progress('failed', 0, f'Error: {str(e)[:300]}')
+                logger.error(f"Thread re-resolve failed: {e}", exc_info=True)
+
+        background_tasks.add_task(_run_re_resolve)
+        return {"status": "started", "message": "Full thread re-resolve started (~30-40 min for 250K emails)"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/extraction/backfill-email-links")
 async def backfill_email_contact_links(
     client_id: str = Query(...),
@@ -2314,15 +2434,26 @@ async def get_thread_detail(
                     all_emails.append(e)
                     seen_ids.add(e['id'])
 
-        # Source 4: subject match fallback (last resort — for threads where IDs don't match)
-        if not all_emails and subject and len(subject) >= 10:
-            r4 = _supabase.table('emails').select(COLS).ilike(
-                'subject', f'%{subject[:80]}%'
-            ).order('sent_date', desc=False).limit(limit).execute()
-            for e in (r4.data or []):
-                if e['id'] not in seen_ids:
-                    all_emails.append(e)
-                    seen_ids.add(e['id'])
+        # Source 4: sibling threads — same normalized subject, different canonical_thread_id
+        # Finds emails from threads that should logically be merged (e.g., Re: variants)
+        if subject and len(subject) >= 10:
+            from ..services.canonical_thread_resolver import _normalize_subject
+            norm_subj = _normalize_subject(subject)
+            if norm_subj and len(norm_subj) >= 5:
+                sibling_threads = _supabase.table('thread_status').select(
+                    'canonical_thread_id'
+                ).neq('canonical_thread_id', canonical_id).ilike(
+                    'subject', f'%{norm_subj[:80]}%'
+                ).limit(10).execute()
+                sibling_ids = [s['canonical_thread_id'] for s in (sibling_threads.data or []) if s.get('canonical_thread_id')]
+                for sib_id in sibling_ids:
+                    r4 = _supabase.table('emails').select(COLS).eq(
+                        'canonical_thread_id', sib_id
+                    ).order('sent_date', desc=False).limit(limit).execute()
+                    for e in (r4.data or []):
+                        if e['id'] not in seen_ids:
+                            all_emails.append(e)
+                            seen_ids.add(e['id'])
 
         # Sort merged results
         all_emails.sort(key=lambda e: e.get('sent_date', ''))
@@ -2370,7 +2501,7 @@ async def get_thread_detail(
             thread_id=thread_id,
             subject=ts.get('subject'),
             status=_map_thread_status(ts.get('status', 'complete')),
-            total_messages=ts.get('message_count', 0),
+            total_messages=len(thread_emails) or ts.get('message_count', 0),
             last_message_date=ts.get('last_message_at'),
             days_since_last_message=ts.get('days_since_last_email', 0),
             contact_id=ts.get('customer_contact_id'),
