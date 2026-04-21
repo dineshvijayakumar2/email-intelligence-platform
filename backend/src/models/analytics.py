@@ -382,6 +382,9 @@ class ThreadStatusSummary(BaseModel):
 
     created_at: Optional[datetime] = None
 
+    # QB journey links (populated by list endpoint)
+    qb_links: Optional[List[str]] = None
+
     class Config:
         from_attributes = True
 

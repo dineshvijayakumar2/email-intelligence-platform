@@ -10,7 +10,7 @@ import type { ThreadStatusSummary, ThreadStatus } from '../../types/analytics';
 import { useClient } from '../../contexts/ClientContext';
 import { PageShell, PageHeader } from '@/components/ui/page-shell';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { Search, ArrowLeft, X } from 'lucide-react';
+import { Search, ArrowLeft, X, FileText, Briefcase } from 'lucide-react';
 
 const PAGE_SIZE = 25;
 const col = createColumnHelper<ThreadStatusSummary>();
@@ -192,6 +192,25 @@ export const ThreadAnalytics: React.FC = () => {
         const v = info.getValue();
         if (!v) return <span className="text-slate-300">—</span>;
         return <StatusBadge variant={intentVariant(v)} size="sm">{intentLabel(v)}</StatusBadge>;
+      },
+    }),
+    col.accessor('qb_links', { header: 'QB Links', size: 140, enableSorting: false,
+      cell: info => {
+        const refs = info.getValue();
+        if (!refs || refs.length === 0) return <span className="text-slate-300">—</span>;
+        return (
+          <div className="flex flex-wrap gap-1">
+            {refs.map(ref => {
+              const isJob = ref.startsWith('J');
+              return (
+                <span key={ref} className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[11px] font-mono rounded ${isJob ? 'bg-emerald-50 text-emerald-700' : 'bg-blue-50 text-blue-700'}`}>
+                  {isJob ? <Briefcase className="h-2.5 w-2.5" /> : <FileText className="h-2.5 w-2.5" />}
+                  {ref}
+                </span>
+              );
+            })}
+          </div>
+        );
       },
     }),
     col.accessor('total_messages', { id: 'message_count', header: 'Emails', size: 70, meta: { align: 'right' },

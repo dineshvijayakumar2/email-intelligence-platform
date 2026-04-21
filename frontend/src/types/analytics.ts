@@ -247,6 +247,8 @@ export interface ThreadStatusSummary {
   last_email_urgency?: string | null;
   last_email_sentiment?: string | null;
   created_at?: string | null;
+  // QB journey links
+  qb_links?: string[] | null;
 }
 
 export interface ThreadStatusListResponse {

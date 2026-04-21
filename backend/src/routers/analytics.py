@@ -2059,6 +2059,31 @@ async def list_thread_statuses(
 
             threads.append(thread)
 
+        # Batch-fetch QB links for all threads in one query
+        canon_ids = [t.thread_id for t in threads if t.thread_id]
+        qb_link_map: dict = {}
+        if canon_ids:
+            try:
+                for i in range(0, len(canon_ids), 100):
+                    batch = canon_ids[i:i + 100]
+                    qb_resp = _supabase.table('thread_qb_links').select(
+                        'canonical_thread_id, qb_reference, link_type'
+                    ).in_('canonical_thread_id', batch).execute()
+                    for ql in (qb_resp.data or []):
+                        cid = ql['canonical_thread_id']
+                        ref = ql.get('qb_reference') or ''
+                        if cid not in qb_link_map:
+                            qb_link_map[cid] = []
+                        if ref and ref not in qb_link_map[cid]:
+                            qb_link_map[cid].append(ref)
+            except Exception:
+                pass
+
+        for thread in threads:
+            refs = qb_link_map.get(thread.thread_id)
+            if refs:
+                thread.qb_links = refs
+
         # Get total count (same filters — must match main query exactly)
         count_query = _supabase.table('thread_status').select('thread_id', count='exact')
         if client_id and mailbox_ids:
