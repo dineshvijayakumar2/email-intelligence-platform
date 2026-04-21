@@ -319,9 +319,10 @@ export const companiesApi = {
     try {
       return await api.get<any>(
         `/customers/${companyId}/strike-rate${force ? '?force=true' : ''}`,
-        { timeout: 15000 }
+        { timeout: 30000 }
       );
-    } catch {
+    } catch (e) {
+      console.error('Strike rate fetch failed:', e);
       return { company_total: { total_quotes: 0, converted: 0, strike_rate_pct: 0 }, by_contact: [], by_year: [] };
     }
   },

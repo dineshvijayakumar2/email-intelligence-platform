@@ -99,21 +99,27 @@ class CustomerAnalyticsService:
                 r['customer_key_id'] for r in (cust_result.data or [])
                 if r.get('customer_key_id')
             ]
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Strike rate: failed to resolve QB customer keys for {company_id}: {e}")
 
-        # Fetch all quotes for this company via ALL QB customer keys
+        # Fetch all quotes for this company via QB customer keys (batched)
         quotes: list[dict] = []
         if qb_key_ids:
-            for key_id in qb_key_ids:
-                batch = self._fetch_all_paginated(
-                    'qb_quotes',
-                    'quote_no, has_job, contact_email, contact_name, date_created',
-                    {'qb_customer_id': key_id},
-                )
-                quotes.extend(batch)
+            select_cols = 'quote_no, has_job, contact_email, contact_name, date_created'
+            offset = 0
+            page_size = 1000
+            while True:
+                query = self._sb.table('qb_quotes').select(select_cols)
+                query = query.eq('client_id', self._client_id)
+                query = query.in_('qb_customer_id', qb_key_ids)
+                query = query.range(offset, offset + page_size - 1)
+                result = query.execute()
+                rows = result.data or []
+                quotes.extend(rows)
+                if len(rows) < page_size:
+                    break
+                offset += len(rows)
         else:
-            # Fallback: try matched_company_id (if propagated)
             quotes = self._fetch_all_paginated(
                 'qb_quotes',
                 'quote_no, has_job, contact_email, contact_name, date_created',
