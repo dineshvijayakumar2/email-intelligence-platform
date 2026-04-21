@@ -115,15 +115,20 @@ export function DataTable<T>({
               >
                 {row.getVisibleCells().map(cell => {
                   const align = (cell.column.columnDef.meta as any)?.align || 'left';
+                  const wrap = (cell.column.columnDef.meta as any)?.wrap;
                   return (
                     <td
                       key={cell.id}
                       className={cn(
-                        'px-3 py-2.5 text-sm text-slate-700 whitespace-nowrap',
+                        'px-3 py-2.5 text-sm text-slate-700',
+                        wrap ? 'break-words' : 'whitespace-nowrap',
                         align === 'right' && 'text-right',
                         align === 'center' && 'text-center',
                       )}
-                      style={{ maxWidth: cell.column.columnDef.maxSize || undefined }}
+                      style={{
+                        maxWidth: cell.column.columnDef.maxSize || undefined,
+                        minWidth: cell.column.columnDef.minSize || undefined,
+                      }}
                     >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>

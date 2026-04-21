@@ -164,8 +164,8 @@ export const EmailList: React.FC = () => {
       setAnalyticsLoading(true);
       try {
         if (analyticsEmailId) { const full = await emailService.getEmail(analyticsEmailId); if (full) { setAnalyticsEmails([full as Email]); setAnalyticsTotal(1); setSelectedEmail(full as Email); setSelectedEmailId(analyticsEmailId); } }
-        else if (analyticsThreadId) { const detail = await threadsApi.getDetail(analyticsThreadId); const te = (detail?.emails || []).map((e: any) => ({ id: e.id, subject: e.subject||'', sender_email: e.sender_email||'', sender_name: e.sender_name||'', recipients: e.recipients||[], sent_date: e.sent_date||'', is_outbound: e.is_outbound??false, body_text: e.body_text||'', folder_path: e.folder_path||'' })) as Email[]; setAnalyticsEmails(te); setAnalyticsTotal(te.length); }
-        else { const r = analyticsContactId ? await contactsApi.getEmails(analyticsContactId, 100, 0) : await companiesApi.getEmails(analyticsCompanyId!, 100, 0); setAnalyticsEmails((r.emails||[]) as Email[]); setAnalyticsTotal(r.total||0); }
+        else if (analyticsThreadId) { const detail = await threadsApi.getDetail(analyticsThreadId); const te = (detail?.emails || []).map((e: any) => ({ id: e.id, subject: e.subject||'', sender_email: e.sender_email||'', sender_name: e.sender_name||'', recipients: e.recipients||[], sent_date: e.sent_date||'', is_outbound: e.is_outbound??false, body_text: e.body_text||'', folder_path: e.folder_path||'' })) as Email[]; te.sort((a, b) => new Date(b.sent_date).getTime() - new Date(a.sent_date).getTime()); setAnalyticsEmails(te); setAnalyticsTotal(te.length); }
+        else { const r = analyticsContactId ? await contactsApi.getEmails(analyticsContactId, 100, 0) : await companiesApi.getEmails(analyticsCompanyId!, 100, 0); const sorted = ((r.emails||[]) as Email[]).sort((a, b) => new Date(b.sent_date).getTime() - new Date(a.sent_date).getTime()); setAnalyticsEmails(sorted); setAnalyticsTotal(r.total||0); }
       } catch { toast.error('Failed to load emails'); } finally { setAnalyticsLoading(false); }
     })();
   }, [isAnalyticsMode, analyticsContactId, analyticsCompanyId, analyticsThreadId, analyticsEmailId]);

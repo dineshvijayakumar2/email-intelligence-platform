@@ -159,24 +159,25 @@ export const ThreadAnalytics: React.FC = () => {
   const columns = useMemo(() => [
     col.accessor('subject', {
       header: 'Subject',
+      minSize: 200,
+      meta: { wrap: true },
       cell: info => {
         const r = info.row.original;
         return (
-          <button onClick={(e) => { e.stopPropagation(); handleThreadClick(r); }} className="text-primary hover:underline text-left truncate">
+          <button onClick={(e) => { e.stopPropagation(); handleThreadClick(r); }} className="text-primary hover:underline text-left line-clamp-2">
             {info.getValue() || <span className="text-slate-400">{r.thread_id?.slice(0, 16)}...</span>}
           </button>
         );
       },
     }),
-    col.accessor('contact_name', { header: 'Contact',
+    col.accessor('contact_name', { header: 'Contact', minSize: 120, meta: { wrap: true },
       cell: info => {
         let name = info.getValue() || info.row.original.contact_email || '—';
-        // Strip company suffix like "Peter Musarra | Carbon8"
         if (name.includes(' | ')) name = name.split(' | ')[0];
         return <span className="text-slate-600">{name}</span>;
       },
     }),
-    col.accessor('company_name', { header: 'Company',
+    col.accessor('company_name', { header: 'Company', minSize: 120, meta: { wrap: true },
       cell: info => <span className="text-slate-600">{info.getValue() || '—'}</span>,
     }),
     col.accessor('status', { header: 'Status', size: 140,
