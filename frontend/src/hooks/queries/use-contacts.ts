@@ -3,7 +3,7 @@
  */
 
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
-import { contactsApi } from '../../services/analyticsService';
+import { contactsApi, contactIntelligenceApi } from '../../services/analyticsService';
 import type {
   ContactAnalytics,
   ContactAnalyticsListResponse,
@@ -43,6 +43,24 @@ export function useAtRiskContacts(clientId: string) {
     queryKey: ['contacts-atrisk', clientId],
     queryFn: () => contactsApi.atRisk(clientId),
     enabled: !!clientId,
+    staleTime: 60_000,
+  });
+}
+
+export function useContactPersona(contactId: string | undefined) {
+  return useQuery<any>({
+    queryKey: ['contact-persona', contactId],
+    queryFn: () => contactIntelligenceApi.getPersona(contactId!),
+    enabled: !!contactId,
+    staleTime: 60_000,
+  });
+}
+
+export function useContactDealActivity(contactId: string | undefined) {
+  return useQuery<any>({
+    queryKey: ['contact-deal-activity', contactId],
+    queryFn: () => contactIntelligenceApi.getDealActivity(contactId!),
+    enabled: !!contactId,
     staleTime: 60_000,
   });
 }

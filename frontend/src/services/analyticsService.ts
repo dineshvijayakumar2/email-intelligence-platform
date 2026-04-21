@@ -570,6 +570,28 @@ export const dashboardAnalyticsApi = {
 };
 
 // ============================================================================
+// H) CONTACT INTELLIGENCE (persona views + deal activity)
+// ============================================================================
+
+export const contactIntelligenceApi = {
+  async getPersona(contactId: string): Promise<any> {
+    try {
+      return await api.get<any>(`/api/contacts-intelligence/${contactId}/persona`, { timeout: 15000 });
+    } catch {
+      return null;
+    }
+  },
+
+  async getDealActivity(contactId: string): Promise<any> {
+    try {
+      return await api.get<any>(`/api/contacts-intelligence/${contactId}/deal-activity`, { timeout: 15000 });
+    } catch {
+      return null;
+    }
+  },
+};
+
+// ============================================================================
 // CACHE MANAGEMENT (handled by TanStack Query — see queryClient.invalidateQueries)
 // ============================================================================
 

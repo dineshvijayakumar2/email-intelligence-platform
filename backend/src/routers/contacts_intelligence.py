@@ -227,3 +227,81 @@ async def list_industry_benchmarks(
     )
 
     return result.data or []
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Endpoint 6: GET /contacts-intelligence/{contact_id}/deal-activity
+# ─────────────────────────────────────────────────────────────────────
+
+@router.get("/{contact_id}/deal-activity")
+async def get_contact_deal_activity(
+    contact_id: str,
+    current_user: dict = Depends(get_current_user),
+    accessible_mailbox_ids: list = Depends(get_accessible_mailbox_ids),
+):
+    """Return deal activity for a contact: thread funnel, quote pipeline,
+    job outcomes — derived from thread_qb_links.
+
+    Also returns the 5 most recent individual links for display.
+    """
+    sb = _get_supabase()
+    client_ids = _get_accessible_client_ids(sb, accessible_mailbox_ids)
+    if not client_ids:
+        raise HTTPException(status_code=403, detail="No accessible clients")
+
+    # Aggregate from the view
+    result = (
+        sb.table("contact_deal_activity")
+        .select("*")
+        .eq("contact_id", contact_id)
+        .in_("client_id", client_ids)
+        .execute()
+    )
+
+    summary = result.data[0] if result.data else {
+        "contact_id": contact_id,
+        "total_threads": 0,
+        "linked_threads": 0,
+        "linked_quotes": 0,
+        "converted_quotes": 0,
+        "open_quotes": 0,
+        "open_pipeline_value": 0,
+        "converted_value": 0,
+        "linked_jobs": 0,
+        "linked_job_revenue": 0,
+        "linked_margin": 0,
+    }
+
+    # Recent individual links: last 5 thread_qb_links for this contact's threads
+    recent_links: list[dict] = []
+    try:
+        # Get this contact's canonical_thread_ids from thread_status
+        threads_resp = (
+            sb.table("thread_status")
+            .select("canonical_thread_id")
+            .eq("customer_contact_id", contact_id)
+            .not_.is_("canonical_thread_id", "null")
+            .limit(200)
+            .execute()
+        )
+        thread_ids = [
+            str(t["canonical_thread_id"])
+            for t in (threads_resp.data or [])
+            if t.get("canonical_thread_id")
+        ]
+        if thread_ids:
+            links_resp = (
+                sb.table("thread_qb_links")
+                .select("id, canonical_thread_id, link_type, qb_reference, confidence, source, verified, created_at")
+                .in_("canonical_thread_id", thread_ids[:50])
+                .in_("client_id", client_ids)
+                .order("created_at", desc=True)
+                .limit(5)
+                .execute()
+            )
+            recent_links = links_resp.data or []
+    except Exception as e:
+        logger.error(f"Failed to fetch recent links for contact {contact_id}: {e}")
+
+    summary["recent_links"] = recent_links
+    return summary

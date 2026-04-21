@@ -1,8 +1,9 @@
 import React from 'react';
 import QBLinkWidget from '../../components/QBLinkWidget';
+import PersonaCard from '../../components/PersonaCard';
+import DealActivityCard from '../../components/DealActivityCard';
 import { useParams, useNavigate } from 'react-router-dom';
 import AIInsightsCard from '../../components/AIInsightsCard';
-// EngagementBadge removed — score not shown in UI
 import { LifecycleBadge } from '../../components/analytics/LifecycleBadge';
 import { useContactDetail, useCompanyDetail } from '../../hooks/queries';
 import { useThreadsByContact } from '../../hooks/queries';
@@ -107,6 +108,14 @@ export const ContactDetail: React.FC = () => {
         <KPICard title="Our Reply Rate" value={contact.reply_rate != null ? formatRatio(contact.reply_rate) : 'N/A'} />
         <KPICard title="Avg Response" value={formatResponseTime(contact.avg_response_time_seconds)} />
       </div>
+
+      {/* Persona + Deal Activity */}
+      {contactId && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <PersonaCard contactId={contactId} />
+          <DealActivityCard contactId={contactId} />
+        </div>
+      )}
 
       {/* Details + Threads */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 mb-4">
