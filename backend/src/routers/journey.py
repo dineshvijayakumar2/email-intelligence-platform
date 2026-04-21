@@ -93,10 +93,10 @@ async def get_thread_journey(
             pass
 
     emails = _supabase.table("emails").select(
-        "id, subject, sender_email, sender_name, date_sent, canonical_thread_id"
-    ).eq("client_id", client_id).eq(
+        "id, subject, sender_email, sender_name, sent_date, canonical_thread_id"
+    ).eq(
         "canonical_thread_id", thread_id
-    ).order("date_sent").execute()
+    ).order("sent_date").execute()
 
     return {
         "thread_id": thread_id,
