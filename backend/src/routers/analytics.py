@@ -331,32 +331,42 @@ async def re_resolve_threads(
                 ).execute()
                 mb_ids = [m['id'] for m in (mailboxes.data or [])]
 
-                # Phase 1: Clear canonical_thread_ids in batches
-                CLEAR_BATCH = 2000
+                # Phase 1: Clear canonical_thread_ids via exec_sql (avoids REST timeout)
+                CLEAR_BATCH = 500
                 total_cleared = 0
                 for mb_id in mb_ids:
                     while True:
-                        page = (
-                            _supabase.table("emails")
-                            .select("id")
-                            .eq("mailbox_id", mb_id)
-                            .not_.is_("canonical_thread_id", "null")
-                            .limit(CLEAR_BATCH)
-                            .execute()
-                        )
-                        rows = page.data or []
-                        if not rows:
+                        try:
+                            _supabase.rpc('exec_sql', {'query': f"""
+                                UPDATE emails SET
+                                    canonical_thread_id = NULL,
+                                    thread_match_method = NULL,
+                                    thread_match_confidence = NULL
+                                WHERE id IN (
+                                    SELECT id FROM emails
+                                    WHERE mailbox_id = '{mb_id}'
+                                      AND canonical_thread_id IS NOT NULL
+                                    LIMIT {CLEAR_BATCH}
+                                )
+                            """}).execute()
+                        except Exception as e:
+                            logger.warning(f"Clear batch retry for {mb_id}: {e}")
+                            _time.sleep(2)
+                            continue
+
+                        # Check remaining
+                        check = _supabase.table("emails").select(
+                            "id", count="exact"
+                        ).eq("mailbox_id", mb_id).not_.is_(
+                            "canonical_thread_id", "null"
+                        ).limit(0).execute()
+                        remaining = check.count or 0
+                        total_cleared += CLEAR_BATCH
+                        if remaining == 0:
                             break
-                        ids = [r["id"] for r in rows]
-                        _supabase.table("emails").update({
-                            "canonical_thread_id": None,
-                            "thread_match_method": None,
-                            "thread_match_confidence": None,
-                        }).in_("id", ids).execute()
-                        total_cleared += len(ids)
-                        if total_cleared % 10000 == 0:
+                        if total_cleared % 5000 == 0:
                             _set_progress('clearing', min(25, 5 + int(total_cleared / 12000)),
-                                          f'Cleared {total_cleared:,} emails...')
+                                          f'Cleared ~{total_cleared:,} emails...')
 
                 _set_progress('resolving', 30, f'Cleared {total_cleared:,}. Running thread resolver...')
                 logger.info(f"Re-resolve: cleared {total_cleared} canonical IDs for client {client_id}")
