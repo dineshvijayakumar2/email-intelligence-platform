@@ -576,7 +576,7 @@ export const dashboardAnalyticsApi = {
 export const contactIntelligenceApi = {
   async getPersona(contactId: string): Promise<any> {
     try {
-      return await api.get<any>(`/api/contacts-intelligence/${contactId}/persona`, { timeout: 15000 });
+      return await api.get<any>(`/contacts-intelligence/${contactId}/persona`, { timeout: 15000 });
     } catch {
       return null;
     }
@@ -584,7 +584,7 @@ export const contactIntelligenceApi = {
 
   async getDealActivity(contactId: string): Promise<any> {
     try {
-      return await api.get<any>(`/api/contacts-intelligence/${contactId}/deal-activity`, { timeout: 15000 });
+      return await api.get<any>(`/contacts-intelligence/${contactId}/deal-activity`, { timeout: 15000 });
     } catch {
       return null;
     }
