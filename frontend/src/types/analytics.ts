@@ -460,6 +460,7 @@ export interface ContactFilterParams extends PaginationParams {
   is_decision_maker?: boolean;
   min_engagement_score?: number;
   qb_linked?: boolean;
+  customer_type?: string;
   search?: string;
 }
 
@@ -477,6 +478,8 @@ export interface ThreadFilterParams extends PaginationParams {
   client_id?: string;
   mailbox_id?: string;
   status?: ThreadStatus | 'active' | string;
+  intent?: string;
+  has_qb_links?: boolean;
   search?: string;
 }
 

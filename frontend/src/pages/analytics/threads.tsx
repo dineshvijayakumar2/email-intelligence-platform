@@ -111,6 +111,8 @@ export const ThreadAnalytics: React.FC = () => {
     limit: PAGE_SIZE,
     offset: (page - 1) * PAGE_SIZE,
     status: statusFilter || undefined,
+    intent: intentFilter || undefined,
+    has_qb_links: qbLinkedOnly || undefined,
     search: debouncedSearch || undefined,
     sort_by: sortBy,
     sort_dir: sortDir,
@@ -139,29 +141,21 @@ export const ThreadAnalytics: React.FC = () => {
       const allowed = statusMap[statusFilter] || [statusFilter];
       filtered = filtered.filter(t => allowed.includes(t.status));
     }
-    if (debouncedSearch) {
-      const term = debouncedSearch.toLowerCase();
-      filtered = filtered.filter(t => (t.subject || '').toLowerCase().includes(term));
-    }
-    return filtered;
-  }, [drilldownRaw, statusFilter, debouncedSearch]);
-
-  // Client-side intent and QB-linked filters (applied on top of server-side status + search)
-  const rawThreads = isDrilldownMode ? drilldownFiltered : (normalThreadsQuery.data?.threads || []);
-  const threads = useMemo(() => {
-    let filtered = rawThreads;
     if (intentFilter) {
       filtered = filtered.filter(t => t.intent_status === intentFilter);
     }
     if (qbLinkedOnly) {
       filtered = filtered.filter(t => t.qb_links && t.qb_links.length > 0);
     }
+    if (debouncedSearch) {
+      const term = debouncedSearch.toLowerCase();
+      filtered = filtered.filter(t => (t.subject || '').toLowerCase().includes(term));
+    }
     return filtered;
-  }, [rawThreads, intentFilter, qbLinkedOnly]);
+  }, [drilldownRaw, statusFilter, intentFilter, qbLinkedOnly, debouncedSearch]);
 
-  const threadsTotal = (intentFilter || qbLinkedOnly)
-    ? threads.length
-    : (isDrilldownMode ? drilldownFiltered.length : (normalThreadsQuery.data?.total || 0));
+  const threads = isDrilldownMode ? drilldownFiltered : (normalThreadsQuery.data?.threads || []);
+  const threadsTotal = isDrilldownMode ? drilldownFiltered.length : (normalThreadsQuery.data?.total || 0);
   const loading = isDrilldownMode
     ? (drilldownContactId ? contactThreadsQuery.isLoading : companyThreadsQuery.isLoading)
     : normalThreadsQuery.isLoading;

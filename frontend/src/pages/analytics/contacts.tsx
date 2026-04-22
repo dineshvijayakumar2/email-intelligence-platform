@@ -58,26 +58,14 @@ export const ContactsAnalytics: React.FC = () => {
     limit: PAGE_SIZE,
     offset: (contactsPage - 1) * PAGE_SIZE,
     qb_linked: qbLinked || undefined,
+    customer_type: lifecycleFilter || undefined,
     sort_by: sortBy,
     sort_dir: sortDir,
     search: debouncedSearch || undefined,
   });
 
-  const allContacts = contactsQuery.data?.contacts || [];
-
-  // Client-side lifecycle filter — uses startsWith to handle QB values
-  // like "Active A Customer", "Active B Customer" matching "Active"
-  const contacts = useMemo(() => {
-    if (!lifecycleFilter) return allContacts;
-    return allContacts.filter(c => {
-      const t = c.qb_customer_type || '';
-      return t.toLowerCase().startsWith(lifecycleFilter.toLowerCase());
-    });
-  }, [allContacts, lifecycleFilter]);
-
-  const contactsTotal = lifecycleFilter
-    ? contacts.length
-    : (contactsQuery.data?.total || 0);
+  const contacts = contactsQuery.data?.contacts || [];
+  const contactsTotal = contactsQuery.data?.total || 0;
 
   const columns = useMemo(() => [
     col.accessor('full_name', {

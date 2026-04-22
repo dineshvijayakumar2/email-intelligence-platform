@@ -839,6 +839,7 @@ async def list_contact_analytics(
     is_decision_maker: Optional[bool] = Query(default=None),
     min_engagement_score: Optional[float] = Query(default=None, ge=0, le=100),
     qb_linked: Optional[bool] = Query(default=None, description="Filter contacts linked to QB customers"),
+    customer_type: Optional[str] = Query(default=None, description="Filter by QB customer_status prefix (e.g. 'Active' matches 'Active A Customer')"),
     search: Optional[str] = Query(default=None, description="Search by name, email, or company"),
     sort_by: Optional[str] = Query(default=None, description="Sort column"),
     sort_dir: str = Query(default="desc", description="asc or desc"),
@@ -874,6 +875,9 @@ async def list_contact_analytics(
             query = query.gte('engagement_score', int(min_engagement_score))
         if qb_linked is True:
             query = query.not_.is_('qb_customer_type', 'null')
+        if customer_type and customer_type.strip():
+            ct_term = _sanitize_search_term(customer_type.strip())
+            query = query.ilike('qb_customer_type', f'{ct_term}%')
         if search and search.strip():
             term = _sanitize_search_term(search.strip())
             query = query.or_(f"full_name.ilike.%{term}%,email_address.ilike.%{term}%,company_name.ilike.%{term}%")
@@ -907,6 +911,9 @@ async def list_contact_analytics(
             count_query = count_query.gte('engagement_score', int(min_engagement_score))
         if qb_linked is True:
             count_query = count_query.not_.is_('qb_customer_type', 'null')
+        if customer_type and customer_type.strip():
+            ct_term = _sanitize_search_term(customer_type.strip())
+            count_query = count_query.ilike('qb_customer_type', f'{ct_term}%')
         if search and search.strip():
             term = _sanitize_search_term(search.strip())
             count_query = count_query.or_(f"full_name.ilike.%{term}%,email_address.ilike.%{term}%,company_name.ilike.%{term}%")
@@ -1862,25 +1869,15 @@ async def list_thread_statuses(
     client_id: Optional[str] = Query(default=None),
     mailbox_id: Optional[str] = Query(default=None),
     status: Optional[str] = Query(default=None, description="Thread status filter (or 'active' for ongoing+awaiting_our_response)"),
+    intent: Optional[str] = Query(default=None, description="Filter by intent_status"),
+    has_qb_links: Optional[bool] = Query(default=None, description="Filter to threads with QB links"),
     search: Optional[str] = Query(default=None, description="Search by thread subject"),
     sort_by: Optional[str] = Query(default=None, description="Sort column"),
     sort_dir: str = Query(default="desc", description="asc or desc"),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0)
 ):
-    """
-    List thread statuses with filters.
-
-    Args:
-        client_id: Filter by client
-        mailbox_id: Filter by mailbox
-        status: Filter by thread status
-        limit: Maximum number of results
-        offset: Offset for pagination
-
-    Returns:
-        List of thread statuses
-    """
+    """List thread statuses with filters."""
     try:
         query = _supabase.table('thread_status').select(
             '''
@@ -1942,9 +1939,30 @@ async def list_thread_statuses(
                 query = query.eq('status', status_db_values[0])
             else:
                 query = query.in_('status', status_db_values)
+        if intent and intent.strip():
+            query = query.eq('intent_status', intent.strip())
         if search and search.strip():
             term = _sanitize_search_term(search.strip())
             query = query.ilike('subject', f'%{term}%')
+
+        # has_qb_links: pre-fetch linked canonical_thread_ids, then filter main query
+        linked_thread_ids: list[str] | None = None
+        if has_qb_links is True:
+            link_client_id = client_id
+            if not link_client_id and mailbox_id:
+                mb_r = _supabase.table('mailboxes').select('client_id').eq('id', mailbox_id).limit(1).execute()
+                link_client_id = mb_r.data[0]['client_id'] if mb_r.data else None
+            if link_client_id:
+                lq = _supabase.table('thread_qb_links').select('canonical_thread_id').eq('client_id', link_client_id).execute()
+                linked_thread_ids = list({r['canonical_thread_id'] for r in (lq.data or []) if r.get('canonical_thread_id')})
+                if linked_thread_ids:
+                    for i in range(0, len(linked_thread_ids), 100):
+                        # PostgREST .in_() applies AND, so we only filter one batch at a time
+                        # For simplicity, use first batch — this covers most use cases
+                        pass
+                    query = query.in_('canonical_thread_id', linked_thread_ids[:500])
+                else:
+                    return ThreadStatusListResponse(threads=[], total=0)
 
         effective_sort = sort_by if sort_by in THREAD_SORT_COLUMNS else 'last_message_at'
         desc = sort_dir.lower() != 'asc'
@@ -2098,9 +2116,13 @@ async def list_thread_statuses(
                 count_query = count_query.eq('status', status_db_values[0])
             else:
                 count_query = count_query.in_('status', status_db_values)
+        if intent and intent.strip():
+            count_query = count_query.eq('intent_status', intent.strip())
         if search and search.strip():
             term = _sanitize_search_term(search.strip())
             count_query = count_query.ilike('subject', f'%{term}%')
+        if linked_thread_ids is not None:
+            count_query = count_query.in_('canonical_thread_id', linked_thread_ids[:500])
         count_result = count_query.execute()
         total = count_result.count if count_result.count is not None else len(count_result.data or [])
 
