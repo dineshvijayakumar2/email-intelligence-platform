@@ -43,6 +43,22 @@ async def get_thread_journey(
 
     link_data = links.data or []
 
+    # Deduplicate links by (qb_reference, link_type): keep verified > unverified,
+    # manual > ai > regex, newest first.
+    _SOURCE_RANK = {"manual": 3, "ai": 2, "regex": 1}
+    seen: dict[tuple[str, str], dict] = {}
+    for lnk in link_data:
+        key = (lnk.get("qb_reference") or lnk["qb_record_id"], lnk["link_type"])
+        existing = seen.get(key)
+        if existing is None:
+            seen[key] = lnk
+        else:
+            new_rank = (lnk.get("verified", False), _SOURCE_RANK.get(lnk.get("source", ""), 0))
+            old_rank = (existing.get("verified", False), _SOURCE_RANK.get(existing.get("source", ""), 0))
+            if new_rank > old_rank:
+                seen[key] = lnk
+    link_data = list(seen.values())
+
     quote_refs = [l for l in link_data if l["link_type"] == "quote"]
     job_refs = [l for l in link_data if l["link_type"] == "job"]
 

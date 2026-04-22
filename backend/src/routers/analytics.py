@@ -814,6 +814,7 @@ CONTACT_SORT_COLUMNS = {
     'engagement_score', 'full_name', 'email_address',
     'total_emails_sent', 'total_emails_received',
     'last_contacted_at', 'created_at', 'company_name',
+    'qb_quotes_count', 'qb_tier', 'qb_customer_type',
 }
 
 COMPANY_SORT_COLUMNS = {
