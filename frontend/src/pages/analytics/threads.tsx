@@ -25,21 +25,23 @@ const col = createColumnHelper<ThreadStatusSummary>();
 // backend/src/routers/analytics.py.
 const STATUS_OPTIONS = [
   { value: '', label: 'All Statuses' },
-  // Composites (most useful day-to-day)
-  { value: 'active', label: 'Active (in progress + flagged)' },
-  { value: 'needs_attention', label: 'Needs Attention (urgent + escalation)' },
-  // Override values — produced by intent override rules
+  { value: 'active', label: 'Active' },
+  { value: 'needs_attention', label: 'Needs Attention' },
+  { value: 'awaiting_our_response', label: 'Awaiting Our Response' },
+  { value: 'awaiting_response', label: 'Awaiting Response' },
+  { value: 'ongoing', label: 'Ongoing' },
+  { value: 'overdue', label: 'Overdue' },
+  { value: 'complete', label: 'Complete' },
+  { value: 'dropped', label: 'Dropped' },
+];
+
+const INTENT_OPTIONS = [
+  { value: '', label: 'All Intents' },
   { value: 'urgent', label: 'Urgent' },
   { value: 'revenue_opportunity', label: 'Revenue Opportunity' },
   { value: 'escalation', label: 'Escalation' },
   { value: 'closing', label: 'Closing' },
-  // Timing-derived
-  { value: 'awaiting_our_response', label: 'Awaiting Our Response' },
-  { value: 'awaiting_response', label: 'Awaiting Response' },
-  { value: 'ongoing', label: 'Ongoing' },
-  { value: 'complete', label: 'Complete' },
-  { value: 'overdue', label: 'Overdue' },
-  { value: 'dropped', label: 'Dropped' },
+  { value: 'informational', label: 'Informational' },
 ];
 
 const statusVariant = (s: string): 'danger' | 'warning' | 'success' | 'info' | 'neutral' => {
@@ -82,9 +84,8 @@ export const ThreadAnalytics: React.FC = () => {
 
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState(() => searchParams.get('status') || '');
-  // Intent filter removed — `status` column now holds effective post-override
-  // value, so override intents (urgent / closing / etc.) are filterable via
-  // STATUS_OPTIONS directly. See migration 077.
+  const [intentFilter, setIntentFilter] = useState('');
+  const [qbLinkedOnly, setQbLinkedOnly] = useState(false);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [sorting, setSorting] = useState<SortingState>([{ id: 'last_message_at', desc: true }]);
@@ -145,8 +146,22 @@ export const ThreadAnalytics: React.FC = () => {
     return filtered;
   }, [drilldownRaw, statusFilter, debouncedSearch]);
 
-  const threads = isDrilldownMode ? drilldownFiltered : (normalThreadsQuery.data?.threads || []);
-  const threadsTotal = isDrilldownMode ? drilldownFiltered.length : (normalThreadsQuery.data?.total || 0);
+  // Client-side intent and QB-linked filters (applied on top of server-side status + search)
+  const rawThreads = isDrilldownMode ? drilldownFiltered : (normalThreadsQuery.data?.threads || []);
+  const threads = useMemo(() => {
+    let filtered = rawThreads;
+    if (intentFilter) {
+      filtered = filtered.filter(t => t.intent_status === intentFilter);
+    }
+    if (qbLinkedOnly) {
+      filtered = filtered.filter(t => t.qb_links && t.qb_links.length > 0);
+    }
+    return filtered;
+  }, [rawThreads, intentFilter, qbLinkedOnly]);
+
+  const threadsTotal = (intentFilter || qbLinkedOnly)
+    ? threads.length
+    : (isDrilldownMode ? drilldownFiltered.length : (normalThreadsQuery.data?.total || 0));
   const loading = isDrilldownMode
     ? (drilldownContactId ? contactThreadsQuery.isLoading : companyThreadsQuery.isLoading)
     : normalThreadsQuery.isLoading;
@@ -237,7 +252,7 @@ export const ThreadAnalytics: React.FC = () => {
     enableSortingRemoval: false,
   });
 
-  const hasFilters = !!statusFilter || !!debouncedSearch;
+  const hasFilters = !!statusFilter || !!debouncedSearch || !!intentFilter || qbLinkedOnly;
 
   return (
     <PageShell>
@@ -271,8 +286,19 @@ export const ThreadAnalytics: React.FC = () => {
         >
           {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
+        <select
+          value={intentFilter}
+          onChange={e => { setIntentFilter(e.target.value); setPage(1); }}
+          className="h-8 px-2 text-sm rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20"
+        >
+          {INTENT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+        <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
+          <input type="checkbox" checked={qbLinkedOnly} onChange={e => { setQbLinkedOnly(e.target.checked); setPage(1); }} className="rounded border-slate-300" />
+          QB Linked
+        </label>
         {hasFilters && (
-          <button onClick={() => { setSearch(''); setDebouncedSearch(''); setStatusFilter(''); setPage(1); }}
+          <button onClick={() => { setSearch(''); setDebouncedSearch(''); setStatusFilter(''); setIntentFilter(''); setQbLinkedOnly(false); setPage(1); }}
             className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
             <X className="h-3 w-3" /> Clear
           </button>

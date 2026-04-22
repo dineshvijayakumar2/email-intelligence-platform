@@ -9,41 +9,23 @@ import { useContacts } from '../../hooks/queries';
 import { formatRelativeTime } from '../../services/analyticsService';
 import { useClient } from '../../contexts/ClientContext';
 import { PageShell, PageHeader } from '@/components/ui/page-shell';
-import { StatusBadge } from '@/components/ui/status-badge';
 import { Search, X, ArrowLeft, FileText } from 'lucide-react';
 import type { ContactAnalytics } from '../../types/analytics';
 
 const PAGE_SIZE = 25;
 const col = createColumnHelper<ContactAnalytics>();
 
+// These match the raw QB `customer_status` values stored in
+// customer_contacts.qb_customer_type. The "Active" option matches any
+// value starting with "Active" (Active A Customer, Active B Customer, etc).
 const LIFECYCLE_OPTIONS = [
-  { value: '', label: 'All Lifecycle' },
-  { value: 'champion', label: 'Champion' },
-  { value: 'active_customer', label: 'Active Customer' },
-  { value: 'new_customer', label: 'New Customer' },
-  { value: 'prospect', label: 'Prospect' },
-  { value: 'at_risk', label: 'At Risk' },
-  { value: 'dormant', label: 'Dormant' },
+  { value: '', label: 'All Types' },
+  { value: 'Active', label: 'Active Customers' },
+  { value: 'Prospect', label: 'Prospects' },
+  { value: 'New Customer', label: 'New Customers' },
+  { value: 'Dormant', label: 'Dormant' },
+  { value: 'At Risk', label: 'At Risk' },
 ];
-
-const TIER_OPTIONS = [
-  { value: '', label: 'All Tiers' },
-  { value: 'A', label: 'Tier A' },
-  { value: 'B', label: 'Tier B' },
-  { value: 'C', label: 'Tier C' },
-  { value: 'D', label: 'Tier D' },
-];
-
-function EngagementDot({ score }: { score: number | null | undefined }) {
-  if (score == null) return <span className="text-slate-300">—</span>;
-  const color = score >= 70 ? 'bg-emerald-500' : score >= 40 ? 'bg-amber-400' : score >= 20 ? 'bg-orange-400' : 'bg-slate-300';
-  return (
-    <div className="flex items-center gap-1.5">
-      <div className={`h-2 w-2 rounded-full ${color}`} />
-      <span className="tabular-nums text-slate-700">{Math.round(score)}</span>
-    </div>
-  );
-}
 
 export const ContactsAnalytics: React.FC = () => {
   const navigate = useNavigate();
@@ -56,7 +38,6 @@ export const ContactsAnalytics: React.FC = () => {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [qbLinked, setQbLinked] = useState(false);
   const [lifecycleFilter, setLifecycleFilter] = useState('');
-  const [tierFilter, setTierFilter] = useState('');
   const companyIdFilter = searchParams.get('company_id') || '';
   const companyName = searchParams.get('name') || '';
   const isCompanyDrilldown = !!companyIdFilter;
@@ -84,19 +65,17 @@ export const ContactsAnalytics: React.FC = () => {
 
   const allContacts = contactsQuery.data?.contacts || [];
 
-  // Client-side filters for lifecycle and tier (backend doesn't support these as query params yet)
+  // Client-side lifecycle filter — uses startsWith to handle QB values
+  // like "Active A Customer", "Active B Customer" matching "Active"
   const contacts = useMemo(() => {
-    let filtered = allContacts;
-    if (lifecycleFilter) {
-      filtered = filtered.filter(c => c.qb_customer_type === lifecycleFilter);
-    }
-    if (tierFilter) {
-      filtered = filtered.filter(c => c.qb_tier === tierFilter);
-    }
-    return filtered;
-  }, [allContacts, lifecycleFilter, tierFilter]);
+    if (!lifecycleFilter) return allContacts;
+    return allContacts.filter(c => {
+      const t = c.qb_customer_type || '';
+      return t.toLowerCase().startsWith(lifecycleFilter.toLowerCase());
+    });
+  }, [allContacts, lifecycleFilter]);
 
-  const contactsTotal = (lifecycleFilter || tierFilter)
+  const contactsTotal = lifecycleFilter
     ? contacts.length
     : (contactsQuery.data?.total || 0);
 
@@ -119,20 +98,16 @@ export const ContactsAnalytics: React.FC = () => {
       cell: info => <span className="text-slate-600">{info.getValue() || '—'}</span>,
     })] : []),
     col.accessor('qb_customer_type', {
-      header: 'Lifecycle', size: 120,
+      header: 'Type', size: 130,
       cell: info => <LifecycleBadge tier={info.getValue()} />,
     }),
-    col.accessor('qb_tier', {
-      header: 'Tier', size: 70,
+    col.accessor('engagement_score', {
+      header: 'Engagement', size: 85, meta: { align: 'right' },
       cell: info => {
         const v = info.getValue();
-        if (!v) return <span className="text-slate-300">—</span>;
-        return <StatusBadge variant="purple" size="sm">{v}</StatusBadge>;
+        if (v == null) return <span className="text-slate-300">—</span>;
+        return <span className="tabular-nums text-slate-700">{Math.round(v)}</span>;
       },
-    }),
-    col.accessor('engagement_score', {
-      header: 'Engagement', size: 90,
-      cell: info => <EngagementDot score={info.getValue()} />,
     }),
     col.accessor('total_emails_sent', {
       header: 'Sent', size: 60, meta: { align: 'right' },
@@ -173,7 +148,7 @@ export const ContactsAnalytics: React.FC = () => {
     enableSortingRemoval: false,
   });
 
-  const hasFilters = qbLinked || !!debouncedSearch || !!lifecycleFilter || !!tierFilter;
+  const hasFilters = qbLinked || !!debouncedSearch || !!lifecycleFilter;
 
   return (
     <PageShell>
@@ -201,19 +176,12 @@ export const ContactsAnalytics: React.FC = () => {
         >
           {LIFECYCLE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
-        <select
-          value={tierFilter}
-          onChange={e => { setTierFilter(e.target.value); setContactsPage(1); }}
-          className="h-8 px-2 text-sm rounded-md border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20"
-        >
-          {TIER_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
         <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
           <input type="checkbox" checked={qbLinked} onChange={e => { setQbLinked(e.target.checked); setContactsPage(1); }} className="rounded border-slate-300" />
           QB Linked
         </label>
         {hasFilters && (
-          <button onClick={() => { setSearch(''); setDebouncedSearch(''); setQbLinked(false); setLifecycleFilter(''); setTierFilter(''); setContactsPage(1); }}
+          <button onClick={() => { setSearch(''); setDebouncedSearch(''); setQbLinked(false); setLifecycleFilter(''); setContactsPage(1); }}
             className="inline-flex items-center gap-1 text-xs text-primary hover:underline"><X className="h-3 w-3" />Clear</button>
         )}
         <span className="text-xs text-slate-400 ml-auto tabular-nums">{contactsTotal.toLocaleString('en-AU')} contacts</span>

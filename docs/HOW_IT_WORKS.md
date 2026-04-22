@@ -563,16 +563,39 @@ Five SQL views built in migration 088:
 
 All endpoints enforce cross-tenant isolation by deriving accessible client_ids from the user's mailbox assignments.
 
+#### Frontend UI
+
+**Contact profile page** (`/customers/contacts/:contactId`) shows two intelligence cards below the KPI strip:
+- **PersonaCard** — persona classification badge (champion / active / prospect / inactive buyer / dormant), engagement score bar (0-100), email velocity 30d/90d, quote count + strike rate, days since last email. Returns null (hidden) if no persona data.
+- **DealActivityCard** — thread-to-deal funnel: linked threads → quotes → converted jobs. Shows open pipeline value, converted value, job revenue. Lists the 5 most recent thread_qb_links with source badges (regex/ai/manual). Returns null if no threads.
+
+**Contacts list page** (`/customers/contacts`) columns and filters:
+- Columns: Contact (name + email + title), Company, Type (QB customer_status badge), Engagement (score), Sent, Recv, Quotes (count), Last Contact
+- Filters: search (name/email), Type dropdown (Active/Prospect/New/Dormant/At Risk — uses prefix matching against raw QB `customer_status` values like "Active A Customer"), QB Linked checkbox
+- All columns are sortable (server-side). Type filter is client-side prefix match on `qb_customer_type`.
+
+**Threads list page** (`/customers/threads`) columns and filters:
+- Columns: Subject, Contact, Company, Status (badge), Intent (badge), QB Links (quote/job refs), Emails, Last Email, Days
+- Filters: search (subject), Status dropdown (Active/Needs Attention/Awaiting/Ongoing/Overdue/Complete/Dropped), Intent dropdown (Urgent/Revenue Opp/Escalation/Closing/Informational), QB Linked checkbox
+- Status filter is server-side. Intent and QB Linked filters are client-side on the current page.
+
+**Thread Journey panel** (shown in email thread drilldown):
+- Left accent border: primary color when links exist, subtle when empty
+- Deduplicates links by `qb_reference` + `link_type`, keeping the most authoritative (verified manual > verified AI > unverified regex). Dedup runs both server-side (backend) and client-side (defense in depth).
+- Each link shows: type badge (Quote/Job), QB reference, verified/unverified status, source badge (manual/ai/regex), date. Hover reveals delete button.
+- Expandable "QB Details" section: Quotes (quote_no, contact, amount, category, dates), Jobs (job_no, status, dates), Operations, Invoices, Status Timeline. Collapses to reduce clutter.
+
 #### Current status
-Data layer built (migration 088 + API). Frontend UI pending (task C2).
+Data layer built (migration 088 + API). Frontend UI built (PersonaCard, DealActivityCard, contact_deal_activity view via migration 093). Deployed to production.
 
 #### Known limitations
 - `contact_email_metrics` is a materialized view — data is stale between refreshes (up to 24 hours for email metrics)
 - Industry benchmarks require ≥ 3 contacts per industry to avoid noisy averages
 - Persona classification thresholds are static CASE expressions — not ML-trained
+- Contact list Type filter uses client-side prefix matching on paginated data — contacts not in the current page won't be filtered. For exact counts, the backend would need a native `qb_customer_type` filter parameter.
 
 #### Verified by
-Migration `scripts/migrations/088_contact_persona_views.sql`. API at `backend/src/routers/contacts_intelligence.py`. Refresh endpoint at `backend/src/routers/internal_jobs.py` (`/refresh-persona-metrics`). Tests at `tests/routers/test_contacts_intelligence.py`.
+Migration `scripts/migrations/088_contact_persona_views.sql`. API at `backend/src/routers/contacts_intelligence.py`. Refresh endpoint at `backend/src/routers/internal_jobs.py` (`/refresh-persona-metrics`). Tests at `tests/routers/test_contacts_intelligence.py`. Frontend: `PersonaCard.tsx`, `DealActivityCard.tsx`, `contact-detail.tsx`, `contacts.tsx`, `threads.tsx`, `ThreadJourneyPanel.tsx`.
 
 ---
 
