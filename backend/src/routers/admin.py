@@ -369,7 +369,7 @@ TABLE_CONFIG: Dict[str, Dict[str, Any]] = {
         "display_name": "Metric History",
         "exclude_columns": [],
         "search_columns": ["entity_type"],
-        "default_sort": "recorded_at",
+        "default_sort": "calculated_at",
         "count_column": "id",
     },
     "audit_log": {
