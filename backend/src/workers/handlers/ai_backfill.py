@@ -56,16 +56,34 @@ async def ai_backfill_handler(sb, job: dict, stop_event: asyncio.Event):
         )
 
         try:
-            # Run in thread so the event loop stays free for heartbeat
-            result = await asyncio.to_thread(
-                analyzer.analyze_all_unanalyzed,
-                mailbox_id=mb_id,
-                client_id=client_id,
-                max_emails=10000,
-                date_from="all",
-            )
-            mb_analyzed = result.get("total_analyzed", 0)
-            mb_failed = result.get("total_failed", 0)
+            CHUNK = 10_000
+            mb_analyzed = 0
+            mb_failed = 0
+
+            while not stop_event.is_set():
+                result = await asyncio.to_thread(
+                    analyzer.analyze_all_unanalyzed,
+                    mailbox_id=mb_id,
+                    client_id=client_id,
+                    max_emails=CHUNK,
+                    date_from="all",
+                )
+                chunk_ok = result.get("total_analyzed", 0)
+                chunk_fail = result.get("total_failed", 0)
+                mb_analyzed += chunk_ok
+                mb_failed += chunk_fail
+
+                _update_progress(
+                    sb, job_id,
+                    f"Mailbox {idx + 1}/{len(mailbox_ids)}: "
+                    f"{mb_analyzed} classified so far",
+                    processed=total_analyzed + mb_analyzed,
+                    failed=total_failed + mb_failed,
+                )
+
+                if chunk_ok + chunk_fail < CHUNK:
+                    break
+
             total_analyzed += mb_analyzed
             total_failed += mb_failed
 
@@ -74,7 +92,6 @@ async def ai_backfill_handler(sb, job: dict, stop_event: asyncio.Event):
                 f"({mb_id}): {mb_analyzed} classified"
             )
 
-            # Run bucket engine after each mailbox
             if mb_analyzed > 0:
                 try:
                     await asyncio.to_thread(

@@ -108,6 +108,21 @@ class ContactExtractor:
         r'^marketing@',
         r'^webmaster@',
         r'^postmaster@',
+        r'^accounts@',
+        r'^noreply@',
+        r'^no-reply@',
+        r'^no\.reply@',
+        r'^donotreply@',
+        r'^do-not-reply@',
+        r'^form-submission@',
+        r'^notifications?@',
+        r'^alerts?@',
+        r'^mailer-daemon@',
+        r'^bounce@',
+        r'^receipts?@',
+        r'^orders?@',
+        r'^invoices?@',
+        r'^enquir(?:y|ies)@',
     ]
 
     # Mailing list headers to check

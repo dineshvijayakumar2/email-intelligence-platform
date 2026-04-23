@@ -372,6 +372,17 @@ class RoleClassifier:
             r'confidential',  # Confidentiality notice
             r'unsubscribe',  # Unsubscribe link
             r'privacy policy',  # Privacy links
+            r'(?:^|\s)(?:kind\s+)?regards?,?\s*$',
+            r'(?:^|\s)(?:best\s+)?regards?,?\s*$',
+            r'(?:^|\s)(?:warm\s+)?regards?,?\s*$',
+            r'(?:^|\s)thanks?,?\s*$',
+            r'(?:^|\s)thank\s+you,?\s*$',
+            r'(?:^|\s)cheers,?\s*$',
+            r'(?:^|\s)sincerely,?\s*$',
+            r'(?:^|\s)(?:yours\s+)?(?:faithfully|truly),?\s*$',
+            r'(?:^|\s)(?:thx|br|ty),?\s*$',
+            r'^sent\s+from\s+(?:my\s+)?',
+            r'^get\s+outlook\s+for\s+',
         ]
 
         for pattern in skip_patterns:
