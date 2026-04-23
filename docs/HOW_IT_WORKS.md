@@ -418,6 +418,7 @@ Traces an email thread through to its QuickBase quote, job, operations, and invo
 
 #### What data it produces
 - Inserts `thread_qb_links` (canonical_thread_id → qb_record_id, link_type: quote or job, source: regex/ai/manual, confidence: 1.0/0.9)
+- Updates `thread_status.qb_link_count` (denormalized count, synced on every create/delete)
 - Stores `extracted_references` JSONB in `ai_email_intelligence` (from AI classification)
 
 #### What it depends on
@@ -577,7 +578,8 @@ All endpoints enforce cross-tenant isolation by deriving accessible client_ids f
 **Threads list page** (`/customers/threads`) columns and filters:
 - Columns: Subject, Contact, Company, Status (badge), Intent (badge), QB Links (quote/job refs), Emails, Last Email, Days
 - Filters: search (subject), Status dropdown (Active/Needs Attention/Awaiting/Ongoing/Overdue/Complete/Dropped), Intent dropdown (Urgent/Revenue Opp/Escalation/Closing/Informational), QB Linked checkbox
-- Status filter is server-side. Intent and QB Linked filters are client-side on the current page.
+- All filters are server-side: status, intent, has_qb_links, search. QB Linked uses `.in_()` (not `.or_()`) to avoid supabase-py filter overwrite.
+- QB Links column is sortable via denormalized `qb_link_count` on `thread_status` (migration 094). Count kept in sync by application code in journey.py and reference_extractor.py.
 
 **Thread Journey panel** (shown in email thread drilldown):
 - Left accent border: primary color when links exist, subtle when empty

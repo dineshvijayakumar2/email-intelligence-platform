@@ -107,10 +107,27 @@ def _upsert_links(
             rows,
             on_conflict="client_id,canonical_thread_id,link_type,qb_record_id",
         ).execute()
+        _sync_qb_link_count(sb, client_id, thread_id)
         return len(rows)
     except Exception as e:
         logger.error(f"Failed to upsert thread_qb_links: {e}")
         return 0
+
+
+def _sync_qb_link_count(sb, client_id: str, canonical_thread_id: str):
+    """Update thread_status.qb_link_count after link changes."""
+    try:
+        cnt_r = sb.table("thread_qb_links").select(
+            "id", count="exact"
+        ).eq("client_id", client_id).eq(
+            "canonical_thread_id", canonical_thread_id
+        ).execute()
+        count = cnt_r.count if cnt_r.count is not None else len(cnt_r.data or [])
+        sb.table("thread_status").update(
+            {"qb_link_count": count}
+        ).eq("canonical_thread_id", canonical_thread_id).execute()
+    except Exception as e:
+        logger.warning(f"Failed to sync qb_link_count for {canonical_thread_id[:16]}: {e}")
 
 
 def extract_and_link_email(

@@ -30,6 +30,22 @@ def init_journey_router(supabase_client):
     _supabase = supabase_client
 
 
+def _sync_qb_link_count(client_id: str, canonical_thread_id: str):
+    """Update thread_status.qb_link_count after link create/delete."""
+    try:
+        cnt_r = _supabase.table("thread_qb_links").select(
+            "id", count="exact"
+        ).eq("client_id", client_id).eq(
+            "canonical_thread_id", canonical_thread_id
+        ).execute()
+        count = cnt_r.count if cnt_r.count is not None else len(cnt_r.data or [])
+        _supabase.table("thread_status").update(
+            {"qb_link_count": count}
+        ).eq("canonical_thread_id", canonical_thread_id).execute()
+    except Exception as e:
+        logger.warning(f"Failed to sync qb_link_count for thread {canonical_thread_id[:16]}: {e}")
+
+
 @router.get("/threads/{thread_id}")
 async def get_thread_journey(
     thread_id: str,
@@ -288,6 +304,7 @@ async def create_manual_link(
             row,
             on_conflict="client_id,canonical_thread_id,link_type,qb_record_id",
         ).execute()
+        _sync_qb_link_count(req.client_id, req.canonical_thread_id)
         return {"status": "created", "link": result.data[0] if result.data else row}
     except Exception as e:
         logger.error(f"Failed to create manual link: {e}")
@@ -301,7 +318,12 @@ async def delete_link(
 ):
     """Delete a thread-QB link."""
     try:
+        link_row = _supabase.table("thread_qb_links").select(
+            "client_id, canonical_thread_id"
+        ).eq("id", link_id).limit(1).execute()
         _supabase.table("thread_qb_links").delete().eq("id", link_id).execute()
+        if link_row.data:
+            _sync_qb_link_count(link_row.data[0]["client_id"], link_row.data[0]["canonical_thread_id"])
         return {"status": "deleted"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

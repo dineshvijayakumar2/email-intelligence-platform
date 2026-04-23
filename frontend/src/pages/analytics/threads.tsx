@@ -203,7 +203,7 @@ export const ThreadAnalytics: React.FC = () => {
         return <StatusBadge variant={intentVariant(v)} size="sm">{intentLabel(v)}</StatusBadge>;
       },
     }),
-    col.accessor('qb_links', { header: 'QB Links', size: 140, enableSorting: false,
+    col.accessor('qb_links', { id: 'qb_link_count', header: 'QB Links', size: 140,
       cell: info => {
         const refs = info.getValue();
         if (!refs || refs.length === 0) return <span className="text-slate-300">—</span>;

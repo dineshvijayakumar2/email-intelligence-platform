@@ -827,7 +827,7 @@ COMPANY_SORT_COLUMNS = {
 
 THREAD_SORT_COLUMNS = {
     'last_message_at', 'message_count', 'days_since_last_email',
-    'status', 'created_at', 'subject',
+    'status', 'created_at', 'subject', 'qb_link_count',
 }
 
 
@@ -1885,7 +1885,7 @@ async def list_thread_statuses(
             status, message_count, last_message_at, last_sender_is_outbound, days_since_last_email,
             mailbox_id, qb_customer_type, qb_customer_tier,
             intent_status, intent_override_reason, last_email_intent, last_email_urgency, last_email_sentiment,
-            created_at
+            created_at, qb_link_count
             '''
         )
 
@@ -1945,24 +1945,27 @@ async def list_thread_statuses(
             term = _sanitize_search_term(search.strip())
             query = query.ilike('subject', f'%{term}%')
 
-        # has_qb_links: pre-fetch linked canonical_thread_ids, then filter main query
-        linked_thread_ids: list[str] | None = None
-        if has_qb_links is True:
+        # has_qb_links: pre-fetch linked canonical_thread_ids, then filter main query.
+        # MUST use .in_() not .or_() — supabase-py's .or_() uses params.update()
+        # which silently replaces any prior .or_() (the mailbox filter above).
+        linked_thread_ids: list | None = None
+        if has_qb_links:
             link_client_id = client_id
             if not link_client_id and mailbox_id:
                 mb_r = _supabase.table('mailboxes').select('client_id').eq('id', mailbox_id).limit(1).execute()
                 link_client_id = mb_r.data[0]['client_id'] if mb_r.data else None
-            if link_client_id:
-                lq = _supabase.table('thread_qb_links').select('canonical_thread_id').eq('client_id', link_client_id).execute()
-                linked_thread_ids = list({r['canonical_thread_id'] for r in (lq.data or []) if r.get('canonical_thread_id')})
-                if linked_thread_ids:
-                    for i in range(0, len(linked_thread_ids), 100):
-                        # PostgREST .in_() applies AND, so we only filter one batch at a time
-                        # For simplicity, use first batch — this covers most use cases
-                        pass
-                    query = query.in_('canonical_thread_id', linked_thread_ids[:500])
-                else:
-                    return ThreadStatusListResponse(threads=[], total=0)
+            if not link_client_id:
+                logger.warning("has_qb_links: no client_id available, returning empty")
+                return ThreadStatusListResponse(threads=[], total=0)
+
+            lq = _supabase.table('thread_qb_links').select('canonical_thread_id').eq('client_id', link_client_id).execute()
+            linked_thread_ids = list({r['canonical_thread_id'] for r in (lq.data or []) if r.get('canonical_thread_id')})
+            logger.info(f"has_qb_links: {len(linked_thread_ids)} linked thread IDs for client {link_client_id[:8]}...")
+
+            if not linked_thread_ids:
+                return ThreadStatusListResponse(threads=[], total=0)
+
+            query = query.in_('canonical_thread_id', linked_thread_ids[:500])
 
         effective_sort = sort_by if sort_by in THREAD_SORT_COLUMNS else 'last_message_at'
         desc = sort_dir.lower() != 'asc'
