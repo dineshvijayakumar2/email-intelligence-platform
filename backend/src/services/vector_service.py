@@ -5,15 +5,17 @@ Fully independent of AI analysis pipeline. Embeds directly from raw source table
   - emails (subject + body_text + sender)
   - customer_companies (name + industry + domains + QB data)
   - qb_operations (operation + dept + machine + customer + capabilities)
+  - qb_quotes (category + customer + contact + AM + value)
 
 Supports two embedding providers (set EMBEDDING_PROVIDER env var):
-  - "google" (default): Google text-embedding-004 / gemini-embedding-001 (768 dims)
-  - "openai": OpenAI text-embedding-3-small (768 dims, configurable)
+  - "google": Google gemini-embedding-001 (768 dims)
+  - "openai": OpenAI text-embedding-3-small (768 dims)
 
 Both produce 768-dim vectors compatible with the existing pgvector schema.
 """
 
 import asyncio
+from datetime import datetime, timezone
 import logging
 import os
 import time
@@ -40,31 +42,17 @@ _cached_provider = None              # Track which provider the cached model is 
 
 
 def _resolve_provider(client_id: str = None) -> str:
-    """Resolve embedding provider: in-memory override > DB (client-scoped).
+    """Resolve embedding provider from EMBEDDING_PROVIDER env var (sole source of truth).
 
-    Never falls back silently — if we can't determine the configured provider,
-    raise so the caller fails visibly rather than using the wrong model.
+    Never falls back silently — if not set, raise so the caller fails visibly.
     """
     if _embedding_provider_override:
         return _embedding_provider_override
-    if not client_id:
-        client_id = _last_client_id
-    if not client_id:
-        raise RuntimeError("Cannot resolve embedding provider: no client_id available")
-    try:
-        from ..database.supabase_client import SupabaseClient
-        sb = SupabaseClient.get_client(use_service_key=True)
-        resp = sb.table('system_settings').select('value').eq(
-            'key', 'embedding_provider'
-        ).eq('client_id', client_id).limit(1).execute()
-        if resp.data and resp.data[0].get('value'):
-            return resp.data[0]['value'].lower()
-    except Exception as e:
-        raise RuntimeError(
-            f"Cannot resolve embedding provider for client {client_id}: {e}"
-        ) from e
+    env_val = os.getenv("EMBEDDING_PROVIDER", "").lower()
+    if env_val:
+        return env_val
     raise RuntimeError(
-        f"No embedding_provider configured in system_settings for client {client_id}"
+        "EMBEDDING_PROVIDER env var not set. Set to 'openai' or 'google'."
     )
 
 
@@ -174,6 +162,17 @@ def reset_embedding_model(provider: str = None):
     logger.info(f"Embedding model cache cleared. Provider set to: {_embedding_provider_override or 'env/default'}")
 
 
+def _embedding_model_tag(client_id: str = None) -> str:
+    """Return the canonical model tag: '{provider}/{model_name}-{dims}'.
+
+    Example: 'openai/text-embedding-3-small-768'
+    """
+    provider = _resolve_provider(client_id)
+    if provider == "openai":
+        return f"openai/{OPENAI_EMBEDDING_MODEL}-{EMBEDDING_DIMS}"
+    return f"google/{GOOGLE_EMBEDDING_MODEL.removeprefix('models/')}-{EMBEDDING_DIMS}"
+
+
 # ---------------------------------------------------------------------------
 # Core helpers
 # ---------------------------------------------------------------------------
@@ -273,6 +272,10 @@ class VectorService:
         """Run a blocking Supabase call in a thread to avoid blocking the event loop."""
         return await asyncio.to_thread(fn)
 
+    # Minimum composed-text length to justify an embedding API call.
+    # Shorter texts (e.g. just "$500" or "Acme") produce near-random vectors.
+    MIN_EMBED_TEXT_LEN = 20
+
     @staticmethod
     def _vecs_to_pg(embeddings: list[list[float]]) -> list[str]:
         """Convert embedding float arrays to PostgreSQL vector string format."""
@@ -316,7 +319,7 @@ class VectorService:
             ids = []
             for row in rows:
                 text = self._build_email_embed_text(row)
-                if not text or len(text.strip()) < 10:
+                if not text or len(text.strip()) < self.MIN_EMBED_TEXT_LEN:
                     total_skipped += 1
                     continue
                 texts.append(text)
@@ -324,6 +327,8 @@ class VectorService:
 
             if texts:
                 embeddings = await embed_texts(texts, client_id)
+                model_tag = _embedding_model_tag(client_id)
+                now_ts = datetime.now(timezone.utc).isoformat()
                 # Filter out None entries (skipped due to rate limits)
                 valid = [(i, e) for i, e in zip(ids, embeddings) if e is not None]
                 if not valid:
@@ -337,16 +342,14 @@ class VectorService:
                         chunk_ids = v_ids[ci:ci + DB_CHUNK]
                         chunk_embs = v_embs[ci:ci + DB_CHUNK]
                         try:
-                            # Wrap in async retry so transient socket errors
-                            # (WinError 10035, ReadError, etc.) don't drop the
-                            # whole chunk. Previously these were caught and the
-                            # 100 emails were silently skipped.
                             await retry_async(
                                 lambda cids=chunk_ids, cembs=chunk_embs: self._db(
                                     lambda: self._sb.rpc(
                                         "batch_update_embeddings_emails", {
                                             "p_ids": cids,
                                             "p_embeddings": self._vecs_to_pg(cembs),
+                                            "p_embedding_model": model_tag,
+                                            "p_embedded_at": now_ts,
                                         }).execute()
                                 ),
                                 label="batch_update_embeddings_emails",
@@ -435,12 +438,14 @@ class VectorService:
             ids = []
             for row in rows:
                 text = self._build_company_embed_text(row)
-                if text and len(text.strip()) >= 5:
+                if text and len(text.strip()) >= self.MIN_EMBED_TEXT_LEN:
                     texts.append(text)
                     ids.append(row["id"])
 
             if texts:
                 embeddings = await embed_texts(texts, client_id)
+                model_tag = _embedding_model_tag(client_id)
+                now_ts = datetime.now(timezone.utc).isoformat()
                 DB_CHUNK = 25
                 for ci in range(0, len(ids), DB_CHUNK):
                     chunk_ids = ids[ci:ci + DB_CHUNK]
@@ -450,6 +455,8 @@ class VectorService:
                             "batch_update_embeddings_companies", {
                                 "p_ids": cids,
                                 "p_embeddings": self._vecs_to_pg(cembs),
+                                "p_embedding_model": model_tag,
+                                "p_embedded_at": now_ts,
                             }).execute())
                         total_embedded += len(chunk_ids)
                     except Exception as e:
@@ -512,12 +519,14 @@ class VectorService:
             ids = []
             for row in rows:
                 text = self._build_operation_embed_text(row)
-                if text and len(text.strip()) >= 5:
+                if text and len(text.strip()) >= self.MIN_EMBED_TEXT_LEN:
                     texts.append(text)
                     ids.append(row["id"])
 
             if texts:
                 embeddings = await embed_texts(texts, client_id)
+                model_tag = _embedding_model_tag(client_id)
+                now_ts = datetime.now(timezone.utc).isoformat()
                 DB_CHUNK = 25
                 for ci in range(0, len(ids), DB_CHUNK):
                     chunk_ids = ids[ci:ci + DB_CHUNK]
@@ -527,6 +536,8 @@ class VectorService:
                             "batch_update_embeddings_operations", {
                                 "p_ids": cids,
                                 "p_embeddings": self._vecs_to_pg(cembs),
+                                "p_embedding_model": model_tag,
+                                "p_embedded_at": now_ts,
                             }).execute())
                         total_embedded += len(chunk_ids)
                     except Exception as e:
@@ -587,6 +598,118 @@ class VectorService:
 
         if row.get("finishing_type"):
             parts.append(f"Finishing: {row['finishing_type']}")
+        return " | ".join(parts)
+
+    # ── Embed: Quotes ────────────────────────────────────────────────────
+
+    async def embed_quotes_batch(
+        self, client_id: str, batch_size: int = 500, limit: int | None = None,
+    ) -> dict:
+        """Embed un-embedded QB quotes for a client."""
+        t0 = time.time()
+        total_embedded = 0
+        offset = 0
+
+        while True:
+            # Only embed quotes linked to a platform company — unmatched quotes
+            # lack customer context and produce thin vectors (88% have no category).
+            result = await self._db(lambda: self._sb.table("qb_quotes").select(
+                "id, category, sell_ex_tax, quantity, kinds, "
+                "contact_name, quote_am_name, job_no, "
+                "qb_customer_id"
+            ).eq("client_id", client_id).is_("embedding", "null").not_.is_(
+                "matched_company_id", "null"
+            ).range(
+                offset, offset + batch_size - 1
+            ).execute())
+
+            rows = result.data or []
+            if not rows:
+                break
+
+            customer_ids = list({r["qb_customer_id"] for r in rows if r.get("qb_customer_id")})
+            customer_map = {}
+            if customer_ids:
+                for ci in range(0, len(customer_ids), 100):
+                    chunk = customer_ids[ci:ci + 100]
+                    cr = await self._db(lambda c=chunk: self._sb.table("qb_customers").select(
+                        "customer_key_id, customer_name, industry"
+                    ).in_("customer_key_id", c).execute())
+                    for c in (cr.data or []):
+                        customer_map[c["customer_key_id"]] = c
+
+            texts = []
+            ids = []
+            for row in rows:
+                text = self._build_quote_embed_text(row, customer_map)
+                if text and len(text.strip()) >= self.MIN_EMBED_TEXT_LEN:
+                    texts.append(text)
+                    ids.append(row["id"])
+
+            if texts:
+                embeddings = await embed_texts(texts, client_id)
+                model_tag = _embedding_model_tag(client_id)
+                now_ts = datetime.now(timezone.utc).isoformat()
+                DB_CHUNK = 25
+                for ci in range(0, len(ids), DB_CHUNK):
+                    chunk_ids = ids[ci:ci + DB_CHUNK]
+                    chunk_embs = embeddings[ci:ci + DB_CHUNK]
+                    try:
+                        await self._db(lambda cids=chunk_ids, cembs=chunk_embs: self._sb.rpc(
+                            "batch_update_embeddings_quotes", {
+                                "p_ids": cids,
+                                "p_embeddings": self._vecs_to_pg(cembs),
+                                "p_embedding_model": model_tag,
+                                "p_embedded_at": now_ts,
+                            }).execute())
+                        total_embedded += len(chunk_ids)
+                    except Exception as e:
+                        logger.warning(f"Batch chunk failed ({len(chunk_ids)} quotes): {e}")
+
+            offset += batch_size
+            if limit and total_embedded >= limit:
+                break
+            if len(rows) < batch_size:
+                break
+
+            if total_embedded % 5000 == 0 and total_embedded > 0:
+                logger.info(f"[Vector] Embedded {total_embedded} quotes so far...")
+
+        elapsed = round(time.time() - t0, 1)
+        logger.info(f"[Vector] Quotes embedding complete: {total_embedded} embedded, {elapsed}s")
+        return {"embedded": total_embedded, "elapsed_s": elapsed}
+
+    def _build_quote_embed_text(self, row: dict, customer_map: dict) -> str:
+        """Build text representation of a quote for embedding.
+
+        Format: category-first with customer enrichment from qb_customers join.
+        """
+        parts = []
+        if row.get("category"):
+            parts.append(row["category"])
+
+        cust = customer_map.get(row.get("qb_customer_id"), {})
+        if cust.get("customer_name"):
+            parts.append(f"Customer: {cust['customer_name']}")
+        if cust.get("industry"):
+            parts.append(f"Industry: {cust['industry']}")
+
+        qty_parts = []
+        if row.get("quantity"):
+            qty_parts.append(f"{row['quantity']} qty")
+        if row.get("kinds"):
+            qty_parts.append(f"{row['kinds']} kinds")
+        if qty_parts:
+            parts.append(" x ".join(qty_parts))
+
+        if row.get("sell_ex_tax"):
+            parts.append(f"${float(row['sell_ex_tax']):,.0f}")
+        if row.get("job_no"):
+            parts.append(f"Job {row['job_no']}")
+        if row.get("contact_name"):
+            parts.append(f"Contact: {row['contact_name']}")
+        if row.get("quote_am_name"):
+            parts.append(f"AM: {row['quote_am_name']}")
         return " | ".join(parts)
 
     # ── Search ────────────────────────────────────────────────────────────
@@ -682,7 +805,7 @@ class VectorService:
 
         Args:
             limit: Max records to embed per table. Pass small value (e.g. 10) for local testing.
-            tables: Which tables to embed. Default: ["emails", "companies", "operations"].
+            tables: Which tables to embed. Default: ["emails", "companies", "operations", "quotes"].
             cancel_check: Callable returning True if job should stop.
             on_progress: Optional callback(stage: str, delta_processed: int,
                 delta_failed: int) invoked at table boundaries AND from inside
@@ -690,12 +813,14 @@ class VectorService:
         """
         self._cancel_check = cancel_check or (lambda: False)
         if tables is None:
-            tables = ["emails", "companies", "operations"]
+            tables = ["emails", "companies", "operations", "quotes"]
 
         logger.info(f"[Vector] Starting reembed for client {client_id}, tables={tables}" + (f" (limit={limit})" if limit else ""))
 
-        # Map friendly names to actual table names for BulkIndexManager
-        table_map = {'emails': 'emails', 'companies': 'customer_companies', 'operations': 'qb_operations'}
+        table_map = {
+            'emails': 'emails', 'companies': 'customer_companies',
+            'operations': 'qb_operations', 'quotes': 'qb_quotes',
+        }
         db_tables = [table_map[t] for t in tables if t in table_map]
 
         from ..database.bulk_index_manager import BulkIndexManager
@@ -711,7 +836,6 @@ class VectorService:
             except Exception as pe:
                 logger.warning(f"[Vector] on_progress raised at stage={stage}: {pe}")
 
-        # BulkIndexManager handles drop → yield → recreate (including HNSW with extended timeout)
         _safe_progress("dropping_indexes")
         async with manager.async_bulk_operation(db_tables, row_count=999999):
             _safe_progress("embedding_emails")
@@ -721,7 +845,7 @@ class VectorService:
             if self._cancel_check():
                 logger.info(f"[Vector] Stopped after emails ({emails['embedded']} embedded)")
                 return {"emails": emails, "companies": skip, "operations": skip,
-                        "total_embedded": emails["embedded"]}
+                        "quotes": skip, "total_embedded": emails["embedded"]}
 
             _safe_progress("embedding_companies")
             companies = await self.embed_companies(client_id, limit=limit) if "companies" in tables else skip
@@ -730,22 +854,33 @@ class VectorService:
             if self._cancel_check():
                 logger.info(f"[Vector] Stopped after companies ({companies['embedded']} embedded)")
                 return {"emails": emails, "companies": companies, "operations": skip,
-                        "total_embedded": emails["embedded"] + companies["embedded"]}
+                        "quotes": skip, "total_embedded": emails["embedded"] + companies["embedded"]}
 
             _safe_progress("embedding_operations")
             operations = await self.embed_operations(client_id, limit=limit) if "operations" in tables else skip
             if "operations" in tables:
                 _safe_progress("operations_done", operations.get("embedded", 0), operations.get("skipped", 0))
+            if self._cancel_check():
+                logger.info(f"[Vector] Stopped after operations ({operations['embedded']} embedded)")
+                return {"emails": emails, "companies": companies, "operations": operations,
+                        "quotes": skip,
+                        "total_embedded": emails["embedded"] + companies["embedded"] + operations["embedded"]}
+
+            _safe_progress("embedding_quotes")
+            quotes = await self.embed_quotes_batch(client_id, limit=limit) if "quotes" in tables else skip
+            if "quotes" in tables:
+                _safe_progress("quotes_done", quotes.get("embedded", 0), quotes.get("skipped", 0))
 
             _safe_progress("recreating_indexes")
-        # async with exit — indexes recreated here by BulkIndexManager
 
         total = {
             "emails": emails,
             "companies": companies,
             "operations": operations,
+            "quotes": quotes,
             "total_embedded": (
-                emails["embedded"] + companies["embedded"] + operations["embedded"]
+                emails["embedded"] + companies["embedded"]
+                + operations["embedded"] + quotes["embedded"]
             ),
         }
         logger.info(f"[Vector] Reembed complete for client {client_id}: {total}")
