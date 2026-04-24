@@ -83,8 +83,7 @@ const UsagePage: React.FC = () => {
   const [openaiKey, setOpenaiKey] = useState('');
   const [apiKeysSaving, setApiKeysSaving] = useState(false);
 
-  // Embedding config state
-  const [embeddingSaving, setEmbeddingSaving] = useState(false);
+  // Embedding config (read-only from env var)
 
   // Re-analyze state
   const [reanalyzeMailbox, setReanalyzeMailbox] = useState<string[]>([]);
@@ -112,24 +111,11 @@ const UsagePage: React.FC = () => {
   const apiKeys = apiKeysQuery.data || null;
   const taskModels = taskModelsQuery.data?.task_models || {};
   const embeddingConfig = embeddingQuery.data || null;
-  const embeddingProvider = embeddingConfig?.provider || 'google';
   const loading = costsQuery.isLoading;
 
   // Track in-flight control updates to disable toggles during save
   const [controlSaving, setControlSaving] = useState<string | null>(null);
 
-  const handleEmbeddingProviderChange = async (provider: string) => {
-    setEmbeddingSaving(true);
-    try {
-      await api.put('/v1/ai/embedding-config', { provider, client_id: clientId });
-      embeddingQuery.refetch();
-      toast.success(`Embedding provider set to ${provider === 'openai' ? 'OpenAI' : 'Google Gemini'}`);
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to update embedding provider');
-    } finally {
-      setEmbeddingSaving(false);
-    }
-  };
 
   // Manual refresh handler
   const loadData = () => {
@@ -512,25 +498,16 @@ const UsagePage: React.FC = () => {
                       </div>
                     );
                   })}
-                  {/* Embedding — separate provider */}
+                  {/* Embedding — read-only (set via EMBEDDING_PROVIDER env var) */}
                   <div className="flex items-center gap-3">
                     <div className="w-40 shrink-0">
                       <p className="text-xs font-medium text-slate-700">Embedding</p>
                       <p className="text-[10px] text-slate-400">Vector search (768-dim)</p>
                     </div>
-                    <select
-                      value={embeddingProvider}
-                      onChange={(e) => handleEmbeddingProviderChange(e.target.value)}
-                      disabled={embeddingSaving}
-                      className="flex-1 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700 shadow-sm focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 disabled:opacity-50"
-                    >
-                      <option value="google">Google Gemini (gemini-embedding-001)</option>
-                      <option value="openai">OpenAI (text-embedding-3-small)</option>
-                    </select>
-                    <span className={`h-2 w-2 rounded-full shrink-0 ${
-                      embeddingProvider === 'openai' ? (apiKeys?.openai_set ? 'bg-emerald-500' : 'bg-red-500')
-                      : (apiKeys?.google_set ? 'bg-emerald-500' : 'bg-amber-500')
-                    }`} />
+                    <div className="flex-1 rounded-md border border-slate-100 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-600">
+                      {embeddingConfig?.model_tag || 'loading...'}
+                    </div>
+                    <span className="h-2 w-2 rounded-full shrink-0 bg-slate-400" />
                     <span className="text-[10px] text-slate-400 w-12 shrink-0">
                       {embeddingConfig?.provider_source || 'env'}
                     </span>

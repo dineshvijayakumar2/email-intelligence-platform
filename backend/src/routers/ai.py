@@ -1711,48 +1711,25 @@ async def get_embedding_config(
     client_id: Optional[str] = Query(default=None),
     current_user: dict = Depends(require_role('admin')),
 ):
-    """Get current embedding provider configuration. DB > 'google' default."""
-    db_provider = _get_global_setting('embedding_provider', client_id)
-    db_model = _get_global_setting('embedding_model', client_id)
+    """Return current embedding provider (read-only, sourced from EMBEDDING_PROVIDER env var).
 
-    provider = db_provider or "google"
-    model = db_model or ("text-embedding-3-small" if provider == "openai" else "models/gemini-embedding-001")
+    Changing embedding provider invalidates all existing vectors and requires a
+    migration-level reembed — it is not a runtime toggle. Set EMBEDDING_PROVIDER
+    in the deployment environment.
+    """
+    from ..services.vector_service import _embedding_model_tag
+    env_val = os.getenv("EMBEDDING_PROVIDER", "").lower()
+    provider = env_val or "google"
+    try:
+        model_tag = _embedding_model_tag()
+    except RuntimeError:
+        model_tag = f"{provider}/unknown"
 
     return {
         "provider": provider,
-        "provider_source": "db" if db_provider else "default",
-        "model": model,
-        "model_source": "db" if db_model else "default",
-        "available_providers": [
-            {"value": "google", "label": "Google Gemini (gemini-embedding-001)", "requires": "Google API Key"},
-            {"value": "openai", "label": "OpenAI (text-embedding-3-small)", "requires": "OpenAI API Key"},
-        ],
+        "provider_source": "env" if env_val else "default",
+        "model_tag": model_tag,
     }
-
-
-@router.put("/embedding-config")
-async def update_embedding_config(
-    data: dict,
-    current_user: dict = Depends(require_role('admin')),
-):
-    """Update embedding provider. Clears model cache so next embed call uses new provider."""
-    client_id = data.get("client_id")
-    provider = data.get("provider", "").lower()
-
-    if provider not in ("google", "openai"):
-        raise HTTPException(status_code=400, detail=f"Invalid provider: {provider}. Must be 'google' or 'openai'.")
-
-    _upsert_global_setting('embedding_provider', provider, client_id)
-
-    model = data.get("model")
-    if model:
-        _upsert_global_setting('embedding_model', model, client_id)
-
-    # Clear the cached model and pass the new provider explicitly
-    from ..services.vector_service import reset_embedding_model
-    reset_embedding_model(provider=provider)
-
-    return {"status": "ok", "provider": provider, "model": model, "client_id": client_id}
 
 
 def _load_persisted_api_keys():
