@@ -13,12 +13,14 @@
 - [x] Insight Engine Audit (`INSIGHT_ENGINE_AUDIT.md`)
 - [x] Signature extraction code fix (`role_classifier.py:369-386`, 11 sign-off phrases added)
 - [x] Shared-address pattern expansion (`contact_extractor.py:110-127`, 17 patterns added)
-- [x] Pass 3 exclusion logic (`094_propagate_qb_from_company.sql:53-73`) — **FLAG:** confirm whether this file edit is safe given 094 already ran in prod
-- [x] Migration 095 cleanup (internal/shared contact QB tier nulling)
-- [x] AI backfill chunked loop (`ai_backfill.py:58-89`)
-- [x] Auth state audit (verdict: 5-6d per breakdown, my read 8-9d — slotted into scope discussion)
-- [x] I/O budget investigation (Postgres buffer pool pressure identified)
-- [x] Dropped threads investigation (likely expected aging behaviour)
+- [x] Pass 3 exclusion logic (`094_propagate_qb_from_company.sql:53-73`) — **FLAG:** 094 already ran in prod; must re-apply updated RPC via `CREATE OR REPLACE`
+- [x] Migration 095 written (internal/shared contact QB tier nulling) — **not yet applied to prod**
+- [x] AI backfill chunked loop (`ai_backfill.py:58-89`) — loops 10K chunks until exhaustion
+- [x] Auth state audit (verdict: 3-5d feature; SMTP-less design eliminates biggest risk)
+- [x] I/O budget investigation (Postgres buffer pool pressure — `shared_buffers` likely 256MB default)
+- [x] Dropped threads investigation (likely expected — 30+ day inactivity threshold; verify migration 080 applied)
+- [x] Integration tests (`test_data_hardening.py`) — 63 tests: sign-off rejection, shared-address detection, QB propagation exclusion
+- [x] All above committed + pushed to prod (`ade0c45`)
 
 ---
 
@@ -49,15 +51,18 @@
 
 ### Internal / shared contact propagation
 
-- [~] Migration 095 applied? (confirm in prod, your standing rule)
+- [ ] Re-apply migration 094 (updated RPC with Pass 3 guards) — `CREATE OR REPLACE` via runner
+- [ ] Apply migration 095 (one-time cleanup) via runner
 - [ ] Verification SQL: zero internal contacts with Carbon8 QB tier, zero shared addresses with inherited QB data
 - [ ] Spot-check: Carbon8 employees, `accounts@`, `hello@`, `noreply@` contacts
+- [ ] Run `test_data_hardening.py` with `TEST_CLIENT_ID=<carbon8>` to exercise DB-level test
 
 ### AI classification coverage
 
 - [ ] Run chunked backfill on AM mailboxes (Linda, Ehab, Kenneth, Nic, Jeff, Peter, Prince)
 - [ ] Verify 80%+ coverage on last 90 days per mailbox
 - [ ] Decide: does this run after or in parallel with re-embed? (Embeddings vs classifications are different API budgets, so parallel is fine)
+- [ ] Note: backfill handler now loops until exhaustion (code shipped `ade0c45`), single "Classify Pending" click will process all 209K
 
 ### Known-issue cleanup (Week 1 fixes not yet done)
 

@@ -91,10 +91,12 @@ COMMENT ON FUNCTION batch_propagate_qb_data(UUID, JSONB) IS
   'Extended in migration 081 to include industry (skips ''Not Selected'' sentinel).';
 
 -- ─── 1c. New batch_propagate_qb_data_to_contacts RPC ────────────────────────
--- Two-pass DB-side update:
+-- Three-pass DB-side update (Pass 3 added in migration 094):
 --   Pass 1: qb_unique_emails → customer_contacts (case-insensitive email join)
 --   Pass 2: qb_contacts      → customer_contacts (FK via matched_contact_id)
--- Returns the SUM of row counts across both passes.
+--   Pass 3: customer_companies → customer_contacts (inherit QB type/tier from parent company)
+-- Returns the SUM of row counts across all passes.
+-- NOTE: See migration 094 for the current version of this function.
 CREATE OR REPLACE FUNCTION batch_propagate_qb_data_to_contacts(
     p_client_id UUID
 )
