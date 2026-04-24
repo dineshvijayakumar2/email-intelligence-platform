@@ -16,7 +16,7 @@ The Email Intelligence Platform ingests emails from Outlook and Gmail mailboxes 
 - **AI email classification** using Claude Haiku to tag intent, urgency, sentiment, business signals, and suggested actions
 - **Action signal engine** deriving 6 AM-centric signals (response urgency, deal at risk, retention risk, revenue opportunity, new relationship, account neglect) from AI + QB data with no additional AI cost
 - **Strategic and daily digest generation** using a LangGraph ReAct agent with tool access for executive summaries
-- **Vector search** over emails, companies, and operations using pgvector HNSW indexes and Google text-embedding-004
+- **Vector search** over emails, companies, operations, and quotes using pgvector HNSW indexes with audited embeddings (OpenAI/Google, configurable via `EMBEDDING_PROVIDER`)
 - **Smart Inbox** grouping classified emails by intelligence signals for AM triage
 - **Customer profile pages** with engagement metrics, order history, product profiles, seasonality, and recommendations
 - **Data health monitoring** with DB performance dashboards and reembed tooling
@@ -265,7 +265,7 @@ Strategic Digest and Daily Digest pages exist in the frontend. Digest generation
 ### 2.7 Vector Embeddings and Semantic Search
 
 #### What it does
-Embeds emails, companies, and operations into 768-dimensional vector space (Google text-embedding-004) so users can search by meaning rather than exact keywords. Uses pgvector HNSW indexes for approximate nearest-neighbor search.
+Embeds emails, companies, operations, and quotes into 768-dimensional vector space using a configurable embedding provider (OpenAI text-embedding-3-small or Google gemini-embedding-001, set via `EMBEDDING_PROVIDER` env var). Uses pgvector HNSW indexes for approximate nearest-neighbor search. Every embedding write stamps `embedding_model` (e.g. `openai/text-embedding-3-small-768`) and `embedded_at` for audit traceability.
 
 #### What triggers it
 - Embedding generation: user triggers reembed via the Data Health page, creating a `processing_jobs` record with `job_type=reembed` (picked up by worker)
@@ -274,27 +274,30 @@ Embeds emails, companies, and operations into 768-dimensional vector space (Goog
 #### What data it reads
 - `emails` (subject + body_text + sender for embedding text)
 - `customer_companies` (name + industry + domains + QB tier)
-- `qb_operations` (operation_name + department + machine + capabilities)
-- External: Google text-embedding-004 API (or OpenAI embedding API)
+- `qb_operations` (operation_name + department + machine + capabilities + QB formula tags)
+- `qb_quotes` (category + customer + contact + AM + value, enriched via `qb_customers` join on `customer_key_id`)
+- External: OpenAI or Google embedding API (configured via `EMBEDDING_PROVIDER` env var)
 
 #### What data it produces
-- Updates `emails.embedding`, `customer_companies.embedding`, `qb_operations.embedding` (vector(768) columns)
-- HNSW indexes: `idx_emails_embedding`, `idx_companies_embedding`, `idx_operations_embedding`
+- Updates `*.embedding` (vector(768)), `*.embedding_model` (text), `*.embedded_at` (timestamptz) on all 4 tables
+- HNSW indexes: managed by `BulkIndexManager` — dropped before bulk reembed, recreated after
+- Partial indexes: `idx_*_embedding_model` on each table (WHERE embedding IS NOT NULL)
+- Batch writes via RPCs: `batch_update_embeddings_emails/companies/operations/quotes` (migrations 090, 097)
 
 #### What it depends on
-Email Synchronization, QB Sync (for company/operation data), embedding API key.
+Email Synchronization, QB Sync (for company/operation/quote data), embedding API key, `EMBEDDING_PROVIDER` env var.
 
 #### Current status
-Active in production. Reembed job type runs on the dedicated worker. Semantic Search page is functional. HNSW indexes are built. Embedding pipeline optimized to handle 20K emails in ~15 minutes.
+Active in production. All prior embeddings were cleared (migration 096) due to mixed Gemini/OpenAI vector contamination — vectors from different models occupy incompatible semantic spaces despite identical 768 dimensions. Clean reembed pending with audit columns. HNSW indexes dropped pre-reembed; `BulkIndexManager` recreates them post-reembed.
 
 #### Known limitations
 - Embedding is not automatic — new emails don't get embedded until a user triggers reembed. There's no automatic embedding on email arrival
 - HNSW index rebuild requires `maintenance_work_mem=256MB` — if the index gets corrupted or needs rebuilding, it requires a manual setting change on Supabase
-- Migration 037b resized vectors to 3072 dimensions at one point, but current code uses 768 — verify which dimension is active in production
+- Vectors from different providers (OpenAI vs Google) cannot coexist — same 768 dims but different semantic spaces. `embedding_model` audit column prevents silent contamination
 - BM25 full-text search (migration 057) and hybrid retrieval (BM25 + vector + RRF fusion) are built but the hybrid retriever's usage may vary by endpoint
 
 #### Verified by
-Semantic Search page exists in frontend. `search_emails`, `search_companies`, `search_operations` RPCs defined in migration 037. `reembed` handler registered in worker. HNSW indexes created.
+Semantic Search page exists in frontend. `search_emails`, `search_companies`, `search_operations` RPCs defined in migration 037. Batch update RPCs with audit params in migration 097. `reembed` handler registered in worker. 13 unit tests in `backend/tests/test_vector_service.py`.
 
 ---
 
@@ -672,7 +675,7 @@ Nothing is automatically deleted. Emails, processing_jobs, events, notifications
 
 ### Database sizing and indexes
 
-86 migrations have been applied. Recent audit work (migrations 063-075) added missing indexes, IO budget RPCs, DB performance RPCs, and partial indexes for vector stats. HNSW indexes exist on `emails.embedding`, `customer_companies.embedding`, and `qb_operations.embedding`. Full-text search index exists on `emails` (migration 057). The `exec_sql` RPC (migration 071) allows index management from application code.
+97 migrations have been applied. Recent audit work (migrations 063-075) added missing indexes, IO budget RPCs, DB performance RPCs, and partial indexes for vector stats. HNSW indexes on `emails`, `customer_companies`, and `qb_operations` are managed by `BulkIndexManager` (dropped before bulk reembed, recreated after). Migration 096 added `embedding_model` + `embedded_at` audit columns and cleared stale mixed-provider embeddings. Migration 097 updated batch embedding RPCs to accept audit params and added `qb_quotes` embedding support. Full-text search index exists on `emails` (migration 057). The `exec_sql` RPC (migration 071) allows index management from application code.
 
 ### Secrets and credentials
 
@@ -694,7 +697,7 @@ All secrets are managed via environment variables: `SUPABASE_URL`, `SUPABASE_SER
 
 - **Email deduplication across mailboxes doesn't exist.** The same email received by a sender and recipient (both with connected mailboxes) appears twice in the `emails` table and gets classified twice.
 
-- **Embedding is not automatic.** New emails arrive without embeddings. Semantic search only covers emails that existed when reembed was last triggered. There's no pipeline to embed on arrival.
+- **Embedding is not automatic.** New emails arrive without embeddings. Semantic search only covers records that existed when reembed was last triggered. There's no pipeline to embed on arrival.
 
 - **BackgroundTasks jobs have no crash recovery.** If the API server restarts while a BackgroundTasks job is running, the `processing_jobs` record stays as "running" forever (unless the stuck-job reconciler catches it, but reconciler only works on worker-leased jobs with `lease_expires_at`).
 
@@ -724,7 +727,7 @@ All secrets are managed via environment variables: `SUPABASE_URL`, `SUPABASE_SER
 
 **Canonical thread resolution** — The process (migration 055) of computing stable thread IDs from email header chains. Handles cases where email clients break threading.
 
-**Embedding vs classification** — Two different AI operations. *Embedding* converts text into a 768-dimensional vector for similarity search (Google text-embedding-004, stored in `*.embedding` columns). *Classification* uses an LLM (Claude Haiku) to assign structured labels (intent, urgency, sentiment) to an email (stored in `ai_email_intelligence`). They serve different purposes and run independently.
+**Embedding vs classification** — Two different AI operations. *Embedding* converts text into a 768-dimensional vector for similarity search (provider set by `EMBEDDING_PROVIDER` env var, stored in `*.embedding` columns with `embedding_model` audit trail). *Classification* uses an LLM (Claude Haiku) to assign structured labels (intent, urgency, sentiment) to an email (stored in `ai_email_intelligence`). They serve different purposes and run independently.
 
 **Processing status** (of an email) — `pending` (not yet classified), `success` (AI classification completed), `failed` (classification attempted but errored). Stored in `emails.processing_status`.
 
