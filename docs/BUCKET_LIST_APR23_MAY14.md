@@ -28,16 +28,26 @@
 
 ### Embedding re-embed (added Apr 23 — priority)
 
-- [ ] Migration: add `embedding_model` + `embedded_at` to `emails`, `qb_operations`, `customer_companies`
-- [ ] `vector_service.py` updated to populate both columns on every embed write
-- [ ] Verify `reembed_all()` / `BulkIndexManager` handles drop-rebuild cleanly for 258K rows
-- [ ] OpenAI rate-limit handling: confirm runner respects `retry-after` headers with backoff
-- [ ] Idempotency + resumability check on runner
-- [ ] Scope query: null-out SQL for all non-OpenAI-768 rows (emails ~210K + operations ~6,800 from scratch since only 1% embedded anyway)
-- [ ] Verification SQL written before kickoff (single-model count check)
-- [ ] HNSW index drop, re-embed run, index rebuild
-- [ ] Verification run: all rows have `embedding_model = 'text-embedding-3-small-768'`, no NULLs
-- [ ] Spot-check semantic search quality on 20 known queries before/after
+- [x] Migration 096: add `embedding_model` + `embedded_at` to emails, qb_operations, customer_companies; drop HNSW; null stale embeddings (applied Apr 24)
+- [x] Migration 097: update 3 batch RPCs with audit params; add embedding/audit cols to qb_quotes; create `batch_update_embeddings_quotes` RPC (applied Apr 24)
+- [x] `vector_service.py`: audit columns on every embed write (all 4 tables), `_resolve_provider()` from env var, `_embedding_model_tag()` canonical format
+- [x] Quality gate: `MIN_EMBED_TEXT_LEN = 20` across all embed methods; quotes also filtered by `matched_company_id IS NOT NULL` (~130K thin rows excluded)
+- [x] `embed_quotes_batch()` with customer enrichment via `qb_customers.customer_key_id` join
+- [x] 14 unit tests passing (`backend/tests/test_vector_service.py`)
+- [x] Null-out: all stale mixed-provider embeddings cleared via DROP+ADD COLUMN (migration 096)
+- [x] Reembed completed Apr 24-25: emails 258,453/258,472 + companies 14,735/14,978 (gaps are below MIN_EMBED_TEXT_LEN gate, expected)
+- [x] Verification: all embedded rows tagged `openai/text-embedding-3-small-768`, zero untagged across both tables
+- [x] qb_operations: 4,000 rows embedded by auto-trigger pipeline during re-embed window (not part of scoped run, but properly tagged — kept as-is)
+- [ ] **Investigate before next bulk re-embed:** companies run required 4 manual clicks to reach 100%. Single job appears to terminate early without exhausting the table. Worth checking worker logs for completion semantics before any post-trip 615K operations re-embed.
+- [x] IVFFlat index built on emails (lists=500, 1013 MB) — HNSW abandoned; fails on Supabase Pro at disk-spill phase
+- [x] `ivfflat.probes = 10` set at database level via `ALTER DATABASE postgres SET ivfflat.probes = 10`
+- [x] Functional test: top-10 similarity returns semantically related results (~140ms, probes=10)
+- [x] `DATABASE_DESIGN.md` updated: vector embedding architecture (§5.5), index choice rationale (§5.6), build operations (§5.7), forbidden operations (§5.8), migration history 094–097
+- [ ] Spot-check semantic search quality on 20 known queries
+- [ ] Post-trip: revisit HNSW with raised `maintenance_work_mem` if IVFFlat recall proves insufficient
+- [ ] Post-trip flag: investigate apparent duplicate emails surfaced during sanity test (rows `a9ad862f` and `f5714636` share identical subject + similarity score)
+- [D] Operations embedding (615K) — not on MVP critical path, deferred
+- [D] Quotes embedding (~19K matched) — untested hypothesis, exit criterion not yet met, deferred
 
 ### Signature re-extraction (titles)
 
@@ -74,12 +84,13 @@
 
 ## AI config page hardening (added Apr 23)
 
-- [ ] **Resolve dual-source-of-truth for embedding provider:** `EMBEDDING_PROVIDER` env var exists in Railway AND `system_settings` DB row exists — two mechanisms, can disagree silently
-- [ ] Decision: env var is source of truth, remove embedding dropdown from UI (recommended — the dropdown is the root cause of today's rework)
-- [ ] Remove embedding model dropdown from AI config page
-- [ ] Keep LLM dropdowns (Email Analysis, Daily Digest, Strategic Digest, Entity Insights) — those are stateless, safe to toggle
-- [ ] Audit code paths: confirm only env var is read at runtime after dropdown removal
-- [ ] Consider storing model name on classification / digest / extraction rows for audit (post-trip if not core to MVP)
+- [x] Resolved dual-source-of-truth: `EMBEDDING_PROVIDER` env var is sole source of truth
+- [x] Removed embedding model dropdown from AI config page (commit `f460729`)
+- [x] Read-only status line shows `model_tag` from env (e.g. `openai/text-embedding-3-small-768`)
+- [x] PUT `/embedding-config` endpoint removed; GET returns env var value only
+- [x] LLM dropdowns kept (Email Analysis, Daily Digest, Strategic Digest, Entity Insights)
+- [x] Grep verified: zero code paths read `embedding_provider`/`embedding_model` from system_settings
+- [D] Consider storing model name on classification / digest / extraction rows for audit (post-trip)
 
 ---
 
@@ -159,7 +170,7 @@
 - [D] LinkedIn prospect replication
 - [D] Daily/Strategic digest as user-facing features
 - [D] AU seasonal calendar integration
-- [D] Embedding config UI: option 2 full migration-trigger flow
+- [x] Embedding config UI: dropdown removed, read-only status from env var (shipped Apr 24)
 - [D] Classification/digest model audit columns
 - [D] `hello@carbon8.com.au` classification coverage
 - [D] 14 Carbon8 domain variant cleanup
@@ -173,7 +184,7 @@
 
 - [ ] Invite User UI: Ant Design (match design doc) or Tailwind+shadcn (match migration direction)
 - [ ] Parent visit specific days — **still unresolved from scope lock doc**
-- [ ] Re-embed run scheduling: during work hours (search degraded briefly) or overnight?
+- [x] Re-embed run scheduling: triggered Apr 24 evening; emails running, companies next; operations + quotes deferred
 
 ---
 

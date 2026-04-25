@@ -13,7 +13,7 @@ A comprehensive reference for every database object in the Email Intelligence Pl
 - **Extensions:** pgvector 0.8.0, pg_stat_statements 1.11, pgcrypto 1.3, uuid-ossp 1.1, pg_graphql 1.5.11, supabase_vault 0.3.1, plpgsql 1.0
 - **Access:** PostgREST auto-generates REST API; RPC functions exposed as `POST /rest/v1/rpc/<fn_name>`
 - **Auth:** Supabase Auth (JWT) with Row-Level Security on select tables
-- **Migrations:** 93 incremental SQL scripts in `scripts/migrations/` (001–093), applied via `exec_sql` RPC + PostgREST schema reload
+- **Migrations:** 97 incremental SQL scripts in `scripts/migrations/` (001–097), applied via `exec_sql` RPC + PostgREST schema reload
 
 ### Schema Domains
 
@@ -190,14 +190,16 @@ Core email storage — every synced/imported email.
 | thread_confidence | float4 | NULL | 1.0 | |
 | attachments | jsonb | NOT NULL | `[]` | Array of attachment metadata |
 | provider_web_link | text | NULL | | Deep link to email in provider |
-| embedding | vector | NULL | | 768-dim Google text-embedding-004 |
+| embedding | vector(768) | NULL | | See §5.5 Vector Embedding Architecture |
+| embedding_model | text | NULL | | Provider/model tag, e.g. `openai/text-embedding-3-small-768` |
+| embedded_at | timestamptz | NULL | | When the embedding was last written |
 | canonical_thread_id | uuid | NULL | | 4-tier resolved thread ID |
 | thread_match_method | text | NULL | | `in_reply_to`, `references`, `subject_participants`, `new` |
 | thread_match_confidence | float4 | NULL | | |
 | search_text | tsvector | NULL | | Auto-populated by trigger for BM25 search |
 | created_at/updated_at | timestamptz | | now() | |
 
-**Scale:** 262,051 rows | **Total size:** 7.7 GB (473 MB data + 7.2 GB indexes including 942 MB HNSW) | **Unique:** (message_id, mailbox_id) | **RLS:** Yes
+**Scale:** 262,051 rows | **Total size:** 7.7 GB (473 MB data + 7.2 GB indexes including IVFFlat vector index) | **Unique:** (message_id, mailbox_id) | **RLS:** Yes
 
 #### `email_categories`
 Tags/categories assigned to emails by the rule-based tagger (20+ tags).
@@ -368,7 +370,9 @@ Extracted companies from email domains. Enriched with QB data post-matching.
 | qb_growth_90d | numeric | NULL | | 90-day growth rate |
 | qb_days_since_last_invoice | int4 | NULL | | |
 | qb_account_manager | text | NULL | | |
-| embedding | vector | NULL | | 768-dim |
+| embedding | vector(768) | NULL | | See §5.5 Vector Embedding Architecture |
+| embedding_model | text | NULL | | Provider/model tag |
+| embedded_at | timestamptz | NULL | | When embedding was last written |
 | qb_customer_id | text | NULL | | FK to QB record |
 | qb_customer_code | text | NULL | | |
 | qb_match_method | text | NULL | | `exact_domain`, `email_first`, `fuzzy` |
@@ -376,7 +380,7 @@ Extracted companies from email domains. Enriched with QB data post-matching.
 | notes | text | NULL | | |
 | created_at/updated_at | timestamptz | | now() | |
 
-**Unique:** (client_id, company_name) | **Scale:** 14,939 rows (40 MB) | **HNSW index:** 4 MB
+**Unique:** (client_id, company_name) | **Scale:** 14,939 rows (40 MB)
 
 #### `customer_contacts`
 Extracted contacts from email addresses with role classification and engagement metrics.
@@ -415,7 +419,7 @@ Extracted contacts from email addresses with role classification and engagement 
 | open_thread_count | int4 | NULL | 0 | |
 | dropped_thread_count | int4 | NULL | 0 | |
 | is_shared_address | bool | NULL | false | e.g., info@, sales@ |
-| contact_type | text | NULL | `person` | `person` or `shared` |
+| contact_type | text | NULL | `person` | `person`, `internal`, `shared`, `automated`, `mailing_list`, `unknown` |
 | scoring_version | int4 | NOT NULL | 1 | |
 | total_emails_sent | int4 | NULL | 0 | |
 | total_emails_received | int4 | NULL | 0 | |
@@ -715,7 +719,7 @@ Key columns: `qb_customer_id`, `first_name`, `surname`, `email`, `phone`, `activ
 #### `qb_quotes` — 148,071 rows (61 MB)
 Quote records from QB.
 
-Key columns: `qb_customer_id`, `quote_no`, `quote_am_name`, `sell_ex_tax`, `date_created`, `date_accepted`, `category`, `contact_email`, `contact_name`, `job_no`, `has_job`, `quantity`, `kinds`, `total_quantity`, `matched_company_id`.
+Key columns: `qb_customer_id`, `quote_no`, `quote_am_name`, `sell_ex_tax`, `date_created`, `date_accepted`, `category`, `contact_email`, `contact_name`, `job_no`, `has_job`, `quantity`, `kinds`, `total_quantity`, `matched_company_id`, `embedding` (vector(768)), `embedding_model`, `embedded_at`.
 
 **Unique:** (client_id, qb_record_id)
 
@@ -729,9 +733,9 @@ Key columns: `qb_customer_id`, `job_no`, `quote_no`, `job_status`, `retail_sale`
 #### `qb_operations` — 614,257 rows (525 MB)
 Largest QB table — individual production operations per job.
 
-Key columns: `operation_id`, `qb_customer_id`, `job_no`, `quote_no`, `operation_name`, `machine`, `department`, `finishing_type`, `job_title`, `date_accepted`, `date_due`, `customer_name`, `customer_code`, `am_job`, `am_customer`, `quantity`, `production_status`, `cost_price`, `cost_plus_price`, `profit_amount`, `profit_pct`, `capability_tags` (jsonb), `has_coating`, `has_sewing`, `has_outsource_component`, `am_rush`, `factory_rush`, `row_type`, `embedding` (vector 768), `qb_process_tag`, `qb_capability_tag`, `qb_machine_tier_tag`, `qb_row_type_tag`, `qb_blank_reason_tag`, `qb_embellishment_tag`, `contact_email`, `matched_company_id`.
+Key columns: `operation_id`, `qb_customer_id`, `job_no`, `quote_no`, `operation_name`, `machine`, `department`, `finishing_type`, `job_title`, `date_accepted`, `date_due`, `customer_name`, `customer_code`, `am_job`, `am_customer`, `quantity`, `production_status`, `cost_price`, `cost_plus_price`, `profit_amount`, `profit_pct`, `capability_tags` (jsonb), `has_coating`, `has_sewing`, `has_outsource_component`, `am_rush`, `factory_rush`, `row_type`, `embedding` (vector(768)), `embedding_model`, `embedded_at`, `qb_process_tag`, `qb_capability_tag`, `qb_machine_tier_tag`, `qb_row_type_tag`, `qb_blank_reason_tag`, `qb_embellishment_tag`, `contact_email`, `matched_company_id`.
 
-**Unique:** (client_id, qb_record_id) | **HNSW index:** 18 MB
+**Unique:** (client_id, qb_record_id)
 
 #### `qb_sales_line_items` — 79,900 rows (38 MB)
 Invoice line items from QB.
@@ -944,9 +948,10 @@ These replace row-by-row updates with single-statement bulk operations, reducing
 
 | Function | Arguments | Notes |
 |----------|-----------|-------|
-| `batch_update_embeddings_emails` | p_ids uuid[], p_embeddings vector[] | SECURITY DEFINER, 30s timeout |
-| `batch_update_embeddings_companies` | p_ids uuid[], p_embeddings vector[] | SECURITY DEFINER, 30s timeout |
-| `batch_update_embeddings_operations` | p_ids uuid[], p_embeddings vector[] | SECURITY DEFINER, 30s timeout |
+| `batch_update_embeddings_emails` | p_ids uuid[], p_embeddings vector[], p_embedding_model text, p_embedded_at timestamptz | SECURITY DEFINER, 30s timeout |
+| `batch_update_embeddings_companies` | p_ids uuid[], p_embeddings vector[], p_embedding_model text, p_embedded_at timestamptz | SECURITY DEFINER, 30s timeout |
+| `batch_update_embeddings_operations` | p_ids uuid[], p_embeddings vector[], p_embedding_model text, p_embedded_at timestamptz | SECURITY DEFINER, 30s timeout |
+| `batch_update_embeddings_quotes` | p_ids uuid[], p_embeddings vector[], p_embedding_model text, p_embedded_at timestamptz | SECURITY DEFINER, 30s timeout |
 | `batch_update_classifications` | p_ids, p_capability_tags, p_has_coating, p_has_sewing, ... | QB operation classification tags |
 | `batch_update_canonical_threads` | p_updates jsonb | Thread ID resolution results |
 | `batch_update_company_analytics` | updates jsonb | Engagement scores, thread counts |
@@ -1065,24 +1070,29 @@ These replace row-by-row updates with single-statement bulk operations, reducing
 
 | Table | Index Count | Total Index Size | Notes |
 |-------|------------|-----------------|-------|
-| emails | 37 | ~7.2 GB | Includes 942 MB HNSW, 304 MB body FTS, 170 MB search_text GIN |
+| emails | 37+ | ~7.2 GB | Includes IVFFlat vector index, 304 MB body FTS, 170 MB search_text GIN |
 | email_categories | 7 | 217 MB | 66 MB covering index |
-| qb_operations | 14 | 220 MB | 47 MB unique, 18 MB HNSW |
+| qb_operations | 14+ | 220 MB | 47 MB unique; no vector index (seq scan on small embedded subset) |
 | email_contact_links | 6 | 95 MB | 42 MB unique |
 | thread_status | 18 | 58 MB | 15 MB thread_id unique |
 | customer_contacts | 17 | 22 MB | |
-| customer_companies | 17 | 16 MB | 4 MB HNSW |
+| customer_companies | 17+ | 16 MB | Includes HNSW vector index |
 | ai_email_intelligence | 21 | 57 MB | |
 | metric_history | 3 | 93 MB | |
 
-### 5.2 Vector Indexes (HNSW)
+### 5.2 Vector Indexes
 
-| Index | Table | Size | Config |
-|-------|-------|------|--------|
-| idx_emails_embedding | emails | 942 MB | m=16, ef_construction=64 |
-| idx_operations_embedding | qb_operations | 18 MB | m=16, ef_construction=64 |
-| idx_companies_embedding | customer_companies | 4 MB | m=16, ef_construction=64 |
-| idx_email_intelligence_embedding | ai_email_intelligence | 16 kB | m=16, ef_construction=64 |
+| Index | Table | Type | Config | Notes |
+|-------|-------|------|--------|-------|
+| idx_emails_embedding | emails | IVFFlat | lists=500 | Large table; HNSW build fails on Supabase Pro |
+| idx_companies_embedding | customer_companies | HNSW | m=16, ef_construction=64 | Small table; HNSW builds reliably |
+| idx_email_intelligence_embedding | ai_email_intelligence | HNSW | m=16, ef_construction=64 | Small embedded subset |
+| idx_emails_embedding_model | emails | btree | partial: WHERE embedding IS NOT NULL | Audit column lookup |
+| idx_qb_operations_embedding_model | qb_operations | btree | partial: WHERE embedding IS NOT NULL | Audit column lookup |
+| idx_customer_companies_embedding_model | customer_companies | btree | partial: WHERE embedding IS NOT NULL | Audit column lookup |
+| idx_qb_quotes_embedding_model | qb_quotes | btree | partial: WHERE embedding IS NOT NULL | Audit column lookup |
+
+**No vector index on `qb_operations` or `qb_quotes`:** The embedded subset is small enough that sequential scan is acceptable. Build an IVFFlat index when the embedded row count exceeds ~10K.
 
 ### 5.3 Full-Text Search Indexes (GIN)
 
@@ -1099,6 +1109,80 @@ Per `docs/database/INDEX_POLICY.md`:
 - **Naming:** `idx_{table}_{purpose}` for single-column, `idx_{table}_{col1}_{col2}` for composite
 - **Partial indexes** preferred for boolean flags and status filters
 - **Monthly review** of index scan counts via `get_db_index_stats()`
+
+### 5.5 Vector Embedding Architecture
+
+Every table with a `vector(768)` column also carries two audit columns: `embedding_model TEXT` and `embedded_at TIMESTAMPTZ`. These are set at write time by `vector_service.py` and distinguish embeddings written by different providers or models. Future provider or dimension changes can target stale rows via the partial index on `embedding_model WHERE embedding IS NOT NULL`, instead of bulk null-and-re-embed.
+
+**Tables with embeddings:**
+
+| Table | Coverage | Index | Search behavior |
+|-------|----------|-------|-----------------|
+| emails | Full (rows passing quality gate) | IVFFlat (lists=500) | Indexed search; requires `ivfflat.probes` ≥ 10 for usable recall (see §5.6) |
+| customer_companies | Full (rows passing quality gate) | HNSW (m=16, ef=64) | Indexed search; no runtime tuning needed |
+| qb_operations | Partial; auto-trigger via QB sync, capped per run | None | Sequential scan over the embedded subset; acceptable at current scale |
+| qb_quotes | Filtered; `matched_company_id IS NOT NULL` only | None | No vectors yet; column exists but is unpopulated |
+
+**Source of truth for embedding provider:** `EMBEDDING_PROVIDER` env var. The AI config page displays the current provider read-only; no UI dropdown writes to `system_settings`. Changing the provider invalidates all existing vectors and requires a full re-embed.
+
+**Composition functions** (all in `vector_service.py`):
+
+| Function | Fields Composed |
+|----------|----------------|
+| `_build_email_embed_text` | subject + sender + outbound direction + body[:1000] |
+| `_build_company_embed_text` | company_name + industry + domains + tier + customer_type + revenue + AM |
+| `_build_operation_embed_text` | operation_name + dept + machine + customer + capability/process/technology/type/embellishment/finishing tags |
+| `_build_quote_embed_text` | category (when present) + customer_name + AM + contact + qty + value + industry + tier (via join to matched company) |
+
+**Quality gate:**
+- `MIN_EMBED_TEXT_LEN = 20` across all embed methods. Rows below the gate are skipped, not failed — visible as `embedded < total` in verification queries.
+- `qb_quotes` additionally requires `matched_company_id IS NOT NULL` pre-filter. Unmatched quotes compose to thin customer-identity-only vectors with no semantic value.
+
+### 5.6 Index Choice Rationale
+
+**IVFFlat for tables above ~50K vectors.** HNSW build on Supabase Pro fails at the disk-spill phase with `hnsw graph no longer fits into maintenance_work_mem`. The managed environment's I/O bandwidth cannot sustain the HNSW disk phase to completion above this threshold. IVFFlat builds in a single pass with no disk-spill phase, completes in minutes, and is the operationally viable choice.
+
+**IVFFlat parameters:** `lists ≈ sqrt(row_count)` rounded to nearest 100.
+
+**HNSW parameters:** `m=16, ef_construction=64`. Used only on small tables (e.g. `customer_companies`) where the build completes reliably.
+
+**Runtime tuning:**
+- `ivfflat.probes = 10` set at database level: `ALTER DATABASE postgres SET ivfflat.probes = 10;`
+- Default probes=1 yields ~10–15% recall; probes=10 yields ~90–95% recall on lists=500.
+- Trade-off: higher probes = more lists scanned per query = higher latency for higher recall.
+
+### 5.7 Index Build Operations
+
+Index builds on vector columns require a direct connection (DBeaver, port 5432) with autocommit enabled:
+
+```sql
+SET statement_timeout = 0;
+SET maintenance_work_mem = '512MB';
+
+-- Only one CREATE INDEX at a time. Concurrent builds cause contention.
+CREATE INDEX idx_emails_embedding
+  ON emails
+  USING ivfflat (embedding vector_cosine_ops)
+  WITH (lists = 500);
+```
+
+For HNSW on small tables:
+
+```sql
+SET statement_timeout = 0;
+SET maintenance_work_mem = '256MB';
+
+CREATE INDEX idx_companies_embedding
+  ON customer_companies
+  USING hnsw (embedding vector_cosine_ops)
+  WITH (m = 16, ef_construction = 64);
+```
+
+### 5.8 Forbidden Vector Operations
+
+- **Do not bulk UPDATE vector columns.** `UPDATE...SET embedding = NULL` on a large vector column hits `statement_timeout` due to MVCC dead-tuple cost (~6KB per row × N rows). Null-then-embed per small batch within the runner instead.
+- **Do not run multiple CREATE INDEX statements concurrently** on the same database. Causes contention, inconsistent state, apparent freezes.
+- **Do not change `EMBEDDING_PROVIDER` without a re-embed plan.** Existing vectors are model-specific; mixing providers in one column produces noise similarity scores even at matching dimensions.
 
 ---
 
@@ -1205,7 +1289,7 @@ RLS is enabled on select tables. Most tables bypass RLS via the service role key
 
 ## 10. Migration History
 
-94 migrations in `scripts/migrations/` track the schema evolution:
+97 migrations in `scripts/migrations/` track the schema evolution:
 
 | Range | Era | Key Changes |
 |-------|-----|-------------|
@@ -1213,7 +1297,9 @@ RLS is enabled on select tables. Most tables bypass RLS via the service role key
 | 021–034 | Sprint 2–3 Analytics & AI | QB enrichment, field definitions, sync logging, system settings, AI prompts, product intelligence |
 | 035–057 | Sales Intelligence & Vector | pgvector + HNSW, batch RPCs, QB matching revamp, email contact links, canonical threads, hybrid search |
 | 060–072 | Data Quality & IO Budget | Thread constraints, IO budget RPCs, data health RPCs, seasonality engine, bulk ops helpers |
-| 073–094 | Worker Infrastructure & Polish | Processing job reembed, thread override rules, QB contact linking, worker infrastructure, events/notifications, contact persona views, deal activity, Pass 3 company→contact QB propagation |
+| 073–093 | Worker Infrastructure & Polish | Processing job reembed, thread override rules, QB contact linking, worker infrastructure, events/notifications, contact persona views, deal activity |
+| 094 | QB Propagation Guards | Pass 3 company→contact QB propagation with contact-type exclusions (`internal`, `shared`, `automated`, `mailing_list`) |
+| 095–097 | Embedding & Contact Hardening | Internal/shared contact cleanup + QB tier nulling, embedding audit columns (`embedding_model`, `embedded_at`) on all vector tables, qb_quotes embedding support, batch RPC audit params |
 
 **Migration application method:** `scripts/db/_run_NNN_via_rest.py` → `exec_sql` RPC + `NOTIFY pgrst, 'reload schema'`; scripts are throwaway and deleted after verification.
 
@@ -1236,7 +1322,7 @@ RLS is enabled on select tables. Most tables bypass RLS via the service role key
 ### Performance
 - `metric_history` at 792K rows and growing — no retention policy
 - `email_categories` at 607K rows with heavy indexing (291 MB) — consider partitioning
-- HNSW rebuild on `emails` (942 MB) requires `maintenance_work_mem=256MB` and takes significant time
+- Vector index rebuild on `emails` requires direct connection with `statement_timeout=0` and `maintenance_work_mem=512MB`; see §5.7
 
 ---
 
