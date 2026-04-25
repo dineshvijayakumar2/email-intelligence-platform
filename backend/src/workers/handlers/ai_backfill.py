@@ -1,10 +1,9 @@
 """
 Worker handler for ai_backfill jobs.
 
-Extracts the run_backfill() closure from ai.py into a standalone handler
-that runs under the worker's lease/heartbeat supervision.
-
-This is the first job type migrated from BackgroundTasks → worker execution.
+Processes mailboxes concurrently (up to CONCURRENCY slots) to maximise
+throughput during bulk backfills. Each slot gets its own AIEmailAnalyzer
+instance to avoid shared cursor/state issues.
 """
 from __future__ import annotations
 
@@ -13,19 +12,19 @@ import logging
 
 logger = logging.getLogger("worker.ai_backfill")
 
+CONCURRENCY = 3
+CHUNK = 10_000
+
 
 async def ai_backfill_handler(sb, job: dict, stop_event: asyncio.Event):
     """Backfill AI intent classification for unanalyzed emails.
 
-    Processes all mailboxes specified in job parameters, running
-    analyze_all_unanalyzed + bucket engine for each.
+    Processes mailboxes concurrently (up to CONCURRENCY at a time).
+    Each mailbox gets its own AIEmailAnalyzer to avoid shared state.
 
     Parameters (from job["parameters"]):
         mailbox_ids: list[str] — mailboxes to process
     """
-    from src.services.ai_email_analyzer import AIEmailAnalyzer
-    from src.services.ai_action_bucket_engine import ActionBucketEngine
-
     job_id = job["id"]
     params = job.get("parameters") or {}
     mailbox_ids = params.get("mailbox_ids", [])
@@ -34,89 +33,87 @@ async def ai_backfill_handler(sb, job: dict, stop_event: asyncio.Event):
     if not mailbox_ids:
         raise ValueError("No mailbox_ids provided in job parameters")
 
-    analyzer = AIEmailAnalyzer(sb)
-    bucket_engine = ActionBucketEngine(sb)
+    progress = {"analyzed": 0, "failed": 0, "done_mailboxes": 0}
+    total_mailboxes = len(mailbox_ids)
+    sem = asyncio.Semaphore(CONCURRENCY)
 
-    total_analyzed = 0
-    total_failed = 0
+    async def _process_mailbox(mb_id: str, idx: int):
+        from src.services.ai_email_analyzer import AIEmailAnalyzer
+        from src.services.ai_action_bucket_engine import ActionBucketEngine
 
-    for idx, mb_id in enumerate(mailbox_ids):
-        if stop_event.is_set():
-            logger.info(
-                f"ai_backfill {job_id}: stopped before mailbox "
-                f"{idx + 1}/{len(mailbox_ids)}"
-            )
-            break
+        async with sem:
+            if stop_event.is_set():
+                return
 
-        _update_progress(
-            sb, job_id,
-            f"Processing mailbox {idx + 1}/{len(mailbox_ids)}",
-            processed=total_analyzed,
-            failed=total_failed,
-        )
-
-        try:
-            CHUNK = 10_000
+            analyzer = AIEmailAnalyzer(sb)
             mb_analyzed = 0
             mb_failed = 0
 
-            while not stop_event.is_set():
-                result = await asyncio.to_thread(
-                    analyzer.analyze_all_unanalyzed,
-                    mailbox_id=mb_id,
-                    client_id=client_id,
-                    max_emails=CHUNK,
-                    date_from="all",
-                )
-                chunk_ok = result.get("total_analyzed", 0)
-                chunk_fail = result.get("total_failed", 0)
-                mb_analyzed += chunk_ok
-                mb_failed += chunk_fail
-
-                _update_progress(
-                    sb, job_id,
-                    f"Mailbox {idx + 1}/{len(mailbox_ids)}: "
-                    f"{mb_analyzed} classified so far",
-                    processed=total_analyzed + mb_analyzed,
-                    failed=total_failed + mb_failed,
-                )
-
-                if chunk_ok + chunk_fail < CHUNK:
-                    break
-
-            total_analyzed += mb_analyzed
-            total_failed += mb_failed
-
-            logger.info(
-                f"ai_backfill {job_id}: mailbox {idx + 1}/{len(mailbox_ids)} "
-                f"({mb_id}): {mb_analyzed} classified"
-            )
-
-            if mb_analyzed > 0:
-                try:
-                    await asyncio.to_thread(
-                        bucket_engine.process_email_buckets, mb_id
+            try:
+                while not stop_event.is_set():
+                    result = await asyncio.to_thread(
+                        analyzer.analyze_all_unanalyzed,
+                        mailbox_id=mb_id,
+                        client_id=client_id,
+                        max_emails=CHUNK,
+                        date_from="all",
                     )
-                except Exception as be:
-                    logger.warning(f"Bucket engine failed for {mb_id}: {be}")
+                    chunk_ok = result.get("total_analyzed", 0)
+                    chunk_fail = result.get("total_failed", 0)
+                    mb_analyzed += chunk_ok
+                    mb_failed += chunk_fail
 
-        except Exception as e:
-            logger.error(f"ai_backfill {job_id}: failed for mailbox {mb_id}: {e}")
-            total_failed += 1
+                    progress["analyzed"] += chunk_ok
+                    progress["failed"] += chunk_fail
 
-    # Write final progress — runner handles status=completed
+                    _update_progress(
+                        sb, job_id,
+                        f"{CONCURRENCY} concurrent | "
+                        f"{progress['analyzed']} classified, "
+                        f"{progress['done_mailboxes']}/{total_mailboxes} mailboxes done",
+                        processed=progress["analyzed"],
+                        failed=progress["failed"],
+                    )
+
+                    if chunk_ok + chunk_fail < CHUNK:
+                        break
+
+                logger.info(
+                    f"ai_backfill {job_id}: mailbox {idx + 1}/{total_mailboxes} "
+                    f"({mb_id}): {mb_analyzed} classified"
+                )
+
+                if mb_analyzed > 0:
+                    try:
+                        bucket_engine = ActionBucketEngine(sb)
+                        await asyncio.to_thread(
+                            bucket_engine.process_email_buckets, mb_id
+                        )
+                    except Exception as be:
+                        logger.warning(f"Bucket engine failed for {mb_id}: {be}")
+
+            except Exception as e:
+                logger.error(f"ai_backfill {job_id}: failed for mailbox {mb_id}: {e}")
+                progress["failed"] += 1
+
+            progress["done_mailboxes"] += 1
+
+    await asyncio.gather(
+        *[_process_mailbox(mb_id, i) for i, mb_id in enumerate(mailbox_ids)]
+    )
+
     _update_progress(
         sb, job_id,
-        f"Done: {total_analyzed} classified, {total_failed} failed "
-        f"across {len(mailbox_ids)} mailboxes",
+        f"Done: {progress['analyzed']} classified, {progress['failed']} failed "
+        f"across {total_mailboxes} mailboxes",
         pct=100,
-        processed=total_analyzed,
-        failed=total_failed,
+        processed=progress["analyzed"],
+        failed=progress["failed"],
     )
 
     logger.info(
-        f"ai_backfill {job_id}: completed — {total_analyzed} classified, "
-        f"{total_failed} failed across {len(mailbox_ids)} mailboxes"
+        f"ai_backfill {job_id}: completed — {progress['analyzed']} classified, "
+        f"{progress['failed']} failed across {total_mailboxes} mailboxes"
     )
 
 
