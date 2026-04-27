@@ -599,6 +599,7 @@ class AIEmailAnalyzer:
                     'Connection reset', 'Connection refused', 'timed out',
                     'JSON could not be generated', 'ECONNRESET', 'ETIMEDOUT',
                     'ConnectionTerminated', 'PROTOCOL_ERROR', 'SEND_HEADERS', 'StreamInput', 'state 5',
+                    'pseudo-header', 'Server disconnected',
                 ])
                 if is_transient and attempt < max_retries:
                     delay = base_delay * (2 ** attempt)

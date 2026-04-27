@@ -48,56 +48,69 @@ async def ai_backfill_handler(sb, job: dict, stop_event: asyncio.Event):
             if idx > 0:
                 await asyncio.sleep(idx * 10)
 
-            analyzer = AIEmailAnalyzer(sb)
             mb_analyzed = 0
             mb_failed = 0
+            max_mailbox_retries = 3
 
-            try:
-                while not stop_event.is_set():
-                    result = await asyncio.to_thread(
-                        analyzer.analyze_all_unanalyzed,
-                        mailbox_id=mb_id,
-                        client_id=client_id,
-                        max_emails=CHUNK,
-                        date_from="all",
-                    )
-                    chunk_ok = result.get("total_analyzed", 0)
-                    chunk_fail = result.get("total_failed", 0)
-                    mb_analyzed += chunk_ok
-                    mb_failed += chunk_fail
-
-                    progress["analyzed"] += chunk_ok
-                    progress["failed"] += chunk_fail
-
-                    _update_progress(
-                        sb, job_id,
-                        f"{CONCURRENCY} concurrent | "
-                        f"{progress['analyzed']} classified, "
-                        f"{progress['done_mailboxes']}/{total_mailboxes} mailboxes done",
-                        processed=progress["analyzed"],
-                        failed=progress["failed"],
-                    )
-
-                    if chunk_ok + chunk_fail < CHUNK:
-                        break
-
-                logger.info(
-                    f"ai_backfill {job_id}: mailbox {idx + 1}/{total_mailboxes} "
-                    f"({mb_id}): {mb_analyzed} classified"
-                )
-
-                if mb_analyzed > 0:
-                    try:
-                        bucket_engine = ActionBucketEngine(sb)
-                        await asyncio.to_thread(
-                            bucket_engine.process_email_buckets, mb_id
+            for mailbox_attempt in range(max_mailbox_retries):
+                try:
+                    analyzer = AIEmailAnalyzer(sb)
+                    while not stop_event.is_set():
+                        result = await asyncio.to_thread(
+                            analyzer.analyze_all_unanalyzed,
+                            mailbox_id=mb_id,
+                            client_id=client_id,
+                            max_emails=CHUNK,
+                            date_from="all",
                         )
-                    except Exception as be:
-                        logger.warning(f"Bucket engine failed for {mb_id}: {be}")
+                        chunk_ok = result.get("total_analyzed", 0)
+                        chunk_fail = result.get("total_failed", 0)
+                        mb_analyzed += chunk_ok
+                        mb_failed += chunk_fail
 
-            except Exception as e:
-                logger.error(f"ai_backfill {job_id}: failed for mailbox {mb_id}: {e}")
-                progress["failed"] += 1
+                        progress["analyzed"] += chunk_ok
+                        progress["failed"] += chunk_fail
+
+                        _update_progress(
+                            sb, job_id,
+                            f"{CONCURRENCY} concurrent | "
+                            f"{progress['analyzed']} classified, "
+                            f"{progress['done_mailboxes']}/{total_mailboxes} mailboxes done",
+                            processed=progress["analyzed"],
+                            failed=progress["failed"],
+                        )
+
+                        if chunk_ok + chunk_fail < CHUNK:
+                            break
+
+                    logger.info(
+                        f"ai_backfill {job_id}: mailbox {idx + 1}/{total_mailboxes} "
+                        f"({mb_id}): {mb_analyzed} classified"
+                    )
+
+                    if mb_analyzed > 0:
+                        try:
+                            bucket_engine = ActionBucketEngine(sb)
+                            await asyncio.to_thread(
+                                bucket_engine.process_email_buckets, mb_id
+                            )
+                        except Exception as be:
+                            logger.warning(f"Bucket engine failed for {mb_id}: {be}")
+
+                    break
+
+                except Exception as e:
+                    if mailbox_attempt < max_mailbox_retries - 1:
+                        delay = 15 * (mailbox_attempt + 1)
+                        logger.warning(
+                            f"ai_backfill {job_id}: mailbox {mb_id} attempt "
+                            f"{mailbox_attempt + 1}/{max_mailbox_retries} failed: {e} — "
+                            f"retrying in {delay}s"
+                        )
+                        await asyncio.sleep(delay)
+                    else:
+                        logger.error(f"ai_backfill {job_id}: failed for mailbox {mb_id}: {e}")
+                        progress["failed"] += 1
 
             progress["done_mailboxes"] += 1
 
