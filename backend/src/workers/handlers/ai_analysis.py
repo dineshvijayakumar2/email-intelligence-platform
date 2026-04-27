@@ -134,32 +134,47 @@ def _link_ai_extracted_refs(sb, client_id: str, mailbox_id: str) -> int:
     Reads recently-completed emails with non-null extracted_references,
     validates each ref against qb_quotes/qb_jobs, and upserts links
     with source='ai' and confidence=0.9.
+
+    Paginates the initial query and chunks .in_() calls to stay within
+    PostgREST size limits.
     """
     import re
     from src.services.reference_extractor import _validate_refs, _upsert_links
 
-    # Fetch emails with AI-extracted refs (completed in this run)
-    resp = sb.table("ai_email_intelligence").select(
-        "email_id, extracted_references"
-    ).eq("mailbox_id", mailbox_id).eq(
-        "processing_status", "completed"
-    ).not_.is_("extracted_references", "null").execute()
+    PAGE = 500
+    all_rows = []
+    offset = 0
+    while True:
+        resp = sb.table("ai_email_intelligence").select(
+            "email_id, extracted_references"
+        ).eq("mailbox_id", mailbox_id).eq(
+            "processing_status", "completed"
+        ).not_.is_("extracted_references", "null").range(
+            offset, offset + PAGE - 1
+        ).execute()
+        batch = resp.data or []
+        all_rows.extend(batch)
+        if len(batch) < PAGE:
+            break
+        offset += PAGE
 
-    if not resp.data:
+    if not all_rows:
         return 0
 
-    # Build email_id -> thread_id lookup
-    email_ids = [r["email_id"] for r in resp.data]
-    thread_resp = sb.table("emails").select(
-        "id, canonical_thread_id"
-    ).in_("id", email_ids).execute()
-    thread_map = {
-        r["id"]: r.get("canonical_thread_id")
-        for r in (thread_resp.data or [])
-    }
+    email_ids = [r["email_id"] for r in all_rows]
+    thread_map: dict[str, str] = {}
+    for i in range(0, len(email_ids), PAGE):
+        chunk = email_ids[i:i + PAGE]
+        thread_resp = sb.table("emails").select(
+            "id, canonical_thread_id"
+        ).in_("id", chunk).execute()
+        for r in (thread_resp.data or []):
+            tid = r.get("canonical_thread_id")
+            if tid:
+                thread_map[r["id"]] = tid
 
     total_linked = 0
-    for row in resp.data:
+    for row in all_rows:
         refs_raw = row.get("extracted_references") or []
         if not refs_raw:
             continue
@@ -168,12 +183,10 @@ def _link_ai_extracted_refs(sb, client_id: str, mailbox_id: str) -> int:
         if not thread_id:
             continue
 
-        # Convert AI output [{type, number}] into {link_type: set(ref_string)}
-        # Normalize to Q/J prefix format to match regex extractor and qb_quotes/qb_jobs
         refs: dict[str, set[str]] = {}
         for ref in refs_raw:
-            ref_type = ref.get("type")  # "quote" or "job"
-            ref_number = ref.get("number")  # e.g. "Q20334"
+            ref_type = ref.get("type")
+            ref_number = ref.get("number")
             if ref_type and ref_number:
                 digits = re.sub(r'[^0-9]', '', str(ref_number))
                 if not digits:
