@@ -45,6 +45,9 @@ async def ai_backfill_handler(sb, job: dict, stop_event: asyncio.Event):
             if stop_event.is_set():
                 return
 
+            if idx > 0:
+                await asyncio.sleep(idx * 10)
+
             analyzer = AIEmailAnalyzer(sb)
             mb_analyzed = 0
             mb_failed = 0
