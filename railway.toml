@@ -2,7 +2,6 @@
 # This file documents the environment variables needed for deployment
 
 [deploy]
-healthcheckPath = "/health"
 
 # Environment Variables to set in Railway Dashboard:
 # 
