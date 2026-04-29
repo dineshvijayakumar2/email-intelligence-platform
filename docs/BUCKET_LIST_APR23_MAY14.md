@@ -69,10 +69,12 @@
 
 ### AI classification coverage
 
-- [ ] Run chunked backfill on AM mailboxes (Linda, Ehab, Kenneth, Nic, Jeff, Peter, Prince)
-- [ ] Verify 80%+ coverage on last 90 days per mailbox
-- [ ] Decide: does this run after or in parallel with re-embed? (Embeddings vs classifications are different API budgets, so parallel is fine)
-- [ ] Note: backfill handler now loops until exhaustion (code shipped `ade0c45`), single "Classify Pending" click will process all 209K
+- [x] Backfill handler: concurrent mailbox processing (CONCURRENCY=3, asyncio.gather + Semaphore), BATCH_SIZE 20→50 (commit `bc7606d`)
+- [~] Monday Apr 28: AI classification backfill in progress, 4 production issues fixed mid-run (PyYAML/Python 3.13 wheel, ref-linking PostgREST limit, concurrent prefetch connection exhaustion, HTTP/2 trailer retry)
+- [~] 88K/209K classified (~42%). At 3,300/hr, ~18h to Tuesday AM = ~59K more → ~70% max by meeting
+- [ ] Decide before Tuesday meeting: present 70% trajectory + completion ETA, or find ways to increase throughput
+- [ ] Verification SQL ready: per-mailbox coverage on last 90 days, all-mailboxes coverage on full 209K
+- [ ] Top up OpenAI credit if burn rate × remaining > remaining $10
 
 ### Known-issue cleanup (Week 1 fixes not yet done)
 

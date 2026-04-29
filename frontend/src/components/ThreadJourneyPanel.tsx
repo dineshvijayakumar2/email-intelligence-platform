@@ -58,7 +58,7 @@ export function ThreadJourneyPanel({ threadId, clientId }: Props) {
   const [loading, setLoading] = useState(true);
   const [showLink, setShowLink] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
-  const [detailOpen, setDetailOpen] = useState(true);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   const refresh = () => getThreadJourney(threadId, clientId).then(setJourney);
 
