@@ -97,7 +97,10 @@ async def trigger_extraction_job(data: ExtractionJobCreate, background_tasks: Ba
                 job_type='email_pipeline',
                 mailbox_id=data.mailbox_id,
                 client_id=client_id,
-                parameters={'trigger_source': 'manual_extraction'},
+                parameters={
+                    'trigger_source': 'manual_extraction',
+                    'extraction_mode': data.mode.value,
+                },
                 triggered_by='user',
                 max_attempts=1,
             ))
