@@ -70,11 +70,17 @@
 ### AI classification coverage
 
 - [x] Backfill handler: concurrent mailbox processing (CONCURRENCY=3, asyncio.gather + Semaphore), BATCH_SIZE 20→50 (commit `bc7606d`)
-- [~] Monday Apr 28: AI classification backfill in progress, 4 production issues fixed mid-run (PyYAML/Python 3.13 wheel, ref-linking PostgREST limit, concurrent prefetch connection exhaustion, HTTP/2 trailer retry)
-- [~] 88K/209K classified (~42%). At 3,300/hr, ~18h to Tuesday AM = ~59K more → ~70% max by meeting
-- [ ] Decide before Tuesday meeting: present 70% trajectory + completion ETA, or find ways to increase throughput
-- [ ] Verification SQL ready: per-mailbox coverage on last 90 days, all-mailboxes coverage on full 209K
-- [ ] Top up OpenAI credit if burn rate × remaining > remaining $10
+- [x] 4 production fixes mid-run: PyYAML/Python 3.13 wheel, ref-linking PostgREST limit, concurrent prefetch connection exhaustion, HTTP/2 trailer retry
+- [x] Multi-slot backfill (SLOTS_PER_MAILBOX=2) — each mailbox gets 2 concurrent analyzers. Tuned CONCURRENCY 5→3 after Supabase pressure
+- [x] Per-mailbox classify button on Data Health page (lightning bolt per row)
+- [~] Tuesday Apr 29: 155K/260K classified (72.4% all-time). Last 90 days: 5/7 mailboxes at 95%+, ehab@ at 82%, hello@ at 99.9%
+- [ ] Top up OpenAI credit if burn rate × remaining > remaining balance
+
+### Extraction pipeline bugs (identified Apr 29)
+
+- [x] **BUG FIX**: Manual extraction always ran as FULL mode — `extraction_mode` not passed in job parameters (commit `00ca6bb`)
+- [ ] **Deeper issue**: Even in incremental mode, pipeline steps (contact upsert, signature fetch, role classification) reprocess ALL emails within scope — no per-record "already extracted" tracking. Incremental only narrows the date window (7-day lookback), not the record set. Acceptable for now since 7-day window is small enough (~500-1000 emails).
+- [ ] Consider: add `last_extraction_at`-based filtering so incremental skips emails processed since last run, not just a fixed lookback window
 
 ### Known-issue cleanup (Week 1 fixes not yet done)
 

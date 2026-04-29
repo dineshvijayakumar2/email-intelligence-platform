@@ -56,20 +56,25 @@ export const DataHealthDashboard: React.FC = () => {
   const threadHealth = threadQuery.data || null;
 
   const [backfilling, setBackfilling] = useState(false);
+  const [backfillingMailbox, setBackfillingMailbox] = useState<string | null>(null);
   const [relinking, setRelinking] = useState(false);
   const [fetchingMissing, setFetchingMissing] = useState(false);
   const [fetchMissingResult, setFetchMissingResult] = useState<any>(null);
 
-  const startBackfill = async () => {
-    if (!clientId || backfilling) return;
-    setBackfilling(true);
+  const startBackfill = async (mailboxId?: string) => {
+    if (!clientId || backfilling || backfillingMailbox) return;
+    if (mailboxId) setBackfillingMailbox(mailboxId); else setBackfilling(true);
     try {
-      await api.post(`/v1/ai/backfill-intent?client_id=${clientId}`);
-      toast.success('Intent backfill started — this may take several minutes');
+      const params = mailboxId
+        ? `client_id=${clientId}&mailbox_id=${mailboxId}`
+        : `client_id=${clientId}`;
+      await api.post(`/v1/ai/backfill-intent?${params}`);
+      toast.success(mailboxId ? 'Mailbox classification started' : 'Intent backfill started — this may take several minutes');
     } catch (err: any) {
       toast.error(err?.message || 'Failed to start backfill');
     } finally {
       setBackfilling(false);
+      setBackfillingMailbox(null);
     }
   };
 
@@ -406,12 +411,12 @@ export const DataHealthDashboard: React.FC = () => {
               <h3 className="text-sm font-semibold text-slate-900">AI Classification Health</h3>
             </div>
             <button
-              onClick={startBackfill}
-              disabled={backfilling || !clientId || (classificationHealth?.totals?.pending ?? 0) === 0}
+              onClick={() => startBackfill()}
+              disabled={backfilling || !!backfillingMailbox || !clientId || (classificationHealth?.totals?.pending ?? 0) === 0}
               className="h-7 px-3 text-xs font-medium rounded-md border border-slate-200 hover:bg-slate-50 inline-flex items-center gap-1.5 disabled:opacity-50"
             >
               {backfilling ? <Spinner className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
-              Classify Pending ({formatNumber(classificationHealth?.totals?.pending ?? 0)})
+              Classify All Pending ({formatNumber(classificationHealth?.totals?.pending ?? 0)})
             </button>
           </div>
 
@@ -448,12 +453,13 @@ export const DataHealthDashboard: React.FC = () => {
                 <th className="px-3 py-1.5 text-right text-xs font-bold uppercase tracking-wider text-slate-600 w-20" title="Pre-filtered (spam, bounces)">Filtered</th>
                 <th className="px-3 py-1.5 text-right text-xs font-bold uppercase tracking-wider text-slate-600 w-20">Failed</th>
                 <th className="px-3 py-1.5 text-right text-xs font-bold uppercase tracking-wider text-slate-600 w-24">Coverage</th>
+                <th className="px-3 py-1.5 w-10"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {(classificationHealth.mailboxes || []).map((mb: any) => (
                 <tr key={mb.mailbox_id}>
-                  <td className="px-3 py-1.5 truncate">{mb.email_address}</td>
+                  <td className="px-3 py-1.5 truncate">{mb.email_address || mb.mailbox_name}</td>
                   <td className="px-3 py-1.5 text-right tabular-nums">{formatNumber(mb.total_emails)}</td>
                   <td className="px-3 py-1.5 text-right tabular-nums text-success">{formatNumber(mb.classified)}</td>
                   <td className="px-3 py-1.5 text-right tabular-nums">{mb.pending > 0 ? <span className="text-warning">{formatNumber(mb.pending)}</span> : '0'}</td>
@@ -461,6 +467,18 @@ export const DataHealthDashboard: React.FC = () => {
                   <td className="px-3 py-1.5 text-right tabular-nums">{mb.failed > 0 ? <span className="text-destructive">{formatNumber(mb.failed)}</span> : '0'}</td>
                   <td className="px-3 py-1.5 text-right">
                     <StatusBadge variant={mb.coverage_pct >= 90 ? 'success' : mb.coverage_pct >= 70 ? 'warning' : 'danger'} size="sm">{mb.coverage_pct}%</StatusBadge>
+                  </td>
+                  <td className="px-3 py-1.5 text-right">
+                    {mb.pending > 0 && (
+                      <button
+                        onClick={() => startBackfill(mb.mailbox_id)}
+                        disabled={backfilling || !!backfillingMailbox}
+                        className="p-1 rounded hover:bg-slate-100 disabled:opacity-30"
+                        title={`Classify ${formatNumber(mb.pending)} pending`}
+                      >
+                        {backfillingMailbox === mb.mailbox_id ? <Spinner className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5 text-slate-400 hover:text-primary" />}
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
