@@ -13,10 +13,10 @@ import logging
 
 logger = logging.getLogger("worker.ai_backfill")
 
-CONCURRENCY = 5
+CONCURRENCY = 3
 CHUNK = 10_000
 SLOTS_PER_MAILBOX = 2
-STAGGER_SECONDS = 15
+STAGGER_SECONDS = 20
 
 
 async def ai_backfill_handler(sb, job: dict, stop_event: asyncio.Event):
