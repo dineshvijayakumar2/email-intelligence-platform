@@ -113,11 +113,20 @@ class EmailOperations:
         mailbox_id = mailbox_id or self.mailbox_id
         if not mailbox_id:
             raise ValueError("mailbox_id is required")
+
+        client_id = None
+        try:
+            mb = self.client.table("mailboxes").select("client_id").eq("id", mailbox_id).limit(1).execute()
+            if mb.data:
+                client_id = mb.data[0].get("client_id")
+        except Exception:
+            logger.warning(f"Could not resolve client_id for mailbox {mailbox_id}")
+
         total = len(emails)
         success = 0
         failed = 0
         errors = []
-        
+
         for i in range(0, total, batch_size):
             batch = emails[i:i + batch_size]
             batch_num = i // batch_size + 1
@@ -126,7 +135,7 @@ class EmailOperations:
                 # Prepare batch data
                 prepared_batch = []
                 for email in batch:
-                    prepared_email = self._prepare_email_for_insert(email, mailbox_id)
+                    prepared_email = self._prepare_email_for_insert(email, mailbox_id, client_id=client_id)
                     if prepared_email:
                         prepared_batch.append(prepared_email)
 
@@ -609,14 +618,15 @@ class EmailOperations:
         # Shouldn't reach here, but handle gracefully
         return {'success': 0, 'failed': batch_size, 'errors': [f"Batch {batch_num} failed"], 'failed_message_ids': []}
 
-    def _prepare_email_for_insert(self, email: Dict, mailbox_id: str) -> Optional[Dict]:
+    def _prepare_email_for_insert(self, email: Dict, mailbox_id: str, client_id: str = None) -> Optional[Dict]:
         """
         Prepare email data for database insertion
-        
+
         Args:
             email: Normalized email dictionary
             mailbox_id: Mailbox ID for the email
-            
+            client_id: Client ID resolved from the mailbox
+
         Returns:
             Prepared email dict or None if invalid
         """
@@ -648,6 +658,7 @@ class EmailOperations:
             prepared = {
                 'message_id': self._ensure_utf8(email.get('message_id', '')),
                 'mailbox_id': mailbox_id,
+                'client_id': email.get('client_id') or client_id,
                 'thread_id': self._ensure_utf8(thread_id),
                 'folder_path': self._ensure_utf8(email.get('folder_path', 'Inbox')),
                 'sender_email': self._ensure_utf8(email.get('sender_email', '')),
