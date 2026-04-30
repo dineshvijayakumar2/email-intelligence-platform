@@ -14,7 +14,7 @@ import logging
 logger = logging.getLogger("worker.ai_backfill")
 
 CONCURRENCY = 3
-CHUNK = 10_000
+CHUNK = 200
 SLOTS_PER_MAILBOX = 2
 STAGGER_SECONDS = 20
 
