@@ -610,9 +610,20 @@ Migration `scripts/migrations/088_contact_persona_views.sql`. API at `backend/sr
 
 When a new email arrives via Outlook live sync, the Outlook sync service fetches it via Microsoft Graph's delta query, parses it into the platform schema, and inserts it into the `emails` table with `processing_status='pending'`. The email now exists in the database but has no contacts, no company link, no AI classification, and no embedding.
 
-When an admin triggers extraction (via the extraction page), the 13-step pipeline reads all unprocessed emails for the mailbox, extracts sender and recipient email addresses, groups them by domain into companies, deduplicates against existing contacts, classifies roles from signatures, links each email back to its contact record, calculates engagement scores, tracks thread status, and analyzes communication patterns. After extraction, the email has contacts and companies, but still no AI classification.
+After sync completes, an `email_pipeline` job is created. The pipeline runs 10 stages in this order:
 
-When an admin triggers AI analysis, the `ai_analysis` endpoint creates a processing_jobs record with `status=pending`. The worker claims it via `claim_next_job` (database lock), starts a heartbeat to hold the lease, and runs the handler. The handler batches 20 unanalyzed emails per API call, sends each batch to Claude Haiku with the email content plus QB-enriched business context (customer type, tier, revenue, open quotes), receives structured classifications, and writes them to `ai_email_intelligence`. After each batch, the action bucket engine runs to assign signals. After AI analysis, the email appears in the Smart Inbox with intent tags, urgency badges, and action signals.
+1. **ai_classify** — Batches unanalyzed emails to Claude Haiku with QB-enriched business context, writes classifications to `ai_email_intelligence`
+2. **bucket_engine** — Assigns action signals (response_urgency, deal_at_risk, etc.) based on AI classifications
+3. **extract_and_link** — 13-step extraction: contacts, companies, roles, email linking. In incremental mode, only processes emails where `extracted_at IS NULL` (skips already-extracted emails). After step 9 completes, stamps `extracted_at` on processed emails
+4. **assign_threads** — Assigns `canonical_thread_id` to new emails
+5. **evaluate_threads** — Updates thread status for affected threads
+6. **refresh_counts** — Updates email counts on contacts and companies
+7. **embed_emails** — Generates vector embeddings for new emails
+8. **entity_aggregation** — Aggregates entity data across emails
+9. **link_ai_refs** — Links AI-extracted references to QB records
+10. **evaluate_threads_final** — Final thread status pass after all data is linked
+
+Classification runs first (stages 1-2) because it has no dependency on extraction and is fast (~2 min per batch). This ensures new emails get classified even if the heavier extraction step times out.
 
 ### The QB enrichment path
 

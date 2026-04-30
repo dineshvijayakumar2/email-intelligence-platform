@@ -97,7 +97,10 @@
 - [x] **BUG FIX**: `ai_email_intelligence` records written with NULL `client_id` when email lacked it — analyzer now resolves from mailbox table (commit `1adfff4`)
 - [x] **BUG FIX**: NULL `client_id` data backfill — updated all existing NULL rows in both `emails` and `ai_email_intelligence` from mailbox's client_id
 - [x] **QUICK WIN**: Moved `ai_classify` + `bucket_engine` to steps 2-3 in pipeline (was steps 6-7) — new emails get classified before heavy extraction steps that may timeout
-- [ ] **Surgical fix needed**: Even in incremental mode, pipeline steps (contact upsert, signature fetch, role classification) reprocess ALL emails within scope — no per-record "already extracted" tracking. Incremental only narrows the date window (7-day lookback), not the record set. Add `last_extraction_at` column to emails table so incremental skips already-processed records. This is why `email_pipeline` jobs INTERRUPT before reaching classification/embedding steps.
+- [x] **Pipeline reorder**: Moved `ai_classify` + `bucket_engine` to steps 1-2 (before `extract_and_link`) — classification now runs first with no extraction dependency
+- [x] **email_categories cleanup**: Removed `_get_rule_based_skip_ids` and `_enrich_with_rule_based_tags` from AI analyzer — legacy file-import-only dependencies that added overhead for live-synced emails
+- [x] **Removed PRE-CLASSIFICATION HINTS** from system prompt — no code populates `pre_classification` after email_categories cleanup
+- [x] **Surgical fix**: Migration 098 adds `extracted_at` column to emails table + partial index. Incremental extraction now skips emails where `extracted_at IS NOT NULL`. After step 9, stamps `extracted_at` on all processed emails. Reduces incremental scope from ~270K to ~50/day steady state.
 
 ### Worker infrastructure (Apr 29)
 
@@ -247,7 +250,7 @@ Items moved from `BUCKET_LIST_APR16_APR22.md` — not yet scheduled into a speci
 - [D] Daily/Strategic digest as user-facing features
 - [D] AU seasonal calendar integration
 - [D] Classification/digest model audit columns
-- [D] `email_categories` table cleanup — legacy rule-based tagger (EmailTagger) only runs on file imports, not live sync. AI classification in `ai_email_intelligence` has replaced its purpose. The table is still read for spam pre-filter skip and `pre_classification` hints to Claude, but both are minor. Plan: remove `_get_rule_based_skip_ids` dependency (folder/bounce/trivial filters are sufficient), retire the `email_categories` pre-classification enrichment (AI classifies fine without hints), and eventually drop the tagger from the file import path too.
+- [x] `email_categories` AI analyzer cleanup — removed `_get_rule_based_skip_ids` and `_enrich_with_rule_based_tags` dependencies from classification path. Table + tagger + display routes kept for file-imported email data.
 - [D] `hello@carbon8.com.au` classification coverage
 - [D] 14 Carbon8 domain variant cleanup
 - [D] 21-weekdays-no-data investigation
@@ -258,7 +261,7 @@ Items moved from `BUCKET_LIST_APR16_APR22.md` — not yet scheduled into a speci
 
 ## Flags / risks being tracked
 
-- **Pipeline throughput**: `extract_and_link` reprocesses ALL emails in incremental mode, causing pipeline timeouts before classification runs. Quick win shipped (ai_classify moved to step 2), but surgical `last_extraction_at` fix still needed for extraction steps
+- ~~**Pipeline throughput**~~: **RESOLVED** — ai_classify moved to step 1 (runs before extraction), `extracted_at` column added so incremental extraction skips already-processed emails, email_categories legacy dependency removed from classification path
 - **Classification backlog**: 62K emails pending (hello@ 46K, ehab@ 14K). At current rate (~330/hr), needs ~190 hours of continuous backfill
 - Cross-Gap revival may expand if join fixes reveal deeper schema issues
 - Week 3 is doing 3 features + starting stabilization in 30h — tight

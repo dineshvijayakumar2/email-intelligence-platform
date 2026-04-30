@@ -246,13 +246,14 @@ class ExtractionOrchestrator:
 
                 logger.debug(f"Incremental mode: {self.lookback_days}d lookback, {date_range_start.date()} → {date_range_end.date()}")
 
-                # Get total count for date range
+                # Get total count for date range (only unextracted emails)
                 count_resp = self._execute_with_retry(
                     self.client.table('emails')
                     .select('id', count='exact')
                     .eq('mailbox_id', self.mailbox_id)
                     .gte('sent_date', date_range_start.isoformat())
                     .lte('sent_date', date_range_end.isoformat())
+                    .is_('extracted_at', 'null')
                 )
                 total_in_range = count_resp.count or 0
                 estimated_pages = (total_in_range + PAGE_SIZE - 1) // PAGE_SIZE
@@ -270,6 +271,7 @@ class ExtractionOrchestrator:
                         .eq('mailbox_id', self.mailbox_id)
                         .gte('sent_date', date_range_start.isoformat())
                         .lte('sent_date', date_range_end.isoformat())
+                        .is_('extracted_at', 'null')
                         .order('sent_date')
                         .range(offset, offset + PAGE_SIZE - 1)
                     )
@@ -405,6 +407,24 @@ class ExtractionOrchestrator:
             # ============================================================
             self._run_step(9, "Link emails to contacts/companies",
                           lambda: self._step_link_emails(force_relink))
+
+            # Stamp extracted_at on all emails in scope so incremental mode skips them next run
+            email_ids_in_scope, _, _ = self._get_emails_in_scope()
+            if email_ids_in_scope:
+                timestamp = datetime.utcnow().isoformat()
+                for i in range(0, len(email_ids_in_scope), 500):
+                    batch = email_ids_in_scope[i:i + 500]
+                    try:
+                        self._execute_with_retry(
+                            self.client.table('emails')
+                            .update({'extracted_at': timestamp})
+                            .in_('id', batch)
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to set extracted_at for batch {i // 500}: {e}")
+                logger.info(f"Stamped extracted_at on {len(email_ids_in_scope)} emails")
+                if hasattr(self, '_cached_scope'):
+                    del self._cached_scope
 
             # Assign canonical_thread_id to new emails + update affected threads
             # Runs in both full and lightweight mode

@@ -146,12 +146,6 @@ BUSINESS CONTEXT (Sprint 3):
   - "open_quotes": Active quotes pending — pricing inquiries from customers with open quotes = high-intent buying signal
 - Use this context to calibrate urgency and business_signal. A complaint from a $200K Tier A customer with declining revenue deserves "high" urgency. The same complaint from a $1K customer is "medium".
 
-PRE-CLASSIFICATION HINTS:
-- Some emails include a "pre_classification" field with rule-based tags already applied (e.g., "urgent", "financial", "meeting", "reply").
-- Use these as strong hints. For example, if tags include "urgent", lean toward higher urgency. If sender_type is "human", treat as a real person.
-- These hints are deterministic and reliable, but you may override them if the email content clearly contradicts them.
-- Do NOT copy pre_classification values verbatim; use your own judgment informed by these hints.
-
 CC / BCC CONTEXT:
 - Some emails include "cc" (visible carbon copy) and "bcc" (blind carbon copy outbound recipients).
 - Multiple recipients on CC/BCC signals a broader communication: team update, escalation, or multi-stakeholder decision.
@@ -615,38 +609,6 @@ class AIEmailAnalyzer:
     # ------------------------------------------------------------------
     # Fetch unanalyzed emails
     # ------------------------------------------------------------------
-    def _get_rule_based_skip_ids(self, mailbox_id: str) -> set:
-        """
-        Get email IDs that EmailTagger classified as spam — the only rule-based
-        category that's worth blanket-skipping. marketing/system/automated were
-        dropped from the skip set: they can carry business content (promos with
-        competitor pricing, order confirmations with PO numbers, shipping
-        notifications) so we let the AI classify and decide.
-        """
-        skip_categories = ['spam', '_meta_spam']
-        skip_ids = set()
-        offset = 0
-        PAGE_SIZE = 500
-        while True:
-            try:
-                resp = self._execute_with_retry(
-                    self.client.table("email_categories")
-                    .select("email_id")
-                    .in_("category", skip_categories)
-                    .range(offset, offset + PAGE_SIZE - 1)
-                )
-                batch = resp.data or []
-                for row in batch:
-                    if row.get("email_id"):
-                        skip_ids.add(row["email_id"])
-                if len(batch) == 0:
-                    break
-                offset += len(batch)
-            except Exception as e:
-                logger.warning(f"Could not fetch rule-based skip IDs: {e}")
-                break
-        return skip_ids
-
     def _prefetch_classification_state(self, mailbox_id: str) -> tuple[set, set]:
         """
         One-shot prefetch of the session state needed for pre-filtering.
@@ -679,10 +641,9 @@ class AIEmailAnalyzer:
                 break
             offset += len(batch)
 
-        skip_ids = self._get_rule_based_skip_ids(mailbox_id)
+        skip_ids: set = set()
         logger.info(
-            f"Session pre-filter state: {len(analyzed_ids)} already analyzed/skipped, "
-            f"{len(skip_ids)} spam-tagged"
+            f"Session pre-filter state: {len(analyzed_ids)} already analyzed/skipped"
         )
         return analyzed_ids, skip_ids
 
@@ -896,50 +857,6 @@ class AIEmailAnalyzer:
                 email["_lifecycle_tier"] = None
 
     # ------------------------------------------------------------------
-    # Enrich emails with rule-based tags (from EmailTagger)
-    # ------------------------------------------------------------------
-    def _enrich_with_rule_based_tags(self, emails: List[dict]) -> None:
-        """
-        Enrich email dicts with rule-based tags from email_categories table.
-        Adds: _rule_tags, _rule_priority, _rule_sender_type
-        These provide free, deterministic hints to the AI prompt.
-        """
-        email_ids = [e["id"] for e in emails]
-        tag_lookup: Dict[str, List[str]] = {}
-
-        for i in range(0, len(email_ids), 500):
-            chunk = email_ids[i:i + 500]
-            try:
-                resp = self._execute_with_retry(
-                    self.client.table("email_categories")
-                    .select("email_id,category")
-                    .in_("email_id", chunk)
-                )
-                for row in (resp.data or []):
-                    eid = row.get("email_id")
-                    cat = row.get("category", "")
-                    if eid:
-                        tag_lookup.setdefault(eid, []).append(cat)
-            except Exception as e:
-                logger.warning(f"Could not fetch rule-based tags: {e}")
-
-        for email in emails:
-            tags = tag_lookup.get(email["id"], [])
-            priority = None
-            sender_type = None
-            visible_tags = []
-            for tag in tags:
-                if tag.startswith("_meta_priority_"):
-                    priority = tag.replace("_meta_priority_", "")
-                elif tag.startswith("_meta_sender_"):
-                    sender_type = tag.replace("_meta_sender_", "")
-                elif not tag.startswith("_meta_"):
-                    visible_tags.append(tag)
-            email["_rule_tags"] = visible_tags
-            email["_rule_priority"] = priority
-            email["_rule_sender_type"] = sender_type
-
-    # ------------------------------------------------------------------
     # Thread context enrichment
     # ------------------------------------------------------------------
     def _enrich_with_thread_context(self, emails: List[dict]) -> None:
@@ -1084,20 +1001,6 @@ class AIEmailAnalyzer:
                 if qb_quotes is not None and qb_quotes > 0:
                     biz["open_quotes"] = qb_quotes
                 entry["business_context"] = biz
-
-            # Add rule-based pre-classification hints (from EmailTagger)
-            rule_tags = email.get("_rule_tags", [])
-            rule_sender_type = email.get("_rule_sender_type")
-            rule_priority = email.get("_rule_priority")
-            if rule_tags or rule_sender_type:
-                pre_class = {}
-                if rule_tags:
-                    pre_class["tags"] = rule_tags
-                if rule_sender_type:
-                    pre_class["sender_type"] = rule_sender_type
-                if rule_priority:
-                    pre_class["priority_score"] = rule_priority
-                entry["pre_classification"] = pre_class
 
             # Add thread conversation history for reply emails
             thread_history = email.get("_thread_history")
@@ -1369,9 +1272,6 @@ class AIEmailAnalyzer:
 
         # Enrich with Sprint 2 + lifecycle tier data for better AI context
         self._enrich_with_sprint2_data(emails)
-
-        # Enrich with rule-based tags (from EmailTagger) for pre-classification hints
-        self._enrich_with_rule_based_tags(emails)
 
         # Enrich reply emails with prior thread messages for full conversation context
         self._enrich_with_thread_context(emails)

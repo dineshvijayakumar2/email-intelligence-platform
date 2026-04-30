@@ -193,6 +193,7 @@ Core email storage — every synced/imported email.
 | embedding | vector(768) | NULL | | See §5.5 Vector Embedding Architecture |
 | embedding_model | text | NULL | | Provider/model tag, e.g. `openai/text-embedding-3-small-768` |
 | embedded_at | timestamptz | NULL | | When the embedding was last written |
+| extracted_at | timestamptz | NULL | | When extraction pipeline last processed this email |
 | canonical_thread_id | uuid | NULL | | 4-tier resolved thread ID |
 | thread_match_method | text | NULL | | `in_reply_to`, `references`, `subject_participants`, `new` |
 | thread_match_confidence | float4 | NULL | | |
@@ -1088,6 +1089,7 @@ These replace row-by-row updates with single-statement bulk operations, reducing
 | idx_companies_embedding | customer_companies | HNSW | m=16, ef_construction=64 | Small table; HNSW builds reliably |
 | idx_email_intelligence_embedding | ai_email_intelligence | HNSW | m=16, ef_construction=64 | Small embedded subset |
 | idx_emails_embedding_model | emails | btree | partial: WHERE embedding IS NOT NULL | Audit column lookup |
+| idx_emails_extracted_at_null | emails | btree | partial: WHERE extracted_at IS NULL | Fast lookup of unextracted emails for incremental extraction |
 | idx_qb_operations_embedding_model | qb_operations | btree | partial: WHERE embedding IS NOT NULL | Audit column lookup |
 | idx_customer_companies_embedding_model | customer_companies | btree | partial: WHERE embedding IS NOT NULL | Audit column lookup |
 | idx_qb_quotes_embedding_model | qb_quotes | btree | partial: WHERE embedding IS NOT NULL | Audit column lookup |
