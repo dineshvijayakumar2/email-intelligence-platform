@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 # fallback when no DB row exists. Actual version comes from ai_prompt_config.version.
 import hashlib as _hashlib
 SCORING_VERSION = "v1.0"
-BATCH_SIZE = 50  # emails per API call (increased for bulk backfill throughput)
+BATCH_SIZE = 100  # emails per API call (OpenAI Tier 2 rate limits)
 GEMINI_BATCH_SIZE = 5  # Gemini needs small batches (limited JSON output tokens)
 DEFAULT_LOOKBACK_DAYS = 7  # Default: only analyze emails from last 7 days
 
