@@ -247,6 +247,7 @@ Items moved from `BUCKET_LIST_APR16_APR22.md` — not yet scheduled into a speci
 - [D] Daily/Strategic digest as user-facing features
 - [D] AU seasonal calendar integration
 - [D] Classification/digest model audit columns
+- [D] `email_categories` table cleanup — legacy rule-based tagger (EmailTagger) only runs on file imports, not live sync. AI classification in `ai_email_intelligence` has replaced its purpose. The table is still read for spam pre-filter skip and `pre_classification` hints to Claude, but both are minor. Plan: remove `_get_rule_based_skip_ids` dependency (folder/bounce/trivial filters are sufficient), retire the `email_categories` pre-classification enrichment (AI classifies fine without hints), and eventually drop the tagger from the file import path too.
 - [D] `hello@carbon8.com.au` classification coverage
 - [D] 14 Carbon8 domain variant cleanup
 - [D] 21-weekdays-no-data investigation
@@ -257,6 +258,8 @@ Items moved from `BUCKET_LIST_APR16_APR22.md` — not yet scheduled into a speci
 
 ## Flags / risks being tracked
 
+- **Pipeline throughput**: `extract_and_link` reprocesses ALL emails in incremental mode, causing pipeline timeouts before classification runs. Quick win shipped (ai_classify moved to step 2), but surgical `last_extraction_at` fix still needed for extraction steps
+- **Classification backlog**: 62K emails pending (hello@ 46K, ehab@ 14K). At current rate (~330/hr), needs ~190 hours of continuous backfill
 - Cross-Gap revival may expand if join fixes reveal deeper schema issues
 - Week 3 is doing 3 features + starting stabilization in 30h — tight
 - Week 4 is 2 days of handoff only, not a full stabilization week
