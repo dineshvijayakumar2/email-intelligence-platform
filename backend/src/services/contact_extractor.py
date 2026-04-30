@@ -184,7 +184,8 @@ class ContactExtractor:
         exclude_mailing_lists: bool = False,  # Changed default to False
         exclude_noreply: bool = False,  # Changed default to False
         exclude_shared: bool = False,  # Changed default to False
-        limit: Optional[int] = None
+        limit: Optional[int] = None,
+        email_ids: Optional[List[str]] = None,
     ) -> List[Dict]:
         """
         Extract all unique contacts from mailbox emails (WITH TAGGING)
@@ -197,6 +198,7 @@ class ContactExtractor:
             exclude_noreply: DEPRECATED - kept for compatibility (always False)
             exclude_shared: DEPRECATED - kept for compatibility (always False)
             limit: Optional limit for testing (processes first N emails)
+            email_ids: If provided, only process these email IDs (for incremental mode)
 
         Returns:
             List of contact dictionaries with metadata including contact_type:
@@ -207,13 +209,16 @@ class ContactExtractor:
             - 'unknown': Could not classify
         """
         logger.info(f"Starting contact extraction for mailbox {self.mailbox_id}")
-        logger.info(f"Extracting ALL contacts with classification tags (not filtering)")
+        if email_ids is not None:
+            logger.info(f"Incremental mode: processing {len(email_ids)} scoped emails")
+        else:
+            logger.info(f"Full mode: extracting ALL contacts with classification tags")
 
         # Reset cache for new extraction
         self._contact_cache = {}
 
-        # Query all successful emails
-        emails = self._fetch_emails(limit=limit)
+        # Query emails — scoped if email_ids provided, otherwise all
+        emails = self._fetch_emails(limit=limit, email_ids=email_ids)
         total_emails = len(emails)
 
         logger.info(f"Processing {total_emails} emails for contact extraction")
@@ -253,15 +258,17 @@ class ContactExtractor:
 
         return contacts
 
-    def _fetch_emails(self, limit: Optional[int] = None) -> List[Dict]:
+    def _fetch_emails(self, limit: Optional[int] = None, email_ids: Optional[List[str]] = None) -> List[Dict]:
         """
-        Fetch all non-failed emails from mailbox, paginating in batches of 500.
+        Fetch emails from mailbox for contact extraction.
 
-        Uses or_ filter to include emails where processing_status is NULL
-        (PostgreSQL's != 'failed' excludes NULLs).
+        When email_ids is provided (incremental mode), fetches only those
+        specific emails using batched .in_() queries. Otherwise fetches all
+        non-failed emails using keyset pagination.
 
         Args:
             limit: Optional limit for testing
+            email_ids: If provided, only fetch these specific emails
 
         Returns:
             List of email records
@@ -270,6 +277,21 @@ class ContactExtractor:
             PAGE_SIZE = 500
             COLUMNS = ('id, sender_email, sender_name, recipients, cc_list, bcc_list, '
                        'sent_date, raw_headers, is_outbound, processing_status')
+
+            # Scoped mode: fetch only specific email IDs
+            if email_ids is not None:
+                all_emails = []
+                for i in range(0, len(email_ids), PAGE_SIZE):
+                    batch = email_ids[i:i + PAGE_SIZE]
+                    response = self._execute_with_retry(
+                        self.client.table('emails')
+                        .select(COLUMNS)
+                        .in_('id', batch)
+                    )
+                    filtered = [e for e in (response.data or []) if e.get('processing_status') != 'failed']
+                    all_emails.extend(filtered)
+                logger.info(f"Contact extraction (scoped): {len(all_emails)} emails fetched from {len(email_ids)} IDs")
+                return all_emails
 
             # Small limit: single query
             if limit and limit <= PAGE_SIZE:

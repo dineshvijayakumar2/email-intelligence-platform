@@ -829,10 +829,18 @@ class ExtractionOrchestrator:
         """
         extractor = ContactExtractor(mailbox_id=self.mailbox_id, client_id=self.client_id)
 
+        # In incremental mode, only extract contacts from scoped emails
+        scoped_ids = None
+        if self.extraction_mode != 'full':
+            email_ids, _, _ = self._get_emails_in_scope()
+            if email_ids:
+                scoped_ids = email_ids
+
         contacts = extractor.extract_contacts(
             exclude_mailing_lists=exclude_mailing_lists,
             exclude_noreply=exclude_noreply,
-            exclude_shared=exclude_shared
+            exclude_shared=exclude_shared,
+            email_ids=scoped_ids,
         )
 
         summary = extractor.get_contact_summary()
@@ -1900,7 +1908,14 @@ class ExtractionOrchestrator:
         """
         linker = EmailLinker(mailbox_id=self.mailbox_id, client_id=self.client_id)
 
-        result = linker.link_emails(force_relink=force_relink)
+        # In incremental mode, only link scoped emails
+        scoped_ids = None
+        if self.extraction_mode != 'full':
+            email_ids, _, _ = self._get_emails_in_scope()
+            if email_ids:
+                scoped_ids = email_ids
+
+        result = linker.link_emails(email_ids=scoped_ids, force_relink=force_relink)
 
         logger.info(f"Email linking complete: {result['linked']} emails linked")
 
