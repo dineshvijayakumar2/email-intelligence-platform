@@ -1551,10 +1551,11 @@ class AIEmailAnalyzer:
         # Apply default date range: last 7 days if not specified
         # Pass date_from="all" to analyze ALL unanalyzed emails (no date filter)
         if date_from == "all":
-            date_from = None  # No lower bound — analyze everything
+            date_from = None
+            date_to = None
         elif not date_from:
             date_from = (datetime.utcnow() - timedelta(days=DEFAULT_LOOKBACK_DAYS)).isoformat()
-        if not date_to:
+        if date_from is not None and not date_to:
             date_to = datetime.utcnow().isoformat()
 
         logger.info(f"Analyzing emails from {date_from} to {date_to} for mailbox {mailbox_id}")
