@@ -696,6 +696,7 @@ class AIEmailAnalyzer:
         limit: int = 50,
         date_from: Optional[str] = None,
         date_to: Optional[str] = None,
+        resolved_client_id: Optional[str] = None,
     ) -> List[dict]:
         """
         Fetch up to `limit` emails that still need AI classification.
@@ -743,8 +744,10 @@ class AIEmailAnalyzer:
                 if eid in analyzed_ids:
                     continue
 
+                cid = email.get("client_id") or resolved_client_id
+
                 if eid in skip_ids:
-                    self._mark_skipped(eid, mailbox_id, email.get("client_id"), "spam")
+                    self._mark_skipped(eid, mailbox_id, cid, "spam")
                     analyzed_ids.add(eid)
                     skipped_count += 1
                     continue
@@ -752,14 +755,14 @@ class AIEmailAnalyzer:
                 # Skip Drafts, Trash, Spam folders — not actionable
                 folder = (email.get("folder_path") or "").strip()
                 if folder.lower() in ("drafts", "draft", "trash", "deleted", "spam", "junk"):
-                    self._mark_skipped(eid, mailbox_id, email.get("client_id"), f"folder_{folder.lower()}")
+                    self._mark_skipped(eid, mailbox_id, cid, f"folder_{folder.lower()}")
                     analyzed_ids.add(eid)
                     skipped_count += 1
                     continue
 
                 # Hard-skip bounces / delivery failures (see AUTOMATED_*_PATTERNS)
                 if is_automated_email(email):
-                    self._mark_skipped(eid, mailbox_id, email.get("client_id"), "bounce_or_delivery_failure")
+                    self._mark_skipped(eid, mailbox_id, cid, "bounce_or_delivery_failure")
                     analyzed_ids.add(eid)
                     skipped_count += 1
                     continue
@@ -767,7 +770,7 @@ class AIEmailAnalyzer:
                 # Skip trivial emails — body too short for meaningful analysis
                 body = (email.get("body_text") or "").strip()
                 if len(body) < 50:
-                    self._mark_skipped(eid, mailbox_id, email.get("client_id"), "trivial_body")
+                    self._mark_skipped(eid, mailbox_id, cid, "trivial_body")
                     analyzed_ids.add(eid)
                     skipped_count += 1
                     continue
@@ -1558,6 +1561,13 @@ class AIEmailAnalyzer:
         if date_from is not None and not date_to:
             date_to = datetime.utcnow().isoformat()
 
+        if not client_id:
+            mb = self._execute_with_retry(
+                self.client.table("mailboxes").select("client_id").eq("id", mailbox_id).limit(1)
+            )
+            if mb.data:
+                client_id = mb.data[0].get("client_id")
+
         logger.info(f"Analyzing emails from {date_from} to {date_to} for mailbox {mailbox_id}")
 
         total_analyzed = 0
@@ -1594,6 +1604,7 @@ class AIEmailAnalyzer:
                     limit=fetch_limit,
                     date_from=date_from,
                     date_to=date_to,
+                    resolved_client_id=client_id,
                 )
 
             if not emails:
