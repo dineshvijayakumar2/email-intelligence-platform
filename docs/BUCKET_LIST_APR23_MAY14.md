@@ -1,8 +1,20 @@
 # Bucket List: Actions Through May 14, 2026
 
-**Purpose:** Tracking all planned work items for the pre-trip sprint.
-**Not a schedule** — that's in SCOPE_LOCK_APR22_MAY14.md. This is a completeness checklist.
-**Status convention:** [ ] not started / [~] in progress / [x] done + verified / [D] deferred post-trip
+**Purpose:** Tracking all planned work items for the current sprint.
+**Status convention:** [ ] not started / [~] in progress / [x] done + verified / [D] deferred next sprint
+
+---
+
+## Week Allocation
+
+| Week | Dates (Wed–Tue) | Hours | Focus |
+|------|-----------------|-------|-------|
+| Week 1 | Apr 23 – Apr 29 | ~20h | Data hardening, embedding re-embed, AI classification backfill |
+| Week 2 | Apr 30 – May 6 | ~30h | Cross-Company Gaps end-to-end, Insights Review page shell, validation capture |
+| Week 3 | May 7 – May 13 | ~30h | Seasonality integration, Due for Reorder, Invite User flow, stabilization starts |
+| Week 4 | May 14 | ~10h | Final stabilization — smoke tests, buffer |
+
+**Discipline:** Features freeze end of Week 3 (May 13). If Week 3 compresses, drop Due for Reorder first. If Week 2 compresses, keep Cross-Gap + Insights Review page minimum.
 
 ---
 
@@ -38,14 +50,14 @@
 - [x] Reembed completed Apr 24-25: emails 258,453/258,472 + companies 14,735/14,978 (gaps are below MIN_EMBED_TEXT_LEN gate, expected)
 - [x] Verification: all embedded rows tagged `openai/text-embedding-3-small-768`, zero untagged across both tables
 - [x] qb_operations: 4,000 rows embedded by auto-trigger pipeline during re-embed window (not part of scoped run, but properly tagged — kept as-is)
-- [ ] **Investigate before next bulk re-embed:** companies run required 4 manual clicks to reach 100%. Single job appears to terminate early without exhausting the table. Worth checking worker logs for completion semantics before any post-trip 615K operations re-embed.
 - [x] IVFFlat index built on emails (lists=500, 1013 MB) — HNSW abandoned; fails on Supabase Pro at disk-spill phase
 - [x] `ivfflat.probes = 10` set at database level via `ALTER DATABASE postgres SET ivfflat.probes = 10`
 - [x] Functional test: top-10 similarity returns semantically related results (~140ms, probes=10)
 - [x] `DATABASE_DESIGN.md` updated: vector embedding architecture (§5.5), index choice rationale (§5.6), build operations (§5.7), forbidden operations (§5.8), migration history 094–097
+- [ ] **Investigate before next bulk re-embed:** companies run required 4 manual clicks to reach 100%. Single job appears to terminate early without exhausting the table. Worth checking worker logs for completion semantics before any next sprint 615K operations re-embed.
 - [ ] Spot-check semantic search quality on 20 known queries
-- [ ] Post-trip: revisit HNSW with raised `maintenance_work_mem` if IVFFlat recall proves insufficient
-- [ ] Post-trip flag: investigate apparent duplicate emails surfaced during sanity test (rows `a9ad862f` and `f5714636` share identical subject + similarity score)
+- [ ] Next sprint: revisit HNSW with raised `maintenance_work_mem` if IVFFlat recall proves insufficient
+- [ ] Next sprint: investigate apparent duplicate emails surfaced during sanity test (rows `a9ad862f` and `f5714636` share identical subject + similarity score)
 - [D] Operations embedding (615K) — not on MVP critical path, deferred
 - [D] Quotes embedding (~19K matched) — untested hypothesis, exit criterion not yet met, deferred
 
@@ -69,24 +81,34 @@
 
 ### AI classification coverage
 
-- [x] Backfill handler: concurrent mailbox processing (CONCURRENCY=3, asyncio.gather + Semaphore), BATCH_SIZE 20→50 (commit `bc7606d`)
+- [x] Backfill handler: concurrent mailbox processing (CONCURRENCY=3, asyncio.gather + Semaphore), BATCH_SIZE 20→50→100 (OpenAI Tier 2 rate limits)
 - [x] 4 production fixes mid-run: PyYAML/Python 3.13 wheel, ref-linking PostgREST limit, concurrent prefetch connection exhaustion, HTTP/2 trailer retry
 - [x] Multi-slot backfill (SLOTS_PER_MAILBOX=2) — each mailbox gets 2 concurrent analyzers. Tuned CONCURRENCY 5→3 after Supabase pressure
 - [x] Per-mailbox classify button on Data Health page (lightning bolt per row)
-- [~] Tuesday Apr 29: 155K/260K classified (72.4% all-time). Last 90 days: 5/7 mailboxes at 95%+, ehab@ at 82%, hello@ at 99.9%
+- [x] Fix: backfill skipping emails with NULL `sent_date` (commit `fdcd509`)
+- [x] Backfill CHUNK reduced 10K→200 so stop_event is checked every ~2min instead of hours (commit `eb544a0`)
+- [~] Apr 30: 162K/260K classified (75.7%). Nic, Jeff, Production PC at 100%. Remaining backlog: hello@ 46K, ehab@ 14K, kenneth@ 1.3K, Linda 828
 - [ ] Top up OpenAI credit if burn rate × remaining > remaining balance
 
-### Extraction pipeline bugs (identified Apr 29)
+### Pipeline + data integrity bugs (identified Apr 29–30)
 
 - [x] **BUG FIX**: Manual extraction always ran as FULL mode — `extraction_mode` not passed in job parameters (commit `00ca6bb`)
-- [ ] **Deeper issue**: Even in incremental mode, pipeline steps (contact upsert, signature fetch, role classification) reprocess ALL emails within scope — no per-record "already extracted" tracking. Incremental only narrows the date window (7-day lookback), not the record set. Acceptable for now since 7-day window is small enough (~500-1000 emails).
-- [ ] Consider: add `last_extraction_at`-based filtering so incremental skips emails processed since last run, not just a fixed lookback window
+- [x] **BUG FIX**: Emails inserted without `client_id` during sync — `batch_insert_emails` never set it, causing invisible rows in health RPC counts (commit `354dd1a`)
+- [x] **BUG FIX**: `ai_email_intelligence` records written with NULL `client_id` when email lacked it — analyzer now resolves from mailbox table (commit `1adfff4`)
+- [x] **BUG FIX**: NULL `client_id` data backfill — updated all existing NULL rows in both `emails` and `ai_email_intelligence` from mailbox's client_id
+- [x] **QUICK WIN**: Moved `ai_classify` + `bucket_engine` to steps 2-3 in pipeline (was steps 6-7) — new emails get classified before heavy extraction steps that may timeout
+- [ ] **Surgical fix needed**: Even in incremental mode, pipeline steps (contact upsert, signature fetch, role classification) reprocess ALL emails within scope — no per-record "already extracted" tracking. Incremental only narrows the date window (7-day lookback), not the record set. Add `last_extraction_at` column to emails table so incremental skips already-processed records. This is why `email_pipeline` jobs INTERRUPT before reaching classification/embedding steps.
+
+### Worker infrastructure (Apr 29)
+
+- [x] Fixed Railway health check killing worker services — removed global `healthcheckPath` from `railway.toml` (per-service config in `deploy/railway/railway.toml` already correct)
+- [x] Verified: `WORKER_ID` env var not required — auto-generates from `{hostname}-{pid}`; job claiming has no worker-id filtering
 
 ### Known-issue cleanup (Week 1 fixes not yet done)
 
-- [ ] `hello@carbon8.com.au` mailbox at 5.4% coverage — [D] deferred post-trip per scope doc
-- [ ] 14 Carbon8 domain variants — [D] deferred post-trip per scope doc
-- [ ] 21 weekdays with no email data investigation — [D] deferred post-trip
+- [D] `hello@carbon8.com.au` mailbox at 5.4% coverage — deferred next sprint
+- [D] 14 Carbon8 domain variants — deferred next sprint
+- [D] 21 weekdays with no email data investigation — deferred next sprint
 
 ---
 
@@ -98,7 +120,7 @@
 - [x] PUT `/embedding-config` endpoint removed; GET returns env var value only
 - [x] LLM dropdowns kept (Email Analysis, Daily Digest, Strategic Digest, Entity Insights)
 - [x] Grep verified: zero code paths read `embedding_provider`/`embedding_model` from system_settings
-- [D] Consider storing model name on classification / digest / extraction rows for audit (post-trip)
+- [D] Consider storing model name on classification / digest / extraction rows for audit (next sprint)
 
 ---
 
@@ -137,7 +159,7 @@
 - [ ] Query design: per-customer typical reorder cycle, approaching-window flag
 - [ ] Backend endpoint
 - [ ] Integration into Insights Review page
-- [ ] Per scope doc: **first to drop if Week 3 compresses**
+- [ ] **First to drop if Week 3 compresses**
 
 ---
 
@@ -151,7 +173,7 @@
 - [ ] Auth callback: invite detection hook
 - [ ] Frontend: Users.tsx integration (pending invites merged into table, resend/revoke actions)
 - [ ] Supabase config: `/invite/accept` and `/auth/callback` redirect URLs
-- [ ] Tailwind+shadcn vs Ant Design decision (design doc is Ant; migration is ongoing)
+- [x] UI framework decision: Tailwind + shadcn/ui (matches migration direction)
 - [ ] OAuth email-mismatch UX: what does user see when they sign in with a different email than the invite?
 - [ ] Test matrix: 3 paths × 3 providers × 4 states (valid/expired/revoked/already-accepted)
 
@@ -159,16 +181,62 @@
 
 ## Stabilization — Week 3 tail + Week 4
 
-- [ ] Runbook: how partner adds a new mailbox/user without your involvement
-- [ ] Runbook: common failure modes and recovery (pipeline jobs, sync issues)
 - [ ] Smoke test checklist for daily partner use
-- [ ] Confirm cron-based sync runs autonomously during trip window
+- [ ] Confirm cron-based sync runs autonomously
 - [ ] Confirm two-worker Railway Pro setup handles peak load unattended
-- [ ] Pre-trip freeze: no deploys after May 13 EOD
+- [ ] Deploy freeze after May 13 EOD
 
 ---
 
-## Deferred to post-trip (explicit)
+## Carryover from Apr 16–22 sprint (to be prioritised)
+
+Items moved from `BUCKET_LIST_APR16_APR22.md` — not yet scheduled into a specific week.
+
+### External cron registration
+
+- [ ] Configure Railway cron or cron-job.org to call internal endpoints (qb-sync hourly, analytics-rollup daily, stuck-reconciler 10min, notification-dispatch 2min)
+- [ ] Set `CRON_SECRET` env var in production
+- [ ] Verify: cron-based sync runs autonomously (overlaps with stabilization checklist)
+
+### Staged worker rollout
+
+- [ ] Staged rollout: analytics → QB sync → reembed → remaining job types
+- [ ] Verify all Tier 2 BackgroundTasks callsites work correctly alongside workers
+
+### Operations Center UI consolidation (W7)
+
+- [ ] Final merge plan: which features stay, which retire, which consolidate
+- [ ] Move operational triggers from AI Usage (re-analysis, re-embed, re-bucket) into Data Health
+- [ ] Move extraction features from Extraction page into Data Health
+- [ ] Add pipeline status monitoring (email_pipeline jobs per mailbox)
+- [ ] Retire standalone Extraction page (redirect to Data Health)
+- [ ] AI Usage page keeps only: config/model selection, cost monitoring, prompt templates
+- [ ] "Run Full Pipeline" button (creates `email_pipeline` job for selected mailbox)
+- [ ] Pipeline progress visualization (8 steps with completion status)
+
+### Contact Persona Metrics (C1)
+
+- [ ] SQL views: `contact_quote_metrics`, `contact_email_metrics` (materialized), `contact_persona`
+- [ ] Rollup views: `company_contact_summary`, `industry_benchmarks`
+- [ ] Materialized view refresh job (daily + post-QB-sync)
+- [ ] API endpoints: persona, contact-summary, industry-benchmarks
+
+### Contact Persona Frontend (C2)
+
+- [ ] Contact Profile Card (identity + QB metrics + email behavior + persona + benchmarks)
+- [ ] Company Profile: "Contact Breakdown" section
+- [ ] Industry Dashboard
+- [ ] Journey Timeline integration on profile pages
+
+### Status Transition Analytics (C3) — blocked until ~July 2026
+
+- [ ] Time-in-phase metrics per job and per contact
+- [ ] Bottleneck detection (status stuck > threshold)
+- [ ] Production cycle time: quote acceptance → job completion
+
+---
+
+## Deferred to next sprint
 
 - [D] Industry Gap Analysis (Insight 2) — including its Week 1 distribution query validation
 - [D] Real-time action signal alerts / Action Signal Engine
@@ -178,7 +246,6 @@
 - [D] LinkedIn prospect replication
 - [D] Daily/Strategic digest as user-facing features
 - [D] AU seasonal calendar integration
-- [x] Embedding config UI: dropdown removed, read-only status from env var (shipped Apr 24)
 - [D] Classification/digest model audit columns
 - [D] `hello@carbon8.com.au` classification coverage
 - [D] 14 Carbon8 domain variant cleanup
@@ -188,18 +255,10 @@
 
 ---
 
-## Open decisions (need answers before moving forward)
-
-- [ ] Invite User UI: Ant Design (match design doc) or Tailwind+shadcn (match migration direction)
-- [ ] Parent visit specific days — **still unresolved from scope lock doc**
-- [x] Re-embed run scheduling: triggered Apr 24 evening; emails running, companies next; operations + quotes deferred
-
----
-
 ## Flags / risks being tracked
 
-- Re-embed + title re-extraction + classification backfill = three big re-processing jobs stacked in Week 1 during a parent-visit week
 - Cross-Gap revival may expand if join fixes reveal deeper schema issues
 - Week 3 is doing 3 features + starting stabilization in 30h — tight
 - Week 4 is 2 days of handoff only, not a full stabilization week
-- Invite User realistic estimate (8-9d per my read) larger than Week 3 allocation can absorb; decision deferred per user
+- Invite User realistic estimate (8-9d) larger than Week 3 allocation can absorb
+- Carryover items (W7, C1, C2) are substantial features — need explicit prioritisation decision before Week 2 starts

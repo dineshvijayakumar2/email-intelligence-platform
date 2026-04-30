@@ -19,12 +19,12 @@ logger = logging.getLogger("worker.email_pipeline")
 # ── Source of truth for step ordering ─────────────────────────────────────
 PIPELINE_STAGES = [
     "extract_and_link",
+    "ai_classify",
+    "bucket_engine",
     "assign_threads",
     "evaluate_threads",
     "refresh_counts",
     "embed_emails",
-    "ai_classify",
-    "bucket_engine",
     "entity_aggregation",
     "link_ai_refs",
     "evaluate_threads_final",
