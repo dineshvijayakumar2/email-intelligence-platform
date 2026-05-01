@@ -1748,113 +1748,60 @@ class ExtractionOrchestrator:
         """
         Sprint 3 sub-step: Enrich companies and contacts with Quickbase data.
 
-        Checks if QB sync config exists for this client. If so, copies QB fields
-        (customer_type, tier, revenue, quotes) to customer_companies/customer_contacts
-        enrichment columns. This makes QB context available to downstream steps
-        (engagement scoring, AI analysis, etc.)
-
-        Returns:
-            Dict with counts of enriched companies and contacts
+        Uses SQL UPDATE...FROM joins instead of per-row HTTP calls.
         """
         result = {'companies': 0, 'contacts': 0}
 
-        import time as _time
+        try:
+            qb_config = self.client.table('qb_sync_config').select(
+                'is_active'
+            ).eq('client_id', self.client_id).execute()
 
-        for attempt in range(3):
-            try:
-                # Check if QB is configured for this client
-                qb_config = self.client.table('qb_sync_config').select(
-                    'is_active'
-                ).eq('client_id', self.client_id).execute()
+            if not qb_config.data or not qb_config.data[0].get('is_active'):
+                logger.info("Step 6 QB enrichment: No active QB config — skipping")
+                return result
 
-                if not qb_config.data or not qb_config.data[0].get('is_active'):
-                    logger.info("Step 6 QB enrichment: No active QB config — skipping")
-                    return result
+            companies_sql = f"""
+                UPDATE customer_companies cc SET
+                    qb_customer_type = COALESCE(qc.customer_status, cc.qb_customer_type),
+                    qb_tier = COALESCE(qc.customer_tier, cc.qb_tier),
+                    qb_account_manager = COALESCE(qc.account_manager, cc.qb_account_manager),
+                    qb_total_revenue = COALESCE(qc.total_invoiced, cc.qb_total_revenue),
+                    qb_invoiced_ty = COALESCE(qc.invoiced_ty, cc.qb_invoiced_ty),
+                    qb_invoiced_ly = COALESCE(qc.invoiced_ly, cc.qb_invoiced_ly),
+                    qb_growth_90d = COALESCE(qc.growth_90d, cc.qb_growth_90d),
+                    qb_days_since_last_invoice = COALESCE(qc.days_since_last_invoice, cc.qb_days_since_last_invoice)
+                FROM qb_customers qc
+                WHERE qc.matched_company_id = cc.id
+                  AND qc.client_id = '{self.client_id}';
+            """
+            resp = self.client.rpc("exec_sql", {"query": companies_sql}).execute()
+            raw = (resp.data or '') if isinstance(resp.data, str) else str(resp.data)
+            import re
+            m = re.search(r'(\d+)', raw)
+            result['companies'] = int(m.group(1)) if m else 0
 
-                # Enrich companies from qb_customers (matched records)
-                qb_customers = self.client.table('qb_customers').select(
-                    'matched_company_id, customer_status, customer_tier, account_manager, '
-                    'total_invoiced, invoiced_ty, invoiced_ly, growth_90d, days_since_last_invoice'
-                ).eq('client_id', self.client_id).not_.is_(
-                    'matched_company_id', 'null'
-                ).execute()
+            contacts_sql = f"""
+                UPDATE customer_contacts cc SET
+                    qb_quotes_count = COALESCE(qc.quotes_accepted_count, cc.qb_quotes_count),
+                    qb_last_quote_date = COALESCE(qc.most_recent_quote_date, cc.qb_last_quote_date),
+                    qb_contact_recency_days = COALESCE(qc.contact_recency_days, cc.qb_contact_recency_days)
+                FROM qb_contacts qc
+                WHERE qc.matched_contact_id = cc.id
+                  AND qc.client_id = '{self.client_id}';
+            """
+            resp = self.client.rpc("exec_sql", {"query": contacts_sql}).execute()
+            raw = (resp.data or '') if isinstance(resp.data, str) else str(resp.data)
+            m = re.search(r'(\d+)', raw)
+            result['contacts'] = int(m.group(1)) if m else 0
 
-                for qb in (qb_customers.data or []):
-                    update = {}
-                    if qb.get('customer_status'):
-                        update['qb_customer_type'] = qb['customer_status']
-                    if qb.get('customer_tier'):
-                        update['qb_tier'] = qb['customer_tier']
-                    if qb.get('account_manager'):
-                        update['qb_account_manager'] = qb['account_manager']
-                    if qb.get('total_invoiced') is not None:
-                        update['qb_total_revenue'] = qb['total_invoiced']
-                    if qb.get('invoiced_ty') is not None:
-                        update['qb_invoiced_ty'] = qb['invoiced_ty']
-                    if qb.get('invoiced_ly') is not None:
-                        update['qb_invoiced_ly'] = qb['invoiced_ly']
-                    if qb.get('growth_90d') is not None:
-                        update['qb_growth_90d'] = qb['growth_90d']
-                    if qb.get('days_since_last_invoice') is not None:
-                        update['qb_days_since_last_invoice'] = qb['days_since_last_invoice']
+            logger.info(
+                f"Step 6 QB enrichment: {result['companies']} companies, "
+                f"{result['contacts']} contacts enriched from Quickbase"
+            )
 
-                    if update:
-                        try:
-                            self.client.table('customer_companies').update(
-                                update
-                            ).eq('id', qb['matched_company_id']).execute()
-                            result['companies'] += 1
-                        except OSError:
-                            _time.sleep(0.3)  # Back off on connection error
-                            self.client.table('customer_companies').update(
-                                update
-                            ).eq('id', qb['matched_company_id']).execute()
-                            result['companies'] += 1
-
-                # Enrich contacts from qb_contacts (matched records)
-                qb_contacts = self.client.table('qb_contacts').select(
-                    'matched_contact_id, quotes_accepted_count, most_recent_quote_date, contact_recency_days'
-                ).eq('client_id', self.client_id).not_.is_(
-                    'matched_contact_id', 'null'
-                ).execute()
-
-                for qb in (qb_contacts.data or []):
-                    update = {}
-                    if qb.get('quotes_accepted_count') is not None:
-                        update['qb_quotes_count'] = qb['quotes_accepted_count']
-                    if qb.get('most_recent_quote_date'):
-                        update['qb_last_quote_date'] = qb['most_recent_quote_date']
-                    if qb.get('contact_recency_days') is not None:
-                        update['qb_contact_recency_days'] = qb['contact_recency_days']
-
-                    if update:
-                        try:
-                            self.client.table('customer_contacts').update(
-                                update
-                            ).eq('id', qb['matched_contact_id']).execute()
-                            result['contacts'] += 1
-                        except OSError:
-                            _time.sleep(0.3)
-                            self.client.table('customer_contacts').update(
-                                update
-                            ).eq('id', qb['matched_contact_id']).execute()
-                            result['contacts'] += 1
-
-                logger.info(
-                    f"Step 6 QB enrichment: {result['companies']} companies, "
-                    f"{result['contacts']} contacts enriched from Quickbase"
-                )
-                break  # Success — exit retry loop
-
-            except OSError as e:
-                if attempt < 2:
-                    logger.warning(f"Step 6 QB enrichment OSError (attempt {attempt+1}/3): {e}")
-                    _time.sleep(1 * (attempt + 1))
-                    continue
-                logger.warning(f"Step 6 QB enrichment failed after 3 attempts: {e}")
-            except Exception as e:
-                logger.warning(f"Step 6 QB enrichment failed (non-critical): {e}")
-                break
+        except Exception as e:
+            logger.warning(f"Step 6 QB enrichment failed (non-critical): {e}")
 
         return result
 
