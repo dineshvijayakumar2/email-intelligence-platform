@@ -11,7 +11,7 @@ import ContactCapabilitiesCard from '../../components/ContactCapabilitiesCard';
 import SeasonalityChart from '../../components/SeasonalityChart';
 import CapabilityRhythmCard from '../../components/CapabilityRhythmCard';
 import QBLinkWidget from '../../components/QBLinkWidget';
-import { useCompanyDetail, useOrderHistory, useProductProfile } from '../../hooks/queries';
+import { useCompanyDetail, useOrderHistory, useProductProfile, useCompanyContactsEnriched } from '../../hooks/queries';
 import { useThreadsByCompany } from '../../hooks/queries';
 import { formatRelativeTime, threadStatusConfig } from '../../services/analyticsService';
 import type { ThreadStatusSummary } from '../../types/analytics';
@@ -21,7 +21,7 @@ import { KPICard } from '@/components/ui/kpi-card';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { ContentSkeleton } from '@/components/ui/empty-state';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, ArrowUp, ArrowDown, ChevronDown, ChevronRight } from 'lucide-react';
+import { ArrowLeft, ArrowUp, ArrowDown, ChevronDown, ChevronRight, Mail, FileText, Star, TrendingUp } from 'lucide-react';
 import { getRiskClass } from '@/lib/risk-variants';
 
 export const CompanyDetail: React.FC = () => {
@@ -33,6 +33,7 @@ export const CompanyDetail: React.FC = () => {
   const threadsQuery = useThreadsByCompany(companyId);
   const orderHistoryQuery = useOrderHistory(companyId);
   const productProfileQuery = useProductProfile(companyId);
+  const contactsQuery = useCompanyContactsEnriched(companyId);
 
   const company = companyQuery.data;
   const threads = threadsQuery.data?.threads || [];
@@ -156,6 +157,15 @@ export const CompanyDetail: React.FC = () => {
         )}
       </div>
 
+      {/* Key Contacts */}
+      <CompanyContactsSection
+        contacts={contactsQuery.data || []}
+        loading={contactsQuery.isLoading}
+        companyId={companyId!}
+        onViewAll={() => navigate(`/customers/contacts?company_id=${companyId}&client_id=${company.client_id}&name=${encodeURIComponent(company.company_name)}`)}
+        onContactClick={(id) => navigate(`/customers/contacts/${id}`)}
+      />
+
       {/* Active Threads */}
       {activeThreads.length > 0 && (
         <div className="rounded-lg border bg-white shadow-sm overflow-hidden mb-4">
@@ -233,3 +243,120 @@ export const CompanyDetail: React.FC = () => {
     </PageShell>
   );
 };
+
+
+// ── Inline contacts section ─────────────────────────────────────────────
+
+function CompanyContactsSection({
+  contacts,
+  loading,
+  companyId,
+  onViewAll,
+  onContactClick,
+}: {
+  contacts: any[];
+  loading: boolean;
+  companyId: string;
+  onViewAll: () => void;
+  onContactClick: (id: string) => void;
+}) {
+  if (loading) {
+    return (
+      <div className="rounded-lg border bg-white shadow-sm p-4 mb-4">
+        <div className="text-sm font-semibold text-slate-900 mb-3">Contacts</div>
+        <ContentSkeleton rows={3} />
+      </div>
+    );
+  }
+
+  if (!contacts.length) return null;
+
+  return (
+    <div className="rounded-lg border bg-white shadow-sm overflow-hidden mb-4">
+      <div className="flex items-center justify-between px-4 py-3 border-b">
+        <button onClick={onViewAll} className="text-sm font-semibold text-primary hover:underline">
+          Key Contacts ({contacts.length})
+        </button>
+      </div>
+      <div className="divide-y">
+        {contacts.slice(0, 8).map((c: any) => {
+          const totalEmails = (c.email_total ?? 0);
+          const quoteCount = (c.quote_count ?? 0);
+          const acceptedQuotes = (c.accepted_quote_count ?? 0);
+          const velocity90 = (c.email_velocity_90d ?? 0);
+          return (
+            <div
+              key={c.contact_id}
+              className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 cursor-pointer transition-colors"
+              onClick={() => onContactClick(c.contact_id)}
+            >
+              {/* Name + role */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm font-medium text-slate-800 truncate">
+                    {c.name || c.email}
+                  </span>
+                  {c.is_primary_contact && (
+                    <Star className="h-3 w-3 text-amber-500 shrink-0" fill="currentColor" />
+                  )}
+                  {c.persona_classification && !['unknown', 'shared_mailbox'].includes(c.persona_classification) && (
+                    <StatusBadge variant={
+                      c.persona_classification === 'champion' ? 'success'
+                      : c.persona_classification === 'active_buyer' ? 'info'
+                      : c.persona_classification === 'active_relationship' ? 'info'
+                      : c.persona_classification === 'warm_lead' ? 'purple'
+                      : c.persona_classification === 'prospect' ? 'purple'
+                      : c.persona_classification === 'inactive_buyer' ? 'warning'
+                      : c.persona_classification === 'dormant' ? 'danger'
+                      : 'neutral'
+                    } size="sm">
+                      {c.persona_classification.replaceAll('_', ' ')}
+                    </StatusBadge>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 text-xs text-slate-400">
+                  {c.name && <span className="truncate">{c.email}</span>}
+                  {c.seniority && <span className="truncate">· {c.seniority}</span>}
+                </div>
+              </div>
+
+              {/* Email stats */}
+              <div className="flex items-center gap-1 text-xs text-slate-500 tabular-nums shrink-0" title={`${c.email_outbound ?? 0} sent / ${c.email_inbound ?? 0} received`}>
+                <Mail className="h-3 w-3 text-slate-400" />
+                <span>{totalEmails}</span>
+                {velocity90 > 0 && (
+                  <span className="text-emerald-600 flex items-center gap-0.5" title={`${velocity90} emails in last 90 days`}>
+                    <TrendingUp className="h-3 w-3" />{velocity90}
+                  </span>
+                )}
+              </div>
+
+              {/* Quote stats */}
+              {quoteCount > 0 && (
+                <div className="flex items-center gap-1 text-xs text-slate-500 tabular-nums shrink-0" title={`${quoteCount} quotes · ${acceptedQuotes} converted${c.strike_rate ? ` · ${(c.strike_rate * 100).toFixed(0)}% strike` : ''}`}>
+                  <FileText className="h-3 w-3 text-slate-400" />
+                  <span>{quoteCount}</span>
+                  {acceptedQuotes > 0 && (
+                    <span className="text-emerald-600">({acceptedQuotes})</span>
+                  )}
+                </div>
+              )}
+
+              {/* Last contact */}
+              <span className="text-xs text-slate-400 w-20 text-right shrink-0">
+                {c.email_last_date ? formatRelativeTime(c.email_last_date) : 'Never'}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      {contacts.length > 8 && (
+        <div className="px-4 py-2 border-t">
+          <button onClick={onViewAll} className="text-xs text-primary hover:underline">
+            View all {contacts.length} contacts
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}

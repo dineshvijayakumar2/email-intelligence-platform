@@ -589,6 +589,17 @@ export const contactIntelligenceApi = {
       return null;
     }
   },
+
+  async getCompanyContacts(companyId: string): Promise<{ contacts: any[]; total: number }> {
+    try {
+      return await api.get<{ contacts: any[]; total: number }>(
+        `/contacts-intelligence/company/${companyId}/contacts?limit=50&sort_by=engagement_score&sort_order=desc`,
+        { timeout: 15000 }
+      );
+    } catch {
+      return { contacts: [], total: 0 };
+    }
+  },
 };
 
 // ============================================================================

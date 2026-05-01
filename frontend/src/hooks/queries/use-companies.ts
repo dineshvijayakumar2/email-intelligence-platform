@@ -4,7 +4,7 @@
  */
 
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
-import { companiesApi } from '../../services/analyticsService';
+import { companiesApi, contactIntelligenceApi } from '../../services/analyticsService';
 import api from '../../services/apiClient';
 import type {
   CompanyAnalytics,
@@ -75,6 +75,18 @@ export function useProductProfile(companyId: string | undefined) {
   return useQuery<{ categories: any[]; operations: any[]; capability_breakdown?: any[]; process_tags?: string[]; embellishment_tags?: string[] }>({
     queryKey: ['product-profile', companyId],
     queryFn: () => companiesApi.getProductProfile(companyId!),
+    enabled: !!companyId,
+    staleTime: 60_000,
+  });
+}
+
+export function useCompanyContactsEnriched(companyId: string | undefined) {
+  return useQuery<any[]>({
+    queryKey: ['company-contacts-enriched', companyId],
+    queryFn: async () => {
+      const result = await contactIntelligenceApi.getCompanyContacts(companyId!);
+      return result.contacts;
+    },
     enabled: !!companyId,
     staleTime: 60_000,
   });
