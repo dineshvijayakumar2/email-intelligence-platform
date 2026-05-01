@@ -1,0 +1,7 @@
+08-04-2026
+- The Currency Format issue is now fixed to make sure that Australian format is used everywhere by default
+- The Customer Profile page issue with showing the "Days Since Order" and the "Revenue" is now fixed.  https://frontend-production-7b0b.up.railway.app/customers/51e72d07-e322-4fd6-8f51-5a6548a7d004. It is yet to be fixed in Customer List page
+- The "Threads" page is now added under "Emails" for searching any threads quickly to find a conversation.
+
+I'm working on the following:
+1. The Customer List page show the correct revenue number

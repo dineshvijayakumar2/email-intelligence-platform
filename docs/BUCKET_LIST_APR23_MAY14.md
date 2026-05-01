@@ -106,6 +106,8 @@
 - [x] **BUG FIX**: Step 6 QB enrichment had PostgREST 1000-row default limit — only enriching ~10% of matched records (9,657 companies, 12,772 contacts). Also did 22K per-row HTTP UPDATE calls (30+ min). Fixed: single SQL UPDATE...FROM join per table — processes all rows in seconds. (commit `f9970c0`)
 - [x] **NULL `client_id` backfill for hello@**: 134K emails had NULL `client_id` causing health dashboard to show 159.2% coverage. Backfill complete (100,113 rows updated May 1)
 - [x] **Script**: `scripts/db/_link_ai_refs_full.py` — on-demand QB reference linking for full mailbox history with `--lookback N` option
+- [x] **PERF**: AI classification batch writes — `_mark_processing`, `_save_completed`, `_save_failed` all converted from per-row upserts to batch upserts (100 HTTP calls → 1-2 per batch). Classification write phase drops from 5-10s to <500ms. (commit `0e6e58e`)
+- [x] **PERF**: Extraction orchestrator — `_link_orphan_contacts` grouped by company `.in_()`, `_step_update_company_stats` uses SQL `UPDATE...FROM VALUES` instead of per-company HTTP calls (commit `0e6e58e`)
 
 ### Worker infrastructure (Apr 29)
 

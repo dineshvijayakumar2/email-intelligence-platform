@@ -612,18 +612,18 @@ When a new email arrives via Outlook live sync, the Outlook sync service fetches
 
 After sync completes, an `email_pipeline` job is created. The pipeline runs 10 stages in this order:
 
-1. **ai_classify** — Batches unanalyzed emails to Claude Haiku with QB-enriched business context, writes classifications to `ai_email_intelligence`
+1. **ai_classify** — Batches unanalyzed emails to Claude Haiku with QB-enriched business context, writes classifications to `ai_email_intelligence`. Uses batch upserts (50 records per call) instead of per-row writes
 2. **bucket_engine** — Assigns action signals (response_urgency, deal_at_risk, etc.) based on AI classifications
-3. **extract_and_link** — 13-step extraction: contacts, companies, roles, email linking. In incremental mode, only processes emails where `extracted_at IS NULL` (skips already-extracted emails). After step 9 completes, stamps `extracted_at` on processed emails
+3. **extract_and_link** — 13-step extraction: contacts, companies, roles, email linking. In incremental mode, only processes emails where `extracted_at IS NULL` (skips already-extracted emails). After step 9 completes, stamps `extracted_at` on processed emails. QB enrichment (step 6 sub-step) uses SQL `UPDATE...FROM` joins instead of per-row HTTP calls. Company stats update uses SQL `UPDATE...FROM VALUES` for batch efficiency
 4. **assign_threads** — Assigns `canonical_thread_id` to new emails
 5. **evaluate_threads** — Updates thread status for affected threads
 6. **refresh_counts** — Updates email counts on contacts and companies
 7. **embed_emails** — Generates vector embeddings for new emails
 8. **entity_aggregation** — Aggregates entity data across emails
-9. **link_ai_refs** — Links AI-extracted references to QB records
+9. **link_ai_refs** — Links AI-extracted references to QB records. Scoped to emails classified in the last 7 days (not entire mailbox history). Validates all refs in bulk (1-2 queries) instead of per-row
 10. **evaluate_threads_final** — Final thread status pass after all data is linked
 
-Classification runs first (stages 1-2) because it has no dependency on extraction and is fast (~2 min per batch). This ensures new emails get classified even if the heavier extraction step times out.
+Classification runs first (stages 1-2) because it has no dependency on extraction and is fast (~2 min per batch). This ensures new emails get classified even if the heavier extraction step times out. For on-demand full reference linking across the entire mailbox history, use `scripts/db/_link_ai_refs_full.py` (supports `--lookback N` for custom windows).
 
 ### The QB enrichment path
 

@@ -2,13 +2,13 @@
 
 All scheduled work runs via HTTP POST to internal endpoints, authenticated with a `CRON_SECRET` Bearer token.
 
-## Prerequisites
+**Status:** Live — Railway cron configured and running.
 
-1. **Set `CRON_SECRET` in production environment** (Railway env vars)
-   - Generate: `openssl rand -hex 32`
-   - Set the same value in both the backend service and the cron provider
+## Current Setup
 
-2. **Backend URL** — replace `$BACKEND_URL` below with the Railway backend service URL (e.g., `https://your-backend.up.railway.app`)
+- **Cron provider:** Railway native cron
+- **Auth:** `CRON_SECRET` env var set in Railway backend service
+- **Backend URL:** Railway backend service URL (referred to as `$BACKEND_URL` in examples below)
 
 ## Cron Schedule
 
@@ -22,9 +22,18 @@ All scheduled work runs via HTTP POST to internal endpoints, authenticated with 
 | `POST /api/internal/jobs/refresh-persona-metrics` | Daily 03:00 UTC | Refresh contact_email_metrics materialized view |
 | `POST /api/internal/jobs/analytics-rollup` | Daily 02:00 UTC | Daily analytics rollup |
 
+## Admin-Only Endpoints (not cron-scheduled)
+
+These require `admin` role authentication, not `CRON_SECRET`:
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /api/internal/jobs/mailboxes/{mailbox_id}/run-pipeline` | Manually trigger email pipeline for a mailbox |
+| `POST /api/internal/jobs/jobs/{job_id}/resume-pipeline` | Resume a failed/interrupted pipeline job |
+
 ## cron-job.org Configuration
 
-For each endpoint above:
+For each cron endpoint above:
 
 - **URL:** `$BACKEND_URL/api/internal/jobs/<endpoint-name>`
 - **Method:** POST
@@ -98,16 +107,11 @@ curl -X POST "$BACKEND_URL/api/internal/jobs/$ENDPOINT" \
   --fail --silent --show-error
 ```
 
-## Disabling Legacy Sync Loops
+## Sync Architecture
 
-Once Railway cron is confirmed working for Gmail/Outlook sync, disable the built-in asyncio loops:
+Gmail and Outlook sync services are initialized at startup but remain idle. They only activate when the external cron calls the sync endpoint. There are no background asyncio loops — sync is 100% cron-triggered.
 
-```bash
-# In Railway env vars for the backend service
-DISABLE_SYNC_LOOPS=true
-```
-
-This prevents the legacy in-process `asyncio.sleep` loops from running. The cron endpoints become the sole trigger for email sync — observable, resilient to restarts, and consistent with QB sync.
+The `email_pipeline` is not cron-scheduled. It runs as a worker job, triggered automatically after sync completes (when new emails are fetched) or manually via the admin endpoint.
 
 ## Health Check
 

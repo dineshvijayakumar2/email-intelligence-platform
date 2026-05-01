@@ -1,0 +1,19 @@
+Gaps in our Current System
+
+Priority
+2. The Seasonality needs to be clear shown across years to find opportunities to reach out to customers 
+3. There is no use of showing operations by department, capabilities. 
+4. Unique Emails have Embelishments Used, Processes Used and Capablities Used columns. The gaps are nothing but comparing the Customer - Capabalities, Embelishments and PRocesses to return the gaps (already solved in Quickbase). The gap is to club this with seasonality trends and give more nuanced insights
+6. While showing Active threads with status like overdue, it needs to be based on the intent of the latest email in the thread. The active threads is not being shown sometimes--It needs to be made consistent. 
+8. Action Items derived from seasonality, contact gaps, customer gaps by comparing with industries
+9. Create a separate analytics page for Industry to profile the list of companies and create similar stats like Revenue, Capability/Embelishment/Process Gaps, Seasonality
+10. Data Health to show the health of Thread processing, Email Metadata Extraction and Vectorisation
+13. Analytics Intelligence Implementation (analytics-intelligence-claude-code-plan.md) is pending to make the AI assistant and other AI-driven insights smarter
+14. Daily Digest and Strategic Digest need to process emails with thread context
+15. Smart Inbox page need to show the analysis in terms of threads like a person who understand the news events completely
+16. Not sure about the role of LangChain with the embedded data. This needs to modified in such a way it's a cornerstone of the platform
+
+Next Plan
+7. Check if the draft emails be created with action items for the Account Manager
+11. Add Feedback section in Customer, Contact, Industry Profile pages to start with. The feedback needs to be more seamless to be able to extendable in any pages
+12. Intuitive feedback and relearning mechanism based on the Email Draft prepared and what was the content sent

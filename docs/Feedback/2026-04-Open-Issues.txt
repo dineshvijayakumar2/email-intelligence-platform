@@ -1,0 +1,7 @@
+Issues
+1. Artis is just showing $410 revenue this year while it was half a million dollar. Also, it sshows Days Since Order as 9999 while there are many orders shown even in april (this month) - FIXED
+2. The threads page is completely useless as it doesn't even show the list of all thread history. It needs to be one-stop-search place for any thread search and can be added to Emails menu - FIXED
+3. Mailbox selection not working in Smart Inbox page
+4. Mailbox selection not working in Opportunities page. Anyway this page needs to be completely revamped
+5. Australian Currency format is not properly applied to all pages.
+6. The signature extraction seem to be not used anywhere
