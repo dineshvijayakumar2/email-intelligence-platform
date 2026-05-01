@@ -1087,21 +1087,22 @@ class AIEmailAnalyzer:
     # ------------------------------------------------------------------
     def _mark_processing(self, email_ids: List[str], mailbox_id: str, client_id: Optional[str]):
         """Insert placeholder rows with processing_status='processing'."""
-        for eid in email_ids:
+        records = [
+            {"email_id": eid, "mailbox_id": mailbox_id,
+             "client_id": client_id, "processing_status": "processing"}
+            for eid in email_ids
+        ]
+        CHUNK = 200
+        for i in range(0, len(records), CHUNK):
             try:
                 self._execute_with_retry(
                     self.client.table("ai_email_intelligence")
-                    .upsert({
-                        "email_id": eid,
-                        "mailbox_id": mailbox_id,
-                        "client_id": client_id,
-                        "processing_status": "processing",
-                    }, on_conflict="email_id")
+                    .upsert(records[i:i + CHUNK], on_conflict="email_id")
                 )
             except Exception as e:
-                logger.warning(f"Failed to mark email {eid} as processing: {e}")
+                logger.warning(f"Failed to mark batch as processing: {e}")
 
-    def _save_completed(
+    def _build_completed_record(
         self,
         email_id: str,
         mailbox_id: str,
@@ -1109,36 +1110,36 @@ class AIEmailAnalyzer:
         row_data: dict,
         ai_response: AIResponse,
         prompt_version: str = PROMPT_VERSION,
-    ):
-        """Save a successfully analyzed email to ai_email_intelligence."""
-        record = {
+    ) -> dict:
+        """Build a record dict for a successfully analyzed email."""
+        return {
             "email_id": email_id,
             "mailbox_id": mailbox_id,
             "client_id": client_id,
             **row_data,
-            # Processing metadata
             "model_used": ai_response.model,
             "input_tokens": ai_response.input_tokens,
             "output_tokens": ai_response.output_tokens,
             "processing_time_ms": ai_response.processing_time_ms,
-            # Idempotent processing
             "processing_status": "completed",
             "processed_at": datetime.utcnow().isoformat(),
             "error_message": None,
-            # Version tracking
             "prompt_version": prompt_version,
             "scoring_version": SCORING_VERSION,
-            # Raw AI output (debugging + compliance)
             "raw_ai_response": ai_response.raw_response,
         }
 
-        try:
-            self._execute_with_retry(
-                self.client.table("ai_email_intelligence")
-                .upsert(record, on_conflict="email_id")
-            )
-        except Exception as e:
-            logger.error(f"Failed to save intelligence for email {email_id}: {e}")
+    def _save_batch(self, records: List[dict]):
+        """Batch-upsert classification results to ai_email_intelligence."""
+        CHUNK = 50
+        for i in range(0, len(records), CHUNK):
+            try:
+                self._execute_with_retry(
+                    self.client.table("ai_email_intelligence")
+                    .upsert(records[i:i + CHUNK], on_conflict="email_id")
+                )
+            except Exception as e:
+                logger.error(f"Failed to batch-save {len(records[i:i + CHUNK])} records: {e}")
 
     def _log_to_job_errors(self, job_id: Optional[str], mailbox_id: str,
                             error_type: str, message: str, email_ids: List[str] = None,
@@ -1173,7 +1174,7 @@ class AIEmailAnalyzer:
         except Exception as e:
             logger.debug(f"Could not log to job_errors: {e}")
 
-    def _save_failed(
+    def _build_failed_record(
         self,
         email_id: str,
         mailbox_id: str,
@@ -1181,8 +1182,8 @@ class AIEmailAnalyzer:
         error_message: str,
         ai_response: Optional[AIResponse] = None,
         prompt_version: str = PROMPT_VERSION,
-    ):
-        """Mark an email as failed in ai_email_intelligence."""
+    ) -> dict:
+        """Build a record dict for a failed email."""
         record = {
             "email_id": email_id,
             "mailbox_id": mailbox_id,
@@ -1194,14 +1195,7 @@ class AIEmailAnalyzer:
         if ai_response:
             record["raw_ai_response"] = ai_response.raw_response
             record["model_used"] = ai_response.model
-
-        try:
-            self._execute_with_retry(
-                self.client.table("ai_email_intelligence")
-                .upsert(record, on_conflict="email_id")
-            )
-        except Exception as e:
-            logger.error(f"Failed to save failure record for email {email_id}: {e}")
+        return record
 
     # ------------------------------------------------------------------
     # Core batch analysis
@@ -1247,8 +1241,8 @@ class AIEmailAnalyzer:
                 f"api_unavailable: email_analysis task is set to '{task_model}' "
                 f"({provider}) but no {provider} API key is configured"
             )
-            for email in emails:
-                self._save_failed(email["id"], mailbox_id, client_id, fail_msg)
+            fail_records = [self._build_failed_record(email["id"], mailbox_id, client_id, fail_msg) for email in emails]
+            self._save_batch(fail_records)
             usage_tracker = get_usage_tracker()
             if usage_tracker:
                 usage_tracker.log_usage(
@@ -1306,8 +1300,8 @@ class AIEmailAnalyzer:
             error_detail = getattr(self.ai_client, 'last_error', None) or "api_timeout"
             fail_msg = f"api_call_failed: {str(error_detail)[:200]}"
             logger.error(f"AI API call failed for batch of {len(emails)} (model={attempted_model}): {error_detail}")
-            for eid in email_ids:
-                self._save_failed(eid, mailbox_id, client_id, fail_msg, prompt_version=effective_prompt_version)
+            fail_records = [self._build_failed_record(eid, mailbox_id, client_id, fail_msg, prompt_version=effective_prompt_version) for eid in email_ids]
+            self._save_batch(fail_records)
             self._log_to_job_errors(job_id, mailbox_id, "api_error", fail_msg, email_ids, client_id=client_id)
             error_lower = (error_detail or "").lower()
             if "budget_exceeded" in error_lower:
@@ -1367,22 +1361,26 @@ class AIEmailAnalyzer:
         # Build lifecycle tier lookup from enriched emails
         lifecycle_lookup = {e["id"]: e.get("_lifecycle_tier") for e in emails}
 
-        # Save valid results
+        # Build all records, then batch-write
+        all_records = []
         analyzed_count = 0
-        all_valid = valid_results
-        for result in all_valid:
+        for result in valid_results:
             row_data = post_process_classification(result, currency_code=currency_code)
-            # Inject lifecycle tier computed during enrichment
             row_data["customer_lifecycle_tier"] = lifecycle_lookup.get(result.email_id)
-            self._save_completed(result.email_id, mailbox_id, client_id, row_data, ai_response, prompt_version=effective_prompt_version)
+            all_records.append(self._build_completed_record(
+                result.email_id, mailbox_id, client_id, row_data, ai_response,
+                prompt_version=effective_prompt_version,
+            ))
             analyzed_count += 1
 
-        # Save failures
         for fail in final_failures:
-            self._save_failed(
+            all_records.append(self._build_failed_record(
                 fail["email_id"], mailbox_id, client_id,
-                fail["error"], ai_response, prompt_version=effective_prompt_version
-            )
+                fail["error"], ai_response, prompt_version=effective_prompt_version,
+            ))
+
+        if all_records:
+            self._save_batch(all_records)
 
         # Log batch failures to unified job_errors table
         if final_failures:

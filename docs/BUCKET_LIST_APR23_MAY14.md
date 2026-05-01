@@ -87,7 +87,7 @@
 - [x] Per-mailbox classify button on Data Health page (lightning bolt per row)
 - [x] Fix: backfill skipping emails with NULL `sent_date` (commit `fdcd509`)
 - [x] Backfill CHUNK reduced 10K→200 so stop_event is checked every ~2min instead of hours (commit `eb544a0`)
-- [~] Apr 30: 162K/260K classified (75.7%). Nic, Jeff, Production PC at 100%. Remaining backlog: hello@ 46K, ehab@ 14K, kenneth@ 1.3K, Linda 828
+- [~] Apr 30: 192K/261K classified (73.6% overall). Nic 100%, Jeff.love 100%, Production PC 100%, Kenneth 97.9%, Linda 98.3%. Remaining backlog: hello@ 47K, ehab@ 14K
 - [ ] Top up OpenAI credit if burn rate × remaining > remaining balance
 
 ### Pipeline + data integrity bugs (identified Apr 29–30)
@@ -100,7 +100,12 @@
 - [x] **Pipeline reorder**: Moved `ai_classify` + `bucket_engine` to steps 1-2 (before `extract_and_link`) — classification now runs first with no extraction dependency
 - [x] **email_categories cleanup**: Removed `_get_rule_based_skip_ids` and `_enrich_with_rule_based_tags` from AI analyzer — legacy file-import-only dependencies that added overhead for live-synced emails
 - [x] **Removed PRE-CLASSIFICATION HINTS** from system prompt — no code populates `pre_classification` after email_categories cleanup
-- [x] **Surgical fix**: Migration 098 adds `extracted_at` column to emails table + partial index. Incremental extraction now skips emails where `extracted_at IS NOT NULL`. After step 9, stamps `extracted_at` on all processed emails. Reduces incremental scope from ~270K to ~50/day steady state.
+- [x] **Surgical fix**: Migration 098 adds `extracted_at` column to emails table + partial index. Incremental extraction now skips emails where `extracted_at IS NOT NULL`. After step 9, stamps `extracted_at` on all processed emails. Reduces incremental scope from ~270K to ~50/day steady state. (applied to prod Apr 30)
+- [x] **Scoped extraction**: ContactExtractor and EmailLinker now receive only scoped email IDs in incremental mode. Previously scanned all 143K+ emails (117 min); now processes only new emails via `_get_emails_in_scope()`. Role classifier also benefits — fewer contacts = fewer signature lookups (commit `1b2bfd9`)
+- [x] **BUG FIX**: `link_ai_refs` pipeline step re-processed ALL classified emails with extracted_references (6,412 for Ehab, 3,419 for hello@) on every run — 20K+ DB round-trips causing Server disconnected after 5-30min. Fixed: scoped to 7-day window via `processed_at` filter + batch validation (1-2 bulk queries instead of per-row). (commit `0edd402`)
+- [x] **BUG FIX**: Step 6 QB enrichment had PostgREST 1000-row default limit — only enriching ~10% of matched records (9,657 companies, 12,772 contacts). Also did 22K per-row HTTP UPDATE calls (30+ min). Fixed: single SQL UPDATE...FROM join per table — processes all rows in seconds. (commit `f9970c0`)
+- [x] **NULL `client_id` backfill for hello@**: 134K emails had NULL `client_id` causing health dashboard to show 159.2% coverage. Backfill complete (100,113 rows updated May 1)
+- [x] **Script**: `scripts/db/_link_ai_refs_full.py` — on-demand QB reference linking for full mailbox history with `--lookback N` option
 
 ### Worker infrastructure (Apr 29)
 
@@ -261,8 +266,9 @@ Items moved from `BUCKET_LIST_APR16_APR22.md` — not yet scheduled into a speci
 
 ## Flags / risks being tracked
 
-- ~~**Pipeline throughput**~~: **RESOLVED** — ai_classify moved to step 1 (runs before extraction), `extracted_at` column added so incremental extraction skips already-processed emails, email_categories legacy dependency removed from classification path
-- **Classification backlog**: 62K emails pending (hello@ 46K, ehab@ 14K). At current rate (~330/hr), needs ~190 hours of continuous backfill
+- ~~**Pipeline throughput**~~: **RESOLVED** — ai_classify moved to step 1 (runs before extraction), `extracted_at` column added so incremental extraction skips already-processed emails, email_categories legacy dependency removed, `link_ai_refs` scoped to 7-day window + batch validation
+- **Classification backlog**: ~61K emails pending (hello@ 47K, ehab@ 14K). At current rate (~330/hr), needs ~185 hours of continuous backfill
+- ~~**hello@ client_id backfill**~~: **RESOLVED** — 134K emails backfilled (May 1), all mailboxes at 0 NULL
 - Cross-Gap revival may expand if join fixes reveal deeper schema issues
 - Week 3 is doing 3 features + starting stabilization in 30h — tight
 - Week 4 is 2 days of handoff only, not a full stabilization week

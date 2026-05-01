@@ -1148,18 +1148,23 @@ class ExtractionOrchestrator:
                 else:
                     no_match += 1
 
-            # Batch update
             linked = 0
-            for i in range(0, len(to_update), 50):
-                batch = to_update[i:i + 50]
-                for item in batch:
+            by_company: dict[str, list[str]] = {}
+            for item in to_update:
+                by_company.setdefault(item['company_id'], []).append(item['id'])
+
+            for company_id, contact_ids in by_company.items():
+                for i in range(0, len(contact_ids), 200):
+                    chunk = contact_ids[i:i + 200]
                     try:
-                        self.client.table('customer_contacts').update({
-                            'customer_company_id': item['company_id']
-                        }).eq('id', item['id']).execute()
-                        linked += 1
-                    except Exception:
-                        pass
+                        self._execute_with_retry(
+                            self.client.table('customer_contacts')
+                            .update({'customer_company_id': company_id})
+                            .in_('id', chunk)
+                        )
+                        linked += len(chunk)
+                    except Exception as e:
+                        logger.warning(f"Orphan linking batch failed: {e}")
 
             logger.info(
                 f"Orphan contact linking: {linked} linked by domain, "
@@ -2113,40 +2118,41 @@ class ExtractionOrchestrator:
 
             logger.info(f"Scanned {emails_scanned} entries → email stats for {len(company_email_stats)} companies")
 
-            # ── 4. Batch update companies ─────────────────────────────────────
-            updated_count = 0
+            # ── 4. Batch update companies via SQL ────────────────────────────
             timestamp = datetime.utcnow().isoformat()
-            CHUNK_SIZE = 100
+            values_rows = []
+            for cid in company_ids:
+                contact_count = company_contact_counts.get(cid, 0)
+                stats = company_email_stats.get(cid)
+                if contact_count > 0 or stats:
+                    total = stats['total'] if stats else 0
+                    inbound = stats['inbound'] if stats else 0
+                    outbound = stats['outbound'] if stats else 0
+                    values_rows.append(
+                        f"('{cid}'::uuid, {contact_count}, {total}, {inbound}, {outbound})"
+                    )
 
-            for i in range(0, len(company_ids), CHUNK_SIZE):
-                chunk = company_ids[i:i + CHUNK_SIZE]
-                for cid in chunk:
-                    contact_count = company_contact_counts.get(cid, 0)
-                    stats = company_email_stats.get(cid)
-                    update_data: dict = {'updated_at': timestamp}
-
-                    if contact_count > 0:
-                        update_data['contact_count'] = contact_count
-                    if stats:
-                        update_data['total_emails'] = stats['total']
-                        update_data['total_inbound'] = stats['inbound']
-                        update_data['total_outbound'] = stats['outbound']
-
-                    if len(update_data) > 1:  # more than just updated_at
-                        try:
-                            self.client.table('customer_companies').update(
-                                update_data
-                            ).eq('id', cid).execute()
-                            updated_count += 1
-                        except Exception as e:
-                            logger.error(f"Failed to update company {cid}: {e}")
-
-                # Throttle + progress
-                if (i + CHUNK_SIZE) < len(company_ids):
-                    import time
-                    time.sleep(0.3)
-                if (i + CHUNK_SIZE) % 500 == 0 or (i + CHUNK_SIZE) >= len(company_ids):
-                    logger.info(f"Company stats update progress: {updated_count}/{len(company_ids)}")
+            updated_count = 0
+            CHUNK_SIZE = 500
+            for i in range(0, len(values_rows), CHUNK_SIZE):
+                chunk = values_rows[i:i + CHUNK_SIZE]
+                values_sql = ", ".join(chunk)
+                sql = f"""
+                    UPDATE customer_companies cc SET
+                        contact_count = v.contact_count,
+                        total_emails = v.total_emails,
+                        total_inbound = v.total_inbound,
+                        total_outbound = v.total_outbound,
+                        updated_at = '{timestamp}'::timestamptz
+                    FROM (VALUES {values_sql})
+                        AS v(id, contact_count, total_emails, total_inbound, total_outbound)
+                    WHERE cc.id = v.id;
+                """
+                try:
+                    self.client.rpc("exec_sql", {"query": sql}).execute()
+                    updated_count += len(chunk)
+                except Exception as e:
+                    logger.error(f"Batch company stats update failed: {e}")
 
             logger.info(f"Updated statistics for {updated_count} companies")
 
