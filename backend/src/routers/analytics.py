@@ -3981,6 +3981,237 @@ async def get_thread_health(client_id: Optional[str] = Query(default=None)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/data-health/ai-link-refs")
+async def get_ai_link_ref_health(client_id: Optional[str] = Query(default=None)):
+    """
+    AI-extracted QB reference linking health — per-mailbox extraction stats + client-wide link totals.
+    Single RPC call via get_ai_link_ref_health().
+    """
+    try:
+        params: dict = {}
+        if client_id:
+            params['p_client_id'] = client_id
+
+        resp = _supabase.rpc('get_ai_link_ref_health', params).execute()
+        raw = resp.data
+        # RPC returns JSONB object; PostgREST may wrap in a list
+        if isinstance(raw, list) and len(raw) > 0 and isinstance(raw[0], dict) and 'mailboxes' in raw[0]:
+            rpc_data = raw[0]
+        elif isinstance(raw, dict):
+            rpc_data = raw
+        else:
+            rpc_data = {'mailboxes': [], 'link_totals': {}}
+
+        per_mailbox = rpc_data.get('mailboxes') or []
+        link_totals = rpc_data.get('link_totals') or {}
+
+        for mb in per_mailbox:
+            for k in ('total_classified', 'emails_with_refs', 'total_refs_found',
+                       'total_quote_refs', 'total_job_refs'):
+                mb[k] = int(mb.get(k, 0))
+
+        total_refs = sum(m['total_refs_found'] for m in per_mailbox)
+        total_classified = sum(m['total_classified'] for m in per_mailbox)
+        total_with_refs = sum(m['emails_with_refs'] for m in per_mailbox)
+
+        total_links = int(link_totals.get('total_links', 0))
+        threads_linked = int(link_totals.get('threads_linked', 0))
+        quote_links = int(link_totals.get('quote_links', 0))
+        job_links = int(link_totals.get('job_links', 0))
+
+        return {
+            'mailboxes': per_mailbox,
+            'totals': {
+                'total_classified': total_classified,
+                'emails_with_refs': total_with_refs,
+                'total_refs_found': total_refs,
+                'total_quote_refs': sum(m['total_quote_refs'] for m in per_mailbox),
+                'total_job_refs': sum(m['total_job_refs'] for m in per_mailbox),
+                'threads_linked': threads_linked,
+                'total_links': total_links,
+                'quote_links': quote_links,
+                'job_links': job_links,
+                'link_rate_pct': round(total_links / total_refs * 100, 1) if total_refs > 0 else 0.0,
+                'extraction_rate_pct': round(total_with_refs / total_classified * 100, 1) if total_classified > 0 else 0.0,
+            },
+        }
+    except Exception as e:
+        logger.error(f"Failed to get AI link ref health: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/data-health/ai-link-refs/backfill")
+async def backfill_ai_link_refs(
+    background_tasks: BackgroundTasks,
+    client_id: str = Query(...),
+    lookback_days: Optional[int] = Query(default=None, description="Only process last N days (null = full backfill)"),
+):
+    """
+    Trigger AI reference linking backfill — validates extracted refs against QB
+    and upserts thread_qb_links. Runs in background.
+    """
+    import re as _re
+
+    PAGE = 500
+
+    async def _run_link_refs():
+        try:
+            mb_resp = _supabase.table("mailboxes").select(
+                "id, name, email_address, client_id"
+            ).eq("client_id", client_id).execute()
+            mailboxes = mb_resp.data or []
+
+            grand_total = 0
+            for mb in mailboxes:
+                mb_id = mb["id"]
+                mb_client_id = mb.get("client_id")
+                if not mb_client_id:
+                    continue
+
+                all_rows = []
+                offset = 0
+                while True:
+                    query = _supabase.table("ai_email_intelligence").select(
+                        "email_id, extracted_references"
+                    ).eq("mailbox_id", mb_id).eq(
+                        "processing_status", "completed"
+                    ).not_.is_("extracted_references", "null")
+
+                    if lookback_days is not None:
+                        cutoff = (datetime.now(timezone.utc) - timedelta(days=lookback_days)).isoformat()
+                        query = query.gte("processed_at", cutoff)
+
+                    resp = query.range(offset, offset + PAGE - 1).execute()
+                    batch = resp.data or []
+                    all_rows.extend(batch)
+                    if len(batch) < PAGE:
+                        break
+                    offset += PAGE
+
+                if not all_rows:
+                    continue
+
+                email_ids = [r["email_id"] for r in all_rows]
+                thread_map: dict[str, str] = {}
+                for i in range(0, len(email_ids), PAGE):
+                    chunk = email_ids[i:i + PAGE]
+                    thread_resp = _supabase.table("emails").select(
+                        "id, canonical_thread_id"
+                    ).in_("id", chunk).execute()
+                    for r in (thread_resp.data or []):
+                        tid = r.get("canonical_thread_id")
+                        if tid:
+                            thread_map[r["id"]] = tid
+
+                all_quote_refs: set[str] = set()
+                all_job_refs: set[str] = set()
+                row_refs: list[tuple[str, dict[str, set[str]]]] = []
+
+                for row in all_rows:
+                    refs_raw = row.get("extracted_references") or []
+                    if not refs_raw:
+                        continue
+                    thread_id = thread_map.get(row["email_id"])
+                    if not thread_id:
+                        continue
+
+                    refs: dict[str, set[str]] = {}
+                    for ref in refs_raw:
+                        ref_type = ref.get("type")
+                        ref_number = ref.get("number")
+                        if ref_type and ref_number:
+                            digits = _re.sub(r'[^0-9]', '', str(ref_number))
+                            if not digits:
+                                continue
+                            prefix = "Q" if ref_type == "quote" else "J"
+                            canonical = f"{prefix}{digits}"
+                            refs.setdefault(ref_type, set()).add(canonical)
+                            if ref_type == "quote":
+                                all_quote_refs.add(canonical)
+                            else:
+                                all_job_refs.add(canonical)
+
+                    if refs:
+                        row_refs.append((thread_id, refs))
+
+                if not row_refs:
+                    continue
+
+                valid_quotes: dict[str, str] = {}
+                valid_jobs: dict[str, str] = {}
+
+                for i in range(0, len(list(all_quote_refs)), PAGE):
+                    chunk = list(all_quote_refs)[i:i + PAGE]
+                    resp = _supabase.table("qb_quotes").select("quote_no, qb_record_id").eq(
+                        "client_id", mb_client_id
+                    ).in_("quote_no", chunk).execute()
+                    for r in (resp.data or []):
+                        valid_quotes[r["quote_no"]] = str(r["qb_record_id"])
+
+                for i in range(0, len(list(all_job_refs)), PAGE):
+                    chunk = list(all_job_refs)[i:i + PAGE]
+                    resp = _supabase.table("qb_jobs").select("job_no, qb_record_id").eq(
+                        "client_id", mb_client_id
+                    ).in_("job_no", chunk).execute()
+                    for r in (resp.data or []):
+                        valid_jobs[r["job_no"]] = str(r["qb_record_id"])
+
+                if not valid_quotes and not valid_jobs:
+                    continue
+
+                total_linked = 0
+                for thread_id, refs in row_refs:
+                    validated: dict[str, dict[str, str]] = {}
+                    for ref_str in refs.get("quote", set()):
+                        if ref_str in valid_quotes:
+                            validated.setdefault("quote", {})[ref_str] = valid_quotes[ref_str]
+                    for ref_str in refs.get("job", set()):
+                        if ref_str in valid_jobs:
+                            validated.setdefault("job", {})[ref_str] = valid_jobs[ref_str]
+
+                    if not validated:
+                        continue
+
+                    rows = []
+                    for link_type, ref_map in validated.items():
+                        for ref_str, record_id in ref_map.items():
+                            rows.append({
+                                "client_id": mb_client_id,
+                                "canonical_thread_id": thread_id,
+                                "link_type": link_type,
+                                "qb_record_id": record_id,
+                                "qb_reference": ref_str,
+                                "confidence": 0.9,
+                                "source": "ai",
+                                "verified": False,
+                            })
+
+                    try:
+                        _supabase.table("thread_qb_links").upsert(
+                            rows,
+                            on_conflict="client_id,canonical_thread_id,link_type,qb_record_id",
+                        ).execute()
+                        total_linked += len(rows)
+                    except Exception as e:
+                        logger.warning(f"Link ref upsert error for thread {thread_id[:16]}: {e}")
+
+                grand_total += total_linked
+
+            logger.info(f"AI link ref backfill complete: {grand_total} links upserted for client {client_id}")
+
+        except Exception as e:
+            logger.error(f"AI link ref backfill failed: {e}", exc_info=True)
+
+    background_tasks.add_task(_run_link_refs)
+
+    scope = f"last {lookback_days} days" if lookback_days else "full (all time)"
+    return {
+        "status": "accepted",
+        "message": f"AI link ref backfill started ({scope})",
+        "lookback_days": lookback_days,
+    }
+
+
 @router.get("/data-health/db-performance")
 async def get_db_performance(
     current_user: dict = Depends(require_role('admin')),

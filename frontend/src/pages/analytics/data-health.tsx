@@ -14,9 +14,9 @@ import {
   type DataHealthResponse,
   type ExtractionJobHealth,
 } from '../../services/analyticsService';
-import { useDataHealth, useClassificationHealth, useThreadHealth } from '../../hooks/queries';
+import { useDataHealth, useClassificationHealth, useThreadHealth, useAiLinkRefHealth } from '../../hooks/queries';
 import api from '../../services/apiClient';
-import { CheckCircle, AlertTriangle, XCircle, RefreshCw, Database, GitMerge, Brain, Zap, Download } from 'lucide-react';
+import { CheckCircle, AlertTriangle, XCircle, RefreshCw, Database, GitMerge, Brain, Zap, Download, Link2 } from 'lucide-react';
 
 const THREAD_COLORS: Record<string, string> = {
   complete: '#10b981', awaiting_response: '#667eea', awaiting_our_response: '#f59e0b',
@@ -49,17 +49,37 @@ export const DataHealthDashboard: React.FC = () => {
   const healthQuery = useDataHealth(clientId);
   const classQuery = useClassificationHealth(clientId);
   const threadQuery = useThreadHealth(clientId);
+  const linkRefQuery = useAiLinkRefHealth(clientId);
 
   const data = healthQuery.data || null;
   const loading = healthQuery.isLoading;
   const classificationHealth = classQuery.data || null;
   const threadHealth = threadQuery.data || null;
+  const linkRefHealth = linkRefQuery.data || null;
 
   const [backfilling, setBackfilling] = useState(false);
   const [backfillingMailbox, setBackfillingMailbox] = useState<string | null>(null);
   const [relinking, setRelinking] = useState(false);
+  const [linkRefBackfilling, setLinkRefBackfilling] = useState(false);
   const [fetchingMissing, setFetchingMissing] = useState(false);
   const [fetchMissingResult, setFetchMissingResult] = useState<any>(null);
+
+  const startLinkRefBackfill = async (lookbackDays?: number) => {
+    if (!clientId || linkRefBackfilling) return;
+    setLinkRefBackfilling(true);
+    try {
+      const params = lookbackDays != null
+        ? `client_id=${clientId}&lookback_days=${lookbackDays}`
+        : `client_id=${clientId}`;
+      await api.post(`/v1/analytics/data-health/ai-link-refs/backfill?${params}`);
+      const scope = lookbackDays ? `last ${lookbackDays} days` : 'full backfill';
+      toast.success(`AI link ref backfill started (${scope})`);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to start link ref backfill');
+    } finally {
+      setLinkRefBackfilling(false);
+    }
+  };
 
   const startBackfill = async (mailboxId?: string) => {
     if (!clientId || backfilling || backfillingMailbox) return;
@@ -545,6 +565,114 @@ export const DataHealthDashboard: React.FC = () => {
                   <td className="px-3 py-1.5 text-right">
                     <StatusBadge variant={mb.intent_coverage_pct >= 80 ? 'success' : mb.intent_coverage_pct >= 50 ? 'warning' : 'danger'} size="sm">
                       {mb.intent_coverage_pct}%
+                    </StatusBadge>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* AI Link References Health */}
+      {linkRefHealth && (
+        <div className="rounded-lg border bg-white shadow-sm p-4 mb-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Link2 className="h-4 w-4 text-primary" />
+              <h3 className="text-sm font-semibold text-slate-900">AI Link References</h3>
+            </div>
+            <div className="flex items-center gap-2">
+              {[7, 30, 90].map(days => (
+                <button
+                  key={days}
+                  onClick={() => startLinkRefBackfill(days)}
+                  disabled={linkRefBackfilling}
+                  className="h-7 px-2.5 text-xs font-medium rounded-md border border-slate-200 hover:bg-slate-50 inline-flex items-center gap-1 disabled:opacity-50"
+                >
+                  {linkRefBackfilling ? <Spinner className="h-3 w-3 animate-spin" /> : null}
+                  {days}d
+                </button>
+              ))}
+              <button
+                onClick={() => startLinkRefBackfill()}
+                disabled={linkRefBackfilling}
+                className="h-7 px-3 text-xs font-medium rounded-md border border-slate-200 hover:bg-slate-50 inline-flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {linkRefBackfilling ? <Spinner className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                Full Backfill
+              </button>
+            </div>
+          </div>
+
+          {/* Overall progress bar */}
+          {(() => {
+            const t = linkRefHealth.totals;
+            const linkPct = t?.link_rate_pct ?? 0;
+            return (
+              <>
+                <div className="h-2 rounded-full bg-slate-100 overflow-hidden mb-2">
+                  <div className={`h-full rounded-full transition-all ${linkPct >= 70 ? 'bg-success' : linkPct >= 40 ? 'bg-warning' : 'bg-destructive'}`}
+                    style={{ width: `${Math.min(linkPct, 100)}%` }} />
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-3">
+                  <div>
+                    <p className="text-xs text-slate-500">Emails w/ Refs</p>
+                    <p className="text-lg font-semibold tabular-nums">{formatNumber(t?.emails_with_refs ?? 0)}</p>
+                    <p className="text-[10px] text-slate-400">{t?.extraction_rate_pct ?? 0}% of classified</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500">Refs Found</p>
+                    <p className="text-lg font-semibold tabular-nums">{formatNumber(t?.total_refs_found ?? 0)}</p>
+                    <p className="text-[10px] text-slate-400">{formatNumber(t?.total_quote_refs ?? 0)} quotes, {formatNumber(t?.total_job_refs ?? 0)} jobs</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500">Linked to QB</p>
+                    <p className="text-lg font-semibold tabular-nums text-success">{formatNumber(t?.total_links ?? 0)}</p>
+                    <p className="text-[10px] text-slate-400">{formatNumber(t?.quote_links ?? 0)} quotes, {formatNumber(t?.job_links ?? 0)} jobs</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500">Threads Linked</p>
+                    <p className="text-lg font-semibold tabular-nums text-primary">{formatNumber(t?.threads_linked ?? 0)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500">Link Rate</p>
+                    <p className={`text-lg font-semibold tabular-nums ${linkPct >= 70 ? 'text-success' : linkPct >= 40 ? 'text-warning' : 'text-destructive'}`}>{linkPct}%</p>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
+
+          {/* Per-mailbox breakdown */}
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b bg-slate-50/50">
+                <th className="px-3 py-1.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Mailbox</th>
+                <th className="px-3 py-1.5 text-right text-xs font-bold uppercase tracking-wider text-slate-600 w-20">w/ Refs</th>
+                <th className="px-3 py-1.5 text-right text-xs font-bold uppercase tracking-wider text-slate-600 w-24">Refs Found</th>
+                <th className="px-3 py-1.5 text-right text-xs font-bold uppercase tracking-wider text-slate-600 w-24">Linked</th>
+                <th className="px-3 py-1.5 text-right text-xs font-bold uppercase tracking-wider text-slate-600 w-24">Threads</th>
+                <th className="px-3 py-1.5 text-right text-xs font-bold uppercase tracking-wider text-slate-600 w-24">Link Rate</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {(linkRefHealth.mailboxes || []).map((mb: any) => (
+                <tr key={mb.mailbox_id}>
+                  <td className="px-3 py-1.5 truncate">{mb.email_address}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums">{formatNumber(mb.emails_with_refs)}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums">
+                    {formatNumber(mb.total_refs_found)}
+                    <span className="text-[10px] text-slate-400 ml-1">({formatNumber(mb.total_quote_refs)}Q {formatNumber(mb.total_job_refs)}J)</span>
+                  </td>
+                  <td className="px-3 py-1.5 text-right tabular-nums text-success">
+                    {formatNumber(mb.total_links)}
+                    <span className="text-[10px] text-slate-400 ml-1">({formatNumber(mb.quote_links)}Q {formatNumber(mb.job_links)}J)</span>
+                  </td>
+                  <td className="px-3 py-1.5 text-right tabular-nums text-primary">{formatNumber(mb.threads_linked)}</td>
+                  <td className="px-3 py-1.5 text-right">
+                    <StatusBadge variant={mb.link_rate_pct >= 70 ? 'success' : mb.link_rate_pct >= 40 ? 'warning' : 'danger'} size="sm">
+                      {mb.link_rate_pct}%
                     </StatusBadge>
                   </td>
                 </tr>

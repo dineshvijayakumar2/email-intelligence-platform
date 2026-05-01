@@ -38,3 +38,13 @@ export function useThreadHealth(clientId: string) {
     refetchInterval: 30_000,
   });
 }
+
+export function useAiLinkRefHealth(clientId: string) {
+  return useQuery<any>({
+    queryKey: ['data-health-ai-link-refs', clientId],
+    queryFn: () => api.get<any>(`/v1/analytics/data-health/ai-link-refs?client_id=${clientId}`).catch(() => null),
+    enabled: !!clientId,
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+  });
+}
