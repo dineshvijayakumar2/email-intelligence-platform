@@ -275,14 +275,17 @@ async def _resume_interrupted_pipelines(sb):
             continue
 
         try:
-            new_id = create_job(sb, JobSpec(
-                job_type="email_pipeline",
-                mailbox_id=mailbox_id,
-                parameters={
+            resume_params = {
                     "trigger_source": "resume_after_deploy",
                     "resumed_from": job["id"],
                     "completed_steps": completed_steps,
-                },
+            }
+            if params.get("extraction_mode"):
+                resume_params["extraction_mode"] = params["extraction_mode"]
+            new_id = create_job(sb, JobSpec(
+                job_type="email_pipeline",
+                mailbox_id=mailbox_id,
+                parameters=resume_params,
                 triggered_by="worker_startup",
                 max_attempts=1,
             ))

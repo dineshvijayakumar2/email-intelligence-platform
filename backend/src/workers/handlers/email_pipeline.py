@@ -66,7 +66,7 @@ async def email_pipeline_handler(sb, job: dict, stop_event: asyncio.Event):
     from src.services.ai_entity_aggregator import AIEntityAggregator
     from src.workers.handlers.ai_analysis import _link_ai_extracted_refs
 
-    extraction_mode = params.get("extraction_mode", "incremental" if trigger_source == "sync" else "full")
+    extraction_mode = params.get("extraction_mode", "incremental" if trigger_source in ("sync", "resume", "resume_after_deploy") else "full")
     orch = ExtractionOrchestrator(
         mailbox_id=mailbox_id,
         client_id=client_id,

@@ -332,15 +332,18 @@ async def resume_pipeline(
     prev_params = failed_job.get("parameters") or {}
     completed_steps = prev_params.get("completed_steps") or []
 
+    resume_params = {
+        "trigger_source": "resume",
+        "resumed_from": job_id,
+        "completed_steps": completed_steps,
+    }
+    if prev_params.get("extraction_mode"):
+        resume_params["extraction_mode"] = prev_params["extraction_mode"]
     try:
         new_job_id = create_job(_supabase, JobSpec(
             job_type="email_pipeline",
             mailbox_id=failed_job["mailbox_id"],
-            parameters={
-                "trigger_source": "resume",
-                "resumed_from": job_id,
-                "completed_steps": completed_steps,
-            },
+            parameters=resume_params,
             triggered_by="user",
             max_attempts=1,
         ))
