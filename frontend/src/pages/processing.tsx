@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useParams, useNavigate } from 'react-router-dom';
-import { formatDate, formatTime, formatDateTime, formatElapsed } from '../utils/dateUtils';
+import { formatDate, formatTime, formatDateTime } from '../utils/dateUtils';
 import {
   Play,
   Pause,
@@ -19,15 +19,19 @@ import {
   RotateCw,
   ChevronLeft,
   ChevronRight,
+  Search,
+  Filter,
+  X,
+  Zap,
+  Layers,
 } from 'lucide-react';
-import { processingService, ProcessingJob } from '../services/processingService';
+import { processingService, ProcessingJob, JobStatus } from '../services/processingService';
 import { ErrorDisplay } from '../components/ErrorDisplay';
 import { MailboxSelector } from '../components/MailboxSelector';
 import { mailboxService } from '../services/mailboxService';
 import { useJobUpdates } from '../hooks/useJobUpdates';
 import { PageShell, PageHeader } from '@/components/ui/page-shell';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { ContentSkeleton } from '@/components/ui/empty-state';
 import { Spinner } from '@/lib/icons';
 import { toast } from '@/lib/toast';
 import {
@@ -170,11 +174,19 @@ export const ProcessingJobs: React.FC = () => {
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(20);
 
   // Mailbox selection state
   const [selectedMailboxId, setSelectedMailboxId] = useState<string | null>(null);
   const [mailboxIdToNameMap, setMailboxIdToNameMap] = useState<Record<string, string>>({});
+
+  // Filters
+  const [statusFilter, setStatusFilter] = useState<JobStatus[]>([]);
+  const [jobTypeFilter, setJobTypeFilter] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
 
   // Use WebSocket-based job updates with polling fallback
   const { jobs, isLoading: loading, isRealtime, refresh: refreshJobs } = useJobUpdates({
@@ -292,15 +304,64 @@ export const ProcessingJobs: React.FC = () => {
 
   const runningJobs = jobs.filter(job => job.status === 'running');
 
+  const activeFilterCount = [
+    statusFilter.length > 0,
+    jobTypeFilter.length > 0,
+    searchQuery.length > 0,
+    dateFrom.length > 0,
+    dateTo.length > 0,
+  ].filter(Boolean).length;
+
+  const clearAllFilters = useCallback(() => {
+    setStatusFilter([]);
+    setJobTypeFilter([]);
+    setSearchQuery('');
+    setDateFrom('');
+    setDateTo('');
+  }, []);
+
+  // Client-side filtering
+  const filteredJobs = useMemo(() => {
+    let result = jobs;
+
+    if (statusFilter.length > 0) {
+      result = result.filter(j => statusFilter.includes(j.status));
+    }
+    if (jobTypeFilter.length > 0) {
+      result = result.filter(j => jobTypeFilter.includes(j.job_type));
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      result = result.filter(j =>
+        j.id.toLowerCase().includes(q) ||
+        (j.mailbox_name || '').toLowerCase().includes(q) ||
+        j.job_type.toLowerCase().includes(q)
+      );
+    }
+    if (dateFrom) {
+      const from = new Date(dateFrom);
+      result = result.filter(j => new Date(j.created_at) >= from);
+    }
+    if (dateTo) {
+      const to = new Date(dateTo + 'T23:59:59');
+      result = result.filter(j => new Date(j.created_at) <= to);
+    }
+    return result;
+  }, [jobs, statusFilter, jobTypeFilter, searchQuery, dateFrom, dateTo]);
+
   // Pagination logic
-  const totalJobs = jobs.length;
+  const totalJobs = filteredJobs.length;
   const totalPages = Math.max(1, Math.ceil(totalJobs / pageSize));
   const paginatedJobs = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
-    return jobs.slice(start, start + pageSize);
-  }, [jobs, currentPage, pageSize]);
+    return filteredJobs.slice(start, start + pageSize);
+  }, [filteredJobs, currentPage, pageSize]);
 
-  // Reset to page 1 when jobs change significantly
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, jobTypeFilter, searchQuery, dateFrom, dateTo]);
+
   useEffect(() => {
     if (currentPage > totalPages) {
       setCurrentPage(1);
@@ -309,6 +370,12 @@ export const ProcessingJobs: React.FC = () => {
 
   const rangeStart = totalJobs === 0 ? 0 : (currentPage - 1) * pageSize + 1;
   const rangeEnd = Math.min(currentPage * pageSize, totalJobs);
+
+  // Distinct job types present in current data (for filter dropdown)
+  const availableJobTypes = useMemo(() => {
+    const types = new Set(jobs.map(j => j.job_type));
+    return Array.from(types).map(t => ({ value: t, label: processingService.getJobTypeLabel(t) }));
+  }, [jobs]);
 
   // Handler for mailbox selection change
   const handleMailboxChange = (mailboxIds: string[]) => {
@@ -331,11 +398,59 @@ export const ProcessingJobs: React.FC = () => {
     </code>
   );
 
-  const renderJobType = (type: string) => (
-    <StatusBadge variant="info" size="sm">
-      {processingService.getJobTypeLabel(type)}
-    </StatusBadge>
+  const renderJobType = (record: ProcessingJob) => (
+    <div className="flex flex-col gap-1">
+      <StatusBadge variant="info" size="sm">
+        {processingService.getJobTypeLabel(record.job_type)}
+      </StatusBadge>
+      <div className="flex items-center gap-1">
+        {record.extraction_mode && (
+          <span className={`inline-flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+            record.extraction_mode === 'full'
+              ? 'bg-amber-50 text-amber-700 border border-amber-200'
+              : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+          }`}>
+            {record.extraction_mode === 'full' ? <Layers className="h-2.5 w-2.5" /> : <Zap className="h-2.5 w-2.5" />}
+            {record.extraction_mode === 'full' ? 'Full' : 'Incremental'}
+          </span>
+        )}
+        {record.trigger_source && (
+          <span className="text-[10px] text-slate-400">
+            via {record.trigger_source}
+          </span>
+        )}
+      </div>
+    </div>
   );
+
+  const renderStage = (record: ProcessingJob) => {
+    if (!record.current_stage && (!record.completed_steps || record.completed_steps.length === 0)) {
+      return <span className="text-slate-400">-</span>;
+    }
+    const stageName = record.current_stage?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    const stepsCount = record.completed_steps?.length || 0;
+    const totalStages = 10; // PIPELINE_STAGES length
+    return (
+      <div className="flex flex-col gap-1">
+        {stageName && (
+          <span className="text-xs text-slate-600 truncate max-w-[140px]" title={stageName}>
+            {stageName}
+          </span>
+        )}
+        {stepsCount > 0 && (
+          <div className="flex items-center gap-1.5">
+            <div className="flex-1 h-1 rounded-full bg-slate-100 w-16">
+              <div
+                className="h-full rounded-full bg-indigo-400 transition-all"
+                style={{ width: `${Math.round((stepsCount / totalStages) * 100)}%` }}
+              />
+            </div>
+            <span className="text-[10px] tabular-nums text-slate-400">{stepsCount}/{totalStages}</span>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const renderStatus = (record: ProcessingJob) => {
     const badge = (
@@ -648,6 +763,135 @@ export const ProcessingJobs: React.FC = () => {
         </div>
       )}
 
+      {/* Filter Bar */}
+      <div className="mb-4 rounded-lg border bg-white shadow-sm">
+        <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-slate-50/50">
+          <button
+            className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
+              showFilters
+                ? 'bg-primary text-white'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+            onClick={() => setShowFilters(!showFilters)}
+          >
+            <Filter className="h-3.5 w-3.5" />
+            Filters
+            {activeFilterCount > 0 && (
+              <span className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-white/20 text-[10px] font-bold">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+
+          {/* Quick search — always visible */}
+          <div className="relative flex-1 max-w-xs">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search by Job ID, mailbox, or type..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="w-full rounded-md border border-slate-200 bg-white pl-8 pr-8 py-1.5 text-xs text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+            />
+            {searchQuery && (
+              <button
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                onClick={() => setSearchQuery('')}
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+
+          {activeFilterCount > 0 && (
+            <button
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs text-slate-500 hover:text-red-600 hover:bg-red-50 transition-colors"
+              onClick={clearAllFilters}
+            >
+              <X className="h-3 w-3" />
+              Clear all
+            </button>
+          )}
+
+          <div className="ml-auto text-xs text-slate-400">
+            {totalJobs} of {jobs.length} jobs
+          </div>
+        </div>
+
+        {showFilters && (
+          <div className="px-4 py-3 flex flex-wrap items-end gap-4 border-b">
+            {/* Status filter */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Status</label>
+              <div className="flex flex-wrap gap-1">
+                {(['pending', 'running', 'downloading', 'completed', 'failed', 'paused', 'stopped', 'interrupted'] as JobStatus[]).map(s => (
+                  <button
+                    key={s}
+                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium border transition-colors ${
+                      statusFilter.includes(s)
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
+                    }`}
+                    onClick={() =>
+                      setStatusFilter(prev =>
+                        prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]
+                      )
+                    }
+                  >
+                    {getStatusIcon(s)}
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Job Type filter */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Job Type</label>
+              <div className="flex flex-wrap gap-1">
+                {availableJobTypes.map(t => (
+                  <button
+                    key={t.value}
+                    className={`rounded-full px-2.5 py-1 text-[11px] font-medium border transition-colors ${
+                      jobTypeFilter.includes(t.value)
+                        ? 'border-blue-400 bg-blue-50 text-blue-700'
+                        : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
+                    }`}
+                    onClick={() =>
+                      setJobTypeFilter(prev =>
+                        prev.includes(t.value) ? prev.filter(x => x !== t.value) : [...prev, t.value]
+                      )
+                    }
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Date range */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Created Date</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={e => setDateFrom(e.target.value)}
+                  className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+                <span className="text-xs text-slate-400">to</span>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={e => setDateTo(e.target.value)}
+                  className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Table */}
       <div className="rounded-lg border bg-white shadow-sm">
         {loading && jobs.length === 0 ? (
@@ -678,9 +922,9 @@ export const ProcessingJobs: React.FC = () => {
                     <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Job Type</th>
                     <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Mailbox</th>
                     <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Status</th>
+                    <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Stage</th>
                     <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Progress</th>
                     <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Created</th>
-                    <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Started</th>
                     <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Duration</th>
                     <th className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Actions</th>
                   </tr>
@@ -689,29 +933,30 @@ export const ProcessingJobs: React.FC = () => {
                   {paginatedJobs.map(record => (
                     <tr
                       key={record.id}
-                      className={
+                      className={`cursor-pointer ${
                         record.status === 'failed'
                           ? 'bg-red-50/50'
                           : record.status === 'running'
                           ? 'bg-blue-50/30'
                           : 'hover:bg-slate-50/50'
-                      }
+                      }`}
+                      onClick={() => showJobDetails(record)}
                     >
                       <td className="px-3 py-2.5">{renderJobId(record.id)}</td>
-                      <td className="px-3 py-2.5">{renderJobType(record.job_type)}</td>
+                      <td className="px-3 py-2.5">{renderJobType(record)}</td>
                       <td className="px-3 py-2.5 text-sm text-slate-700">{record.mailbox_name}</td>
                       <td className="px-3 py-2.5">{renderStatus(record)}</td>
+                      <td className="px-3 py-2.5">{renderStage(record)}</td>
                       <td className="px-3 py-2.5">{renderProgress(record)}</td>
                       <td className="px-3 py-2.5">{renderDate(record.created_at)}</td>
-                      <td className="px-3 py-2.5">{renderDate(record.started_at, 'Not started')}</td>
                       <td className="px-3 py-2.5">{renderDuration(record)}</td>
-                      <td className="px-3 py-2.5">{renderActions(record)}</td>
+                      <td className="px-3 py-2.5" onClick={e => e.stopPropagation()}>{renderActions(record)}</td>
                     </tr>
                   ))}
                   {paginatedJobs.length === 0 && (
                     <tr>
                       <td colSpan={9} className="px-3 py-12 text-center text-sm text-slate-400">
-                        No processing jobs found
+                        {activeFilterCount > 0 ? 'No jobs match the current filters' : 'No processing jobs found'}
                       </td>
                     </tr>
                   )}
@@ -803,7 +1048,7 @@ export const ProcessingJobs: React.FC = () => {
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-3">Job Information</h3>
                 <div className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-lg border bg-slate-50/50 p-4">
                   <DetailRow label="Job ID" span>
-                    <code className="text-[11px] bg-slate-200 px-1.5 py-0.5 rounded font-mono text-slate-600">
+                    <code className="text-[11px] bg-slate-200 px-1.5 py-0.5 rounded font-mono text-slate-600 select-all">
                       {selectedJob.id}
                     </code>
                   </DetailRow>
@@ -821,6 +1066,56 @@ export const ProcessingJobs: React.FC = () => {
                   <DetailRow label="Mailbox">
                     {selectedJob.mailbox_name}
                   </DetailRow>
+
+                  {/* Extraction mode & trigger source */}
+                  {selectedJob.extraction_mode && (
+                    <DetailRow label="Extraction Mode">
+                      <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${
+                        selectedJob.extraction_mode === 'full'
+                          ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                          : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                      }`}>
+                        {selectedJob.extraction_mode === 'full' ? <Layers className="h-3 w-3" /> : <Zap className="h-3 w-3" />}
+                        {selectedJob.extraction_mode === 'full' ? 'Full Re-extraction' : 'Incremental'}
+                      </span>
+                    </DetailRow>
+                  )}
+                  {selectedJob.trigger_source && (
+                    <DetailRow label="Trigger Source">
+                      <span className="inline-flex items-center gap-1 text-xs text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
+                        {selectedJob.trigger_source}
+                      </span>
+                    </DetailRow>
+                  )}
+                  {selectedJob.triggered_by && (
+                    <DetailRow label="Triggered By">
+                      {selectedJob.triggered_by}
+                    </DetailRow>
+                  )}
+
+                  {/* Current stage for pipeline jobs */}
+                  {selectedJob.current_stage && (
+                    <DetailRow label="Current Stage" span>
+                      <span className="text-sm text-indigo-600 font-medium">
+                        {selectedJob.current_stage.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                      </span>
+                    </DetailRow>
+                  )}
+
+                  {/* Pipeline steps progress */}
+                  {selectedJob.completed_steps && selectedJob.completed_steps.length > 0 && (
+                    <DetailRow label="Pipeline Steps" span>
+                      <div className="flex flex-wrap gap-1">
+                        {selectedJob.completed_steps.map(step => (
+                          <span key={step} className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200">
+                            <CheckCircle2 className="h-2.5 w-2.5" />
+                            {step.replace(/_/g, ' ')}
+                          </span>
+                        ))}
+                      </div>
+                    </DetailRow>
+                  )}
+
                   <DetailRow label="Total Records">
                     {selectedJob.total_records.toLocaleString('en-AU')}
                   </DetailRow>
@@ -834,7 +1129,7 @@ export const ProcessingJobs: React.FC = () => {
                   </DetailRow>
 
                   {(selectedJob.filtered_records !== undefined && selectedJob.filtered_records > 0) && (
-                    <DetailRow label="Filtered Records" span>
+                    <DetailRow label="Filtered Records">
                       <span className="text-warning">
                         {selectedJob.filtered_records.toLocaleString('en-AU')} (excluded by date filter)
                       </span>
@@ -865,11 +1160,17 @@ export const ProcessingJobs: React.FC = () => {
                     />
                   </DetailRow>
 
+                  <DetailRow label="Created At">
+                    {formatDateTime(selectedJob.created_at)}
+                  </DetailRow>
                   <DetailRow label="Started At">
                     {selectedJob.started_at ? formatDateTime(selectedJob.started_at) : 'Not started'}
                   </DetailRow>
                   <DetailRow label="Completed At">
                     {selectedJob.completed_at ? formatDateTime(selectedJob.completed_at) : 'Not completed'}
+                  </DetailRow>
+                  <DetailRow label="Duration">
+                    {renderDuration(selectedJob)}
                   </DetailRow>
                 </div>
               </div>
@@ -891,7 +1192,7 @@ export const ProcessingJobs: React.FC = () => {
                 </div>
               )}
 
-              {/* Stage 2: Enhanced Error Display with detailed breakdown and retry */}
+              {/* Enhanced Error Display with detailed breakdown and retry */}
               {selectedJob.failed_records > 0 && (
                 <ErrorDisplay
                   jobId={selectedJob.id}

@@ -1,15 +1,17 @@
 import api from './apiClient';
 
+export type JobStatus = 'pending' | 'running' | 'completed' | 'failed' | 'paused' | 'stopped' | 'interrupted' | 'downloading';
+
 export interface ProcessingJob {
   id: string;
   job_type: string;
   mailbox_id: string;
   mailbox_name?: string;
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'paused' | 'stopped' | 'interrupted' | 'downloading';
+  status: JobStatus;
   total_records: number;
   processed_records: number;
   failed_records: number;
-  filtered_records?: number;  // Stage 2: Emails filtered by date range
+  filtered_records?: number;
   started_at?: string;
   completed_at?: string;
   created_at: string;
@@ -18,12 +20,25 @@ export interface ProcessingJob {
   emails_per_second?: number;
   estimated_time_remaining?: string;
   estimated_seconds_remaining?: number;
-  // Download progress (for parallel download mode)
   download_percent?: number;
   download_speed_mbps?: number;
-  // Stage 2: Date range filter parameters
   filter_start_date?: string;
   filter_end_date?: string;
+  extraction_mode?: 'full' | 'incremental';
+  trigger_source?: string;
+  current_stage?: string;
+  triggered_by?: string;
+  completed_steps?: string[];
+  total_stages?: number;
+}
+
+export interface JobFilters {
+  mailboxId?: string;
+  status?: string[];
+  jobType?: string[];
+  createdAfter?: string;
+  createdBefore?: string;
+  search?: string;
 }
 
 export interface CreateProcessingJobData {
@@ -81,13 +96,21 @@ export const processingService = {
     };
   },
 
-  // Get processing jobs (with silent network error handling for polling)
-  // Optional mailbox_id parameter to filter by specific mailbox at the backend level
-  async getProcessingJobs(silent: boolean = false, mailboxId?: string): Promise<ProcessingJob[]> {
-    const url = mailboxId ? `/processing-jobs?mailbox_id=${mailboxId}` : '/processing-jobs';
+  async getProcessingJobs(silent: boolean = false, mailboxId?: string, filters?: JobFilters): Promise<ProcessingJob[]> {
+    const params = new URLSearchParams();
+    const effectiveMailbox = mailboxId || filters?.mailboxId;
+    if (effectiveMailbox) params.set('mailbox_id', effectiveMailbox);
+    if (filters?.status?.length) params.set('status', filters.status.join(','));
+    if (filters?.jobType?.length) params.set('job_type', filters.jobType.join(','));
+    if (filters?.createdAfter) params.set('created_after', filters.createdAfter);
+    if (filters?.createdBefore) params.set('created_before', filters.createdBefore);
+    if (filters?.search) params.set('search', filters.search);
+
+    const qs = params.toString();
+    const url = `/processing-jobs${qs ? `?${qs}` : ''}`;
     const jobs = await api.get<ProcessingJob[]>(url, {
       silentOnNetworkError: silent,
-      timeout: 5000, // Shorter timeout for polling
+      timeout: 5000,
     });
 
     if (!jobs) {
@@ -144,16 +167,37 @@ export const processingService = {
 
   // Get job status labels
   getJobTypeLabel(jobType: string): string {
-    const labels = {
+    const labels: Record<string, string> = {
       mbox_extraction: 'MBOX Extraction',
       outlook_extraction: 'Outlook Extraction',
       extraction: 'Email Extraction',
       reprocessing: 'Re-sync (Attachments & Links)',
       categorization: 'Email Categorization',
       enrichment: 'AI Enrichment',
-      cleanup: 'Data Cleanup'
+      cleanup: 'Data Cleanup',
+      email_pipeline: 'Email Pipeline',
+      reembed: 'Re-embed Vectors',
+      ai_analysis: 'AI Analysis',
+      ai_classify: 'AI Classification',
+      bucket_engine: 'Bucket Engine',
+      entity_aggregation: 'Entity Aggregation',
     };
-    return labels[jobType as keyof typeof labels] || jobType;
+    return labels[jobType] || jobType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  },
+
+  getAllJobTypes(): { value: string; label: string }[] {
+    return [
+      { value: 'email_pipeline', label: 'Email Pipeline' },
+      { value: 'extraction', label: 'Email Extraction' },
+      { value: 'mbox_extraction', label: 'MBOX Extraction' },
+      { value: 'outlook_extraction', label: 'Outlook Extraction' },
+      { value: 'reprocessing', label: 'Re-sync' },
+      { value: 'reembed', label: 'Re-embed Vectors' },
+      { value: 'ai_analysis', label: 'AI Analysis' },
+      { value: 'enrichment', label: 'AI Enrichment' },
+      { value: 'categorization', label: 'Categorization' },
+      { value: 'cleanup', label: 'Data Cleanup' },
+    ];
   },
 
   getStatusColor(status: string): string {

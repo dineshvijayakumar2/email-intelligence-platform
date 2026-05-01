@@ -91,10 +91,15 @@ router = APIRouter(prefix="/processing-jobs", tags=["processing_jobs"])
 @router.get("")
 async def get_processing_jobs(
     mailbox_id: str = None,
+    status: str = None,
+    job_type: str = None,
+    created_after: str = None,
+    created_before: str = None,
+    search: str = None,
     current_user: dict = Depends(get_current_user),
     accessible_mailbox_ids: list = Depends(get_accessible_mailbox_ids),
 ):
-    """Get processing jobs filtered by user's accessible mailboxes. Optionally filter by specific mailbox_id."""
+    """Get processing jobs filtered by user's accessible mailboxes with optional filters."""
 
     try:
         logger.info(
@@ -122,9 +127,37 @@ async def get_processing_jobs(
         # Retry once on transient HTTP/2 connection errors (Supabase cold-start)
         for attempt in range(2):
             try:
-                result = _get_supabase().table('processing_jobs').select(
-                    'id, job_type, mailbox_id, status, total_records, processed_records, failed_records, filtered_records, started_at, completed_at, created_at, filter_start_date, filter_end_date, mailboxes(name)'
-                ).in_('mailbox_id', filter_mailbox_ids).order('created_at', desc=True).limit(100).execute()
+                query = _get_supabase().table('processing_jobs').select(
+                    'id, job_type, mailbox_id, status, total_records, processed_records, '
+                    'failed_records, filtered_records, started_at, completed_at, created_at, '
+                    'filter_start_date, filter_end_date, parameters, current_stage, triggered_by, '
+                    'mailboxes(name)'
+                ).in_('mailbox_id', filter_mailbox_ids)
+
+                if status:
+                    statuses = [s.strip() for s in status.split(',')]
+                    if len(statuses) == 1:
+                        query = query.eq('status', statuses[0])
+                    else:
+                        query = query.in_('status', statuses)
+
+                if job_type:
+                    job_types = [t.strip() for t in job_type.split(',')]
+                    if len(job_types) == 1:
+                        query = query.eq('job_type', job_types[0])
+                    else:
+                        query = query.in_('job_type', job_types)
+
+                if created_after:
+                    query = query.gte('created_at', created_after)
+
+                if created_before:
+                    query = query.lte('created_at', created_before)
+
+                if search:
+                    query = query.ilike('id', f'%{search}%')
+
+                result = query.order('created_at', desc=True).limit(100).execute()
                 break
             except Exception as retry_err:
                 if attempt == 0 and 'ConnectionTerminated' in str(retry_err):
@@ -243,6 +276,12 @@ async def get_processing_jobs(
                 except (ValueError, TypeError) as e:
                     logger.debug(f"Error calculating duration for job {job['id']}: {e}")
 
+            # Extract useful fields from parameters JSONB
+            params = job.get('parameters') or {}
+            extraction_mode = params.get('extraction_mode')
+            trigger_source = params.get('trigger_source')
+            completed_steps = params.get('completed_steps') or []
+
             job_data = {
                 **job,
                 "mailbox_name": job.get('mailboxes', {}).get('name') if job.get('mailboxes') else 'Unknown Mailbox',
@@ -257,6 +296,12 @@ async def get_processing_jobs(
                 "download_speed_mbps": download_speed_mbps,
                 "duration": duration_str,
                 "duration_seconds": duration_seconds,
+                "extraction_mode": extraction_mode,
+                "trigger_source": trigger_source,
+                "current_stage": job.get('current_stage'),
+                "triggered_by": job.get('triggered_by'),
+                "completed_steps": completed_steps,
+                "total_stages": len(completed_steps) if completed_steps else None,
             }
             # Remove the nested mailboxes object
             if 'mailboxes' in job_data:
