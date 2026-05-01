@@ -131,16 +131,14 @@ async def ai_analysis_handler(sb, job: dict, stop_event: asyncio.Event):
 def _link_ai_extracted_refs(sb, client_id: str, mailbox_id: str) -> int:
     """Validate AI-extracted QB references and write to thread_qb_links.
 
-    Reads recently-completed emails with non-null extracted_references,
-    validates each ref against qb_quotes/qb_jobs, and upserts links
-    with source='ai' and confidence=0.9.
-
-    Paginates the initial query and chunks .in_() calls to stay within
-    PostgREST size limits.
+    Scoped to emails classified in the last 7 days to avoid re-processing
+    the entire mailbox history on every pipeline run.
     """
     import re
+    from datetime import datetime, timedelta
     from src.services.reference_extractor import _validate_refs, _upsert_links
 
+    cutoff = (datetime.utcnow() - timedelta(days=7)).isoformat()
     PAGE = 500
     all_rows = []
     offset = 0
@@ -149,7 +147,9 @@ def _link_ai_extracted_refs(sb, client_id: str, mailbox_id: str) -> int:
             "email_id, extracted_references"
         ).eq("mailbox_id", mailbox_id).eq(
             "processing_status", "completed"
-        ).not_.is_("extracted_references", "null").range(
+        ).not_.is_("extracted_references", "null").gte(
+            "processed_at", cutoff
+        ).range(
             offset, offset + PAGE - 1
         ).execute()
         batch = resp.data or []
@@ -160,6 +160,8 @@ def _link_ai_extracted_refs(sb, client_id: str, mailbox_id: str) -> int:
 
     if not all_rows:
         return 0
+
+    logger.info(f"link_ai_refs: {len(all_rows)} recently-classified emails with refs (mailbox {mailbox_id[:8]})")
 
     email_ids = [r["email_id"] for r in all_rows]
     thread_map: dict[str, str] = {}
@@ -173,12 +175,14 @@ def _link_ai_extracted_refs(sb, client_id: str, mailbox_id: str) -> int:
             if tid:
                 thread_map[r["id"]] = tid
 
-    total_linked = 0
+    all_quote_refs: set[str] = set()
+    all_job_refs: set[str] = set()
+    row_refs: list[tuple[str, dict[str, set[str]]]] = []
+
     for row in all_rows:
         refs_raw = row.get("extracted_references") or []
         if not refs_raw:
             continue
-
         thread_id = thread_map.get(row["email_id"])
         if not thread_id:
             continue
@@ -192,12 +196,49 @@ def _link_ai_extracted_refs(sb, client_id: str, mailbox_id: str) -> int:
                 if not digits:
                     continue
                 prefix = "Q" if ref_type == "quote" else "J"
-                refs.setdefault(ref_type, set()).add(f"{prefix}{digits}")
+                canonical = f"{prefix}{digits}"
+                refs.setdefault(ref_type, set()).add(canonical)
+                if ref_type == "quote":
+                    all_quote_refs.add(canonical)
+                else:
+                    all_job_refs.add(canonical)
 
-        if not refs:
-            continue
+        if refs:
+            row_refs.append((thread_id, refs))
 
-        validated = _validate_refs(sb, client_id, refs)
+    if not row_refs:
+        return 0
+
+    valid_quotes: dict[str, str] = {}
+    valid_jobs: dict[str, str] = {}
+    quote_list = list(all_quote_refs)
+    for i in range(0, len(quote_list), PAGE):
+        chunk = quote_list[i:i + PAGE]
+        resp = sb.table("qb_quotes").select("quote_no, qb_record_id").eq(
+            "client_id", client_id
+        ).in_("quote_no", chunk).execute()
+        for r in (resp.data or []):
+            valid_quotes[r["quote_no"]] = str(r["qb_record_id"])
+
+    job_list = list(all_job_refs)
+    for i in range(0, len(job_list), PAGE):
+        chunk = job_list[i:i + PAGE]
+        resp = sb.table("qb_jobs").select("job_no, qb_record_id").eq(
+            "client_id", client_id
+        ).in_("job_no", chunk).execute()
+        for r in (resp.data or []):
+            valid_jobs[r["job_no"]] = str(r["qb_record_id"])
+
+    total_linked = 0
+    for thread_id, refs in row_refs:
+        validated: dict[str, dict[str, str]] = {}
+        for ref_str in refs.get("quote", set()):
+            if ref_str in valid_quotes:
+                validated.setdefault("quote", {})[ref_str] = valid_quotes[ref_str]
+        for ref_str in refs.get("job", set()):
+            if ref_str in valid_jobs:
+                validated.setdefault("job", {})[ref_str] = valid_jobs[ref_str]
+
         if validated:
             count = _upsert_links(
                 sb, client_id, thread_id, validated,
@@ -205,6 +246,7 @@ def _link_ai_extracted_refs(sb, client_id: str, mailbox_id: str) -> int:
             )
             total_linked += count
 
+    logger.info(f"link_ai_refs: {total_linked} links created/updated")
     return total_linked
 
 
