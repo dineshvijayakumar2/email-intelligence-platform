@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import AIInsightsCard from '../../components/AIInsightsCard';
 // EngagementBadge removed — score not shown in UI
 import { LifecycleBadge } from '../../components/analytics/LifecycleBadge';
+import { PersonaBadge } from '../../components/analytics/PersonaBadge';
 import { OrderHistoryTable } from '../../components/OrderHistoryTable';
 import { ProductProfileCards } from '../../components/ProductProfileCard';
 import { RecommendationsPanel } from '../../components/RecommendationsPanel';
@@ -21,7 +22,7 @@ import { KPICard } from '@/components/ui/kpi-card';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { ContentSkeleton } from '@/components/ui/empty-state';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, ArrowUp, ArrowDown, ChevronDown, ChevronRight, Mail, FileText, Star, TrendingUp } from 'lucide-react';
+import { ArrowLeft, ArrowUp, ArrowDown, ChevronDown, ChevronRight } from 'lucide-react';
 import { getRiskClass } from '@/lib/risk-variants';
 
 export const CompanyDetail: React.FC = () => {
@@ -278,79 +279,52 @@ function CompanyContactsSection({
           Key Contacts ({contacts.length})
         </button>
       </div>
-      <div className="divide-y">
-        {contacts.slice(0, 8).map((c: any) => {
-          const totalEmails = (c.email_total ?? 0);
-          const quoteCount = (c.quote_count ?? 0);
-          const acceptedQuotes = (c.accepted_quote_count ?? 0);
-          const velocity90 = (c.email_velocity_90d ?? 0);
-          return (
-            <div
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b bg-slate-50/50 text-xs text-slate-500">
+            <th className="text-left font-medium px-4 py-2">Contact</th>
+            <th className="text-left font-medium px-2 py-2">Persona</th>
+            <th className="text-right font-medium px-2 py-2 w-16">Score</th>
+            <th className="text-right font-medium px-2 py-2 w-14">Sent</th>
+            <th className="text-right font-medium px-2 py-2 w-14">Recv</th>
+            <th className="text-right font-medium px-2 py-2 w-16">Quotes</th>
+            <th className="text-right font-medium px-4 py-2 w-24">Last Contact</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y">
+          {contacts.slice(0, 10).map((c: any) => (
+            <tr
               key={c.contact_id}
-              className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 cursor-pointer transition-colors"
+              className="hover:bg-slate-50 cursor-pointer transition-colors"
               onClick={() => onContactClick(c.contact_id)}
             >
-              {/* Name + role */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-sm font-medium text-slate-800 truncate">
-                    {c.name || c.email}
-                  </span>
-                  {c.is_primary_contact && (
-                    <Star className="h-3 w-3 text-amber-500 shrink-0" fill="currentColor" />
-                  )}
-                  {c.persona_classification && !['unknown', 'shared_mailbox'].includes(c.persona_classification) && (
-                    <StatusBadge variant={
-                      c.persona_classification === 'champion' ? 'success'
-                      : c.persona_classification === 'active_buyer' ? 'info'
-                      : c.persona_classification === 'active_relationship' ? 'info'
-                      : c.persona_classification === 'warm_lead' ? 'purple'
-                      : c.persona_classification === 'prospect' ? 'purple'
-                      : c.persona_classification === 'inactive_buyer' ? 'warning'
-                      : c.persona_classification === 'dormant' ? 'danger'
-                      : 'neutral'
-                    } size="sm">
-                      {c.persona_classification.replaceAll('_', ' ')}
-                    </StatusBadge>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 text-xs text-slate-400">
-                  {c.name && <span className="truncate">{c.email}</span>}
-                  {c.seniority && <span className="truncate">· {c.seniority}</span>}
-                </div>
-              </div>
-
-              {/* Email stats */}
-              <div className="flex items-center gap-1 text-xs text-slate-500 tabular-nums shrink-0" title={`${c.email_outbound ?? 0} sent / ${c.email_inbound ?? 0} received`}>
-                <Mail className="h-3 w-3 text-slate-400" />
-                <span>{totalEmails}</span>
-                {velocity90 > 0 && (
-                  <span className="text-emerald-600 flex items-center gap-0.5" title={`${velocity90} emails in last 90 days`}>
-                    <TrendingUp className="h-3 w-3" />{velocity90}
-                  </span>
-                )}
-              </div>
-
-              {/* Quote stats */}
-              {quoteCount > 0 && (
-                <div className="flex items-center gap-1 text-xs text-slate-500 tabular-nums shrink-0" title={`${quoteCount} quotes · ${acceptedQuotes} converted${c.strike_rate ? ` · ${(c.strike_rate * 100).toFixed(0)}% strike` : ''}`}>
-                  <FileText className="h-3 w-3 text-slate-400" />
-                  <span>{quoteCount}</span>
-                  {acceptedQuotes > 0 && (
-                    <span className="text-emerald-600">({acceptedQuotes})</span>
-                  )}
-                </div>
-              )}
-
-              {/* Last contact */}
-              <span className="text-xs text-slate-400 w-20 text-right shrink-0">
+              <td className="px-4 py-2">
+                <span className="font-medium text-slate-900">{c.name || c.email}</span>
+                {c.name && <div className="text-xs text-slate-400 truncate">{c.email}</div>}
+              </td>
+              <td className="px-2 py-2">
+                <PersonaBadge classification={c.persona_classification} />
+              </td>
+              <td className="text-right px-2 py-2 tabular-nums text-slate-700">
+                {c.engagement_score ?? '—'}
+              </td>
+              <td className="text-right px-2 py-2 tabular-nums text-slate-700">
+                {c.email_outbound ?? 0}
+              </td>
+              <td className="text-right px-2 py-2 tabular-nums text-slate-700">
+                {c.email_inbound ?? 0}
+              </td>
+              <td className="text-right px-2 py-2 tabular-nums text-slate-700">
+                {(c.quote_count ?? 0) > 0 ? c.quote_count : <span className="text-slate-300">—</span>}
+              </td>
+              <td className="text-right px-4 py-2 text-xs text-slate-500">
                 {c.email_last_date ? formatRelativeTime(c.email_last_date) : 'Never'}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-      {contacts.length > 8 && (
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {contacts.length > 10 && (
         <div className="px-4 py-2 border-t">
           <button onClick={onViewAll} className="text-xs text-primary hover:underline">
             View all {contacts.length} contacts

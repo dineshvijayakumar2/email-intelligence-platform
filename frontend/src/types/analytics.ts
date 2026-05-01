@@ -97,6 +97,8 @@ export interface ContactAnalytics {
   reply_rate?: number | null;
   avg_response_time_seconds?: number | null;
   avg_thread_depth?: number | null;
+  // Persona
+  persona_classification?: string | null;
   // QB business context (Sprint 3)
   qb_contact_id?: string | null;
   qb_customer_type?: string | null;

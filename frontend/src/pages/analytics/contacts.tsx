@@ -4,20 +4,17 @@ import {
   useReactTable, getCoreRowModel, createColumnHelper, type SortingState,
 } from '@tanstack/react-table';
 import { DataTable } from '../../components/DataTable';
-import { LifecycleBadge } from '../../components/analytics/LifecycleBadge';
+import { PersonaBadge } from '../../components/analytics/PersonaBadge';
 import { useContacts } from '../../hooks/queries';
 import { formatRelativeTime } from '../../services/analyticsService';
 import { useClient } from '../../contexts/ClientContext';
 import { PageShell, PageHeader } from '@/components/ui/page-shell';
-import { Search, X, ArrowLeft, FileText } from 'lucide-react';
+import { Search, X, ArrowLeft } from 'lucide-react';
 import type { ContactAnalytics } from '../../types/analytics';
 
 const PAGE_SIZE = 25;
 const col = createColumnHelper<ContactAnalytics>();
 
-// These match the raw QB `customer_status` values stored in
-// customer_contacts.qb_customer_type. The "Active" option matches any
-// value starting with "Active" (Active A Customer, Active B Customer, etc).
 const LIFECYCLE_OPTIONS = [
   { value: '', label: 'All Types' },
   { value: 'Active', label: 'Active Customers' },
@@ -76,7 +73,6 @@ export const ContactsAnalytics: React.FC = () => {
           <div>
             <span className="font-medium text-slate-900">{r.full_name || r.email_address}</span>
             {r.full_name && <div className="text-xs text-slate-400 truncate">{r.email_address}</div>}
-            {r.job_title && <div className="text-[11px] text-slate-400">{r.job_title}</div>}
           </div>
         );
       },
@@ -85,9 +81,9 @@ export const ContactsAnalytics: React.FC = () => {
       header: 'Company', minSize: 120, meta: { wrap: true },
       cell: info => <span className="text-slate-600">{info.getValue() || '—'}</span>,
     })] : []),
-    col.accessor('qb_customer_type', {
-      header: 'Type', size: 130,
-      cell: info => <LifecycleBadge tier={info.getValue()} />,
+    col.accessor('persona_classification', {
+      header: 'Persona', size: 120,
+      cell: info => <PersonaBadge classification={info.getValue()} />,
     }),
     col.accessor('engagement_score', {
       header: 'Engagement', size: 85, meta: { align: 'right' },
@@ -110,18 +106,14 @@ export const ContactsAnalytics: React.FC = () => {
       cell: info => {
         const v = info.getValue();
         if (!v) return <span className="text-slate-300">—</span>;
-        return (
-          <span className="inline-flex items-center gap-0.5 tabular-nums text-slate-700">
-            <FileText className="h-3 w-3 text-slate-400" />{v}
-          </span>
-        );
+        return <span className="tabular-nums text-slate-700">{v}</span>;
       },
     }),
     col.accessor('last_contacted_at', {
       header: 'Last Contact', size: 100,
       cell: info => <span className="text-xs text-slate-500">{formatRelativeTime(info.getValue())}</span>,
     }),
-  ], [navigate, isCompanyDrilldown]);
+  ], [isCompanyDrilldown]);
 
   const table = useReactTable({
     data: contacts,

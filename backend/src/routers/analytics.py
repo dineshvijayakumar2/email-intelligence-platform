@@ -889,6 +889,21 @@ async def list_contact_analytics(
         desc = sort_dir.lower() != 'asc'
         result = query.order(effective_sort, desc=desc, nullsfirst=False).range(offset, offset + limit - 1).execute()
 
+        # Batch lookup persona_classification from contact_persona view
+        contact_ids = [c['id'] for c in result.data]
+        persona_map: dict = {}
+        if contact_ids:
+            try:
+                for i in range(0, len(contact_ids), 500):
+                    batch_ids = contact_ids[i:i+500]
+                    persona_result = _supabase.table('contact_persona').select(
+                        'contact_id, persona_classification'
+                    ).in_('contact_id', batch_ids).execute()
+                    for p in (persona_result.data or []):
+                        persona_map[p['contact_id']] = p['persona_classification']
+            except Exception as e:
+                logger.warning(f"Persona lookup failed (non-critical): {e}")
+
         contacts = []
         for c in result.data:
             customer_company_name = None
@@ -897,7 +912,8 @@ async def list_contact_analytics(
 
             contacts.append(ContactAnalytics(
                 **c,
-                customer_company_name=customer_company_name
+                customer_company_name=customer_company_name,
+                persona_classification=persona_map.get(c['id']),
             ))
 
         # Get total count
