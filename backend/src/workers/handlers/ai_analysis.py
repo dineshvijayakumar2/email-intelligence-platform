@@ -136,7 +136,6 @@ def _link_ai_extracted_refs(sb, client_id: str, mailbox_id: str) -> int:
     """
     import re
     from datetime import datetime, timedelta
-    from src.services.reference_extractor import _validate_refs, _upsert_links
 
     cutoff = (datetime.utcnow() - timedelta(days=7)).isoformat()
     PAGE = 500
@@ -229,25 +228,98 @@ def _link_ai_extracted_refs(sb, client_id: str, mailbox_id: str) -> int:
         for r in (resp.data or []):
             valid_jobs[r["job_no"]] = str(r["qb_record_id"])
 
-    total_linked = 0
+    all_link_rows = []
+    affected_threads: set[str] = set()
     for thread_id, refs in row_refs:
-        validated: dict[str, dict[str, str]] = {}
         for ref_str in refs.get("quote", set()):
             if ref_str in valid_quotes:
-                validated.setdefault("quote", {})[ref_str] = valid_quotes[ref_str]
+                all_link_rows.append({
+                    "client_id": client_id,
+                    "canonical_thread_id": thread_id,
+                    "link_type": "quote",
+                    "qb_record_id": valid_quotes[ref_str],
+                    "qb_reference": ref_str,
+                    "confidence": 0.9,
+                    "source": "ai",
+                    "verified": False,
+                })
+                affected_threads.add(thread_id)
         for ref_str in refs.get("job", set()):
             if ref_str in valid_jobs:
-                validated.setdefault("job", {})[ref_str] = valid_jobs[ref_str]
+                all_link_rows.append({
+                    "client_id": client_id,
+                    "canonical_thread_id": thread_id,
+                    "link_type": "job",
+                    "qb_record_id": valid_jobs[ref_str],
+                    "qb_reference": ref_str,
+                    "confidence": 0.9,
+                    "source": "ai",
+                    "verified": False,
+                })
+                affected_threads.add(thread_id)
 
-        if validated:
-            count = _upsert_links(
-                sb, client_id, thread_id, validated,
-                source="ai", confidence=0.9,
-            )
-            total_linked += count
+    if not all_link_rows:
+        return 0
 
-    logger.info(f"link_ai_refs: {total_linked} links created/updated")
+    UPSERT_BATCH = 200
+    total_linked = 0
+    for i in range(0, len(all_link_rows), UPSERT_BATCH):
+        batch = all_link_rows[i:i + UPSERT_BATCH]
+        try:
+            sb.table("thread_qb_links").upsert(
+                batch,
+                on_conflict="client_id,canonical_thread_id,link_type,qb_record_id",
+            ).execute()
+            total_linked += len(batch)
+        except Exception as e:
+            logger.error(f"link_ai_refs: batch upsert failed at offset {i}: {e}")
+
+    logger.info(f"link_ai_refs: upserted {total_linked} links, syncing counts for {len(affected_threads)} threads...")
+    _batch_sync_qb_link_counts(sb, client_id, affected_threads)
+
+    logger.info(f"link_ai_refs: done — {total_linked} links across {len(affected_threads)} threads")
     return total_linked
+
+
+def _batch_sync_qb_link_counts(sb, client_id: str, thread_ids: set[str]):
+    """Batch-update thread_status.qb_link_count for all affected threads."""
+    if not thread_ids:
+        return
+    CHUNK = 200
+    tid_list = list(thread_ids)
+    counts: dict[str, int] = {}
+
+    for i in range(0, len(tid_list), CHUNK):
+        chunk = tid_list[i:i + CHUNK]
+        try:
+            offset = 0
+            while True:
+                resp = sb.table("thread_qb_links").select(
+                    "canonical_thread_id"
+                ).eq("client_id", client_id).in_(
+                    "canonical_thread_id", chunk
+                ).range(offset, offset + 999).execute()
+                rows = resp.data or []
+                for row in rows:
+                    tid = row["canonical_thread_id"]
+                    counts[tid] = counts.get(tid, 0) + 1
+                if len(rows) < 1000:
+                    break
+                offset += 1000
+        except Exception as e:
+            logger.warning(f"link_ai_refs: count query failed for chunk at {i}: {e}")
+
+    updated = 0
+    for tid, count in counts.items():
+        try:
+            sb.table("thread_status").update(
+                {"qb_link_count": count}
+            ).eq("canonical_thread_id", tid).execute()
+            updated += 1
+        except Exception:
+            pass
+
+    logger.info(f"link_ai_refs: synced qb_link_count on {updated}/{len(counts)} threads")
 
 
 def _update_progress(
