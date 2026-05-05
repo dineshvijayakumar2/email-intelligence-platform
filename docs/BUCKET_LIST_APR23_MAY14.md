@@ -33,6 +33,11 @@
 - [x] Dropped threads investigation (likely expected — 30+ day inactivity threshold; verify migration 080 applied)
 - [x] Integration tests (`test_data_hardening.py`) — 63 tests: sign-off rejection, shared-address detection, QB propagation exclusion
 - [x] All above committed + pushed to prod (`ade0c45`)
+- [x] Migration 100: contact date backfill — `update_contact_email_counts_from_junction` RPC now also sets `first_contacted_at`/`last_contacted_at` from email dates (17,405 contacts updated)
+- [x] Migration 101: persona classification v2 — champion rule (≥10 accepted OR ≥$50K jobs), shared_mailbox classification for non-person contacts, split active_relationship → active_buyer + warm_lead, `contact_type` column added to `contact_persona` view
+- [x] Pipeline extraction_mode fix: startup sweep resume jobs now preserve original `extraction_mode` from interrupted job params (was defaulting to "full")
+- [x] Company profile inline contacts: contacts table embedded in company detail page using `contact_persona` view (PersonaBadge, engagement, email stats, quotes)
+- [x] Unified contacts views: contacts list page + company profile use consistent columns with shared `PersonaBadge` component
 
 ---
 
@@ -224,17 +229,21 @@ Items moved from `BUCKET_LIST_APR16_APR22.md` — not yet scheduled into a speci
 - [ ] "Run Full Pipeline" button (creates `email_pipeline` job for selected mailbox)
 - [ ] Pipeline progress visualization (8 steps with completion status)
 
-### Contact Persona Metrics (C1)
+### Contact Persona Metrics (C1) — ✅ DONE
 
-- [ ] SQL views: `contact_quote_metrics`, `contact_email_metrics` (materialized), `contact_persona`
-- [ ] Rollup views: `company_contact_summary`, `industry_benchmarks`
-- [ ] Materialized view refresh job (daily + post-QB-sync)
-- [ ] API endpoints: persona, contact-summary, industry-benchmarks
+- [x] SQL views: `contact_quote_metrics`, `contact_email_metrics` (materialized), `contact_persona` (migration 088)
+- [x] Rollup views: `company_contact_summary`, `industry_benchmarks` (migration 088)
+- [x] Materialized view refresh job (daily + post-QB-sync) via `POST /internal/jobs/refresh-persona-metrics`
+- [x] API endpoints: persona, contact-summary, industry-benchmarks (`contacts_intelligence.py`)
+- [x] Persona classification v2 (migration 101): champion rule fix, shared_mailbox classification, active_buyer/warm_lead split
+- [x] Contact date backfill (migration 100): `update_contact_email_counts_from_junction` RPC now sets `first_contacted_at`/`last_contacted_at`
 
-### Contact Persona Frontend (C2)
+### Contact Persona Frontend (C2) — ✅ DONE
 
-- [ ] Contact Profile Card (identity + QB metrics + email behavior + persona + benchmarks)
-- [ ] Company Profile: "Contact Breakdown" section
+- [x] Contact Profile Card (PersonaCard + DealActivityCard on contact detail page)
+- [x] Company Profile: inline contacts table with persona badges, engagement, email stats, quotes
+- [x] Unified contacts views: contacts list page + company profile contacts section use same columns and PersonaBadge component
+- [x] PersonaBadge shared component: 8 classifications (champion, active_buyer, active_relationship, warm_lead, prospect, inactive_buyer, dormant, shared_mailbox)
 - [ ] Industry Dashboard
 - [ ] Journey Timeline integration on profile pages
 

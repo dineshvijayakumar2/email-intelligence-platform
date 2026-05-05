@@ -1,7 +1,8 @@
 """
-Apply migration 099 via exec_sql RPC. Delete after verified.
+Apply migration 099 (v2) via exec_sql RPC. Delete after verified.
 
-Creates get_ai_link_ref_health() RPC for AI reference linking stats.
+Updates get_ai_link_ref_health() to include per-mailbox link stats
+(total_links, quote_links, job_links, threads_linked, link_rate_pct).
 """
 import os, sys, time
 
@@ -31,7 +32,7 @@ def run(label, sql, timeout_s=60):
         sys.exit(1)
 
 
-print("[1/2] Create get_ai_link_ref_health RPC")
+print("[1/2] Create get_ai_link_ref_health RPC (v2 — with per-mailbox link stats)")
 
 run("get_ai_link_ref_health", """
 CREATE OR REPLACE FUNCTION get_ai_link_ref_health(
@@ -47,7 +48,7 @@ DECLARE
     mb_data JSONB;
     link_totals JSONB;
 BEGIN
-    -- Per-mailbox extraction stats (from ai_email_intelligence)
+    -- Per-mailbox extraction stats + link stats
     SELECT jsonb_agg(row_data)
     INTO mb_data
     FROM (
@@ -58,7 +59,14 @@ BEGIN
             'emails_with_refs',    COALESCE(ref_stats.with_refs, 0),
             'total_refs_found',    COALESCE(ref_stats.total_refs, 0),
             'total_quote_refs',    COALESCE(ref_stats.quote_refs, 0),
-            'total_job_refs',      COALESCE(ref_stats.job_refs, 0)
+            'total_job_refs',      COALESCE(ref_stats.job_refs, 0),
+            'total_links',         COALESCE(lk.total_links, 0),
+            'quote_links',         COALESCE(lk.quote_links, 0),
+            'job_links',           COALESCE(lk.job_links, 0),
+            'threads_linked',      COALESCE(lk.threads_linked, 0),
+            'link_rate_pct',       CASE WHEN COALESCE(ref_stats.total_refs, 0) > 0
+                                        THEN ROUND(COALESCE(lk.total_links, 0)::numeric / ref_stats.total_refs * 100, 1)
+                                        ELSE 0 END
         ) AS row_data
         FROM mailboxes m
         LEFT JOIN LATERAL (
@@ -85,12 +93,28 @@ BEGIN
               AND ai.extracted_references IS NOT NULL
               AND jsonb_array_length(ai.extracted_references) > 0
         ) ref_stats ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT
+                COUNT(*)                              AS total_links,
+                COUNT(*) FILTER (WHERE tql.link_type = 'quote') AS quote_links,
+                COUNT(*) FILTER (WHERE tql.link_type = 'job')   AS job_links,
+                COUNT(DISTINCT tql.canonical_thread_id)          AS threads_linked
+            FROM thread_qb_links tql
+            WHERE tql.source = 'ai'
+              AND tql.canonical_thread_id IN (
+                  SELECT DISTINCT e.canonical_thread_id::text
+                  FROM emails e
+                  WHERE e.mailbox_id = m.id
+                    AND e.canonical_thread_id IS NOT NULL
+              )
+              AND (p_client_id IS NULL OR tql.client_id = p_client_id)
+        ) lk ON TRUE
         WHERE (p_client_id IS NULL OR m.client_id = p_client_id)
           AND COALESCE(cls.total, 0) > 0
         ORDER BY COALESCE(ref_stats.with_refs, 0) DESC
     ) sub;
 
-    -- Client-wide link totals (from thread_qb_links, no thread_status join)
+    -- Client-wide link totals (from thread_qb_links)
     SELECT jsonb_build_object(
         'threads_linked',  COUNT(DISTINCT canonical_thread_id),
         'total_links',     COUNT(*),
@@ -109,7 +133,7 @@ BEGIN
     );
 END;
 $fn$;
-""", timeout_s=30)
+""", timeout_s=60)
 
 print("\n[2/2] Grant permissions")
 run("grant", "GRANT EXECUTE ON FUNCTION get_ai_link_ref_health(UUID) TO anon, authenticated")
@@ -136,9 +160,12 @@ try:
     for mb in mailboxes[:3]:
         addr = mb.get("email_address", "?")
         refs = mb.get("total_refs_found", 0)
-        print(f"       {addr}: {refs} refs found")
-    print(f"  [ok] Link totals: {links.get('total_links', 0)} links across {links.get('threads_linked', 0)} threads")
+        linked = mb.get("total_links", 0)
+        threads = mb.get("threads_linked", 0)
+        rate = mb.get("link_rate_pct", 0)
+        print(f"       {addr}: {refs} refs, {linked} linked, {threads} threads, {rate}%")
+    print(f"  [ok] Client totals: {links.get('total_links', 0)} links across {links.get('threads_linked', 0)} threads")
 except Exception as e:
     print(f"  [FAIL] RPC call failed: {e}")
 
-print("\n=== Migration 099 complete ===")
+print("\n=== Migration 099 v2 complete ===")

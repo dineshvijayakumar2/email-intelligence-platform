@@ -1,6 +1,6 @@
 # Database Design — Email Intelligence Platform
 
-A comprehensive reference for every database object in the Email Intelligence Platform. Describes current-state production schema as of 2026-04-22. Validated against live Supabase PostgreSQL 17.6.
+A comprehensive reference for every database object in the Email Intelligence Platform. Describes current-state production schema as of 2026-05-01. Validated against live Supabase PostgreSQL 17.6.
 
 **Total database size: 9.4 GB** across 55 tables, 1 materialized view, 10 regular views, ~60 application-level RPC functions, and 7 PostgreSQL extensions.
 
@@ -13,7 +13,7 @@ A comprehensive reference for every database object in the Email Intelligence Pl
 - **Extensions:** pgvector 0.8.0, pg_stat_statements 1.11, pgcrypto 1.3, uuid-ossp 1.1, pg_graphql 1.5.11, supabase_vault 0.3.1, plpgsql 1.0
 - **Access:** PostgREST auto-generates REST API; RPC functions exposed as `POST /rest/v1/rpc/<fn_name>`
 - **Auth:** Supabase Auth (JWT) with Row-Level Security on select tables
-- **Migrations:** 97 incremental SQL scripts in `scripts/migrations/` (001–097), applied via `exec_sql` RPC + PostgREST schema reload
+- **Migrations:** 101 incremental SQL scripts in `scripts/migrations/` (001–101), applied via `exec_sql` RPC + PostgREST schema reload
 
 ### Schema Domains
 
@@ -908,11 +908,11 @@ Links email threads to QB records (quotes, jobs, operations) via two extraction 
 
 | View | Purpose |
 |------|---------|
-| `contact_persona` | Composite contact profile joining contacts + quote metrics + email metrics + company data. Used by contact profile pages. |
+| `contact_persona` | Composite contact profile joining contacts + quote metrics + email metrics + company data. Includes `contact_type` column; 8 persona classifications (champion, active_buyer, active_relationship, warm_lead, prospect, inactive_buyer, dormant, shared_mailbox). Used by contact profile pages and contacts list. |
 | `contact_quote_metrics` | Per-contact QB quote/job aggregates: quote count, strike rate, total value, avg margin |
-| `company_contact_summary` | Per-company contact rollup: total contacts, champions, prospects, dormant, avg strike rate |
+| `company_contact_summary` | Per-company contact rollup: person contacts, champions, warm leads, avg engagement (person-only), avg strike rate |
 | `contact_deal_activity` | Per-contact thread-to-QB link activity: linked threads, quotes, jobs, pipeline value |
-| `industry_benchmarks` | Industry-level benchmarks: avg strike rate, avg quote value, engagement |
+| `industry_benchmarks` | Industry-level benchmarks: avg strike rate, avg quote value, engagement (person contacts only, ≥3 per industry) |
 | `customer_engagement_summary` | Company engagement overview joining companies and clients |
 | `customer_industry_segments` | Industry segment rollup with revenue and activity counts |
 | `daily_email_volume` | Daily email volume by mailbox |
@@ -979,7 +979,7 @@ These replace row-by-row updates with single-statement bulk operations, reducing
 | `update_contact_engagement_metrics(p_contact_id)` | Recalculate single contact engagement |
 | `update_customer_engagement(p_customer_company_id)` | Legacy engagement update |
 | `update_company_email_counts_from_junction(p_client_id)` | Recount from email_contact_links; SECURITY DEFINER, 30s timeout |
-| `update_contact_email_counts_from_junction(p_client_id)` | Recount from email_contact_links; SECURITY DEFINER, 30s timeout |
+| `update_contact_email_counts_from_junction(p_client_id)` | Recount from email_contact_links + set first/last_contacted_at from email dates; SECURITY DEFINER, 30s timeout |
 | `refresh_contact_email_metrics()` | Refresh materialized view; SECURITY DEFINER |
 
 ### 4.4 Seasonality & Outreach
@@ -1291,7 +1291,7 @@ RLS is enabled on select tables. Most tables bypass RLS via the service role key
 
 ## 10. Migration History
 
-97 migrations in `scripts/migrations/` track the schema evolution:
+101 migrations in `scripts/migrations/` track the schema evolution:
 
 | Range | Era | Key Changes |
 |-------|-----|-------------|
@@ -1302,6 +1302,9 @@ RLS is enabled on select tables. Most tables bypass RLS via the service role key
 | 073–093 | Worker Infrastructure & Polish | Processing job reembed, thread override rules, QB contact linking, worker infrastructure, events/notifications, contact persona views, deal activity |
 | 094 | QB Propagation Guards | Pass 3 company→contact QB propagation with contact-type exclusions (`internal`, `shared`, `automated`, `mailing_list`) |
 | 095–097 | Embedding & Contact Hardening | Internal/shared contact cleanup + QB tier nulling, embedding audit columns (`embedding_model`, `embedded_at`) on all vector tables, qb_quotes embedding support, batch RPC audit params |
+| 098 | Extraction Scoping | `extracted_at` column on emails + partial index; incremental extraction skips already-processed emails |
+| 100 | Contact Date Backfill | Updated `update_contact_email_counts_from_junction` RPC to also compute and set `first_contacted_at`/`last_contacted_at` from email dates |
+| 101 | Persona Classification v2 | DROP+CREATE `contact_persona`, `company_contact_summary`, `industry_benchmarks` views. Champion rule: `accepted_quote_count >= 10 OR total_job_value >= 50000`. Added `contact_type` column. Non-person contacts → `shared_mailbox`. Split `active_relationship` → `active_buyer` + `warm_lead`. Person-only filtering on rollup views |
 
 **Migration application method:** `scripts/db/_run_NNN_via_rest.py` → `exec_sql` RPC + `NOTIFY pgrst, 'reload schema'`; scripts are throwaway and deleted after verification.
 

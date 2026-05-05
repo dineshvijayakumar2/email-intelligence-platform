@@ -199,11 +199,16 @@ For each email, return one JSON object with the following schema:
 }}
 
 QB REFERENCE EXTRACTION:
-- Look for QuickBase reference numbers mentioned in the email subject or body.
-- Quote numbers: Q followed by 4-6 digits (e.g., Q20334), or "Quote #12345", "QT-12345", "quote 12345".
-- Job numbers: J followed by 5-7 digits (e.g., J460037), or "Job #123456", "JB-123456", "job number 123456".
-- Return just the numeric part prefixed with Q or J. E.g., "Quote #20334" → {{"type": "quote", "number": "Q20334"}}.
-- If no references found, return empty array.
+- Look for QuickBase reference numbers in email subject or body.
+- Quote numbers: Q followed by 4-6 digits only (e.g., Q20334, Q123456). 
+  Do NOT extract: Q with 1-3 digits (Q1, Q100), Q with 7+ digits (Q1234567), 
+  or the placeholder Q12345.
+- Job numbers: J followed by 5-6 digits only (e.g., J460037, J123456).
+  Do NOT extract: J with 1-4 digits, J with 7+ digits, or the placeholder J123456.
+- Valid quote range is roughly Q5 to Q800000. Anything above is not a real quote.
+- Valid job range is roughly J32 to J500000. Anything above is not a real job.
+- Return just the prefix + numeric part. E.g., "Quote #20334" → {"type": "quote", "number": "Q20334"}.
+- If no valid references found, return empty array.
 - Only extract references explicitly present — do not guess or infer.
 
 Rules:
