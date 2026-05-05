@@ -228,11 +228,16 @@ def _link_ai_extracted_refs(sb, client_id: str, mailbox_id: str) -> int:
         for r in (resp.data or []):
             valid_jobs[r["job_no"]] = str(r["qb_record_id"])
 
+    seen_keys: set[tuple] = set()
     all_link_rows = []
     affected_threads: set[str] = set()
     for thread_id, refs in row_refs:
         for ref_str in refs.get("quote", set()):
             if ref_str in valid_quotes:
+                key = (thread_id, "quote", valid_quotes[ref_str])
+                if key in seen_keys:
+                    continue
+                seen_keys.add(key)
                 all_link_rows.append({
                     "client_id": client_id,
                     "canonical_thread_id": thread_id,
@@ -246,6 +251,10 @@ def _link_ai_extracted_refs(sb, client_id: str, mailbox_id: str) -> int:
                 affected_threads.add(thread_id)
         for ref_str in refs.get("job", set()):
             if ref_str in valid_jobs:
+                key = (thread_id, "job", valid_jobs[ref_str])
+                if key in seen_keys:
+                    continue
+                seen_keys.add(key)
                 all_link_rows.append({
                     "client_id": client_id,
                     "canonical_thread_id": thread_id,

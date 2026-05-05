@@ -13,11 +13,20 @@ CREATE OR REPLACE FUNCTION get_classification_health(
 RETURNS JSONB
 LANGUAGE plpgsql
 STABLE
+SECURITY DEFINER
+SET search_path = public
 SET statement_timeout = '60s'
 AS $$
 DECLARE
     result JSONB;
+    mailbox_ids UUID[];
 BEGIN
+    -- Resolve mailbox scope once; subqueries join on mailbox_id
+    -- instead of each table's client_id (emails may have NULL client_id).
+    SELECT ARRAY_AGG(id) INTO mailbox_ids
+    FROM mailboxes
+    WHERE (p_client_id IS NULL OR client_id = p_client_id);
+
     SELECT jsonb_agg(row_data)
     INTO result
     FROM (
@@ -38,7 +47,7 @@ BEGIN
         LEFT JOIN (
             SELECT mailbox_id, COUNT(*) AS cnt
             FROM emails
-            WHERE (p_client_id IS NULL OR client_id = p_client_id)
+            WHERE mailbox_id = ANY(mailbox_ids)
             GROUP BY mailbox_id
         ) ec ON ec.mailbox_id = m.id
         LEFT JOIN (
@@ -49,10 +58,10 @@ BEGIN
                 COUNT(*) FILTER (WHERE processing_status = 'skipped')   AS skipped,
                 MAX(processed_at) FILTER (WHERE processing_status = 'completed') AS last_completed
             FROM ai_email_intelligence
-            WHERE (p_client_id IS NULL OR client_id = p_client_id)
+            WHERE mailbox_id = ANY(mailbox_ids)
             GROUP BY mailbox_id
         ) sc ON sc.mailbox_id = m.id
-        WHERE (p_client_id IS NULL OR m.client_id = p_client_id)
+        WHERE m.id = ANY(mailbox_ids)
         ORDER BY COALESCE(ec.cnt, 0) DESC
     ) sub;
 

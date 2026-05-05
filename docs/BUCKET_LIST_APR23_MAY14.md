@@ -108,6 +108,7 @@
 - [x] **Surgical fix**: Migration 098 adds `extracted_at` column to emails table + partial index. Incremental extraction now skips emails where `extracted_at IS NOT NULL`. After step 9, stamps `extracted_at` on all processed emails. Reduces incremental scope from ~270K to ~50/day steady state. (applied to prod Apr 30)
 - [x] **Scoped extraction**: ContactExtractor and EmailLinker now receive only scoped email IDs in incremental mode. Previously scanned all 143K+ emails (117 min); now processes only new emails via `_get_emails_in_scope()`. Role classifier also benefits — fewer contacts = fewer signature lookups (commit `1b2bfd9`)
 - [x] **BUG FIX**: `link_ai_refs` pipeline step re-processed ALL classified emails with extracted_references (6,412 for Ehab, 3,419 for hello@) on every run — 20K+ DB round-trips causing Server disconnected after 5-30min. Fixed: scoped to 7-day window via `processed_at` filter + batch validation (1-2 bulk queries instead of per-row). (commit `0edd402`)
+- [x] **PERF**: `link_ai_refs` batch upsert — per-thread `_upsert_links` N+1 pattern (3,000+ individual calls = 9,000+ HTTP calls, 8min timeout) replaced with collect-then-batch-upsert in chunks of 200 (~15 calls). Total HTTP calls reduced ~85% (9,000→1,550). (commit `53303b2`)
 - [x] **BUG FIX**: Step 6 QB enrichment had PostgREST 1000-row default limit — only enriching ~10% of matched records (9,657 companies, 12,772 contacts). Also did 22K per-row HTTP UPDATE calls (30+ min). Fixed: single SQL UPDATE...FROM join per table — processes all rows in seconds. (commit `f9970c0`)
 - [x] **NULL `client_id` backfill for hello@**: 134K emails had NULL `client_id` causing health dashboard to show 159.2% coverage. Backfill complete (100,113 rows updated May 1)
 - [x] **Script**: `scripts/db/_link_ai_refs_full.py` — on-demand QB reference linking for full mailbox history with `--lookback N` option
@@ -211,10 +212,11 @@
 
 Items moved from `BUCKET_LIST_APR16_APR22.md` — not yet scheduled into a specific week.
 
-### External cron registration
+### External cron registration — ✅ DONE
 
-- [ ] Configure Railway cron or cron-job.org to call internal endpoints (qb-sync hourly, analytics-rollup daily, stuck-reconciler 10min, notification-dispatch 2min)
-- [ ] Set `CRON_SECRET` env var in production
+- [x] Configure Railway cron services (7 total): gmail-sync, outlook-sync, qb-sync, notification-dispatch, stuck-reconciler, refresh-persona-metrics, analytics-rollup
+- [x] Set `CRON_SECRET` env var on all cron services + backend
+- [x] `docs/CRON_SETUP.md` fully rewritten: step-by-step Railway cron creation, worker deployment section, env var reference
 - [ ] Verify: cron-based sync runs autonomously (overlaps with stabilization checklist)
 
 ### Staged worker rollout
