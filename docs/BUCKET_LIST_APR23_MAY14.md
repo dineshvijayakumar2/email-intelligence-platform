@@ -113,6 +113,10 @@
 - [x] **Script**: `scripts/db/_link_ai_refs_full.py` — on-demand QB reference linking for full mailbox history with `--lookback N` option
 - [x] **PERF**: AI classification batch writes — `_mark_processing`, `_save_completed`, `_save_failed` all converted from per-row upserts to batch upserts (100 HTTP calls → 1-2 per batch). Classification write phase drops from 5-10s to <500ms. (commit `0e6e58e`)
 - [x] **PERF**: Extraction orchestrator — `_link_orphan_contacts` grouped by company `.in_()`, `_step_update_company_stats` uses SQL `UPDATE...FROM VALUES` instead of per-company HTTP calls (commit `0e6e58e`)
+- [x] **QB ref extraction prompt tightened**: min 4-6 digits for quotes, 5-6 for jobs, exclude placeholders (Q12345/J123456), add valid range caps (Q5-Q800000, J32-J500000). Updated in code + `ai_prompt_config` DB row for Carbon8 client. Eliminates 18% false positives (2,716 occurrences). (commit `74e04ef`)
+- [x] **BUG FIX**: Data Health per-mailbox link stats — RPC 099 v2 adds lateral join through `emails → thread_qb_links` for per-mailbox linked/threads/link_rate. Was showing 0 linked across all mailboxes despite 6,142 total links. (commit `74e04ef`)
+- [x] **Diagnostic**: `scripts/db/_diagnose_ref_gaps.py` — separates false positives (short digits, placeholders, above-range) from real sync gaps in unmatched QB references. Findings: 61.5% matched, 18% false positive, 20.4% real gaps
+- [x] **HOW_IT_WORKS.md**: Full documentation of AI reference extraction + linking flow (Prompt → Store → Link phases, normalization, bulk validation, pipeline vs full mode, diagnostic findings)
 
 ### Worker infrastructure (Apr 29)
 
@@ -280,6 +284,8 @@ Items moved from `BUCKET_LIST_APR16_APR22.md` — not yet scheduled into a speci
 - ~~**Pipeline throughput**~~: **RESOLVED** — ai_classify moved to step 1 (runs before extraction), `extracted_at` column added so incremental extraction skips already-processed emails, email_categories legacy dependency removed, `link_ai_refs` scoped to 7-day window + batch validation
 - **Classification backlog**: ~61K emails pending (hello@ 47K, ehab@ 14K). At current rate (~330/hr), needs ~185 hours of continuous backfill
 - ~~**hello@ client_id backfill**~~: **RESOLVED** — 134K emails backfilled (May 1), all mailboxes at 0 NULL
+- ~~**AI Link References per-mailbox view**~~: **RESOLVED** — RPC 099 v2 adds per-mailbox link stats. ehab@ 36.6%, Linda 38.8%, hello@ 27.2%
+- **AI ref extraction quality**: Prompt tightened May 5. 20.4% of refs are "real gaps" (valid QB numbers not in synced data — ~32K quotes not synced). Improvement requires QB sync scope expansion or acceptance
 - Cross-Gap revival may expand if join fixes reveal deeper schema issues
 - Week 3 is doing 3 features + starting stabilization in 30h — tight
 - Week 4 is 2 days of handoff only, not a full stabilization week
