@@ -1,26 +1,29 @@
 # External Cron Setup
 
-All scheduled work runs via HTTP POST to internal endpoints, authenticated with a `CRON_SECRET` Bearer token.
+All scheduled work runs via HTTP POST to internal endpoints, authenticated with a `CRON_SECRET` Bearer token. Each cron job is a separate Railway service using `alpine/curl` as the Docker image.
 
-**Status:** Live — Railway cron configured and running.
+**Status:** Live — 7 Railway cron services configured and running.
 
 ## Current Setup
 
-- **Cron provider:** Railway native cron
-- **Auth:** `CRON_SECRET` env var set in Railway backend service
-- **Backend URL:** Railway backend service URL (referred to as `$BACKEND_URL` in examples below)
+- **Cron provider:** Railway native cron services
+- **Auth:** `CRON_SECRET` env var (shared across all cron services + backend)
+- **Backend URL:** Railway backend service private URL (referred to as `$BACKEND_URL` below)
+- **Minimum interval:** Railway cron supports a minimum of **5 minutes** between runs
 
 ## Cron Schedule
 
-| Endpoint | Interval | Purpose |
-|---|---|---|
-| `POST /api/internal/jobs/notification-dispatch` | Every 2 min | Dispatch pending event notifications |
-| `POST /api/internal/jobs/stuck-reconciler` | Every 10 min | Mark expired-lease jobs as interrupted |
-| `POST /api/internal/jobs/gmail-sync` | Every 15 min | Sync Gmail mailboxes (per-mailbox interval check) |
-| `POST /api/internal/jobs/outlook-sync` | Every 15 min | Sync Outlook mailboxes (per-mailbox interval check) |
-| `POST /api/internal/jobs/qb-sync` | Hourly at :15 | Sync QuickBase data for auto-sync clients (respects `sync_interval_hours`) |
-| `POST /api/internal/jobs/refresh-persona-metrics` | Daily 03:00 UTC | Refresh contact_email_metrics materialized view |
-| `POST /api/internal/jobs/analytics-rollup` | Daily 02:00 UTC | Daily analytics rollup |
+| Endpoint | Interval | Railway Cron | Status |
+|---|---|---|---|
+| `POST /api/internal/jobs/gmail-sync` | Every 15 min | `*/15 * * * *` | Live |
+| `POST /api/internal/jobs/outlook-sync` | Every 15 min | `*/15 * * * *` | Live |
+| `POST /api/internal/jobs/qb-sync` | Hourly at :15 | `15 * * * *` | Live |
+| `POST /api/internal/jobs/notification-dispatch` | Every 5 min | `*/5 * * * *` | Live |
+| `POST /api/internal/jobs/stuck-reconciler` | Every 10 min | `*/10 * * * *` | Live |
+| `POST /api/internal/jobs/refresh-persona-metrics` | Daily 03:00 UTC | `0 3 * * *` | Live |
+| `POST /api/internal/jobs/analytics-rollup` | Daily 02:00 UTC | `0 2 * * *` | Live |
+
+**Note:** `notification-dispatch` was designed for 2-minute intervals but Railway's minimum is 5 minutes. This is acceptable — notifications may be delayed up to 5 minutes from event creation.
 
 ## Admin-Only Endpoints (not cron-scheduled)
 
@@ -31,81 +34,55 @@ These require `admin` role authentication, not `CRON_SECRET`:
 | `POST /api/internal/jobs/mailboxes/{mailbox_id}/run-pipeline` | Manually trigger email pipeline for a mailbox |
 | `POST /api/internal/jobs/jobs/{job_id}/resume-pipeline` | Resume a failed/interrupted pipeline job |
 
-## cron-job.org Configuration
+---
 
-For each cron endpoint above:
+## How to Create a Railway Cron Service
 
-- **URL:** `$BACKEND_URL/api/internal/jobs/<endpoint-name>`
-- **Method:** POST
-- **Headers:**
-  ```
-  Authorization: Bearer $CRON_SECRET
-  Content-Type: application/json
-  ```
-- **Body:** (empty)
-- **Timeout:** 30 seconds (60s for qb-sync)
+Each cron job is a standalone Railway service that runs on a schedule and curls the backend endpoint.
 
-### Example: notification-dispatch (every 2 min)
+### Step 1: Add a new service
 
-```
-URL:     POST https://your-backend.up.railway.app/api/internal/jobs/notification-dispatch
-Headers: Authorization: Bearer <your-cron-secret>
-Cron:    */2 * * * *
-```
+In your Railway project dashboard:
+1. Click **+ New** → **Docker Image**
+2. Set image to: `alpine/curl:latest`
 
-### Example: stuck-reconciler (every 10 min)
+### Step 2: Configure environment variables
 
-```
-URL:     POST https://your-backend.up.railway.app/api/internal/jobs/stuck-reconciler
-Cron:    */10 * * * *
-```
+Add these variables to the cron service:
 
-### Example: gmail-sync (every 15 min)
+| Variable | Value |
+|---|---|
+| `CRON_SECRET` | Same value as the backend's `CRON_SECRET` |
+| `BACKEND_URL` | Your backend's Railway private domain (e.g., `http://backend.railway.internal:8000`) |
+
+### Step 3: Set the start command
+
+In the service settings, set the **Start Command** to:
 
 ```
-URL:     POST https://your-backend.up.railway.app/api/internal/jobs/gmail-sync
-Cron:    */15 * * * *
+curl -X POST "$BACKEND_URL/api/internal/jobs/<endpoint-name>" -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: application/json" --fail --silent --show-error
 ```
 
-### Example: outlook-sync (every 15 min)
+Replace `<endpoint-name>` with the specific job name (e.g., `gmail-sync`, `stuck-reconciler`).
 
-```
-URL:     POST https://your-backend.up.railway.app/api/internal/jobs/outlook-sync
-Cron:    */15 * * * *
-```
+### Step 4: Set the cron schedule
 
-### Example: qb-sync (hourly at :15)
+In the service settings under **Cron Schedule**, enter the cron expression from the schedule table above.
 
-```
-URL:     POST https://your-backend.up.railway.app/api/internal/jobs/qb-sync
-Cron:    15 * * * *
-```
+### Step 5: Name the service
 
-### Example: analytics-rollup (daily 02:00 UTC)
+Name it descriptively (e.g., `cron-gmail-sync`, `cron-stuck-reconciler`, `cron-persona-refresh`).
 
-```
-URL:     POST https://your-backend.up.railway.app/api/internal/jobs/analytics-rollup
-Cron:    0 2 * * *
-```
+### Example: complete configuration for stuck-reconciler
 
-### Example: refresh-persona-metrics (daily 03:00 UTC)
+| Setting | Value |
+|---|---|
+| **Image** | `alpine/curl:latest` |
+| **Start Command** | `curl -X POST "$BACKEND_URL/api/internal/jobs/stuck-reconciler" -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: application/json" --fail --silent --show-error` |
+| **Cron Schedule** | `*/10 * * * *` |
+| **Variables** | `CRON_SECRET=<value>`, `BACKEND_URL=http://backend.railway.internal:8000` |
 
-```
-URL:     POST https://your-backend.up.railway.app/api/internal/jobs/refresh-persona-metrics
-Cron:    0 3 * * *
-```
-
-## Railway Cron Alternative
-
-If using Railway's native cron jobs instead of cron-job.org, create a lightweight script per schedule:
-
-```bash
-#!/bin/bash
-curl -X POST "$BACKEND_URL/api/internal/jobs/$ENDPOINT" \
-  -H "Authorization: Bearer $CRON_SECRET" \
-  -H "Content-Type: application/json" \
-  --fail --silent --show-error
-```
+---
 
 ## Sync Architecture
 
@@ -131,3 +108,4 @@ After configuring cron:
 2. Verify `events.dispatched_at` is being populated (notification dispatch working)
 3. Check `/api/internal/jobs/health` returns healthy status
 4. Monitor `qb_sync_config.last_synced_at` timestamps for QB sync
+5. Check `contact_email_metrics` view freshness — should reflect emails from the last 24 hours

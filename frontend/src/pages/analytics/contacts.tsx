@@ -109,6 +109,22 @@ export const ContactsAnalytics: React.FC = () => {
         return <span className="tabular-nums text-slate-700">{v}</span>;
       },
     }),
+    col.accessor('strike_rate', {
+      header: 'Strike %', size: 70, meta: { align: 'right' },
+      cell: info => {
+        const v = info.getValue();
+        if (v == null) return <span className="text-slate-300">—</span>;
+        return <span className="tabular-nums text-slate-700">{Math.round(v * 100)}%</span>;
+      },
+    }),
+    col.accessor('total_job_value', {
+      header: 'Job Value', size: 90, meta: { align: 'right' },
+      cell: info => {
+        const v = info.getValue();
+        if (!v) return <span className="text-slate-300">—</span>;
+        return <span className="tabular-nums text-slate-700">${v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v.toLocaleString('en-AU')}</span>;
+      },
+    }),
     col.accessor('last_contacted_at', {
       header: 'Last Contact', size: 100,
       cell: info => <span className="text-xs text-slate-500">{formatRelativeTime(info.getValue())}</span>,

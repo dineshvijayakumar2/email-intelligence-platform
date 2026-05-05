@@ -147,7 +147,7 @@
 
 ### Cross-Company Gaps
 
-- [ ] Revive `cross_gap_intelligence.py`
+- [~] Revive `cross_gap_intelligence.py` — investigation started May 5. Existing infrastructure (contact_persona view, customer profile page, strike rate by contact) covers much of the analytical foundation
 - [ ] Fix data joins (specific fixes TBD from code review)
 - [ ] Verify output on 5 known Carbon8 companies
 - [ ] Natural-language summary via digest prompt templates

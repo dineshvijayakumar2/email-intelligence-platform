@@ -99,6 +99,9 @@ export interface ContactAnalytics {
   avg_thread_depth?: number | null;
   // Persona
   persona_classification?: string | null;
+  strike_rate?: number | null;
+  accepted_quote_count?: number | null;
+  total_job_value?: number | null;
   // QB business context (Sprint 3)
   qb_contact_id?: string | null;
   qb_customer_type?: string | null;

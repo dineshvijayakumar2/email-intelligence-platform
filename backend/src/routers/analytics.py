@@ -889,18 +889,18 @@ async def list_contact_analytics(
         desc = sort_dir.lower() != 'asc'
         result = query.order(effective_sort, desc=desc, nullsfirst=False).range(offset, offset + limit - 1).execute()
 
-        # Batch lookup persona_classification from contact_persona view
+        # Batch lookup persona + quote metrics from contact_persona view
         contact_ids = [c['id'] for c in result.data]
-        persona_map: dict = {}
+        persona_map: dict[str, dict] = {}
         if contact_ids:
             try:
                 for i in range(0, len(contact_ids), 500):
                     batch_ids = contact_ids[i:i+500]
                     persona_result = _supabase.table('contact_persona').select(
-                        'contact_id, persona_classification'
+                        'contact_id, persona_classification, strike_rate, accepted_quote_count, total_job_value'
                     ).in_('contact_id', batch_ids).execute()
                     for p in (persona_result.data or []):
-                        persona_map[p['contact_id']] = p['persona_classification']
+                        persona_map[p['contact_id']] = p
             except Exception as e:
                 logger.warning(f"Persona lookup failed (non-critical): {e}")
 
@@ -910,10 +910,14 @@ async def list_contact_analytics(
             if c.get('customer_companies'):
                 customer_company_name = c['customer_companies'].get('company_name')
 
+            pm = persona_map.get(c['id']) or {}
             contacts.append(ContactAnalytics(
                 **c,
                 customer_company_name=customer_company_name,
-                persona_classification=persona_map.get(c['id']),
+                persona_classification=pm.get('persona_classification'),
+                strike_rate=pm.get('strike_rate'),
+                accepted_quote_count=pm.get('accepted_quote_count'),
+                total_job_value=pm.get('total_job_value'),
             ))
 
         # Get total count

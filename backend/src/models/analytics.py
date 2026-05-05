@@ -185,6 +185,9 @@ class ContactAnalytics(BaseModel):
 
     # Persona (from contact_persona view)
     persona_classification: Optional[str] = None
+    strike_rate: Optional[float] = None
+    accepted_quote_count: Optional[int] = None
+    total_job_value: Optional[float] = None
 
     # QB business context (Sprint 3)
     qb_contact_id: Optional[str] = None

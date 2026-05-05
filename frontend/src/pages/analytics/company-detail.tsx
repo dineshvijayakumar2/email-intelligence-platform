@@ -288,6 +288,8 @@ function CompanyContactsSection({
             <th className="text-right font-medium px-2 py-2 w-14">Sent</th>
             <th className="text-right font-medium px-2 py-2 w-14">Recv</th>
             <th className="text-right font-medium px-2 py-2 w-16">Quotes</th>
+            <th className="text-right font-medium px-2 py-2 w-16">Strike %</th>
+            <th className="text-right font-medium px-2 py-2 w-20">Job Value</th>
             <th className="text-right font-medium px-4 py-2 w-24">Last Contact</th>
           </tr>
         </thead>
@@ -316,6 +318,12 @@ function CompanyContactsSection({
               </td>
               <td className="text-right px-2 py-2 tabular-nums text-slate-700">
                 {(c.quote_count ?? 0) > 0 ? c.quote_count : <span className="text-slate-300">—</span>}
+              </td>
+              <td className="text-right px-2 py-2 tabular-nums text-slate-700">
+                {c.strike_rate != null ? `${Math.round(c.strike_rate * 100)}%` : <span className="text-slate-300">—</span>}
+              </td>
+              <td className="text-right px-2 py-2 tabular-nums text-slate-700">
+                {c.total_job_value ? `$${c.total_job_value >= 1000 ? `${(c.total_job_value / 1000).toFixed(0)}K` : c.total_job_value.toLocaleString('en-AU')}` : <span className="text-slate-300">—</span>}
               </td>
               <td className="text-right px-4 py-2 text-xs text-slate-500">
                 {c.email_last_date ? formatRelativeTime(c.email_last_date) : 'Never'}
