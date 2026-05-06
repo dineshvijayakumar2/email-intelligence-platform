@@ -364,6 +364,55 @@ logger.info("Step 6 done", extra={
 
 The `LogStreamHandler` in `src/utils/log_stream.py` reads `extra` fields first, falling back to regex extraction for legacy log calls. New code should always use `extra`.
 
+---
+
+## 9. Supabase Security
+
+### Every new table MUST have RLS enabled
+
+All 49 public tables have RLS enabled (migration 102). When creating a new table, always include:
+
+```sql
+CREATE TABLE IF NOT EXISTS my_new_table (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    client_id UUID REFERENCES clients(id),
+    -- ...columns...
+);
+
+ALTER TABLE my_new_table ENABLE ROW LEVEL SECURITY;
+```
+
+**Why:** Without RLS, anyone with the Supabase project URL + anon key can read/write the table. The backend uses the `service_role` key (bypasses RLS), so enabling RLS with no policies effectively locks the table to backend-only access — which is the correct default.
+
+**Only add RLS policies if** the frontend needs direct Supabase access to the table (currently: only auth-related tables like `user_profiles`, `user_client_assignments`). The frontend accesses all other data through the backend API.
+
+### SECURITY DEFINER functions MUST set search_path
+
+Any RPC with `SECURITY DEFINER` must include `SET search_path = public` to prevent search-path hijacking:
+
+```sql
+CREATE OR REPLACE FUNCTION my_rpc(p_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public   -- REQUIRED for SECURITY DEFINER
+AS $$ ... $$;
+```
+
+### Never expose secrets via RPC return values
+
+RPCs that query tables with sensitive columns (`system_settings`, `qb_sync_config`, `clients`) must explicitly select only the columns needed — never `SELECT *`.
+
+### exec_sql RPCs are a known risk
+
+`exec_sql` and `exec_sql_extended` are granted to the `authenticated` role — any user with a valid JWT can execute arbitrary SQL. These exist for migration tooling only. Restrict to service role when the invite system goes live and multiple users are active.
+
+### Views and materialized views
+
+Views/matviews cannot have RLS (Postgres limitation). They show "UNRESTRICTED" in the Supabase dashboard. This is safe as long as their base tables have RLS enabled — the view inherits the restriction from the underlying tables.
+
+---
+
 ### Non-blocking log infrastructure
 
 The live log stream uses a fire-and-forget pattern:

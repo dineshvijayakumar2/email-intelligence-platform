@@ -1255,7 +1255,17 @@ thread_qb_links (references canonical_thread_id + qb_record_id)
 
 ## 8. Row-Level Security (RLS)
 
-RLS is enabled on select tables. Most tables bypass RLS via the service role key used by the backend.
+**RLS is enabled on ALL tables** (migration 102, applied May 2026). No table in the public schema is accessible via the anon key.
+
+### Architecture
+
+- **Backend** uses the `service_role` key → bypasses RLS entirely. All data queries go through the backend API.
+- **Frontend** uses Supabase **exclusively for auth** (`supabase.auth.*`). Zero direct table access. The anon key is never used to read/write data.
+- **Views and materialized views** cannot have RLS (Postgres limitation) but inherit protection from their RLS-enabled base tables.
+
+### Explicit RLS Policies
+
+Most tables have RLS enabled with **no policies** — this means only the service role can access them. The following tables have explicit policies for authenticated users:
 
 | Table | Policy | Command | Description |
 |-------|--------|---------|-------------|
@@ -1272,6 +1282,22 @@ RLS is enabled on select tables. Most tables bypass RLS via the service role key
 | email_response_metrics | email_response_metrics_client_isolation | ALL | Client isolation |
 | audit_log | Admins can read audit_log | SELECT | Admin read-only |
 | audit_log | Service role full access on audit_log | ALL | Service role bypass |
+
+### Views (UNRESTRICTED in Supabase dashboard — expected)
+
+These show an "UNRESTRICTED" badge because Postgres cannot apply RLS to views/matviews. Data is protected because their base tables all have RLS enabled.
+
+| View | Type | Base Tables |
+|------|------|-------------|
+| thread_stats | VIEW | thread_status |
+| top_correspondents | VIEW | customer_contacts, emails |
+| contact_persona | VIEW | customer_contacts, contact_quote_metrics, contact_email_metrics |
+| contact_quote_metrics | VIEW | qb_quotes, qb_jobs, customer_contacts |
+| contact_deal_activity | VIEW | qb_quotes, qb_jobs, customer_contacts |
+| company_contact_summary | VIEW | customer_contacts, contact_persona |
+| customer_engagement_summary | VIEW | customer_companies, emails |
+| customer_industry_segments | VIEW | customer_companies, qb_customers |
+| contact_email_metrics | MATVIEW | emails, email_contact_links, customer_contacts |
 
 ---
 
@@ -1291,7 +1317,7 @@ RLS is enabled on select tables. Most tables bypass RLS via the service role key
 
 ## 10. Migration History
 
-101 migrations in `scripts/migrations/` track the schema evolution:
+102 migrations in `scripts/migrations/` track the schema evolution:
 
 | Range | Era | Key Changes |
 |-------|-----|-------------|
@@ -1305,6 +1331,7 @@ RLS is enabled on select tables. Most tables bypass RLS via the service role key
 | 098 | Extraction Scoping | `extracted_at` column on emails + partial index; incremental extraction skips already-processed emails |
 | 100 | Contact Date Backfill | Updated `update_contact_email_counts_from_junction` RPC to also compute and set `first_contacted_at`/`last_contacted_at` from email dates |
 | 101 | Persona Classification v2 | DROP+CREATE `contact_persona`, `company_contact_summary`, `industry_benchmarks` views. Champion rule: `accepted_quote_count >= 10 OR total_job_value >= 50000`. Added `contact_type` column. Non-person contacts → `shared_mailbox`. Split `active_relationship` → `active_buyer` + `warm_lead`. Person-only filtering on rollup views |
+| 102 | RLS on All Tables | `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` on all 49 public tables. Resolves Supabase critical security alert. Views/matviews excluded (Postgres limitation — inherit protection from base tables) |
 
 **Migration application method:** `scripts/db/_run_NNN_via_rest.py` → `exec_sql` RPC + `NOTIFY pgrst, 'reload schema'`; scripts are throwaway and deleted after verification.
 
