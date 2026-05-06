@@ -96,3 +96,19 @@ ALTER TABLE IF EXISTS app_config ENABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS gmail_filters ENABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS outlook_rules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS pending_invites ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS ai_strategic_digests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS am_performance_snapshots ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS relationship_context_cache ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS sprint2_cleanup_log ENABLE ROW LEVEL SECURITY;
+
+-- ====================================================================
+-- Views / materialized views (CANNOT have RLS — Postgres limitation)
+-- ====================================================================
+-- These show "UNRESTRICTED" in Supabase dashboard but are safe because
+-- their base tables all have RLS enabled. The anon key cannot read
+-- through them since the underlying tables block access.
+--
+-- Views: thread_stats, top_correspondents, company_contact_summary,
+--        contact_deal_activity, contact_persona, contact_quote_metrics,
+--        customer_engagement_summary, customer_industry_segments
+-- Materialized views: contact_email_metrics
