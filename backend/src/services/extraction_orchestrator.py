@@ -352,6 +352,20 @@ class ExtractionOrchestrator:
             # ============================================================
             self._run_step(1, "Validate prerequisites", self._step_validate)
 
+            if self.step_results.get(1, {}).get('skipped'):
+                logger.info("Incremental extraction: no new emails — completing early")
+                if self.job_id:
+                    self._update_job_status('completed')
+                from ..utils.log_stream import clear_log_context
+                clear_log_context()
+                return {
+                    'success': True,
+                    'job_id': self.job_id,
+                    'duration_seconds': (datetime.utcnow() - start_time).total_seconds(),
+                    'steps_completed': 1,
+                    'results': self.step_results,
+                }
+
             # ============================================================
             # STEP 2: Extract Contacts
             # ============================================================
@@ -797,6 +811,9 @@ class ExtractionOrchestrator:
         emails_in_scope = len(email_ids)
 
         if emails_in_scope == 0:
+            if self.extraction_mode == 'incremental':
+                logger.info(f"No new emails in scope for incremental extraction — nothing to do")
+                return {'emails_in_scope': 0, 'skipped': True}
             raise ValueError(f"No emails in scope for {self.extraction_mode} extraction")
 
         logger.info(f"Mailbox validated: {mailbox['email_address']} ({mailbox['mailbox_type']})")

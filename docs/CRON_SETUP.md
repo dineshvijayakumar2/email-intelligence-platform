@@ -84,6 +84,99 @@ Name it descriptively (e.g., `cron-gmail-sync`, `cron-stuck-reconciler`, `cron-p
 
 ---
 
+---
+
+## Worker Deployment
+
+The worker process runs background jobs (AI classification, extraction pipeline, embedding, reference linking). It's a separate Railway service from the backend API.
+
+### Architecture
+
+- Workers poll the `processing_jobs` table every 2 seconds
+- Jobs are claimed with `SELECT FOR UPDATE SKIP LOCKED` — no duplicate execution across replicas
+- Each worker emits a heartbeat every 30 seconds to extend its 5-minute lease
+- On startup, workers auto-resume any interrupted pipeline jobs
+- Workers do **NOT** need Redis — job coordination is entirely database-driven
+
+### Creating the Worker Service in Railway
+
+#### Step 1: Add a new service
+
+In your Railway project dashboard:
+1. Click **+ New** → **GitHub Repo**
+2. Select the same repository as the backend API
+
+#### Step 2: Configure the service
+
+| Setting | Value |
+|---|---|
+| **Root Directory** | `/backend` |
+| **Start Command** | `python3 -m src.workers.job_runner` |
+| **Replicas** | 2 (recommended for availability) |
+
+#### Step 3: Set environment variables
+
+**Required** — worker will not start without these:
+
+| Variable | Description |
+|---|---|
+| `SUPABASE_URL` | Supabase project URL |
+| `SUPABASE_SERVICE_KEY` | Supabase service role key |
+
+**Required for job handlers** — without these, specific job types will fail when claimed:
+
+| Variable | Description | Used by |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | Claude API key | `ai_analysis`, `ai_backfill` |
+| `OPENAI_API_KEY` | OpenAI API key | `ai_analysis` (if configured as provider) |
+| `GOOGLE_GENAI_API_KEY` | Google Gemini API key | `ai_analysis` (if configured as provider) |
+| `EMBEDDING_PROVIDER` | `openai` or `google` | `embed_emails`, `reembed` |
+
+**Optional tuning:**
+
+| Variable | Default | Description |
+|---|---|---|
+| `WORKER_POLL_INTERVAL` | `2` | Seconds between job polls |
+| `WORKER_ID` | `{hostname}-{pid}` | Override auto-generated worker ID |
+
+**NOT needed by worker** (API-only variables — safe to omit):
+
+- `REDIS_URL` — worker explicitly disables Redis
+- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — OAuth, API-only
+- `MICROSOFT_CLIENT_ID` / `MICROSOFT_CLIENT_SECRET` — OAuth, API-only
+- `GOOGLE_REDIRECT_URI` / `MICROSOFT_REDIRECT_URI` — OAuth callbacks
+- `SECRET_KEY` / `SUPABASE_JWT_SECRET` — API auth
+- `CRON_SECRET` — cron endpoint auth
+- All `VITE_*` variables — frontend only
+
+**Practical recommendation:** Copy all backend env vars to the worker service. The worker ignores variables it doesn't need, and this avoids missing a variable when a new handler is added. The list above is for minimal deployments or debugging.
+
+#### Step 4: Verify deployment
+
+After deployment, check the Railway logs for:
+```
+Worker <worker-id> started, polling every 2s
+```
+
+Then create a test job (e.g., trigger pipeline from the UI) and confirm the worker picks it up.
+
+### Job Types
+
+| Job Type | Handler | What it does |
+|---|---|---|
+| `email_pipeline` | 10-step pipeline | Full sync → extract → classify → embed flow |
+| `ai_analysis` | AI classification | Claude-based email classification + bucket engine |
+| `ai_backfill` | Backfill classifier | Batch classification of unanalyzed emails |
+| `reembed` | Vector embeddings | Re-embed emails/companies/operations |
+| `reference_extraction` | QB ref linking | Regex-based QB reference extraction from email bodies |
+| `notification_dispatch` | Event notifications | Dispatch pending event notifications |
+
+### Scaling
+
+Workers scale horizontally — add replicas in Railway to increase throughput. Each replica gets a unique `worker_id` from its hostname. The database lease mechanism prevents duplicate execution. Start with 2 replicas; increase if `processing_jobs` shows a backlog of `pending` jobs.
+
+---
+
 ## Sync Architecture
 
 Gmail and Outlook sync services are initialized at startup but remain idle. They only activate when the external cron calls the sync endpoint. There are no background asyncio loops — sync is 100% cron-triggered.
