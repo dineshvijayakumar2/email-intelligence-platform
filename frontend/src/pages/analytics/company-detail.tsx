@@ -158,6 +158,18 @@ export const CompanyDetail: React.FC = () => {
         )}
       </div>
 
+      {/* ── Action Layer ─────────────────────────────────────── */}
+
+      {/* Sales Opportunities — most actionable, right after financials */}
+      {companyId && (
+        <div className="rounded-lg border bg-white shadow-sm p-4 mb-4">
+          <h2 className="text-sm font-semibold text-slate-900 mb-3">Sales Opportunities</h2>
+          <RecommendationsPanel companyId={companyId} />
+        </div>
+      )}
+
+      {/* ── People & Activity ─────────────────────────────── */}
+
       {/* Key Contacts */}
       <CompanyContactsSection
         contacts={contactsQuery.data || []}
@@ -201,16 +213,28 @@ export const CompanyDetail: React.FC = () => {
         </div>
       )}
 
-      {/* AI Insights — still uses antd internally (migrated in Phase 4) */}
-      {companyId && company && <AIInsightsCard entityType="company" entityId={companyId} clientId={company.client_id} />}
+      {/* ── Performance & Timing ──────────────────────────── */}
 
-      {/* Intelligence cards grid — these still use antd internally */}
       {companyId && company && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
           <StrikeRateCard companyId={companyId} />
           <SeasonalityChart companyId={companyId} />
+        </div>
+      )}
+
+      {/* ── Capabilities & Products ───────────────────────── */}
+
+      {companyId && company && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
           <CapabilityRhythmCard companyId={companyId} />
           <ContactCapabilitiesCard companyId={companyId} />
+        </div>
+      )}
+
+      {/* ── Deep Dive ─────────────────────────────────────── */}
+
+      {companyId && company && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
           <ProductProfileCards
             categories={productProfile.categories}
             operations={productProfile.operations}
@@ -219,14 +243,11 @@ export const CompanyDetail: React.FC = () => {
             embellishment_tags={productProfile.embellishment_tags}
             loading={productProfileQuery.isLoading}
           />
-          <div className="rounded-lg border bg-white shadow-sm p-4">
-            <h3 className="text-sm font-semibold text-slate-900 mb-3">Sales Opportunities</h3>
-            <RecommendationsPanel companyId={companyId} />
-          </div>
+          <AIInsightsCard entityType="company" entityId={companyId} clientId={company.client_id} />
         </div>
       )}
 
-      {/* Order History — collapsible */}
+      {/* Order History — collapsible reference data */}
       <div className="mt-4">
         <button
           onClick={() => setShowOrderHistory(!showOrderHistory)}
