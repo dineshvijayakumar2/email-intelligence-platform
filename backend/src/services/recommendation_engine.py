@@ -191,8 +191,9 @@ class RecommendationEngine:
 
     def _compute_cross_contact(self, company_id: str) -> list:
         """
-        Find operations that the company uses but specific contacts haven't
-        been involved with. Requires ≥ 2 person contacts to be meaningful.
+        Capability-level gap analysis per contact. For each contact, shows
+        which capabilities the company uses that this contact hasn't been
+        on a quote for. Aggregated from raw operations → qb_capability_tag.
         """
         try:
             contacts_result = (
@@ -204,7 +205,6 @@ class RecommendationEngine:
             )
             all_contacts = contacts_result.data or []
 
-            # Fix 1: Only person contacts — exclude shared mailboxes, automated, mailing lists
             contacts = [
                 c for c in all_contacts
                 if c.get('contact_type') in ('person', 'unknown', None)
@@ -212,7 +212,6 @@ class RecommendationEngine:
             if len(contacts) < MIN_CONTACTS_FOR_GAPS:
                 return []
 
-            # Fix 2: Deduplicate contacts with same email at same company (keep first by id)
             seen_emails: set = set()
             contact_by_email: dict = {}
             for c in contacts:
@@ -222,7 +221,6 @@ class RecommendationEngine:
                 seen_emails.add(email)
                 contact_by_email[email] = c
 
-            # Fetch company's email domains for Fix 3 (domain mismatch flagging)
             company_result = (
                 self._supabase.table('customer_companies')
                 .select('email_domains')
@@ -237,7 +235,7 @@ class RecommendationEngine:
 
             ops_result = (
                 self._supabase.table('qb_operations')
-                .select('job_no, operation_name, department')
+                .select('job_no, operation_name, qb_capability_tag')
                 .eq('matched_company_id', company_id)
                 .eq('client_id', self._client_id)
                 .execute()
@@ -264,14 +262,15 @@ class RecommendationEngine:
                     if q.get('job_no') and q.get('contact_email'):
                         job_to_email[q['job_no']] = q['contact_email'].strip().lower()
 
-            contact_op_map: dict = {}
-            op_dept_map: dict = {}
+            # Map each contact to their set of capabilities (via operations → capability_tag)
+            contact_cap_map: dict = {}
+            all_capabilities: set = set()
 
             for op in operations:
-                op_name = op.get('operation_name')
-                if not op_name:
+                cap = (op.get('qb_capability_tag') or '').strip()
+                if not cap:
                     continue
-                op_dept_map[op_name] = op.get('department')
+                all_capabilities.add(cap)
                 email = job_to_email.get(op.get('job_no', ''))
                 if not email:
                     continue
@@ -279,28 +278,21 @@ class RecommendationEngine:
                 if not contact:
                     continue
                 cid = contact['id']
-                if cid not in contact_op_map:
-                    contact_op_map[cid] = {'contact': contact, 'ops': set()}
-                contact_op_map[cid]['ops'].add(op_name)
+                if cid not in contact_cap_map:
+                    contact_cap_map[cid] = {'contact': contact, 'capabilities': set()}
+                contact_cap_map[cid]['capabilities'].add(cap)
 
-            if not contact_op_map:
+            if not contact_cap_map or len(all_capabilities) < 2:
                 return []
 
-            all_ops = set()
-            for v in contact_op_map.values():
-                all_ops |= v['ops']
-
             recs = []
-            for cid, v in contact_op_map.items():
-                gaps = all_ops - v['ops']
+            for cid, v in contact_cap_map.items():
+                gaps = all_capabilities - v['capabilities']
                 if not gaps:
                     continue
                 contact = v['contact']
                 contact_name = contact.get('full_name') or contact.get('email_address', '')
-                missing = sorted(gaps)
-                depts = sorted({op_dept_map.get(g) for g in missing if op_dept_map.get(g)})
 
-                # Fix 3: Flag domain mismatch
                 contact_email = (contact.get('email_address') or '').lower()
                 domain_mismatch = False
                 if company_domains and '@' in contact_email:
@@ -312,11 +304,11 @@ class RecommendationEngine:
                     'contact_id': cid,
                     'contact_name': contact_name,
                     'contact_email': contact_email,
-                    'missing_operations': missing,
-                    'departments': depts,
+                    'already_buys': sorted(v['capabilities']),
+                    'untapped_capabilities': sorted(gaps),
                     'reason': (
-                        f"{len(missing)} operation(s) used by other contacts at this company "
-                        f"that {contact_name} hasn't been involved with"
+                        f"{contact_name} buys {len(v['capabilities'])} capability(ies) but "
+                        f"hasn't been introduced to {len(gaps)} other(s) this company uses"
                     ),
                 }
                 if domain_mismatch:
@@ -325,6 +317,7 @@ class RecommendationEngine:
 
                 recs.append(rec)
 
+            recs.sort(key=lambda r: -len(r['untapped_capabilities']))
             return recs
 
         except Exception as e:
