@@ -208,6 +208,32 @@ async def list_customer_companies(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/portfolio-insights")
+async def get_portfolio_insights(
+    client_id: str = Query(..., description="Client ID to scan"),
+):
+    """
+    Portfolio-wide revenue concentration and buyer decay risk analysis.
+    Scans all companies for a client via contact_persona view.
+    """
+    try:
+        from ..services.recommendation_engine import RecommendationEngine
+        engine = RecommendationEngine(_supabase, client_id)
+        insights = engine.get_portfolio_insights()
+        return {
+            'client_id': client_id,
+            'insights': insights,
+            'total': len(insights),
+            'by_type': {
+                'concentration_risk': len([i for i in insights if i['insight_type'] == 'concentration_risk']),
+                'buyer_decay_risk': len([i for i in insights if i['insight_type'] == 'buyer_decay_risk']),
+            },
+        }
+    except Exception as e:
+        logger.error(f"Portfolio insights failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/{company_id}", response_model=CustomerCompanyWithContacts)
 async def get_customer_company(company_id: str):
     """

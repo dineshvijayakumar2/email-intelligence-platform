@@ -24,6 +24,9 @@ logger = logging.getLogger(__name__)
 CACHE_TTL_HOURS = 24
 MIN_AFFINITY_SUPPORT = 3      # min companies sharing a pair for Level 2
 MIN_CONTACTS_FOR_GAPS = 2     # need ≥ 2 contacts to show cross-contact gaps
+CONCENTRATION_REVENUE_THRESHOLD = 100_000  # $100K minimum for concentration risk
+CONCENTRATION_MAX_REVENUE_CONTACTS = 2     # ≤ 2 contacts producing revenue
+CONCENTRATION_MIN_TOTAL_CONTACTS = 3       # > 2 total contacts for the filter (HAVING > 2)
 
 
 class RecommendationEngine:
@@ -39,9 +42,13 @@ class RecommendationEngine:
 
     def get_recommendations(self, company_id: str, force: bool = False) -> dict:
         """Return recommendations for a company (cached 24h)."""
+        # Revenue insight is always fresh (fast view query, not worth caching)
+        revenue_insight = self._compute_revenue_concentration(company_id)
+
         if not force:
             cached = self._get_cached(company_id)
             if cached:
+                cached['revenue_insight'] = revenue_insight
                 return cached
 
         cross_contact = self._compute_cross_contact(company_id)
@@ -52,6 +59,7 @@ class RecommendationEngine:
             'cross_contact_recs': cross_contact,
             'related_product_recs': related_product,
             'product_profile': product_profile,
+            'revenue_insight': revenue_insight,
             'computed_at': datetime.now(timezone.utc).isoformat(),
         }
         self._save_cache(company_id, result)
@@ -321,6 +329,232 @@ class RecommendationEngine:
 
         except Exception as e:
             logger.warning(f"cross_contact computation failed for {company_id}: {e}")
+            return []
+
+    # ------------------------------------------------------------------
+    # Revenue Concentration / Buyer Decay Analysis
+    # ------------------------------------------------------------------
+
+    def _compute_revenue_concentration(self, company_id: str) -> Optional[dict]:
+        """
+        Classify a company's revenue concentration risk using contact_persona view.
+        Returns insight dict or None if company doesn't meet thresholds.
+        """
+        try:
+            all_rows = []
+            offset = 0
+            while True:
+                batch = (
+                    self._supabase.table('contact_persona')
+                    .select(
+                        'contact_id, name, email, persona_classification, '
+                        'engagement_score, total_job_value, email_days_since_last, contact_type'
+                    )
+                    .eq('company_id', company_id)
+                    .eq('client_id', self._client_id)
+                    .neq('persona_classification', 'shared_mailbox')
+                    .eq('contact_type', 'person')
+                    .range(offset, offset + 999)
+                    .execute()
+                )
+                rows = batch.data or []
+                all_rows.extend(rows)
+                if len(rows) == 0:
+                    break
+                offset += len(rows)
+
+            if len(all_rows) < CONCENTRATION_MIN_TOTAL_CONTACTS:
+                return None
+
+            total_contacts = len(all_rows)
+            company_total_revenue = sum(float(r.get('total_job_value') or 0) for r in all_rows)
+
+            if company_total_revenue < CONCENTRATION_REVENUE_THRESHOLD:
+                return None
+
+            revenue_contacts = [
+                r for r in all_rows if float(r.get('total_job_value') or 0) > 0
+            ]
+            revenue_producing_contacts = len(revenue_contacts)
+
+            if revenue_producing_contacts > CONCENTRATION_MAX_REVENUE_CONTACTS:
+                return None
+
+            ranked = sorted(all_rows, key=lambda r: -float(r.get('total_job_value') or 0))
+            top_buyer = ranked[0]
+            top_buyer_persona = top_buyer.get('persona_classification', 'unknown')
+            top_buyer_name = top_buyer.get('name') or top_buyer.get('email', 'unknown')
+
+            # Classify insight type
+            if top_buyer_persona == 'inactive_buyer':
+                insight_type = 'buyer_decay_risk'
+            elif (revenue_producing_contacts <= 2
+                  and total_contacts > 4
+                  and company_total_revenue > CONCENTRATION_REVENUE_THRESHOLD):
+                insight_type = 'concentration_risk'
+            else:
+                return None
+
+            # Build top 2 contact summaries
+            top_2 = []
+            for r in ranked[:2]:
+                val = float(r.get('total_job_value') or 0)
+                if val <= 0:
+                    break
+                pct = round(100.0 * val / company_total_revenue, 1)
+                name = r.get('name') or r.get('email', '?')
+                top_2.append({
+                    'name': name,
+                    'pct_of_revenue': pct,
+                    'persona': r.get('persona_classification'),
+                    'total_job_value': val,
+                })
+
+            # Build unengaged contact list
+            unengaged = []
+            for r in all_rows:
+                if float(r.get('total_job_value') or 0) == 0:
+                    unengaged.append({
+                        'name': r.get('name') or r.get('email', '?'),
+                        'persona': r.get('persona_classification'),
+                        'engagement_score': r.get('engagement_score', 0),
+                    })
+
+            return {
+                'insight_type': insight_type,
+                'company_total_revenue': round(company_total_revenue, 2),
+                'total_contacts': total_contacts,
+                'revenue_producing_contacts': revenue_producing_contacts,
+                'top_buyer_name': top_buyer_name,
+                'top_buyer_persona': top_buyer_persona,
+                'top_revenue_contacts': top_2,
+                'unengaged_contacts': unengaged,
+            }
+
+        except Exception as e:
+            logger.warning(f"revenue_concentration failed for {company_id}: {e}")
+            return None
+
+    def get_portfolio_insights(self) -> list:
+        """
+        Portfolio-wide scan: all companies with concentration_risk or buyer_decay_risk.
+        Queries contact_persona view, aggregates in Python. No caching (on-demand).
+        """
+        try:
+            all_rows = []
+            offset = 0
+            while True:
+                batch = (
+                    self._supabase.table('contact_persona')
+                    .select(
+                        'company_id, company_name, contact_id, name, email, '
+                        'persona_classification, engagement_score, total_job_value, '
+                        'email_days_since_last, contact_type'
+                    )
+                    .eq('client_id', self._client_id)
+                    .neq('persona_classification', 'shared_mailbox')
+                    .eq('contact_type', 'person')
+                    .range(offset, offset + 999)
+                    .execute()
+                )
+                rows = batch.data or []
+                all_rows.extend(rows)
+                if len(rows) == 0:
+                    break
+                offset += len(rows)
+
+            if not all_rows:
+                return []
+
+            # Group by company
+            companies: dict = {}
+            for r in all_rows:
+                cid = r.get('company_id')
+                if not cid:
+                    continue
+                if cid not in companies:
+                    companies[cid] = {
+                        'company_id': cid,
+                        'company_name': r.get('company_name', ''),
+                        'contacts': [],
+                    }
+                companies[cid]['contacts'].append(r)
+
+            insights = []
+            for cid, company in companies.items():
+                contacts = company['contacts']
+                total_contacts = len(contacts)
+                company_total_revenue = sum(float(c.get('total_job_value') or 0) for c in contacts)
+
+                if company_total_revenue < CONCENTRATION_REVENUE_THRESHOLD:
+                    continue
+                if total_contacts <= 2:
+                    continue
+
+                revenue_producing = [
+                    c for c in contacts if float(c.get('total_job_value') or 0) > 0
+                ]
+                revenue_producing_contacts = len(revenue_producing)
+
+                if revenue_producing_contacts > CONCENTRATION_MAX_REVENUE_CONTACTS:
+                    continue
+
+                ranked = sorted(contacts, key=lambda c: -float(c.get('total_job_value') or 0))
+                top_buyer = ranked[0]
+                top_buyer_persona = top_buyer.get('persona_classification', 'unknown')
+                top_buyer_name = top_buyer.get('name') or top_buyer.get('email', 'unknown')
+
+                if top_buyer_persona == 'inactive_buyer':
+                    insight_type = 'buyer_decay_risk'
+                elif (revenue_producing_contacts <= 2
+                      and total_contacts > 4
+                      and company_total_revenue > CONCENTRATION_REVENUE_THRESHOLD):
+                    insight_type = 'concentration_risk'
+                else:
+                    continue
+
+                # Top 2 revenue contacts
+                top_2_parts = []
+                for c in ranked[:2]:
+                    val = float(c.get('total_job_value') or 0)
+                    if val <= 0:
+                        break
+                    pct = round(100.0 * val / company_total_revenue, 1)
+                    name = c.get('name') or c.get('email', '?')
+                    top_2_parts.append(f"{name} ({pct}%, {c.get('persona_classification')})")
+
+                # Unengaged contacts
+                unengaged_parts = []
+                for c in contacts:
+                    if float(c.get('total_job_value') or 0) == 0:
+                        name = c.get('name') or c.get('email', '?')
+                        unengaged_parts.append(
+                            f"{name} ({c.get('persona_classification')}, "
+                            f"score {c.get('engagement_score', 0)})"
+                        )
+
+                insights.append({
+                    'company_id': cid,
+                    'company_name': company['company_name'],
+                    'insight_type': insight_type,
+                    'company_total_revenue': round(company_total_revenue, 2),
+                    'total_contacts': total_contacts,
+                    'revenue_producing_contacts': revenue_producing_contacts,
+                    'top_buyer_name': top_buyer_name,
+                    'top_buyer_persona': top_buyer_persona,
+                    'top_2_contacts': ', '.join(top_2_parts),
+                    'unengaged_contacts': ', '.join(unengaged_parts[:10]),
+                })
+
+            insights.sort(key=lambda x: -x['company_total_revenue'])
+            logger.info(
+                f"Portfolio insights: {len(insights)} companies with "
+                f"concentration/decay risk out of {len(companies)} total"
+            )
+            return insights
+
+        except Exception as e:
+            logger.error(f"Portfolio insights failed for {self._client_id}: {e}")
             return []
 
     # ------------------------------------------------------------------
