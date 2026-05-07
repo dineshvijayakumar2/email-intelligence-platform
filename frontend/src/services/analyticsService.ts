@@ -303,7 +303,7 @@ export const companiesApi = {
   },
 
   /** GET /customers/{companyId}/recommendations */
-  async getRecommendations(companyId: string, force = false): Promise<{ cross_contact_recs: any[]; related_product_recs: any[]; product_profile: any; computed_at?: string }> {
+  async getRecommendations(companyId: string, force = false): Promise<{ cross_contact_recs: any[]; related_product_recs: any[]; product_profile: any; revenue_insight?: any; computed_at?: string }> {
     try {
       return await api.get<any>(
         `/customers/${companyId}/recommendations${force ? '?force=true' : ''}`,
@@ -311,6 +311,18 @@ export const companiesApi = {
       );
     } catch {
       return { cross_contact_recs: [], related_product_recs: [], product_profile: {} };
+    }
+  },
+
+  /** GET /customers/portfolio-insights?client_id=... */
+  async getPortfolioInsights(clientId: string): Promise<{ client_id: string; insights: any[]; total: number; by_type: Record<string, number> }> {
+    try {
+      return await api.get<any>(
+        `/customers/portfolio-insights?client_id=${clientId}`,
+        { timeout: 30000 }
+      );
+    } catch {
+      return { client_id: clientId, insights: [], total: 0, by_type: {} };
     }
   },
 

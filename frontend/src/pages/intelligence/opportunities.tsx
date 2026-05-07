@@ -4,13 +4,14 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Zap, DollarSign, Trophy, Users, RefreshCw, X } from 'lucide-react';
+import { Zap, DollarSign, Trophy, Users, RefreshCw, X, AlertTriangle } from 'lucide-react';
 import { Spinner } from '@/lib/icons';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { PageShell, PageHeader } from '@/components/ui/page-shell';
 import { ContentSkeleton } from '@/components/ui/empty-state';
 import dayjs from 'dayjs';
 import { bucketApi, entityApi, intelligenceApi } from '../../services/aiService';
+import { companiesApi } from '../../services/analyticsService';
 import { emailService } from '../../services/emailService';
 import { MailboxSelector } from '../../components/MailboxSelector';
 import { formatDate } from '../../utils/dateUtils';
@@ -40,6 +41,10 @@ const OpportunitiesPage: React.FC = () => {
   const [opportunities, setOpportunities] = useState<IntelligenceResult[]>([]);
   const [competitors, setCompetitors] = useState<BusinessEntity[]>([]);
   const [entities, setEntities] = useState<BusinessEntity[]>([]);
+
+  const [portfolioInsights, setPortfolioInsights] = useState<any[]>([]);
+  const [portfolioByType, setPortfolioByType] = useState<Record<string, number>>({});
+  const [portfolioLoading, setPortfolioLoading] = useState(false);
 
   const [previewEmail, setPreviewEmail] = useState<Email | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -83,7 +88,24 @@ const OpportunitiesPage: React.FC = () => {
     }
   }, [mailboxId, clientId, dateRange]);
 
+  const loadPortfolioInsights = useCallback(async (cid: string) => {
+    if (!cid) return;
+    setPortfolioLoading(true);
+    try {
+      const data = await companiesApi.getPortfolioInsights(cid);
+      if (isMountedRef.current) {
+        setPortfolioInsights(data.insights || []);
+        setPortfolioByType(data.by_type || {});
+      }
+    } catch (err) {
+      console.error('Failed to load portfolio insights:', err);
+    } finally {
+      if (isMountedRef.current) setPortfolioLoading(false);
+    }
+  }, []);
+
   useEffect(() => { if (mailboxId) loadData(); }, [mailboxId, loadData]);
+  useEffect(() => { if (clientId) loadPortfolioInsights(clientId); }, [clientId, loadPortfolioInsights]);
 
   const handleMailboxChange = (ids: string[]) => { setMailboxIds(ids); setClientId(''); };
 
@@ -98,6 +120,7 @@ const OpportunitiesPage: React.FC = () => {
   const TABS = [
     { key: 'actions', label: 'Action Items', count: actionItems.length, icon: <Zap className="h-3.5 w-3.5" /> },
     { key: 'opportunities', label: 'Opportunities', count: opportunities.length, icon: <DollarSign className="h-3.5 w-3.5" /> },
+    { key: 'revenue-risk', label: 'Revenue Risk', count: portfolioInsights.length, icon: <AlertTriangle className="h-3.5 w-3.5" /> },
     { key: 'competitors', label: 'Competitors', count: competitors.length, icon: <Trophy className="h-3.5 w-3.5" /> },
     { key: 'entities', label: 'Entities', count: entities.length, icon: <Users className="h-3.5 w-3.5" /> },
   ];
@@ -225,6 +248,79 @@ const OpportunitiesPage: React.FC = () => {
                 </tbody>
               </table>
             </div>
+          )}
+
+          {/* Revenue Risk */}
+          {activeTab === 'revenue-risk' && (
+            portfolioLoading ? <ContentSkeleton rows={8} /> : (
+              <>
+                {/* Summary cards */}
+                {(portfolioByType.concentration_risk || portfolioByType.buyer_decay_risk) ? (
+                  <div className="grid grid-cols-2 gap-3 mb-4">
+                    <div className="rounded-lg border bg-white shadow-sm p-4">
+                      <div className="text-xs font-medium uppercase tracking-wider text-slate-500 mb-1">Concentration Risk</div>
+                      <div className="text-2xl font-bold text-amber-600">{portfolioByType.concentration_risk || 0}</div>
+                      <div className="text-xs text-slate-400 mt-1">Revenue depends on 1-2 contacts</div>
+                    </div>
+                    <div className="rounded-lg border bg-white shadow-sm p-4">
+                      <div className="text-xs font-medium uppercase tracking-wider text-slate-500 mb-1">Buyer Decay Risk</div>
+                      <div className="text-2xl font-bold text-red-600">{portfolioByType.buyer_decay_risk || 0}</div>
+                      <div className="text-xs text-slate-400 mt-1">Top buyer is now inactive</div>
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="rounded-lg border bg-white shadow-sm overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-slate-50/50">
+                        <th className="px-3 py-2 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Company</th>
+                        <th className="px-3 py-2 text-right text-xs font-bold uppercase tracking-wider text-slate-600 w-28">Revenue</th>
+                        <th className="px-3 py-2 text-left text-xs font-bold uppercase tracking-wider text-slate-600 w-28">Risk Type</th>
+                        <th className="px-3 py-2 text-center text-xs font-bold uppercase tracking-wider text-slate-600 w-20">Contacts</th>
+                        <th className="px-3 py-2 text-center text-xs font-bold uppercase tracking-wider text-slate-600 w-24">Revenue Contacts</th>
+                        <th className="px-3 py-2 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Top Buyer</th>
+                        <th className="px-3 py-2 text-left text-xs font-bold uppercase tracking-wider text-slate-600">Top Revenue Contacts</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {portfolioInsights.map((r, i) => (
+                        <tr key={r.company_id || i} className="hover:bg-slate-50/50">
+                          <td className="px-3 py-2 font-medium text-slate-900">{r.company_name}</td>
+                          <td className="px-3 py-2 text-right tabular-nums font-medium">
+                            ${(r.company_total_revenue || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                          </td>
+                          <td className="px-3 py-2">
+                            <StatusBadge
+                              variant={r.insight_type === 'buyer_decay_risk' ? 'danger' : 'warning'}
+                              size="sm"
+                            >
+                              {r.insight_type === 'buyer_decay_risk' ? 'Buyer Decay' : 'Concentration'}
+                            </StatusBadge>
+                          </td>
+                          <td className="px-3 py-2 text-center tabular-nums">{r.total_contacts}</td>
+                          <td className="px-3 py-2 text-center tabular-nums">{r.revenue_producing_contacts}</td>
+                          <td className="px-3 py-2">
+                            <span className="text-sm">{r.top_buyer_name}</span>
+                            {r.top_buyer_persona && (
+                              <span className="text-xs text-slate-400 ml-1">({r.top_buyer_persona.replace(/_/g, ' ')})</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-xs text-slate-500 truncate max-w-[250px]">{r.top_2_contacts || '—'}</td>
+                        </tr>
+                      ))}
+                      {portfolioInsights.length === 0 && (
+                        <tr>
+                          <td colSpan={7} className="text-center py-8 text-sm text-slate-400">
+                            {clientId ? 'No revenue concentration risks detected' : 'Select a mailbox to scan for revenue risks'}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )
           )}
 
           {/* Competitors */}
