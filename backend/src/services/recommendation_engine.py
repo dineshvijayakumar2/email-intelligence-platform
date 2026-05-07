@@ -184,28 +184,49 @@ class RecommendationEngine:
     def _compute_cross_contact(self, company_id: str) -> list:
         """
         Find operations that the company uses but specific contacts haven't
-        been involved with. Requires ≥ 2 contacts to be meaningful.
+        been involved with. Requires ≥ 2 person contacts to be meaningful.
         """
         try:
-            # All contacts for this company
             contacts_result = (
                 self._supabase.table('customer_contacts')
-                .select('id, email_address, full_name')
+                .select('id, email_address, full_name, contact_type')
                 .eq('customer_company_id', company_id)
                 .eq('client_id', self._client_id)
                 .execute()
             )
-            contacts = contacts_result.data or []
+            all_contacts = contacts_result.data or []
+
+            # Fix 1: Only person contacts — exclude shared mailboxes, automated, mailing lists
+            contacts = [
+                c for c in all_contacts
+                if c.get('contact_type') in ('person', 'unknown', None)
+            ]
             if len(contacts) < MIN_CONTACTS_FOR_GAPS:
                 return []
 
-            contact_by_email = {
-                c['email_address'].strip().lower(): c
-                for c in contacts
-                if c.get('email_address')
-            }
+            # Fix 2: Deduplicate contacts with same email at same company (keep first by id)
+            seen_emails: set = set()
+            contact_by_email: dict = {}
+            for c in contacts:
+                email = (c.get('email_address') or '').strip().lower()
+                if not email or email in seen_emails:
+                    continue
+                seen_emails.add(email)
+                contact_by_email[email] = c
 
-            # All operations for this company
+            # Fetch company's email domains for Fix 3 (domain mismatch flagging)
+            company_result = (
+                self._supabase.table('customer_companies')
+                .select('email_domains')
+                .eq('id', company_id)
+                .limit(1)
+                .execute()
+            )
+            company_domains: set = set()
+            if company_result.data:
+                domains_raw = company_result.data[0].get('email_domains') or []
+                company_domains = {d.lower() for d in domains_raw if d}
+
             ops_result = (
                 self._supabase.table('qb_operations')
                 .select('job_no, operation_name, department')
@@ -217,7 +238,6 @@ class RecommendationEngine:
             if not operations:
                 return []
 
-            # Resolve contact per operation via job_no → qb_quotes.contact_email
             job_nos = list({op['job_no'] for op in operations if op.get('job_no')})
             if not job_nos:
                 return []
@@ -236,7 +256,6 @@ class RecommendationEngine:
                     if q.get('job_no') and q.get('contact_email'):
                         job_to_email[q['job_no']] = q['contact_email'].strip().lower()
 
-            # Build {contact_id: set(operation_names)}
             contact_op_map: dict = {}
             op_dept_map: dict = {}
 
@@ -259,31 +278,44 @@ class RecommendationEngine:
             if not contact_op_map:
                 return []
 
-            # Company-wide operations set
             all_ops = set()
             for v in contact_op_map.values():
                 all_ops |= v['ops']
 
-            # Gap per contact
             recs = []
             for cid, v in contact_op_map.items():
                 gaps = all_ops - v['ops']
                 if not gaps:
                     continue
-                contact_name = v['contact'].get('full_name') or v['contact'].get('email_address', '')
+                contact = v['contact']
+                contact_name = contact.get('full_name') or contact.get('email_address', '')
                 missing = sorted(gaps)
                 depts = sorted({op_dept_map.get(g) for g in missing if op_dept_map.get(g)})
-                recs.append({
+
+                # Fix 3: Flag domain mismatch
+                contact_email = (contact.get('email_address') or '').lower()
+                domain_mismatch = False
+                if company_domains and '@' in contact_email:
+                    contact_domain = contact_email.split('@')[1]
+                    domain_mismatch = contact_domain not in company_domains
+
+                rec = {
                     'type': 'cross_contact',
                     'contact_id': cid,
                     'contact_name': contact_name,
+                    'contact_email': contact_email,
                     'missing_operations': missing,
                     'departments': depts,
                     'reason': (
                         f"{len(missing)} operation(s) used by other contacts at this company "
                         f"that {contact_name} hasn't been involved with"
                     ),
-                })
+                }
+                if domain_mismatch:
+                    rec['domain_mismatch'] = True
+                    rec['contact_domain'] = contact_email.split('@')[1]
+
+                recs.append(rec)
 
             return recs
 
