@@ -146,13 +146,38 @@
 
 ## Insight engine — Week 2 core
 
-### Cross-Company Gaps
+### Cross-Company Gaps — ✅ DONE
 
-- [~] Revive `cross_gap_intelligence.py` — investigation started May 5. Existing infrastructure (contact_persona view, customer profile page, strike rate by contact) covers much of the analytical foundation
-- [ ] Fix data joins (specific fixes TBD from code review)
-- [ ] Verify output on 5 known Carbon8 companies
-- [ ] Natural-language summary via digest prompt templates
-- [ ] Time-box the revival: if join fixes exceed 6h, explicit rewrite-vs-patch decision
+- [x] Integrated into `RecommendationEngine` (not revived as standalone `cross_gap_intelligence.py`). Revenue concentration + buyer decay risk analysis via `contact_persona` view
+- [x] Data quality fixes: excluded shared/automated/mailing_list contacts, deduped by email, flagged domain mismatches (`08f71d3`)
+- [x] Lifted from 48 raw operations to ~7 `qb_capability_tag` categories — `already_buys` + `untapped_capabilities` per contact (`f17b530`)
+- [x] Revenue concentration risk: companies with >$100K revenue but ≤2 contacts producing orders. Buyer decay risk: top buyer persona = inactive_buyer
+- [x] Portfolio-wide scan via `GET /customers/portfolio-insights` endpoint
+- [x] Revenue insight + capability gaps surfaced on company profile (Sales Opportunities card)
+- [x] Company profile reorganized: action-first layout, semantic widget pairs (Performance, Capabilities, Deep Dive) (`71858a1`)
+- [x] AI Insights composite strategic summary: LLM now receives strike rate, seasonality, revenue risk, capability gaps as context → produces `strategic_summary` narrative (`24d90b2`)
+- [x] Revenue framing fix: prompt + context labels clarified that figures = what we invoice TO the customer (`f0522d1`)
+- [x] Migration 103: updated `insight_company` prompt in `ai_prompt_config` (global + Newbound + Carbon8 rows)
+
+### Security — RLS Enforcement (added May 5) — ✅ DONE
+
+- [x] Migration 102: `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` on all 49 public tables (`6305727`, `b1641d4`)
+- [x] Critical exposure closed: `system_settings` (API keys), `clients` (QB tokens), `qb_sync_config`, `user_integrations` (OAuth tokens) — all were readable via anon key
+- [x] Verified: anon key returns 0 rows on all tested tables; service_role key retains full access
+- [x] Views/matviews show UNRESTRICTED badge in Supabase dashboard (Postgres limitation) — inherit protection from RLS-enabled base tables
+- [x] `DATABASE_DESIGN.md` §8 rewritten with full RLS status, views table, migration 102 (`20ca1ef`)
+- [x] `BEST_PRACTICES.md` §9 added: RLS on every new table, SECURITY DEFINER search_path, secret exposure prevention
+
+### Pipeline reliability fixes (May 5–6) — ✅ DONE
+
+- [x] Classification health RPC 089 v2: overcounting fix — scoped by `mailbox_id` instead of `client_id` (hello@ showed 210.7%) (`1447c3e`)
+- [x] `link_ai_refs` batch dedup: same QB number in multiple emails → "ON CONFLICT cannot affect row a second time" → added `seen_keys` set (`1447c3e`)
+- [x] Extraction orchestrator: incremental mode with zero new emails raised ValueError → now completes gracefully with `skipped=True` (`c66c708`)
+
+### Contact table enrichment (May 5) — ✅ DONE
+
+- [x] Contacts list + company profile: added Strike %, Job Value columns (`8a1ad57`)
+- [x] Backend: extended persona batch lookup to include `strike_rate`, `accepted_quote_count`, `total_job_value` from `contact_persona` view
 
 ### Insights Review page shell
 
@@ -288,8 +313,10 @@ Items moved from `BUCKET_LIST_APR16_APR22.md` — not yet scheduled into a speci
 - ~~**hello@ client_id backfill**~~: **RESOLVED** — 134K emails backfilled (May 1), all mailboxes at 0 NULL
 - ~~**AI Link References per-mailbox view**~~: **RESOLVED** — RPC 099 v2 adds per-mailbox link stats. ehab@ 36.6%, Linda 38.8%, hello@ 27.2%
 - **AI ref extraction quality**: Prompt tightened May 5. 20.4% of refs are "real gaps" (valid QB numbers not in synced data — ~32K quotes not synced). Improvement requires QB sync scope expansion or acceptance
-- Cross-Gap revival may expand if join fixes reveal deeper schema issues
-- Week 3 is doing 3 features + starting stabilization in 30h — tight
+- ~~**Cross-Gap revival**~~: **RESOLVED** — Integrated into RecommendationEngine at capability level. Revenue concentration + buyer decay risk analysis added. AI Insights now produces composite strategic summary
+- ~~**RLS security exposure**~~: **RESOLVED** — Migration 102 enables RLS on all 49 public tables. Anon key returns 0 rows everywhere
+- ~~**Classification health overcounting**~~: **RESOLVED** — RPC 089 v2 scoped by mailbox_id, link_ai_refs dedup, extraction zero-email graceful skip
+- Week 3 is doing 3 features + starting stabilization in 30h — tight (Cross-Gap now done, frees ~10h)
 - Week 4 is 2 days of handoff only, not a full stabilization week
 - Invite User realistic estimate (8-9d) larger than Week 3 allocation can absorb
-- Carryover items (W7, C1, C2) are substantial features — need explicit prioritisation decision before Week 2 starts
+- Carryover items (W7, C1, C2) are substantial features — need explicit prioritisation decision

@@ -428,15 +428,25 @@ Email Processing Pipeline, QB Sync, AI Analysis (for some enrichment).
 
 Active in production. Company list, company detail, contact list, and contact detail pages are all functional. Seasonality engine, capability rhythm, and recommendations are built and deployed.
 
+**Sales Opportunities** (promoted to top of company profile, May 2026):
+
+- **Cross-contact capability gaps (Level 1):** For each contact, shows which `qb_capability_tag` categories the company uses that this contact hasn't been on a quote for. Output: `already_buys` (e.g. Flat Sheets, Wide Format) + `untapped_capabilities` (e.g. Hard Cover Books, Specialty Finishing). Aggregated from raw `qb_operations` → `qb_capability_tag`, not the 48+ individual operation names. Excludes shared mailboxes, automated contacts, mailing lists. Flags domain mismatches (contact email domain ≠ company's known domains).
+- **Revenue concentration risk:** Triggered when company revenue > $100K but ≤2 contacts are producing orders (out of 3+ total). Queries `contact_persona` view. Shows top revenue contacts with % attribution and unengaged contacts.
+- **Buyer decay risk:** Triggered when the top revenue contact's persona is `inactive_buyer`. Same data source as concentration risk but escalated severity.
+- **Portfolio-wide scan:** `GET /customers/portfolio-insights` scans all companies for a client, returns list sorted by revenue desc.
+
+**Company profile layout** (reorganized May 2026): action-first flow with semantic widget pairs — Business Data → Sales Opportunities → Key Contacts → Performance (strike rate + seasonality) → Capabilities (rhythm + contact capabilities) → Deep Dive (product profile + AI insights) → Order History.
+
 #### Known limitations
 
 - Recommendation engine (Level 1 cross-contact gaps, Level 2 market basket analysis) runs on-demand, not pre-computed. First load of a company with many orders may be slow
 - Seasonality analysis requires at least 2 years of QB data to produce multi-year patterns. New clients will see limited data
 - Engagement score refresh is per-company. No bulk refresh for all companies at once
+- Revenue concentration thresholds are hardcoded ($100K, ≤2 contacts, 3+ total). May need tuning per client
 
 #### Verified by
 
-Customer pages exist in frontend. Company detail has 6 sections (overview, contacts, order history, product profile, recommendations, communication). Dashboard shows "9 companies" (recently fixed to show actual count from `customer_companies` table).
+Customer pages exist in frontend. Company detail has sections for overview, contacts, sales opportunities, order history, product profile, recommendations, seasonality, and AI insights. Dashboard shows company count from `customer_companies` table.
 
 ---
 
@@ -762,6 +772,66 @@ Built and deployed, partially active. Events are emitted whenever worker jobs ru
 
 ---
 
+### 2.14 AI Insights Engine (Per-Entity Analysis)
+
+#### What it does
+
+On-demand AI analysis for companies, contacts, and threads. When the user clicks "Summarize this page" on a company profile, the engine gathers context from multiple data sources, sends it to an LLM, and returns a structured insight with a `strategic_summary` narrative plus detailed observations and actions.
+
+#### What triggers it
+
+User clicks "Summarize this page" button on company/contact/thread detail pages. No auto-trigger (cost control). Cached 24h — subsequent requests return the cached result unless `force=true`.
+
+- `GET /v1/ai/insights/company/{company_id}?force=false&client_id=...`
+- `GET /v1/ai/insights/contact/{contact_id}?force=false&client_id=...`
+- `GET /v1/ai/insights/thread/{thread_id}?force=false`
+
+#### What data it reads (company insights)
+
+The context sent to the LLM is assembled from 5 sources:
+
+1. **Company profile:** `customer_companies` (name, type, tier, engagement score, email counts, QB financials). Revenue figures are labeled as "invoiced to customer" (not the customer's own revenue).
+2. **Active threads:** top 5 from `thread_status` by recency (subject, status, message count).
+3. **AI signals:** last 20 classified emails via `emails` → `ai_email_intelligence` (bucket distribution).
+4. **Strike rate:** from `CustomerAnalyticsService` — overall conversion %, per-contact breakdown, year-over-year trend.
+5. **Seasonality:** from `CustomerAnalyticsService` — peak/trough months, approaching outreach windows, YTD comparison with prior year.
+6. **Sales opportunities:** from `RecommendationEngine` — revenue concentration/buyer decay risk (top contacts, % attribution), capability gaps per contact (already_buys + untapped at `qb_capability_tag` level), related product affinities.
+
+All data sources are fault-tolerant — if any fails, it's skipped with a debug log and the remaining context is sent.
+
+#### What data it produces
+
+Returns structured JSON:
+- `strategic_summary` — 3-4 sentence narrative synthesizing the most important trends across all data sources. Framed from the account manager's perspective (revenue = what we bill this customer).
+- `health_summary` — 2-3 sentence relationship assessment
+- `revenue_risk` — low/medium/high/unknown
+- `engagement_trend` — improving/stable/declining/unknown
+- `key_observations[]` — bullet points
+- `recommended_actions[]` — actionable next steps
+
+Cached in `relationship_context_cache.ai_signals_summary._ai_insight` (24h TTL for companies).
+
+#### What it depends on
+
+AI Analysis (signals), QB Sync (financial data), Customer Analytics Service (strike rate, seasonality), Recommendation Engine (revenue risk, capability gaps), Contact Persona views (buyer classification).
+
+#### Current status
+
+Active in production. Company, contact, and thread insights all functional. Prompt customizable per client via `ai_prompt_config` table (key: `insight_company`). Uses `entity_insights` task model (typically Claude Haiku or Gemini Flash). Migration 103 updated prompt to request `strategic_summary` and clarify revenue framing.
+
+#### Known limitations
+
+- Context gathering makes 6-10 Supabase queries per company insight — adds ~2-3s latency on top of LLM call
+- Contact and thread insights don't use the enriched context (no strike rate/seasonality for contacts yet)
+- Cache is per-company only — contact and thread insights have a simpler cache path
+- `strategic_summary` quality depends on data availability: companies without QB data or seasonality history produce thinner summaries
+
+#### Verified by
+
+Backend: `backend/src/services/ai_insights_engine.py`. Frontend: `frontend/src/components/AIInsightsCard.tsx`. Types: `frontend/src/types/strategic-digest.ts` (`AIInsight` interface). Endpoint: `backend/src/routers/ai.py` (lines 1452-1470). Prompt config: `ai_prompt_config` rows for `insight_company` (global + per-client). Migration 103: prompt text update.
+
+---
+
 ### 2.N Contact Intelligence (Persona Views)
 
 #### What it does
@@ -924,7 +994,7 @@ Users log in via Supabase Auth (email/password, Google OAuth, Microsoft OAuth). 
 - **Client Manager:** access to mailboxes of assigned clients, can manage users
 - **Account Manager:** access to their own assigned mailboxes only
 
-Row-Level Security (RLS) policies exist on Supabase but the backend uses the service key (which bypasses RLS), so authorization is enforced application-side via the `require_role` and `get_accessible_mailbox_ids` dependencies. The frontend hides/shows pages and nav items based on role.
+Row-Level Security (RLS) is enabled on all 49 public tables (migration 102, May 2026). The backend uses the service_role key (which bypasses RLS), so authorization is enforced application-side via the `require_role` and `get_accessible_mailbox_ids` dependencies. The frontend uses Supabase exclusively for auth (zero direct table access) — all data queries route through the backend API. The anon key returns 0 rows on all tables. Views and materialized views show UNRESTRICTED in the Supabase dashboard (Postgres limitation) but inherit protection from their RLS-enabled base tables. The frontend hides/shows pages and nav items based on role.
 
 ### Background job execution
 

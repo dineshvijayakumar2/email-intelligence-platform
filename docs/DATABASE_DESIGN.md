@@ -1332,6 +1332,7 @@ These show an "UNRESTRICTED" badge because Postgres cannot apply RLS to views/ma
 | 100 | Contact Date Backfill | Updated `update_contact_email_counts_from_junction` RPC to also compute and set `first_contacted_at`/`last_contacted_at` from email dates |
 | 101 | Persona Classification v2 | DROP+CREATE `contact_persona`, `company_contact_summary`, `industry_benchmarks` views. Champion rule: `accepted_quote_count >= 10 OR total_job_value >= 50000`. Added `contact_type` column. Non-person contacts → `shared_mailbox`. Split `active_relationship` → `active_buyer` + `warm_lead`. Person-only filtering on rollup views |
 | 102 | RLS on All Tables | `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` on all 49 public tables. Resolves Supabase critical security alert. Views/matviews excluded (Postgres limitation — inherit protection from base tables) |
+| 103 | AI Insights Prompt Update | Updated `insight_company` prompt in `ai_prompt_config` (all 3 rows: global + Newbound + Carbon8) to request `strategic_summary` field and clarify revenue framing as invoiced-to-customer |
 
 **Migration application method:** `scripts/db/_run_NNN_via_rest.py` → `exec_sql` RPC + `NOTIFY pgrst, 'reload schema'`; scripts are throwaway and deleted after verification.
 
