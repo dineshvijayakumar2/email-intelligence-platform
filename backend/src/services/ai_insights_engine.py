@@ -27,12 +27,12 @@ logger = logging.getLogger(__name__)
 CACHE_TTL_HOURS = 24
 
 # System prompts per entity type
-COMPANY_INSIGHT_PROMPT = """You are a business intelligence analyst at a print & packaging company. Analyze this company's relationship health using email patterns, financial data, seasonality, strike rate, and sales opportunities.
+COMPANY_INSIGHT_PROMPT = """You are a business intelligence analyst at a print & packaging company. You are analyzing a CUSTOMER account — all revenue and order figures represent what YOUR company invoices TO this customer, not the customer's own revenue. Analyze this customer's account health using email patterns, invoicing data, seasonality, strike rate, and sales opportunities.
 
 Return JSON with:
 {
-  "strategic_summary": "3-4 sentence natural-language narrative synthesising the most important trends — weave together seasonality timing, revenue risk, strike rate, and contact engagement into an actionable paragraph for the account manager. Lead with what matters most RIGHT NOW. Use concrete numbers (dollars, percentages, month names).",
-  "health_summary": "2-3 sentence assessment of this relationship",
+  "strategic_summary": "3-4 sentence natural-language narrative synthesising the most important trends — weave together seasonality timing, revenue risk, strike rate, and contact engagement into an actionable paragraph for the account manager. Lead with what matters most RIGHT NOW. Use concrete numbers (dollars, percentages, month names). Remember: revenue = what we bill this customer.",
+  "health_summary": "2-3 sentence assessment of this customer relationship",
   "revenue_risk": "low" | "medium" | "high" | "unknown",
   "key_observations": ["observation 1", "observation 2", "observation 3"],
   "recommended_actions": ["action 1", "action 2"],
@@ -41,6 +41,7 @@ Return JSON with:
 
 Rules:
 - strategic_summary is the most important field — it should read like a brief from an analyst to a sales director.
+- All revenue/order figures are OUR revenue from this customer, not the customer's own financials. Frame accordingly (e.g. "we invoiced $X to this customer" not "this customer's revenue is $X").
 - Be factual. Base analysis ONLY on the data provided. Never invent data.
 - If a data section (seasonality, strike rate, etc.) is missing from the context, skip it in your analysis — do not mention its absence."""
 
@@ -191,18 +192,18 @@ class AIInsightsEngine:
             # Load per-client currency code
             currency_code = get_client_currency_code(self._supabase, c.get("client_id"))
 
-            # Build context string
-            parts = [f"Company: {c['company_name']}"]
+            # Build context string — revenue = what we invoice TO this customer
+            parts = [f"Customer: {c['company_name']}"]
             if c.get("qb_customer_type"):
                 parts.append(f"Customer Type: {c['qb_customer_type']}")
             if c.get("qb_tier"):
                 parts.append(f"Tier: {c['qb_tier']}")
             if c.get("qb_total_revenue"):
-                parts.append(f"Total Revenue: {format_currency(c['qb_total_revenue'], currency_code, include_code=True)}")
+                parts.append(f"Total Invoiced to Customer (all-time): {format_currency(c['qb_total_revenue'], currency_code, include_code=True)}")
                 if c.get("qb_invoiced_ty") is not None and c.get("qb_invoiced_ly") is not None:
-                    parts.append(f"This Year: {format_currency(c['qb_invoiced_ty'], currency_code, include_code=True)} | Last Year: {format_currency(c['qb_invoiced_ly'], currency_code, include_code=True)}")
+                    parts.append(f"Invoiced This Year: {format_currency(c['qb_invoiced_ty'], currency_code, include_code=True)} | Invoiced Last Year: {format_currency(c['qb_invoiced_ly'], currency_code, include_code=True)}")
             if c.get("qb_days_since_last_invoice") is not None:
-                parts.append(f"Days Since Last Order: {c['qb_days_since_last_invoice']}")
+                parts.append(f"Days Since Last Invoice: {c['qb_days_since_last_invoice']}")
             parts.append(f"Engagement Score: {c.get('engagement_score', 'N/A')}/100")
             parts.append(f"Total Emails: {c.get('total_emails', 0)} (in: {c.get('total_inbound', 0)}, out: {c.get('total_outbound', 0)})")
             parts.append(f"Contacts: {c.get('contact_count', 0)} | Decision Makers: {c.get('decision_maker_count', 0)}")
@@ -309,13 +310,13 @@ class AIInsightsEngine:
             if ri:
                 itype = ri.get('insight_type', '')
                 parts.append(f"\nREVENUE RISK ({itype.replace('_', ' ').title()}):")
-                parts.append(f"  Total revenue: {format_currency(ri.get('company_total_revenue', 0), currency_code)}")
-                parts.append(f"  Revenue-producing contacts: {ri.get('revenue_producing_contacts', 0)} of {ri.get('total_contacts', 0)}")
+                parts.append(f"  Total invoiced to this customer: {format_currency(ri.get('company_total_revenue', 0), currency_code)}")
+                parts.append(f"  Contacts generating orders: {ri.get('revenue_producing_contacts', 0)} of {ri.get('total_contacts', 0)}")
                 top_buyer = ri.get('top_buyer_name', '?')
                 top_persona = ri.get('top_buyer_persona', '?').replace('_', ' ')
-                parts.append(f"  Top buyer: {top_buyer} (persona: {top_persona})")
+                parts.append(f"  Top ordering contact: {top_buyer} (persona: {top_persona})")
                 for tc in ri.get('top_revenue_contacts', []):
-                    parts.append(f"    {tc['name']}: {tc.get('pct_of_revenue', 0)}% of revenue ({format_currency(tc.get('total_job_value', 0), currency_code)})")
+                    parts.append(f"    {tc['name']}: {tc.get('pct_of_revenue', 0)}% of our billings ({format_currency(tc.get('total_job_value', 0), currency_code)})")
 
             gaps = recs.get('cross_contact_recs', [])
             if gaps:
