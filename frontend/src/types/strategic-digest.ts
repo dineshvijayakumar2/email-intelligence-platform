@@ -163,6 +163,7 @@ export interface StrategicDigestHistory {
 }
 
 export interface AIInsight {
+  strategic_summary?: string;
   health_summary?: string;
   engagement_summary?: string;
   thread_summary?: string;

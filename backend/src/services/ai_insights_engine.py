@@ -27,10 +27,11 @@ logger = logging.getLogger(__name__)
 CACHE_TTL_HOURS = 24
 
 # System prompts per entity type
-COMPANY_INSIGHT_PROMPT = """You are a business intelligence analyst. Analyze this company's relationship health based on email communication patterns and business data.
+COMPANY_INSIGHT_PROMPT = """You are a business intelligence analyst at a print & packaging company. Analyze this company's relationship health using email patterns, financial data, seasonality, strike rate, and sales opportunities.
 
 Return JSON with:
 {
+  "strategic_summary": "3-4 sentence natural-language narrative synthesising the most important trends — weave together seasonality timing, revenue risk, strike rate, and contact engagement into an actionable paragraph for the account manager. Lead with what matters most RIGHT NOW. Use concrete numbers (dollars, percentages, month names).",
   "health_summary": "2-3 sentence assessment of this relationship",
   "revenue_risk": "low" | "medium" | "high" | "unknown",
   "key_observations": ["observation 1", "observation 2", "observation 3"],
@@ -38,7 +39,10 @@ Return JSON with:
   "engagement_trend": "improving" | "stable" | "declining" | "unknown"
 }
 
-Be factual. Base analysis on the data provided. Never invent data."""
+Rules:
+- strategic_summary is the most important field — it should read like a brief from an analyst to a sales director.
+- Be factual. Base analysis ONLY on the data provided. Never invent data.
+- If a data section (seasonality, strike rate, etc.) is missing from the context, skip it in your analysis — do not mention its absence."""
 
 CONTACT_INSIGHT_PROMPT = """You are a business intelligence analyst. Analyze this contact's engagement and importance based on email patterns and business data.
 
@@ -144,7 +148,7 @@ class AIInsightsEngine:
         return None
 
     def _gather_company_context(self, company_id: str) -> Optional[str]:
-        """Gather all context for a company insight."""
+        """Gather all context for a company insight — enriched with sales intelligence."""
         try:
             # Company profile
             company = self._supabase.table("customer_companies").select(
@@ -158,6 +162,7 @@ class AIInsightsEngine:
                 return None
 
             c = company.data
+            client_id = c.get("client_id") or self._client_id
 
             # Active threads
             threads = self._supabase.table("thread_status").select(
@@ -216,11 +221,118 @@ class AIInsightsEngine:
                 if bucket_counts:
                     parts.append(f"\nAI Signals (last 20 emails): {bucket_counts}")
 
+            # --- Sales Intelligence Context ---
+            if client_id:
+                self._append_strike_rate_context(parts, company_id, client_id)
+                self._append_seasonality_context(parts, company_id, client_id, currency_code)
+                self._append_sales_opportunities_context(parts, company_id, client_id, currency_code)
+
             return "\n".join(parts)
 
         except Exception as e:
             logger.error(f"Failed to gather company context: {e}")
             return None
+
+    def _append_strike_rate_context(self, parts: list, company_id: str, client_id: str) -> None:
+        """Append strike rate summary to context parts."""
+        try:
+            from .customer_analytics_service import CustomerAnalyticsService
+            svc = CustomerAnalyticsService(self._supabase, client_id)
+            sr = svc.get_strike_rate(company_id)
+            if not sr:
+                return
+            total = sr.get('company_total', {})
+            if total.get('total_quotes', 0) == 0:
+                return
+            parts.append(f"\nSTRIKE RATE:")
+            parts.append(f"  Overall: {total.get('strike_rate_pct', 0):.0f}% ({total.get('converted', 0)} of {total.get('total_quotes', 0)} quotes converted)")
+            by_contact = sr.get('by_contact', [])
+            if by_contact:
+                top = sorted(by_contact, key=lambda x: -x.get('total_quotes', 0))[:5]
+                for ct in top:
+                    parts.append(f"  {ct.get('contact_name', ct.get('contact_email', '?'))}: {ct.get('strike_rate_pct', 0):.0f}% ({ct.get('converted', 0)}/{ct.get('total_quotes', 0)})")
+            by_year = sr.get('by_year', [])
+            if by_year:
+                trend_parts = [f"{y['year']}: {y.get('strike_rate_pct', 0):.0f}%" for y in sorted(by_year, key=lambda x: x['year'])]
+                parts.append(f"  Trend: {' → '.join(trend_parts)}")
+        except Exception as e:
+            logger.debug(f"Strike rate context skipped for {company_id}: {e}")
+
+    def _append_seasonality_context(self, parts: list, company_id: str, client_id: str, currency_code: str) -> None:
+        """Append seasonality summary to context parts."""
+        try:
+            from .customer_analytics_service import CustomerAnalyticsService
+            svc = CustomerAnalyticsService(self._supabase, client_id)
+            season = svc.get_seasonality(company_id)
+            if not season or season.get('total_orders', 0) == 0:
+                return
+            parts.append(f"\nSEASONALITY:")
+            peak_months = season.get('peak_months', [])
+            trough_months = season.get('trough_months', [])
+            month_names = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+            if peak_months:
+                parts.append(f"  Peak months: {', '.join(month_names[m] for m in peak_months if 1 <= m <= 12)}")
+            if trough_months:
+                parts.append(f"  Quiet months: {', '.join(month_names[m] for m in trough_months if 1 <= m <= 12)}")
+            windows = season.get('outreach_windows', [])
+            approaching = [w for w in windows if w.get('is_approaching')]
+            if approaching:
+                w = approaching[0]
+                parts.append(
+                    f"  APPROACHING WINDOW: Contact in {w.get('approach_month_name', '?')} "
+                    f"for {w.get('peak_month_name', '?')} peak "
+                    f"(avg {format_currency(w.get('avg_peak_revenue', 0), currency_code)}, "
+                    f"{w.get('avg_peak_orders', 0):.0f} orders)"
+                )
+            ytd = season.get('ytd_comparison')
+            if ytd and ytd.get('months_compared', 0) > 0:
+                growth = ytd.get('growth_pct', 0)
+                direction = "up" if growth > 0 else "down" if growth < 0 else "flat"
+                parts.append(
+                    f"  YTD: {format_currency(ytd.get('current_ytd_revenue', 0), currency_code)} "
+                    f"vs {format_currency(ytd.get('prior_ytd_revenue', 0), currency_code)} last year "
+                    f"({direction} {abs(growth):.0f}%)"
+                )
+        except Exception as e:
+            logger.debug(f"Seasonality context skipped for {company_id}: {e}")
+
+    def _append_sales_opportunities_context(self, parts: list, company_id: str, client_id: str, currency_code: str) -> None:
+        """Append revenue risk + capability gaps to context parts."""
+        try:
+            from .recommendation_engine import RecommendationEngine
+            engine = RecommendationEngine(self._supabase, client_id)
+            recs = engine.get_recommendations(company_id, force=False)
+            if not recs:
+                return
+
+            ri = recs.get('revenue_insight')
+            if ri:
+                itype = ri.get('insight_type', '')
+                parts.append(f"\nREVENUE RISK ({itype.replace('_', ' ').title()}):")
+                parts.append(f"  Total revenue: {format_currency(ri.get('company_total_revenue', 0), currency_code)}")
+                parts.append(f"  Revenue-producing contacts: {ri.get('revenue_producing_contacts', 0)} of {ri.get('total_contacts', 0)}")
+                top_buyer = ri.get('top_buyer_name', '?')
+                top_persona = ri.get('top_buyer_persona', '?').replace('_', ' ')
+                parts.append(f"  Top buyer: {top_buyer} (persona: {top_persona})")
+                for tc in ri.get('top_revenue_contacts', []):
+                    parts.append(f"    {tc['name']}: {tc.get('pct_of_revenue', 0)}% of revenue ({format_currency(tc.get('total_job_value', 0), currency_code)})")
+
+            gaps = recs.get('cross_contact_recs', [])
+            if gaps:
+                parts.append(f"\nCAPABILITY GAPS ({len(gaps)} contacts with untapped capabilities):")
+                for g in gaps[:5]:
+                    name = g.get('contact_name', '?')
+                    buys = ', '.join(g.get('already_buys', []))
+                    untapped = ', '.join(g.get('untapped_capabilities', []))
+                    parts.append(f"  {name}: buys [{buys}], untapped [{untapped}]")
+
+            products = recs.get('related_product_recs', [])
+            if products:
+                parts.append(f"\nPRODUCT OPPORTUNITIES:")
+                for p in products[:3]:
+                    parts.append(f"  {p.get('message', '')}")
+        except Exception as e:
+            logger.debug(f"Sales opportunities context skipped for {company_id}: {e}")
 
     def _gather_contact_context(self, contact_id: str) -> Optional[str]:
         """Gather context for a contact insight."""

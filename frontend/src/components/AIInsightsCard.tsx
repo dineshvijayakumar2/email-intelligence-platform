@@ -41,6 +41,11 @@ const BulletList: React.FC<{ items?: string[]; header: string }> = ({ items, hea
 
 const CompanyInsight: React.FC<{ insight: AIInsight }> = ({ insight }) => (
   <div className="space-y-2">
+    {insight.strategic_summary && (
+      <div className="rounded-md border border-primary/20 bg-primary/5 px-3 py-2.5 mb-1">
+        <p className="text-sm text-slate-800 leading-relaxed font-medium">{insight.strategic_summary}</p>
+      </div>
+    )}
     {insight.health_summary && <p className="text-sm text-slate-700 leading-relaxed">{insight.health_summary}</p>}
     <div className="flex gap-2 flex-wrap">
       {insight.revenue_risk && <span className="text-xs text-slate-500">Revenue Risk: <StatusBadge variant={riskVariant(insight.revenue_risk) as any} size="sm">{insight.revenue_risk}</StatusBadge></span>}
