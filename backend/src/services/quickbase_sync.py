@@ -2,8 +2,10 @@
 Quickbase Sync Service — Syncs QB data to local Supabase cache tables.
 
 Handles: Customers, Contacts, Quotes, Jobs, Sales Line Items, Operations.
-After sync, matches QB records to existing customer_companies/customer_contacts
-using a 3-pass pipeline: exact name → domain root → fuzzy (staging).
+After sync, matches QB records to existing customer_companies/customer_contacts:
+  Pass 0a — Email join (1:1 auto-write, multi-match staged)
+  Pass 0b — Contact chain (1:1 auto-write, multi-match staged)
+  Pass 1-3 — Name-based: exact name, domain root, fuzzy (all staged for review)
 """
 
 import asyncio
@@ -272,20 +274,23 @@ class QuickbaseSync:
                 logger.error(f"Operations post-sync enrichment failed: {e}")
 
         # After sync, match to existing companies/contacts
+        self._email_matched_qb_ids: set[str] = set()
+        self._email_staged_qb_record_ids: set[str] = set()
+
         # Pass 0: Email-based matching via QB Unique Emails (highest priority)
         email_match_stats = await self.match_companies_via_unique_emails()
         counts['email_match_stats'] = email_match_stats
 
-        # Pass 1-3: Name-based matching for remaining unmatched QB customers
+        # Pass 1-3: Name-based matching → staged for review (no auto-write)
         match_stats = await self.match_to_companies()
         matched_contacts = await self.match_to_contacts()
         matched_via_contacts = await self.match_customers_via_contacts()
         counts['match_stats'] = match_stats
         counts['matched_companies'] = (
             email_match_stats.get('matched', 0)
-            + match_stats.get('total', 0)
             + matched_via_contacts
         )
+        counts['staged_candidates'] = match_stats.get('total', 0)
         counts['matched_contacts'] = matched_contacts
 
         # Update last_sync_at
@@ -903,18 +908,21 @@ class QuickbaseSync:
     async def match_companies_via_unique_emails(self) -> dict:
         """Pass 0: Match QB customers to SB companies via QB Unique Emails.
 
-        Chain: customer_contacts.email_address → qb_unique_emails.email
-               → qb_unique_emails.qb_customer_id → link to company via contact's customer_company_id
+        Chain: customer_contacts.email_address = qb_unique_emails.email
+               links SB company (via customer_company_id) to QB customer (via qb_customer_id).
 
-        This is the highest-confidence match method because it's email-based.
-        Auto-writes matches (100% confidence).
+        1:1 pairs (one SB company <-> one QB customer) are auto-written as
+        perfect matches. Multi-match cases are staged for human review.
         """
+        from collections import defaultdict
+
         stats = {
             'matched': 0,
-            'skipped_no_company': 0,
+            'staged': 0,
             'skipped_no_qb_customer': 0,
-            'multi_customer_conflicts': 0,
-            'total_emails_checked': 0,
+            'total_sb_linked': 0,
+            'total_qb_linked': 0,
+            'total_emails_joined': 0,
         }
 
         # Step 1: Fetch ALL valid QB unique emails (paginated)
@@ -940,16 +948,6 @@ class QuickbaseSync:
             logger.info("No valid QB unique emails found for email-based matching")
             return stats
 
-        # Build email → qb_customer_id lookup (lowercased)
-        email_to_qb_customer: dict[str, str] = {}
-        for ue in all_qb_emails:
-            email = (ue.get('email') or '').strip().lower()
-            qb_cid = ue.get('qb_customer_id')
-            if email and qb_cid:
-                email_to_qb_customer[email] = str(qb_cid).strip()
-
-        logger.info(f"Built email→QB customer lookup: {len(email_to_qb_customer)} valid entries")
-
         # Step 2: Fetch ALL SB contacts with their company links (paginated)
         all_contacts: list[dict] = []
         offset = 0
@@ -965,84 +963,96 @@ class QuickbaseSync:
                 break
             offset += len(rows)
 
-        logger.info(f"Fetched {len(all_contacts)} SB contacts with companies for email matching")
+        # Step 3: Build bidirectional maps via email join
+        email_to_qb: dict[str, set] = defaultdict(set)
+        for ue in all_qb_emails:
+            email = (ue.get('email') or '').strip().lower()
+            qb_cid = ue.get('qb_customer_id')
+            if email and qb_cid:
+                email_to_qb[email].add(str(qb_cid).strip())
 
-        # Step 3: For each contact email, look up in QB unique emails
-        # Build: company_id → {qb_customer_id: contact_count} (to detect conflicts)
-        company_to_qb_customers: dict[str, dict[str, int]] = {}
-
+        email_to_sb: dict[str, set] = defaultdict(set)
         for contact in all_contacts:
             email = (contact.get('email_address') or '').strip().lower()
             company_id = contact.get('customer_company_id')
-            if not email or not company_id:
-                continue
+            if email and company_id:
+                email_to_sb[email].add(company_id)
 
-            stats['total_emails_checked'] += 1
-            qb_customer_id = email_to_qb_customer.get(email)
+        sb_to_qb: dict[str, dict[str, list]] = defaultdict(lambda: defaultdict(list))
+        qb_to_sb: dict[str, dict[str, list]] = defaultdict(lambda: defaultdict(list))
+        shared_emails = set(email_to_qb.keys()) & set(email_to_sb.keys())
+        stats['total_emails_joined'] = len(shared_emails)
 
-            if not qb_customer_id:
-                continue
+        for email in shared_emails:
+            for sb_cid in email_to_sb[email]:
+                for qb_cid in email_to_qb[email]:
+                    sb_to_qb[sb_cid][qb_cid].append(email)
+                    qb_to_sb[qb_cid][sb_cid].append(email)
 
-            if company_id not in company_to_qb_customers:
-                company_to_qb_customers[company_id] = {}
-            counts_map = company_to_qb_customers[company_id]
-            counts_map[qb_customer_id] = counts_map.get(qb_customer_id, 0) + 1
-
-        # Step 4: Resolve conflicts — majority vote (most contacts wins)
-        company_to_best_qb: dict[str, str] = {}
-        for company_id, qb_map in company_to_qb_customers.items():
-            if len(qb_map) == 1:
-                company_to_best_qb[company_id] = next(iter(qb_map))
-            else:
-                stats['multi_customer_conflicts'] += 1
-                best_qb = max(qb_map, key=qb_map.get)
-                company_to_best_qb[company_id] = best_qb
-                logger.debug(
-                    f"Company {company_id} has {len(qb_map)} QB customer matches, "
-                    f"picking {best_qb} ({qb_map[best_qb]} contacts)"
-                )
+        stats['total_sb_linked'] = len(sb_to_qb)
+        stats['total_qb_linked'] = len(qb_to_sb)
 
         logger.info(
-            f"Email lookup resolved {len(company_to_best_qb)} company→QB customer links "
-            f"({stats['multi_customer_conflicts']} had conflicts)"
+            f"Email join: {len(shared_emails)} shared emails, "
+            f"{len(sb_to_qb)} SB companies linked, {len(qb_to_sb)} QB customers linked"
         )
 
-        if not company_to_best_qb:
+        if not sb_to_qb:
             return stats
 
-        # Step 5: Build qb_record_id → qb_customers row lookup (need UUID + code)
-        qb_customer_map: dict[str, dict] = {}
+        # Step 4: Classify 1:1 pairs vs multi-match
+        perfect_pairs: list[tuple[str, str, list[str]]] = []
+        multi_match_pairs: list[tuple[str, str, list[str]]] = []
+
+        for sb_cid, qb_map in sb_to_qb.items():
+            if len(qb_map) == 1:
+                qb_cid = next(iter(qb_map))
+                if len(qb_to_sb.get(qb_cid, {})) == 1:
+                    perfect_pairs.append((sb_cid, qb_cid, qb_map[qb_cid]))
+                    continue
+            for qb_cid, emails in qb_map.items():
+                multi_match_pairs.append((sb_cid, qb_cid, emails))
+
+        logger.info(f"Classified: {len(perfect_pairs)} perfect 1:1 pairs, {len(multi_match_pairs)} multi-match pairs")
+
+        # Step 5: Resolve QB customer IDs to UUIDs (index by both record_id and customer_key_id)
+        qb_by_record_id: dict[str, dict] = {}
+        qb_by_key_id: dict[str, dict] = {}
         offset = 0
         while True:
             page = _execute_with_retry(lambda o=offset: self._supabase.table('qb_customers').select(
-                'id, qb_record_id, customer_code'
+                'id, qb_record_id, customer_key_id, customer_code, customer_name'
             ).eq('client_id', self._client_id).range(o, o + 999).execute())
             rows = page.data or []
             for r in rows:
                 rid = r.get('qb_record_id')
+                kid = r.get('customer_key_id')
                 if rid:
-                    qb_customer_map[str(rid)] = r
+                    qb_by_record_id[str(rid)] = r
+                if kid:
+                    qb_by_key_id[str(kid)] = r
             if len(rows) == 0:
                 break
             offset += len(rows)
 
-        # Step 6: Build batch payloads and write via RPC
-        now_iso = datetime.now(timezone.utc).isoformat()
-
-        matches_payload: list[dict] = []
-        for company_id, qb_customer_id in company_to_best_qb.items():
+        def _resolve_qb_customer(qb_customer_id: str) -> dict | None:
             try:
-                normalized_id = str(int(float(qb_customer_id)))
+                norm_id = str(int(float(qb_customer_id)))
             except (ValueError, TypeError):
-                normalized_id = str(qb_customer_id)
+                norm_id = str(qb_customer_id)
+            return qb_by_record_id.get(norm_id) or qb_by_key_id.get(norm_id)
 
-            qb_cust = qb_customer_map.get(normalized_id)
+        # Step 6: Build payloads for perfect matches (auto-write)
+        now_iso = datetime.now(timezone.utc).isoformat()
+        matches_payload: list[dict] = []
+
+        for sb_cid, qb_cid, emails in perfect_pairs:
+            qb_cust = _resolve_qb_customer(qb_cid)
             if not qb_cust:
                 stats['skipped_no_qb_customer'] += 1
                 continue
-
             matches_payload.append({
-                'company_id': company_id,
+                'company_id': sb_cid,
                 'qb_customer_uuid': qb_cust['id'],
                 'qb_record_id': qb_cust.get('qb_record_id'),
                 'qb_customer_code': qb_cust.get('customer_code'),
@@ -1051,23 +1061,60 @@ class QuickbaseSync:
 
         stats['matched'] = await self._rpc_batch_write_matches(matches_payload, now_iso)
 
+        # Track matched QB customer UUIDs for downstream passes
+        self._email_matched_qb_ids = {m['qb_customer_uuid'] for m in matches_payload}
+
+        # Step 7: Stage multi-match cases for human review
+        staged_batch: list[dict] = []
+        for sb_cid, qb_cid, emails in multi_match_pairs:
+            qb_cust = _resolve_qb_customer(qb_cid)
+            if not qb_cust:
+                continue
+            staged_batch.append({
+                'client_id': self._client_id,
+                'sb_company_id': sb_cid,
+                'sb_company_name': None,
+                'qb_record_id': qb_cust.get('qb_record_id'),
+                'qb_customer_id': qb_cust.get('qb_record_id'),
+                'qb_name': qb_cust.get('customer_name'),
+                'match_score': 80,
+                'match_method': 'email_multi_match',
+            })
+
+        if staged_batch:
+            for i in range(0, len(staged_batch), UPSERT_BATCH_SIZE):
+                batch = staged_batch[i:i + UPSERT_BATCH_SIZE]
+                try:
+                    _execute_with_retry(lambda b=batch: self._supabase.table(
+                        'qb_match_candidates'
+                    ).insert(b).execute())
+                except Exception as e:
+                    logger.warning(f"Failed to stage email multi-match batch: {e}")
+            stats['staged'] = len(staged_batch)
+
+        # Track staged record IDs so name-matching passes skip them
+        self._email_staged_qb_record_ids = {s['qb_record_id'] for s in staged_batch if s.get('qb_record_id')}
+
         logger.info(
-            f"Email-lookup matching complete: {stats['matched']} matched, "
-            f"{stats['skipped_no_qb_customer']} skipped (QB customer not in cache), "
-            f"{stats['multi_customer_conflicts']} conflicts resolved by majority vote"
+            f"Email matching complete: {stats['matched']} auto-matched (1:1), "
+            f"{stats['staged']} staged (multi-match), "
+            f"{stats['skipped_no_qb_customer']} skipped (QB customer not found)"
         )
         return stats
 
     async def match_to_companies(self) -> dict:
-        """Match qb_customers → customer_companies using a 3-pass pipeline.
+        """Stage name-based qb_customers → customer_companies candidates for human review.
 
-        Pass 1 — Exact normalised name (high confidence, auto-write)
-        Pass 2 — Email domain root (medium confidence, auto-write with flag)
-        Pass 3 — Fuzzy name via rapidfuzz (low confidence, staging only)
+        Pass 1 — Exact normalised name (staged with score 100)
+        Pass 2 — Email domain root (staged with score 90)
+        Pass 3 — Fuzzy name via rapidfuzz (staged with fuzzy score)
 
-        Returns dict with per-pass counts: {pass1, pass2, pass3_staged, unmatched, total}.
+        All name-based matches are staging-only — only email-based matching
+        (Pass 0 via match_companies_via_unique_emails) auto-writes.
+
+        Returns dict with per-pass counts: {pass1_staged, pass2_staged, pass3_staged, unmatched, total}.
         """
-        stats = {'pass1': 0, 'pass2': 0, 'pass3_staged': 0, 'unmatched': 0, 'total': 0}
+        stats = {'pass1_staged': 0, 'pass2_staged': 0, 'pass3_staged': 0, 'unmatched': 0, 'total': 0}
 
         # ── Fetch ALL unmatched QB customers (paginated) ─────────────────────
         unmatched: list[dict] = []
@@ -1084,7 +1131,12 @@ class QuickbaseSync:
                 break
             offset += len(rows)
 
-        logger.info(f"Fetched {len(unmatched)} unmatched QB customers for matching")
+        # Filter out QB customers already handled by email/contact chain passes
+        if hasattr(self, '_email_staged_qb_record_ids') and self._email_staged_qb_record_ids:
+            unmatched = [qc for qc in unmatched
+                         if qc.get('qb_record_id') not in self._email_staged_qb_record_ids]
+
+        logger.info(f"Fetched {len(unmatched)} unmatched QB customers for name matching")
         if not unmatched:
             return stats
 
@@ -1092,9 +1144,7 @@ class QuickbaseSync:
         all_companies = self._fetch_all_companies()
 
         # ── Build lookup structures ───────────────────────────────────────────
-        # Normalised SB name → company dict
         sb_by_norm: dict[str, dict] = {}
-        # Domain root → company dict (first wins)
         sb_by_domain_root: dict[str, dict] = {}
 
         for c in all_companies:
@@ -1103,26 +1153,27 @@ class QuickbaseSync:
             norm = _normalise(c['company_name'])
             if norm and norm not in sb_by_norm:
                 sb_by_norm[norm] = c
-            # Index by domain roots
             for root in _extract_domain_roots(c.get('email_domains')):
                 if root not in sb_by_domain_root:
                     sb_by_domain_root[root] = c
 
-        # Normalised QB name → QB row (for fuzzy pass)
-        qb_by_norm: dict[str, dict] = {}
-        for qb in unmatched:
-            norm = _normalise(qb.get('customer_name'))
-            if norm:
-                qb_by_norm[norm] = qb
-
         now_iso = datetime.now(timezone.utc).isoformat()
-        pass2_remaining = []  # QB customers not matched in pass 1
-        pass3_remaining = []  # QB customers not matched in pass 1 or 2
+        pass2_remaining = []
+        pass3_remaining = []
 
-        # Collect matches in memory first, then batch-write at the end
-        confirmed_matches: list[tuple[dict, dict, str]] = []  # (qb_cust, sb_company, method)
+        # Clear stale name-based candidates only (preserve email/contact chain staged ones)
+        try:
+            _execute_with_retry(lambda: self._supabase.table('qb_match_candidates').delete().eq(
+                'client_id', self._client_id
+            ).eq('reviewed', False).in_(
+                'match_method', ['exact_name', 'domain_root', 'fuzzy']
+            ).execute())
+        except Exception as e:
+            logger.warning(f"Failed to clear stale candidates: {e}")
 
-        # ── Pass 1: Exact normalised name ─────────────────────────────────────
+        staged_batch: list[dict] = []
+
+        # ── Pass 1: Exact normalised name → stage ────────────────────────────
         for qb_cust in unmatched:
             qb_norm = _normalise(qb_cust.get('customer_name'))
             if not qb_norm:
@@ -1131,12 +1182,21 @@ class QuickbaseSync:
 
             sb_match = sb_by_norm.get(qb_norm)
             if sb_match:
-                confirmed_matches.append((qb_cust, sb_match, 'exact_name'))
-                stats['pass1'] += 1
+                staged_batch.append({
+                    'client_id': self._client_id,
+                    'sb_company_id': sb_match['id'],
+                    'sb_company_name': sb_match.get('company_name'),
+                    'qb_record_id': qb_cust.get('qb_record_id'),
+                    'qb_customer_id': qb_cust.get('qb_record_id'),
+                    'qb_name': qb_cust.get('customer_name'),
+                    'match_score': 100,
+                    'match_method': 'exact_name',
+                })
+                stats['pass1_staged'] += 1
             else:
                 pass2_remaining.append(qb_cust)
 
-        # ── Pass 2: Email domain root ─────────────────────────────────────────
+        # ── Pass 2: Email domain root → stage ────────────────────────────────
         for qb_cust in pass2_remaining:
             qb_norm = _normalise(qb_cust.get('customer_name'))
             if not qb_norm:
@@ -1146,33 +1206,28 @@ class QuickbaseSync:
             matched = False
             for root, sb_company in sb_by_domain_root.items():
                 if root in qb_norm:
-                    confirmed_matches.append((qb_cust, sb_company, 'domain_root'))
-                    stats['pass2'] += 1
+                    staged_batch.append({
+                        'client_id': self._client_id,
+                        'sb_company_id': sb_company['id'],
+                        'sb_company_name': sb_company.get('company_name'),
+                        'qb_record_id': qb_cust.get('qb_record_id'),
+                        'qb_customer_id': qb_cust.get('qb_record_id'),
+                        'qb_name': qb_cust.get('customer_name'),
+                        'match_score': 90,
+                        'match_method': 'domain_root',
+                    })
+                    stats['pass2_staged'] += 1
                     matched = True
                     break
 
             if not matched:
                 pass3_remaining.append(qb_cust)
 
-        # ── Batch-write Pass 1+2 matches ─────────────────────────────────────
-        if confirmed_matches:
-            logger.info(f"Writing {len(confirmed_matches)} confirmed matches (Pass 1+2) in batches")
-            await self._batch_write_matches(confirmed_matches, now_iso)
-
-        # ── Pass 3: Fuzzy name match (staging only) ───────────────────────────
-        # Clear stale unreviewed candidates before inserting fresh ones
-        try:
-            _execute_with_retry(lambda: self._supabase.table('qb_match_candidates').delete().eq(
-                'client_id', self._client_id
-            ).eq('reviewed', False).execute())
-        except Exception as e:
-            logger.warning(f"Failed to clear stale candidates: {e}")
-
+        # ── Pass 3: Fuzzy name match → stage ─────────────────────────────────
         try:
             from rapidfuzz import fuzz, process as rf_process
 
             sb_norm_names = list(sb_by_norm.keys())
-            staged_batch: list[dict] = []
             total_pass3 = len(pass3_remaining)
             logger.info(f"Pass 3 (fuzzy): processing {total_pass3} remaining customers against {len(sb_norm_names)} SB names")
 
@@ -1210,26 +1265,27 @@ class QuickbaseSync:
                 else:
                     stats['unmatched'] += 1
 
-            # Batch insert all fuzzy candidates at once (instead of 1-by-1)
-            if staged_batch:
-                for i in range(0, len(staged_batch), UPSERT_BATCH_SIZE):
-                    batch = staged_batch[i:i + UPSERT_BATCH_SIZE]
-                    try:
-                        _execute_with_retry(lambda b=batch: self._supabase.table(
-                            'qb_match_candidates'
-                        ).insert(b).execute())
-                    except Exception as e:
-                        logger.warning(f"Failed to stage fuzzy batch {i // UPSERT_BATCH_SIZE + 1}: {e}")
-
         except ImportError:
             logger.warning("rapidfuzz not installed — skipping Pass 3 fuzzy matching")
             stats['unmatched'] += len(pass3_remaining)
 
-        stats['total'] = stats['pass1'] + stats['pass2']
+        # Batch insert all candidates (Pass 1+2+3) at once
+        if staged_batch:
+            logger.info(f"Staging {len(staged_batch)} match candidates (Pass 1+2+3) for review")
+            for i in range(0, len(staged_batch), UPSERT_BATCH_SIZE):
+                batch = staged_batch[i:i + UPSERT_BATCH_SIZE]
+                try:
+                    _execute_with_retry(lambda b=batch: self._supabase.table(
+                        'qb_match_candidates'
+                    ).insert(b).execute())
+                except Exception as e:
+                    logger.warning(f"Failed to stage batch {i // UPSERT_BATCH_SIZE + 1}: {e}")
+
+        stats['total'] = stats['pass1_staged'] + stats['pass2_staged'] + stats['pass3_staged']
         logger.info(
-            f"Company matching complete: "
-            f"Pass 1 (exact)={stats['pass1']}, Pass 2 (domain)={stats['pass2']}, "
-            f"Pass 3 (staged)={stats['pass3_staged']}, Unmatched={stats['unmatched']}"
+            f"Company matching complete (all staged for review): "
+            f"Pass 1 (exact)={stats['pass1_staged']}, Pass 2 (domain)={stats['pass2_staged']}, "
+            f"Pass 3 (fuzzy)={stats['pass3_staged']}, Unmatched={stats['unmatched']}"
         )
         return stats
 
@@ -1486,23 +1542,18 @@ class QuickbaseSync:
                     if c.get('customer_company_id'):
                         contact_company_map[c['id']] = c['customer_company_id']
 
-            # Debug: log sample data to diagnose format mismatches
-            sample_contact_ids = [c.get('qb_customer_id') for c in all_matched_contacts[:5] if c.get('qb_customer_id')]
-            sample_key_ids = list(qb_cust_by_key.keys())[:5]
             logger.info(
-                f"Chain match debug: {len(all_matched_contacts)} matched contacts, "
+                f"Chain match: {len(all_matched_contacts)} matched contacts, "
                 f"{len(all_unmatched_custs)} unmatched customers, "
-                f"{len(contact_company_map)} contacts with companies. "
-                f"Sample qb_customer_id on contacts: {sample_contact_ids}, "
-                f"Sample customer_key_id on customers: {sample_key_ids}"
+                f"{len(contact_company_map)} contacts with companies"
             )
 
-            # Now match: QB contact → customer_contact → company
-            matched = 0
-            no_company = 0
-            no_cust_match = 0
-            total_chain = len(all_matched_contacts)
-            for chain_idx, qb_contact in enumerate(all_matched_contacts):
+            # Build bidirectional maps: QB customer key -> {company_id} and reverse
+            from collections import defaultdict
+            chain_qb_to_company: dict[str, set] = defaultdict(set)
+            chain_company_to_qb: dict[str, set] = defaultdict(set)
+
+            for qb_contact in all_matched_contacts:
                 contact_id = qb_contact.get('matched_contact_id')
                 customer_id = qb_contact.get('qb_customer_id')
                 if not contact_id or not customer_id:
@@ -1510,38 +1561,87 @@ class QuickbaseSync:
 
                 company_id = contact_company_map.get(contact_id)
                 if not company_id:
-                    no_company += 1
                     continue
 
-                # Look up by customer_key_id (field 92), not record_id (field 3)
                 try:
                     normalized_key = str(int(float(customer_id)))
                 except (ValueError, TypeError):
                     normalized_key = str(customer_id)
-                qb_cust_id = qb_cust_by_key.get(normalized_key)
-                if not qb_cust_id:
-                    no_cust_match += 1
+
+                qb_cust_uuid = qb_cust_by_key.get(normalized_key)
+                if not qb_cust_uuid:
                     continue
 
-                if company_id and qb_cust_id:
-                    try:
-                        _execute_with_retry(lambda cid=company_id, qid=qb_cust_id: (
-                            self._supabase.table('qb_customers').update({
-                                'matched_company_id': cid
-                            }).eq('id', qid).execute()
-                        ))
-                        matched += 1
-                    except Exception:
-                        pass
+                # Skip QB customers already matched by email
+                if qb_cust_uuid in self._email_matched_qb_ids:
+                    continue
 
-                if (chain_idx + 1) % 2000 == 0:
-                    logger.info(f"Chain match progress: {chain_idx + 1}/{total_chain} "
-                                f"({matched} matched so far)")
+                chain_qb_to_company[normalized_key].add(company_id)
+                chain_company_to_qb[company_id].add(normalized_key)
+
+            # Classify 1:1 pairs vs multi-match
+            perfect_matches: list[dict] = []
+            staged_batch: list[dict] = []
+            matched = 0
+
+            for qb_key, companies in chain_qb_to_company.items():
+                qb_cust_uuid = qb_cust_by_key.get(qb_key)
+                if not qb_cust_uuid:
+                    continue
+                # Find the qb_customers row for record_id/code
+                qb_row = next((c for c in all_unmatched_custs if c['id'] == qb_cust_uuid), None)
+                if not qb_row:
+                    continue
+
+                if len(companies) == 1:
+                    company_id = next(iter(companies))
+                    if len(chain_company_to_qb.get(company_id, set())) == 1:
+                        perfect_matches.append({
+                            'company_id': company_id,
+                            'qb_customer_uuid': qb_cust_uuid,
+                            'qb_record_id': qb_row.get('qb_record_id'),
+                            'qb_customer_code': None,
+                            'match_method': 'contact_chain',
+                        })
+                        continue
+
+                # Multi-match: stage for review
+                for company_id in companies:
+                    staged_batch.append({
+                        'client_id': self._client_id,
+                        'sb_company_id': company_id,
+                        'sb_company_name': None,
+                        'qb_record_id': qb_row.get('qb_record_id'),
+                        'qb_customer_id': qb_row.get('qb_record_id'),
+                        'qb_name': None,
+                        'match_score': 75,
+                        'match_method': 'contact_chain',
+                    })
+
+            # Write perfect matches via RPC
+            if perfect_matches:
+                now_iso = datetime.now(timezone.utc).isoformat()
+                matched = await self._rpc_batch_write_matches(perfect_matches, now_iso)
+                self._email_matched_qb_ids.update(m['qb_customer_uuid'] for m in perfect_matches)
+
+            # Stage multi-match cases
+            staged = 0
+            if staged_batch:
+                for i in range(0, len(staged_batch), UPSERT_BATCH_SIZE):
+                    batch = staged_batch[i:i + UPSERT_BATCH_SIZE]
+                    try:
+                        _execute_with_retry(lambda b=batch: self._supabase.table(
+                            'qb_match_candidates'
+                        ).insert(b).execute())
+                    except Exception as e:
+                        logger.warning(f"Failed to stage contact chain batch: {e}")
+                staged = len(staged_batch)
+                self._email_staged_qb_record_ids.update(
+                    s['qb_record_id'] for s in staged_batch if s.get('qb_record_id')
+                )
 
             logger.info(
-                f"Chain match result: {matched} matched, "
-                f"{no_company} contacts without company, "
-                f"{no_cust_match} contacts whose QB customer already matched or ID mismatch"
+                f"Chain match result: {matched} auto-matched (1:1), {staged} staged (multi-match)"
             )
             return matched
 

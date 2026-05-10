@@ -934,6 +934,24 @@ async def qb_health(client_id: str = Query(...)):
         except Exception:
             pass
 
+        # Revenue stats via RPC (single DB round-trip for all aggregations)
+        revenue_stats = {}
+        try:
+            rev_resp = _supabase.rpc('qb_health_revenue_stats', {
+                'p_client_id': client_id
+            }).execute()
+            revenue_stats = rev_resp.data or {}
+        except Exception:
+            revenue_stats = {
+                'total_revenue': 0, 'matched_revenue': 0, 'unmatched_revenue': 0,
+                'revenue_match_rate_pct': 0, 'revenue_target_pct': 95,
+                'method_revenue': {}, 'buckets': {
+                    'email_linked': {'count': 0, 'revenue': 0},
+                    'staged': {'count': 0, 'revenue': 0},
+                    'no_link': {'count': 0, 'revenue': 0},
+                },
+            }
+
         return {
             "qb_configured": True,
             "qb_customers": {"total": total_c, "matched": matched_c, "unmatched": total_c - matched_c, "match_rate_pct": round(matched_c / total_c * 100, 1) if total_c else 0},
@@ -942,6 +960,7 @@ async def qb_health(client_id: str = Query(...)):
             "active_companies": {"total": active_companies, "with_qb_data": active_enriched, "coverage_pct": round(active_enriched / active_companies * 100, 1) if active_companies else 0},
             "qb_unique_emails": {"total": total_ue, "valid": valid_ue},
             "match_methods": {"email_lookup": email_matched_count, "name_based": name_matched_count},
+            "revenue": revenue_stats,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)[:200])

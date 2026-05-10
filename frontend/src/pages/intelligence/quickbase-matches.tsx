@@ -7,6 +7,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   CheckCircle2, RefreshCw, Search, ChevronDown, ChevronUp, ArrowUpDown,
+  TrendingUp, AlertCircle, Link2, FileQuestion,
 } from 'lucide-react';
 import { Spinner } from '@/lib/icons';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -15,7 +16,7 @@ import { ContentSkeleton } from '@/components/ui/empty-state';
 import { notify } from '@/lib/toast';
 import { useClient } from '../../contexts/ClientContext';
 import api from '../../services/apiClient';
-import { formatCurrency } from '../../utils/numberFormat';
+import { formatCurrency, formatCurrencyCompact } from '../../utils/numberFormat';
 
 const PAGE_SIZE = 30;
 
@@ -34,6 +35,22 @@ interface MatchCandidate {
   sb_total_emails?: number;
 }
 
+interface RevenueBucket { count: number; revenue: number }
+
+interface RevenueStats {
+  total_revenue: number;
+  matched_revenue: number;
+  unmatched_revenue: number;
+  revenue_match_rate_pct: number;
+  revenue_target_pct: number;
+  method_revenue: Record<string, { revenue: number; count: number }>;
+  buckets: {
+    email_linked: RevenueBucket;
+    staged: RevenueBucket;
+    no_link: RevenueBucket;
+  };
+}
+
 interface HealthData {
   qb_configured: boolean;
   qb_customers: { total: number; matched: number; unmatched: number; match_rate_pct: number };
@@ -42,6 +59,7 @@ interface HealthData {
   active_companies: { total: number; with_qb_data: number; coverage_pct: number };
   qb_unique_emails?: { total: number; valid: number };
   match_methods?: { email_lookup: number; name_based: number };
+  revenue?: RevenueStats;
 }
 
 // -- Server-side search Select for SB companies -----------------------------------------------
@@ -241,11 +259,25 @@ export default function QuickbaseMatchesPage() {
       setCandidates(prev => prev.filter(c => c.id !== candidate.id));
       setTotal(prev => prev - 1);
       setRowSelections(prev => { const n = { ...prev }; delete n[candidate.id]; return n; });
-      // Update matched count optimistically instead of re-fetching
-      setHealth(prev => prev ? {
-        ...prev,
-        qb_customers: { ...prev.qb_customers, matched: prev.qb_customers.matched + 1, unmatched: prev.qb_customers.unmatched - 1, match_rate_pct: prev.qb_customers.total ? Math.round((prev.qb_customers.matched + 1) / prev.qb_customers.total * 1000) / 10 : 0 },
-      } : prev);
+      // Update matched count + revenue optimistically
+      const addedRevenue = candidate.qb_total_revenue || 0;
+      setHealth(prev => {
+        if (!prev) return prev;
+        const newMatched = prev.qb_customers.matched + 1;
+        const newRevenue = prev.revenue ? {
+          ...prev.revenue,
+          matched_revenue: prev.revenue.matched_revenue + addedRevenue,
+          unmatched_revenue: prev.revenue.unmatched_revenue - addedRevenue,
+          revenue_match_rate_pct: prev.revenue.total_revenue
+            ? Math.round((prev.revenue.matched_revenue + addedRevenue) / prev.revenue.total_revenue * 1000) / 10
+            : 0,
+        } : prev.revenue;
+        return {
+          ...prev,
+          qb_customers: { ...prev.qb_customers, matched: newMatched, unmatched: prev.qb_customers.unmatched - 1, match_rate_pct: prev.qb_customers.total ? Math.round(newMatched / prev.qb_customers.total * 1000) / 10 : 0 },
+          revenue: newRevenue,
+        };
+      });
     } catch {
       notify.error('Failed to save mapping');
     }
@@ -365,62 +397,137 @@ export default function QuickbaseMatchesPage() {
 
       {clientId && (!health || health.qb_configured) && (
         <>
-          {/* Match Health Stats */}
+          {/* Revenue Dashboard */}
           {healthLoading ? (
-            <ContentSkeleton rows={2} className="mb-5" />
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
-              {/* QB Customers Matched */}
-              <div className="rounded-lg border bg-white shadow-sm p-4">
-                <p className="text-xs font-medium text-slate-500 mb-1">QB Customers Matched</p>
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-2xl font-semibold text-green-700">
-                    {health?.qb_customers.matched || 0}
-                  </span>
-                  <span className="text-sm text-slate-400">/ {health?.qb_customers.total || 0}</span>
-                </div>
-                <p className="text-xs text-slate-400 mt-1">{health?.qb_customers.match_rate_pct || 0}% match rate</p>
-              </div>
+            <ContentSkeleton rows={3} className="mb-5" />
+          ) : (() => {
+            const rev = health?.revenue;
+            const matchedPct = rev?.revenue_match_rate_pct ?? 0;
+            const targetPct = rev?.revenue_target_pct ?? 95;
+            const totalRev = rev?.total_revenue ?? 0;
+            const matchedRev = rev?.matched_revenue ?? 0;
+            const unmatchedRev = rev?.unmatched_revenue ?? 0;
+            const gapToTarget = totalRev > 0 ? Math.max(0, totalRev * targetPct / 100 - matchedRev) : 0;
 
-              {/* Email-Matched */}
-              <div className="rounded-lg border bg-white shadow-sm p-4">
-                <p className="text-xs font-medium text-slate-500 mb-1">Email-Matched</p>
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-2xl font-semibold text-blue-600">
-                    {health?.match_methods?.email_lookup || 0}
-                  </span>
-                  <span className="text-sm text-slate-400">/ {health?.qb_customers.total || 0} QB customers</span>
+            return (
+              <>
+                {/* Row 1: Revenue Progress Bar */}
+                <div className="rounded-lg border bg-white shadow-sm p-5 mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4 text-emerald-600" />
+                      <h3 className="text-sm font-semibold text-slate-800">Revenue Match Coverage</h3>
+                    </div>
+                    <span className="text-sm font-medium text-slate-600">
+                      {formatCurrencyCompact(matchedRev)} / {formatCurrencyCompact(totalRev)}
+                    </span>
+                  </div>
+                  <div className="relative h-5 bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                      className={`absolute inset-y-0 left-0 rounded-full transition-all duration-500 ${matchedPct >= targetPct ? 'bg-emerald-500' : 'bg-amber-500'}`}
+                      style={{ width: `${Math.min(matchedPct, 100)}%` }}
+                    />
+                    <div
+                      className="absolute inset-y-0 w-0.5 bg-slate-800 z-10"
+                      style={{ left: `${targetPct}%` }}
+                      title={`${targetPct}% target`}
+                    />
+                  </div>
+                  <div className="flex justify-between mt-1.5">
+                    <span className="text-xs font-medium text-slate-600">
+                      {matchedPct}% matched
+                    </span>
+                    <span className="text-xs text-slate-500">
+                      {targetPct}% target
+                      {gapToTarget > 0 && <span className="ml-1 text-amber-600">({formatCurrencyCompact(gapToTarget)} gap)</span>}
+                    </span>
+                  </div>
                 </div>
-                <p className="text-xs text-slate-400 mt-1">
-                  {health?.match_methods?.name_based || 0} name-based | {health?.qb_unique_emails?.valid || 0} QB emails
-                </p>
-              </div>
 
-              {/* QB Contacts Matched */}
-              <div className="rounded-lg border bg-white shadow-sm p-4">
-                <p className="text-xs font-medium text-slate-500 mb-1">QB Contacts Matched</p>
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-2xl font-semibold text-green-700">
-                    {health?.qb_contacts.matched || 0}
-                  </span>
-                  <span className="text-sm text-slate-400">/ {health?.qb_contacts.total || 0}</span>
-                </div>
-                <p className="text-xs text-slate-400 mt-1">{health?.qb_contacts.match_rate_pct || 0}% match rate</p>
-              </div>
+                {/* Row 2: Revenue KPI Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                  <div className="rounded-lg border bg-white shadow-sm p-4">
+                    <p className="text-xs font-medium text-slate-500 mb-1">Total QB Revenue</p>
+                    <span className="text-2xl font-semibold text-slate-900">
+                      {formatCurrencyCompact(totalRev)}
+                    </span>
+                    <p className="text-xs text-slate-400 mt-1">{health?.qb_customers.total || 0} QB customers</p>
+                  </div>
 
-              {/* Fuzzy Candidates */}
-              <div className="rounded-lg border bg-white shadow-sm p-4">
-                <p className="text-xs font-medium text-slate-500 mb-1">Fuzzy Candidates</p>
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-2xl font-semibold text-purple-600">
-                    {total}
-                  </span>
-                  <span className="text-sm text-slate-400">to review</span>
+                  <div className="rounded-lg border bg-white shadow-sm p-4">
+                    <p className="text-xs font-medium text-slate-500 mb-1">Matched Revenue</p>
+                    <span className="text-2xl font-semibold text-emerald-600">
+                      {formatCurrencyCompact(matchedRev)}
+                    </span>
+                    <p className="text-xs text-slate-400 mt-1">
+                      {health?.qb_customers.matched || 0} customers | {health?.match_methods?.email_lookup || 0} via email
+                    </p>
+                  </div>
+
+                  <div className="rounded-lg border bg-white shadow-sm p-4">
+                    <p className="text-xs font-medium text-slate-500 mb-1">Unmatched Revenue</p>
+                    <span className="text-2xl font-semibold text-amber-600">
+                      {formatCurrencyCompact(unmatchedRev)}
+                    </span>
+                    <p className="text-xs text-slate-400 mt-1">{health?.qb_customers.unmatched || 0} QB customers unmatched</p>
+                  </div>
+
+                  <div className="rounded-lg border bg-white shadow-sm p-4">
+                    <p className="text-xs font-medium text-slate-500 mb-1">Candidates to Review</p>
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-2xl font-semibold text-purple-600">{total}</span>
+                      <span className="text-sm text-slate-400">staged</span>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-1">{health?.qb_contacts.match_rate_pct || 0}% contacts matched</p>
+                  </div>
                 </div>
-                <p className="text-xs text-slate-400 mt-1">{health?.qb_customers.unmatched || 0} still unmatched</p>
-              </div>
-            </div>
-          )}
+
+                {/* Row 3: Unmatched Buckets */}
+                {rev && unmatchedRev > 0 && (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
+                    <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-4">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <Link2 className="h-3.5 w-3.5 text-amber-600" />
+                        <p className="text-xs font-medium text-amber-700">Has Email Link</p>
+                      </div>
+                      <span className="text-lg font-semibold text-amber-700">
+                        {formatCurrencyCompact(rev.buckets.email_linked.revenue)}
+                      </span>
+                      <p className="text-xs text-amber-600/70 mt-0.5">
+                        {rev.buckets.email_linked.count} customers — fixable
+                      </p>
+                    </div>
+
+                    <div className="rounded-lg border border-purple-200 bg-purple-50/50 p-4">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <AlertCircle className="h-3.5 w-3.5 text-purple-600" />
+                        <p className="text-xs font-medium text-purple-700">Staged for Review</p>
+                      </div>
+                      <span className="text-lg font-semibold text-purple-700">
+                        {formatCurrencyCompact(rev.buckets.staged.revenue)}
+                      </span>
+                      <p className="text-xs text-purple-600/70 mt-0.5">
+                        {rev.buckets.staged.count} customers — needs review
+                      </p>
+                    </div>
+
+                    <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <FileQuestion className="h-3.5 w-3.5 text-slate-500" />
+                        <p className="text-xs font-medium text-slate-600">No Link</p>
+                      </div>
+                      <span className="text-lg font-semibold text-slate-600">
+                        {formatCurrencyCompact(rev.buckets.no_link.revenue)}
+                      </span>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        {rev.buckets.no_link.count} customers — manual effort
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </>
+            );
+          })()}
 
           {/* Candidates table */}
           <div className="rounded-lg border bg-white shadow-sm">

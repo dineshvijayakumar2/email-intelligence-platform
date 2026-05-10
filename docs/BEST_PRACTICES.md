@@ -407,9 +407,20 @@ RPCs that query tables with sensitive columns (`system_settings`, `qb_sync_confi
 
 `exec_sql` and `exec_sql_extended` are granted to the `authenticated` role — any user with a valid JWT can execute arbitrary SQL. These exist for migration tooling only. Restrict to service role when the invite system goes live and multiple users are active.
 
+### Views MUST set security_invoker = on
+
+All regular views must include `security_invoker = on` so they run as the calling user (respecting RLS), not the view owner:
+
+```sql
+CREATE OR REPLACE VIEW my_view AS SELECT ...;
+ALTER VIEW my_view SET (security_invoker = on);
+```
+
+Without this, Supabase Advisor flags them as "Security Definer View" — the view executes as the owner (typically `postgres`), bypassing RLS on base tables.
+
 ### Views and materialized views
 
-Views/matviews cannot have RLS (Postgres limitation). They show "UNRESTRICTED" in the Supabase dashboard. This is safe as long as their base tables have RLS enabled — the view inherits the restriction from the underlying tables.
+Views/matviews cannot have RLS (Postgres limitation). They show "UNRESTRICTED" in the Supabase dashboard. This is safe as long as their base tables have RLS enabled and `security_invoker = on` is set — the view inherits the restriction from the underlying tables.
 
 ---
 

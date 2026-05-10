@@ -446,10 +446,15 @@ class VectorService:
                 embeddings = await embed_texts(texts, client_id)
                 model_tag = _embedding_model_tag(client_id)
                 now_ts = datetime.now(timezone.utc).isoformat()
+                valid = [(i, e) for i, e in zip(ids, embeddings) if e is not None]
+                if not valid:
+                    continue
+                v_ids, v_embs = list(zip(*valid))
+                v_ids, v_embs = list(v_ids), list(v_embs)
                 DB_CHUNK = 25
-                for ci in range(0, len(ids), DB_CHUNK):
-                    chunk_ids = ids[ci:ci + DB_CHUNK]
-                    chunk_embs = embeddings[ci:ci + DB_CHUNK]
+                for ci in range(0, len(v_ids), DB_CHUNK):
+                    chunk_ids = v_ids[ci:ci + DB_CHUNK]
+                    chunk_embs = v_embs[ci:ci + DB_CHUNK]
                     try:
                         await self._db(lambda cids=chunk_ids, cembs=chunk_embs: self._sb.rpc(
                             "batch_update_embeddings_companies", {
@@ -527,10 +532,15 @@ class VectorService:
                 embeddings = await embed_texts(texts, client_id)
                 model_tag = _embedding_model_tag(client_id)
                 now_ts = datetime.now(timezone.utc).isoformat()
+                valid = [(i, e) for i, e in zip(ids, embeddings) if e is not None]
+                if not valid:
+                    continue
+                v_ids, v_embs = list(zip(*valid))
+                v_ids, v_embs = list(v_ids), list(v_embs)
                 DB_CHUNK = 25
-                for ci in range(0, len(ids), DB_CHUNK):
-                    chunk_ids = ids[ci:ci + DB_CHUNK]
-                    chunk_embs = embeddings[ci:ci + DB_CHUNK]
+                for ci in range(0, len(v_ids), DB_CHUNK):
+                    chunk_ids = v_ids[ci:ci + DB_CHUNK]
+                    chunk_embs = v_embs[ci:ci + DB_CHUNK]
                     try:
                         await self._db(lambda cids=chunk_ids, cembs=chunk_embs: self._sb.rpc(
                             "batch_update_embeddings_operations", {
@@ -650,10 +660,15 @@ class VectorService:
                 embeddings = await embed_texts(texts, client_id)
                 model_tag = _embedding_model_tag(client_id)
                 now_ts = datetime.now(timezone.utc).isoformat()
+                valid = [(i, e) for i, e in zip(ids, embeddings) if e is not None]
+                if not valid:
+                    continue
+                v_ids, v_embs = list(zip(*valid))
+                v_ids, v_embs = list(v_ids), list(v_embs)
                 DB_CHUNK = 25
-                for ci in range(0, len(ids), DB_CHUNK):
-                    chunk_ids = ids[ci:ci + DB_CHUNK]
-                    chunk_embs = embeddings[ci:ci + DB_CHUNK]
+                for ci in range(0, len(v_ids), DB_CHUNK):
+                    chunk_ids = v_ids[ci:ci + DB_CHUNK]
+                    chunk_embs = v_embs[ci:ci + DB_CHUNK]
                     try:
                         await self._db(lambda cids=chunk_ids, cembs=chunk_embs: self._sb.rpc(
                             "batch_update_embeddings_quotes", {

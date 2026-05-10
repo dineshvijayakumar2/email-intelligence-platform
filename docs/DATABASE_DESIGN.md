@@ -904,7 +904,9 @@ Links email threads to QB records (quotes, jobs, operations) via two extraction 
 
 ## 3. Views
 
-### Regular Views (10)
+### Regular Views (11)
+
+All regular views have `security_invoker = on` (migration 104) so they run as the calling user and respect RLS on base tables.
 
 | View | Purpose |
 |------|---------|
@@ -1261,7 +1263,7 @@ thread_qb_links (references canonical_thread_id + qb_record_id)
 
 - **Backend** uses the `service_role` key → bypasses RLS entirely. All data queries go through the backend API.
 - **Frontend** uses Supabase **exclusively for auth** (`supabase.auth.*`). Zero direct table access. The anon key is never used to read/write data.
-- **Views and materialized views** cannot have RLS (Postgres limitation) but inherit protection from their RLS-enabled base tables.
+- **Views and materialized views** cannot have RLS (Postgres limitation) but inherit protection from their RLS-enabled base tables. All regular views have `security_invoker = on` so they run as the calling user.
 
 ### Explicit RLS Policies
 
@@ -1285,7 +1287,7 @@ Most tables have RLS enabled with **no policies** — this means only the servic
 
 ### Views (UNRESTRICTED in Supabase dashboard — expected)
 
-These show an "UNRESTRICTED" badge because Postgres cannot apply RLS to views/matviews. Data is protected because their base tables all have RLS enabled.
+These show an "UNRESTRICTED" badge because Postgres cannot apply RLS to views/matviews. Data is protected because their base tables all have RLS enabled and all regular views have `security_invoker = on` (migration 104).
 
 | View | Type | Base Tables |
 |------|------|-------------|
@@ -1333,6 +1335,7 @@ These show an "UNRESTRICTED" badge because Postgres cannot apply RLS to views/ma
 | 101 | Persona Classification v2 | DROP+CREATE `contact_persona`, `company_contact_summary`, `industry_benchmarks` views. Champion rule: `accepted_quote_count >= 10 OR total_job_value >= 50000`. Added `contact_type` column. Non-person contacts → `shared_mailbox`. Split `active_relationship` → `active_buyer` + `warm_lead`. Person-only filtering on rollup views |
 | 102 | RLS on All Tables | `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` on all 49 public tables. Resolves Supabase critical security alert. Views/matviews excluded (Postgres limitation — inherit protection from base tables) |
 | 103 | AI Insights Prompt Update | Updated `insight_company` prompt in `ai_prompt_config` (all 3 rows: global + Newbound + Carbon8) to request `strategic_summary` field and clarify revenue framing as invoiced-to-customer |
+| 104 | Security Definer Fixes | `security_invoker = on` on all 11 regular views; `SET search_path = public` on 10 SECURITY DEFINER functions missing it. Resolves all Supabase Advisor security warnings |
 
 **Migration application method:** `scripts/db/_run_NNN_via_rest.py` → `exec_sql` RPC + `NOTIFY pgrst, 'reload schema'`; scripts are throwaway and deleted after verification.
 

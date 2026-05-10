@@ -954,7 +954,7 @@ Classification runs first (stages 1-2) because it has no dependency on extractio
 
 ### The QB enrichment path
 
-QB sync runs independently of email processing. When triggered, it fetches all records from 7 QB tables and upserts them locally. Then the 3-pass matching algorithm runs: exact company name match, domain root match, fuzzy name match. Matched companies get enriched with QB metadata (customer type, tier, revenue, invoice recency). This enrichment is then available to the AI analyzer — when classifying emails, the prompt includes "this customer is a Level 3 Key Account with $X revenue and an open quote" which dramatically improves classification quality.
+QB sync runs independently of email processing. When triggered, it fetches all records from 7 QB tables and upserts them locally. Then the multi-pass matching algorithm runs: Pass 0a (email join via qb_unique_emails — 1:1 pairs auto-write as `email_lookup`), Pass 0b (contact chain via qb_contacts — 1:1 pairs auto-write as `contact_chain`), then Pass 1-3 (exact name, domain root, fuzzy — all staged to `qb_match_candidates` for human review). Multi-match cases from any pass are also staged. The Match Review page shows revenue-based progress toward a 95% match target with bucket breakdown. Matched companies get enriched with QB metadata (customer type, tier, revenue, invoice recency). This enrichment is then available to the AI analyzer — when classifying emails, the prompt includes "this customer is a Level 3 Key Account with $X revenue and an open quote" which dramatically improves classification quality.
 
 ### The job and worker flow
 
