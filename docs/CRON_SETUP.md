@@ -2,7 +2,7 @@
 
 All scheduled work runs via HTTP POST to internal endpoints, authenticated with a `CRON_SECRET` Bearer token. Each cron job is a separate Railway service using `alpine/curl` as the Docker image.
 
-**Status:** Live — 7 Railway cron services configured and running.
+**Status:** Live — 6 Railway cron services active (notification-dispatch disabled).
 
 ## Current Setup
 
@@ -18,12 +18,12 @@ All scheduled work runs via HTTP POST to internal endpoints, authenticated with 
 | `POST /api/internal/jobs/gmail-sync` | Every 15 min | `*/15 * * * *` | Live |
 | `POST /api/internal/jobs/outlook-sync` | Every 15 min | `*/15 * * * *` | Live |
 | `POST /api/internal/jobs/qb-sync` | Hourly at :15 | `15 * * * *` | Live |
-| `POST /api/internal/jobs/notification-dispatch` | Every 5 min | `*/5 * * * *` | Live |
+| `POST /api/internal/jobs/notification-dispatch` | — | No schedule | Disabled (no user-facing notifications yet) |
 | `POST /api/internal/jobs/stuck-reconciler` | Every 10 min | `*/10 * * * *` | Live |
 | `POST /api/internal/jobs/refresh-persona-metrics` | Daily 03:00 UTC | `0 3 * * *` | Live |
 | `POST /api/internal/jobs/analytics-rollup` | Daily 02:00 UTC | `0 2 * * *` | Live |
 
-**Note:** `notification-dispatch` was designed for 2-minute intervals but Railway's minimum is 5 minutes. This is acceptable — notifications may be delayed up to 5 minutes from event creation.
+**Note:** `notification-dispatch` is currently disabled — no user-facing notifications are implemented yet. Job lifecycle events are no longer emitted (processing jobs page serves that purpose). Re-enable when real user-facing notifications are built (e.g., new customer discovered, at-risk alerts).
 
 ## Admin-Only Endpoints (not cron-scheduled)
 
@@ -169,7 +169,7 @@ Then create a test job (e.g., trigger pipeline from the UI) and confirm the work
 | `ai_backfill` | Backfill classifier | Batch classification of unanalyzed emails |
 | `reembed` | Vector embeddings | Re-embed emails/companies/operations |
 | `reference_extraction` | QB ref linking | Regex-based QB reference extraction from email bodies |
-| `notification_dispatch` | Event notifications | Dispatch pending event notifications |
+| `notification_dispatch` | Event notifications | Dispatch pending event notifications (currently idle — cron disabled, no events emitted) |
 
 ### Scaling
 
@@ -198,7 +198,7 @@ Returns `{"status": "healthy", "issues": []}` when everything is fine. Non-empty
 
 After configuring cron:
 1. Check `processing_jobs` table for `triggered_by='cron'` entries
-2. Verify `events.dispatched_at` is being populated (notification dispatch working)
+2. ~~Verify `events.dispatched_at` is being populated~~ (notification dispatch currently disabled)
 3. Check `/api/internal/jobs/health` returns healthy status
 4. Monitor `qb_sync_config.last_synced_at` timestamps for QB sync
 5. Check `contact_email_metrics` view freshness — should reflect emails from the last 24 hours

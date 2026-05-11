@@ -676,7 +676,6 @@ Runs long tasks (AI analysis, reembed, reference extraction, notification dispat
 #### What data it produces
 
 - Updates `processing_jobs` (status transitions: pending → running → completed/failed/stopped/interrupted)
-- Emits events to `events` table on job lifecycle transitions (started, completed, failed, stopped)
 
 #### What it depends on
 
@@ -692,7 +691,7 @@ Built and deployed, partial traffic. The worker process is defined in `railway.t
 - `ai_backfill` — Intent backfill across multiple mailboxes
 - `reembed` — Vector embedding regeneration
 - `reference_extraction` — QB reference scanning
-- `notification_dispatch` — Event-to-notification routing
+- `notification_dispatch` — Event-to-notification routing (currently idle — cron disabled, no events emitted)
 
 **Job types still on FastAPI BackgroundTasks (not worker):**
 
@@ -725,50 +724,27 @@ Worker code exists at `backend/src/workers/job_runner.py`. Handler registry at `
 
 #### What it does
 
-Delivers in-app alerts to users when things happen (jobs complete, fail, etc.). The system emits events on job lifecycle transitions, a notification dispatcher reads undispatched events and creates notification records for the right recipients, and a bell icon in the header shows unread count.
+Infrastructure for delivering in-app alerts to users. The system has an event emission layer, a notification dispatcher that routes events to recipients, and a bell icon in the header. **Currently idle** — no events are emitted and the dispatch cron is disabled.
 
-#### What triggers it
+#### Architecture (built but idle)
 
-- Event emission: the job runner calls `emit_job_event()` on job.started, job.completed, job.failed, job.stopped
-- Notification dispatch: external cron calls `POST /internal/jobs/notification-dispatch` every 2 minutes (requires `CRON_SECRET`), which creates a `notification_dispatch` processing job for the worker to claim
-- Bell icon: polls `GET /notifications/unread-count` every 30 seconds
+- **Event emission:** `emit_job_event()` in `backend/src/services/events.py` — inserts rows into the `events` table. Previously called on job lifecycle transitions (started, completed, failed, stopped). **Removed** — job lifecycle events added no user value; the processing jobs page serves that purpose.
+- **Notification dispatch:** `notification_dispatch` worker handler reads undispatched events, resolves recipients (admins + client-assigned users), creates `notifications` rows. Triggered by cron calling `POST /internal/jobs/notification-dispatch`. **Cron disabled** (Railway schedule set to "No schedule").
+- **Bell icon:** `NotificationBell.tsx` polls `GET /notifications/unread-count` every 5 minutes (reduced from 30 seconds). Shows unread badge, popover with notification list, mark-read actions.
 
-#### What data it reads
+#### What to wire up when real notifications are needed
 
-- `events` table (undispatched events)
-- `user_profiles` (admin role check), `user_client_assignments` (client-scoped recipient resolution)
-- `notifications` table (for listing and marking read)
+The infrastructure is ready — event emission, dispatch handler, recipient resolution, bell icon, and API endpoints all work. Future user-facing events to consider:
+- New customer/contact discovered during extraction
+- QB match found (new company matched)
+- At-risk customer detected (engagement score drop)
+- Overdue thread threshold crossed
 
-#### What data it produces
-
-- `events` table (event rows with type, payload, source)
-- `notifications` table (per-recipient records with title, body, status, channel)
-- Updates `events.dispatched_at` after processing
-
-#### What it depends on
-
-Background Job System (emits events). Worker process (for notification_dispatch handler).
-
-#### Current status
-
-Built and deployed, partially active. Events are emitted whenever worker jobs run (the 5 migrated job types). The notification_dispatch handler exists and is registered. A cron endpoint (`POST /internal/jobs/notification-dispatch`) is available for automated dispatch every 2 minutes. However:
-
-- Events are only emitted by jobs running on the **worker** (5 types). BackgroundTasks jobs don't emit events
-- The cron endpoint exists but requires external cron (cron-job.org or Railway cron) to be configured and calling it — see `docs/CRON_SETUP.md`
-- The bell icon polls for notifications via HTTP. WebSocket infrastructure exists but notifications use polling, not push
-- If the worker is not running, no events are emitted and no notifications are dispatched
-
-#### Known limitations
-
-- Only 4 event types exist: job.started, job.completed, job.failed, job.stopped. No events for email arrival, new contact discovery, QB sync completion, or action signal detection
-- Notification dispatch depends on external cron calling the endpoint every 2 minutes — if cron is not configured, events pile up with `dispatched_at=NULL`
-- Recipient resolution is basic: admins see all events, assigned users see their client's events. No per-user notification preferences or muting
-- No email or Slack delivery — in-app only (by design for Phase A)
-- Bell icon polls every 30 seconds. In-app notifications may be up to 30 seconds stale
+To re-enable: (1) add `emit_event()` calls at the desired trigger points, (2) re-enable the Railway cron for `notification-dispatch`, (3) optionally tighten the bell poll interval.
 
 #### Verified by
 
-`notification_dispatch` handler at `backend/src/workers/handlers/notification_dispatch.py`. Notification API at `backend/src/routers/notifications.py`. NotificationBell component at `frontend/src/components/NotificationBell.tsx`. `events` and `notifications` tables defined in migration 085. Whether events actually exist in production depends on whether the worker is running.
+`notification_dispatch` handler at `backend/src/workers/handlers/notification_dispatch.py`. Notification API at `backend/src/routers/notifications.py`. NotificationBell component at `frontend/src/components/NotificationBell.tsx`. `events` and `notifications` tables defined in migration 085.
 
 ---
 
@@ -967,16 +943,16 @@ The worker claims jobs via `claim_next_job`, an RPC that does `SELECT ... FROM p
 
 If a worker crashes, its heartbeat stops, and the lease expires. Every 10 minutes, each worker runs the `reconcile_stuck_jobs` RPC which finds jobs with expired leases and marks them as `interrupted`. There's also a belt-and-suspenders HTTP endpoint (`POST /internal/jobs/stuck-reconciler`) that external cron can call.
 
-### The event-to-notification path
+### The event-to-notification path (currently idle)
 
-When a worker job transitions state (started, completed, failed, stopped), the job runner calls `emit_job_event()` which inserts a row into the `events` table with `dispatched_at=NULL`. The notification_dispatch handler (when triggered) reads undispatched events, resolves recipients (admins + users assigned to the event's client), creates `notifications` rows, and marks events as dispatched. The frontend's NotificationBell component polls `GET /notifications/unread-count` every 30 seconds and displays the count badge. Currently, this chain only fires for the 5 worker job types, and only if someone triggers a notification_dispatch job.
+The notification pipeline is built but intentionally disabled. The flow was: worker job transitions → `emit_job_event()` inserts into `events` → cron triggers `notification_dispatch` → handler resolves recipients and creates `notifications` rows → bell icon polls unread count. This was disabled because job lifecycle events provided no end-user value (processing jobs page already shows job status). To re-enable with user-facing events, see Section 2.13.
 
 ### What to check when something breaks
 
 - **Smart Inbox not updating after sync:** Check that email sync completed (look at `mailboxes.last_sync_at`). Then check that AI analysis has been run (look at `ai_email_intelligence` for the new emails). Then check that bucket engine ran (look at `action_bucket` column).
 - **Company showing no QB data:** Check `qb_sync_config` is active. Check `qb_customers` has the company. Check `customer_companies.qb_customer_id` is populated (matching ran). Check QB data propagation ran after matching.
 - **Processing job stuck as "running":** Check if `worker_id` is populated (worker path) or NULL (BackgroundTasks path). If worker path: check if the worker is alive and heartbeating. If BackgroundTasks path: the API server may have restarted — manually update the job status.
-- **No notifications appearing:** Check `events` table for recent rows. If empty: the worker isn't running or no worker jobs have run. If events exist but `dispatched_at` is NULL: the notification_dispatch job hasn't been triggered. If notifications exist but the bell shows 0: check `recipient_user_id` matches the current user.
+- **No notifications appearing:** Expected — notification system is currently idle (no events emitted, dispatch cron disabled). See Section 2.13 for re-enablement steps.
 
 ---
 
@@ -1008,7 +984,7 @@ Both paths coexist because the migration is incremental. The `railway.toml` defi
 
 ### Notifications
 
-Only `in_app` channel is active (Phase A). Events are emitted for 4 job lifecycle types (started, completed, failed, stopped) but only from worker-executed jobs. The notification_dispatch handler routes events to recipients based on role and client assignment. A cron endpoint (`POST /internal/jobs/notification-dispatch`) exists for automated dispatch every 2 minutes — requires external cron to be configured (see `docs/CRON_SETUP.md`). No email, Slack, or push notification channels.
+**Currently idle.** The notification infrastructure is built (events table, dispatch handler, bell icon, API) but intentionally disabled. Job lifecycle event emission was removed (processing jobs page covers that), and the Railway cron for `notification-dispatch` is set to "No schedule". The bell icon polls at 5-minute intervals but there are no events to dispatch. Re-enable when user-facing notifications are implemented (see Section 2.13). Only `in_app` channel exists — no email, Slack, or push.
 
 ### Data retention
 

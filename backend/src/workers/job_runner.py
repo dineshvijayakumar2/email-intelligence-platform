@@ -31,7 +31,6 @@ load_dotenv(_env)
 from supabase import create_client
 
 from .handlers import JOB_HANDLERS
-from ..services.events import emit_job_event
 
 logger = logging.getLogger("worker")
 
@@ -130,7 +129,6 @@ async def _execute_job(sb, job: dict):
         return
 
     logger.info(f"Executing job {job_id} (type={job_type}, attempt={job.get('attempts', 1)})")
-    emit_job_event(sb, job, "job.started")
 
     stop_event = asyncio.Event()
     heartbeat_task = asyncio.create_task(_heartbeat_loop(sb, job_id, stop_event))
@@ -140,15 +138,12 @@ async def _execute_job(sb, job: dict):
 
         if not stop_event.is_set():
             await _mark_completed(sb, job_id)
-            emit_job_event(sb, job, "job.completed")
             logger.info(f"Job {job_id} completed successfully")
         else:
-            emit_job_event(sb, job, "job.stopped")
             logger.warning(f"Job {job_id} aborted (lease lost or shutdown)")
     except Exception as e:
         logger.error(f"Job {job_id} failed: {e}", exc_info=True)
         await _mark_failed(sb, job_id, str(e))
-        emit_job_event(sb, job, "job.failed", {"error": str(e)[:500]})
     finally:
         stop_event.set()
         heartbeat_task.cancel()
