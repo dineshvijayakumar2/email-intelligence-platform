@@ -104,7 +104,7 @@ file_handler = logging.handlers.RotatingFileHandler(
     os.path.join(log_dir, 'backend.log'), maxBytes=10*1024*1024, backupCount=5, encoding='utf-8'
 )
 file_handler.setFormatter(logging.Formatter(log_format))
-console_handler = logging.StreamHandler()
+console_handler = logging.StreamHandler(sys.stdout)
 console_handler.setFormatter(SafeFormatter(log_format))
 
 # Apply token redaction to all handlers

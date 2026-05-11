@@ -73,11 +73,18 @@ BEGIN
           AND qc.matched_company_id IS NULL
     ),
 
+    -- QB-anchored company IDs (source of truth: qb_customers.matched_company_id)
+    qb_anchored_set AS (
+        SELECT DISTINCT matched_company_id AS company_id
+        FROM qb_customers
+        WHERE client_id = p_client_id AND matched_company_id IS NOT NULL
+    ),
+
     -- Company stats: single scan
     company_agg AS (
         SELECT
             COUNT(*)::int AS total_sb,
-            COUNT(CASE WHEN qb_customer_id IS NOT NULL THEN 1 END)::int AS qb_anchored
+            (SELECT COUNT(*)::int FROM qb_anchored_set) AS qb_anchored
         FROM customer_companies
         WHERE client_id = p_client_id
     ),
@@ -94,25 +101,25 @@ BEGIN
         ) sub
     ),
 
-    -- Contact stats: single scan with LEFT JOIN for QB-anchor check
+    -- Contact stats: single scan with LEFT JOIN to QB-anchored set
     contact_agg AS (
         SELECT
             COUNT(*)::int AS total,
             COUNT(ct.customer_company_id)::int AS with_company,
-            COUNT(CASE WHEN co.qb_customer_id IS NOT NULL THEN 1 END)::int AS with_qb_company
+            COUNT(CASE WHEN qa.company_id IS NOT NULL THEN 1 END)::int AS with_qb_company
         FROM customer_contacts ct
-        LEFT JOIN customer_companies co ON ct.customer_company_id = co.id
+        LEFT JOIN qb_anchored_set qa ON ct.customer_company_id = qa.company_id
         WHERE ct.client_id = p_client_id
     ),
 
-    -- Email stats: single scan with LEFT JOIN for QB-anchor check
+    -- Email stats: single scan with LEFT JOIN to QB-anchored set
     email_agg AS (
         SELECT
             COUNT(*)::int AS total,
             COUNT(e.customer_company_id)::int AS with_company,
-            COUNT(CASE WHEN co.qb_customer_id IS NOT NULL THEN 1 END)::int AS with_qb_company
+            COUNT(CASE WHEN qa.company_id IS NOT NULL THEN 1 END)::int AS with_qb_company
         FROM emails e
-        LEFT JOIN customer_companies co ON e.customer_company_id = co.id
+        LEFT JOIN qb_anchored_set qa ON e.customer_company_id = qa.company_id
         WHERE e.client_id = p_client_id
     )
 

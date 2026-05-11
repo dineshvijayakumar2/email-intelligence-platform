@@ -1678,136 +1678,24 @@ class QuickbaseSync:
         total_propagate = len(all_matched)
         logger.info(f"Propagating QB data for {total_propagate} matched customers")
 
-        # ── Compute live revenue from qb_quotes + qb_jobs ──────────────
-        # QB's summary fields (total_invoiced, invoiced_ty, etc.) are often
-        # stale or incorrect. Computing from actual line-item data is authoritative.
-        from datetime import datetime
-        current_year = datetime.utcnow().year
-        last_year = current_year - 1
-
-        # Build customer_key_id → company_id lookup
-        key_to_company: dict[str, str] = {}
-        for qb in all_matched:
-            company_id = qb['matched_company_id']
-            key_id = qb.get('customer_key_id') or qb.get('qb_record_id')
-            if key_id:
-                key_to_company[str(key_id)] = company_id
-
-        all_key_ids = list(key_to_company.keys())
-
-        # Fetch accepted quotes (has_job=true) revenue grouped by customer
-        # company_revenue[company_id] = {total, ty, ly, latest_date}
-        company_revenue: dict[str, dict] = {}
-
-        if all_key_ids:
-            IN_LIMIT = 400
-            for i in range(0, len(all_key_ids), IN_LIMIT):
-                batch_keys = all_key_ids[i:i + IN_LIMIT]
-                q_offset = 0
-                while True:
-                    quotes_page = _execute_with_retry(lambda bk=batch_keys, off=q_offset: self._supabase.table('qb_quotes').select(
-                        'qb_customer_id, sell_ex_tax, date_created, has_job'
-                    ).in_('qb_customer_id', bk).eq('client_id', self._client_id).range(off, off + 999).execute())
-                    rows = quotes_page.data or []
-                    for q in rows:
-                        cid = key_to_company.get(str(q.get('qb_customer_id', '')))
-                        if not cid:
-                            continue
-                        if cid not in company_revenue:
-                            company_revenue[cid] = {'total': 0.0, 'ty': 0.0, 'ly': 0.0, 'latest': ''}
-                        val = float(q.get('sell_ex_tax') or 0)
-                        if q.get('has_job'):  # only count accepted quotes
-                            company_revenue[cid]['total'] += val
-                            dt = q.get('date_created') or ''
-                            if dt:
-                                try:
-                                    yr = int(dt[:4])
-                                    if yr == current_year:
-                                        company_revenue[cid]['ty'] += val
-                                    elif yr == last_year:
-                                        company_revenue[cid]['ly'] += val
-                                except (ValueError, IndexError):
-                                    pass
-                                if dt > company_revenue[cid]['latest']:
-                                    company_revenue[cid]['latest'] = dt
-                    if len(rows) == 0:
-                        break
-                    q_offset += len(rows)
-
-            # Also fetch jobs with invoiced_margin
-            for i in range(0, len(all_key_ids), IN_LIMIT):
-                batch_keys = all_key_ids[i:i + IN_LIMIT]
-                j_offset = 0
-                while True:
-                    jobs_page = _execute_with_retry(lambda bk=batch_keys, off=j_offset: self._supabase.table('qb_jobs').select(
-                        'qb_customer_id, invoiced_margin, accepted_date'
-                    ).in_('qb_customer_id', bk).eq('client_id', self._client_id).range(off, off + 999).execute())
-                    rows = jobs_page.data or []
-                    for j in rows:
-                        cid = key_to_company.get(str(j.get('qb_customer_id', '')))
-                        if not cid:
-                            continue
-                        if cid not in company_revenue:
-                            company_revenue[cid] = {'total': 0.0, 'ty': 0.0, 'ly': 0.0, 'latest': ''}
-                        val = float(j.get('invoiced_margin') or 0)
-                        company_revenue[cid]['total'] += val
-                        dt = j.get('accepted_date') or ''
-                        if dt:
-                            try:
-                                yr = int(dt[:4])
-                                if yr == current_year:
-                                    company_revenue[cid]['ty'] += val
-                                elif yr == last_year:
-                                    company_revenue[cid]['ly'] += val
-                            except (ValueError, IndexError):
-                                pass
-                            if dt > company_revenue[cid]['latest']:
-                                company_revenue[cid]['latest'] = dt
-                    if len(rows) == 0:
-                        break
-                    j_offset += len(rows)
-
-        logger.info(f"Computed live revenue for {len(company_revenue)} companies from quotes/jobs")
-
         # Group matched QB customers by company_id for dedup (multiple QB
         # customers can map to the same company — pick best: highest revenue)
         by_company: dict[str, dict] = {}
         for qb in all_matched:
             company_id = qb['matched_company_id']
-            tier = qb.get('customer_tier') or _derive_tier(qb.get('total_invoiced'))
-
-            # Use live-computed revenue if available, else fall back to QB summary
-            live = company_revenue.get(company_id)
-            if live and live['total'] > 0:
-                total = round(live['total'], 2)
-                ty = round(live['ty'], 2) if live['ty'] else None
-                ly = round(live['ly'], 2) if live['ly'] else None
-                growth = _derive_growth(ty, ly)
-                # Compute days since last order from latest date
+            total = qb.get('total_invoiced')
+            tier = qb.get('customer_tier') or _derive_tier(total)
+            ty = qb.get('invoiced_ty')
+            ly = qb.get('invoiced_ly')
+            growth = qb.get('growth_90d') or _derive_growth(ty, ly)
+            recency_raw = qb.get('days_since_last_invoice') or qb.get('recency_days')
+            recency = _parse_recency_html(recency_raw)
+            if recency and recency >= 9999:
                 recency = None
-                if live['latest']:
-                    try:
-                        last_dt = datetime.fromisoformat(live['latest'].replace('Z', '+00:00'))
-                        recency = (datetime.utcnow() - last_dt.replace(tzinfo=None)).days
-                    except Exception:
-                        pass
-                tier = _derive_tier(total) or tier
-            else:
-                # Fallback to QB summary fields
-                ty = qb.get('invoiced_ty')
-                ly = qb.get('invoiced_ly')
-                total = qb.get('total_invoiced')
-                growth = qb.get('growth_90d') or _derive_growth(ty, ly)
-                recency_raw = qb.get('days_since_last_invoice') or qb.get('recency_days')
-                recency = _parse_recency_html(recency_raw)
-                # Suppress QB's 9999 sentinel
-                if recency and recency >= 9999:
-                    recency = None
 
-            # Only write if we don't already have a better record for this company
             existing = by_company.get(company_id)
             if existing and (existing.get('qb_total_revenue') or 0) > (total or 0):
-                continue  # keep higher-revenue record
+                continue
 
             by_company[company_id] = {
                 'qb_customer_type': qb.get('customer_status'),

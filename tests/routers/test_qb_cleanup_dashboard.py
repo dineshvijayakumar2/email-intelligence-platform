@@ -177,17 +177,13 @@ class TestCompanyConsistency:
     def test_total_sb_is_positive(self, dashboard):
         assert int(dashboard["companies"]["total_sb_companies"]) > 0
 
-    def test_qb_anchored_matches_independent_count(self, sb, dashboard):
-        """Cross-check: qb_anchored_sb should match count of companies with qb_customer_id set."""
-        resp = sb.table("customer_companies").select(
-            "id", count="exact"
-        ).eq("client_id", CLIENT_ID).not_.is_(
-            "qb_customer_id", "null"
-        ).limit(0).execute()
-        independent_count = resp.count or 0
-        rpc_count = int(dashboard["companies"]["qb_anchored_sb"])
-        assert rpc_count == independent_count, (
-            f"RPC qb_anchored_sb ({rpc_count}) != independent count ({independent_count})"
+    def test_qb_anchored_bounded_by_matched_customers(self, dashboard):
+        """qb_anchored_sb <= matched_qb_customers (multiple QB can share one SB)."""
+        co = dashboard["companies"]
+        anchored = int(co["qb_anchored_sb"])
+        matched = int(co["matched_qb_customers"])
+        assert 0 < anchored <= matched, (
+            f"qb_anchored_sb ({anchored}) should be >0 and <= matched_qb_customers ({matched})"
         )
 
 
