@@ -1077,7 +1077,7 @@ class QuickbaseSync:
                 'qb_record_id': qb_cust.get('qb_record_id'),
                 'qb_customer_id': qb_cust.get('qb_record_id'),
                 'qb_name': qb_cust.get('customer_name'),
-                'match_score': 80,
+                'match_score': 85,
                 'match_method': 'email_multi_match',
             })
 
@@ -1189,7 +1189,7 @@ class QuickbaseSync:
                     'qb_record_id': qb_cust.get('qb_record_id'),
                     'qb_customer_id': qb_cust.get('qb_record_id'),
                     'qb_name': qb_cust.get('customer_name'),
-                    'match_score': 100,
+                    'match_score': 75,
                     'match_method': 'exact_name',
                 })
                 stats['pass1_staged'] += 1
@@ -1213,7 +1213,7 @@ class QuickbaseSync:
                         'qb_record_id': qb_cust.get('qb_record_id'),
                         'qb_customer_id': qb_cust.get('qb_record_id'),
                         'qb_name': qb_cust.get('customer_name'),
-                        'match_score': 90,
+                        'match_score': 65,
                         'match_method': 'domain_root',
                     })
                     stats['pass2_staged'] += 1
@@ -1258,7 +1258,7 @@ class QuickbaseSync:
                         'qb_record_id': qb_cust.get('qb_record_id'),
                         'qb_customer_id': qb_cust.get('qb_record_id'),
                         'qb_name': qb_cust.get('customer_name'),
-                        'match_score': score,
+                        'match_score': round(score * 0.75),
                         'match_method': 'fuzzy',
                     })
                     stats['pass3_staged'] += 1

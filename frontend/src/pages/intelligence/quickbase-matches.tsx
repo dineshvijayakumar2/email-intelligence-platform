@@ -1,6 +1,7 @@
 /**
- * QB Match Review -- Map QB customers to SB companies via searchable selector.
- * Fuzzy candidates are pre-suggested; user can type to search all SB companies (server-side).
+ * QB Match Review -- Browse QB customers (matched, staged, unmatched).
+ * Candidates view allows confirm/skip with searchable company selector.
+ * Matched/unmatched views are read-only for verifiability.
  * Zero antd -- Tailwind CSS + Lucide icons.
  */
 
@@ -20,20 +21,7 @@ import { formatCurrency, formatCurrencyCompact } from '../../utils/numberFormat'
 
 const PAGE_SIZE = 30;
 
-interface MatchCandidate {
-  id: string;
-  sb_company_id: string;
-  sb_company_name: string;
-  qb_record_id: string;
-  qb_customer_id: string;
-  qb_name: string;
-  match_score: number;
-  match_method: string;
-  reviewed: boolean;
-  accepted: boolean | null;
-  qb_total_revenue?: number;
-  sb_total_emails?: number;
-}
+// -- Interfaces -------------------------------------------------------------------------------
 
 interface RevenueBucket { count: number; revenue: number }
 
@@ -62,6 +50,23 @@ interface HealthData {
   revenue?: RevenueStats;
 }
 
+type ViewType = 'candidates' | 'matched' | 'unmatched';
+
+interface BrowseRow {
+  id: string;
+  qb_record_id?: string;
+  qb_name: string;
+  qb_total_revenue?: number;
+  match_status: 'matched' | 'candidate' | 'unmatched';
+  match_method?: string;
+  match_score?: number;
+  sb_company_id?: string;
+  sb_company_name?: string;
+  sb_total_emails?: number;
+  candidate_id?: string;
+  qb_customer_id?: string;
+}
+
 // -- Server-side search Select for SB companies -----------------------------------------------
 
 interface CompanyOption { value: string; label: string }
@@ -86,7 +91,6 @@ function CompanySearchSelect({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
@@ -183,6 +187,17 @@ function SortIcon({ field, sortBy, sortDesc }: { field: string; sortBy: string; 
     : <ChevronUp className="h-3 w-3 text-slate-600 ml-1" />;
 }
 
+// -- Helpers ----------------------------------------------------------------------------------
+
+const METHOD_LABELS: Record<string, string> = {
+  email_lookup: 'Email',
+  email_multi_match: 'Email (multi)',
+  contact_chain: 'Contact chain',
+  exact_name: 'Name',
+  domain_root: 'Domain',
+  fuzzy: 'Fuzzy',
+};
+
 // -- Main page ---------------------------------------------------------------------------------
 
 export default function QuickbaseMatchesPage() {
@@ -190,8 +205,9 @@ export default function QuickbaseMatchesPage() {
   const [health, setHealth] = useState<HealthData | null>(null);
   const [healthLoading, setHealthLoading] = useState(false);
 
-  const [candidates, setCandidates] = useState<MatchCandidate[]>([]);
-  const [total, setTotal] = useState(0);
+  const [view, setView] = useState<ViewType>('candidates');
+  const [rows, setRows] = useState<BrowseRow[]>([]);
+  const [browseTotal, setBrowseTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [sortBy, setSortBy] = useState('match_score');
@@ -203,7 +219,6 @@ export default function QuickbaseMatchesPage() {
   const [rematchMenuOpen, setRematchMenuOpen] = useState(false);
   const rematchRef = useRef<HTMLDivElement>(null);
 
-  // Close rematch dropdown on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (rematchRef.current && !rematchRef.current.contains(e.target as Node)) {
@@ -226,41 +241,47 @@ export default function QuickbaseMatchesPage() {
     setHealthLoading(false);
   }, [clientId]);
 
-  const loadCandidates = useCallback(async () => {
+  const loadBrowseData = useCallback(async () => {
     if (!clientId) return;
     setLoading(true);
     try {
-      const offset = (page - 1) * PAGE_SIZE;
+      const off = (page - 1) * PAGE_SIZE;
+      let backendSort = sortBy;
+      if (view !== 'candidates') {
+        if (sortBy === 'qb_total_revenue' || sortBy === 'match_score') backendSort = 'total_invoiced';
+        else if (sortBy === 'qb_name') backendSort = 'customer_name';
+        else backendSort = 'total_invoiced';
+      }
       const data = await api.get(
-        `/v1/quickbase/match-candidates?client_id=${clientId}&reviewed=false&limit=${PAGE_SIZE}&offset=${offset}&sort_by=${sortBy}&sort_desc=${sortDesc}`
-      ) as { candidates: MatchCandidate[]; total: number };
-      setCandidates(data.candidates || []);
-      setTotal(data.total || 0);
+        `/v1/quickbase/qb-customers-browse?client_id=${clientId}&view=${view}&limit=${PAGE_SIZE}&offset=${off}&sort_by=${backendSort}&sort_desc=${sortDesc}`
+      ) as { items: BrowseRow[]; total: number };
+      setRows(data.items || []);
+      setBrowseTotal(data.total || 0);
     } catch { /* silent */ }
     setLoading(false);
-  }, [clientId, page, sortBy, sortDesc]);
+  }, [clientId, view, page, sortBy, sortDesc]);
 
   useEffect(() => { loadHealth(); }, [loadHealth]);
-  useEffect(() => { loadCandidates(); }, [loadCandidates]);
+  useEffect(() => { loadBrowseData(); }, [loadBrowseData]);
 
   // -- Actions --------------------------------------------------------------------------------
 
-  const handleConfirm = async (candidate: MatchCandidate) => {
-    const override = rowSelections[candidate.id];
-    const targetName = override?.name || candidate.sb_company_name;
-    setSavingRow(candidate.id);
+  const handleConfirm = async (row: BrowseRow) => {
+    if (!row.candidate_id) return;
+    const override = rowSelections[row.candidate_id];
+    const targetName = override?.name || row.sb_company_name;
+    setSavingRow(row.candidate_id);
     try {
       const params = new URLSearchParams({ accepted: 'true' });
-      if (override && override.id !== candidate.sb_company_id) {
+      if (override && override.id !== row.sb_company_id) {
         params.set('sb_company_id', override.id);
       }
-      await api.post(`/v1/quickbase/match-candidates/${candidate.id}/review?${params}`);
-      notify.success(`Linked "${candidate.qb_name}" \u2192 "${targetName}"`);
-      setCandidates(prev => prev.filter(c => c.id !== candidate.id));
-      setTotal(prev => prev - 1);
-      setRowSelections(prev => { const n = { ...prev }; delete n[candidate.id]; return n; });
-      // Update matched count + revenue optimistically
-      const addedRevenue = candidate.qb_total_revenue || 0;
+      await api.post(`/v1/quickbase/match-candidates/${row.candidate_id}/review?${params}`);
+      notify.success(`Linked "${row.qb_name}" → "${targetName}"`);
+      setRows(prev => prev.filter(r => r.candidate_id !== row.candidate_id));
+      setBrowseTotal(prev => prev - 1);
+      setRowSelections(prev => { const n = { ...prev }; delete n[row.candidate_id!]; return n; });
+      const addedRevenue = row.qb_total_revenue || 0;
       setHealth(prev => {
         if (!prev) return prev;
         const newMatched = prev.qb_customers.matched + 1;
@@ -288,8 +309,8 @@ export default function QuickbaseMatchesPage() {
     setSavingRow(candidateId);
     try {
       await api.post(`/v1/quickbase/match-candidates/${candidateId}/review?accepted=false`);
-      setCandidates(prev => prev.filter(c => c.id !== candidateId));
-      setTotal(prev => prev - 1);
+      setRows(prev => prev.filter(r => r.candidate_id !== candidateId));
+      setBrowseTotal(prev => prev - 1);
     } catch {
       notify.error('Failed to skip');
     }
@@ -312,11 +333,20 @@ export default function QuickbaseMatchesPage() {
     setTimeout(() => setRematchLoading(false), 2000);
   };
 
+  const switchView = (v: ViewType) => {
+    if (v === view) return;
+    setView(v);
+    setPage(1);
+    setSortBy(v === 'candidates' ? 'match_score' : 'qb_total_revenue');
+    setSortDesc(true);
+    setRowSelections({});
+  };
+
   const scoreVariant = (score: number): 'success' | 'warning' | 'info' | 'neutral' => {
-    if (score >= 95) return 'success';
-    if (score >= 90) return 'success';
-    if (score >= 85) return 'warning';
-    return 'info';
+    if (score >= 85) return 'success';
+    if (score >= 75) return 'warning';
+    if (score >= 65) return 'info';
+    return 'neutral';
   };
 
   const handleSort = (field: string) => {
@@ -329,7 +359,16 @@ export default function QuickbaseMatchesPage() {
     setPage(1);
   };
 
-  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const totalPages = Math.ceil(browseTotal / PAGE_SIZE);
+  const rev = health?.revenue;
+
+  // -- Tab config -----------------------------------------------------------------------------
+
+  const tabs: { key: ViewType; label: string; count: number }[] = [
+    { key: 'candidates', label: 'Candidates', count: rev?.buckets.staged.count ?? 0 },
+    { key: 'matched', label: 'Matched', count: health?.qb_customers.matched ?? 0 },
+    { key: 'unmatched', label: 'Unmatched', count: health?.qb_customers.unmatched ?? 0 },
+  ];
 
   // -- Render ---------------------------------------------------------------------------------
 
@@ -371,7 +410,7 @@ export default function QuickbaseMatchesPage() {
             <button
               className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-colors"
               disabled={!clientId}
-              onClick={() => { loadHealth(); loadCandidates(); }}
+              onClick={() => { loadHealth(); loadBrowseData(); }}
             >
               <RefreshCw className="h-3.5 w-3.5" />
               Refresh
@@ -401,7 +440,6 @@ export default function QuickbaseMatchesPage() {
           {healthLoading ? (
             <ContentSkeleton rows={3} className="mb-5" />
           ) : (() => {
-            const rev = health?.revenue;
             const matchedPct = rev?.revenue_match_rate_pct ?? 0;
             const targetPct = rev?.revenue_target_pct ?? 95;
             const totalRev = rev?.total_revenue ?? 0;
@@ -444,7 +482,7 @@ export default function QuickbaseMatchesPage() {
                   </div>
                 </div>
 
-                {/* Row 2: Revenue KPI Cards */}
+                {/* Row 2: Revenue KPI Cards (clickable) */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                   <div className="rounded-lg border bg-white shadow-sm p-4">
                     <p className="text-xs font-medium text-slate-500 mb-1">Total QB Revenue</p>
@@ -454,7 +492,12 @@ export default function QuickbaseMatchesPage() {
                     <p className="text-xs text-slate-400 mt-1">{health?.qb_customers.total || 0} QB customers</p>
                   </div>
 
-                  <div className="rounded-lg border bg-white shadow-sm p-4">
+                  <div
+                    className={`rounded-lg border shadow-sm p-4 cursor-pointer transition-all hover:shadow-md ${
+                      view === 'matched' ? 'ring-2 ring-emerald-500 bg-emerald-50/30' : 'bg-white hover:border-emerald-300'
+                    }`}
+                    onClick={() => switchView('matched')}
+                  >
                     <p className="text-xs font-medium text-slate-500 mb-1">Matched Revenue</p>
                     <span className="text-2xl font-semibold text-emerald-600">
                       {formatCurrencyCompact(matchedRev)}
@@ -464,7 +507,12 @@ export default function QuickbaseMatchesPage() {
                     </p>
                   </div>
 
-                  <div className="rounded-lg border bg-white shadow-sm p-4">
+                  <div
+                    className={`rounded-lg border shadow-sm p-4 cursor-pointer transition-all hover:shadow-md ${
+                      view === 'unmatched' ? 'ring-2 ring-amber-500 bg-amber-50/30' : 'bg-white hover:border-amber-300'
+                    }`}
+                    onClick={() => switchView('unmatched')}
+                  >
                     <p className="text-xs font-medium text-slate-500 mb-1">Unmatched Revenue</p>
                     <span className="text-2xl font-semibold text-amber-600">
                       {formatCurrencyCompact(unmatchedRev)}
@@ -472,20 +520,30 @@ export default function QuickbaseMatchesPage() {
                     <p className="text-xs text-slate-400 mt-1">{health?.qb_customers.unmatched || 0} QB customers unmatched</p>
                   </div>
 
-                  <div className="rounded-lg border bg-white shadow-sm p-4">
+                  <div
+                    className={`rounded-lg border shadow-sm p-4 cursor-pointer transition-all hover:shadow-md ${
+                      view === 'candidates' ? 'ring-2 ring-purple-500 bg-purple-50/30' : 'bg-white hover:border-purple-300'
+                    }`}
+                    onClick={() => switchView('candidates')}
+                  >
                     <p className="text-xs font-medium text-slate-500 mb-1">Candidates to Review</p>
                     <div className="flex items-baseline gap-1.5">
-                      <span className="text-2xl font-semibold text-purple-600">{total}</span>
+                      <span className="text-2xl font-semibold text-purple-600">{rev?.buckets.staged.count ?? 0}</span>
                       <span className="text-sm text-slate-400">staged</span>
                     </div>
                     <p className="text-xs text-slate-400 mt-1">{health?.qb_contacts.match_rate_pct || 0}% contacts matched</p>
                   </div>
                 </div>
 
-                {/* Row 3: Unmatched Buckets */}
+                {/* Row 3: Unmatched Buckets (clickable) */}
                 {rev && unmatchedRev > 0 && (
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
-                    <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-4">
+                    <div
+                      className={`rounded-lg border p-4 cursor-pointer transition-all hover:shadow-md ${
+                        view === 'unmatched' ? 'ring-2 ring-amber-400 border-amber-300 bg-amber-50' : 'border-amber-200 bg-amber-50/50 hover:border-amber-300'
+                      }`}
+                      onClick={() => switchView('unmatched')}
+                    >
                       <div className="flex items-center gap-1.5 mb-1">
                         <Link2 className="h-3.5 w-3.5 text-amber-600" />
                         <p className="text-xs font-medium text-amber-700">Has Email Link</p>
@@ -498,7 +556,12 @@ export default function QuickbaseMatchesPage() {
                       </p>
                     </div>
 
-                    <div className="rounded-lg border border-purple-200 bg-purple-50/50 p-4">
+                    <div
+                      className={`rounded-lg border p-4 cursor-pointer transition-all hover:shadow-md ${
+                        view === 'candidates' ? 'ring-2 ring-purple-400 border-purple-300 bg-purple-50' : 'border-purple-200 bg-purple-50/50 hover:border-purple-300'
+                      }`}
+                      onClick={() => switchView('candidates')}
+                    >
                       <div className="flex items-center gap-1.5 mb-1">
                         <AlertCircle className="h-3.5 w-3.5 text-purple-600" />
                         <p className="text-xs font-medium text-purple-700">Staged for Review</p>
@@ -511,7 +574,12 @@ export default function QuickbaseMatchesPage() {
                       </p>
                     </div>
 
-                    <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4">
+                    <div
+                      className={`rounded-lg border p-4 cursor-pointer transition-all hover:shadow-md ${
+                        view === 'unmatched' ? 'ring-2 ring-slate-400 border-slate-300 bg-slate-100' : 'border-slate-200 bg-slate-50/50 hover:border-slate-300'
+                      }`}
+                      onClick={() => switchView('unmatched')}
+                    >
                       <div className="flex items-center gap-1.5 mb-1">
                         <FileQuestion className="h-3.5 w-3.5 text-slate-500" />
                         <p className="text-xs font-medium text-slate-600">No Link</p>
@@ -529,22 +597,43 @@ export default function QuickbaseMatchesPage() {
             );
           })()}
 
-          {/* Candidates table */}
+          {/* View Tabs + Table */}
           <div className="rounded-lg border bg-white shadow-sm">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-semibold text-slate-800">Fuzzy Match Candidates</h3>
-                {total > 0 && (
-                  <StatusBadge variant="purple" size="sm">{total}</StatusBadge>
-                )}
-              </div>
+            {/* Tab bar */}
+            <div className="flex items-center gap-1 px-4 py-3 border-b border-slate-100">
+              {tabs.map(tab => (
+                <button
+                  key={tab.key}
+                  className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                    view === tab.key
+                      ? 'bg-slate-900 text-white'
+                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800'
+                  }`}
+                  onClick={() => switchView(tab.key)}
+                >
+                  {tab.label}
+                  <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                    view === tab.key ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'
+                  }`}>
+                    {tab.count.toLocaleString()}
+                  </span>
+                </button>
+              ))}
+              <div className="flex-1" />
+              <span className="text-xs text-slate-400">
+                {browseTotal.toLocaleString()} {view === 'candidates' ? 'candidates' : 'customers'}
+              </span>
             </div>
 
             {loading ? (
               <ContentSkeleton rows={6} />
-            ) : candidates.length === 0 ? (
+            ) : rows.length === 0 ? (
               <div className="py-12 text-center text-sm text-slate-400">
-                No fuzzy candidates -- run Re-Match to generate
+                {view === 'candidates'
+                  ? 'No candidates to review — run Re-Match to generate'
+                  : view === 'matched'
+                  ? 'No matched QB customers yet'
+                  : 'All QB customers are matched'}
               </div>
             ) : (
               <>
@@ -552,11 +641,11 @@ export default function QuickbaseMatchesPage() {
                   <table className="w-full text-left">
                     <thead>
                       <tr className="border-b border-slate-100">
-                        <th className="px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-600 w-[180px]">
+                        <th className="px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-600 w-[200px]">
                           QB Customer
                         </th>
                         <th
-                          className="px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-600 text-right w-[100px] cursor-pointer select-none"
+                          className="px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-600 text-right w-[110px] cursor-pointer select-none"
                           onClick={() => handleSort('qb_total_revenue')}
                         >
                           <span className="inline-flex items-center justify-end">
@@ -564,97 +653,132 @@ export default function QuickbaseMatchesPage() {
                             <SortIcon field="qb_total_revenue" sortBy={sortBy} sortDesc={sortDesc} />
                           </span>
                         </th>
-                        <th
-                          className="px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-600 text-center w-[70px] cursor-pointer select-none"
-                          onClick={() => handleSort('match_score')}
-                        >
-                          <span className="inline-flex items-center justify-center">
-                            Score
-                            <SortIcon field="match_score" sortBy={sortBy} sortDesc={sortDesc} />
-                          </span>
-                        </th>
-                        <th className="px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-600 w-[280px]">
-                          Map to SB Company
-                        </th>
-                        <th className="px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-600 text-center w-[70px]">
-                          Emails
-                        </th>
-                        <th className="px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-600 w-[150px]" />
+                        {view === 'candidates' && (
+                          <th
+                            className="px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-600 text-center w-[70px] cursor-pointer select-none"
+                            onClick={() => handleSort('match_score')}
+                          >
+                            <span className="inline-flex items-center justify-center">
+                              Score
+                              <SortIcon field="match_score" sortBy={sortBy} sortDesc={sortDesc} />
+                            </span>
+                          </th>
+                        )}
+                        {view === 'matched' && (
+                          <th className="px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-600 text-center w-[100px]">
+                            Method
+                          </th>
+                        )}
+                        {view !== 'unmatched' && (
+                          <th className="px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-600 w-[280px]">
+                            {view === 'candidates' ? 'Map to SB Company' : 'SB Company'}
+                          </th>
+                        )}
+                        {view !== 'unmatched' && (
+                          <th className="px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-600 text-center w-[70px]">
+                            Emails
+                          </th>
+                        )}
+                        {view === 'candidates' && (
+                          <th className="px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-600 w-[150px]" />
+                        )}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
-                      {candidates.map((record) => (
-                        <tr key={record.id} className="hover:bg-slate-50/50 transition-colors">
+                      {rows.map((row) => (
+                        <tr key={row.candidate_id || row.id} className="hover:bg-slate-50/50 transition-colors">
                           {/* QB Customer */}
-                          <td className="px-4 py-2 text-sm font-medium text-slate-900 truncate max-w-[180px]">
-                            {record.qb_name}
+                          <td className="px-4 py-2 text-sm font-medium text-slate-900 truncate max-w-[200px]">
+                            {row.qb_name}
                           </td>
 
                           {/* QB Revenue */}
                           <td className="px-4 py-2 text-sm text-right">
-                            {record.qb_total_revenue != null
-                              ? <span className="text-slate-700">{formatCurrency(Number(record.qb_total_revenue))}</span>
+                            {row.qb_total_revenue != null
+                              ? <span className="text-slate-700">{formatCurrency(Number(row.qb_total_revenue))}</span>
                               : <span className="text-slate-400">-</span>
                             }
                           </td>
 
-                          {/* Score */}
-                          <td className="px-4 py-2 text-center">
-                            <StatusBadge variant={scoreVariant(record.match_score)} size="sm">
-                              {record.match_score?.toFixed(0)}%
-                            </StatusBadge>
-                          </td>
+                          {/* Score (candidates only) */}
+                          {view === 'candidates' && (
+                            <td className="px-4 py-2 text-center">
+                              <StatusBadge variant={scoreVariant(row.match_score ?? 0)} size="sm">
+                                {row.match_score?.toFixed(0)}%
+                              </StatusBadge>
+                            </td>
+                          )}
 
-                          {/* Map to SB Company */}
-                          <td className="px-4 py-2">
-                            <CompanySearchSelect
-                              clientId={clientId}
-                              defaultValue={rowSelections[record.id]?.id || record.sb_company_id}
-                              defaultLabel={rowSelections[record.id]?.name || record.sb_company_name}
-                              onChange={(id, name) => setRowSelections(prev => ({ ...prev, [record.id]: { id, name } }))}
-                            />
-                          </td>
+                          {/* Method (matched only) */}
+                          {view === 'matched' && (
+                            <td className="px-4 py-2 text-center">
+                              <StatusBadge variant={scoreVariant(row.match_score ?? 0)} size="sm">
+                                {METHOD_LABELS[row.match_method || ''] || row.match_method || '—'}
+                              </StatusBadge>
+                            </td>
+                          )}
+
+                          {/* SB Company */}
+                          {view === 'candidates' && (
+                            <td className="px-4 py-2">
+                              <CompanySearchSelect
+                                clientId={clientId}
+                                defaultValue={rowSelections[row.candidate_id!]?.id || row.sb_company_id || ''}
+                                defaultLabel={rowSelections[row.candidate_id!]?.name || row.sb_company_name || ''}
+                                onChange={(id, name) => setRowSelections(prev => ({ ...prev, [row.candidate_id!]: { id, name } }))}
+                              />
+                            </td>
+                          )}
+                          {view === 'matched' && (
+                            <td className="px-4 py-2 text-sm text-slate-700 truncate max-w-[280px]">
+                              {row.sb_company_name || '—'}
+                            </td>
+                          )}
 
                           {/* Emails */}
-                          <td className="px-4 py-2 text-center text-sm">
-                            {record.sb_total_emails ? (
-                              <a
-                                href={`/emails/all?company_id=${record.sb_company_id}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-blue-600 hover:underline"
-                              >
-                                {record.sb_total_emails}
-                              </a>
-                            ) : (
-                              <span className="text-slate-400">0</span>
-                            )}
-                          </td>
+                          {view !== 'unmatched' && (
+                            <td className="px-4 py-2 text-center text-sm">
+                              {row.sb_total_emails ? (
+                                <a
+                                  href={`/emails/all?company_id=${row.sb_company_id}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-blue-600 hover:underline"
+                                >
+                                  {row.sb_total_emails}
+                                </a>
+                              ) : (
+                                <span className="text-slate-400">0</span>
+                              )}
+                            </td>
+                          )}
 
-                          {/* Actions */}
-                          <td className="px-4 py-2">
-                            <div className="flex items-center gap-1">
-                              <button
-                                className="inline-flex items-center gap-1 rounded-md bg-slate-900 px-2.5 py-1 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-50 transition-colors"
-                                disabled={savingRow === record.id}
-                                onClick={() => handleConfirm(record)}
-                              >
-                                {savingRow === record.id ? (
-                                  <Spinner className="h-3 w-3 animate-spin" />
-                                ) : (
-                                  <CheckCircle2 className="h-3 w-3" />
-                                )}
-                                Confirm
-                              </button>
-                              <button
-                                className="rounded-md px-2 py-1 text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-50 transition-colors"
-                                disabled={savingRow === record.id}
-                                onClick={() => handleSkip(record.id)}
-                              >
-                                Skip
-                              </button>
-                            </div>
-                          </td>
+                          {/* Actions (candidates only) */}
+                          {view === 'candidates' && (
+                            <td className="px-4 py-2">
+                              <div className="flex items-center gap-1">
+                                <button
+                                  className="inline-flex items-center gap-1 rounded-md bg-slate-900 px-2.5 py-1 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-50 transition-colors"
+                                  disabled={savingRow === row.candidate_id}
+                                  onClick={() => handleConfirm(row)}
+                                >
+                                  {savingRow === row.candidate_id ? (
+                                    <Spinner className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <CheckCircle2 className="h-3 w-3" />
+                                  )}
+                                  Confirm
+                                </button>
+                                <button
+                                  className="rounded-md px-2 py-1 text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-50 transition-colors"
+                                  disabled={savingRow === row.candidate_id}
+                                  onClick={() => handleSkip(row.candidate_id!)}
+                                >
+                                  Skip
+                                </button>
+                              </div>
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
@@ -664,7 +788,9 @@ export default function QuickbaseMatchesPage() {
                 {/* Pagination */}
                 {totalPages > 1 && (
                   <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100">
-                    <span className="text-xs text-slate-500">{total} candidates</span>
+                    <span className="text-xs text-slate-500">
+                      {browseTotal.toLocaleString()} {view === 'candidates' ? 'candidates' : 'customers'}
+                    </span>
                     <div className="flex items-center gap-1">
                       <button
                         className="rounded-md px-2.5 py-1 text-xs border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-colors"

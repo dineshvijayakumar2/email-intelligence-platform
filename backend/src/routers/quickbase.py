@@ -1099,6 +1099,127 @@ async def list_match_candidates(
         raise HTTPException(status_code=500, detail=str(e)[:200])
 
 
+@router.get("/qb-customers-browse")
+async def browse_qb_customers(
+    client_id: str = Query(...),
+    view: str = Query('candidates', description="'matched' | 'candidates' | 'unmatched'"),
+    sort_by: str = Query('total_invoiced', description="Sort column"),
+    sort_desc: bool = Query(True),
+    limit: int = Query(30, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    """Browse QB customers by match status — matched, staged candidates, or unmatched."""
+    try:
+        if view == 'matched':
+            q = _supabase.table('qb_customers').select(
+                'id, qb_record_id, customer_name, total_invoiced, matched_company_id'
+            ).eq('client_id', client_id).not_.is_('matched_company_id', 'null')
+
+            sort_col = sort_by if sort_by in {'total_invoiced', 'customer_name'} else 'total_invoiced'
+            q = q.order(sort_col, desc=sort_desc)
+
+            total_q = _supabase.table('qb_customers').select(
+                'id', count='exact'
+            ).eq('client_id', client_id).not_.is_('matched_company_id', 'null').limit(0).execute()
+
+            result = q.range(offset, offset + limit - 1).execute()
+            rows = result.data or []
+
+            # Enrich with company names + match method + email counts
+            company_ids = list({r['matched_company_id'] for r in rows if r.get('matched_company_id')})
+            company_map: dict = {}
+            for i in range(0, len(company_ids), 500):
+                batch = company_ids[i:i + 500]
+                resp = _supabase.table('customer_companies').select(
+                    'id, company_name, qb_match_method, total_emails'
+                ).in_('id', batch).execute()
+                for c in (resp.data or []):
+                    company_map[c['id']] = c
+
+            items = []
+            for r in rows:
+                cc = company_map.get(r.get('matched_company_id'), {})
+                items.append({
+                    'id': r['id'],
+                    'qb_record_id': r.get('qb_record_id'),
+                    'qb_name': r.get('customer_name'),
+                    'qb_total_revenue': r.get('total_invoiced'),
+                    'match_status': 'matched',
+                    'match_method': cc.get('qb_match_method'),
+                    'match_score': {'email_lookup': 100, 'contact_chain': 80, 'exact_name': 75, 'domain_root': 65, 'fuzzy': 60}.get(cc.get('qb_match_method') or '', 50),
+                    'sb_company_id': r.get('matched_company_id'),
+                    'sb_company_name': cc.get('company_name'),
+                    'sb_total_emails': cc.get('total_emails') or 0,
+                    'candidate_id': None,
+                })
+
+            return {"items": items, "total": total_q.count or 0}
+
+        elif view == 'unmatched':
+            q = _supabase.table('qb_customers').select(
+                'id, qb_record_id, customer_name, total_invoiced'
+            ).eq('client_id', client_id).is_('matched_company_id', 'null')
+
+            sort_col = sort_by if sort_by in {'total_invoiced', 'customer_name'} else 'total_invoiced'
+            q = q.order(sort_col, desc=sort_desc)
+
+            total_q = _supabase.table('qb_customers').select(
+                'id', count='exact'
+            ).eq('client_id', client_id).is_('matched_company_id', 'null').limit(0).execute()
+
+            result = q.range(offset, offset + limit - 1).execute()
+            rows = result.data or []
+
+            items = []
+            for r in rows:
+                items.append({
+                    'id': r['id'],
+                    'qb_record_id': r.get('qb_record_id'),
+                    'qb_name': r.get('customer_name'),
+                    'qb_total_revenue': r.get('total_invoiced'),
+                    'match_status': 'unmatched',
+                    'match_method': None,
+                    'match_score': None,
+                    'sb_company_id': None,
+                    'sb_company_name': None,
+                    'sb_total_emails': 0,
+                    'candidate_id': None,
+                })
+
+            return {"items": items, "total": total_q.count or 0}
+
+        else:
+            # Candidates view — delegate then normalize to {items, total} shape
+            result = await list_match_candidates(
+                client_id=client_id,
+                reviewed=False,
+                sort_by=sort_by if sort_by in {'match_score', 'qb_name', 'sb_company_name', 'created_at'} else 'match_score',
+                sort_desc=sort_desc,
+                limit=limit,
+                offset=offset,
+            )
+            items = []
+            for c in (result.get('candidates') or []):
+                items.append({
+                    'id': c['id'],
+                    'qb_record_id': c.get('qb_record_id'),
+                    'qb_name': c.get('qb_name'),
+                    'qb_total_revenue': c.get('qb_total_revenue'),
+                    'match_status': 'candidate',
+                    'match_method': c.get('match_method'),
+                    'match_score': c.get('match_score'),
+                    'sb_company_id': c.get('sb_company_id'),
+                    'sb_company_name': c.get('sb_company_name'),
+                    'sb_total_emails': c.get('sb_total_emails', 0),
+                    'candidate_id': c['id'],
+                    'qb_customer_id': c.get('qb_customer_id'),
+                })
+            return {"items": items, "total": result.get('total', 0)}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)[:200])
+
+
 @router.post("/link-company")
 async def link_company_to_qb(
     client_id: str = Query(...),
