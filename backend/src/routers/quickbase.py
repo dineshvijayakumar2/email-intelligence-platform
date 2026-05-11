@@ -1020,6 +1020,7 @@ async def browse_qb_customers(
     client_id: str = Query(...),
     view: str = Query('candidates', description="'matched' | 'candidates' | 'unmatched'"),
     search: Optional[str] = Query(None, description="Search by customer name"),
+    method: Optional[str] = Query(None, description="Filter by match method (e.g. email_lookup, exact_name)"),
     sort_by: str = Query('total_invoiced', description="Sort column"),
     sort_desc: bool = Query(True),
     limit: int = Query(30, ge=1, le=200),
@@ -1034,22 +1035,31 @@ async def browse_qb_customers(
             if search and search.strip():
                 q = q.ilike('customer_name', f'%{search.strip()}%')
 
-            sort_by_emails = sort_by == 'sb_total_emails'
+            in_memory = sort_by == 'sb_total_emails' or bool(method)
             sort_col = sort_by if sort_by in {'total_invoiced', 'customer_name'} else 'total_invoiced'
             q = q.order(sort_col, desc=sort_desc)
 
-            total_q = _supabase.table('qb_customers').select(
-                'id', count='exact'
-            ).eq('client_id', client_id).not_.is_('matched_company_id', 'null')
-            if search and search.strip():
-                total_q = total_q.ilike('customer_name', f'%{search.strip()}%')
-            total_q = total_q.limit(0).execute()
+            if not in_memory:
+                total_q = _supabase.table('qb_customers').select(
+                    'id', count='exact'
+                ).eq('client_id', client_id).not_.is_('matched_company_id', 'null')
+                if search and search.strip():
+                    total_q = total_q.ilike('customer_name', f'%{search.strip()}%')
+                total_q = total_q.limit(0).execute()
 
-            if sort_by_emails:
-                result = q.range(0, 999).execute()
+            if in_memory:
+                all_rows = []
+                fetch_offset = 0
+                while True:
+                    batch_result = q.range(fetch_offset, fetch_offset + 999).execute()
+                    all_rows.extend(batch_result.data or [])
+                    if len(batch_result.data or []) < 1000:
+                        break
+                    fetch_offset += 1000
+                rows = all_rows
             else:
                 result = q.range(offset, offset + limit - 1).execute()
-            rows = result.data or []
+                rows = result.data or []
 
             # Enrich with company names + match method + email counts
             company_ids = list({r['matched_company_id'] for r in rows if r.get('matched_company_id')})
@@ -1065,23 +1075,29 @@ async def browse_qb_customers(
             items = []
             for r in rows:
                 cc = company_map.get(r.get('matched_company_id'), {})
+                row_method = cc.get('qb_match_method')
+                if method and row_method != method:
+                    continue
                 items.append({
                     'id': r['id'],
                     'qb_record_id': r.get('qb_record_id'),
                     'qb_name': r.get('customer_name'),
                     'qb_total_revenue': r.get('total_invoiced'),
                     'match_status': 'matched',
-                    'match_method': cc.get('qb_match_method'),
-                    'match_score': {'email_lookup': 100, 'contact_chain': 80, 'exact_name': 75, 'domain_root': 65, 'fuzzy': 60}.get(cc.get('qb_match_method') or '', 50),
+                    'match_method': row_method,
+                    'match_score': {'email_lookup': 100, 'contact_chain': 80, 'exact_name': 75, 'domain_root': 65, 'fuzzy': 60}.get(row_method or '', 50),
                     'sb_company_id': r.get('matched_company_id'),
                     'sb_company_name': cc.get('company_name'),
                     'sb_total_emails': cc.get('total_emails') or 0,
                     'candidate_id': None,
                 })
 
-            if sort_by_emails:
-                items.sort(key=lambda x: int(x.get('sb_total_emails') or 0), reverse=sort_desc)
+            if in_memory:
+                if sort_by == 'sb_total_emails':
+                    items.sort(key=lambda x: int(x.get('sb_total_emails') or 0), reverse=sort_desc)
+                total_count = len(items)
                 items = items[offset:offset + limit]
+                return {"items": items, "total": total_count}
 
             return {"items": items, "total": total_q.count or 0}
 

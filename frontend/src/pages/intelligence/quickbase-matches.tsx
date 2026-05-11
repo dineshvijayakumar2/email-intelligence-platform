@@ -250,6 +250,7 @@ export default function QuickbaseMatchesPage() {
   const [savingRow, setSavingRow] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [methodFilter, setMethodFilter] = useState('');
   const [rematchMenuOpen, setRematchMenuOpen] = useState(false);
   const rematchRef = useRef<HTMLDivElement>(null);
 
@@ -296,14 +297,15 @@ export default function QuickbaseMatchesPage() {
         else backendSort = 'total_invoiced';
       }
       const searchParam = debouncedSearch ? `&search=${encodeURIComponent(debouncedSearch)}` : '';
+      const methodParam = methodFilter ? `&method=${encodeURIComponent(methodFilter)}` : '';
       const d = await api.get(
-        `/v1/quickbase/qb-customers-browse?client_id=${clientId}&view=${view}&limit=${PAGE_SIZE}&offset=${off}&sort_by=${backendSort}&sort_desc=${sortDesc}${searchParam}`
+        `/v1/quickbase/qb-customers-browse?client_id=${clientId}&view=${view}&limit=${PAGE_SIZE}&offset=${off}&sort_by=${backendSort}&sort_desc=${sortDesc}${searchParam}${methodParam}`
       ) as { items: BrowseRow[]; total: number };
       setRows(d.items || []);
       setBrowseTotal(d.total || 0);
     } catch { /* silent */ }
     setLoading(false);
-  }, [clientId, view, page, sortBy, sortDesc, debouncedSearch]);
+  }, [clientId, view, page, sortBy, sortDesc, debouncedSearch, methodFilter]);
 
   useEffect(() => { loadHealth(); }, [loadHealth]);
   useEffect(() => { loadBrowseData(); }, [loadBrowseData]);
@@ -364,6 +366,7 @@ export default function QuickbaseMatchesPage() {
     setRowSelections({});
     setSearchTerm('');
     setDebouncedSearch('');
+    setMethodFilter('');
   };
 
   const scoreVariant = (score: number): 'success' | 'warning' | 'info' | 'neutral' => {
@@ -616,6 +619,23 @@ export default function QuickbaseMatchesPage() {
                 </button>
               ))}
               <div className="flex-1" />
+              {view === 'matched' && (
+                <select
+                  value={methodFilter}
+                  onChange={(e) => { setMethodFilter(e.target.value); setPage(1); }}
+                  className="text-xs rounded-md border border-slate-200 bg-white text-slate-700 px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-slate-300"
+                >
+                  <option value="">All methods</option>
+                  <option value="email_lookup">Email</option>
+                  <option value="contact_chain">Contact chain</option>
+                  <option value="exact_name">Name</option>
+                  <option value="domain_root">Domain</option>
+                  <option value="fuzzy">Fuzzy</option>
+                  <option value="manual">Manual</option>
+                  <option value="qb_anchored_link">QB link</option>
+                  <option value="qb_anchored_create">QB create</option>
+                </select>
+              )}
               <div className="relative">
                 <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
                 <input
