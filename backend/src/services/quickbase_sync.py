@@ -1669,7 +1669,7 @@ class QuickbaseSync:
         offset = 0
         while True:
             page = _execute_with_retry(lambda o=offset: self._supabase.table('qb_customers').select(
-                'qb_record_id, customer_key_id, customer_code, matched_company_id, customer_status, '
+                'qb_record_id, customer_key_id, customer_code, customer_name, matched_company_id, customer_status, '
                 'customer_tier, account_manager, total_invoiced, invoiced_ty, invoiced_ly, '
                 'growth_90d, days_since_last_invoice, recency_days, industry'
             ).eq('client_id', self._client_id).not_.is_(
@@ -1704,6 +1704,7 @@ class QuickbaseSync:
                 continue
 
             by_company[company_id] = {
+                'qb_customer_name': qb.get('customer_name'),
                 'qb_customer_type': qb.get('customer_status'),
                 'qb_tier': tier,
                 'qb_total_revenue': total,
