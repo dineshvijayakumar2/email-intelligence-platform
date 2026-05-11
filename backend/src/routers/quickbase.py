@@ -924,6 +924,7 @@ async def match_preview(client_id: str = Query(...)):
 async def list_match_candidates(
     client_id: str = Query(...),
     reviewed: Optional[bool] = Query(None, description="Filter by review status"),
+    search: Optional[str] = Query(None, description="Search QB or SB company name"),
     sort_by: str = Query('match_score', description="Column to sort by"),
     sort_desc: bool = Query(True, description="Sort descending"),
     limit: int = Query(50, ge=1, le=200),
@@ -932,26 +933,37 @@ async def list_match_candidates(
     """List fuzzy match candidates for review."""
     ALLOWED_SORTS = {'match_score', 'qb_name', 'sb_company_name', 'created_at'}
     sort_col = sort_by if sort_by in ALLOWED_SORTS else 'match_score'
+    sort_in_memory = sort_by in ('total_invoiced', 'sb_total_emails')
 
     try:
         q = _supabase.table('qb_match_candidates').select(
             'id, sb_company_id, sb_company_name, qb_record_id, qb_customer_id, '
             'qb_name, match_score, match_method, reviewed, accepted, '
             'reviewed_by, reviewed_at, created_at'
-        ).eq('client_id', client_id).order(sort_col, desc=sort_desc)
+        ).eq('client_id', client_id)
 
         if reviewed is not None:
             q = q.eq('reviewed', reviewed)
 
-        result = q.range(offset, offset + limit - 1).execute()
+        if search and search.strip():
+            q = q.or_(f"qb_name.ilike.%{search.strip()}%,sb_company_name.ilike.%{search.strip()}%")
+
+        if sort_in_memory:
+            q = q.order('match_score', desc=True)
+            result = q.range(0, 999).execute()
+        else:
+            q = q.order(sort_col, desc=sort_desc)
+            result = q.range(offset, offset + limit - 1).execute()
+
         candidates = result.data or []
 
-        # Also get total counts
         total_q = _supabase.table('qb_match_candidates').select(
             'id', count='exact'
         ).eq('client_id', client_id)
         if reviewed is not None:
             total_q = total_q.eq('reviewed', reviewed)
+        if search and search.strip():
+            total_q = total_q.or_(f"qb_name.ilike.%{search.strip()}%,sb_company_name.ilike.%{search.strip()}%")
         total_result = total_q.limit(0).execute()
 
         # Enrich candidates with QB revenue + SB email count
@@ -959,7 +971,6 @@ async def list_match_candidates(
             qb_record_ids = list({c['qb_record_id'] for c in candidates if c.get('qb_record_id')})
             sb_company_ids = list({c['sb_company_id'] for c in candidates if c.get('sb_company_id')})
 
-            # QB revenue lookup
             qb_revenue_map: dict = {}
             if qb_record_ids:
                 for i in range(0, len(qb_record_ids), 500):
@@ -971,7 +982,6 @@ async def list_match_candidates(
                         if r.get('qb_record_id'):
                             qb_revenue_map[r['qb_record_id']] = r.get('total_invoiced')
 
-            # SB email count lookup
             sb_emails_map: dict = {}
             if sb_company_ids:
                 for i in range(0, len(sb_company_ids), 500):
@@ -986,6 +996,13 @@ async def list_match_candidates(
             for c in candidates:
                 c['qb_total_revenue'] = qb_revenue_map.get(c.get('qb_record_id'))
                 c['sb_total_emails'] = sb_emails_map.get(c.get('sb_company_id'), 0)
+
+        if sort_in_memory:
+            if sort_by == 'sb_total_emails':
+                candidates.sort(key=lambda c: int(c.get('sb_total_emails') or 0), reverse=sort_desc)
+            else:
+                candidates.sort(key=lambda c: float(c.get('qb_total_revenue') or 0), reverse=sort_desc)
+            candidates = candidates[offset:offset + limit]
 
         return {
             "candidates": candidates,
@@ -1002,6 +1019,7 @@ async def list_match_candidates(
 async def browse_qb_customers(
     client_id: str = Query(...),
     view: str = Query('candidates', description="'matched' | 'candidates' | 'unmatched'"),
+    search: Optional[str] = Query(None, description="Search by customer name"),
     sort_by: str = Query('total_invoiced', description="Sort column"),
     sort_desc: bool = Query(True),
     limit: int = Query(30, ge=1, le=200),
@@ -1013,15 +1031,24 @@ async def browse_qb_customers(
             q = _supabase.table('qb_customers').select(
                 'id, qb_record_id, customer_name, total_invoiced, matched_company_id'
             ).eq('client_id', client_id).not_.is_('matched_company_id', 'null')
+            if search and search.strip():
+                q = q.ilike('customer_name', f'%{search.strip()}%')
 
+            sort_by_emails = sort_by == 'sb_total_emails'
             sort_col = sort_by if sort_by in {'total_invoiced', 'customer_name'} else 'total_invoiced'
             q = q.order(sort_col, desc=sort_desc)
 
             total_q = _supabase.table('qb_customers').select(
                 'id', count='exact'
-            ).eq('client_id', client_id).not_.is_('matched_company_id', 'null').limit(0).execute()
+            ).eq('client_id', client_id).not_.is_('matched_company_id', 'null')
+            if search and search.strip():
+                total_q = total_q.ilike('customer_name', f'%{search.strip()}%')
+            total_q = total_q.limit(0).execute()
 
-            result = q.range(offset, offset + limit - 1).execute()
+            if sort_by_emails:
+                result = q.range(0, 999).execute()
+            else:
+                result = q.range(offset, offset + limit - 1).execute()
             rows = result.data or []
 
             # Enrich with company names + match method + email counts
@@ -1052,19 +1079,28 @@ async def browse_qb_customers(
                     'candidate_id': None,
                 })
 
+            if sort_by_emails:
+                items.sort(key=lambda x: int(x.get('sb_total_emails') or 0), reverse=sort_desc)
+                items = items[offset:offset + limit]
+
             return {"items": items, "total": total_q.count or 0}
 
         elif view == 'unmatched':
             q = _supabase.table('qb_customers').select(
                 'id, qb_record_id, customer_name, total_invoiced'
             ).eq('client_id', client_id).is_('matched_company_id', 'null')
+            if search and search.strip():
+                q = q.ilike('customer_name', f'%{search.strip()}%')
 
             sort_col = sort_by if sort_by in {'total_invoiced', 'customer_name'} else 'total_invoiced'
             q = q.order(sort_col, desc=sort_desc)
 
             total_q = _supabase.table('qb_customers').select(
                 'id', count='exact'
-            ).eq('client_id', client_id).is_('matched_company_id', 'null').limit(0).execute()
+            ).eq('client_id', client_id).is_('matched_company_id', 'null')
+            if search and search.strip():
+                total_q = total_q.ilike('customer_name', f'%{search.strip()}%')
+            total_q = total_q.limit(0).execute()
 
             result = q.range(offset, offset + limit - 1).execute()
             rows = result.data or []
@@ -1089,10 +1125,12 @@ async def browse_qb_customers(
 
         else:
             # Candidates view — delegate then normalize to {items, total} shape
+            effective_sort = sort_by if sort_by in {'match_score', 'qb_name', 'sb_company_name', 'created_at', 'total_invoiced', 'sb_total_emails'} else 'match_score'
             result = await list_match_candidates(
                 client_id=client_id,
                 reviewed=False,
-                sort_by=sort_by if sort_by in {'match_score', 'qb_name', 'sb_company_name', 'created_at'} else 'match_score',
+                search=search,
+                sort_by=effective_sort,
                 sort_desc=sort_desc,
                 limit=limit,
                 offset=offset,

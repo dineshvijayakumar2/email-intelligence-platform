@@ -1079,9 +1079,9 @@ class QuickbaseSync:
             try:
                 _execute_with_retry(lambda: self._supabase.table('qb_match_candidates').delete().eq(
                     'client_id', self._client_id
-                ).eq('reviewed', False).eq('match_method', 'email_multi_match').execute())
+                ).eq('reviewed', False).execute())
             except Exception as e:
-                logger.warning(f"Failed to clear stale email multi-match candidates: {e}")
+                logger.warning(f"Failed to clear stale unreviewed candidates: {e}")
             for i in range(0, len(staged_batch), UPSERT_BATCH_SIZE):
                 batch = staged_batch[i:i + UPSERT_BATCH_SIZE]
                 try:

@@ -659,7 +659,7 @@ class CompanyResolver:
 
             company_data = {
                 'client_id': self.client_id,
-                'company_name': company.company_name,
+                'company_name': existing['company_name'] if existing else company.company_name,
                 'email_domains': new_domains,
                 'contact_count': company.contact_count,
                 'first_contact_date': company.first_seen.isoformat(),

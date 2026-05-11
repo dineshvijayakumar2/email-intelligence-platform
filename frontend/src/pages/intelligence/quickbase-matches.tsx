@@ -248,6 +248,8 @@ export default function QuickbaseMatchesPage() {
   const [rematchLoading, setRematchLoading] = useState(false);
   const [rowSelections, setRowSelections] = useState<Record<string, { id: string; name: string }>>({});
   const [savingRow, setSavingRow] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [rematchMenuOpen, setRematchMenuOpen] = useState(false);
   const rematchRef = useRef<HTMLDivElement>(null);
 
@@ -258,6 +260,14 @@ export default function QuickbaseMatchesPage() {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   // -- Data loading ---------------------------------------------------------------------------
 
@@ -277,19 +287,23 @@ export default function QuickbaseMatchesPage() {
     try {
       const off = (page - 1) * PAGE_SIZE;
       let backendSort = sortBy;
-      if (view !== 'candidates') {
-        if (sortBy === 'qb_total_revenue' || sortBy === 'match_score') backendSort = 'total_invoiced';
-        else if (sortBy === 'qb_name') backendSort = 'customer_name';
+      if (sortBy === 'qb_total_revenue') {
+        backendSort = 'total_invoiced';
+      } else if (view !== 'candidates') {
+        if (sortBy === 'qb_name') backendSort = 'customer_name';
+        else if (sortBy === 'sb_total_emails') backendSort = 'sb_total_emails';
+        else if (sortBy === 'match_score') backendSort = 'total_invoiced';
         else backendSort = 'total_invoiced';
       }
+      const searchParam = debouncedSearch ? `&search=${encodeURIComponent(debouncedSearch)}` : '';
       const d = await api.get(
-        `/v1/quickbase/qb-customers-browse?client_id=${clientId}&view=${view}&limit=${PAGE_SIZE}&offset=${off}&sort_by=${backendSort}&sort_desc=${sortDesc}`
+        `/v1/quickbase/qb-customers-browse?client_id=${clientId}&view=${view}&limit=${PAGE_SIZE}&offset=${off}&sort_by=${backendSort}&sort_desc=${sortDesc}${searchParam}`
       ) as { items: BrowseRow[]; total: number };
       setRows(d.items || []);
       setBrowseTotal(d.total || 0);
     } catch { /* silent */ }
     setLoading(false);
-  }, [clientId, view, page, sortBy, sortDesc]);
+  }, [clientId, view, page, sortBy, sortDesc, debouncedSearch]);
 
   useEffect(() => { loadHealth(); }, [loadHealth]);
   useEffect(() => { loadBrowseData(); }, [loadBrowseData]);
@@ -348,6 +362,8 @@ export default function QuickbaseMatchesPage() {
     setSortBy(v === 'candidates' ? 'match_score' : 'qb_total_revenue');
     setSortDesc(true);
     setRowSelections({});
+    setSearchTerm('');
+    setDebouncedSearch('');
   };
 
   const scoreVariant = (score: number): 'success' | 'warning' | 'info' | 'neutral' => {
@@ -600,6 +616,16 @@ export default function QuickbaseMatchesPage() {
                 </button>
               ))}
               <div className="flex-1" />
+              <div className="relative">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search by name..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-48 pl-7 pr-2 py-1.5 text-xs rounded-md border border-slate-200 bg-white text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-300"
+                />
+              </div>
               <span className="text-xs text-slate-400">{browseTotal.toLocaleString()} {view === 'candidates' ? 'candidates' : 'customers'}</span>
             </div>
 
@@ -641,7 +667,12 @@ export default function QuickbaseMatchesPage() {
                           </th>
                         )}
                         {view !== 'unmatched' && (
-                          <th className="px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-600 text-center w-[70px]">Emails</th>
+                          <th className="px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-600 text-center w-[70px] cursor-pointer select-none"
+                            onClick={() => handleSort('sb_total_emails')}>
+                            <span className="inline-flex items-center justify-center">
+                              Emails <SortIcon field="sb_total_emails" sortBy={sortBy} sortDesc={sortDesc} />
+                            </span>
+                          </th>
                         )}
                         {view === 'candidates' && (
                           <th className="px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-600 w-[150px]" />
