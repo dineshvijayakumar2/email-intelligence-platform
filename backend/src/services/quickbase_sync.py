@@ -842,12 +842,6 @@ class QuickbaseSync:
                 elif isinstance(v, str):
                     # Strip null bytes — Postgres text columns reject \u0000
                     mapped[k] = v.replace('\x00', '')
-                # Numeric overflow guard: DECIMAL(8,2) columns max at ±999,999.99.
-                # Null out values that would cause a "numeric field overflow" error.
-                if isinstance(mapped[k], (int, float)) and not isinstance(mapped[k], bool):
-                    if abs(mapped[k]) >= 1_000_000:
-                        logger.debug(f"Nullifying {k}={mapped[k]} — numeric overflow guard")
-                        mapped[k] = None
             # Skip rows missing any required (NOT NULL) field
             if required_fields and any(mapped.get(f) is None for f in required_fields):
                 skipped += 1
@@ -1082,6 +1076,12 @@ class QuickbaseSync:
             })
 
         if staged_batch:
+            try:
+                _execute_with_retry(lambda: self._supabase.table('qb_match_candidates').delete().eq(
+                    'client_id', self._client_id
+                ).eq('reviewed', False).eq('match_method', 'email_multi_match').execute())
+            except Exception as e:
+                logger.warning(f"Failed to clear stale email multi-match candidates: {e}")
             for i in range(0, len(staged_batch), UPSERT_BATCH_SIZE):
                 batch = staged_batch[i:i + UPSERT_BATCH_SIZE]
                 try:
@@ -1627,6 +1627,12 @@ class QuickbaseSync:
             # Stage multi-match cases
             staged = 0
             if staged_batch:
+                try:
+                    _execute_with_retry(lambda: self._supabase.table('qb_match_candidates').delete().eq(
+                        'client_id', self._client_id
+                    ).eq('reviewed', False).eq('match_method', 'contact_chain').execute())
+                except Exception as e:
+                    logger.warning(f"Failed to clear stale contact chain candidates: {e}")
                 for i in range(0, len(staged_batch), UPSERT_BATCH_SIZE):
                     batch = staged_batch[i:i + UPSERT_BATCH_SIZE]
                     try:
