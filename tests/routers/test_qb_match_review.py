@@ -218,6 +218,8 @@ class TestScoreCalibration:
 
     SCORE_MAP = {
         "email_lookup": 100,
+        "qb_anchored_link": 95,
+        "qb_anchored_create": 90,
         "contact_chain": 80,
         "exact_name": 75,
         "domain_root": 65,

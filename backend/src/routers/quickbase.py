@@ -847,121 +847,20 @@ async def rematch_qb_data(
 
 @router.get("/health")
 async def qb_health(client_id: str = Query(...)):
-    """QB data health: match rates, enrichment coverage, data quality.
-
-    Only returns meaningful stats for clients that have QB config.
-    The denominators use QB record counts (not SB company totals) so percentages
-    reflect how well QB records are matched, not how many SB companies exist.
-    """
+    """QB cleanup dashboard: single RPC returns all stats in one DB round-trip."""
     try:
-        # Check if this client has QB configured at all
-        cfg = _supabase.table('qb_sync_config').select('client_id, last_sync_at').eq(
+        cfg = _supabase.table('qb_sync_config').select('client_id').eq(
             'client_id', client_id
         ).limit(1).execute()
-        qb_configured = bool(cfg.data)
+        if not cfg.data:
+            return {"qb_configured": False}
 
-        if not qb_configured:
-            return {
-                "qb_configured": False,
-                "qb_customers": {"total": 0, "matched": 0, "unmatched": 0, "match_rate_pct": 0},
-                "qb_contacts": {"total": 0, "matched": 0, "unmatched": 0, "match_rate_pct": 0},
-                "company_enrichment": {"total": 0, "enriched": 0, "not_enriched": 0, "coverage_pct": 0},
-                "active_companies": {"total": 0, "with_qb_data": 0, "coverage_pct": 0},
-                "qb_unique_emails": {"total": 0, "valid": 0},
-                "match_methods": {"email_lookup": 0, "name_based": 0},
-            }
-
-        # QB customer match rate (denominator = QB customers, not SB companies)
-        # .limit(0) ensures only the count header is returned, not all rows
-        total_qb = _supabase.table('qb_customers').select('id', count='exact').eq('client_id', client_id).limit(0).execute()
-        matched_qb = _supabase.table('qb_customers').select('id', count='exact').eq('client_id', client_id).not_.is_('matched_company_id', 'null').limit(0).execute()
-
-        # QB contact match rate
-        total_qb_contacts = _supabase.table('qb_contacts').select('id', count='exact').eq('client_id', client_id).limit(0).execute()
-        matched_qb_contacts = _supabase.table('qb_contacts').select('id', count='exact').eq('client_id', client_id).not_.is_('matched_contact_id', 'null').limit(0).execute()
-
-        total_c = total_qb.count or 0
-        matched_c = matched_qb.count or 0
-        total_ct = total_qb_contacts.count or 0
-        matched_ct = matched_qb_contacts.count or 0
-
-        # Match method counts (from customer_companies.qb_match_method)
-        email_matched_resp = _supabase.table('customer_companies').select(
-            'id', count='exact'
-        ).eq('client_id', client_id).eq('qb_match_method', 'email_lookup').limit(0).execute()
-        email_matched_count = email_matched_resp.count or 0
-
-        name_matched_resp = _supabase.table('customer_companies').select(
-            'id', count='exact'
-        ).eq('client_id', client_id).not_.is_(
-            'qb_match_method', 'null'
-        ).neq('qb_match_method', 'email_lookup').limit(0).execute()
-        name_matched_count = name_matched_resp.count or 0
-
-        # QB unique emails stats (gracefully handle table not yet created)
-        total_ue = 0
-        valid_ue = 0
-        try:
-            total_ue_resp = _supabase.table('qb_unique_emails').select(
-                'id', count='exact'
-            ).eq('client_id', client_id).limit(0).execute()
-            valid_ue_resp = _supabase.table('qb_unique_emails').select(
-                'id', count='exact'
-            ).eq('client_id', client_id).eq('hide', False).eq('email_invalid', False).limit(0).execute()
-            total_ue = total_ue_resp.count or 0
-            valid_ue = valid_ue_resp.count or 0
-        except Exception:
-            pass
-
-        # SB companies with QB data vs SB companies with email activity (the meaningful ratio)
-        enriched_companies = _supabase.table('customer_companies').select('id', count='exact').eq(
-            'client_id', client_id
-        ).not_.is_('qb_total_revenue', 'null').limit(0).execute()
-        enriched_co = enriched_companies.count or 0
-
-        active_companies = 0
-        active_enriched = 0
-        try:
-            ac_resp = _supabase.table('customer_companies').select('id', count='exact').eq(
-                'client_id', client_id
-            ).gt('total_emails', '0').limit(0).execute()
-            active_companies = ac_resp.count or 0
-
-            active_resp = _supabase.table('customer_companies').select('id', count='exact').eq(
-                'client_id', client_id
-            ).not_.is_('qb_total_revenue', 'null').gt('total_emails', '0').limit(0).execute()
-            active_enriched = active_resp.count or 0
-        except Exception:
-            pass
-
-        # Revenue stats via RPC (single DB round-trip for all aggregations)
-        revenue_stats = {}
-        try:
-            rev_resp = _supabase.rpc('qb_health_revenue_stats', {
-                'p_client_id': client_id
-            }).execute()
-            revenue_stats = rev_resp.data or {}
-        except Exception:
-            revenue_stats = {
-                'total_revenue': 0, 'matched_revenue': 0, 'unmatched_revenue': 0,
-                'revenue_match_rate_pct': 0, 'revenue_target_pct': 95,
-                'method_revenue': {}, 'buckets': {
-                    'email_linked': {'count': 0, 'revenue': 0},
-                    'staged': {'count': 0, 'revenue': 0},
-                    'no_link': {'count': 0, 'revenue': 0},
-                },
-            }
-
-        return {
-            "qb_configured": True,
-            "qb_customers": {"total": total_c, "matched": matched_c, "unmatched": total_c - matched_c, "match_rate_pct": round(matched_c / total_c * 100, 1) if total_c else 0},
-            "qb_contacts": {"total": total_ct, "matched": matched_ct, "unmatched": total_ct - matched_ct, "match_rate_pct": round(matched_ct / total_ct * 100, 1) if total_ct else 0},
-            "company_enrichment": {"total": total_c, "enriched": enriched_co, "not_enriched": total_c - enriched_co, "coverage_pct": round(enriched_co / total_c * 100, 1) if total_c else 0},
-            "active_companies": {"total": active_companies, "with_qb_data": active_enriched, "coverage_pct": round(active_enriched / active_companies * 100, 1) if active_companies else 0},
-            "qb_unique_emails": {"total": total_ue, "valid": valid_ue},
-            "match_methods": {"email_lookup": email_matched_count, "name_based": name_matched_count},
-            "revenue": revenue_stats,
-        }
+        resp = _supabase.rpc('qb_cleanup_dashboard_stats', {
+            'p_client_id': client_id
+        }).execute()
+        data = resp.data or {}
+        data['qb_configured'] = True
+        return data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)[:200])
 

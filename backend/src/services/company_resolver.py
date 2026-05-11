@@ -410,10 +410,15 @@ class CompanyResolver:
             companies.append(company)
 
         # ── Phase 2: Domain-based resolution (fallback) ──────────────────
-        logger.info(f"Domain fallback: resolving {len(remaining_contacts)} remaining contacts")
+        # QB-anchored mode: only match to EXISTING companies by domain.
+        # Never create new companies from domain names or person names —
+        # that produces junk SB rows. Contacts without a QB or domain match
+        # stay unlinked (customer_company_id = NULL).
+        logger.info(f"Domain fallback: resolving {len(remaining_contacts)} remaining contacts (existing-only)")
 
         domain_groups = self._group_by_domain(remaining_contacts)
         excluded_internal_count = 0
+        skipped_no_existing_count = 0
 
         for domain, domain_contacts in domain_groups.items():
             classification = self.classify_domain(domain)
@@ -423,21 +428,21 @@ class CompanyResolver:
                 continue
 
             if classification == 'free_provider':
-                if group_free_providers:
-                    pass
-                else:
-                    for contact in domain_contacts:
-                        company = self._create_individual_company(contact)
-                        companies.append(company)
-                    continue
+                skipped_no_existing_count += len(domain_contacts)
+                continue
 
-            company = self._create_company_from_domain(domain, domain_contacts, classification)
-            companies.append(company)
+            existing_company = self._existing_companies.get(domain.lower())
+            if existing_company:
+                company = self._create_company_from_domain(domain, domain_contacts, classification)
+                companies.append(company)
+            else:
+                skipped_no_existing_count += len(domain_contacts)
 
         logger.info(
             f"Resolved {len(companies)} companies total "
             f"({qb_matched_count} via QB email, "
-            f"{excluded_internal_count} internal excluded)"
+            f"{excluded_internal_count} internal excluded, "
+            f"{skipped_no_existing_count} skipped — no existing company)"
         )
 
         return companies

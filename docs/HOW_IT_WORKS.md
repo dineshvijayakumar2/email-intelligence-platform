@@ -114,7 +114,7 @@ Active in production, handling real traffic. The 13 steps run successfully acros
 #### Known limitations
 
 - Runs via FastAPI BackgroundTasks — if the API server restarts, the extraction job dies mid-run. The processing_jobs record will stay as "running" until manually fixed or the stuck-job reconciler catches it
-- Company resolution relies on email domain matching. Free email providers (gmail.com, outlook.com) are excluded, but niche free providers may slip through
+- Company resolution is QB-anchored: contact email is looked up in `qb_unique_emails` first; if no QB match, domain is checked against existing `customer_companies` only. New companies are never created from domain names or person names — contacts without a QB or existing-company match stay unlinked (`customer_company_id = NULL`)
 - Role classification is rule-based (regex on signatures), not AI. Accuracy depends on signature format — some contacts never have titles extracted
 - Engagement scoring uses 8 factors but weights are hardcoded, not configurable per client
 - Thread tracking depends on `canonical_thread_id`. Emails with no In-Reply-To or References headers start new threads even if they're part of a conversation
