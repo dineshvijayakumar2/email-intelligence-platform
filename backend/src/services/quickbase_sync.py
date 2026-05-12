@@ -986,10 +986,12 @@ class QuickbaseSync:
 
         sb_to_qb: dict[str, dict[str, list]] = defaultdict(lambda: defaultdict(list))
         qb_to_sb: dict[str, dict[str, list]] = defaultdict(lambda: defaultdict(list))
+        excluded_domains = internal_domains | GENERIC_DOMAINS
         raw_shared = set(email_to_qb.keys()) & set(email_to_sb.keys())
-        shared_emails = {e for e in raw_shared if e.split('@')[-1] not in internal_domains}
+        shared_emails = {e for e in raw_shared if e.split('@')[-1] not in excluded_domains}
         if len(raw_shared) != len(shared_emails):
-            logger.info(f"Email match: filtered {len(raw_shared) - len(shared_emails)} internal-domain emails from {len(raw_shared)} shared")
+            logger.info(f"Email match: filtered {len(raw_shared) - len(shared_emails)} excluded-domain emails "
+                         f"(internal + generic) from {len(raw_shared)} shared")
         stats['total_emails_joined'] = len(shared_emails)
 
         for email in shared_emails:
