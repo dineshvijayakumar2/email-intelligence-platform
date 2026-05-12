@@ -1116,7 +1116,7 @@ class QuickbaseSync:
                 try:
                     _execute_with_retry(lambda b=batch: self._supabase.table(
                         'qb_match_candidates'
-                    ).upsert(b, on_conflict='client_id,qb_record_id,sb_company_id').execute())
+                    ).insert(b).execute())
                 except Exception as e:
                     logger.warning(f"Failed to stage email multi-match batch: {e}")
             stats['staged'] = len(staged_batch)
@@ -1305,7 +1305,7 @@ class QuickbaseSync:
                 try:
                     _execute_with_retry(lambda b=batch: self._supabase.table(
                         'qb_match_candidates'
-                    ).upsert(b, on_conflict='client_id,qb_record_id,sb_company_id').execute())
+                    ).insert(b).execute())
                 except Exception as e:
                     logger.warning(f"Failed to stage batch {i // UPSERT_BATCH_SIZE + 1}: {e}")
 
@@ -1668,7 +1668,7 @@ class QuickbaseSync:
                     try:
                         _execute_with_retry(lambda b=batch: self._supabase.table(
                             'qb_match_candidates'
-                        ).upsert(b, on_conflict='client_id,qb_record_id,sb_company_id').execute())
+                        ).insert(b).execute())
                     except Exception as e:
                         logger.warning(f"Failed to stage contact chain batch: {e}")
                 staged = len(staged_batch)
