@@ -343,6 +343,21 @@ export default function QuickbaseMatchesPage() {
     setSavingRow(null);
   };
 
+  const handleUnmatch = async (row: BrowseRow) => {
+    if (!row.qb_record_id || !clientId) return;
+    setSavingRow(row.id);
+    try {
+      await api.post(`/v1/quickbase/unmatch-company?client_id=${clientId}&qb_record_id=${row.qb_record_id}`);
+      notify.success(`Unmatched "${row.qb_name}"`);
+      setRows(prev => prev.filter(r => r.id !== row.id));
+      setBrowseTotal(prev => prev - 1);
+      loadHealth();
+    } catch {
+      notify.error('Failed to unmatch');
+    }
+    setSavingRow(null);
+  };
+
   const handleRematch = async (reset = false) => {
     if (!clientId) return;
     setRematchLoading(true);
@@ -694,8 +709,8 @@ export default function QuickbaseMatchesPage() {
                             </span>
                           </th>
                         )}
-                        {view === 'candidates' && (
-                          <th className="px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-600 w-[150px]" />
+                        {(view === 'candidates' || view === 'matched') && (
+                          <th className="px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-600 w-[80px]" />
                         )}
                       </tr>
                     </thead>
@@ -760,6 +775,17 @@ export default function QuickbaseMatchesPage() {
                                   Skip
                                 </button>
                               </div>
+                            </td>
+                          )}
+                          {view === 'matched' && (
+                            <td className="px-4 py-2 text-center">
+                              <button
+                                className="rounded-md px-2 py-1 text-xs text-red-500 hover:text-red-700 hover:bg-red-50 disabled:opacity-50 transition-colors"
+                                disabled={savingRow === row.id}
+                                onClick={() => handleUnmatch(row)}
+                                title="Remove this match">
+                                {savingRow === row.id ? <Spinner className="h-3 w-3 animate-spin" /> : '✕'}
+                              </button>
                             </td>
                           )}
                         </tr>

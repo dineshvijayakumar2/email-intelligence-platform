@@ -37,11 +37,26 @@ export default function QBLinkWidget({
   const [searching, setSearching] = useState(false);
   const [selectedQbId, setSelectedQbId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [unlinking, setUnlinking] = useState(false);
   const [searchText, setSearchText] = useState('');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isCompany = mode === 'company';
   const entityLabel = isCompany ? 'QB Customer' : 'QB Contact';
+
+  const handleUnlink = async () => {
+    if (!qbLinkedId || !isCompany) return;
+    setUnlinking(true);
+    try {
+      const params = new URLSearchParams({ client_id: clientId, qb_record_id: qbLinkedId });
+      await api.post(`/v1/quickbase/unmatch-company?${params}`);
+      toast.success(`${entityLabel} unlinked`);
+      onLinked?.();
+    } catch {
+      toast.error('Failed to unlink');
+    }
+    setUnlinking(false);
+  };
 
   const handleSearch = (query: string) => {
     setSearchText(query);
@@ -105,6 +120,16 @@ export default function QBLinkWidget({
               </StatusBadge>
             </span>
             <button onClick={() => setEditing(true)} className="text-xs text-primary hover:underline">Change</button>
+            {isCompany && (
+              <button
+                onClick={handleUnlink}
+                disabled={unlinking}
+                className="text-xs text-red-500 hover:text-red-700 disabled:opacity-50 inline-flex items-center gap-0.5"
+              >
+                {unlinking ? <Spinner className="h-3 w-3 animate-spin" /> : <Unlink className="h-3 w-3" />}
+                Unlink
+              </button>
+            )}
           </>
         ) : (
           <button

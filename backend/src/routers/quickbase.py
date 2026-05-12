@@ -1235,6 +1235,42 @@ async def link_company_to_qb(
         raise HTTPException(status_code=500, detail=str(e)[:200])
 
 
+@router.post("/unmatch-company")
+async def unmatch_company(
+    client_id: str = Query(...),
+    qb_record_id: str = Query(..., description="QB customers qb_record_id to unmatch"),
+):
+    """Remove match between a QB customer and its SB company."""
+    try:
+        qb_resp = _supabase.table('qb_customers').select(
+            'id, matched_company_id'
+        ).eq('client_id', client_id).eq('qb_record_id', qb_record_id).limit(1).execute()
+
+        if not qb_resp.data:
+            raise HTTPException(status_code=404, detail="QB customer not found")
+
+        sb_company_id = qb_resp.data[0].get('matched_company_id')
+
+        _supabase.table('qb_customers').update({
+            'matched_company_id': None
+        }).eq('client_id', client_id).eq('qb_record_id', qb_record_id).execute()
+
+        if sb_company_id:
+            _supabase.table('customer_companies').update({
+                'qb_customer_id': None,
+                'qb_customer_code': None,
+                'qb_match_method': None,
+                'qb_matched_at': None,
+            }).eq('id', sb_company_id).eq('qb_customer_id', qb_record_id).execute()
+
+        return {"status": "unmatched", "qb_record_id": qb_record_id}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)[:200])
+
+
 @router.post("/link-contact")
 async def link_contact_to_qb(
     client_id: str = Query(...),

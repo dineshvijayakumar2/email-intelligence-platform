@@ -1130,18 +1130,15 @@ class QuickbaseSync:
         return stats
 
     async def match_to_companies(self) -> dict:
-        """Stage name-based qb_customers → customer_companies candidates for human review.
+        """Match qb_customers → customer_companies by name.
 
-        Pass 1 — Exact normalised name (staged with score 100)
-        Pass 2 — Email domain root (staged with score 90)
-        Pass 3 — Fuzzy name via rapidfuzz (staged with fuzzy score)
+        Pass 1 — Exact normalised name → AUTO-PROMOTED (high confidence)
+        Pass 2 — Email domain root → staged for review
+        Pass 3 — Fuzzy name via rapidfuzz → staged for review
 
-        All name-based matches are staging-only — only email-based matching
-        (Pass 0 via match_companies_via_unique_emails) auto-writes.
-
-        Returns dict with per-pass counts: {pass1_staged, pass2_staged, pass3_staged, unmatched, total}.
+        Returns dict with per-pass counts.
         """
-        stats = {'pass1_staged': 0, 'pass2_staged': 0, 'pass3_staged': 0, 'unmatched': 0, 'total': 0}
+        stats = {'pass1_matched': 0, 'pass2_staged': 0, 'pass3_staged': 0, 'unmatched': 0, 'total': 0}
 
         # ── Fetch ALL unmatched QB customers (paginated) ─────────────────────
         unmatched: list[dict] = []
@@ -1199,8 +1196,9 @@ class QuickbaseSync:
             logger.warning(f"Failed to clear stale candidates: {e}")
 
         staged_batch: list[dict] = []
+        pass1_matches: list[dict] = []
 
-        # ── Pass 1: Exact normalised name → stage ────────────────────────────
+        # ── Pass 1: Exact normalised name → AUTO-PROMOTE ─────────────────────
         for qb_cust in unmatched:
             qb_norm = _normalise(qb_cust.get('customer_name'))
             if not qb_norm:
@@ -1209,19 +1207,20 @@ class QuickbaseSync:
 
             sb_match = sb_by_norm.get(qb_norm)
             if sb_match:
-                staged_batch.append({
-                    'client_id': self._client_id,
-                    'sb_company_id': sb_match['id'],
-                    'sb_company_name': sb_match.get('company_name'),
+                pass1_matches.append({
+                    'company_id': sb_match['id'],
+                    'qb_customer_uuid': qb_cust['id'],
                     'qb_record_id': qb_cust.get('qb_record_id'),
-                    'qb_customer_id': qb_cust.get('qb_record_id'),
-                    'qb_name': qb_cust.get('customer_name'),
-                    'match_score': 75,
+                    'qb_customer_code': qb_cust.get('customer_code'),
                     'match_method': 'exact_name',
                 })
-                stats['pass1_staged'] += 1
+                stats['pass1_matched'] += 1
             else:
                 pass2_remaining.append(qb_cust)
+
+        if pass1_matches:
+            written = await self._rpc_batch_write_matches(pass1_matches, now_iso)
+            logger.info(f"Pass 1 (exact name): auto-promoted {written}/{len(pass1_matches)} matches")
 
         # ── Pass 2: Email domain root → stage ────────────────────────────────
         for qb_cust in pass2_remaining:
@@ -1308,11 +1307,13 @@ class QuickbaseSync:
                 except Exception as e:
                     logger.warning(f"Failed to stage batch {i // UPSERT_BATCH_SIZE + 1}: {e}")
 
-        stats['total'] = stats['pass1_staged'] + stats['pass2_staged'] + stats['pass3_staged']
+        stats['total'] = stats['pass1_matched'] + stats['pass2_staged'] + stats['pass3_staged']
         logger.info(
-            f"Company matching complete (all staged for review): "
-            f"Pass 1 (exact)={stats['pass1_staged']}, Pass 2 (domain)={stats['pass2_staged']}, "
-            f"Pass 3 (fuzzy)={stats['pass3_staged']}, Unmatched={stats['unmatched']}"
+            f"Company matching complete: "
+            f"Pass 1 (exact)={stats['pass1_matched']} auto-promoted, "
+            f"Pass 2 (domain)={stats['pass2_staged']} staged, "
+            f"Pass 3 (fuzzy)={stats['pass3_staged']} staged, "
+            f"Unmatched={stats['unmatched']}"
         )
         return stats
 
