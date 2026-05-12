@@ -1781,8 +1781,9 @@ class QuickbaseSync:
         except Exception as rpc_err:
             logger.warning(f"RPC batch_propagate_qb_data failed, falling back to individual: {rpc_err}")
             # Fallback: individual updates
+            rpc_only_keys = {'qb_customer_name'}
             for idx, (cid, data) in enumerate(items):
-                data = {k: v for k, v in data.items() if v is not None}
+                data = {k: v for k, v in data.items() if v is not None and k not in rpc_only_keys}
                 if data:
                     try:
                         _execute_with_retry(lambda d=data, c=cid: (
