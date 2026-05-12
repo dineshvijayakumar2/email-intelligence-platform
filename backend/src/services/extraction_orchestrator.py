@@ -1588,6 +1588,18 @@ class ExtractionOrchestrator:
                     break
                 offset += len(rows)
 
+            # ── Step 3b: Load internal domains to exclude from matching ──
+            internal_domains: set[str] = set()
+            try:
+                id_resp = self._execute_with_retry(
+                    self.client.table('internal_domains').select('domain').eq('client_id', self.client_id)
+                )
+                internal_domains = {(r['domain'] or '').strip().lower() for r in (id_resp.data or [])}
+                if internal_domains:
+                    logger.info(f"Step 6 QB email match: excluding internal domains: {internal_domains}")
+            except Exception as e:
+                logger.warning(f"Step 6: could not load internal_domains: {e}")
+
             # ── Step 4: Match companies via email lookup ──
             # company_id → {qb_customer_id: count} (majority vote for conflicts)
             company_votes: dict = {}
@@ -1595,6 +1607,8 @@ class ExtractionOrchestrator:
                 email = (ct.get('email_address') or '').strip().lower()
                 company_id = ct.get('customer_company_id')
                 if not email or not company_id:
+                    continue
+                if email.split('@')[-1] in internal_domains:
                     continue
                 qb_info = email_to_qb.get(email)
                 if not qb_info:

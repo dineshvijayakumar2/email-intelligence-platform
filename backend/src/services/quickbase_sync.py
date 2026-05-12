@@ -972,9 +972,24 @@ class QuickbaseSync:
             if email and company_id:
                 email_to_sb[email].add(company_id)
 
+        # Load internal domains to exclude from matching (e.g. carbon8.com.au)
+        internal_domains: set[str] = set()
+        try:
+            id_resp = _execute_with_retry(lambda: self._supabase.table('internal_domains').select(
+                'domain'
+            ).eq('client_id', self._client_id).execute())
+            internal_domains = {(r['domain'] or '').strip().lower() for r in (id_resp.data or [])}
+            if internal_domains:
+                logger.info(f"Email match: excluding {len(internal_domains)} internal domains: {internal_domains}")
+        except Exception as e:
+            logger.warning(f"Could not load internal_domains: {e}")
+
         sb_to_qb: dict[str, dict[str, list]] = defaultdict(lambda: defaultdict(list))
         qb_to_sb: dict[str, dict[str, list]] = defaultdict(lambda: defaultdict(list))
-        shared_emails = set(email_to_qb.keys()) & set(email_to_sb.keys())
+        raw_shared = set(email_to_qb.keys()) & set(email_to_sb.keys())
+        shared_emails = {e for e in raw_shared if e.split('@')[-1] not in internal_domains}
+        if len(raw_shared) != len(shared_emails):
+            logger.info(f"Email match: filtered {len(raw_shared) - len(shared_emails)} internal-domain emails from {len(raw_shared)} shared")
         stats['total_emails_joined'] = len(shared_emails)
 
         for email in shared_emails:

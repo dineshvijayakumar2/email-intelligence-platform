@@ -59,9 +59,9 @@
 - [x] `ivfflat.probes = 10` set at database level via `ALTER DATABASE postgres SET ivfflat.probes = 10`
 - [x] Functional test: top-10 similarity returns semantically related results (~140ms, probes=10)
 - [x] `DATABASE_DESIGN.md` updated: vector embedding architecture (§5.5), index choice rationale (§5.6), build operations (§5.7), forbidden operations (§5.8), migration history 094–097
-- [ ] **Investigate before next bulk re-embed:** companies run required 4 manual clicks to reach 100%. Single job appears to terminate early without exhausting the table. Worth checking worker logs for completion semantics before any next sprint 615K operations re-embed.
-- [ ] Spot-check semantic search quality on 20 known queries
-- [ ] Next sprint: revisit HNSW with raised `maintenance_work_mem` if IVFFlat recall proves insufficient
+- [D] **Investigate before next bulk re-embed:** companies run required 4 manual clicks to reach 100%. Single job appears to terminate early without exhausting the table. Worth checking worker logs for completion semantics before any next sprint 615K operations re-embed. — deferred, not blocking
+- [D] Spot-check semantic search quality on 20 known queries — deferred
+- [D] Next sprint: revisit HNSW with raised `maintenance_work_mem` if IVFFlat recall proves insufficient — deferred
 - [ ] Next sprint: investigate apparent duplicate emails surfaced during sanity test (rows `a9ad862f` and `f5714636` share identical subject + similarity score)
 - [D] Operations embedding (615K) — not on MVP critical path, deferred
 - [D] Quotes embedding (~19K matched) — untested hypothesis, exit criterion not yet met, deferred
@@ -92,8 +92,8 @@
 - [x] Per-mailbox classify button on Data Health page (lightning bolt per row)
 - [x] Fix: backfill skipping emails with NULL `sent_date` (commit `fdcd509`)
 - [x] Backfill CHUNK reduced 10K→200 so stop_event is checked every ~2min instead of hours (commit `eb544a0`)
-- [~] Apr 30: 192K/261K classified (73.6% overall). Nic 100%, Jeff.love 100%, Production PC 100%, Kenneth 97.9%, Linda 98.3%. Remaining backlog: hello@ 47K, ehab@ 14K
-- [ ] Top up OpenAI credit if burn rate × remaining > remaining balance
+- [x] May 12: 217K/271K classified (99.9% overall). All mailboxes 99.7%+. Only 337 pending across all mailboxes
+- [x] Top up OpenAI credit — classification effectively complete
 
 ### Pipeline + data integrity bugs (identified Apr 29–30)
 
@@ -286,6 +286,38 @@ Items moved from `BUCKET_LIST_APR16_APR22.md` — not yet scheduled into a speci
 
 ---
 
+## QB Match Review Page + Data Cleanup — May 11 session + follow-up
+
+### QB Match Review page enhancements (May 11) — ✅ DONE
+
+- [x] Search box: real-time search across QB customer names and SB company names (300ms debounce, backend passthrough)
+- [x] Email count sort: sortable EMAILS column header on matched and candidates views (in-memory sort with full-fetch)
+- [x] Revenue sort fix: `qb_total_revenue` → `total_invoiced` mapping corrected for all views
+- [x] Method filter dropdown on matched tab: filter by match method (Email, Contact chain, QB create, QB link, etc.)
+- [x] Migration 109: candidate unique index fix — added `sb_company_id` to allow multi-match candidates per QB customer
+
+### Data cleanup (May 11) — ✅ DONE
+
+- [x] Merged 35 case-variant duplicate companies via bulk merge script (`scripts/db/bulk_merge_case_dupes.py`)
+- [x] Migration 110: CITEXT on `customer_companies.company_name` — prevents future case-variant duplicates (dropped/recreated 5 dependent views)
+- [x] Code guard in `company_resolver.py`: upsert preserves existing DB name casing on update
+- [x] Decontamination re-run: 2,642 junk links auto-unlinked, 565 multi-revenue cases flagged for manual review
+- [x] Revenue match coverage at 95.5% ($58.1M / $60.8M)
+
+### Follow-up (May 12+)
+
+- [ ] **Email-method SB name correction** — ~4,250 email-matched QB customers have wrong SB company names (Carbon8 staff emails create false links between unrelated QB customers and SB companies). Needs: name-similarity guard on email_lookup + batch correction script
+- [ ] **Method filter dropdown fix** — dropdown values are stale (`exact_name`, `domain_root`, `qb_anchored_link`, `qb_anchored_create` don't match actual DB values `qb_create`, `qb_link`). Also 2 "unknown" method records to investigate/fix
+- [ ] **Automate candidate review** — 972 staged candidates (exact name, domain, fuzzy matches) could be auto-promoted where confidence is high (e.g. exact name + same domain = auto-accept), reducing manual review backlog
+- [ ] **Contamination cleanup** — 727 contaminated companies remaining (down from 1,059), 565 multi-revenue cases need manual review or smarter heuristics (e.g. pick highest-revenue QB customer as primary)
+- [ ] **Build Top-N page** — from Insights Review shell; frontend page listing top customers with NL insight summaries + source data links
+- [ ] **Ship validation buttons on insights** — from Insights Review shell; correct/partial/incorrect buttons + optional notes on insight cards
+- [ ] **Manual spot-check 5-10 customer profile pages** — verify data accuracy, insight quality, QB data display after all cleanup
+- [ ] **Update HOW_IT_WORKS.md** — CITEXT migration, match method changes, decontamination process
+- [ ] **Update DATABASE_DESIGN.md** — CITEXT column type on company_name, migration 109-110
+
+---
+
 ## Deferred to next sprint
 
 - [D] Industry Gap Analysis (Insight 2) — including its Week 1 distribution query validation
@@ -298,7 +330,7 @@ Items moved from `BUCKET_LIST_APR16_APR22.md` — not yet scheduled into a speci
 - [D] AU seasonal calendar integration
 - [D] Classification/digest model audit columns
 - [x] `email_categories` AI analyzer cleanup — removed `_get_rule_based_skip_ids` and `_enrich_with_rule_based_tags` dependencies from classification path. Table + tagger + display routes kept for file-imported email data.
-- [D] `hello@carbon8.com.au` classification coverage
+- [x] `hello@carbon8.com.au` classification coverage — 99.9% (114,075/144,672 classified, 149 pending, May 12)
 - [D] 14 Carbon8 domain variant cleanup
 - [D] 21-weekdays-no-data investigation
 - [D] I/O budget fix (shared_buffers tuning, Redis caching for dashboard)
@@ -309,7 +341,7 @@ Items moved from `BUCKET_LIST_APR16_APR22.md` — not yet scheduled into a speci
 ## Flags / risks being tracked
 
 - ~~**Pipeline throughput**~~: **RESOLVED** — ai_classify moved to step 1 (runs before extraction), `extracted_at` column added so incremental extraction skips already-processed emails, email_categories legacy dependency removed, `link_ai_refs` scoped to 7-day window + batch validation
-- **Classification backlog**: ~61K emails pending (hello@ 47K, ehab@ 14K). At current rate (~330/hr), needs ~185 hours of continuous backfill
+- ~~**Classification backlog**~~: **RESOLVED** — 99.9% coverage (217K/271K), only 337 pending across all mailboxes (May 12)
 - ~~**hello@ client_id backfill**~~: **RESOLVED** — 134K emails backfilled (May 1), all mailboxes at 0 NULL
 - ~~**AI Link References per-mailbox view**~~: **RESOLVED** — RPC 099 v2 adds per-mailbox link stats. ehab@ 36.6%, Linda 38.8%, hello@ 27.2%
 - **AI ref extraction quality**: Prompt tightened May 5. 20.4% of refs are "real gaps" (valid QB numbers not in synced data — ~32K quotes not synced). Improvement requires QB sync scope expansion or acceptance
