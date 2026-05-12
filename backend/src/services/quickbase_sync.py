@@ -1091,6 +1091,18 @@ class QuickbaseSync:
             })
 
         if staged_batch:
+            # Dedup by (qb_record_id, sb_company_id) — email fan-out can produce duplicates
+            seen_keys: set[tuple] = set()
+            deduped: list[dict] = []
+            for row in staged_batch:
+                key = (row['qb_record_id'], row['sb_company_id'])
+                if key not in seen_keys:
+                    seen_keys.add(key)
+                    deduped.append(row)
+            if len(staged_batch) != len(deduped):
+                logger.info(f"Email multi-match: deduped {len(staged_batch)} -> {len(deduped)} candidates")
+            staged_batch = deduped
+
             try:
                 _execute_with_retry(lambda: self._supabase.table('qb_match_candidates').delete().eq(
                     'client_id', self._client_id
@@ -1102,7 +1114,7 @@ class QuickbaseSync:
                 try:
                     _execute_with_retry(lambda b=batch: self._supabase.table(
                         'qb_match_candidates'
-                    ).insert(b).execute())
+                    ).upsert(b, on_conflict='client_id,qb_record_id,sb_company_id').execute())
                 except Exception as e:
                     logger.warning(f"Failed to stage email multi-match batch: {e}")
             stats['staged'] = len(staged_batch)
@@ -1292,7 +1304,7 @@ class QuickbaseSync:
                 try:
                     _execute_with_retry(lambda b=batch: self._supabase.table(
                         'qb_match_candidates'
-                    ).insert(b).execute())
+                    ).upsert(b, on_conflict='client_id,qb_record_id,sb_company_id').execute())
                 except Exception as e:
                     logger.warning(f"Failed to stage batch {i // UPSERT_BATCH_SIZE + 1}: {e}")
 
@@ -1653,7 +1665,7 @@ class QuickbaseSync:
                     try:
                         _execute_with_retry(lambda b=batch: self._supabase.table(
                             'qb_match_candidates'
-                        ).insert(b).execute())
+                        ).upsert(b, on_conflict='client_id,qb_record_id,sb_company_id').execute())
                     except Exception as e:
                         logger.warning(f"Failed to stage contact chain batch: {e}")
                 staged = len(staged_batch)
