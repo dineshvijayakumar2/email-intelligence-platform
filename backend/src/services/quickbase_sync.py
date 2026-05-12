@@ -986,12 +986,10 @@ class QuickbaseSync:
 
         sb_to_qb: dict[str, dict[str, list]] = defaultdict(lambda: defaultdict(list))
         qb_to_sb: dict[str, dict[str, list]] = defaultdict(lambda: defaultdict(list))
-        excluded_domains = internal_domains | GENERIC_DOMAINS
         raw_shared = set(email_to_qb.keys()) & set(email_to_sb.keys())
-        shared_emails = {e for e in raw_shared if e.split('@')[-1] not in excluded_domains}
+        shared_emails = {e for e in raw_shared if e.split('@')[-1] not in internal_domains}
         if len(raw_shared) != len(shared_emails):
-            logger.info(f"Email match: filtered {len(raw_shared) - len(shared_emails)} excluded-domain emails "
-                         f"(internal + generic) from {len(raw_shared)} shared")
+            logger.info(f"Email match: filtered {len(raw_shared) - len(shared_emails)} internal-domain emails from {len(raw_shared)} shared")
         stats['total_emails_joined'] = len(shared_emails)
 
         for email in shared_emails:
@@ -1068,6 +1066,7 @@ class QuickbaseSync:
                 'qb_record_id': qb_cust.get('qb_record_id'),
                 'qb_customer_code': qb_cust.get('customer_code'),
                 'match_method': 'email_lookup',
+                'qb_customer_name': qb_cust.get('customer_name'),
             })
 
         stats['matched'] = await self._rpc_batch_write_matches(matches_payload, now_iso)
@@ -1215,6 +1214,7 @@ class QuickbaseSync:
                     'qb_record_id': qb_cust.get('qb_record_id'),
                     'qb_customer_code': qb_cust.get('customer_code'),
                     'match_method': 'exact_name',
+                    'qb_customer_name': qb_cust.get('customer_name'),
                 })
                 stats['pass1_matched'] += 1
             else:
@@ -1632,6 +1632,7 @@ class QuickbaseSync:
                             'qb_record_id': qb_row.get('qb_record_id'),
                             'qb_customer_code': None,
                             'match_method': 'contact_chain',
+                            'qb_customer_name': qb_row.get('customer_name'),
                         })
                         continue
 

@@ -1602,15 +1602,13 @@ class ExtractionOrchestrator:
 
             # ── Step 4: Match companies via email lookup ──
             # company_id → {qb_customer_id: count} (majority vote for conflicts)
-            from .quickbase_sync import GENERIC_DOMAINS as _generic_domains
             company_votes: dict = {}
             for ct in contacts_with_companies:
                 email = (ct.get('email_address') or '').strip().lower()
                 company_id = ct.get('customer_company_id')
                 if not email or not company_id:
                     continue
-                email_domain = email.split('@')[-1]
-                if email_domain in internal_domains or email_domain in _generic_domains:
+                if email.split('@')[-1] in internal_domains:
                     continue
                 qb_info = email_to_qb.get(email)
                 if not qb_info:
