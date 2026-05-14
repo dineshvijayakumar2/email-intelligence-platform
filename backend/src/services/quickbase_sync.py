@@ -1835,3 +1835,24 @@ class QuickbaseSync:
         except Exception as e:
             logger.error(f"propagate_qb_data_to_contacts failed: {e}", exc_info=True)
             return 0
+
+    async def backfill_contacts_after_match(self) -> dict:
+        """Link QB contacts to matched companies and backfill company_id on emails/junction."""
+        try:
+            result = _execute_with_retry(lambda: self._supabase.rpc(
+                'backfill_contacts_to_matched_companies',
+                {'p_client_id': self._client_id},
+            ).execute())
+            counts = result.data if isinstance(result.data, dict) else {}
+            total = sum(counts.values()) if counts else 0
+            if total > 0:
+                logger.info(f"Backfilled contacts to matched companies: {counts}")
+                _execute_with_retry(lambda: self._supabase.rpc(
+                    'update_company_email_counts_from_junction',
+                    {'p_client_id': self._client_id},
+                ).execute())
+                logger.info("Refreshed company email counts after backfill")
+            return counts
+        except Exception as e:
+            logger.error(f"backfill_contacts_after_match failed: {e}", exc_info=True)
+            return {}

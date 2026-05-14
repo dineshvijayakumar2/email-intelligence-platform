@@ -222,6 +222,7 @@ async def trigger_sync(
                 syncer = QuickbaseSync(sync_sb, config, cancel_event=cancel_event)
                 counts = loop.run_until_complete(syncer.sync_all(tables=tables_list, full=full))
                 if not cancel_event.is_set():
+                    loop.run_until_complete(syncer.backfill_contacts_after_match())
                     loop.run_until_complete(syncer.propagate_qb_data_to_companies())
                     loop.run_until_complete(syncer.propagate_qb_data_to_contacts())
                 loop.close()
@@ -813,17 +814,21 @@ async def rematch_qb_data(
                 logger.info("QB rematch — Step 5: Chain-match customers via contacts")
                 c3 = loop.run_until_complete(syncer.match_customers_via_contacts())
 
-                # Step 6: Propagate QB data (companies + contacts)
-                logger.info("QB rematch — Step 6: Propagate QB data to companies")
+                # Step 6: Backfill contacts to matched companies + refresh counts
+                logger.info("QB rematch — Step 6: Backfill contacts to matched companies")
+                backfill = loop.run_until_complete(syncer.backfill_contacts_after_match())
+
+                # Step 7: Propagate QB data (companies + contacts)
+                logger.info("QB rematch — Step 7: Propagate QB data to companies")
                 c4 = loop.run_until_complete(syncer.propagate_qb_data_to_companies())
-                logger.info("QB rematch — Step 6b: Propagate QB data to contacts")
+                logger.info("QB rematch — Step 7b: Propagate QB data to contacts")
                 c5 = loop.run_until_complete(syncer.propagate_qb_data_to_contacts())
                 loop.close()
 
                 logger.info(
                     f"QB rematch complete: email_lookup={e1}, name_based={match_stats}, "
-                    f"{c2} contacts, {c3} chain-matched, {c4} companies propagated, "
-                    f"{c5} contact rows propagated"
+                    f"{c2} contacts, {c3} chain-matched, backfill={backfill}, "
+                    f"{c4} companies propagated, {c5} contact rows propagated"
                 )
             except Exception as e:
                 logger.error(f"Rematch failed: {e}")
@@ -1232,6 +1237,12 @@ async def link_company_to_qb(
         except Exception as e:
             logger.warning(f"link-company propagation failed (non-critical): {e}")
 
+        try:
+            _supabase.rpc('backfill_contacts_to_matched_companies', {'p_client_id': client_id}).execute()
+            _supabase.rpc('update_company_email_counts_from_junction', {'p_client_id': client_id}).execute()
+        except Exception as e:
+            logger.warning(f"link-company backfill failed (non-critical): {e}")
+
         return {"status": "linked", "sb_company_id": sb_company_id, "qb_record_id": qb_record_id}
 
     except Exception as e:
@@ -1404,6 +1415,12 @@ async def review_match_candidate(
                 except Exception as e:
                     logger.warning(f"Single-company propagation failed (non-critical): {e}")
 
+                try:
+                    _supabase.rpc('backfill_contacts_to_matched_companies', {'p_client_id': client_id}).execute()
+                    _supabase.rpc('update_company_email_counts_from_junction', {'p_client_id': client_id}).execute()
+                except Exception as e:
+                    logger.warning(f"Review-accept backfill failed (non-critical): {e}")
+
                 return {
                     "status": "accepted",
                     "promoted": True,
@@ -1473,6 +1490,7 @@ async def bulk_review_candidates(
                     if cfg.data:
                         loop = asyncio.new_event_loop()
                         syncer = QuickbaseSync(_supabase, cfg.data[0])
+                        loop.run_until_complete(syncer.backfill_contacts_after_match())
                         loop.run_until_complete(syncer.propagate_qb_data_to_companies())
                         loop.run_until_complete(syncer.propagate_qb_data_to_contacts())
                         loop.close()

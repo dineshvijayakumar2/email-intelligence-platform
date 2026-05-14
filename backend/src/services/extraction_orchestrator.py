@@ -1752,6 +1752,7 @@ class ExtractionOrchestrator:
                 syncer = QuickbaseSync(self.client, qb_config_resp.data[0])
 
                 async def _propagate_both():
+                    await syncer.backfill_contacts_after_match()
                     companies = await syncer.propagate_qb_data_to_companies()
                     contacts = await syncer.propagate_qb_data_to_contacts()
                     return companies, contacts
