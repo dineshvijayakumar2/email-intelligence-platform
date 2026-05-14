@@ -982,20 +982,23 @@ async def list_match_candidates(
                         if r.get('qb_record_id'):
                             qb_revenue_map[r['qb_record_id']] = r.get('total_invoiced')
 
-            sb_emails_map: dict = {}
+            sb_company_map: dict = {}
             if sb_company_ids:
                 for i in range(0, len(sb_company_ids), 500):
                     batch = sb_company_ids[i:i + 500]
                     sb_resp = _supabase.table('customer_companies').select(
-                        'id, total_emails'
+                        'id, company_name, total_emails'
                     ).in_('id', batch).execute()
                     for r in (sb_resp.data or []):
                         if r.get('id'):
-                            sb_emails_map[r['id']] = r.get('total_emails') or 0
+                            sb_company_map[r['id']] = r
 
             for c in candidates:
                 c['qb_total_revenue'] = qb_revenue_map.get(c.get('qb_record_id'))
-                c['sb_total_emails'] = sb_emails_map.get(c.get('sb_company_id'), 0)
+                sb = sb_company_map.get(c.get('sb_company_id'), {})
+                c['sb_total_emails'] = sb.get('total_emails') or 0
+                if not c.get('sb_company_name'):
+                    c['sb_company_name'] = sb.get('company_name')
 
         if sort_in_memory:
             if sort_by == 'sb_total_emails':
