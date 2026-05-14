@@ -1352,9 +1352,20 @@ class QuickbaseSync:
         Each match dict: {company_id, qb_customer_uuid, qb_record_id, qb_customer_code, match_method}
         Falls back to individual updates if RPC is not available (migration not run).
         """
-        total = len(matches)
-        if not total:
+        if not matches:
             return 0
+
+        seen_companies: set[str] = set()
+        deduped: list[dict] = []
+        for m in matches:
+            cid = m.get('company_id')
+            if cid and cid not in seen_companies:
+                seen_companies.add(cid)
+                deduped.append(m)
+        if len(deduped) < len(matches):
+            logger.info(f"Match dedup: {len(matches)} -> {len(deduped)} (removed {len(matches)-len(deduped)} duplicate company targets)")
+        matches = deduped
+        total = len(matches)
 
         written = 0
 
