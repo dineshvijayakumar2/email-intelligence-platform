@@ -1391,52 +1391,8 @@ class QuickbaseSync:
             return written
 
         except Exception as rpc_err:
-            logger.warning(f"RPC batch_write_qb_matches failed, falling back to individual writes: {rpc_err}")
-
-        # Fallback: individual updates (slower but works without migration 050)
-        import time as _time
-
-        def _do_individual():
-            nonlocal written
-            for i, m in enumerate(matches):
-                if self._cancel and self._cancel.is_set():
-                    break
-                try:
-                    _execute_with_retry(lambda m=m: (
-                        self._supabase.table('qb_customers').update({
-                            'matched_company_id': m['company_id']
-                        }).eq('id', m['qb_customer_uuid']).execute()
-                    ))
-                    # Only write match metadata if not already email_lookup (higher confidence)
-                    if m['match_method'] == 'email_lookup':
-                        _execute_with_retry(lambda m=m: (
-                            self._supabase.table('customer_companies').update({
-                                'qb_customer_id': m['qb_record_id'],
-                                'qb_customer_code': m['qb_customer_code'],
-                                'qb_match_method': m['match_method'],
-                                'qb_matched_at': now_iso,
-                            }).eq('id', m['company_id']).execute()
-                        ))
-                    else:
-                        # Name-based: only set if not already linked
-                        _execute_with_retry(lambda m=m: (
-                            self._supabase.table('customer_companies').update({
-                                'qb_customer_id': m['qb_record_id'],
-                                'qb_customer_code': m['qb_customer_code'],
-                                'qb_match_method': m['match_method'],
-                                'qb_matched_at': now_iso,
-                            }).eq('id', m['company_id']).is_('qb_match_method', 'null').execute()
-                        ))
-                    written += 1
-                except Exception as e:
-                    logger.warning(f"Individual match write failed: {e}")
-
-                if (i + 1) % 500 == 0:
-                    logger.info(f"Fallback match write: {i + 1}/{total} ({written} written)")
-                    _time.sleep(0.3)
-
-        await asyncio.to_thread(_do_individual)
-        return written
+            logger.error(f"RPC batch_write_qb_matches failed: {rpc_err}", exc_info=True)
+            return 0
 
     def _fetch_all_companies(self) -> list[dict]:
         """Fetch all customer_companies for this client (paginated)."""
