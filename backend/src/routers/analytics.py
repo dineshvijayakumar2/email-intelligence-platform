@@ -1367,6 +1367,7 @@ async def list_company_analytics(
     client_id: Optional[str] = Query(default=None),
     engagement_status: Optional[EngagementStatus] = Query(default=None),
     min_engagement_score: Optional[float] = Query(default=None, ge=0, le=100),
+    has_activity: Optional[bool] = Query(default=None, description="Filter to companies with emails > 0"),
     qb_matched: Optional[bool] = Query(default=None, description="Filter companies matched to QB customers"),
     qb_tier: Optional[str] = Query(default=None, description="Filter by QB tier (e.g. 'Level 1')"),
     qb_account_manager: Optional[str] = Query(default=None, description="Filter by account manager name"),
@@ -1392,6 +1393,8 @@ async def list_company_analytics(
 
         if client_id:
             query = query.eq('client_id', client_id)
+        if has_activity is True:
+            query = query.gte('total_emails', 1)
         if min_engagement_score is not None:
             query = query.gte('engagement_score', int(min_engagement_score))
         if qb_matched is True:
@@ -1453,6 +1456,8 @@ async def list_company_analytics(
             count_query = _supabase.table('customer_companies').select('id', count='exact')
             if client_id:
                 count_query = count_query.eq('client_id', client_id)
+            if has_activity is True:
+                count_query = count_query.gte('total_emails', 1)
             if min_engagement_score is not None:
                 count_query = count_query.gte('engagement_score', int(min_engagement_score))
             if qb_matched is True:

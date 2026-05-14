@@ -29,6 +29,7 @@ export const CompaniesAnalytics: React.FC = () => {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [hasActivity, setHasActivity] = useState(true);
   const [qbMatched, setQbMatched] = useState(false);
   const [tierFilter, setTierFilter] = useState('');
   const [amFilter, setAmFilter] = useState('');
@@ -49,6 +50,7 @@ export const CompaniesAnalytics: React.FC = () => {
     client_id: clientId,
     limit: PAGE_SIZE,
     offset: (page - 1) * PAGE_SIZE,
+    has_activity: hasActivity || undefined,
     qb_matched: qbMatched || undefined,
     qb_tier: tierFilter || undefined,
     qb_account_manager: amFilter || undefined,
@@ -145,10 +147,10 @@ export const CompaniesAnalytics: React.FC = () => {
     enableSortingRemoval: false,
   });
 
-  const hasFilters = qbMatched || !!tierFilter || !!amFilter || !!debouncedSearch;
+  const hasFilters = !hasActivity || qbMatched || !!tierFilter || !!amFilter || !!debouncedSearch;
 
   const clearFilters = () => {
-    setSearch(''); setDebouncedSearch(''); setTierFilter(''); setAmFilter(''); setQbMatched(false); setPage(1);
+    setSearch(''); setDebouncedSearch(''); setTierFilter(''); setAmFilter(''); setQbMatched(false); setHasActivity(true); setPage(1);
   };
 
   return (
@@ -187,6 +189,15 @@ export const CompaniesAnalytics: React.FC = () => {
           <option value="">All AMs</option>
           {amOptions.map(am => <option key={am} value={am}>{am}</option>)}
         </select>
+        <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={hasActivity}
+            onChange={e => { setHasActivity(e.target.checked); setPage(1); }}
+            className="rounded border-slate-300"
+          />
+          Has emails
+        </label>
         <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
           <input
             type="checkbox"
