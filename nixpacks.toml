@@ -1,11 +1,7 @@
 # Nixpacks configuration for Railway deployment
 
-[variables]
-MISE_PYTHON_GITHUB_ATTESTATIONS = "false"
-
 [phases.setup]
-nixPkgs = ["gcc"]
-cmds = ["MISE_PYTHON_GITHUB_ATTESTATIONS=false mise install python@3.11"]
+nixPkgs = ["python311", "gcc"]
 
 [phases.install]
 cmds = ["cd backend && pip install --upgrade pip && pip install -r requirements.txt"]
