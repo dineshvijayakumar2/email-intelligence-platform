@@ -1,5 +1,9 @@
 # Nixpacks configuration for Railway deployment
 
+[variables]
+MISE_PYTHON_GITHUB_ATTESTATIONS = "false"
+MISE_SETTINGS__PYTHON__GITHUB_ATTESTATIONS = "false"
+
 [phases.setup]
 nixPkgs = ["python311", "gcc"]
 
