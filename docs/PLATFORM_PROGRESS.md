@@ -1,6 +1,6 @@
 # Email Intelligence Platform — Consolidated Implementation Progress
 
-**Last Updated:** 8 April 2026
+**Last Updated:** 14 May 2026
 **Purpose:** Consolidated reference — completed work, architecture, database schema, and next priorities.
 
 ---
@@ -38,6 +38,7 @@ A commercial intelligence platform for B2B account management teams. It syncs em
 | Frontend Stabilisation | TanStack Query + Table, SSE streaming, terminology cleanup | ✅ Complete | 5 Apr 2026 |
 | Premium UI Overhaul | Ant Design → shadcn/ui + Tailwind CSS, 35+ files, zero antd | ✅ Complete | 7-8 Apr 2026 |
 | Data Accuracy & Thread Stability | QB revenue accuracy, thread dedup root fix, Data Health page, intent status | ✅ Complete | 8 Apr 2026 |
+| QB Data Cleanup & Match Integrity | Contact backfill, 1:1 match enforcement, contamination fix, orphan cleanup | ✅ Complete | 14 May 2026 |
 | Invite User System | Admin-controlled onboarding, restrict open sign-up | 🔲 Planned | Not started |
 
 ---
@@ -1343,14 +1344,68 @@ Indexes: `idx_thread_status_intent` (WHERE intent_status IS NOT NULL) + `idx_thr
 
 ---
 
-## Key Outstanding Gaps
+## ✅ COMPLETE — QB Data Cleanup & Match Integrity (14 May 2026)
 
-1. **No invite-only access control** — open sign-up currently. Invite system fully designed (`docs/INVITE_USER_SMTPLESS.md`) but not built.
+Comprehensive cleanup of QB matching data and permanent architectural fix for contamination (multiple QB customers matching to the same SB company).
 
+### Contact Backfill (Migration 112)
+
+| Item | Detail |
+|------|--------|
+| `backfill_contacts_to_matched_companies` RPC | 3-pass: (1) link contacts to matched companies via QB email chain, (2) backfill `emails.customer_company_id`, (3) backfill `email_contact_links.company_id` |
+| Wired into 6 entry points | Main sync, rematch, extraction pipeline, manual link, review accept, bulk review |
+| Email count refresh | Calls `update_company_email_counts_from_junction` after backfill when count > 0 |
+| Initial run results | 1 contact linked, 10,758 emails backfilled, 16,639 junction links backfilled |
+
+### 1:1 Match Enforcement (Migrations 113–114)
+
+| Item | Detail |
+|------|--------|
+| `batch_write_qb_matches` rewrite (113) | DISTINCT ON dedup within batch + NOT EXISTS guard against cross-batch duplicates |
+| Python-side company_id dedup | Pre-dedup in `_rpc_batch_write_matches` before sending to RPC |
+| Fallback path removed | Unguarded direct-write fallback (root cause of contamination) deleted entirely |
+| `_enforce_1to1_matches` cleanup RPC (114) | Keeps highest-revenue QB customer per company, unmatches rest |
+| Unique partial index (114) | `idx_qb_customers_unique_match ON qb_customers (client_id, matched_company_id) WHERE matched_company_id IS NOT NULL` — physically prevents contamination |
+
+### Data Cleanup
+
+| Item | Detail |
+|------|--------|
+| Orphan companies deleted | 583 companies with no contacts, no emails, no QB match, no pending candidates |
+| Stale candidates dismissed | 1,089 candidates for already-matched QB customers marked as reviewed |
+| Contamination cleared | All multi-match contamination resolved to 0, verified stable |
+
+### UI Enhancement
+
+| Item | Detail |
+|------|--------|
+| "Has emails" filter | Default filter on companies list page hides 0-email companies; toggle to show all |
+
+---
+
+## Next Sprint — Pending Items (Starting 29 May 2026)
+
+### High Priority
+
+| Item | Detail | Effort |
+|------|--------|--------|
+| Candidates count mismatch | Tab badge shows 228 vs browse total 240 — different query definitions (tab counts unreviewed, browse shows all pending+unreviewed) | 2h |
+| Contact creation from QB data | 1,344 unmatched QB customers have emails in `qb_unique_emails` but no corresponding SB contacts — need to create contacts from QB data to enable matching | 1 day |
+| Fix email count sorting in matched view | Sorting by email count in QB matched companies doesn't work correctly | 2h |
+| Method filter dropdown fix | QB review page method filter parked from earlier sessions | 2h |
+
+### Medium Priority
+
+| Item | Detail | Effort |
+|------|--------|--------|
+| Invite User System | Admin-controlled onboarding, restrict open sign-up. Fully designed (`docs/INVITE_USER_SMTPLESS.md`) | 3 days |
+| Manual-only unmatched cleanup | 942 "No link (manual)" unmatched QB customers with $0 revenue — decide: auto-dismiss or leave for review | 1h |
+
+### Architectural Gaps
+
+1. **No invite-only access control** — open sign-up currently. Invite system fully designed but not built.
 2. **Email vectorisation during extraction** — New emails are not automatically vectorised. Needs integration into extraction pipeline (post-Step 9).
-
 3. **Embedding model not configurable** — Hardcoded to Google `gemini-embedding-001`. UI selector planned.
-
 4. **QB tag data → analytics/AI** — Capabilities, processes, embellishments now synced on unique emails; need to wire into customer profiling, AI agent tools, and digest generation.
 
 ---

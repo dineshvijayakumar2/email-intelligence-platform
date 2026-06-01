@@ -1,9 +1,23 @@
 {
+  "model": "claude-opus-4-6",
   "permissions": {
     "allow": [
       "Bash(npx tsc --noEmit)",
       "Bash(wc -l \"/c/Users/Dinesh Vijayakumar/Documents/Projects/Newbound/email-intelligence-platform/backend/src/services\"/*.py)",
-      "Bash(xargs grep:*)"
+      "Bash(xargs grep:*)",
+      "Bash(python -m py_compile backend/src/services/vector_service.py)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"systemMessage\": \"Expected Claude account for this project: dinesh@newbound.com.au — run /status to verify\"}'"
+          }
+        ]
+      }
     ]
   }
 }

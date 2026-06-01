@@ -126,7 +126,7 @@
 
 ### Known-issue cleanup (Week 1 fixes not yet done)
 
-- [D] `hello@carbon8.com.au` mailbox at 5.4% coverage — deferred next sprint
+- [x] `hello@carbon8.com.au` mailbox extraction coverage — resolved (was 5.4%, now complete)
 - [D] 14 Carbon8 domain variants — deferred next sprint
 - [D] 21 weekdays with no email data investigation — deferred next sprint
 
@@ -306,15 +306,26 @@ Items moved from `BUCKET_LIST_APR16_APR22.md` — not yet scheduled into a speci
 
 ### Follow-up (May 12+)
 
-- [ ] **Email-method SB name correction** — ~4,250 email-matched QB customers have wrong SB company names (Carbon8 staff emails create false links between unrelated QB customers and SB companies). Needs: name-similarity guard on email_lookup + batch correction script
-- [ ] **Method filter dropdown fix** — dropdown values are stale (`exact_name`, `domain_root`, `qb_anchored_link`, `qb_anchored_create` don't match actual DB values `qb_create`, `qb_link`). Also 2 "unknown" method records to investigate/fix
-- [ ] **Automate candidate review** — 972 staged candidates (exact name, domain, fuzzy matches) could be auto-promoted where confidence is high (e.g. exact name + same domain = auto-accept), reducing manual review backlog
-- [ ] **Contamination cleanup** — 727 contaminated companies remaining (down from 1,059), 565 multi-revenue cases need manual review or smarter heuristics (e.g. pick highest-revenue QB customer as primary)
-- [ ] **Build Top-N page** — from Insights Review shell; frontend page listing top customers with NL insight summaries + source data links
-- [ ] **Ship validation buttons on insights** — from Insights Review shell; correct/partial/incorrect buttons + optional notes on insight cards
-- [ ] **Manual spot-check 5-10 customer profile pages** — verify data accuracy, insight quality, QB data display after all cleanup
-- [ ] **Update HOW_IT_WORKS.md** — CITEXT migration, match method changes, decontamination process
-- [ ] **Update DATABASE_DESIGN.md** — CITEXT column type on company_name, migration 109-110
+- [D] **Email-method SB name correction** — ~4,250 email-matched QB customers have wrong SB company names (Carbon8 staff emails create false links between unrelated QB customers and SB companies). Needs: name-similarity guard on email_lookup + batch correction script
+- [D] **Method filter dropdown fix** — dropdown values are stale (`exact_name`, `domain_root`, `qb_anchored_link`, `qb_anchored_create` don't match actual DB values `qb_create`, `qb_link`). Also 2 "unknown" method records to investigate/fix
+- [D] **Automate candidate review** — 972 staged candidates (exact name, domain, fuzzy matches) could be auto-promoted where confidence is high (e.g. exact name + same domain = auto-accept), reducing manual review backlog
+- [x] **Contamination cleanup** — RESOLVED: unique partial index `idx_qb_customers_unique_match` physically prevents contamination. All existing contamination cleared via `_enforce_1to1_matches` RPC. `batch_write_qb_matches` rewritten with DISTINCT ON dedup + NOT EXISTS guard. Fallback path removed. (May 14)
+- [D] **Build Top-N page** — from Insights Review shell; frontend page listing top customers with NL insight summaries + source data links
+- [D] **Ship validation buttons on insights** — from Insights Review shell; correct/partial/incorrect buttons + optional notes on insight cards
+- [D] **Manual spot-check 5-10 customer profile pages** — verify data accuracy, insight quality, QB data display after all cleanup
+- [x] **Update HOW_IT_WORKS.md** — QB sync section updated: contact backfill, 1:1 enforcement, unique index, known limitation (1,344 unmatched with QB emails) (May 14)
+- [x] **Update DATABASE_DESIGN.md** — Migration count 101→114, qb_customers unique partial index, batch_write_qb_matches description updated, 2 new RPCs (backfill_contacts_to_matched_companies, _enforce_1to1_matches) (May 14)
+
+### Contact backfill & match integrity (May 14) — ✅ DONE
+
+- [x] Migration 112: `backfill_contacts_to_matched_companies` RPC — 3-pass: link contacts via QB email chain, backfill emails.customer_company_id, backfill email_contact_links.company_id
+- [x] Wired into 6 entry points: main sync, rematch, extraction, manual link, review accept, bulk review
+- [x] Migration 113: `batch_write_qb_matches` rewrite — DISTINCT ON dedup + NOT EXISTS 1:1 guard
+- [x] Python-side company_id dedup in `_rpc_batch_write_matches` + fallback path removed
+- [x] Migration 114: `_enforce_1to1_matches` cleanup RPC + unique partial index
+- [x] Orphan companies deleted (583), stale candidates dismissed (1,089), contamination cleared to 0
+- [x] "Has emails" filter on companies list page (default on, toggle to show all)
+- [x] PLATFORM_PROGRESS.md updated with new sprint row + pending items for May 29
 
 ---
 

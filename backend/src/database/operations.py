@@ -996,8 +996,17 @@ class EmailOperations:
             Tuple of (emails list, total count)
         """
         try:
-            # Build base query
-            query_builder = self.client.table('emails').select('*', count='exact')
+            # Build base query — explicit columns, exclude heavy body/header fields
+            query_builder = self.client.table('emails').select(
+                'id, message_id, mailbox_id, thread_id, folder_path,'
+                'sender_email, sender_name, recipients, cc_list, bcc_list,'
+                'subject, sent_date, received_date, is_outbound, is_reply,'
+                'message_size, processing_status, client_id,'
+                'customer_company_id, customer_contact_id, direction,'
+                'created_at, attachments, provider_web_link,'
+                'canonical_thread_id',
+                count='exact'
+            )
             
             # Apply filters
             if sender:

@@ -1,6 +1,6 @@
 # Database Design — Email Intelligence Platform
 
-A comprehensive reference for every database object in the Email Intelligence Platform. Describes current-state production schema as of 2026-05-01. Validated against live Supabase PostgreSQL 17.6.
+A comprehensive reference for every database object in the Email Intelligence Platform. Describes current-state production schema as of 2026-05-14. Validated against live Supabase PostgreSQL 17.6.
 
 **Total database size: 9.4 GB** across 55 tables, 1 materialized view, 10 regular views, ~60 application-level RPC functions, and 7 PostgreSQL extensions.
 
@@ -13,7 +13,7 @@ A comprehensive reference for every database object in the Email Intelligence Pl
 - **Extensions:** pgvector 0.8.0, pg_stat_statements 1.11, pgcrypto 1.3, uuid-ossp 1.1, pg_graphql 1.5.11, supabase_vault 0.3.1, plpgsql 1.0
 - **Access:** PostgREST auto-generates REST API; RPC functions exposed as `POST /rest/v1/rpc/<fn_name>`
 - **Auth:** Supabase Auth (JWT) with Row-Level Security on select tables
-- **Migrations:** 101 incremental SQL scripts in `scripts/migrations/` (001–101), applied via `exec_sql` RPC + PostgREST schema reload
+- **Migrations:** 114 incremental SQL scripts in `scripts/migrations/` (001–114), applied via `exec_sql` RPC + PostgREST schema reload
 
 ### Schema Domains
 
@@ -708,7 +708,7 @@ QB customer master data with financial metrics and matching.
 
 Key columns: `customer_name`, `customer_code`, `customer_key_id`, `customer_tier`, `customer_status`, `account_manager`, `industry`, `active`, `total_invoiced`, `invoiced_ty`, `invoiced_ly`, `invoiced_l90d`, `invoiced_l12m`, `recency_days`, `cadence_score`, `growth_90d`, `days_since_last_invoice`, `matched_company_id`.
 
-**Unique:** (client_id, qb_record_id)
+**Unique:** (client_id, qb_record_id), (client_id, matched_company_id) WHERE matched_company_id IS NOT NULL — enforces 1:1 QB-to-SB company matching
 
 #### `qb_contacts` — 29,726 rows (15 MB)
 QB contact records with quote metrics.
@@ -963,7 +963,7 @@ These replace row-by-row updates with single-statement bulk operations, reducing
 | `batch_update_contact_roles` | updates jsonb | Role classification results |
 | `batch_update_qb_capabilities` | p_updates jsonb | QB capability tag updates |
 | `batch_update_qb_contact_emails` | p_updates jsonb | QB contact email updates |
-| `batch_write_qb_matches` | p_client_id, p_matches jsonb, p_now | Write 500+ company matches in 2 statements |
+| `batch_write_qb_matches` | p_client_id, p_matches jsonb, p_now | Write company matches with DISTINCT ON dedup + NOT EXISTS 1:1 guard |
 | `batch_propagate_qb_data` | p_client_id, p_data jsonb | Push QB financial data to companies |
 | `batch_propagate_qb_data_to_contacts` | p_client_id | 3-pass: (1) qb_unique_emails by email, (2) qb_contacts by FK, (3) inherit company qb_type/tier |
 
@@ -1029,6 +1029,8 @@ These replace row-by-row updates with single-statement bulk operations, reducing
 |----------|---------|
 | `promote_accepted_matches(p_client_id)` | Move reviewed+accepted fuzzy matches to confirmed company links |
 | `link_emails_by_domain(p_client_id, p_domain, p_company_id)` | Bulk-link emails to a company by sender domain |
+| `backfill_contacts_to_matched_companies(p_client_id)` | 3-pass: link contacts via QB email chain, backfill emails.customer_company_id, backfill email_contact_links.company_id; SECURITY DEFINER, 120s timeout |
+| `_enforce_1to1_matches(p_client_id)` | Cleanup: keep highest-revenue QB customer per company, unmatch the rest |
 
 ### 4.9 Utility & Admin
 
@@ -1338,6 +1340,14 @@ These show an "UNRESTRICTED" badge because Postgres cannot apply RLS to views/ma
 | 104 | Security Definer Fixes | `security_invoker = on` on all 11 regular views; `SET search_path = public` on 10 SECURITY DEFINER functions missing it. Resolves all Supabase Advisor security warnings |
 
 **Migration application method:** `scripts/db/_run_NNN_via_rest.py` → `exec_sql` RPC + `NOTIFY pgrst, 'reload schema'`; scripts are throwaway and deleted after verification.
+
+**IMPORTANT — Table grants:** Supabase has announced that `ALTER DEFAULT PRIVILEGES` auto-granting `anon`/`authenticated`/`service_role` access on new `public` tables will be removed in a future update. All 55 existing tables already have full grants (verified May 2026 via `has_table_privilege()` audit). Every new `CREATE TABLE` migration must include explicit grants:
+
+```sql
+GRANT SELECT, INSERT, UPDATE, DELETE ON <table_name> TO anon, authenticated, service_role;
+```
+
+Without this, the table will be invisible to the Data API (PostgREST). See also `BEST_PRACTICES.md` §1 "Migration patterns".
 
 ---
 

@@ -174,6 +174,6 @@ def retry_on_transient_error(func: Callable[..., T]) -> Callable[..., T]:
     Example:
         @retry_on_transient_error
         def fetch_data():
-            return client.table('emails').select('*').execute()
+            return client.table('emails').select('id, subject, sender_email').execute()
     """
     return with_retry(max_retries=3, base_delay=0.5)(func)

@@ -1,6 +1,6 @@
 # How It Works — Email Intelligence Platform
 
-A plain-language guide to every capability in the Email Intelligence Platform. Describes current-state production behavior as of 2026-04-16. If something is built but not yet active, it says so.
+A plain-language guide to every capability in the Email Intelligence Platform. Describes current-state production behavior as of 2026-05-14. If something is built but not yet active, it says so.
 
 ---
 
@@ -129,7 +129,7 @@ Dashboard shows 80 completed processing jobs. Customer list shows 9 companies wi
 
 #### What it does
 
-Imports CRM data from QuickBase — customers, contacts, quotes, jobs, operations, sales line items, and unique emails — then matches QB customers to platform-extracted companies using a 3-pass algorithm (exact name, domain root, fuzzy name at >82% similarity).
+Imports CRM data from QuickBase — customers, contacts, quotes, jobs, operations, sales line items, and unique emails — then matches QB customers to platform-extracted companies using a 3-pass algorithm (exact name, domain root, fuzzy name at >82% similarity). After matching, automatically backfills contacts and email linkages onto matched companies via the QB email chain.
 
 #### What triggers it
 
@@ -149,6 +149,8 @@ Imports CRM data from QuickBase — customers, contacts, quotes, jobs, operation
 - Creates `qb_match_candidates` for fuzzy matches requiring review
 - Enriches `customer_companies` with QB data: `qb_customer_id`, `customer_type`, `qb_tier`, `qb_total_revenue`, `days_since_last_invoice`, `open_quote_count`, `growth_pct`
 - Enriches `customer_contacts` with QB data: `qb_contact_id`, `qb_quote_count`, `qb_capabilities_used`
+- Backfills contacts onto matched companies: links unlinked `customer_contacts` to the matched company via `qb_unique_emails` email chain, then cascades to `emails.customer_company_id` and `email_contact_links.company_id`
+- Refreshes `customer_companies.total_emails` from junction table after backfill
 
 #### What it depends on
 
@@ -156,7 +158,7 @@ Email Processing Pipeline (needs companies to match against). QB API credentials
 
 #### Current status
 
-Active in production. Carbon8 QB config is active with App ID `buzfemk4f`. All 7 QB tables are populated. Matching and data propagation run on sync.
+Active in production. Carbon8 QB config is active with App ID `buzfemk4f`. All 7 QB tables are populated. Matching, contact backfill, and data propagation run on sync. A unique partial index on `qb_customers(client_id, matched_company_id)` enforces 1:1 QB-to-SB company matching at the database level.
 
 #### Known limitations
 
@@ -165,6 +167,7 @@ Active in production. Carbon8 QB config is active with App ID `buzfemk4f`. All 7
 - QB API rate limits are not explicitly handled; high-volume syncs could hit throttling
 - No incremental QB sync — every sync pulls all records from QB (though it uses upsert locally)
 - `qb_sync_config` stores QB API credentials (realm hostname, user token) in the database. The user token has broad QB access — there's no per-table scoping
+- 1,344 unmatched QB customers have emails in `qb_unique_emails` but no corresponding SB contacts — contact creation from QB data not yet implemented
 
 #### Verified by
 

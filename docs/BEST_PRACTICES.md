@@ -95,6 +95,21 @@ for ci in range(0, len(ids), DB_CHUNK):
 - Always test on smaller dataset before running on production
 - pgvector HNSW/IVFFlat indexes: max 2000 dimensions
 
+### Every new table MUST include explicit GRANT statements
+
+Supabase's `ALTER DEFAULT PRIVILEGES` currently auto-grants access to `anon`, `authenticated`, and `service_role` for tables created in the `public` schema. **Supabase has announced this default will change** — future tables will require explicit grants.
+
+All existing tables are covered (verified May 2026), but every new `CREATE TABLE` migration must include:
+
+```sql
+CREATE TABLE IF NOT EXISTS my_new_table (...);
+
+ALTER TABLE my_new_table ENABLE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT, UPDATE, DELETE ON my_new_table TO anon, authenticated, service_role;
+```
+
+Without the `GRANT`, the table will be invisible to the Data API (PostgREST) after Supabase enforces the change — the backend's `service_role` key and all authenticated queries will silently return empty results.
+
 ---
 
 ## 2. Background Processing
