@@ -1,13 +1,13 @@
 # Nixpacks configuration for Railway deployment
 
+[variables]
+MISE_PYTHON_GITHUB_ATTESTATIONS = "false"
+
 [phases.setup]
-# Use Python 3.9 as base
-nixPkgs = ["python39", "gcc"]
+nixPkgs = ["python311", "gcc"]
 
 [phases.install]
-# Install Python dependencies
 cmds = ["cd backend && pip install --upgrade pip && pip install -r requirements.txt"]
 
 [start]
-# Start the backend application
 cmd = "cd backend && uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"
