@@ -1718,19 +1718,22 @@ async def get_company_analytics(company_id: str):
             except Exception:
                 pass
 
-        # Live contact count (not stale stored value)
+        # Live contact count — authoritative. Do NOT fall back to the stored
+        # aggregate: when the true live count is 0 (e.g. contacts re-pointed to
+        # a canonical company during dedup), a `live or stored` fallback would
+        # resurrect a stale value and disagree with the drilldown.
         try:
             live_contacts = _supabase.table('customer_contacts').select(
                 'id', count='exact'
             ).eq('customer_company_id', company_id).limit(0).execute()
-            comp['contact_count'] = live_contacts.count or comp.get('contact_count', 0)
+            comp['contact_count'] = live_contacts.count or 0
 
             dm_contacts = _supabase.table('customer_contacts').select(
                 'id', count='exact'
             ).eq('customer_company_id', company_id).eq('is_decision_maker', True).limit(0).execute()
-            comp['decision_maker_count'] = dm_contacts.count or comp.get('decision_maker_count', 0)
-        except Exception:
-            pass
+            comp['decision_maker_count'] = dm_contacts.count or 0
+        except Exception as e:
+            logger.warning(f"Live contact-count query failed for company {company_id}: {e}")
 
         # Thread counts: active + overdue
         active_threads = 0
