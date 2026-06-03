@@ -208,21 +208,30 @@ class CompanyResolver:
             if not self._qb_email_lookup:
                 return
 
-            # Load QB customers so we can map qb_customer_id → matched SB company
+            # Load QB customers so we can map qb_customer_id → matched SB company.
+            # qb_unique_emails.qb_customer_id is QB's "Customer ID (key)" field —
+            # which lands in qb_customers.customer_key_id, NOT qb_record_id (the
+            # internal Record ID#). Keying this lookup by qb_record_id mis-joins
+            # ~100% of rows (the two id spaces are unrelated), so use customer_key_id.
             offset = 0
             while True:
                 resp = (
                     self.client.table('qb_customers')
-                    .select('id, qb_record_id, customer_name, customer_code, matched_company_id')
+                    .select('id, qb_record_id, customer_key_id, customer_name, customer_code, matched_company_id')
                     .eq('client_id', self.client_id)
                     .range(offset, offset + 999)
                     .execute()
                 )
                 rows = resp.data or []
                 for r in rows:
-                    rid = str(r.get('qb_record_id', '')).strip()
-                    if rid:
-                        self._qb_customer_lookup[rid] = r
+                    key = str(r.get('customer_key_id', '')).strip()
+                    if not key:
+                        continue
+                    try:
+                        key = str(int(float(key)))  # match resolve_company_from_qb_email normalisation
+                    except (ValueError, TypeError):
+                        pass
+                    self._qb_customer_lookup[key] = r
                 if len(rows) == 0:
                     break
                 offset += len(rows)

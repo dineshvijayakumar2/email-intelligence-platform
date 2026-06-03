@@ -1346,6 +1346,29 @@ async def review_match_candidate(
     try:
         now = datetime.now(timezone.utc).isoformat()
 
+        candidate = _supabase.table('qb_match_candidates').select(
+            'client_id, sb_company_id, sb_company_name, qb_record_id, qb_customer_id, qb_name'
+        ).eq('id', candidate_id).limit(1).execute()
+        c = candidate.data[0] if candidate.data else None
+
+        # Guard the one-company-per-QB-customer rule (idx_qb_customers_unique_match)
+        # before we mutate any state, so a conflict surfaces as an actionable 409
+        # instead of a raw 500 — and leaves the candidate un-reviewed for a retry.
+        if accepted and c:
+            target_company_id = sb_company_id or c['sb_company_id']
+            if target_company_id:
+                conflict = _supabase.table('qb_customers').select(
+                    'qb_record_id, customer_name'
+                ).eq('client_id', c['client_id']).eq(
+                    'matched_company_id', target_company_id
+                ).neq('qb_record_id', c['qb_record_id']).limit(1).execute()
+                if conflict.data:
+                    other = conflict.data[0].get('customer_name') or 'another QB customer'
+                    raise HTTPException(
+                        status_code=409,
+                        detail=f"That SB company is already matched to \"{other}\". Unmatch it first, or pick a different company.",
+                    )
+
         # Update candidate review status
         update_payload: dict = {
             'reviewed': True,
@@ -1361,12 +1384,7 @@ async def review_match_candidate(
 
         # If accepted, promote the match immediately
         if accepted:
-            candidate = _supabase.table('qb_match_candidates').select(
-                'client_id, sb_company_id, sb_company_name, qb_record_id, qb_customer_id, qb_name'
-            ).eq('id', candidate_id).limit(1).execute()
-
-            if candidate.data:
-                c = candidate.data[0]
+            if c:
                 target_company_id = sb_company_id or c['sb_company_id']
                 method = 'manual' if sb_company_id else 'fuzzy'
 
@@ -1422,8 +1440,8 @@ async def review_match_candidate(
                     logger.warning(f"Single-company propagation failed (non-critical): {e}")
 
                 try:
-                    _supabase.rpc('backfill_contacts_to_matched_companies', {'p_client_id': client_id}).execute()
-                    _supabase.rpc('update_company_email_counts_from_junction', {'p_client_id': client_id}).execute()
+                    _supabase.rpc('backfill_contacts_to_matched_companies', {'p_client_id': c['client_id']}).execute()
+                    _supabase.rpc('update_company_email_counts_from_junction', {'p_client_id': c['client_id']}).execute()
                 except Exception as e:
                     logger.warning(f"Review-accept backfill failed (non-critical): {e}")
 
@@ -1439,6 +1457,8 @@ async def review_match_candidate(
             "promoted": False,
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)[:200])
 
