@@ -797,7 +797,14 @@ export default function QuickbaseMatchesPage() {
                             </td>
                           )}
                           {view === 'matched' && (
-                            <td className="px-4 py-2 text-sm text-slate-700 truncate max-w-[280px]">{row.sb_company_name || '--'}</td>
+                            <td className="px-4 py-2 text-sm text-slate-700 max-w-[280px]">
+                              <div className="truncate">{row.sb_company_name || '--'}</div>
+                              {row.sb_company_name && (
+                                <div className="mt-1">
+                                  <DomainChips domains={row.sb_email_domains} website={row.sb_website} />
+                                </div>
+                              )}
+                            </td>
                           )}
                           {view !== 'unmatched' && (
                             <td className="px-4 py-2 text-center text-sm">

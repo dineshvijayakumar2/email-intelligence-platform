@@ -1077,7 +1077,7 @@ async def browse_qb_customers(
             for i in range(0, len(company_ids), 500):
                 batch = company_ids[i:i + 500]
                 resp = _supabase.table('customer_companies').select(
-                    'id, company_name, qb_match_method, total_emails'
+                    'id, company_name, qb_match_method, total_emails, email_domains, website'
                 ).in_('id', batch).execute()
                 for c in (resp.data or []):
                     company_map[c['id']] = c
@@ -1099,6 +1099,8 @@ async def browse_qb_customers(
                     'sb_company_id': r.get('matched_company_id'),
                     'sb_company_name': cc.get('company_name'),
                     'sb_total_emails': cc.get('total_emails') or 0,
+                    'sb_email_domains': cc.get('email_domains') or [],
+                    'sb_website': cc.get('website'),
                     'candidate_id': None,
                 })
 
