@@ -30,7 +30,6 @@ from ..database.supabase_client import SupabaseClient
 from ..utils.domain_parser import (
     extract_domain,
     normalize_domain,
-    domain_to_company_name,
     get_root_domain
 )
 
@@ -492,17 +491,20 @@ class CompanyResolver:
         Returns:
             ResolvedCompany instance
         """
-        # Check if company already exists
+        # resolve_companies only invokes this for an EXISTING company matched by
+        # domain. QB-anchored mode never mints companies from domain-derived
+        # names — that historically produced junk duplicates like "Mauijim"
+        # alongside the real, QB-linked "Maui Jim". Fail loud rather than
+        # silently re-introduce that path.
         existing_company = self._existing_companies.get(domain.lower())
-
-        if existing_company:
-            company_id = existing_company['id']
-            company_name = existing_company['company_name']
-            is_new = False
-        else:
-            company_id = None
-            company_name = domain_to_company_name(domain)
-            is_new = True
+        if not existing_company:
+            raise ValueError(
+                f"_create_company_from_domain called for domain '{domain}' with no "
+                f"existing company; domain-derived company creation is disabled"
+            )
+        company_id = existing_company['id']
+        company_name = existing_company['company_name']
+        is_new = False
 
         # Calculate statistics
         contact_count = len(contacts)
@@ -540,47 +542,6 @@ class CompanyResolver:
             first_seen=first_seen,
             last_seen=last_seen,
             contact_emails=contact_emails
-        )
-
-    def _create_individual_company(self, contact: Dict) -> ResolvedCompany:
-        """
-        Create individual company for free provider contact
-
-        Used when group_free_providers=False
-
-        Args:
-            contact: Contact dictionary
-
-        Returns:
-            ResolvedCompany instance
-        """
-        # Use contact full name or email as company name
-        if contact.get('display_name'):
-            company_name = contact['display_name']
-        elif contact.get('first_name') or contact.get('last_name'):
-            parts = [contact.get('first_name', ''), contact.get('last_name', '')]
-            company_name = ' '.join(p for p in parts if p).strip()
-        else:
-            # Use email prefix
-            company_name = contact['email'].split('@')[0].replace('.', ' ').title()
-
-        first_seen = self._parse_datetime(contact['first_seen_date'])
-        last_seen = self._parse_datetime(contact['last_seen_date'])
-
-        return ResolvedCompany(
-            company_id=None,
-            company_name=company_name,
-            domain=contact['domain'],
-            domain_classification='free_provider',
-            contact_count=1,
-            total_emails=int(contact.get('total_emails', 0) or 0),
-            sender_count=1 if int(contact.get('as_sender_count', 0) or 0) > 0 else 0,
-            recipient_count=1 if int(contact.get('as_recipient_count', 0) or 0) > 0 else 0,
-            email_domains=[contact['domain']],
-            is_new=True,
-            first_seen=first_seen,
-            last_seen=last_seen,
-            contact_emails=[contact['email']]
         )
 
     def upsert_companies(self, companies: List[ResolvedCompany]) -> Dict:
@@ -764,100 +725,6 @@ class CompanyResolver:
             'qb_linked': qb_linked,
             'errors': errors
         }
-
-    def _create_company(self, company: ResolvedCompany):
-        """
-        Create new company in database (or update if duplicate name exists)
-
-        Args:
-            company: ResolvedCompany instance
-        """
-        insert_data = {
-            'client_id': self.client_id,
-            'company_name': company.company_name,
-            'email_domains': company.email_domains,
-            'contact_count': company.contact_count,
-            'first_contact_date': company.first_seen.isoformat(),
-            'last_contact_date': company.last_seen.isoformat(),
-            'created_at': datetime.utcnow().isoformat(),
-            'updated_at': datetime.utcnow().isoformat(),
-        }
-
-        try:
-            response = (
-                self.client.table('customer_companies')
-                .insert(insert_data)
-                .execute()
-            )
-
-            if response.data:
-                # Update cache
-                company.company_id = response.data[0]['id']
-                for domain in company.email_domains:
-                    self._existing_companies[domain.lower()] = response.data[0]
-
-                logger.debug(f"Created company: {company.company_name} (ID: {company.company_id})")
-
-        except Exception as e:
-            # Check if it's a duplicate key error
-            error_str = str(e)
-            if 'duplicate key' in error_str or '23505' in error_str:
-                # Company with this name already exists, fetch and update it
-                logger.warning(f"Company {company.company_name} already exists, updating instead")
-
-                existing = (
-                    self.client.table('customer_companies')
-                    .select('*')
-                    .eq('client_id', self.client_id)
-                    .eq('company_name', company.company_name)
-                    .execute()
-                )
-
-                if existing.data:
-                    # Update the existing company
-                    company.company_id = existing.data[0]['id']
-                    company.is_new = False
-                    self._update_company(company)
-                else:
-                    # Unexpected: duplicate error but can't find existing
-                    raise
-            else:
-                # Different error, re-raise
-                raise
-
-    def _update_company(self, company: ResolvedCompany):
-        """
-        Update existing company in database
-
-        Args:
-            company: ResolvedCompany instance
-        """
-        # Get existing record
-        existing = self._existing_companies.get(company.domain.lower())
-
-        if not existing:
-            logger.warning(f"Company {company.company_name} marked as existing but not in cache")
-            return
-
-        # Merge email_domains (keep existing + add new)
-        existing_domains = set(existing.get('email_domains', []))
-        new_domains = existing_domains.union(set(company.email_domains))
-
-        update_data = {
-            'email_domains': list(new_domains),
-            'contact_count': company.contact_count,
-            'last_contact_date': company.last_seen.isoformat(),
-            'updated_at': datetime.utcnow().isoformat(),
-        }
-
-        response = (
-            self.client.table('customer_companies')
-            .update(update_data)
-            .eq('id', company.company_id)
-            .execute()
-        )
-
-        logger.debug(f"Updated company: {company.company_name} (ID: {company.company_id})")
 
     def get_resolution_summary(self, companies: List[ResolvedCompany]) -> Dict:
         """
