@@ -70,6 +70,8 @@ interface BrowseRow {
   sb_company_id?: string;
   sb_company_name?: string;
   sb_total_emails?: number;
+  sb_email_domains?: string[];
+  sb_website?: string;
   candidate_id?: string;
   qb_customer_id?: string;
 }
@@ -162,6 +164,50 @@ function CompanySearchSelect({
 }
 
 // -- Helpers ----------------------------------------------------------------------------------
+
+// Freemail domains carry no matching signal — de-emphasize them.
+const FREEMAIL_DOMAINS = new Set([
+  'gmail.com', 'outlook.com', 'hotmail.com', 'yahoo.com', 'yahoo.com.au',
+  'bigpond.com', 'icloud.com', 'live.com', 'me.com', 'aol.com', 'optusnet.com.au',
+]);
+
+function DomainChips({ domains, website }: { domains?: string[]; website?: string | null }) {
+  const list = (domains || []).filter(Boolean);
+  if (list.length === 0 && !website) {
+    return <span className="text-[11px] text-slate-300">no email domains</span>;
+  }
+  // Business domains first, freemail last; cap display to keep the cell compact.
+  const sorted = [...list].sort((a, b) => {
+    const af = FREEMAIL_DOMAINS.has(a.toLowerCase()) ? 1 : 0;
+    const bf = FREEMAIL_DOMAINS.has(b.toLowerCase()) ? 1 : 0;
+    return af - bf;
+  });
+  const shown = sorted.slice(0, 4);
+  const extra = sorted.length - shown.length;
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {shown.map((d) => {
+        const isFree = FREEMAIL_DOMAINS.has(d.toLowerCase());
+        return (
+          <span
+            key={d}
+            className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${
+              isFree ? 'bg-slate-100 text-slate-400' : 'bg-blue-50 text-blue-700'
+            }`}
+            title={isFree ? 'Freemail domain (weak signal)' : 'Email domain'}
+          >
+            {d}
+          </span>
+        );
+      })}
+      {extra > 0 && (
+        <span className="text-[10px] text-slate-400" title={sorted.slice(4).join(', ')}>
+          +{extra}
+        </span>
+      )}
+    </div>
+  );
+}
 
 function SortIcon({ field, sortBy, sortDesc }: { field: string; sortBy: string; sortDesc: boolean }) {
   if (sortBy !== field) return <ArrowUpDown className="h-3 w-3 text-slate-300 ml-1" />;
@@ -743,6 +789,11 @@ export default function QuickbaseMatchesPage() {
                                 defaultValue={rowSelections[row.candidate_id!]?.id || row.sb_company_id || ''}
                                 defaultLabel={rowSelections[row.candidate_id!]?.name || row.sb_company_name || ''}
                                 onChange={(id, name) => setRowSelections(prev => ({ ...prev, [row.candidate_id!]: { id, name } }))} />
+                              {!rowSelections[row.candidate_id!] && (
+                                <div className="mt-1">
+                                  <DomainChips domains={row.sb_email_domains} website={row.sb_website} />
+                                </div>
+                              )}
                             </td>
                           )}
                           {view === 'matched' && (

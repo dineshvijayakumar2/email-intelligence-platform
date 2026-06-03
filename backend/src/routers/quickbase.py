@@ -992,7 +992,7 @@ async def list_match_candidates(
                 for i in range(0, len(sb_company_ids), 500):
                     batch = sb_company_ids[i:i + 500]
                     sb_resp = _supabase.table('customer_companies').select(
-                        'id, company_name, total_emails'
+                        'id, company_name, total_emails, email_domains, website'
                     ).in_('id', batch).execute()
                     for r in (sb_resp.data or []):
                         if r.get('id'):
@@ -1002,6 +1002,8 @@ async def list_match_candidates(
                 c['qb_total_revenue'] = qb_revenue_map.get(c.get('qb_record_id'))
                 sb = sb_company_map.get(c.get('sb_company_id'), {})
                 c['sb_total_emails'] = sb.get('total_emails') or 0
+                c['sb_email_domains'] = sb.get('email_domains') or []
+                c['sb_website'] = sb.get('website')
                 if not c.get('sb_company_name'):
                     c['sb_company_name'] = sb.get('company_name')
 
@@ -1172,6 +1174,8 @@ async def browse_qb_customers(
                     'sb_company_id': c.get('sb_company_id'),
                     'sb_company_name': c.get('sb_company_name'),
                     'sb_total_emails': c.get('sb_total_emails', 0),
+                    'sb_email_domains': c.get('sb_email_domains', []),
+                    'sb_website': c.get('sb_website'),
                     'candidate_id': c['id'],
                     'qb_customer_id': c.get('qb_customer_id'),
                 })
