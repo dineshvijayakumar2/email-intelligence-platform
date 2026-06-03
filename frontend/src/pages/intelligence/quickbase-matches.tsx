@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   CheckCircle2, RefreshCw, Search, ChevronDown, ChevronUp, ArrowUpDown,
-  TrendingUp, AlertTriangle, Building2, Users, Mail, ArrowRight,
+  TrendingUp, AlertTriangle, Building2, Users, Mail, ArrowRight, Download,
 } from 'lucide-react';
 import { Spinner } from '@/lib/icons';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -298,6 +298,7 @@ export default function QuickbaseMatchesPage() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [methodFilter, setMethodFilter] = useState('');
   const [rematchMenuOpen, setRematchMenuOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const rematchRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -416,6 +417,57 @@ export default function QuickbaseMatchesPage() {
       notify.error('Rematch failed');
     }
     setTimeout(() => setRematchLoading(false), 2000);
+  };
+
+  const handleExport = async () => {
+    if (!clientId || exporting) return;
+    setExporting(true);
+    try {
+      let backendSort = sortBy;
+      if (sortBy === 'qb_total_revenue') {
+        backendSort = 'total_invoiced';
+      } else if (view !== 'candidates') {
+        if (sortBy === 'qb_name') backendSort = 'customer_name';
+        else if (sortBy === 'sb_total_emails') backendSort = 'sb_total_emails';
+        else backendSort = 'total_invoiced';
+      }
+      const searchParam = debouncedSearch ? `&search=${encodeURIComponent(debouncedSearch)}` : '';
+      const methodParam = methodFilter ? `&method=${encodeURIComponent(methodFilter)}` : '';
+      const d = await api.get(
+        `/v1/quickbase/qb-customers-browse?client_id=${clientId}&view=${view}&limit=100000&offset=0&sort_by=${backendSort}&sort_desc=${sortDesc}${searchParam}${methodParam}`
+      ) as { items: BrowseRow[]; total: number };
+      const items = d.items || [];
+      if (items.length === 0) { notify.error('Nothing to export'); return; }
+
+      const esc = (v: unknown) => {
+        const s = v == null ? '' : String(v);
+        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      };
+      const headers = [
+        'QB Customer', 'QB Record ID', 'QB Revenue', 'Match Score', 'Match Method',
+        'SB Company', 'SB Email Domains', 'SB Website', 'SB Emails',
+      ];
+      const lines = [headers.join(',')];
+      for (const r of items) {
+        lines.push([
+          esc(r.qb_name), esc(r.qb_record_id), esc(r.qb_total_revenue),
+          esc(r.match_score), esc(r.match_method),
+          esc(r.sb_company_name), esc((r.sb_email_domains || []).join('; ')),
+          esc(r.sb_website), esc(r.sb_total_emails),
+        ].join(','));
+      }
+      const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `qb-${view}-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      notify.success(`Exported ${items.length} rows`);
+    } catch {
+      notify.error('Export failed');
+    }
+    setExporting(false);
   };
 
   const switchView = (v: ViewType) => {
@@ -707,6 +759,14 @@ export default function QuickbaseMatchesPage() {
                   className="w-48 pl-7 pr-2 py-1.5 text-xs rounded-md border border-slate-200 bg-white text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-300"
                 />
               </div>
+              <button
+                onClick={handleExport}
+                disabled={exporting || browseTotal === 0}
+                className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                title="Export current view to CSV">
+                {exporting ? <Spinner className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                Export CSV
+              </button>
               <span className="text-xs text-slate-400">{browseTotal.toLocaleString()} {view === 'candidates' ? 'candidates' : 'customers'}</span>
             </div>
 
