@@ -1554,19 +1554,29 @@ class ExtractionOrchestrator:
                 return 0
             logger.info(f"Step 6 QB email match: {len(email_to_qb)} unique emails loaded")
 
-            # ── Step 2: Build qb_record_id → qb_customers row lookup ──
-            qb_cust_map: dict = {}  # qb_record_id → {id, customer_code}
+            # ── Step 2: Build customer_key_id → qb_customers row lookup ──
+            # qb_unique_emails.qb_customer_id holds QB's "Customer ID (key)" (field 92),
+            # which lands in qb_customers.customer_key_id, NOT qb_record_id (the internal
+            # Record ID#, field 3). Keying this map by qb_record_id mis-joins ~100% of
+            # rows (unrelated id spaces), so key by customer_key_id.
+            qb_cust_map: dict = {}  # customer_key_id → {id, qb_record_id, customer_code}
             offset = 0
             while True:
                 cust_resp = self._execute_with_retry(
                     self.client.table('qb_customers').select(
-                        'id, qb_record_id, customer_code'
+                        'id, qb_record_id, customer_key_id, customer_code'
                     ).eq('client_id', self.client_id).range(offset, offset + 999)
                 )
                 rows = cust_resp.data or []
                 for r in rows:
-                    if r.get('qb_record_id'):
-                        qb_cust_map[str(r['qb_record_id'])] = r
+                    key = str(r.get('customer_key_id') or '').strip()
+                    if not key:
+                        continue
+                    try:
+                        key = str(int(float(key)))  # match the lookup-side normalisation
+                    except (ValueError, TypeError):
+                        pass
+                    qb_cust_map[key] = r
                 if len(rows) == 0:
                     break
                 offset += len(rows)
