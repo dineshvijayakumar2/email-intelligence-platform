@@ -1024,8 +1024,12 @@ class QuickbaseSync:
 
         logger.info(f"Classified: {len(perfect_pairs)} perfect 1:1 pairs, {len(multi_match_pairs)} multi-match pairs")
 
-        # Step 5: Resolve QB customer IDs to UUIDs (index by both record_id and customer_key_id)
-        qb_by_record_id: dict[str, dict] = {}
+        # Step 5: Resolve QB customer IDs to UUIDs.
+        # qb_unique_emails.qb_customer_id is QB's "Customer ID (key)" (field 92),
+        # NOT the Record ID# — so it MUST resolve against customer_key_id only.
+        # Resolving against qb_record_id mis-matches whenever a key value collides
+        # with a different customer's record id (the GreenSquareDC/"Nicholas J
+        # Baker" contamination: key 34520 vs record-id 34520 are different rows).
         qb_by_key_id: dict[str, dict] = {}
         offset = 0
         while True:
@@ -1034,12 +1038,12 @@ class QuickbaseSync:
             ).eq('client_id', self._client_id).range(o, o + 999).execute())
             rows = page.data or []
             for r in rows:
-                rid = r.get('qb_record_id')
                 kid = r.get('customer_key_id')
-                if rid:
-                    qb_by_record_id[str(rid)] = r
-                if kid:
-                    qb_by_key_id[str(kid)] = r
+                if kid is not None and str(kid).strip():
+                    try:
+                        qb_by_key_id[str(int(float(kid)))] = r
+                    except (ValueError, TypeError):
+                        qb_by_key_id[str(kid)] = r
             if len(rows) == 0:
                 break
             offset += len(rows)
@@ -1049,7 +1053,7 @@ class QuickbaseSync:
                 norm_id = str(int(float(qb_customer_id)))
             except (ValueError, TypeError):
                 norm_id = str(qb_customer_id)
-            return qb_by_record_id.get(norm_id) or qb_by_key_id.get(norm_id)
+            return qb_by_key_id.get(norm_id)
 
         # Step 6: Build payloads for perfect matches (auto-write)
         now_iso = datetime.now(timezone.utc).isoformat()
