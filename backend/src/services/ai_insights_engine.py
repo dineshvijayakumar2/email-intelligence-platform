@@ -378,12 +378,21 @@ class AIInsightsEngine:
                 "qb_customer_type, qb_customer_tier"
             ).eq("thread_id", thread_id).single().execute()
 
-            # Get thread emails (last 5)
+            # Get thread emails (last 5) — body_text fetched SQL-side truncated below
             emails = self._supabase.table("emails").select(
-                "subject, sender_email, sender_name, sent_date, is_outbound, body_text"
+                "id, subject, sender_email, sender_name, sent_date, is_outbound"
             ).eq("thread_id", thread_id).order(
                 "sent_date", desc=True
             ).limit(5).execute()
+
+            # Only the first 200 chars per email are used — truncate at the DB.
+            body_by_id = {}
+            email_ids = [e["id"] for e in (emails.data or []) if e.get("id")]
+            if email_ids:
+                body_resp = self._supabase.rpc(
+                    "emails_body_left", {"email_ids": email_ids, "n": 200}
+                ).execute()
+                body_by_id = {r["id"]: (r.get("body") or "") for r in (body_resp.data or [])}
 
             parts = []
             if thread.data:
@@ -398,7 +407,7 @@ class AIInsightsEngine:
                 for e in reversed(emails.data):  # chronological order
                     direction = "OUT" if e.get("is_outbound") else "IN"
                     sender = e.get("sender_name") or e.get("sender_email", "?")
-                    body = (e.get("body_text") or "")[:200]
+                    body = body_by_id.get(e.get("id"), "")
                     parts.append(f"  [{direction}] {sender}: {body}")
 
             return "\n".join(parts) if parts else None
