@@ -86,7 +86,7 @@ def lookup_company_detail(company_name: str) -> str:
     try:
         resp = _execute_with_retry(
             client.table("customer_companies")
-            .select("*")
+            .select("id, company_name, industry, engagement_score, contact_count, created_at")
             .ilike("company_name", f"%{company_name}%")
             .limit(5)
         )
@@ -114,7 +114,9 @@ def lookup_company_detail(company_name: str) -> str:
     try:
         resp = _execute_with_retry(
             client.table("qb_customers")
-            .select("*")
+            .select("customer_name, customer_tier, customer_status, account_manager, "
+                    "total_invoiced, invoiced_ty, invoiced_ly, invoiced_l90d, "
+                    "growth_90d, cadence_score, days_since_last_invoice")
             .ilike("customer_name", f"%{company_name}%")
             .limit(5)
         )
@@ -159,7 +161,7 @@ def lookup_contact_history(contact_email: str) -> str:
     try:
         resp = _execute_with_retry(
             client.table("customer_contacts")
-            .select("*")
+            .select("first_name, last_name, customer_company_id, contact_type, engagement_score")
             .eq("email", contact_email)
             .limit(1)
         )
@@ -279,7 +281,8 @@ def lookup_quote_detail(quote_no: str) -> str:
     try:
         resp = _execute_with_retry(
             client.table("qb_quotes")
-            .select("*")
+            .select("quote_no, quote_am_name, sell_ex_tax, date_created, date_accepted, "
+                    "category, contact_name, contact_email, has_job, job_no, quantity, kinds")
             .eq("quote_no", quote_no)
             .limit(5)
         )
@@ -310,7 +313,9 @@ def lookup_quote_detail(quote_no: str) -> str:
             try:
                 job_resp = _execute_with_retry(
                     client.table("qb_jobs")
-                    .select("*")
+                    .select("job_status, retail_sale, invoiced_margin, margin_pct, "
+                            "accepted_date, due_date, factory_rush_level, "
+                            "pieces_ordered, kinds_ordered")
                     .eq("job_no", job_no)
                     .limit(1)
                 )
