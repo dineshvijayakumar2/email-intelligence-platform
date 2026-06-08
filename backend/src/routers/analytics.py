@@ -2492,7 +2492,9 @@ async def get_thread_detail(
         canonical_id = ts.get('canonical_thread_id') or thread_id
         original_thread_id = ts.get('thread_id')
         subject = ts.get('subject', '')
-        COLS = 'id, subject, sender_email, sender_name, recipients, sent_date, is_outbound, body_text, folder_path'
+        # body_text excluded here — fetched SQL-side truncated below (this view
+        # only renders a 500-char preview, so the full body never crosses the wire).
+        COLS = 'id, subject, sender_email, sender_name, recipients, sent_date, is_outbound, folder_path'
 
         all_emails: list = []
         seen_ids: set = set()
@@ -2551,10 +2553,20 @@ async def get_thread_detail(
         all_emails.sort(key=lambda e: e.get('sent_date', ''))
         emails_result = type('R', (), {'data': all_emails})()
 
+        # Fetch SQL-side-truncated bodies for the preview (501 chars so we can still
+        # append the '...' truncation marker for bodies that were longer than 500).
+        body_by_id: dict = {}
+        email_ids = [e['id'] for e in all_emails if e.get('id')]
+        if email_ids:
+            body_resp = _supabase.rpc(
+                'emails_body_left', {'email_ids': email_ids, 'n': 501}
+            ).execute()
+            body_by_id = {r['id']: (r.get('body') or '') for r in (body_resp.data or [])}
+
         thread_emails = []
         for e in (emails_result.data or []):
             # Truncate body_text for preview
-            body = e.get('body_text', '') or ''
+            body = body_by_id.get(e['id'], '')
             if len(body) > 500:
                 body = body[:500] + '...'
             thread_emails.append(ThreadEmail(
