@@ -640,6 +640,10 @@ class RecommendationEngine:
             qb_key_id = cust_result.data[0]['customer_key_id']
 
             # Sales line items → revenue by product_group (fallback to industry)
+            # FRAGILE (mixed-space ID): safe only because qb_key_id comes from
+            # qb_customers.customer_key_id and qb_sales_line_items.qb_customer_id is key-id
+            # space. Never feed a customer_companies.qb_customer_id (mixed key_id/record_id)
+            # here — resolve it first via resolve_qb in scripts/db/merge_duplicate_companies.py.
             sli_result = (
                 self._supabase.table('qb_sales_line_items')
                 .select('product_group, industry, total')

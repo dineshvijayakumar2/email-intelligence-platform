@@ -31,9 +31,18 @@ from dotenv import load_dotenv
 
 EXECUTE = "--execute" in sys.argv
 LIMIT = None
+ONLY = None            # restrict to these norms AND revive them past the conflict gate (vetted)
+SURVIVOR = {}          # norm -> sb_id to FORCE as the surviving row (override pick_canonical)
 for a in sys.argv:
     if a.startswith("--limit="):
         LIMIT = int(a.split("=", 1)[1])
+    if a.startswith("--only="):
+        ONLY = {x for x in a.split("=", 1)[1].split(",") if x}
+    if a.startswith("--survivor="):
+        for pair in a.split("=", 1)[1].split(","):
+            if ":" in pair:
+                nk, sid = pair.split(":", 1)
+                SURVIVOR[nk] = sid
 
 env_path = os.path.join(os.path.dirname(__file__), "..", "..", "backend", ".env.production")
 if not os.path.exists(env_path):
@@ -92,18 +101,67 @@ def best_display_name(records):
     return re.sub(r"\s+", " ", (best.get("company_name") or "").strip())
 
 
-def pick_canonical(records, live):
+def build_qb_index(rows):
+    """Index qb_customers by BOTH numeric spaces. A single number can be a valid
+    customer_key_id for one customer AND a valid qb_record_id for a different one,
+    so we keep both maps and disambiguate by name at lookup time."""
+    by_key = {str(r["customer_key_id"]): r for r in rows
+              if r.get("customer_key_id") is not None}
+    by_rec = {str(r["qb_record_id"]): r for r in rows
+              if r.get("qb_record_id") is not None}
+    return by_key, by_rec
+
+
+def resolve_qb(qid, sb_name, by_key, by_rec):
+    """Resolve a mixed customer_companies.qb_customer_id (which may be a
+    customer_key_id OR a qb_record_id, depending on which write path stamped it)
+    to a single canonical qb_customers row.
+
+    Disambiguation is name-aware: if the number resolves to two different QB
+    customers (one via key space, one via record space), prefer the interpretation
+    whose customer_name matches the SB company name. Returns the qb_customers row
+    (with the true customer_key_id / total_invoiced) or None if unresolvable.
+
+    This is the ONLY trustworthy way to compare these IDs — never compare the raw
+    qb_customer_id values, since they may live in different numeric spaces."""
+    if qid is None:
+        return None
+    s = str(qid)
+    sn = norm(sb_name)
+    ck = by_key.get(s)
+    cr = by_rec.get(s)
+    cands = []
+    if ck:
+        cands.append(ck)
+    if cr and (not ck or cr["customer_key_id"] != ck["customer_key_id"]):
+        cands.append(cr)
+    if not cands:
+        return None
+    for row in cands:
+        if norm(row["customer_name"]) == sn:
+            return row
+    return cands[0]  # default to key-space interpretation when name is ambiguous
+
+
+def pick_canonical(records, live, by_key, by_rec):
     """Pick the row that SURVIVES. Ranked by data-integrity signals that live on
     the company row itself (live contacts, domain, qb match + its revenue), since
     those columns are not recomputed on merge. Name readability is only a low
-    tiebreak — the survivor is separately renamed to the group's nicest name."""
+    tiebreak — the survivor is separately renamed to the group's nicest name.
+
+    Revenue is the RESOLVED QB customer's true total_invoiced (via resolve_qb), NOT
+    the denormalized qb_total_revenue column — that column was corrupted by the same
+    key/record mixing (e.g. Coco Republic shows $1,022,568 there while its resolved
+    customer has $0), so ranking on it would pick the wrong survivor."""
     def key(r):
+        qrow = resolve_qb(r.get("qb_customer_id"), r.get("company_name"), by_key, by_rec)
+        true_rev = float(qrow.get("total_invoiced") or 0) if qrow else 0.0
         return (
             live.get(r["id"], 0),
             1 if (r.get("email_domains") or []) else 0,
             1 if r.get("qb_customer_id") else 0,
             METHOD_RANK.get(r.get("qb_match_method"), 0),
-            float(r.get("qb_total_revenue") or 0),
+            true_rev,
             name_quality(r.get("company_name")),
             r.get("total_emails") or 0,
         )
@@ -131,6 +189,14 @@ def main():
         live[r["customer_company_id"]] = r["c"]
         live_dm[r["customer_company_id"]] = r["dm"]
 
+    # Index qb_customers by both numeric spaces so qb_customer_id (a mixed
+    # key_id/record_id field) can be resolved to the true underlying customer
+    # before any comparison or canonical selection.
+    cur.execute(
+        "SELECT customer_key_id, qb_record_id, customer_name, total_invoiced "
+        "FROM qb_customers WHERE client_id = %s", (CLIENT_ID,))
+    by_key, by_rec = build_qb_index(cur.fetchall())
+
     groups = {}
     for c in comps:
         k = norm(c["company_name"])
@@ -149,20 +215,35 @@ def main():
     skipped = []
     clean = []
     for k, recs in dup_groups.items():
-        canon = pick_canonical(recs, live)
+        canon = pick_canonical(recs, live, by_key, by_rec)
         artifacts = [r for r in recs if r["id"] != canon["id"]]
 
         # Conflict: artifact & canonical reference DIFFERENT qb customers, both with
         # materially different revenue -> needs human resolution, skip.
+        #
+        # CRITICAL: resolve each qb_customer_id to its true qb_customers row FIRST.
+        # The raw values may live in different numeric spaces (key_id vs record_id),
+        # so comparing them raw invented phantom conflicts (Themakehaus, Louisvuitton,
+        # Matthewely, ...) where both SB rows actually point at ONE QB customer.
+        c_qb = resolve_qb(canon.get("qb_customer_id"), canon.get("company_name"),
+                          by_key, by_rec)
         conflict_reason = None
         for a in artifacts:
-            aq, cq = a.get("qb_customer_id"), canon.get("qb_customer_id")
-            ar = float(a.get("qb_total_revenue") or 0)
-            crv = float(canon.get("qb_total_revenue") or 0)
-            if aq and cq and aq != cq and ar > 1000 and abs(ar - crv) > 1000:
+            a_qb = resolve_qb(a.get("qb_customer_id"), a.get("company_name"),
+                              by_key, by_rec)
+            if not (a_qb and c_qb):
+                continue
+            # Same underlying QB customer once resolved -> phantom conflict, safe to merge.
+            if a_qb["customer_key_id"] == c_qb["customer_key_id"]:
+                continue
+            ar = float(a_qb.get("total_invoiced") or 0)
+            crv = float(c_qb.get("total_invoiced") or 0)
+            if ar > 1000 and abs(ar - crv) > 1000:
                 conflict_reason = (
-                    f"qb conflict: artifact {a['company_name']!r} qb={aq} ${ar:,.0f} "
-                    f"vs canonical qb={cq} ${crv:,.0f}")
+                    f"qb conflict: artifact {a['company_name']!r} -> QB "
+                    f"{a_qb['customer_name']!r} key={a_qb['customer_key_id']} ${ar:,.0f} "
+                    f"vs canonical -> QB {c_qb['customer_name']!r} "
+                    f"key={c_qb['customer_key_id']} ${crv:,.0f}")
                 break
         if conflict_reason:
             skipped.append({"norm": k, "canonical": canon["company_name"],
@@ -170,6 +251,36 @@ def main():
             continue
 
         clean.append((k, canon, artifacts, best_display_name(recs)))
+
+    # --only: revive explicitly allow-listed groups that the conflict gate skipped
+    # (these have been vetted by hand) and restrict processing to the allow-list.
+    if ONLY is not None:
+        revived = []
+        for s in list(skipped):
+            if s["norm"] in ONLY and s["norm"] in dup_groups:
+                recs = dup_groups[s["norm"]]
+                canon = pick_canonical(recs, live, by_key, by_rec)
+                arts = [r for r in recs if r["id"] != canon["id"]]
+                revived.append((s["norm"], canon, arts, best_display_name(recs)))
+                skipped.remove(s)
+        clean = [c for c in clean if c[0] in ONLY] + revived
+
+    # --survivor: force a specific sb_id to survive (override pick_canonical), so a
+    # high-revenue QB link is never NULLed just because the stray row has more contacts.
+    if SURVIVOR:
+        forced_clean = []
+        for (k, canon, artifacts, best_name) in clean:
+            if k in SURVIVOR:
+                recs = [canon] + artifacts
+                forced = next((r for r in recs if str(r["id"]) == SURVIVOR[k]), None)
+                if forced is None:
+                    skipped.append({"norm": k, "canonical": canon["company_name"],
+                                    "reason": f"survivor override {SURVIVOR[k]} not in group"})
+                    continue
+                canon = forced
+                artifacts = [r for r in recs if r["id"] != forced["id"]]
+            forced_clean.append((k, canon, artifacts, best_name))
+        clean = forced_clean
 
     if LIMIT:
         clean = clean[:LIMIT]
@@ -184,6 +295,15 @@ def main():
                 "merges": []}
     total_repointed = 0
 
+    def flush_rollback():
+        """Persist the rollback manifest durably. Called per-group BEFORE that group's
+        commit so a crash mid-run can never leave a committed merge unrecorded. Only
+        ever invoked under EXECUTE, so dry-runs never touch ROLLBACK_PATH."""
+        with open(ROLLBACK_PATH, "w") as f:
+            json.dump(rollback, f, indent=1, default=str)
+            f.flush()
+            os.fsync(f.fileno())
+
     for idx, (k, canon, artifacts, best_name) in enumerate(clean):
         cid = canon["id"]
         rename = best_name if best_name and best_name != canon["company_name"] else None
@@ -197,11 +317,23 @@ def main():
 
                 # 1) qb_customers reverse-match: repoint, or NULL if canonical already matched
                 cur.execute(
-                    "SELECT id, customer_key_id, matched_company_id FROM qb_customers "
+                    "SELECT id, customer_key_id, total_invoiced, matched_company_id "
+                    "FROM qb_customers "
                     "WHERE client_id=%s AND matched_company_id=%s", (CLIENT_ID, aid))
                 for q in cur.fetchall():
                     if qbcust_ref.get(cid, 0) > 0:
-                        # collision: drop the artifact's (lower-confidence) match
+                        # collision: canonical already has a QB match. Dropping the
+                        # artifact's match is only safe if it carries no real revenue.
+                        # GUARD: refuse to NULL a non-zero-revenue match — that would
+                        # silently destroy a real QB linkage (the Coco Republic class
+                        # of bug). Send the whole group to manual review instead.
+                        if float(q.get("total_invoiced") or 0) > 0:
+                            raise RuntimeError(
+                                f"refuse to NULL non-zero-revenue qb match: "
+                                f"qb_customers {q['id']} key={q['customer_key_id']} "
+                                f"${float(q['total_invoiced']):,.0f} matched to artifact "
+                                f"{aid} ({a['company_name']!r})")
+                        # collision: drop the artifact's (zero-revenue) match
                         group_log["qb_unmatched"].append({"qb_customers_id": q["id"],
                                                            "old": aid})
                         if EXECUTE:
@@ -281,10 +413,20 @@ def main():
                       updated_at = now()
                     WHERE cc.id=%s
                 """, (cid,))
-                conn.commit()
+                # Manifest BEFORE commit: record the undo plan durably first, then
+                # commit. If the commit fails, un-record so the manifest never claims
+                # a merge that did not happen.
+                rollback["merges"].append(group_log)
+                flush_rollback()
+                try:
+                    conn.commit()
+                except Exception:
+                    rollback["merges"].pop()
+                    flush_rollback()
+                    raise
             else:
                 conn.rollback()  # ensure dry-run leaves nothing
-            rollback["merges"].append(group_log)
+                rollback["merges"].append(group_log)
         except Exception as e:
             conn.rollback()
             skipped.append({"norm": k, "canonical": canon["company_name"],

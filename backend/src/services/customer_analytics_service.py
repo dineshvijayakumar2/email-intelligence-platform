@@ -111,6 +111,10 @@ class CustomerAnalyticsService:
             while True:
                 query = self._sb.table('qb_quotes').select(select_cols)
                 query = query.eq('client_id', self._client_id)
+                # FRAGILE (mixed-space ID): safe only because qb_key_ids come from
+                # qb_customers.customer_key_id and qb_quotes.qb_customer_id is key-id space.
+                # Never feed a customer_companies.qb_customer_id (mixed) here — resolve it
+                # first via resolve_qb in scripts/db/merge_duplicate_companies.py.
                 query = query.in_('qb_customer_id', qb_key_ids)
                 query = query.range(offset, offset + page_size - 1)
                 result = query.execute()

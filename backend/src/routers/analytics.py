@@ -1753,6 +1753,12 @@ async def get_company_analytics(company_id: str):
             pass
 
         # QB capability tags from Unique Emails
+        # FRAGILE (mixed-space ID): customer_companies.qb_customer_id may hold a
+        # customer_key_id OR a qb_record_id depending on which path wrote it. The join
+        # below assumes record-id space; a key-id-stamped row resolves to nothing.
+        # Canonical, name-aware resolution is resolve_qb() in
+        # scripts/db/merge_duplicate_companies.py — the standing rule until Option A
+        # (normalize-on-write to customer_key_id) lands.
         # customer_companies.qb_customer_id = qb_customers.qb_record_id (field 3, e.g. "44050")
         # qb_unique_emails.qb_customer_id = QB "Customer ID (key)" (field 92, e.g. "28035")
         # Join through qb_customers: qb_record_id → customer_key_id → qb_unique_emails.qb_customer_id
@@ -1767,6 +1773,12 @@ async def get_company_analytics(company_id: str):
                     'qb_record_id', qb_cid
                 ).limit(1).execute()
                 qb_key_id = (key_resp.data[0].get('customer_key_id') or '') if key_resp.data else ''
+                if not qb_key_id:
+                    logger.warning(
+                        "qb_customer_id=%s on company %s did not resolve to a qb_customers "
+                        "row via qb_record_id space (mixed key_id/record_id field; see "
+                        "resolve_qb in scripts/db/merge_duplicate_companies.py). QB capability "
+                        "tags skipped.", qb_cid, comp.get('id'))
 
                 if qb_key_id:
                     ue_resp = _supabase.table('qb_unique_emails').select(

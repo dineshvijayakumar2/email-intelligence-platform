@@ -732,6 +732,12 @@ class StrategicContextBuilder:
             qb_processes = set()
             qb_embellishments = set()
             try:
+                # FRAGILE (mixed-space ID): customer_companies.qb_customer_id may hold a
+                # customer_key_id OR a qb_record_id depending on which path wrote it. This
+                # join assumes record-id space; a row stamped in key-id space resolves to
+                # nothing here. Canonical, name-aware resolution is resolve_qb() in
+                # scripts/db/merge_duplicate_companies.py — the standing rule until Option A
+                # (normalize-on-write to customer_key_id) lands.
                 # Translate qb_record_id → customer_key_id (field 92) for unique email lookup
                 company_resp = self._execute_with_retry(
                     self.client.table("customer_companies")
@@ -750,6 +756,12 @@ class StrategicContextBuilder:
                         .limit(1)
                     )
                     qb_key_id = (key_resp.data[0].get("customer_key_id") or "") if key_resp.data else ""
+                    if not qb_key_id:
+                        logger.warning(
+                            "qb_customer_id=%s on company %s did not resolve to a "
+                            "qb_customers row via qb_record_id space (mixed key_id/record_id "
+                            "field; see resolve_qb in scripts/db/merge_duplicate_companies.py). "
+                            "QB tag enrichment skipped.", qb_record_id, company_id)
 
                 if qb_key_id:
                     ue_resp = self._execute_with_retry(

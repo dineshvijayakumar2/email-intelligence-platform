@@ -1034,6 +1034,12 @@ def company_analytics(company_name: str, analysis: str = "all") -> str:
 
                 elif a == "qb_tags":
                     # QB-maintained capability/process/embellishment summary from Unique Emails
+                    # FRAGILE (mixed-space ID): customer_companies.qb_customer_id may hold a
+                    # customer_key_id OR a qb_record_id depending on which path wrote it. This
+                    # join assumes record-id space; a key-id-stamped row resolves to nothing.
+                    # Canonical, name-aware resolution is resolve_qb() in
+                    # scripts/db/merge_duplicate_companies.py — the standing rule until Option A
+                    # (normalize-on-write to customer_key_id) lands.
                     # Translate qb_record_id → customer_key_id (field 92) for unique email lookup
                     qb_cid_resp = sb.table('customer_companies').select('qb_customer_id').eq('id', comp_id).limit(1).execute()
                     qb_record_id = (qb_cid_resp.data[0].get('qb_customer_id') or '') if qb_cid_resp.data else ''
@@ -1043,6 +1049,12 @@ def company_analytics(company_name: str, analysis: str = "all") -> str:
                             'client_id', client_id
                         ).eq('qb_record_id', qb_record_id).limit(1).execute()
                         qb_cid = (key_resp.data[0].get('customer_key_id') or '') if key_resp.data else ''
+                        if not qb_cid:
+                            logger.warning(
+                                "qb_customer_id=%s on company %s did not resolve to a "
+                                "qb_customers row via qb_record_id space (mixed key_id/record_id "
+                                "field; see resolve_qb in scripts/db/merge_duplicate_companies.py). "
+                                "QB tags skipped.", qb_record_id, comp_id)
                     if not qb_cid:
                         lines.append("QB TAGS: Company not linked to QB customer")
                         lines.append("")
