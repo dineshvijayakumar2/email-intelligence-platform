@@ -237,19 +237,13 @@ class RoleClassifier:
                 fetched = False
                 for attempt in range(3):
                     try:
-                        response = (
-                            self.client.table('emails')
-                            .select('id, body_text')
-                            .in_('id', batch)
-                            .execute()
-                        )
+                        # SQL-side truncation: only the last 1000 chars (signatures
+                        # live at the end) cross the wire instead of the full body.
+                        response = self.client.rpc(
+                            'emails_body_right', {'email_ids': batch, 'n': 1000}
+                        ).execute()
                         for row in response.data:
-                            body_text = row.get('body_text', '')
-                            # Only keep last 1000 characters — signatures are at end
-                            if body_text:
-                                all_signatures[row['id']] = body_text[-1000:] if len(body_text) > 1000 else body_text
-                            else:
-                                all_signatures[row['id']] = ''
+                            all_signatures[row['id']] = row.get('body') or ''
                         fetched = True
                         break
                     except Exception as batch_error:
