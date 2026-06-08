@@ -678,7 +678,7 @@ Generate the {scope} digest now. Return ONLY valid JSON."""
             try:
                 msgs_resp = self._execute_with_retry(
                     self.client.table("emails")
-                    .select("thread_id,sender_email,direction,sent_date,body_text,subject")
+                    .select("id,thread_id,sender_email,direction,sent_date,subject")
                     .in_("thread_id", thread_ids)
                     .order("sent_date", desc=False)
                 )
@@ -688,6 +688,24 @@ Generate the {scope} digest now. Return ONLY valid JSON."""
                         messages_by_thread.setdefault(tid, []).append(m)
             except Exception as e:
                 logger.warning(f"Failed to fetch thread messages for digest: {e}")
+
+        # Only the first MAX_SNIPPET chars of the last MAX_MSGS_PER_THREAD messages
+        # per thread are rendered — fetch just those snippets, truncated SQL-side.
+        snippet_ids = []
+        for t in threads:
+            tid = t.get("thread_id")
+            for m in (messages_by_thread.get(tid) or [])[-MAX_MSGS_PER_THREAD:]:
+                if m.get("id"):
+                    snippet_ids.append(m["id"])
+        body_by_id: dict = {}
+        if snippet_ids:
+            try:
+                body_resp = self._execute_with_retry(
+                    self.client.rpc("emails_body_left", {"email_ids": snippet_ids, "n": MAX_SNIPPET})
+                )
+                body_by_id = {r["id"]: (r.get("body") or "") for r in (body_resp.data or [])}
+            except Exception as e:
+                logger.warning(f"Failed to fetch thread message snippets for digest: {e}")
 
         summaries = []
         for t in threads:
@@ -707,7 +725,7 @@ Generate the {scope} digest now. Return ONLY valid JSON."""
                         "from": m.get("sender_email", ""),
                         "direction": m.get("direction", ""),
                         "date": (m.get("sent_date") or "")[:10],
-                        "snippet": (m.get("body_text") or "")[:MAX_SNIPPET],
+                        "snippet": body_by_id.get(m.get("id"), ""),
                     }
                     for m in msgs
                 ],
