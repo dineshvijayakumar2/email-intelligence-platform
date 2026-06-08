@@ -997,6 +997,15 @@ Nothing is automatically deleted. Emails, processing_jobs, events, notifications
 
 97 migrations have been applied. Recent audit work (migrations 063-075) added missing indexes, IO budget RPCs, DB performance RPCs, and partial indexes for vector stats. HNSW indexes on `emails`, `customer_companies`, and `qb_operations` are managed by `BulkIndexManager` (dropped before bulk reembed, recreated after). Migration 096 added `embedding_model` + `embedded_at` audit columns and cleared stale mixed-provider embeddings. Migration 097 updated batch embedding RPCs to accept audit params and added `qb_quotes` embedding support. Full-text search index exists on `emails` (migration 057). The `exec_sql` RPC (migration 071) allows index management from application code.
 
+### Egress optimization (body_text)
+
+`body_text` is the single largest egress contributor — averaging ~8.4 KB/row across ~297K emails. Several read paths historically fetched the full body and then discarded most of it in Python. Because PostgREST's `.select()` cannot run SQL functions like `LEFT()`/`RIGHT()`, two reusable RPCs were added in **migration 116** to push truncation server-side:
+
+- `emails_body_left(email_ids uuid[], n int)` → `(id, LEFT(body_text, n))` — for previews and AI context.
+- `emails_body_right(email_ids uuid[], n int)` → `(id, RIGHT(body_text, n))` — for signature-tail extraction.
+
+Both are SECURITY DEFINER with `SET search_path = public` and clamp `n` (reject negative, cap 50000). Four callsites now use them: `role_classifier.py` (RIGHT n=1000, signature parse), `analytics.py` thread detail (LEFT n=501, preview), `ai_insights_engine.py` (LEFT n=200, thread context), `ai_digest_generator.py` (LEFT n=200, snippet). The role_classifier pass measured a **91.2% egress reduction** (~2.52 GB saved per full-corpus pass). Tier 2 work in the same effort replaced 5 `select("*")` calls in `langchain_tools.py` with explicit column lists. The AI batch pipelines (embedding, classification) and a `body_text` vertical partition remain as larger follow-up work — see `docs/BODY_TEXT_EGRESS_AUDIT.md`.
+
 ### Secrets and credentials
 
 All secrets are managed via environment variables: `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `SUPABASE_ANON_KEY`, `SUPABASE_JWT_SECRET`, `GOOGLE_CLIENT_ID/SECRET`, `MICROSOFT_CLIENT_ID/SECRET`, `REDIS_URL`, `CRON_SECRET`, `ANTHROPIC_API_KEY` (or `GEMINI_API_KEY`). In production, these are Railway environment variables. QB API user token is stored in the `qb_sync_config` database table (not an env var). OAuth refresh tokens are stored in `mailboxes.connection_config` and `user_integrations`. No hardcoded secrets were found in application code, but the `exec_sql` RPC grants `EXECUTE` to the `authenticated` role, which means any authenticated user could theoretically execute arbitrary SQL via the Supabase client (if they bypass the API and call Supabase directly with their JWT).

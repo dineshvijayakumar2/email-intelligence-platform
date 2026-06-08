@@ -13,7 +13,7 @@ A comprehensive reference for every database object in the Email Intelligence Pl
 - **Extensions:** pgvector 0.8.0, pg_stat_statements 1.11, pgcrypto 1.3, uuid-ossp 1.1, pg_graphql 1.5.11, supabase_vault 0.3.1, plpgsql 1.0
 - **Access:** PostgREST auto-generates REST API; RPC functions exposed as `POST /rest/v1/rpc/<fn_name>`
 - **Auth:** Supabase Auth (JWT) with Row-Level Security on select tables
-- **Migrations:** 114 incremental SQL scripts in `scripts/migrations/` (001–114), applied via `exec_sql` RPC + PostgREST schema reload
+- **Migrations:** incremental SQL scripts in `scripts/migrations/` (001–116), applied via `exec_sql` RPC + PostgREST schema reload
 
 ### Schema Domains
 
@@ -944,6 +944,8 @@ Application-level RPC functions exposed via PostgREST. Excludes pgvector interna
 | `search_companies` | query_embedding, threshold, count, client_id, date_from, date_to | TABLE(id, name, industry, similarity) | Vector search on companies |
 | `search_operations` | query_embedding, threshold, count, client_id | TABLE(id, operation_name, department, similarity) | Vector search on operations |
 | `find_customer_by_domain` | p_email text, p_client_id | TABLE(company_id, company_name, client_id) | STABLE; domain-based company lookup |
+| `emails_body_left` | email_ids uuid[], n int | TABLE(id uuid, body text) | SECURITY DEFINER, search_path=public. Returns `LEFT(body_text, n)`; clamps n (reject negative, cap 50000). Egress: SQL-side truncation for previews/context (migration 116) |
+| `emails_body_right` | email_ids uuid[], n int | TABLE(id uuid, body text) | SECURITY DEFINER, search_path=public. Returns `RIGHT(body_text, n)`; clamps n (reject negative, cap 50000). Egress: SQL-side signature-tail fetch (migration 116) |
 
 ### 4.2 Batch Update RPCs (Performance-Critical)
 
@@ -1338,6 +1340,7 @@ These show an "UNRESTRICTED" badge because Postgres cannot apply RLS to views/ma
 | 102 | RLS on All Tables | `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` on all 49 public tables. Resolves Supabase critical security alert. Views/matviews excluded (Postgres limitation — inherit protection from base tables) |
 | 103 | AI Insights Prompt Update | Updated `insight_company` prompt in `ai_prompt_config` (all 3 rows: global + Newbound + Carbon8) to request `strategic_summary` field and clarify revenue framing as invoiced-to-customer |
 | 104 | Security Definer Fixes | `security_invoker = on` on all 11 regular views; `SET search_path = public` on 10 SECURITY DEFINER functions missing it. Resolves all Supabase Advisor security warnings |
+| 116 | Egress: body_text truncation RPCs | Added `emails_body_left(email_ids uuid[], n int)` and `emails_body_right(...)` — SECURITY DEFINER, search_path=public, clamped n. Pushes fetch-then-truncate to SQL at 4 callsites (role_classifier, analytics thread detail, ai_insights, ai_digest). Measured 91.2% egress reduction on role_classifier pass |
 
 **Migration application method:** `scripts/db/_run_NNN_via_rest.py` → `exec_sql` RPC + `NOTIFY pgrst, 'reload schema'`; scripts are throwaway and deleted after verification.
 

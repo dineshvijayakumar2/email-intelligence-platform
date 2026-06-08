@@ -1,7 +1,19 @@
 # body_text & SELECT * on emails — Egress Audit
 
-**Date:** June 1, 2026
+**Date:** June 1, 2026 (Tier 2 + Tier 3 remediated 8 June 2026)
 **Purpose:** Identify every callsite that fetches `body_text` or uses `SELECT *` on the emails table, to inform vertical partition and egress reduction.
+
+---
+
+## Remediation Status (8 June 2026)
+
+- **Tier 2 (SELECT \* in `langchain_tools.py`):** ✅ DONE — 5 callsites replaced with explicit column lists (wide JSONB `embedding`/`signature_data` excluded). Commit `3082761`.
+- **Tier 3 (fetch-then-truncate):** ✅ DONE — all 4 callsites (B10, C3, B6, B7) now truncate SQL-side via two reusable RPCs added in **migration 116**:
+  - `emails_body_left(email_ids uuid[], n int)` → `id, LEFT(body_text, n)`
+  - `emails_body_right(email_ids uuid[], n int)` → `id, RIGHT(body_text, n)`
+  - Both SECURITY DEFINER, `SET search_path = public`, clamp `n` (reject negative, cap 50000).
+  - Adapted: `role_classifier.py` (RIGHT n=1000, **measured 91.2% reduction, 2.52 GB/pass saved**), `analytics.py` (LEFT n=501), `ai_insights_engine.py` (LEFT n=200), `ai_digest_generator.py` (LEFT n=200).
+- **Tier 1 (AI batch pipelines), Tier 4, vertical partition:** still open (see below).
 
 ---
 
@@ -34,11 +46,11 @@ These need body_text to feed into AI classifiers, embedders, or context builders
 | B3 | `services/ai_email_analyzer.py` | 940 | Uses `email.get("body_text")` | Single email AI analysis input | **Legitimate** — from B1 fetch |
 | B4 | `services/ai_email_analyzer.py` | 1681 | Explicit list incl `body_text,body_html` | Single email on-demand analysis (get_intelligence) | **Legitimate** — single row |
 | B5 | `routers/ai.py` | 1038 | `body_text, body_html` | On-demand AI summary for single email | **Legitimate** — single row, needs body |
-| B6 | `services/ai_digest_generator.py` | 681 | Explicit list incl `body_text` | Thread emails for digest generation | **Legitimate** — truncated to MAX_SNIPPET |
-| B7 | `services/ai_insights_engine.py` | 383 | Explicit list incl `body_text` | Thread context for company insight generation | **Legitimate** — truncated to 200 chars |
+| B6 | `services/ai_digest_generator.py` | 681 | `id,thread_id,sender_email,direction,sent_date,subject` (body via `emails_body_left` n=200) | Thread emails for digest generation | **FIXED** — SQL-side truncation, migration 116 |
+| B7 | `services/ai_insights_engine.py` | 383 | id + metadata (body via `emails_body_left` n=200) | Thread context for company insight generation | **FIXED** — SQL-side truncation, migration 116 |
 | B8 | `services/vector_service.py` | 309 | `id, subject, body_text, sender_email, sender_name, is_outbound` | Email embedding — builds embed text from body | **Legitimate** — core vectorization |
 | B9 | `services/reference_extractor.py` | 146–188 | `body_text, body_html` | QB reference extraction (quote/job numbers from body) | **Legitimate** — needs body content |
-| B10 | `services/role_classifier.py` | 242 | `id, body_text` | Signature extraction from last 1000 chars | **Optimize** — only needs last 1KB, fetches entire body |
+| B10 | `services/role_classifier.py` | 242 | `emails_body_right` n=1000 | Signature extraction from last 1000 chars | **FIXED** — SQL-side `RIGHT(body_text,1000)`, migration 116. Measured 91.2% reduction |
 
 ---
 
@@ -48,7 +60,7 @@ These need body_text to feed into AI classifiers, embedders, or context builders
 |---|------|------|---------------|---------|-------|
 | C1 | `routers/emails.py` | 736–752 | Explicit list incl `body_text, body_html` | Single email detail view (by ID) | **Legitimate** — user clicked to read email |
 | C2 | `routers/analytics.py` | 2492 | `COLS` incl `body_text` | Thread detail view — all emails in a thread | **Review** — fetches full body for up to `limit` emails; used for thread display |
-| C3 | `routers/analytics.py` | 2553–2565 | Truncates body_text to preview | Thread emails — truncates after fetch | **Optimize** — fetches full body then truncates in Python. Could use SQL `LEFT(body_text, 300)` or partition |
+| C3 | `routers/analytics.py` | 2553–2565 | `emails_body_left` n=501 | Thread emails — truncates to 500-char preview | **FIXED** — SQL-side `LEFT(body_text,501)` (501 preserves `'...'` marker), migration 116 |
 
 ---
 
@@ -192,6 +204,13 @@ Before full partition, these truncations could be pushed to SQL to reduce egress
 .select("id, RIGHT(body_text, 1000) as signature_block")
 ```
 
-**Limitation:** Supabase REST API (PostgREST) does not support SQL functions in `.select()`. These would need RPC wrappers or computed columns.
+**Limitation (RESOLVED 8 June):** Supabase REST API (PostgREST) does not support SQL functions in `.select()`. Resolved via two reusable RPC wrappers in **migration 116**:
 
-Alternative: Add a `body_preview` generated column (first 300 chars) to the emails table — instant for reads, maintained automatically.
+```python
+# LEFT(body_text, n) — previews / first-N-char context
+client.rpc('emails_body_left', {'email_ids': ids, 'n': 200}).execute()
+# RIGHT(body_text, n) — signature tail
+client.rpc('emails_body_right', {'email_ids': ids, 'n': 1000}).execute()
+```
+
+Both return `(id uuid, body text)`, are SECURITY DEFINER with `SET search_path = public`, and clamp `n` (reject negative, cap 50000). Preferred over a generated column because callsites need different N values (200 / 501 / 1000) and the RPC approach adds no per-row write/storage overhead.

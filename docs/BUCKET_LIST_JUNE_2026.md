@@ -166,20 +166,20 @@ These pipelines legitimately need body content but pull full bodies when truncat
 - [ ] **ai_email_analyzer.py:691** — AI classification fetches body_text for PAGE_SIZE emails per batch. Fix: same pattern as above
 - [ ] **ai_email_analyzer.py:898** — thread context builder fetches full body_text, truncates to MAX_BODY_CHARS in Python. Fix: RPC with SQL-side `LEFT()` truncation
 
-### Tier 2 — SELECT * on non-emails tables
+### Tier 2 — SELECT * on non-emails tables ✅ DONE (8 June)
 
 5 callsites in langchain_tools.py doing `select("*")` on customer_companies, qb_customers, customer_contacts, qb_quotes, qb_jobs. These tables have JSONB columns and wide schemas.
 
-- [ ] **langchain_tools.py** — replace 5 SELECT * callsites with explicit column lists. Quick win, zero risk, single file
+- [x] **langchain_tools.py** — replaced 5 SELECT * callsites with explicit column lists (traced downstream usage; excluded wide `embedding`/`signature_data` JSONB columns). Commit `3082761`.
 
-### Tier 3 — Fetch-then-truncate waste
+### Tier 3 — Fetch-then-truncate waste ✅ DONE (8 June)
 
-Callsites that fetch full body_text then discard most of it in Python.
+Callsites that fetched full body_text then discarded most of it in Python. Now truncated SQL-side via two reusable SECURITY DEFINER RPCs (`emails_body_left(email_ids uuid[], n int)`, `emails_body_right(email_ids uuid[], n int)`) added in **migration 116**. Both clamp `n` (reject negative, cap at 50000) and SET search_path = public.
 
-- [ ] **analytics.py:2553** — thread detail fetches full body for N emails, truncates to 300 chars (~94% wasted)
-- [ ] **role_classifier.py:242** — fetches full body, uses last 1000 chars only (~80% wasted)
-- [ ] **ai_insights_engine.py:383** — fetches full body, uses first 200 chars (~96% wasted)
-- [ ] **ai_digest_generator.py:681** — fetches full body, uses MAX_SNIPPET chars (~90% wasted)
+- [x] **analytics.py** — thread detail fetched full body for N emails, truncated to **500** chars in Python; now `emails_body_left` n=501 (501 preserves the `'...'` truncation marker). Commit `8e9e03f`.
+- [x] **role_classifier.py** — fetched full body, uses last 1000 chars only; now `emails_body_right` n=1000. Validated via gate (parser self-truncates to `body_text[-500:]`, 50/50 sample identical full-vs-RIGHT(1000)). Commit `bbd648f`. **Measured: 91.2% egress reduction** (9,981→878 B/email avg over 2000 emails); projected full corpus pass **2.77 GB → 0.24 GB (saves 2.52 GB/pass)**.
+- [x] **ai_insights_engine.py** — fetched full body, uses first 200 chars; now `emails_body_left` n=200. Commit `6df1449`.
+- [x] **ai_digest_generator.py** — fetched full body, uses MAX_SNIPPET=200 chars; now `emails_body_left` n=200 (snippet ids = last 5 msgs/thread). Commit `b122f9c`.
 
 ### Tier 4 — Large batch preloads (ai_email_intelligence)
 
