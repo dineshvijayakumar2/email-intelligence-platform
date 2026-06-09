@@ -11,6 +11,8 @@ Features:
 """
 
 import logging
+import math
+import statistics
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta, date
 from typing import Optional
@@ -18,6 +20,21 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 CACHE_TTL_HOURS = 24
+RHYTHM_MIN_GAPS = 5   # need >=5 inter-order gaps for a reliable own-history percentile
+
+
+def _percentile(sorted_vals: list, q: float):
+    """Linear-interpolation percentile of a pre-sorted list (q in [0,1])."""
+    if not sorted_vals:
+        return None
+    if len(sorted_vals) == 1:
+        return float(sorted_vals[0])
+    pos = (len(sorted_vals) - 1) * q
+    lo = math.floor(pos)
+    hi = math.ceil(pos)
+    if lo == hi:
+        return float(sorted_vals[lo])
+    return sorted_vals[lo] + (sorted_vals[hi] - sorted_vals[lo]) * (pos - lo)
 MONTH_NAMES = [
     '', 'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December',
@@ -578,39 +595,55 @@ class CustomerAnalyticsService:
                 })
                 continue
 
-            # Compute intervals between consecutive orders
-            intervals = [(dates_sorted[i+1] - dates_sorted[i]).days for i in range(len(dates_sorted) - 1)]
-            # Filter out same-day (0) and very short intervals (< 7 days) that are likely same-job ops
-            meaningful = [iv for iv in intervals if iv >= 7]
-            if not meaningful:
-                meaningful = intervals  # fall back to all
-
-            avg_interval = sum(meaningful) / len(meaningful)
+            # Inter-order gaps between distinct order DATES (already deduped same-day).
+            # Compare days-since-last against the customer's OWN gap distribution (p75/p90),
+            # NOT a global mean — a near-daily account 27d quiet is a modest slowdown vs its
+            # own pattern, not a 1.3x "overdue" spike. (No <7d filter band-aid: that discarded
+            # high-frequency accounts' real cadence and inflated the average.)
+            gaps = sorted(g for g in
+                          ((dates_sorted[i+1] - dates_sorted[i]).days for i in range(len(dates_sorted) - 1))
+                          if g > 0)
             last_date = dates_sorted[-1]
             days_since = (today - last_date).days
-            overdue_threshold = avg_interval * 1.3
-            overdue = days_since > overdue_threshold
-            overdue_days = max(0, round(days_since - avg_interval))
+            typical = statistics.median(gaps) if gaps else None
+            p75 = _percentile(gaps, 0.75)
+            p90 = _percentile(gaps, 0.90)
+            limited = len(gaps) < RHYTHM_MIN_GAPS   # too few gaps for a confident percentile read
 
-            status = 'overdue' if overdue else ('due_soon' if days_since > avg_interval * 0.9 else 'on_track')
-
-            interval_weeks = round(avg_interval / 7)
-            interval_desc = f"{interval_weeks} weeks" if interval_weeks > 0 else f"{round(avg_interval)} days"
-            message = f"Usually orders every {interval_desc}. Last order was {days_since} days ago"
-            if overdue:
-                message += f" ({overdue_days} days overdue)."
+            if p90 is not None and days_since > p90:
+                status, overdue = 'overdue', True
+                overdue_days = max(0, round(days_since - p90))
+            elif p75 is not None and days_since >= p75:
+                status, overdue, overdue_days = 'due_soon', False, 0
             else:
-                message += "."
+                status, overdue, overdue_days = 'on_track', False, 0
+
+            typ_round = round(typical) if typical is not None else None
+            interval_weeks = round(typical / 7) if typical else 0
+            interval_desc = (f"{interval_weeks} weeks" if interval_weeks > 0
+                             else f"{typ_round} days" if typ_round is not None else "irregularly")
+            message = f"Typically orders every {interval_desc}; last order {days_since} days ago"
+            if status == 'overdue':
+                message += f" — quiet past their usual range (90th-percentile gap ~{round(p90)}d)."
+            elif status == 'due_soon':
+                message += f" — due soon (entering their p75–p90 window, ~{round(p75)}–{round(p90)}d)."
+            else:
+                message += " — on track (within their normal range)."
+            if limited:
+                message += f" (limited history: {order_count} orders)"
 
             rhythms.append({
                 'capability': tag,
                 'order_count': order_count,
-                'avg_interval_days': round(avg_interval),
+                'avg_interval_days': typ_round,   # now the median (typical) gap — robust to outliers
+                'p75_gap_days': round(p75) if p75 is not None else None,
+                'p90_gap_days': round(p90) if p90 is not None else None,
                 'last_order_date': str(last_date),
                 'days_since_last': days_since,
                 'overdue': overdue,
                 'overdue_days': overdue_days,
                 'status': status,
+                'limited_history': limited,
                 'message': message,
             })
 
@@ -618,7 +651,7 @@ class CustomerAnalyticsService:
                 alerts.append({
                     'capability': tag,
                     'overdue_days': overdue_days,
-                    'severity': 'danger' if overdue_days > avg_interval * 0.5 else 'warning',
+                    'severity': 'danger' if (p90 and days_since > 2 * p90) else 'warning',
                 })
 
         # Sort: overdue first, then by order count

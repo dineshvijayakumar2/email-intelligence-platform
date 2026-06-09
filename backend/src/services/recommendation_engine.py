@@ -29,6 +29,26 @@ CONCENTRATION_MAX_REVENUE_CONTACTS = 2     # ≤ 2 contacts producing revenue
 CONCENTRATION_MIN_TOTAL_CONTACTS = 3       # > 2 total contacts for the filter (HAVING > 2)
 
 
+def _caps_for_op(op: dict) -> list:
+    """Capabilities for an operation: qb_capability_tag if present, else the classifier
+    capability_tags fallback. MUST match get_capability_rhythm's definition — qb_capability_tag
+    is NULL on ~40% of ops, and using it alone fabricates capability 'gaps' for work the
+    classifier already recognises (e.g. a customer who foils/embosses but has no QB tag)."""
+    qb = (op.get('qb_capability_tag') or '').strip()
+    if qb:
+        return [qb]
+    raw = op.get('capability_tags') or []
+    if isinstance(raw, str):
+        import json as _json
+        try:
+            raw = _json.loads(raw)
+        except (ValueError, TypeError):
+            raw = [t.strip() for t in raw.split(',') if t.strip()]
+    if not isinstance(raw, list):
+        return []
+    return [t.strip() for t in raw if isinstance(t, str) and len(t.strip()) > 1]
+
+
 class RecommendationEngine:
     """Compute and cache sales recommendations for a client."""
 
@@ -235,7 +255,7 @@ class RecommendationEngine:
 
             ops_result = (
                 self._supabase.table('qb_operations')
-                .select('job_no, operation_name, qb_capability_tag')
+                .select('job_no, operation_name, qb_capability_tag, capability_tags')
                 .eq('matched_company_id', company_id)
                 .eq('client_id', self._client_id)
                 .execute()
@@ -267,10 +287,10 @@ class RecommendationEngine:
             all_capabilities: set = set()
 
             for op in operations:
-                cap = (op.get('qb_capability_tag') or '').strip()
-                if not cap:
+                caps = _caps_for_op(op)   # qb_capability_tag OR classifier fallback (matches rhythm)
+                if not caps:
                     continue
-                all_capabilities.add(cap)
+                all_capabilities.update(caps)
                 email = job_to_email.get(op.get('job_no', ''))
                 if not email:
                     continue
@@ -280,7 +300,7 @@ class RecommendationEngine:
                 cid = contact['id']
                 if cid not in contact_cap_map:
                     contact_cap_map[cid] = {'contact': contact, 'capabilities': set()}
-                contact_cap_map[cid]['capabilities'].add(cap)
+                contact_cap_map[cid]['capabilities'].update(caps)
 
             if not contact_cap_map or len(all_capabilities) < 2:
                 return []
