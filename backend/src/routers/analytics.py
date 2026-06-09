@@ -1828,54 +1828,32 @@ async def get_company_analytics(company_id: str):
 
 @router.get("/companies/{company_id}/emails")
 async def get_company_emails(company_id: str, limit: int = 50, offset: int = 0):
-    """Get emails linked to a company via email_contact_links junction table.
+    """Get emails ASSIGNED to a company via emails.customer_company_id (canonical).
 
-    Falls back to emails.customer_company_id if junction table not populated yet.
-    The junction table includes TO, CC, and BCC recipients — giving accurate counts.
+    This is the single source of truth for "this company's emails" — it matches the
+    total_emails badge (see migration 117). We intentionally do NOT use
+    email_contact_links.company_id here: that per-participant resolution diverges from
+    the email's primary assignment and inflates end-customers with broker/shared-domain
+    spillover (e.g. an agency's emails appearing under every client it CC'd).
     """
     try:
-        # Try junction table first (includes CC/BCC)
-        try:
-            # Get distinct email IDs linked to this company
-            junction_count = _supabase.table('email_contact_links').select(
-                'email_id', count='exact'
-            ).eq('company_id', company_id).limit(0).execute()
-            total = junction_count.count or 0
-        except Exception:
-            total = 0
+        count_resp = _supabase.table('emails').select(
+            'id', count='exact'
+        ).eq('customer_company_id', company_id).limit(0).execute()
+        total = count_resp.count or 0
 
-        if total > 0:
-            # Junction table has data — use it
-            # Count sent (outbound) via join: get email_ids, then count outbound
-            junction_emails = _supabase.table('email_contact_links').select(
-                'email_id'
-            ).eq('company_id', company_id).execute()
-            email_ids = list({r['email_id'] for r in (junction_emails.data or [])})
-            total = len(email_ids)
+        sent_resp = _supabase.table('emails').select(
+            'id', count='exact'
+        ).eq('customer_company_id', company_id).eq('is_outbound', True).limit(0).execute()
+        total_sent = sent_resp.count or 0
+        total_received = total - total_sent
 
-            total_sent = 0
-            for i in range(0, len(email_ids), 500):
-                batch = email_ids[i:i + 500]
-                sent_resp = _supabase.table('emails').select(
-                    'id', count='exact'
-                ).in_('id', batch).eq('is_outbound', True).limit(0).execute()
-                total_sent += sent_resp.count or 0
-            total_received = total - total_sent
-
-            # Fetch paginated emails
-            page_ids = email_ids[offset:offset + limit] if email_ids else []
-            if page_ids:
-                result = _supabase.table('emails').select(
-                    'id, subject, sender_email, sender_name, sent_date, folder_path, is_outbound'
-                ).in_('id', page_ids).order('sent_date', desc=True).execute()
-                paginated = result.data or []
-            else:
-                paginated = []
-        else:
-            total = 0
-            total_sent = 0
-            total_received = 0
-            paginated = []
+        result = _supabase.table('emails').select(
+            'id, subject, sender_email, sender_name, sent_date, folder_path, is_outbound'
+        ).eq('customer_company_id', company_id).order(
+            'sent_date', desc=True
+        ).range(offset, offset + limit - 1).execute()
+        paginated = result.data or []
 
         return {'emails': paginated, 'total': total, 'total_sent': total_sent, 'total_received': total_received}
 

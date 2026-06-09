@@ -398,18 +398,22 @@ def main():
                 if rename:
                     cur.execute("UPDATE customer_companies SET company_name=%s "
                                 "WHERE id=%s", (rename, cid))
+                # Counts from the CANONICAL assignment (emails.customer_company_id +
+                # customer_contacts.customer_company_id), NOT email_contact_links.company_id
+                # which diverges and inflates with broker/shared-domain spillover. Mirrors
+                # migration 117 / the get_company_emails endpoint.
                 cur.execute("""
                     UPDATE customer_companies cc SET
                       contact_count = COALESCE((SELECT COUNT(*) FROM customer_contacts
                           WHERE customer_company_id=cc.id), 0),
                       decision_maker_count = COALESCE((SELECT COUNT(*) FROM customer_contacts
                           WHERE customer_company_id=cc.id AND is_decision_maker), 0),
-                      total_emails = COALESCE((SELECT COUNT(DISTINCT email_id)
-                          FROM email_contact_links WHERE company_id=cc.id), 0),
-                      last_contact_date = (SELECT MAX(e.sent_date) FROM email_contact_links l
-                          JOIN emails e ON e.id=l.email_id WHERE l.company_id=cc.id),
-                      first_contact_date = (SELECT MIN(e.sent_date) FROM email_contact_links l
-                          JOIN emails e ON e.id=l.email_id WHERE l.company_id=cc.id),
+                      total_emails = COALESCE((SELECT COUNT(*)
+                          FROM emails WHERE customer_company_id=cc.id), 0),
+                      last_contact_date = (SELECT MAX(sent_date) FROM emails
+                          WHERE customer_company_id=cc.id),
+                      first_contact_date = (SELECT MIN(sent_date) FROM emails
+                          WHERE customer_company_id=cc.id),
                       updated_at = now()
                     WHERE cc.id=%s
                 """, (cid,))
