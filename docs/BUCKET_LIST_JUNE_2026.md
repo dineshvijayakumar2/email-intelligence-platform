@@ -5,6 +5,8 @@
 **Companion document:** insight_catalog.md (full spec) and insight_catalog_summary.md
 **Related:** DB_PERFORMANCE_SNAPSHOT_JUN01.md (baseline for measuring impact); today's egress audits captured in BODY_TEXT_EGRESS_AUDIT.md and BUYER_QUALITY_AUDIT.md
 
+> **Current focus (9 June → Tuesday):** DB foundation is in good shape — the recent dual-ID/contamination work is complete or parked-and-safe (see *DB foundation remediation* under Carryover). Highest-stakes item before Tuesday is the **cross-sell shortlist**: shaping the saturation finding + bulletproof prospects into the demo. When the curated shortlist returns, that's where attention goes — not more foundation work.
+
 ---
 
 ## Priority 1: AM Comparison (first deliverable, 4-5 weeks)
@@ -199,7 +201,7 @@ Callsites that fetched full body_text then discarded most of it in Python. Now t
 ### CPU / cache improvements (not egress-focused, still valuable)
 
 - [ ] **RLS auth function pattern fix** — wrap `auth.uid()` in `(SELECT auth.uid())`. SQL-only fix
-- [ ] **Email count aggregation refactor** — `update_company_email_counts_from_junction` consumes ~14% of total DB time
+- [x] **Email count aggregation refactor (9 June, mig 117)** — `update_company_email_counts_from_junction` rewritten to a single set-based UPDATE sourcing from `emails.customer_company_id` (canonical) instead of the per-row loop over `email_contact_links`. Also fixed a correctness bug (counts were diverging from the email assignment; ~40% of QB companies were wrong). NOTE: the set-based UPDATE must run via a direct connection (`statement_timeout=0`), not the PostgREST RPC (times out at ~20K rows).
 - [ ] **Keyset pagination on heavy endpoints** — replace PostgREST count-pagination on qb_operations, qb_jobs, emails list
 - [ ] **Capability tags GIN operator fix** — current query uses `=` on GIN-indexed column
 - [ ] **Unused index cleanup** — drop unused indexes on emails table after verifying `idx_scan = 0`
@@ -218,12 +220,33 @@ Callsites that fetched full body_text then discarded most of it in Python. Now t
 ### QB Data Quality
 - [ ] **Contact creation from QB data** — 1,344 unmatched QB customers have emails in `qb_unique_emails` but no SB contacts
 - [~] **Email-method SB name correction / mis-key contamination** — ~4,250 email-matched QB customers have wrong SB company names. Mis-key bug fixed in pipeline + `company_resolver.py` (keys by `customer_key_id`). Remediation run 3 June: 174 RELINK fixes (census 209→35 genuinely-wrong), 19 DUP_COMPANY merges (CONFLICT 24→1), 3 of 4 freed CHAIN relinks. Scripts in `scripts/db/_fix_miskey_relink.py`, `_fix_conflict_dups.py`, census via `_diagnose_miskey_live.py`.
-  - [ ] **Name-vs-email-content knots (human review needed)** — companies NAMED for one customer but POPULATED by another's contact emails; name-canon match picks wrong QB and resolver re-asserts the email-owner QB on next ingestion. Durable fix = correct the company name or move mis-filed contacts, NOT the QB link. Cases: Louisvuitton→Louis Vuitton (contacts @blaineynorth.com), Matthewely→Matthew Ely (studio@stephenlayfield.com), Flintwood (@virtuoso.com), Bec Morris Design (contact_chain blocker). See `memory/project_qb_name_vs_email_contamination.md`.
+  - [~] **Name-vs-email-content knots (human review needed)** — companies NAMED for one customer but POPULATED by another's contact emails; name-canon match picks wrong QB and resolver re-asserts the email-owner QB on next ingestion. Durable fix = correct the company name or move mis-filed contacts, NOT the QB link.
+    - [x] **Louis Vuitton & The Make Haus — RESOLVED (8-9 June).** Root cause was the dual-ID key/record-id collision (29737 = LV key = Blainey record; 34817 = MH key = Payce record). Remediated via `_remediate_crossed_pairs_run.py` + `_remediate_crossed_pairs_contacts.py`: merged spaced→squished survivor, moved real ops, repointed contaminating QB (Blainey/Payce) to their own SB companies, moved @blaineynorth.com/@payce.com.au contacts+emails off LV/MH, removed foreign `email_domains`, rejected the stale `qb_match_candidates`. See `memory/project_duplicate_company_merge.md`.
+    - [ ] Remaining: Matthewely→Matthew Ely (studio@stephenlayfield.com), Flintwood (@virtuoso.com), Bec Morris Design (contact_chain blocker). See `memory/project_qb_name_vs_email_contamination.md`.
   - [ ] **11 UNLINK cases** — likely false positives (e.g. Arup ↔ Arup Pty Ltd); leave unless reviewed.
 - [x] **Duplicate company merge (squished vs spaced names)** — 2026-06-03: consolidated 240 duplicate `customer_companies` groups (e.g. `Qreport`→`Q Report`) via `scripts/db/merge_duplicate_companies.py`; FKs repointed across 11 tables, survivors renamed to nicest name, stored counts recomputed. Fixed the count=N/drilldown=0 symptom. Rollback manifests: `_merge_rollback_batch1.json` (218) + `_merge_rollback.json` (22).
-  - [ ] **16 QB-conflict pairs (human review needed)** — both squished + spaced record carry a *different* real QB customer with material revenue; auto-merge skipped to avoid orphaning a QB match. Decide which QB customer is authoritative, then merge by hand. Standouts: Coco Republic ($1,022,568 vs $318), Matthew Ely ($10,418 vs $70,337), Louis Vuitton ($29,319 vs $10,161), Cocogun, Publicis Sapient. Full list in `scripts/db/_merge_plan.json` → `skipped`. Overlaps the name-vs-email-content knots above.
+  - [~] **16 QB-conflict pairs (human review needed)** — both squished + spaced record carry a *different* real QB customer with material revenue; auto-merge skipped to avoid orphaning a QB match. Decide which QB customer is authoritative, then merge by hand. Full list in `scripts/db/_merge_plan.json` → `skipped`. Overlaps the name-vs-email-content knots above.
+    - [x] **Louis Vuitton ($29,319 vs $10,161) & The Make Haus — RESOLVED (8-9 June)** via the crossed-pair remediation (see above). 8 of the original "phantom" norms (matthewely, wesshawdesign, spacenow, milkandhoneyunited, cocorepublic, poppiepack, 4idsolutions, publicissapient) were already single rows with correct survivors.
+    - [ ] Remaining standouts: Coco Republic ($1,022,568 vs $318), Cocogun, plus any from the gate's `skipped` set still showing material revenue on both sides.
 - [ ] **Manual-only unmatched cleanup** — 942 "No link (manual)" unmatched QB customers with $0 revenue
 - [ ] **Automate candidate review** — 972 staged candidates could be auto-promoted
+
+### DB foundation remediation — ✅ DONE (8–9 June) · root cause: dual-ID key/record-id collision
+
+The same `qb_customers` dual numeric ID-space collision (field 3 `qb_record_id` vs field 92 `customer_key_id`) surfaced across **5 tables**; each was point-fixed, then the root was addressed non-destructively.
+
+- [x] **merge gate hardened** — `merge_duplicate_companies.py` resolves `qb_customer_id` name-aware before comparing; `pick_canonical` ranks on resolved `total_invoiced`; guard refuses to NULL non-zero-revenue matches; rollback manifest fsync'd before commit. Commit `91d4138`.
+- [x] **crossed-pair remediation** — Louis Vuitton & The Make Haus de-contaminated (see Name-vs-email-content knots above).
+- [x] **email_domains contamination** — `blaineynorth.com`/`payce.com.au` removed from LV/MH; foreign contacts+emails moved to rightful owners.
+- [x] **email count canonicalisation (mig 117)** — counts from `emails.customer_company_id`, not `email_contact_links` (see CPU/cache section). `get_company_emails` endpoint + merge recompute aligned. Commit `3380daf`. **Needs backend deploy** for the endpoint half to take effect in UI.
+- [x] **qb_match_candidates cleanup** — rejected stale Blainey→LV / Payce→MH suggestions.
+- [x] **Option A Phase 1 (mig 118, non-destructive)** — added + backfilled `customer_companies.qb_customer_key_id` canonical shadow column (13,570 rows, name-aware; 14 ambiguous NULL). Nothing reads it yet. Commit `1aeb307`.
+
+**Parked-and-safe (DB foundation now in good shape — not the priority before Tuesday):**
+- [ ] **Option A Phase 2** — repoint 3 read-joins + 5 write-paths to `qb_customer_key_id` (site list in `option_a_migration_plan.json`). Deploy-coupled.
+- [ ] **Option A Phase 3 — DROP `qb_customer_id`** — irreversible; do LAST, only after Phase 2 bakes a release cycle + grep-confirms nothing reads the old column. **Never bundle with Phase 2** (Dinesh's directive, 9 June).
+- [ ] **Audit A: email_domains contamination triage** — ~369 business-on-business shared-domain cases; NOT auto-cleanable (mix of real relationships / individuals-as-companies). Needs ranked human review. Data in `audit_domain_link_health.json`.
+- [ ] **4 ambiguous match candidates** — Nas←National Art School, Space Now←Climate 200, Among Equals←Meshki, Boom Studios←Alexa Keirnan. Human review in the candidate tab (some may be correct).
 
 ### Known-issue cleanup
 - [x] `hello@carbon8.com.au` mailbox extraction coverage — resolved

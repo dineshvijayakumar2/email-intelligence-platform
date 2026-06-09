@@ -148,9 +148,10 @@ Imports CRM data from QuickBase — customers, contacts, quotes, jobs, operation
 - Inserts/updates 7 QB cache tables: `qb_customers`, `qb_contacts`, `qb_quotes`, `qb_jobs`, `qb_operations`, `qb_sales_line_items`, `qb_unique_emails`
 - Creates `qb_match_candidates` for fuzzy matches requiring review
 - Enriches `customer_companies` with QB data: `qb_customer_id`, `customer_type`, `qb_tier`, `qb_total_revenue`, `days_since_last_invoice`, `open_quote_count`, `growth_pct`
+  - ⚠️ `qb_customer_id` is a **mixed ID-space** (QB field 3 record-id in practice) that collides with the `customer_key_id` space (field 92) — the root of recurring cross-customer contamination (e.g. Blainey North ↔ Louis Vuitton). Never compare/join it raw against `qb_customers` without name-aware resolution. A canonical `qb_customer_key_id` shadow column (mig 118, Option A Phase 1) now holds the resolved key-id; code will repoint to it (Phase 2) before the old column is dropped (Phase 3).
 - Enriches `customer_contacts` with QB data: `qb_contact_id`, `qb_quote_count`, `qb_capabilities_used`
 - Backfills contacts onto matched companies: links unlinked `customer_contacts` to the matched company via `qb_unique_emails` email chain, then cascades to `emails.customer_company_id` and `email_contact_links.company_id`
-- Refreshes `customer_companies.total_emails` from junction table after backfill
+- Refreshes `customer_companies` email/contact counts from the **canonical assignment** (`emails.customer_company_id` + `customer_contacts.customer_company_id`), not the `email_contact_links` junction (mig 117) — the junction's per-participant `company_id` inflates end-customers with broker/shared-domain spillover
 
 #### What it depends on
 
@@ -923,7 +924,7 @@ After sync completes, an `email_pipeline` job is created. The pipeline runs 10 s
 3. **extract_and_link** — 13-step extraction: contacts, companies, roles, email linking. In incremental mode, only processes emails where `extracted_at IS NULL` (skips already-extracted emails). After step 9 completes, stamps `extracted_at` on processed emails. QB enrichment (step 6 sub-step) uses SQL `UPDATE...FROM` joins instead of per-row HTTP calls. Company stats update uses SQL `UPDATE...FROM VALUES` for batch efficiency
 4. **assign_threads** — Assigns `canonical_thread_id` to new emails
 5. **evaluate_threads** — Updates thread status for affected threads
-6. **refresh_counts** — Updates email counts on contacts and companies
+6. **refresh_counts** — Updates email/contact counts on companies from the canonical assignment (`emails.customer_company_id` + `customer_contacts.customer_company_id`), not the `email_contact_links` junction (mig 117)
 7. **embed_emails** — Generates vector embeddings for new emails
 8. **entity_aggregation** — Aggregates entity data across emails
 9. **link_ai_refs** — Links AI-extracted references to QB records. Scoped to emails classified in the last 7 days (not entire mailbox history). Validates all refs in bulk (1-2 queries) instead of per-row

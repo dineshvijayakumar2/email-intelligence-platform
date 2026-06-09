@@ -218,7 +218,7 @@ Tags/categories assigned to emails by the rule-based tagger (20+ tags).
 **Unique:** (email_id, category) | **Scale:** 607,485 rows (291 MB)
 
 #### `email_contact_links`
-Many-to-many junction between emails and contacts/companies with role tracking.
+Many-to-many junction between emails and contacts/companies with role tracking. **Scope: contact-level / participant analysis ONLY.** `company_id` is resolved per-participant (contact-FK → domain lookup) and diverges from `emails.customer_company_id`; do NOT use it to count a company's emails (it inflates end-customers with broker/shared-domain spillover — see `customer_companies` aggregate-semantics note). Company email volume comes from `emails.customer_company_id`.
 
 | Column | Type | Nullable | Default | Notes |
 |--------|------|----------|---------|-------|
@@ -374,7 +374,8 @@ Extracted companies from email domains. Enriched with QB data post-matching.
 | embedding | vector(768) | NULL | | See §5.5 Vector Embedding Architecture |
 | embedding_model | text | NULL | | Provider/model tag |
 | embedded_at | timestamptz | NULL | | When embedding was last written |
-| qb_customer_id | text | NULL | | FK to QB record |
+| qb_customer_id | text | NULL | | **MIXED ID-SPACE (record-id in practice).** Holds a QB numeric id that collides with the `customer_key_id` space (QB field 3 vs field 92) — root cause of cross-customer contamination. Being superseded by `qb_customer_key_id` (Option A). Do NOT compare/join raw against `qb_customers` without name-aware resolution. |
+| qb_customer_key_id | text | NULL | | **Canonical key-id-space resolution** of `qb_customer_id` (name-aware). Added mig 118 (Option A Phase 1), backfilled 13,570 rows. NOT yet read by code (Phase 2 repoints to it; Phase 3 drops `qb_customer_id`). NULL = ambiguous/unresolved. |
 | qb_customer_code | text | NULL | | |
 | qb_match_method | text | NULL | | `exact_domain`, `email_first`, `fuzzy` |
 | qb_matched_at | timestamptz | NULL | | |
@@ -382,6 +383,8 @@ Extracted companies from email domains. Enriched with QB data post-matching.
 | created_at/updated_at | timestamptz | | now() | |
 
 **Unique:** (client_id, company_name) | **Scale:** 14,939 rows (40 MB)
+
+**Email/contact aggregate semantics (mig 117, 9 June):** `total_emails`/`total_inbound`/`total_outbound`/`first_contact_date`/`last_contact_date` are computed from the CANONICAL assignment `emails.customer_company_id`, and `contact_count`/`decision_maker_count` from `customer_contacts.customer_company_id` — **NOT** from `email_contact_links.company_id`. The junction's `company_id` is a per-participant resolution that diverges from the email's primary assignment and inflates end-customers with broker/shared-domain spillover. The recompute function `update_company_email_counts_from_junction` (name retained for caller compat) was rewritten accordingly; it must be invoked via a direct connection (`statement_timeout=0`), not the PostgREST RPC. The `get_company_emails` endpoint lists by `customer_company_id` to match these counts.
 
 #### `customer_contacts`
 Extracted contacts from email addresses with role classification and engagement metrics.
