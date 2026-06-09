@@ -29,7 +29,7 @@ const CapabilityRhythmCard: React.FC<Props> = ({ companyId }) => {
     col.accessor('order_count', { header: 'Orders', size: 60, meta: { align: 'right' },
       cell: info => <span className="tabular-nums">{info.getValue()}</span>,
     }),
-    col.accessor('avg_interval_days', { header: 'Avg Interval', size: 90,
+    col.accessor('avg_interval_days', { header: 'Typical Interval', size: 90,
       cell: info => {
         const v = info.getValue();
         if (v == null) return <span className="text-slate-300">—</span>;
