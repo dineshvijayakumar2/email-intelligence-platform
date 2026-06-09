@@ -12,7 +12,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 
 from ..models.api_models import MailboxConfig, ConnectionTest
-from ..dependencies.auth import get_current_user, get_accessible_mailbox_ids, require_role
+from ..dependencies.auth import get_current_user, require_role
 from ..utils.audit import audit_from_user
 from ..processors.email_processor import EmailProcessor
 
@@ -36,10 +36,22 @@ def init_mailboxes_router(supabase_getter, run_reprocessing_fn=None):
 # ── List ────────────────────────────────────────────────────────────────
 
 @router.get("")
-async def get_mailboxes(accessible_mailbox_ids: list = Depends(get_accessible_mailbox_ids)):
-    """Get mailboxes accessible to current user with email counts."""
+async def get_mailboxes(current_user: dict = Depends(get_current_user)):
+    """Get mailboxes accessible to current user with email counts.
+
+    Includes inactive (deactivated) mailboxes so they remain visible in the
+    list with an "Inactive" label and can be recovered, rather than vanishing.
+    Access scope is unchanged — the same role-based rules apply; only the
+    is_active filter is relaxed for this list view via p_include_inactive.
+    """
     try:
         sb = _get_supabase()
+
+        accessible = sb.rpc(
+            'get_user_accessible_mailboxes',
+            {'p_user_id': current_user['user_id'], 'p_include_inactive': True}
+        ).execute()
+        accessible_mailbox_ids = [r['mailbox_id'] for r in (accessible.data or [])]
 
         if not accessible_mailbox_ids:
             logger.warning("[Mailboxes API] No accessible mailboxes for user")
