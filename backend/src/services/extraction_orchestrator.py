@@ -1649,11 +1649,15 @@ class ExtractionOrchestrator:
 
                 for write_attempt in range(3):
                     try:
-                        # Link qb_customers → company
+                        # Link qb_customers → company.
+                        # Guard with matched_company_id IS NULL (mirrors the 1-to-1
+                        # guard in migration 113) so re-extraction of an already-linked
+                        # company is a silent no-op instead of violating
+                        # idx_qb_customers_unique_match (client_id, matched_company_id).
                         self._execute_with_retry(
                             self.client.table('qb_customers').update({
                                 'matched_company_id': company_id
-                            }).eq('id', qb_cust['id'])
+                            }).eq('id', qb_cust['id']).is_('matched_company_id', 'null')
                         )
                         # Write match metadata on company
                         self._execute_with_retry(
@@ -1674,7 +1678,13 @@ class ExtractionOrchestrator:
                         else:
                             logger.warning(f"Step 6 QB match write failed for company {company_id} after 3 attempts: {e}")
                     except Exception as e:
-                        logger.warning(f"Step 6 QB match write failed for company {company_id}: {e}")
+                        # 23505 on idx_qb_customers_unique_match means this company is
+                        # already matched to a (different) QB customer for this client —
+                        # the 1-to-1 invariant is already satisfied, so this is benign.
+                        if getattr(e, 'code', None) == '23505' or 'idx_qb_customers_unique_match' in str(e):
+                            logger.debug(f"Step 6 QB match already present for company {company_id}, skipping")
+                        else:
+                            logger.warning(f"Step 6 QB match write failed for company {company_id}: {e}")
                         break
 
             # ── Step 6: Match contacts by name against QB contacts ──
