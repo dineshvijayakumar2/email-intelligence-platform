@@ -718,9 +718,15 @@ class AIEmailAnalyzer:
                     skipped_count += 1
                     continue
 
-                # Skip Drafts, Trash, Spam folders — not actionable
+                # Folder-level skip: Drafts (unsent) and Spam/Junk only.
+                # 'trash'/'deleted' are deliberately NOT folder-skipped: for this client ~50%
+                # of Trash is genuine customer mail (live quotes/approvals from top accounts —
+                # HH Global, TPA, Centuria, Emily Ziz) that AMs delete after handling. Folder
+                # location is not a relevance signal here. Trash now falls through to the
+                # content filters below (bounce/delivery-failure, trivial-body) and the
+                # rule-based spam check above — so junk is still skipped on content, not folder.
                 folder = (email.get("folder_path") or "").strip()
-                if folder.lower() in ("drafts", "draft", "trash", "deleted", "spam", "junk"):
+                if folder.lower() in ("drafts", "draft", "spam", "junk"):
                     self._mark_skipped(eid, mailbox_id, cid, f"folder_{folder.lower()}")
                     analyzed_ids.add(eid)
                     skipped_count += 1
