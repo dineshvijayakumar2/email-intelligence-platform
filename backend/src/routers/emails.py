@@ -690,28 +690,16 @@ async def get_email_categories():
     try:
         sb = _get_supabase()
 
-        # Use filter to exclude _meta_ prefixed categories at database level
-        # and fetch more rows to ensure we get actual categories
+        # Server-side DISTINCT. The old approach (.select('category').limit(10000) then
+        # client-side dedup) was silently capped at PostgREST db-max-rows (1000), so it only
+        # saw the first 1000 of ~412K rows and returned 2 of 24 real categories. The RPC does
+        # the DISTINCT in SQL and returns the true set.
         result = await asyncio.get_running_loop().run_in_executor(
             None,
-            lambda: sb.table('email_categories')
-                .select('category')
-                .not_.like('category', '_meta_%')
-                .limit(10000)
-                .execute()
+            lambda: sb.rpc('distinct_email_categories').execute()
         )
 
-        row_count = len(result.data or [])
-        logger.info(f'[Categories API] Fetched {row_count} non-meta category rows')
-
-        # Get unique categories
-        category_set = set()
-        for item in result.data or []:
-            category = item.get('category')
-            if category:
-                category_set.add(category)
-
-        categories = sorted(list(category_set))
+        categories = [c for c in (result.data or []) if c]
         logger.info(f'[Categories API] Returning {len(categories)} categories: {categories}')
 
         return categories
