@@ -150,6 +150,11 @@ the post-deploy batch produced 0 genuine mis-keys, only cosmetic/email-correct h
   every paged read. When de-duping into a set, overlaps are harmless but *skips*
   silently undercount — so the higher count across unstable runs is the more
   trustworthy one, and the fix is ordering, not picking the max.
+- **Same rule for ad-hoc QuickBase pulls:** `skip/top` paging without `sortBy` is
+  unstable across pages. Sort by Record ID# (`sort_by=[{"fieldId": 3, "order": "ASC"}]`)
+  — unique and immutable on every QB table. (The production sync now does this by
+  default; a missing sort here is what made the 2026-06-10 `qb_operations` backfill
+  untrustworthy.)
 
 ## 4. Quote-number extraction — use the canonical extractor
 
@@ -249,6 +254,30 @@ capability the customer demonstrably already does.
 - `hello@` is a shared mailbox; named AM mailboxes are per-user.
 - Reference script: `scripts/db/_coverage_reconfirm.py` (throwaway diagnostic;
   read-only). Embeds all of the above patterns.
+
+### 9.1 `qb_operations` count reconciliation — the cache is intentionally smaller than QB
+
+Don't treat `count(qb_operations) < QB Operations total` as a sync gap. The sync
+applies a **`T-Cancelled` prefilter** (`sync_operations` drops every record whose
+`production_status = 'T-Cancelled'`). Reconciliation (2026-06-10):
+
+| | rows |
+|---|---:|
+| QB Operations table (raw, what the QB report shows) | 683,366 |
+| Less `T-Cancelled` (excluded by the sync prefilter) | −53,043 |
+| **Expected in `qb_operations`** | **630,323** |
+| Actual live count (incl. stale stragglers) | 630,707 |
+
+- The cache holds **630,707**, i.e. ~384 *more* than the 630,323 valid set. Those
+  extras are rows cached earlier that have since become `T-Cancelled` or been deleted
+  in QB; the upsert-only sync never purges them. So expect the live count to drift a
+  few hundred above the valid total until a delete-aware reconciliation runs.
+- When reconciling an analysis count against QB, **always exclude `T-Cancelled`**
+  on the QB side first (`{'21'.EX.'T-Cancelled'}`), or compare against 630,323 — not 683,366.
+- `profit_pct` is unbounded `NUMERIC` (migration 119). Do **not** assume it sits in
+  any bounded range; QB emits values in the millions of percent when cost ≈ 0. Treat
+  it as a display field, not an aggregation input (a mean/sum is dominated by these
+  near-zero-cost outliers and is meaningless) — see [BEST_PRACTICES.md](BEST_PRACTICES.md).
 
 ---
 

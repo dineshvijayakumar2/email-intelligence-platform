@@ -166,6 +166,86 @@ The 12 May ask was for AM comparison based on thread insights — language, resp
 
 ---
 
+## Update — 4 June 2026: Won/Lost behaviour analysis (first hard evidence for the catalog)
+
+Before building the proposed LLM feature-extraction passes, we ran the data analysis
+first (read-only, metadata + existing AI intent only, zero new egress). Goal: move from
+"email correlates with outcomes" to "**which email behaviours separate won quotes from
+lost ones**." Two customers, within-customer only (n=2 — not generalised across):
+Artis (Ehab, transactional/high-volume) and The Property Agency (Linda, relationship/
+fewer-larger). QB is ground truth for won/lost; quotes linked to their surrounding email
+via the validated contact+temporal ±14d proximity method. Full output:
+`scripts/db/artis_tpa_won_lost_contrast.json`; method in `DATA_ANALYSIS_GUIDELINES.md`.
+
+### Finding 1 — behaviour separates won/lost, but only for the transactional account
+
+**Artis (533 won / 1,390 lost linked — well powered):**
+
+| feature (±14d window) | WON | LOST |
+|---|--:|--:|
+| avg reply latency (hrs) | **4.7** | 9.0 |
+| follow-up count after quote | **28.5** | 14.9 |
+| AM-initiated thread (share) | **0.34** | 0.60 |
+| window exchanges (emails) | **89.8** | 39.1 |
+| distinct contacts engaged | 3.7 | 2.9 |
+
+Sharpest signal is **intent mix**: WON windows are *job_approval 34% / artwork 10%*
+(production/execution); LOST windows are *quote_request 32% / payment_query 25%*
+(price-shopping + billing friction). Winning is associated with **customer-pull + fast
+responsiveness**, not AM cold-push (won threads are *more* customer-initiated).
+
+**The Property Agency (135 won / 223 lost) — essentially flat.** No timing/volume feature
+separates; reply latency is even slightly *slower* on won, and won/lost intent mixes are
+near-identical. **This is itself the most important finding:** for a relationship account,
+*metadata behaviour does not distinguish outcomes* — the differentiator must be **content
+quality (substance), not speed or volume.** Insights likely need per-archetype treatment;
+a single global won/lost model would wash these two accounts out against each other.
+
+### Finding 2 — value-driver vs volume-sink, confirmed quantitatively
+
+- Artis `graphics@`: 80% strike, $854k won, 1,018 emails sent — the value contact *is* the
+  comms hub (**value-driver**). `accounts.pay@`: CC'd on 321 emails but **sent only 2**,
+  initiation-ratio 0.01, 4% strike — textbook **volume-sink** (citation ≠ engagement).
+- TPA `ck@` sends *more* than `ry@` (516 vs 338) yet `ry@` carries 3× the won value —
+  **volume contact ≠ value contact.** Per-contact engagement must be value-weighted.
+
+### Caveats (honest)
+
+- **The numeric sentiment-score feature is not built.** `ai_email_intelligence` exposes a
+  categorical `sentiment` (which is uniformly neutral-heavy here) but the per-email
+  *sentiment score* is not populated by the pipeline, so it could not contribute to this
+  contrast. We relied on the **intent classifier** (which is built and carried the signal)
+  plus timing/volume. Any future "sentiment score" insight is net-new work, not a wiring fix.
+- Within-customer only (n=2); the flags are a descriptive heuristic, **not significance tests**.
+- Artis recency understated (Ehab mailbox ~2wk unsynced). TPA has ~21% off-named-mailbox
+  email, so its low-volume contacts (`hw@`, `mi@`) are QB-real but email-sparse — their
+  per-contact engagement figures are unreliable and should not be over-read.
+
+### Honest re-assessment of the proposed email feature-extraction ideas
+
+The proposal to extract richer email features was deferred so we could do this analysis
+first. With evidence in hand, here is a frank ROI read on each proposed feature — what to
+build next round to make these insights *richer*, and what looks lower-value than it seemed.
+
+| Proposed feature | Evidence from this analysis | Verdict / priority |
+|---|---|---|
+| **Intent-lifecycle rollup** (contact/quote-window aggregation of the *existing* per-email intent) | The **single strongest separator** (job_approval/artwork vs quote_request/payment_query). Already classified per-email; only the aggregation is missing. | **Do first.** Highest ROI, lowest cost — no new LLM pass, just rollup + window join (Q1/AM2 plumbing). |
+| **Response substance** (substantive / deflective / requirement-shifting) [Q3] | Directly justified by the TPA *null* result: when timing/volume go flat, the only remaining lever is content quality. This is the feature that "rescues" relationship accounts where metadata says nothing. | **High.** The most defensible net-new LLM pass — has a concrete failure case it explains. |
+| **Specificity / production-ready inputs** (did the customer supply a complete brief / print-ready files) [Q1] | Indirectly supported: `artwork_submission` intent is over-represented in winning windows. A "brief completeness" signal would sharpen buyer-quality. | **Medium-high.** Build alongside Q1; validate against strike rate. |
+| **Competitor-mention aggregation** | Not tested here, but `competitors_mentioned` already exists per-email and is un-aggregated. | **Cheap win.** Aggregate to contact; low cost, testable Q1 hypothesis. |
+| **Promise / follow-through tracking** [AM3] | Follow-up *count* separated won/lost for Artis — but that's volume, not kept commitments. The cheap count-proxy already carries signal. | **Medium.** Validate the count-proxy before investing in full commitment-extraction. |
+| **Tone / consultative ratio / tone-adaptation** [AM2] | No evidence yet either way; speculative. | **Defer.** Build after substance ships and is validated, or it's unfalsifiable polish. |
+| **Numeric sentiment score** | Categorical sentiment was uniformly neutral and did not separate won/lost. | **Low / deprioritise.** Sentiment likely only matters at extremes, which complaint-intent + urgency already capture. |
+
+**Two methodology recommendations for the next round:**
+1. **Formalise the contact+temporal ±14d proximity join** as the standard quote↔thread link
+   (it unlocked this entire analysis and beats Q-number citation, which under-counts ~5×).
+   Otherwise every future insight re-derives it.
+2. **Either populate or remove the `sentiment_score` field** so it stops reading as a silent
+   zero — it's a trap for any analyst who assumes it's wired up.
+
+---
+
 ## Common conventions across all insights
 
 - **12-month time window** for derived characterisations

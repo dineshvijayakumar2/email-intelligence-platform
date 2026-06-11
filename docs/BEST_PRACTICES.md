@@ -41,6 +41,30 @@ while True:
 
 **Safe to skip pagination:** Single-row lookups (`.eq('id', uuid)`), count-only queries (`count='exact'` + `.limit(0)`), queries with explicit `.limit(N)` where N < 1000.
 
+### ALWAYS specify an explicit, stable sort order on paginated queries
+
+**Problem:** Pagination with `offset/limit` (Supabase `.range()`) or `skip/top` (QuickBase) walks the result set across many sequential requests. If you don't pin an explicit `ORDER BY` / `sortBy`, the engine returns rows in an **undefined order that can shift between page fetches** — especially while the table is being written to during a long sync. The result: rows silently **skipped or fetched twice**, and you only notice when a downstream count comes up short.
+
+**Real incident (cost ~2 hours):** A full sync of `qb_operations` (~680 pages of 1000) paginated with `skip/top` but **no `sortBy`**. Records that had failed an earlier upsert (the `profit_pct` overflow) never reliably reappeared, so the backfill couldn't be trusted, and a first attempt also died mid-stream on a transient error with no deterministic way to resume. Fix: pin a stable sort.
+
+**Rule:** Every paginated query MUST sort by a **unique, immutable key** — never an updatable/non-unique column (a mutable `updated_at` or a non-unique `name` reorders rows mid-walk and breaks the offset math).
+
+```python
+# WRONG — order undefined; rows can shift between pages as the table changes
+page = supabase.table('qb_operations').select('*').eq('client_id', cid).range(off, off+999).execute()
+
+# RIGHT — stable, unique sort key → each row visited exactly once
+page = supabase.table('qb_operations').select('*').eq('client_id', cid) \
+    .order('id').range(off, off+999).execute()
+```
+
+```python
+# QuickBase: sort by Record ID# (field 3) — built-in, unique, immutable on every QB table
+await qc.query_records(table_id, fields, sort_by=[{"fieldId": 3, "order": "ASC"}], skip=skip, top=1000)
+```
+
+This is now the default in `query_records_streamed` (sorts by field 3 when the caller passes none). When you add any new paginated walk, do the same.
+
 ### Never do individual row updates in a loop
 
 **Problem:** Updating 600K rows one at a time = 600K REST API calls → connection pool exhausted → all other queries timeout → frontend hangs.

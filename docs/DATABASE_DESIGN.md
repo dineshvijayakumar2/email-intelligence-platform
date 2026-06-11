@@ -734,12 +734,17 @@ Key columns: `qb_customer_id`, `job_no`, `quote_no`, `job_status`, `retail_sale`
 
 **Unique:** (client_id, qb_record_id)
 
-#### `qb_operations` — 614,257 rows (525 MB)
+#### `qb_operations` — 630,707 rows (~855 MB total incl. indexes)
 Largest QB table — individual production operations per job.
 
 Key columns: `operation_id`, `qb_customer_id`, `job_no`, `quote_no`, `operation_name`, `machine`, `department`, `finishing_type`, `job_title`, `date_accepted`, `date_due`, `customer_name`, `customer_code`, `am_job`, `am_customer`, `quantity`, `production_status`, `cost_price`, `cost_plus_price`, `profit_amount`, `profit_pct`, `capability_tags` (jsonb), `has_coating`, `has_sewing`, `has_outsource_component`, `am_rush`, `factory_rush`, `row_type`, `embedding` (vector(768)), `embedding_model`, `embedded_at`, `qb_process_tag`, `qb_capability_tag`, `qb_machine_tier_tag`, `qb_row_type_tag`, `qb_blank_reason_tag`, `qb_embellishment_tag`, `contact_email`, `matched_company_id`.
 
 **Unique:** (client_id, qb_record_id)
+
+**Sync notes:**
+- **`T-Cancelled` prefilter:** `sync_operations` drops every QB record whose `production_status = 'T-Cancelled'` (client-side page filter). QB holds 683,366 operations; 53,043 are `T-Cancelled`, leaving 630,323 cached. A cache count below the raw QB total is therefore expected by design, not a sync gap.
+- **`profit_pct` is unbounded `NUMERIC`** (migration 119). QB computes Profit % as an astronomically large value when cost approaches zero (e.g. ~5,000,000% for a $500 sale at $0.01 cost), which overflowed the prior `DECIMAL(8,2)` and silently dropped upsert batches. The column is display-only (never aggregated), so it carries no precision cap. Earlier history: `DECIMAL(5,2)` → `DECIMAL(8,2)` (migration 036) → `NUMERIC` (migration 119).
+- **Reliable pagination:** the streamed QB sync sorts by Record ID# (field 3) ascending so skip/top paging over ~680 pages can't skip or double-fetch records as the table changes mid-sync; transient QB 5xx are retried with capped backoff (~61s/page tolerance).
 
 #### `qb_sales_line_items` — 79,900 rows (38 MB)
 Invoice line items from QB.
