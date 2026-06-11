@@ -3589,7 +3589,7 @@ async def get_data_health(client_id: Optional[str] = Query(default=None)):
         logger.info("data-health: starting step 1 - mailboxes")
         # ---------- 1. Sync lag per mailbox ----------
         mb_query = _supabase.table('mailboxes').select(
-            'id, name, email_address, mailbox_type, is_active, last_sync_at, last_extraction_at'
+            'id, name, email_address, mailbox_type, is_active, last_sync_at, last_extraction_at, connection_config'
         )
         if client_id:
             mb_query = mb_query.eq('client_id', client_id)
@@ -3624,6 +3624,47 @@ async def get_data_health(client_id: Optional[str] = Query(default=None)):
                 'sync_lag_hours': sync_lag_hours,
                 'extraction_lag_hours': extraction_lag_hours,
             })
+
+        # ---------- 1b. Re-auth detection + missing range ----------
+        # A paused/expired OAuth connector is skipped silently by the scheduler, so the
+        # mailbox just stops at its last email date. Surface it (with the missing date range)
+        # instead of letting it hide behind a generic "stale" lag. The catch-up sync only
+        # resumes after the AM reconnects — Fetch Missing can't help (it skips re-auth mailboxes).
+        mailbox_bounds = {}
+        try:
+            mb_bounds_r = _supabase.rpc('data_health_mailbox_bounds', {'p_client': client_id}).execute()
+            mailbox_bounds = mb_bounds_r.data or {}
+        except Exception as mb_err:
+            logger.warning(f"data-health: mailbox_bounds rpc failed: {mb_err}")
+
+        mailboxes_needing_reauth = []
+        for mh, mb in zip(mailbox_health, (mb_result.data or [])):
+            cc = mb.get('connection_config') or {}
+            err = (cc.get('outlook_sync_error') or cc.get('gmail_sync_error') or '')
+            needs = bool(cc.get('outlook_requires_reauth') or cc.get('gmail_requires_reauth'))
+            if not needs and err and any(k in err.lower() for k in ('reconnect', 'expired', 'authenticat')):
+                needs = True
+            last_email = mailbox_bounds.get(mh['mailbox_id'])
+            mh['needs_reauth'] = needs
+            mh['sync_error'] = err or None
+            mh['last_email_date'] = last_email
+            if needs:
+                missing_days = None
+                if last_email:
+                    try:
+                        missing_days = (now.date() - datetime.strptime(last_email, '%Y-%m-%d').date()).days
+                    except Exception:
+                        pass
+                mailboxes_needing_reauth.append({
+                    'mailbox_id': mh['mailbox_id'],
+                    'email_address': mh['email_address'],
+                    'provider': mh['provider'],
+                    'last_email_date': last_email,
+                    'missing_since': last_email,
+                    'missing_until': now.date().isoformat(),
+                    'missing_days': missing_days,
+                    'sync_error': err or 'Authentication expired — reconnect required',
+                })
 
         # ---------- 2. Identity resolution coverage ----------
         logger.info("data-health: step 2 - identity resolution")
@@ -3711,22 +3752,23 @@ async def get_data_health(client_id: Optional[str] = Query(default=None)):
         # ---------- 4. Missing days (gaps in email data, last 30 days) ----------
         # Fetch only sent_date for last 30 days — single column, fast index scan
         # Even at 100K emails, sent_date is ~20 bytes each so 100K = ~2MB, well within timeout
-        thirty_days_ago = (now - timedelta(days=30)).isoformat()
+        # Aggregate DISTINCT dates-with-email server-side. The old approach
+        # (.select('sent_date').limit(200000)) was silently capped at PostgREST db-max-rows
+        # (1000) with no .order(), so all_dates only ever saw ~2 dates -> ~21 false "missing"
+        # weekdays. The RPC does a proper DISTINCT in SQL.
+        thirty_days_ago_date = (now - timedelta(days=30)).date()
         all_dates = set()
         try:
-            recent_q = _supabase.table('emails').select('sent_date').gte('sent_date', thirty_days_ago).limit(200000)
-            if client_id:
-                recent_q = recent_q.eq('client_id', client_id)
-            recent_result = recent_q.execute()
-            for r in (recent_result.data or []):
-                if r.get('sent_date'):
-                    try:
-                        d = datetime.fromisoformat(r['sent_date'].replace('Z', '+00:00')).date()
-                        all_dates.add(d)
-                    except Exception:
-                        pass
-        except Exception:
-            pass
+            present = _supabase.rpc('data_health_present_dates', {
+                'p_client': client_id, 'p_since': thirty_days_ago_date.isoformat()
+            }).execute()
+            for s in (present.data or []):
+                try:
+                    all_dates.add(datetime.strptime(s, '%Y-%m-%d').date())
+                except Exception:
+                    pass
+        except Exception as md_err:
+            logger.warning(f"data-health: present_dates rpc failed: {md_err}")
 
         expected_dates = set()
         for i in range(30):
@@ -3777,6 +3819,7 @@ async def get_data_health(client_id: Optional[str] = Query(default=None)):
             'thread_health': thread_health,
             'missing_weekdays': missing_weekdays,
             'missing_weekday_count': len(missing_weekdays),
+            'mailboxes_needing_reauth': mailboxes_needing_reauth,
             'recent_extraction_jobs': recent_jobs,
         }
 

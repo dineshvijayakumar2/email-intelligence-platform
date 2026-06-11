@@ -682,6 +682,34 @@ export const DataHealthDashboard: React.FC = () => {
         </div>
       )}
 
+      {/* Re-auth needed: paused connectors with their missing date range */}
+      {data && (data.mailboxes_needing_reauth?.length ?? 0) > 0 && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 mb-4">
+          <div className="flex items-center gap-2 mb-2">
+            <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
+            <span className="text-sm font-medium">
+              {data.mailboxes_needing_reauth!.length} mailbox(es) need re-authentication — sync paused, email missing
+            </span>
+          </div>
+          <p className="text-xs text-slate-600 mb-2">
+            The scheduler skips these mailboxes because their OAuth token expired. No email has been pulled since
+            the dates below, and it won't resume until the account owner reconnects. "Fetch Missing" cannot fix this.
+          </p>
+          <div className="space-y-1.5">
+            {data.mailboxes_needing_reauth!.map((m) => (
+              <div key={m.mailbox_id} className="flex items-center justify-between gap-3 text-xs bg-white/60 rounded border border-destructive/10 px-2.5 py-1.5">
+                <span className="font-medium text-slate-800 truncate">{m.email_address}</span>
+                <span className="text-slate-600 whitespace-nowrap">
+                  missing {m.missing_since ?? '?'} → {m.missing_until}
+                  {m.missing_days != null && <span className="text-destructive font-medium"> ({m.missing_days}d)</span>}
+                </span>
+                <span className="text-slate-400 truncate hidden sm:inline" title={m.sync_error}>{m.provider}: reconnect required</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Missing weekdays alert + fetch action */}
       {data && data.missing_weekdays.length > 0 && (
         <div className="rounded-lg border border-warning/30 bg-warning/5 p-4 mb-4">

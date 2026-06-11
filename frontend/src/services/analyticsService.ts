@@ -733,6 +733,20 @@ export interface MailboxHealth {
   last_extraction_at: string | null;
   sync_lag_hours: number | null;
   extraction_lag_hours: number | null;
+  needs_reauth?: boolean;
+  sync_error?: string | null;
+  last_email_date?: string | null;
+}
+
+export interface MailboxReauth {
+  mailbox_id: string;
+  email_address: string;
+  provider: string;
+  last_email_date: string | null;
+  missing_since: string | null;
+  missing_until: string;
+  missing_days: number | null;
+  sync_error: string;
 }
 
 export interface IdentityResolution {
@@ -765,6 +779,7 @@ export interface DataHealthResponse {
   thread_distribution: ThreadDistributionEntry[];
   missing_weekdays: string[];
   missing_weekday_count: number;
+  mailboxes_needing_reauth?: MailboxReauth[];
   recent_extraction_jobs: ExtractionJobHealth[];
 }
 
