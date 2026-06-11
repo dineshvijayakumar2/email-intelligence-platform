@@ -190,7 +190,7 @@ class QuickbaseClient:
         sort_by: Optional[list[dict]] = None,
         skip: int = 0,
         top: int = 1000,
-        max_retries: int = 3,
+        max_retries: int = 6,
     ) -> dict[str, Any]:
         """
         Query records from a Quickbase table with retry on transient errors.
@@ -223,7 +223,10 @@ class QuickbaseClient:
             except (httpx.TimeoutException, httpx.ConnectError, httpx.ReadError) as e:
                 last_err = e
                 if attempt < max_retries:
-                    delay = 2 ** attempt
+                    # Capped exponential backoff: 1,2,4,8,16,30s (~61s total tolerance).
+                    # A full-table sync makes hundreds of sequential page calls over ~70 min,
+                    # so it must survive a transient QB outage longer than a few seconds.
+                    delay = min(2 ** attempt, 30)
                     logger.warning(f"QB query retry {attempt+1}/{max_retries} (skip={skip}): {e}. Waiting {delay}s...")
                     _time.sleep(delay)
                     continue
@@ -231,7 +234,7 @@ class QuickbaseClient:
             except httpx.HTTPStatusError as e:
                 if e.response.status_code in (502, 503, 504, 525) and attempt < max_retries:
                     last_err = e
-                    delay = 2 ** attempt
+                    delay = min(2 ** attempt, 30)
                     logger.warning(f"QB query retry {attempt+1}/{max_retries} (skip={skip}): HTTP {e.response.status_code}. Waiting {delay}s...")
                     _time.sleep(delay)
                     continue
@@ -293,7 +296,16 @@ class QuickbaseClient:
         Async generator yielding (page_records, total) one QB page (≤1000 records) at a time.
         Use instead of query_all_records when the table is large — the caller can upsert each
         page immediately rather than buffering all records in memory first.
+
+        Pagination uses skip/top across many sequential calls, so a STABLE sort is required:
+        without one, QB's default order can shift between page fetches (e.g. as rows are
+        modified mid-sync), causing records to be skipped or fetched twice. When the caller
+        doesn't specify a sort, default to Record ID# (field 3) ascending — a built-in,
+        unique, immutable key present on every QB table — so each record is visited exactly once.
         """
+        if not sort_by:
+            sort_by = [{"fieldId": 3, "order": "ASC"}]
+
         skip = 0
         page_size = 1000
         total = None
