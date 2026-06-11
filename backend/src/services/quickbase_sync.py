@@ -576,7 +576,7 @@ class QuickbaseSync:
         while True:
             result = _execute_with_retry(lambda o=offset: self._supabase.table('qb_operations').select(
                 'id, department, operation_name, machine, qb_capability_tag, qb_row_type_tag'
-            ).eq('client_id', self._client_id).eq('capability_tags', '[]').range(
+            ).eq('client_id', self._client_id).eq('capability_tags', '[]').order('id').range(
                 o, o + batch_size - 1
             ).execute())
 
@@ -653,7 +653,7 @@ class QuickbaseSync:
                 'id, job_no'
             ).eq('client_id', self._client_id).is_('contact_email', 'null').not_.is_(
                 'job_no', 'null'
-            ).range(o, o + 999).execute())
+            ).order('id').range(o, o + 999).execute())
             rows = page.data or []
             ops.extend(rows)
             if len(rows) == 0:
@@ -713,7 +713,7 @@ class QuickbaseSync:
                 'id, job_no'
             ).eq('client_id', self._client_id).eq('factory_rush', False).not_.is_(
                 'job_no', 'null'
-            ).range(o, o + 999).execute())
+            ).order('id').range(o, o + 999).execute())
             rows = page.data or []
             all_ops.extend(rows)
             if len(rows) == 0:
@@ -773,7 +773,7 @@ class QuickbaseSync:
                 'id, qb_customer_id'
             ).eq('client_id', self._client_id).is_(
                 'matched_company_id', 'null'
-            ).range(o, o + 999).execute())
+            ).order('id').range(o, o + 999).execute())
             rows = [r for r in (ops_page.data or []) if r.get('qb_customer_id')]
             unmatched.extend(rows)
             if len(ops_page.data or []) == 0:
@@ -792,7 +792,7 @@ class QuickbaseSync:
                 'customer_key_id, matched_company_id'
             ).eq('client_id', self._client_id).not_.is_(
                 'matched_company_id', 'null'
-            ).range(o, o + 999).execute())
+            ).order('id').range(o, o + 999).execute())
             rows = cust_page.data or []
             for r in rows:
                 key_id = r.get('customer_key_id') or ''
@@ -931,7 +931,7 @@ class QuickbaseSync:
                 'email_invalid', False
             ).not_.is_(
                 'qb_customer_id', 'null'
-            ).range(o, o + 999).execute())
+            ).order('id').range(o, o + 999).execute())
             rows = page.data or []
             all_qb_emails.extend(rows)
             if len(rows) == 0:
@@ -950,7 +950,7 @@ class QuickbaseSync:
                 'email_address, customer_company_id'
             ).eq('client_id', self._client_id).not_.is_(
                 'customer_company_id', 'null'
-            ).range(o, o + 999).execute())
+            ).order('id').range(o, o + 999).execute())
             rows = page.data or []
             all_contacts.extend(rows)
             if len(rows) == 0:
@@ -1035,7 +1035,7 @@ class QuickbaseSync:
         while True:
             page = _execute_with_retry(lambda o=offset: self._supabase.table('qb_customers').select(
                 'id, qb_record_id, customer_key_id, customer_code, customer_name'
-            ).eq('client_id', self._client_id).range(o, o + 999).execute())
+            ).eq('client_id', self._client_id).order('id').range(o, o + 999).execute())
             rows = page.data or []
             for r in rows:
                 kid = r.get('customer_key_id')
@@ -1153,7 +1153,7 @@ class QuickbaseSync:
                 'id, qb_record_id, customer_name, customer_code'
             ).eq('client_id', self._client_id).is_(
                 'matched_company_id', 'null'
-            ).range(o, o + 999).execute())
+            ).order('id').range(o, o + 999).execute())
             rows = qb_result.data or []
             unmatched.extend(rows)
             if len(rows) == 0:
@@ -1405,7 +1405,7 @@ class QuickbaseSync:
         while True:
             company_batch = _execute_with_retry(lambda o=offset: self._supabase.table('customer_companies').select(
                 'id, company_name, email_domains'
-            ).eq('client_id', self._client_id).range(o, o + 999).execute())
+            ).eq('client_id', self._client_id).order('id').range(o, o + 999).execute())
             rows = company_batch.data or []
             all_companies.extend(rows)
             if len(rows) == 0:
@@ -1423,7 +1423,7 @@ class QuickbaseSync:
                 'id, email'
             ).eq('client_id', self._client_id).is_(
                 'matched_contact_id', 'null'
-            ).range(o, o + 999).execute())
+            ).order('id').range(o, o + 999).execute())
             rows = qb_result.data or []
             all_unmatched.extend(rows)
             if len(rows) == 0:
@@ -1441,7 +1441,7 @@ class QuickbaseSync:
         while True:
             contact_batch = _execute_with_retry(lambda o=offset: self._supabase.table('customer_contacts').select(
                 'id, email_address'
-            ).eq('client_id', self._client_id).range(o, o + 999).execute())
+            ).eq('client_id', self._client_id).order('id').range(o, o + 999).execute())
             rows = contact_batch.data or []
             all_contacts.extend(rows)
             if len(rows) == 0:
@@ -1496,7 +1496,7 @@ class QuickbaseSync:
                     'id, matched_contact_id, qb_customer_id'
                 ).eq('client_id', self._client_id).not_.is_(
                     'matched_contact_id', 'null'
-                ).range(o, o + 999).execute())
+                ).order('id').range(o, o + 999).execute())
                 rows = qb_contacts_page.data or []
                 all_matched_contacts.extend(rows)
                 if len(rows) == 0:
@@ -1514,7 +1514,7 @@ class QuickbaseSync:
                     'id, qb_record_id, customer_key_id'
                 ).eq('client_id', self._client_id).is_(
                     'matched_company_id', 'null'
-                ).range(o, o + 999).execute())
+                ).order('id').range(o, o + 999).execute())
                 rows = unmatched_page.data or []
                 all_unmatched_custs.extend(rows)
                 if len(rows) == 0:
@@ -1676,7 +1676,7 @@ class QuickbaseSync:
                 'growth_90d, days_since_last_invoice, recency_days, industry'
             ).eq('client_id', self._client_id).not_.is_(
                 'matched_company_id', 'null'
-            ).range(o, o + 999).execute())
+            ).order('id').range(o, o + 999).execute())
             rows = page.data or []
             all_matched.extend(rows)
             if len(rows) == 0:
