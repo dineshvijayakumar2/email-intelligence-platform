@@ -13,7 +13,7 @@ A comprehensive reference for every database object in the Email Intelligence Pl
 - **Extensions:** pgvector 0.8.0, pg_stat_statements 1.11, pgcrypto 1.3, uuid-ossp 1.1, pg_graphql 1.5.11, supabase_vault 0.3.1, plpgsql 1.0
 - **Access:** PostgREST auto-generates REST API; RPC functions exposed as `POST /rest/v1/rpc/<fn_name>`
 - **Auth:** Supabase Auth (JWT) with Row-Level Security on select tables
-- **Migrations:** incremental SQL scripts in `scripts/migrations/` (001–116), applied via `exec_sql` RPC + PostgREST schema reload
+- **Migrations:** incremental SQL scripts in `scripts/migrations/` (001–122), applied via `exec_sql` RPC + PostgREST schema reload
 
 ### Schema Domains
 
@@ -1406,6 +1406,12 @@ Without this, the table will be invisible to the Data API (PostgREST). See also 
 - Use `.in_()` with max 500 IDs per call
 - ThreadPoolExecutor limited to 3 workers for Supabase connection safety
 - Python-side filtering for NULL handling (not Supabase `.neq()`)
+
+---
+
+## 13. Recent Schema Changes
+
+- **Migration 122 (2026-06-12) — contact response-time direction split.** Rewrote the contact-average rollup: `calculate_all_contact_response_times` (which returned rows and was silently PostgREST `db-max-rows`-capped at 1,000 of 21,655 contacts) replaced by `update_all_contact_response_times`, which performs the UPDATE server-side and returns only a count (no cap; 4,123 contacts updated). **Column-semantics change:** `avg_response_time_seconds` (our reply latency) and `their_avg_response_time` are now computed separately by `is_outbound`; previously both held the same undirected `AVG(response_time_seconds)`. Any consumer that read the two as interchangeable must be updated. `update_contact_averages()` in `response_time_tracker.py` now calls the single new RPC. Verified against the known-good Python `_calculate_contact_response_times` (717/946 sampled contacts show distinct our/their values). Note: extreme `their_*` magnitudes may warrant an outlier/staleness guard before use in comparisons.
 
 ---
 

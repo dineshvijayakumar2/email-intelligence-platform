@@ -412,60 +412,37 @@ class ResponseTimeTracker:
 
     def update_contact_averages(self) -> Dict:
         """
-        Update avg_response_time_seconds for all contacts based on response metrics
+        Update avg_response_time_seconds / their_avg_response_time for all of the
+        client's contacts based on response metrics.
 
-        Uses database-side calculation + batch update for maximum performance
-        - Before: 744 individual SELECT queries + 744 UPDATEs (~5 minutes)
-        - After: 1 calculation query + 1 batch UPDATE (~2 seconds)
-
-        Calculates average response time for:
-        - Outbound → Inbound (their response time to us)
-        - Inbound → Outbound (our response time to them)
+        Calculation AND update both run server-side in a single RPC
+        (update_all_contact_response_times, migration 122). This:
+        - splits the two directions correctly:
+            * outbound responding email → WE replied → avg_response_time_seconds
+            * inbound  responding email → THEY replied → their_avg_response_time
+        - avoids the PostgREST db-max-rows cap that previously truncated the
+          calc-then-batch-update path at 1000 contacts (the older RPC RETURNED
+          rows to the client; this one performs the UPDATE in SQL and returns
+          only the affected-row count).
 
         Returns:
             Update results
         """
-        logger.info("Updating contact average response times (database-side calculation)")
+        logger.info("Updating contact average response times (server-side calc + update)")
 
         try:
-            # Calculate all averages in ONE database query
-            logger.info(f"Calculating all contact response times on database...")
-
-            calc_result = self.client.rpc(
-                'calculate_all_contact_response_times',
+            result = self.client.rpc(
+                'update_all_contact_response_times',
                 {'p_client_id': self.client_id}
             ).execute()
 
-            calculations = calc_result.data
-            logger.info(f"Calculated response times for {len(calculations)} contacts")
+            # RPC returns a scalar INTEGER (affected row count).
+            updated_count = result.data if isinstance(result.data, int) else (result.data or 0)
 
-            # Prepare batch update
-            updates = []
-            for calc in calculations:
-                updates.append({
-                    'contact_id': calc['contact_id'],
-                    'avg_response_time_seconds': str(calc['avg_response_time_seconds']),
-                    'their_avg_response_time': str(calc['their_avg_response_time'])
-                })
-
-            # Batch update via RPC
-            if updates:
-                logger.info(f"Batch updating {len(updates)} contacts with response times")
-
-                result = self.client.rpc(
-                    'batch_update_contact_analytics',
-                    {'updates': updates}
-                ).execute()
-
-                updated_count = result.data[0]['updated_count'] if result.data else 0
-
-                logger.info(f"Contact response times updated: {updated_count} contacts (database-calculated)")
-            else:
-                updated_count = 0
-                logger.info("No contacts with response time data to update")
+            logger.info(f"Contact response times updated: {updated_count} contacts (database-calculated)")
 
             return {
-                'total_contacts': len(calculations),
+                'total_contacts': updated_count,
                 'updated_count': updated_count
             }
 
