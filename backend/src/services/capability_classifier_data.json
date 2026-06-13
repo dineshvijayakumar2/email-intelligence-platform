@@ -4,7 +4,7 @@
     "operation": "Cello",
     "machine": "Celloglazer - Autobond",
     "count": 588,
-    "mvp_tag": "(none)",
+    "mvp_tag": "Specialty Finishing",
     "row_type": "process",
     "has_coating": true
   },
@@ -22,7 +22,7 @@
     "operation": "Gloss",
     "machine": "Celloglazer - Autobond",
     "count": 46,
-    "mvp_tag": "(none)",
+    "mvp_tag": "Specialty Finishing",
     "row_type": "process",
     "has_coating": true
   },
@@ -40,7 +40,7 @@
     "operation": "Soft-touch",
     "machine": "Celloglazer - Autobond",
     "count": 14,
-    "mvp_tag": "(none)",
+    "mvp_tag": "Specialty Finishing",
     "row_type": "process",
     "has_coating": true
   },
@@ -49,7 +49,7 @@
     "operation": "Matte",
     "machine": "Celloglazer - Autobond",
     "count": 6,
-    "mvp_tag": "(none)",
+    "mvp_tag": "Specialty Finishing",
     "row_type": "process",
     "has_coating": true
   },
@@ -58,7 +58,7 @@
     "operation": "Anti-scuff matte",
     "machine": "Celloglazer - Autobond",
     "count": 4,
-    "mvp_tag": "(none)",
+    "mvp_tag": "Specialty Finishing",
     "row_type": "process",
     "has_coating": true
   },
@@ -76,7 +76,7 @@
     "operation": "Cello",
     "machine": null,
     "count": 1,
-    "mvp_tag": "(none)",
+    "mvp_tag": "Specialty Finishing",
     "row_type": "process",
     "has_coating": true
   },
@@ -3863,7 +3863,7 @@
     "operation": "External die-cutting",
     "machine": "Foil Emboss Die Cut - ThermoTy",
     "count": 1,
-    "mvp_tag": "Embellishment",
+    "mvp_tag": "Specialty Finishing",
     "row_type": "production",
     "has_outsource_component": true
   },
@@ -3926,7 +3926,7 @@
     "operation": "Printing",
     "machine": "LED UV Printer - SwissQ",
     "count": 768,
-    "mvp_tag": "Embellishment",
+    "mvp_tag": "Wide Format",
     "row_type": "production"
   },
   {
@@ -3942,7 +3942,7 @@
     "operation": "Hand Lay onto SwissQ",
     "machine": "No machine",
     "count": 101,
-    "mvp_tag": "Embellishment",
+    "mvp_tag": "Wide Format",
     "row_type": "production"
   },
   {
@@ -3950,7 +3950,7 @@
     "operation": "SwissQ Spot Gloss Varnish",
     "machine": "No machine",
     "count": 35,
-    "mvp_tag": "Embellishment",
+    "mvp_tag": "Wide Format",
     "row_type": "production"
   },
   {
@@ -3958,7 +3958,7 @@
     "operation": "SwissQ Spot Gloss Hi-Build Varnish",
     "machine": "No machine",
     "count": 25,
-    "mvp_tag": "Embellishment",
+    "mvp_tag": "Wide Format",
     "row_type": "production"
   },
   {
@@ -3966,7 +3966,7 @@
     "operation": "SwissQ Spot Gloss Varnish",
     "machine": "LED UV Printer - SwissQ",
     "count": 8,
-    "mvp_tag": "Embellishment",
+    "mvp_tag": "Wide Format",
     "row_type": "production"
   },
   {
@@ -3982,7 +3982,7 @@
     "operation": "SwissQ Spot Gloss Hi-Build Varnish",
     "machine": "LED UV Printer - SwissQ",
     "count": 5,
-    "mvp_tag": "Embellishment",
+    "mvp_tag": "Wide Format",
     "row_type": "production"
   },
   {
@@ -3990,7 +3990,7 @@
     "operation": "Printing",
     "machine": "LED UV Printer - SwissQ",
     "count": 5,
-    "mvp_tag": "Embellishment",
+    "mvp_tag": "Wide Format",
     "row_type": "production"
   },
   {
@@ -4030,7 +4030,7 @@
     "operation": "Zund large format cutting",
     "machine": "Foil Emboss Die Cut - ThermoTy",
     "count": 1,
-    "mvp_tag": "Embellishment",
+    "mvp_tag": "Wide Format",
     "row_type": "production"
   },
   {
@@ -4054,7 +4054,7 @@
     "operation": "Hand Lay onto SwissQ",
     "machine": "Casebinding Inhouse",
     "count": 1,
-    "mvp_tag": "Embellishment",
+    "mvp_tag": "Wide Format",
     "row_type": "production"
   },
   {
@@ -4169,7 +4169,7 @@
     "operation": "Fuse back to back",
     "machine": "Large format laminator",
     "count": 2,
-    "mvp_tag": "Hard Cover Books",
+    "mvp_tag": "Specialty Finishing",
     "row_type": "production",
     "has_coating": true
   },
@@ -4178,7 +4178,7 @@
     "operation": "JOB - Manual Section Sewing",
     "machine": "Section Sewer - Manual",
     "count": 38,
-    "mvp_tag": "Hard Cover Books",
+    "mvp_tag": "Soft Cover Books",
     "row_type": "production",
     "has_sewing": true
   },
@@ -4187,7 +4187,7 @@
     "operation": "SECTION - Manual Section Sewing",
     "machine": "Section Sewer - Manual",
     "count": 21,
-    "mvp_tag": "Hard Cover Books",
+    "mvp_tag": "Soft Cover Books",
     "row_type": "production",
     "has_sewing": true
   },
@@ -4196,7 +4196,7 @@
     "operation": "Section sewing binding 440x350mm Max Size",
     "machine": "Section Sewer - Manual",
     "count": 21,
-    "mvp_tag": "Hard Cover Books",
+    "mvp_tag": "Soft Cover Books",
     "row_type": "production",
     "has_sewing": true
   },
@@ -4205,7 +4205,7 @@
     "operation": "Oversewn exposed spine (loose ends)",
     "machine": "Sewing Machine - Juki",
     "count": 13,
-    "mvp_tag": "Hard Cover Books",
+    "mvp_tag": "Soft Cover Books",
     "row_type": "production",
     "has_sewing": true
   },
@@ -4214,7 +4214,7 @@
     "operation": "Oversewn wrapped cover (loose ends)",
     "machine": "Sewing Machine - Juki",
     "count": 3,
-    "mvp_tag": "Hard Cover Books",
+    "mvp_tag": "Soft Cover Books",
     "row_type": "production",
     "has_sewing": true
   },
@@ -4223,7 +4223,7 @@
     "operation": "Oversewn exposed spine (tied ends)",
     "machine": "Sewing Machine - Juki",
     "count": 3,
-    "mvp_tag": "Hard Cover Books",
+    "mvp_tag": "Soft Cover Books",
     "row_type": "production",
     "has_sewing": true
   },
@@ -4232,7 +4232,7 @@
     "operation": "Oversewn DIFFICULT exposed spine (loose ends)",
     "machine": "Sewing Machine - Juki",
     "count": 2,
-    "mvp_tag": "Hard Cover Books",
+    "mvp_tag": "Soft Cover Books",
     "row_type": "production",
     "has_sewing": true
   },
@@ -4241,7 +4241,7 @@
     "operation": "Oversewn wrapped cover (tied ends)",
     "machine": "Sewing Machine - Juki",
     "count": 2,
-    "mvp_tag": "Hard Cover Books",
+    "mvp_tag": "Soft Cover Books",
     "row_type": "production",
     "has_sewing": true
   },
@@ -4250,7 +4250,7 @@
     "operation": "Oversewn wrapped cover (loose ends)",
     "machine": "Hand Padding",
     "count": 1,
-    "mvp_tag": "Hard Cover Books",
+    "mvp_tag": "Soft Cover Books",
     "row_type": "production",
     "has_sewing": true
   },
@@ -4259,7 +4259,7 @@
     "operation": "Oversewn exposed spine (loose ends)",
     "machine": "Hand Padding",
     "count": 1,
-    "mvp_tag": "Hard Cover Books",
+    "mvp_tag": "Soft Cover Books",
     "row_type": "production",
     "has_sewing": true
   },
@@ -4268,7 +4268,7 @@
     "operation": "Oversewn DIFFICULT wrapped cover (tied ends)",
     "machine": "Sewing Machine - Juki",
     "count": 1,
-    "mvp_tag": "Hard Cover Books",
+    "mvp_tag": "Soft Cover Books",
     "row_type": "production",
     "has_sewing": true
   },
@@ -4277,7 +4277,7 @@
     "operation": "Oversewn DIFFICULT exposed spine (tied ends)",
     "machine": "Sewing Machine - Juki",
     "count": 1,
-    "mvp_tag": "Hard Cover Books",
+    "mvp_tag": "Soft Cover Books",
     "row_type": "production",
     "has_sewing": true
   },
@@ -4303,7 +4303,7 @@
     "operation": "Fuse back to back",
     "machine": "Teco gluing",
     "count": 107,
-    "mvp_tag": "Hard Cover Books",
+    "mvp_tag": "Specialty Finishing",
     "row_type": "production"
   },
   {
@@ -4367,7 +4367,7 @@
     "operation": "Fuse or mounting",
     "machine": "Teco gluing",
     "count": 17,
-    "mvp_tag": "Hard Cover Books",
+    "mvp_tag": "Specialty Finishing",
     "row_type": "production"
   },
   {
@@ -4375,7 +4375,7 @@
     "operation": "Adds set-up charge + per unit price to attach one D-ring. You must manually enter the item charge based on the D-ring size/colour.",
     "machine": "No machine",
     "count": 14,
-    "mvp_tag": "Hard Cover Books",
+    "mvp_tag": "Specialty Finishing",
     "row_type": "production"
   },
   {
@@ -4439,7 +4439,7 @@
     "operation": "1 x Book Ribbon",
     "machine": "No machine",
     "count": 2,
-    "mvp_tag": "Hard Cover Books",
+    "mvp_tag": "Specialty Finishing",
     "row_type": "production"
   },
   {
@@ -4447,7 +4447,7 @@
     "operation": "Adds set-up charge + per unit price to attach one D-ring. You must manually enter the item charge based on the D-ring size/colour.",
     "machine": "Casebinding Inhouse",
     "count": 2,
-    "mvp_tag": "Hard Cover Books",
+    "mvp_tag": "Specialty Finishing",
     "row_type": "production"
   },
   {
@@ -4554,7 +4554,7 @@
     "operation": "Adds set-up charge + m2 area rate + per item price to glue Text Block to Cover by hand, Includes Nipping.",
     "machine": "Outsource",
     "count": 1,
-    "mvp_tag": "Soft Cover Books",
+    "mvp_tag": "Hard Cover Books",
     "row_type": "production",
     "has_outsource_component": true
   },

@@ -40,17 +40,60 @@ DEFAULT_RUSH_SETTINGS = {
     "gap_count_threshold": 3,                    # factory_rush without am_rush count → surface in recommendations
 }
 
-# Keyword fallback rules: if no exact match, check these keywords in (dept+op+machine)
+# Keyword fallback rules: if no exact match, check these keywords in (dept+op+machine).
+# Evaluated in ORDER — first list whose keyword is a substring wins. The order and keyword
+# sets mirror the capability_tag_audit TRUE taxonomy (capability_tag_audit.json /
+# reconcile_pollution.json) so the classifier reproduces the audit's clean base rates.
+#
+# Pollution corrections baked in here (the reason this classifier supersedes qb_capability_tag,
+# which mis-routes by Department — see feedback_qb_capability_tag_pollution):
+#   - cello / celloglaze / laminate / matte / gloss / soft-touch / velvet / anti-scuff /
+#     varnish / scuff  → Specialty Finishing  (NOT Embellishment)
+#   - fuse / fuse back to back / mount          → Specialty Finishing  (NOT Hard Cover)
+#   - perfect-bind / saddle / section / oversew → Soft Cover Books      (NOT Hard Cover)
+#   - genuine foil / spot-uv / emboss / deboss / scodix / hot-foil → Embellishment
+#   - genuine casebind / casing / end-paper / head-and-tail / fusing-board → Hard Cover Books
+# These are the CODE DEFAULT; the live source is client_taxonomy_config.classifier_rules
+# config_data['keyword_rules'] (loaded per-client, falls back to this default when absent).
 _KEYWORD_RULES = [
-    (["wide format", "wf print", "wf lam", "wf mount"], "Wide Format"),
-    (["foil", "scodix", "spot uv", "varnish", "emboss", "digital foil"], "Embellishment"),
-    (["perfect bind", "saddle stitch", "saddle sewn", "wire bind", "case bind", "section sew", "oversew"], "Soft Cover Books"),
-    (["casebind", "casebinding", "section sewing", "oversewing"], "Hard Cover Books"),
-    (["zund", "laser cut", "die cut"], "Specialty Finishing"),
-    (["design", "artwork", "pre-press", "prepress"], "Design Services"),
-    (["display", "install", "signage"], "Display / Installation"),
+    (["foil", "scodix", "spot uv", "emboss", "deboss", "stamping die", "hot foil", "digital foil"], "Embellishment"),
+    (["wide format", "wf print", "zund", "large format", "banner", "pull up", "decal", "vinyl",
+      "mesh", "swissq", "laminate 6", "laminate setup", "groove cut", "eyelet", "hanging kit",
+      "poles", "application tape", "top-cut", "top cut"], "Wide Format"),
+    (["casebind", "casing", "text block to cover", "head & tail", "head and tail", "end paper", "fusing board"], "Hard Cover Books"),
+    (["perfect bind", "saddle stitch", "saddle sew", "wire bind", "pur bind", "false cover",
+      "section", "oversew", "padding", "coil bind", "spiral", "wire-o", "hand saddle"], "Soft Cover Books"),
+    (["install", "signage"], "Display / Installation"),
+    (["prepress", "pre-press", "artwork", "preflight", "proof", "mock-up", "mockup", "layout",
+      "variable data setup", "complexity", "online setup", "internal setup", "online admin"], "Design Services"),
+    (["cello", "celloglaze", "soft-touch", "soft touch", "velvet", "anti-scuff", "scuff", "varnish",
+      "matt", "gloss", "fuse", "mount", "round corner", "die cut", "die-cut", "laser", "perforat",
+      "nip", "d-ring", "magnet", "ribbon", "packag", "precoat", "coat", "laminat", "sleeking"], "Specialty Finishing"),
     (["sheetfed", "offset", "litho", "digital print", "indigo", "vdp", "variable data"], "Flat Sheets"),
 ]
+
+
+def _coerce_keyword_rules(raw) -> list:
+    """Normalize config-stored keyword rules to [(["kw", ...], "Tag"), ...].
+
+    Accepts the config_data['keyword_rules'] shape — a list of dicts
+    {"keywords": [...], "tag": "..."} (UI-editable) — or the code-default
+    list-of-tuples shape. Returns the code default if raw is empty/invalid.
+    """
+    if not raw:
+        return _KEYWORD_RULES
+    out = []
+    for r in raw:
+        if isinstance(r, dict):
+            kws = r.get("keywords") or []
+            tag = r.get("tag")
+        elif isinstance(r, (list, tuple)) and len(r) == 2:
+            kws, tag = r[0], r[1]
+        else:
+            continue
+        if tag and isinstance(kws, list) and kws:
+            out.append(([str(k).lower() for k in kws], str(tag)))
+    return out or _KEYWORD_RULES
 
 # ── In-memory cache ──────────────────────────────────────────────────────────
 # client_id → {version: int, rules: dict, tags: list}
@@ -124,9 +167,13 @@ def _seed_defaults(supabase_client, client_id: str) -> None:
         {
             "client_id":   client_id,
             "config_type": "classifier_rules",
-            "config_data": {"rules": seed_rules},
+            "config_data": {
+                "rules": seed_rules,
+                # config-driven keyword fallback (UI-editable); seeded from the code default
+                "keyword_rules": [{"keywords": kws, "tag": tag} for kws, tag in _KEYWORD_RULES],
+            },
             "version":     1,
-            "description": f"Classifier rules — {len(seed_rules)} tuples auto-seeded from Carbon8 taxonomy",
+            "description": f"Classifier rules — {len(seed_rules)} tuples + {len(_KEYWORD_RULES)} keyword rules auto-seeded from Carbon8 taxonomy",
         },
         {
             "client_id":   client_id,
@@ -169,12 +216,16 @@ def _load_client_rules(supabase_client, client_id: str) -> dict:
             rows = {r["config_type"]: r for r in (result.data or [])}
 
         rules_row = rows.get("classifier_rules", {})
-        rules_list = (rules_row.get("config_data") or {}).get("rules", [])
+        rules_cfg = rules_row.get("config_data") or {}
+        rules_list = rules_cfg.get("rules", [])
         version = rules_row.get("version", 1)
 
         return {
             "version": version,
             "lookup": _build_lookup(rules_list),
+            # Keyword fallback rules are now config-driven (UI-editable). Falls back to the
+            # corrected code default when the client config has no keyword_rules key yet.
+            "keyword_rules": _coerce_keyword_rules(rules_cfg.get("keyword_rules")),
             "rush_pattern": (
                 (rows.get("rush_settings", {}).get("config_data") or {})
                 .get("am_rush_pattern", DEFAULT_RUSH_SETTINGS["am_rush_pattern"])
@@ -182,7 +233,8 @@ def _load_client_rules(supabase_client, client_id: str) -> dict:
         }
     except Exception as e:
         logger.error(f"Failed to load classifier rules for client {client_id}: {e}")
-        return {"version": 0, "lookup": {}, "rush_pattern": DEFAULT_RUSH_SETTINGS["am_rush_pattern"]}
+        return {"version": 0, "lookup": {}, "keyword_rules": _KEYWORD_RULES,
+                "rush_pattern": DEFAULT_RUSH_SETTINGS["am_rush_pattern"]}
 
 
 def _get_client_state(supabase_client, client_id: str) -> dict:
@@ -239,9 +291,9 @@ def classify(
     match = lookup.get(key)
 
     if not match:
-        # Keyword fallback on combined text
+        # Keyword fallback on combined text (config-driven, code default if unset)
         combined = f"{dept or ''} {op or ''} {machine or ''}".lower()
-        for keywords, tag in _KEYWORD_RULES:
+        for keywords, tag in state["keyword_rules"]:
             if any(kw in combined for kw in keywords):
                 match = {"tag": tag, "granular_tags": [], "flags": [], "row_type": None}
                 break
@@ -286,6 +338,7 @@ def reclassify_all(supabase_client, client_id: str) -> int:
     _cache.pop(client_id, None)
     state = _get_client_state(supabase_client, client_id)
     lookup = state["lookup"]
+    keyword_rules = state["keyword_rules"]
     rush_pattern = state["rush_pattern"]
 
     logger.info(f"[Classifier] Starting reclassify_all for client {client_id} ({len(lookup)} rules loaded)")
@@ -324,7 +377,7 @@ def reclassify_all(supabase_client, client_id: str) -> int:
 
             if not match:
                 combined = f"{dept or ''} {op or ''} {machine or ''}".lower()
-                for keywords, tag in _KEYWORD_RULES:
+                for keywords, tag in keyword_rules:
                     if any(kw in combined for kw in keywords):
                         match = {"tag": tag, "granular_tags": [], "flags": [], "row_type": None}
                         break
