@@ -26,6 +26,8 @@ ASSIGN = json.load(open(os.path.join(HERE, "card_am_assignment.json"), encoding=
 CARDS = {c["company_id"]: c for c in json.load(open(os.path.join(HERE, "outreach_cards_50.json"), encoding="utf-8"))["cards"]}
 BIG = json.load(open(os.path.join(HERE, "big_accounts.json"), encoding="utf-8"))
 GEN_DATE = "2026-06-14"
+_y, _m, _d = GEN_DATE.split("-")
+DATESTAMP = f"{_d}-{_m}-{_y}"                   # Australian date format DD-MM-YYYY for the filename
 ONLY = ["Ehab", "Kenneth", "Mary", "Peter"]   # Nic + Linda already reviewed/committed
 AM_FULL = {"Nic": "Nic Doyle", "Linda": "Linda D'Arcy", "Ehab": "Ehab Kamel",
            "Kenneth": "Kenneth Beck-Pedersen", "Mary": "Mary Serratore-Howe", "Peter": "Peter Musarra"}
@@ -46,29 +48,12 @@ _sb.rpc("exec_sql", {"query": "NOTIFY pgrst,'reload schema'"}).execute(); time.s
 REV12 = {k: float(v) for k, v in (_sb.rpc("_tmp_cardrev", {"p": _C8, "ids": _cids}).execute().data or {}).items()}
 _sb.rpc("exec_sql", {"query": "DROP FUNCTION IF EXISTS _tmp_cardrev(uuid,uuid[])"}).execute()
 
-# Reorder-CADENCE metric for the rep-facing timing line. The deck measures gaps between individual
-# order DATES, so a customer who places several jobs in the same fortnight shows a tiny median
-# ("every 4 days"). Fix: collapse orders within BURST_DAYS into one ordering OCCASION (a project),
-# then take the median/p90 gap BETWEEN occasions. Presentation-only (deck ranking unchanged).
-BURST_DAYS = 14
-_sb.rpc("exec_sql", {"query": f"""CREATE OR REPLACE FUNCTION _tmp_cadence(p uuid, ids uuid[]) RETURNS jsonb
-LANGUAGE sql STABLE SET search_path=public AS $f$
-WITH d AS (SELECT DISTINCT o.matched_company_id cid, o.date_accepted dt FROM qb_operations o
-           WHERE o.client_id=p AND o.matched_company_id = ANY(ids) AND o.date_accepted IS NOT NULL),
-mk AS (SELECT cid, dt, CASE WHEN lag(dt) OVER (PARTITION BY cid ORDER BY dt) IS NULL
-                            OR dt - lag(dt) OVER (PARTITION BY cid ORDER BY dt) > {BURST_DAYS}
-                       THEN 1 ELSE 0 END newocc FROM d),
-occ AS (SELECT cid, dt, sum(newocc) OVER (PARTITION BY cid ORDER BY dt) oid FROM mk),
-occd AS (SELECT cid, oid, min(dt) odt FROM occ GROUP BY cid, oid),
-g AS (SELECT cid, odt - lag(odt) OVER (PARTITION BY cid ORDER BY odt) gap FROM occd),
-agg AS (SELECT cid, (SELECT count(*) FROM occd o2 WHERE o2.cid=g.cid) n_occ,
-               percentile_cont(0.5) WITHIN GROUP (ORDER BY gap) p50,
-               percentile_cont(0.9) WITHIN GROUP (ORDER BY gap) p90
-        FROM g GROUP BY cid)
-SELECT coalesce(jsonb_object_agg(cid, jsonb_build_object('p50',p50,'p90',p90,'n_occ',n_occ)),'{{}}') FROM agg $f$;"""}).execute()
-_sb.rpc("exec_sql", {"query": "NOTIFY pgrst,'reload schema'"}).execute(); time.sleep(2)
-CADENCE = _sb.rpc("_tmp_cadence", {"p": _C8, "ids": _cids}).execute().data or {}
-_sb.rpc("exec_sql", {"query": "DROP FUNCTION IF EXISTS _tmp_cadence(uuid,uuid[])"}).execute()
+# Reorder cadence (the rep-facing "typically reorder every N days" line) is read straight from each
+# card's back.timing_evidence. The deck now computes p50/p90 on ORDERING OCCASIONS (orders within
+# BURST_DAYS collapsed into one occasion — scripts/db/_outreach_cards_50.py RPC_GAPS) and exposes its
+# own rhythm verdict as timing_evidence.status, so this doc and the deck's timing-driven ranking use a
+# single cadence definition. The separate _tmp_cadence RPC that used to live here (back when the deck
+# still ranked on raw between-order-date gaps) is gone — there is nothing left to keep in sync.
 
 BLUE = RGBColor(0x1F, 0x49, 0x7D)
 GREY = RGBColor(0x70, 0x70, 0x70)
@@ -160,33 +145,29 @@ def fmt_money(v):
     return f"${round(v):,}"
 
 
-DORMANT_DAYS = 365
-
-
 def plain_timing(card):
-    """Rep-facing timing in plain words. The 'typical reorder gap' uses the OCCASION-based cadence
-    (same-project bursts collapsed) so it reads like a real reorder rhythm, not 'every 4 days'.
-    days-since-last-order stays the actual last order; status is re-derived from the corrected gaps.
-    Deck JSON unchanged."""
+    """Rep-facing timing in plain words, read straight from the deck's back.timing_evidence. p50/p90 are
+    the OCCASION-based reorder gaps (same-project bursts collapsed, BURST_DAYS in the deck's RPC_GAPS)
+    and status is the deck's own rhythm verdict, so the doc and the deck's timing-driven ranking agree
+    by construction. days-since-last-order stays the actual last order."""
     te = card["back"]["timing_evidence"]
     days = te.get("days_since_last_order")
     seas = te.get("seasonal") or {}
-    cad = CADENCE.get(card["company_id"]) or {}
-    p50 = cad.get("p50")
-    p90 = cad.get("p90")
-    n_occ = cad.get("n_occ") or 0
-    typ = f"they typically reorder about every {round(p50)} days" if p50 is not None else None
+    status = te.get("status")
+    p50 = te.get("p50_gap_days")
+    n_occ = te.get("n_occasions") or 0
+    typ = f"they typically reorder about every {p50} days" if p50 is not None else None
 
     if days is None:
         base = "No order-date history to read a reorder timing from."
-    elif days > DORMANT_DAYS:
+    elif status == "dormant":
         base = (f"Dormant: last ordered {days} days ago (about {days/365:.1f} years), so this is a "
                 f"reactivation, not a warm reorder.")
-    elif n_occ < 2 or p50 is None:
+    elif p50 is None or n_occ < 2:
         base = f"Only one ordering occasion on record ({days} days ago), so there's no reorder rhythm to read yet."
-    elif p90 is not None and days >= p90:
+    elif status == "overdue":
         base = f"Overdue: last ordered {days} days ago; {typ}, so they're past due."
-    elif days >= p50:
+    elif status == "due_soon":
         base = f"Due soon: last ordered {days} days ago; {typ}, so they're about due."
     else:
         base = f"In cadence: last ordered {days} days ago; {typ}, so they're not due yet."
@@ -336,7 +317,7 @@ def build_doc(am, recs):
     build_opportunities(doc, am, recs)
     build_major_accounts(doc, am, accounts, shifts, drops)
     sanitize_doc(doc)
-    fn = os.path.join(OUTDIR, f"outreach_{am.lower()}.docx")
+    fn = os.path.join(OUTDIR, f"outreach_{am.lower()}_{DATESTAMP}.docx")
     doc.save(fn)
     return fn, len(recs), len(accounts), len(shifts), len(drops)
 
