@@ -26,8 +26,10 @@ ASSIGN = json.load(open(os.path.join(HERE, "card_am_assignment.json"), encoding=
 CARDS = {c["company_id"]: c for c in json.load(open(os.path.join(HERE, "outreach_cards_50.json"), encoding="utf-8"))["cards"]}
 BIG = json.load(open(os.path.join(HERE, "big_accounts.json"), encoding="utf-8"))
 GEN_DATE = "2026-06-14"
-ONLY = ["Nic", "Linda"]
-AM_FULL = {"Nic": "Nic Doyle", "Linda": "Linda D'Arcy"}   # to match big-accounts am_job
+ONLY = ["Ehab", "Kenneth", "Mary", "Peter"]   # Nic + Linda already reviewed/committed
+AM_FULL = {"Nic": "Nic Doyle", "Linda": "Linda D'Arcy", "Ehab": "Ehab Kamel",
+           "Kenneth": "Kenneth Beck-Pedersen", "Mary": "Mary Serratore-Howe", "Peter": "Peter Musarra"}
+NO_MAILBOX = {"Mary", "Peter"}   # no AM mailbox -> contact/email recency may be missing
 
 # trailing-12-month revenue per card company (the card's factors.revenue is ALL-TIME, not 12mo)
 load_dotenv("backend/.env.production" if os.path.exists("backend/.env.production") else "backend/.env")
@@ -124,22 +126,34 @@ def build_opening_note(doc, am, n_cards):
                     "stored: cello and laminate finishing was being counted as \"embellishment,\" which "
                     "inflated that category. That is now fixed at the platform level, so every pitch below "
                     "reads from corrected data.", False, False, None, None)])
-    box2 = doc.add_paragraph()
-    add_runs(box2, [("You will see a lot of Hard Cover / casebound suggestions, and that is the finding, "
-                     "not a glitch. ", True, False, None, BLUE),
-                    ("Once the tagging was clean, hard cover turned out to be the single biggest genuine gap "
-                     "across your book-and-finishing customers: they already buy embellishment, soft cover and "
-                     "finishing, but have not been sold casebound work, and customers with that exact profile "
-                     "take it up at 3 to 4 times the base rate. Each card tells you whether the pitch ",
-                     False, False, None, None),
-                    ("fits the customer's industry", True, False, None, None),
-                    (" (for example a property or trade-print client genuinely does books) or is ",
-                     False, False, None, None),
-                    ("purely statistical", True, False, None, None),
-                    (" (worth a look, no industry signal either way). Where a strong-looking pitch did not fit "
-                     "the customer's business, it is shown as ", False, False, None, None),
-                    ("\"Not pitched\"", True, False, None, None),
-                    (" with the reason, so you can see what the system set aside and why.", False, False, None, None)])
+    if n_cards >= 1:
+        box2 = doc.add_paragraph()
+        add_runs(box2, [("You will see a lot of Hard Cover / casebound suggestions, and that is the finding, "
+                         "not a glitch. ", True, False, None, BLUE),
+                        ("Once the tagging was clean, hard cover turned out to be the single biggest genuine gap "
+                         "across your book-and-finishing customers: they already buy embellishment, soft cover and "
+                         "finishing, but have not been sold casebound work, and customers with that exact profile "
+                         "take it up at 3 to 4 times the base rate. Each card tells you whether the pitch ",
+                         False, False, None, None),
+                        ("fits the customer's industry", True, False, None, None),
+                        (" (for example a property or trade-print client genuinely does books) or is ",
+                         False, False, None, None),
+                        ("purely statistical", True, False, None, None),
+                        (" (worth a look, no industry signal either way). Where a strong-looking pitch did not fit "
+                         "the customer's business, it is shown as ", False, False, None, None),
+                        ("\"Not pitched\"", True, False, None, None),
+                        (" with the reason, so you can see what the system set aside and why.", False, False, None, None)])
+    else:
+        box2 = doc.add_paragraph()
+        add_runs(box2, [("No new cross-sell opportunity cards for you this round ", True, False, None, BLUE),
+                        ("(no customer cleared the confidence and genuine-gap thresholds). Your major accounts are "
+                         "below, with where they stand.", False, False, None, None)])
+    if am in NO_MAILBOX:
+        bn = doc.add_paragraph()
+        add_runs(bn, [("Note on contacts: ", True, False, None, GREY),
+                      ("there is no email mailbox connected for your accounts yet, so contact names and email "
+                       "timing may be missing or thin. Treat a blank contact as \"not in our email data,\" not "
+                       "\"no relationship,\" and confirm the decision-maker before reaching out.", False, True, 9, GREY)])
 
 
 def fmt_money(v):
@@ -193,6 +207,9 @@ def pattern_line(card):
 
 def build_opportunities(doc, am, recs):
     doc.add_heading("Section 1 - Opportunities", level=1)
+    if not recs:
+        doc.add_paragraph("No new cross-sell opportunity cards this round. See your major accounts in Section 2.")
+        return
     doc.add_paragraph("One card per customer. The numbers come straight from QuickBase order history; "
                       "nothing is rounded up. Mark each one in the feedback line.", style="Intense Quote")
     for idx, r in enumerate(recs, 1):
@@ -231,10 +248,13 @@ def build_opportunities(doc, am, recs):
         else:
             add_runs(pf, [("Industry fit: ", True, False, None, None), (fitv, False, False, None, None)])
 
-        # not pitched (suppression) - prominent where present
+        # not pitched (suppression) - prominent where present; the deck field already carries its own label
         if inf.get("not_pitched"):
+            npv = inf["not_pitched"]
+            if npv.startswith("Not pitched: "):
+                npv = npv[len("Not pitched: "):]
             pn = doc.add_paragraph()
-            add_runs(pn, [("Not pitched: ", True, False, None, AMBER), (inf["not_pitched"], False, False, None, None)])
+            add_runs(pn, [("Not pitched: ", True, False, None, AMBER), (npv, False, False, None, None)])
 
         pt = doc.add_paragraph(); add_runs(pt, [("Timing: ", True, False, None, None), (plain_timing(card), False, False, None, None)])
 
@@ -326,22 +346,19 @@ if __name__ == "__main__":
     for c in ASSIGN["cards"]:
         if c.get("am"):
             per_am.setdefault(c["am"], []).append(c)
-    print("Generating NIC + LINDA only (per spec sequence)...\n")
+    print(f"Generating: {', '.join(ONLY)}\n")
     for am in ONLY:
-        recs = per_am.get(am, [])
-        if not recs:
-            print(f"  {am}: no cards"); continue
+        recs = per_am.get(am, [])   # may be empty (Peter) -> major-accounts-only doc
         try:
             fn, n, na, ns, ndp = build_doc(am, recs)
-            # pitch-type mix
             mix = {}
             for r in recs:
                 kp = CARDS[r["company_id"]]["front"]["industry_fit"]["kept_pitch"] or "retention/none"
                 mix[kp] = mix.get(kp, 0) + 1
             supp = sum(1 for r in recs if CARDS[r["company_id"]]["front"]["industry_fit"].get("not_pitched"))
             print(f"  {am}: {n} cards -> {os.path.basename(fn)}")
-            print(f"     pitch mix: {dict(sorted(mix.items(), key=lambda kv:-kv[1]))}")
-            print(f"     major-accounts slice: {na} | shifts surfaced: {ns} | suppressions surfaced: {ndp} | "
+            print(f"     pitch mix: {dict(sorted(mix.items(), key=lambda kv:-kv[1])) or '(none)'}")
+            print(f"     major-accounts slice: {na} | shifts surfaced: {ns} | suppressions surfaced (drops): {ndp} | "
                   f"cards with a 'Not pitched' line: {supp}")
         except PermissionError:
             print(f"  SKIPPED outreach_{am.lower()}.docx - file is open in Word, close and re-run")
