@@ -739,6 +739,8 @@ Largest QB table — individual production operations per job.
 
 Key columns: `operation_id`, `qb_customer_id`, `job_no`, `quote_no`, `operation_name`, `machine`, `department`, `finishing_type`, `job_title`, `date_accepted`, `date_due`, `customer_name`, `customer_code`, `am_job`, `am_customer`, `quantity`, `production_status`, `cost_price`, `cost_plus_price`, `profit_amount`, `profit_pct`, `capability_tags` (jsonb), `has_coating`, `has_sewing`, `has_outsource_component`, `am_rush`, `factory_rush`, `row_type`, `embedding` (vector(768)), `embedding_model`, `embedded_at`, `qb_process_tag`, `qb_capability_tag`, `qb_machine_tier_tag`, `qb_row_type_tag`, `qb_blank_reason_tag`, `qb_embellishment_tag`, `contact_email`, `matched_company_id`.
 
+**Capability resolution (Task 13.7):** `qb_capability_tag` is the QB-synced source of truth but is **read-only and polluted** — QB's formula keys on `department`, so cello finishing lands under Embellishment and "Fuse back to back" under Hard Cover. `capability_tags` (jsonb array) is the **platform-owned correction**, written only by the op-name classifier (`capability_classifier.py`, rules in `client_taxonomy_config`). Consumers resolve capability via the shared `capability_resolution.caps_for_op`: classifier opinion wins, `qb_capability_tag` fills gaps only where the classifier is silent. Sync enrichment (`_classify_operations`) writes classifier output only and never copies the QB tag (migrations 123–124); `capability_tags = NULL` is the never-classified sentinel.
+
 **Unique:** (client_id, qb_record_id)
 
 **Sync notes:**
@@ -965,7 +967,7 @@ These replace row-by-row updates with single-statement bulk operations, reducing
 | `batch_update_embeddings_companies` | p_ids uuid[], p_embeddings vector[], p_embedding_model text, p_embedded_at timestamptz | SECURITY DEFINER, 30s timeout |
 | `batch_update_embeddings_operations` | p_ids uuid[], p_embeddings vector[], p_embedding_model text, p_embedded_at timestamptz | SECURITY DEFINER, 30s timeout |
 | `batch_update_embeddings_quotes` | p_ids uuid[], p_embeddings vector[], p_embedding_model text, p_embedded_at timestamptz | SECURITY DEFINER, 30s timeout |
-| `batch_update_classifications` | p_ids, p_capability_tags, p_has_coating, p_has_sewing, ... | QB operation classification tags |
+| `batch_update_classifications` | p_ids uuid[], p_capability_tags **text[]** (JSON array text, cast `::jsonb` — migration 123), p_has_coating, p_has_sewing, ... | Writes classifier capability_tags + flags; used by reclassify_all and sync enrichment |
 | `batch_update_canonical_threads` | p_updates jsonb | Thread ID resolution results |
 | `batch_update_company_analytics` | updates jsonb | Engagement scores, thread counts |
 | `batch_update_contact_analytics` | updates jsonb | Contact engagement metrics |
@@ -1349,6 +1351,8 @@ These show an "UNRESTRICTED" badge because Postgres cannot apply RLS to views/ma
 | 103 | AI Insights Prompt Update | Updated `insight_company` prompt in `ai_prompt_config` (all 3 rows: global + Newbound + Carbon8) to request `strategic_summary` field and clarify revenue framing as invoiced-to-customer |
 | 104 | Security Definer Fixes | `security_invoker = on` on all 11 regular views; `SET search_path = public` on 10 SECURITY DEFINER functions missing it. Resolves all Supabase Advisor security warnings |
 | 116 | Egress: body_text truncation RPCs | Added `emails_body_left(email_ids uuid[], n int)` and `emails_body_right(...)` — SECURITY DEFINER, search_path=public, clamped n. Pushes fetch-then-truncate to SQL at 4 callsites (role_classifier, analytics thread detail, ai_insights, ai_digest). Measured 91.2% egress reduction on role_classifier pass |
+| 123 | Capability classifier encoding fix (13.7) | `batch_update_classifications.p_capability_tags` jsonb[] → text[] with `::jsonb` cast. Callers send `json.dumps()` text; the old jsonb[] param stored it double-encoded as a jsonb string `"[\"X\"]"`, breaking SQL consumers (`->>0`). Fixes the latent bug in `reclassify_all` and the sync path |
+| 124 | capability_tags NULL sentinel (13.7) | `qb_operations.capability_tags` default `'[]'` → NULL. After the Layer-1 reclassify, `'[]'` is a legitimate classifier result, so the sync's "unclassified" filter moved from `= '[]'` to `IS NULL`; new ops arrive NULL and are classified once |
 
 **Migration application method:** `scripts/db/_run_NNN_via_rest.py` → `exec_sql` RPC + `NOTIFY pgrst, 'reload schema'`; scripts are throwaway and deleted after verification.
 

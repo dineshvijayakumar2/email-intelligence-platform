@@ -434,7 +434,7 @@ Active in production. Company list, company detail, contact list, and contact de
 
 **Sales Opportunities** (promoted to top of company profile, May 2026):
 
-- **Cross-contact capability gaps (Level 1):** For each contact, shows which `qb_capability_tag` categories the company uses that this contact hasn't been on a quote for. Output: `already_buys` (e.g. Flat Sheets, Wide Format) + `untapped_capabilities` (e.g. Hard Cover Books, Specialty Finishing). Aggregated from raw `qb_operations` → `qb_capability_tag`, not the 48+ individual operation names. Excludes shared mailboxes, automated contacts, mailing lists. Flags domain mismatches (contact email domain ≠ company's known domains).
+- **Cross-contact capability gaps (Level 1):** For each contact, shows which capability categories the company uses that this contact hasn't been on a quote for. Output: `already_buys` (e.g. Flat Sheets, Wide Format) + `untapped_capabilities` (e.g. Hard Cover Books, Specialty Finishing). Capability is resolved per operation by the shared resolver `capability_resolution.caps_for_op` (Task 13.7): the corrected op-name classifier (`qb_operations.capability_tags`) is the authority, and the QB formula tag (`qb_capability_tag`) only fills gaps where the classifier is silent. This corrects QB's Department-keyed mis-routing (cello was tagged Embellishment, "Fuse back to back" Hard Cover) so the gaps are real, not artifacts. Aggregated at the capability level, not the 48+ individual operation names. Excludes shared mailboxes, automated contacts, mailing lists. Flags domain mismatches (contact email domain ≠ company's known domains).
 - **Revenue concentration risk:** Triggered when company revenue > $100K but ≤2 contacts are producing orders (out of 3+ total). Queries `contact_persona` view. Shows top revenue contacts with % attribution and unengaged contacts.
 - **Buyer decay risk:** Triggered when the top revenue contact's persona is `inactive_buyer`. Same data source as concentration risk but escalated severity.
 - **Portfolio-wide scan:** `GET /customers/portfolio-insights` scans all companies for a client, returns list sorted by revenue desc.
@@ -775,7 +775,7 @@ The context sent to the LLM is assembled from 5 sources:
 3. **AI signals:** last 20 classified emails via `emails` → `ai_email_intelligence` (bucket distribution).
 4. **Strike rate:** from `CustomerAnalyticsService` — overall conversion %, per-contact breakdown, year-over-year trend.
 5. **Seasonality:** from `CustomerAnalyticsService` — peak/trough months, approaching outreach windows, YTD comparison with prior year.
-6. **Sales opportunities:** from `RecommendationEngine` — revenue concentration/buyer decay risk (top contacts, % attribution), capability gaps per contact (already_buys + untapped at `qb_capability_tag` level), related product affinities.
+6. **Sales opportunities:** from `RecommendationEngine` — revenue concentration/buyer decay risk (top contacts, % attribution), capability gaps per contact (already_buys + untapped, resolved classifier-first via `capability_resolution.caps_for_op`), related product affinities.
 
 All data sources are fault-tolerant — if any fails, it's skipped with a debug log and the remaining context is sent.
 
