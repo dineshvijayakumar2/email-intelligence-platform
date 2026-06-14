@@ -44,6 +44,30 @@ _sb.rpc("exec_sql", {"query": "NOTIFY pgrst,'reload schema'"}).execute(); time.s
 REV12 = {k: float(v) for k, v in (_sb.rpc("_tmp_cardrev", {"p": _C8, "ids": _cids}).execute().data or {}).items()}
 _sb.rpc("exec_sql", {"query": "DROP FUNCTION IF EXISTS _tmp_cardrev(uuid,uuid[])"}).execute()
 
+# Reorder-CADENCE metric for the rep-facing timing line. The deck measures gaps between individual
+# order DATES, so a customer who places several jobs in the same fortnight shows a tiny median
+# ("every 4 days"). Fix: collapse orders within BURST_DAYS into one ordering OCCASION (a project),
+# then take the median/p90 gap BETWEEN occasions. Presentation-only (deck ranking unchanged).
+BURST_DAYS = 14
+_sb.rpc("exec_sql", {"query": f"""CREATE OR REPLACE FUNCTION _tmp_cadence(p uuid, ids uuid[]) RETURNS jsonb
+LANGUAGE sql STABLE SET search_path=public AS $f$
+WITH d AS (SELECT DISTINCT o.matched_company_id cid, o.date_accepted dt FROM qb_operations o
+           WHERE o.client_id=p AND o.matched_company_id = ANY(ids) AND o.date_accepted IS NOT NULL),
+mk AS (SELECT cid, dt, CASE WHEN lag(dt) OVER (PARTITION BY cid ORDER BY dt) IS NULL
+                            OR dt - lag(dt) OVER (PARTITION BY cid ORDER BY dt) > {BURST_DAYS}
+                       THEN 1 ELSE 0 END newocc FROM d),
+occ AS (SELECT cid, dt, sum(newocc) OVER (PARTITION BY cid ORDER BY dt) oid FROM mk),
+occd AS (SELECT cid, oid, min(dt) odt FROM occ GROUP BY cid, oid),
+g AS (SELECT cid, odt - lag(odt) OVER (PARTITION BY cid ORDER BY odt) gap FROM occd),
+agg AS (SELECT cid, (SELECT count(*) FROM occd o2 WHERE o2.cid=g.cid) n_occ,
+               percentile_cont(0.5) WITHIN GROUP (ORDER BY gap) p50,
+               percentile_cont(0.9) WITHIN GROUP (ORDER BY gap) p90
+        FROM g GROUP BY cid)
+SELECT coalesce(jsonb_object_agg(cid, jsonb_build_object('p50',p50,'p90',p90,'n_occ',n_occ)),'{{}}') FROM agg $f$;"""}).execute()
+_sb.rpc("exec_sql", {"query": "NOTIFY pgrst,'reload schema'"}).execute(); time.sleep(2)
+CADENCE = _sb.rpc("_tmp_cadence", {"p": _C8, "ids": _cids}).execute().data or {}
+_sb.rpc("exec_sql", {"query": "DROP FUNCTION IF EXISTS _tmp_cadence(uuid,uuid[])"}).execute()
+
 BLUE = RGBColor(0x1F, 0x49, 0x7D)
 GREY = RGBColor(0x70, 0x70, 0x70)
 GREEN = RGBColor(0x1B, 0x7F, 0x3B)
@@ -122,31 +146,36 @@ def fmt_money(v):
     return f"${round(v):,}"
 
 
+DORMANT_DAYS = 365
+
+
 def plain_timing(card):
-    """Rep-facing timing in plain words (no p50/p90 jargon). Rebuilt from the structured timing
-    evidence; the deck JSON is left as-is. p50 = the customer's typical gap between orders; p90 dropped."""
+    """Rep-facing timing in plain words. The 'typical reorder gap' uses the OCCASION-based cadence
+    (same-project bursts collapsed) so it reads like a real reorder rhythm, not 'every 4 days'.
+    days-since-last-order stays the actual last order; status is re-derived from the corrected gaps.
+    Deck JSON unchanged."""
     te = card["back"]["timing_evidence"]
-    st = te.get("status")
     days = te.get("days_since_last_order")
-    p50 = te.get("p50_gap_days")
     seas = te.get("seasonal") or {}
+    cad = CADENCE.get(card["company_id"]) or {}
+    p50 = cad.get("p50")
+    p90 = cad.get("p90")
+    n_occ = cad.get("n_occ") or 0
     typ = f"they typically reorder about every {round(p50)} days" if p50 is not None else None
 
-    if st == "in_cadence" and days is not None and typ:
-        base = f"In cadence: last ordered {days} days ago; {typ}, so they're not due yet."
-    elif st == "due_soon" and days is not None and typ:
-        base = f"Due soon: last ordered {days} days ago; {typ}, so they're about due."
-    elif st == "overdue" and days is not None and typ:
-        base = f"Overdue: last ordered {days} days ago; {typ}, so they're past due."
-    elif st == "overdue" and days is not None:
-        base = f"Overdue: last ordered {days} days ago, well beyond their usual ordering pattern."
-    elif st == "dormant" and days is not None:
+    if days is None:
+        base = "No order-date history to read a reorder timing from."
+    elif days > DORMANT_DAYS:
         base = (f"Dormant: last ordered {days} days ago (about {days/365:.1f} years), so this is a "
                 f"reactivation, not a warm reorder.")
-    elif st == "single_order" and days is not None:
-        base = f"Only one order on record ({days} days ago), so there's no reorder pattern to read yet."
+    elif n_occ < 2 or p50 is None:
+        base = f"Only one ordering occasion on record ({days} days ago), so there's no reorder rhythm to read yet."
+    elif p90 is not None and days >= p90:
+        base = f"Overdue: last ordered {days} days ago; {typ}, so they're past due."
+    elif days >= p50:
+        base = f"Due soon: last ordered {days} days ago; {typ}, so they're about due."
     else:
-        base = "No order-date history to read a reorder timing from."
+        base = f"In cadence: last ordered {days} days ago; {typ}, so they're not due yet."
 
     if seas.get("approaching") and seas.get("peak_month"):
         base += f" They also tend to pick up around {seas['peak_month']}, which is coming up."
