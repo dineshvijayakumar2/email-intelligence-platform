@@ -31,7 +31,7 @@ DEFAULT_CAPABILITY_TAGS = [
     {"tag_id": "embellishment",      "name": "Embellishment",        "color": "#EC4899", "description": "Foil, spot UV, varnish, digital foil, embossing"},
     {"tag_id": "specialty_finishing","name": "Specialty Finishing",  "color": "#EF4444", "description": "Zund, laser cut, die cut"},
     {"tag_id": "design_services",    "name": "Design Services",      "color": "#6366F1", "description": "Design, artwork, pre-press"},
-    {"tag_id": "display_install",    "name": "Display / Installation","color": "#14B8A6", "description": "Display, signage, installation"},
+    {"tag_id": "display_install",    "name": "Display/Installation","color": "#14B8A6", "description": "Display, signage, installation"},
 ]
 
 DEFAULT_RUSH_SETTINGS = {
@@ -63,7 +63,7 @@ _KEYWORD_RULES = [
     (["casebind", "casing", "text block to cover", "head & tail", "head and tail", "end paper", "fusing board"], "Hard Cover Books"),
     (["perfect bind", "saddle stitch", "saddle sew", "wire bind", "pur bind", "false cover",
       "section", "oversew", "padding", "coil bind", "spiral", "wire-o", "hand saddle"], "Soft Cover Books"),
-    (["install", "signage"], "Display / Installation"),
+    (["install", "signage"], "Display/Installation"),
     (["prepress", "pre-press", "artwork", "preflight", "proof", "mock-up", "mockup", "layout",
       "variable data setup", "complexity", "online setup", "internal setup", "online admin"], "Design Services"),
     (["cello", "celloglaze", "soft-touch", "soft touch", "velvet", "anti-scuff", "scuff", "varnish",
