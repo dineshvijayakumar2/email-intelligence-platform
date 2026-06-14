@@ -25,7 +25,7 @@ os.makedirs(OUTDIR, exist_ok=True)
 ASSIGN = json.load(open(os.path.join(HERE, "card_am_assignment.json"), encoding="utf-8"))
 CARDS = {c["company_id"]: c for c in json.load(open(os.path.join(HERE, "outreach_cards_50.json"), encoding="utf-8"))["cards"]}
 BIG = json.load(open(os.path.join(HERE, "big_accounts.json"), encoding="utf-8"))
-GEN_DATE = "2026-06-14"
+GEN_DATE = "2026-06-15"                         # deck as-of date (matches _outreach_cards_50.py TODAY)
 _y, _m, _d = GEN_DATE.split("-")
 DATESTAMP = f"{_d}-{_m}-{_y}"                   # Australian date format DD-MM-YYYY for the filename
 ONLY = ["Nic", "Linda", "Ehab", "Kenneth", "Mary", "Peter"]   # all six — Nic/Linda re-included so their docs match the occasion-cadence deck regen (ranks/timing shifted)
