@@ -37,10 +37,24 @@ SELECT coalesce(jsonb_agg(jsonb_build_object('cid',cid,'cap',cap,'j',j)),'[]')
 FROM (SELECT cid, cap, count(DISTINCT job_no) j FROM op
       WHERE cap IS NOT NULL AND length(cap)>1 GROUP BY 1,2) t;
 $fn$;"""
+# (a) coverage + (b) shape-normalization check over ALL rows
+SHAPE_FN = f"""CREATE OR REPLACE FUNCTION _tmp_vshape(p uuid) RETURNS jsonb LANGUAGE sql STABLE
+SET search_path=public SET statement_timeout='120s' AS $fn$
+SELECT jsonb_build_object(
+  'total', count(*),
+  'array', count(*) FILTER (WHERE jsonb_typeof(o.capability_tags)='array'),
+  'string_legacy', count(*) FILTER (WHERE jsonb_typeof(o.capability_tags)='string'),
+  'null_or_other', count(*) FILTER (WHERE o.capability_tags IS NULL OR jsonb_typeof(o.capability_tags) NOT IN ('array','string')),
+  'empty_array', count(*) FILTER (WHERE o.capability_tags='[]'::jsonb)
+) FROM qb_operations o WHERE o.client_id=p;
+$fn$;"""
 sb.rpc("exec_sql", {"query": FN}).execute()
+sb.rpc("exec_sql", {"query": SHAPE_FN}).execute()
 sb.rpc("exec_sql", {"query": "NOTIFY pgrst,'reload schema'"}).execute(); time.sleep(2)
 rows = sb.rpc("_tmp_vlive", {"p": C8}).execute().data or []
+shape = sb.rpc("_tmp_vshape", {"p": C8}).execute().data
 sb.rpc("exec_sql", {"query": "DROP FUNCTION IF EXISTS _tmp_vlive(uuid)"}).execute()
+sb.rpc("exec_sql", {"query": "DROP FUNCTION IF EXISTS _tmp_vshape(uuid)"}).execute()
 
 comp = defaultdict(dict)
 for r in rows:
@@ -70,13 +84,21 @@ ok = {}
 for cap, tgt in TGT.items():
     pct = base.get(cap, (0, 0.0))[1]
     ok[cap] = abs(pct - tgt) <= TOL
-gate = all(ok.values())
+rates_ok = all(ok.values())
+# (a) coverage: every row carries a written capability_tags (none left NULL/other) ;
+# (b) shape: zero legacy string scalars remain (all normalized to json arrays)
+coverage_ok = (shape["string_legacy"] == 0 and shape["null_or_other"] == 0)
+shape_ok = (shape["string_legacy"] == 0)
+gate = rates_ok and coverage_ok and shape_ok
 json.dump({"universe": N, "base_rates": {k: {"companies": v[0], "pct": v[1]} for k, v in base.items()},
-           "rule_count": len(rules), "audit_targets": TGT, "pass": gate},
+           "rule_count": len(rules), "audit_targets": TGT, "shape": shape,
+           "rates_ok": rates_ok, "coverage_ok": coverage_ok, "shape_ok": shape_ok, "pass": gate},
           open("scripts/db/verify_live_layer1.json", "w", encoding="utf-8"), indent=2)
 
 P = print
 P("=" * 86); P("STEP 3c — LIVE capability_tags verification (reads written column, new precedence)"); P("=" * 86)
+P(f"  (a) coverage: total={shape['total']}  array={shape['array']}  empty_array={shape['empty_array']}")
+P(f"  (b) shape:    legacy_string_scalars={shape['string_legacy']} (must be 0)  null/other={shape['null_or_other']} (must be 0)")
 P(f"  basket universe: {N}")
 for c, (n, p) in sorted(base.items(), key=lambda kv: -kv[1][0]):
     flag = ""
@@ -84,5 +106,6 @@ for c, (n, p) in sorted(base.items(), key=lambda kv: -kv[1][0]):
         flag = f"   <- audit {TGT[c]}% ({'OK' if ok[c] else 'MISS'})"
     P(f"  {c:<22}{n:>9}{p:>8}%{flag}")
 P(f"\n  surviving rules: {len(rules)}")
+P(f"  checks: rates {'OK' if rates_ok else 'MISS'} | coverage {'OK' if coverage_ok else 'FAIL'} | shape {'OK' if shape_ok else 'FAIL'}")
 P(f"  VERDICT: {'PASS — live column reproduces the audit; safe to flip consumer precedence' if gate else 'FAIL — STOP'}")
 P("  JSON -> scripts/db/verify_live_layer1.json")
