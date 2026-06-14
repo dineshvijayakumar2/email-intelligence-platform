@@ -9,6 +9,7 @@ After sync, matches QB records to existing customer_companies/customer_contacts:
 """
 
 import asyncio
+import json
 import logging
 import re
 from datetime import datetime, timezone
@@ -543,40 +544,30 @@ class QuickbaseSync:
         return counts
 
     def _classify_operations(self) -> int:
-        """Classify unclassified operations. QB tags are primary; our classifier fills gaps.
+        """Classify newly-synced operations. The op-name CLASSIFIER is the authority for
+        capability_tags (Layer-1, Task 13.7) — we NEVER copy qb_capability_tag, which mis-routes
+        by Department (cello->Embellishment, fuse->Hard Cover). qb_capability_tag only fills gaps
+        at READ time, via capability_resolution.caps_for_op. Copying it here would re-pollute the
+        column every sync (§10.14 fix-the-tap).
 
-        - If qb_capability_tag is populated: use it as capability_tags (wrapped in list)
-        - If qb_capability_tag is blank: full classifier fallback
-        - Boolean flags (has_coating, has_sewing, etc.) and am_rush always come from classifier
-        - row_type: prefer qb_row_type_tag, fall back to classifier
+        - capability_tags: classifier output only, written as a JSON array via the
+          migration-123 batch_update_classifications RPC (text[] -> ::jsonb cast).
+        - flags (has_coating/sewing/outsource) + am_rush: from the classifier.
+        - row_type: prefer qb_row_type_tag, fall back to the classifier.
 
-        Writes batched via batch_update_qb_capabilities RPC (migration 072) —
-        replaces per-row UPDATE calls with one RPC per 100-row chunk.
+        Incremental: processes rows where capability_tags IS NULL (the never-classified sentinel,
+        migration 124). Already-classified rows ('[]' or ["X"]) are skipped, so empties are not
+        reprocessed. Idempotent — a second run finds no NULL rows and is a no-op.
         """
         total = 0
-        qb_primary = 0
-        classifier_used = 0
         offset = 0
         batch_size = 500
         WRITE_CHUNK = 100  # batch RPC chunk size
 
-        def _flush(updates: list[dict]) -> int:
-            if not updates:
-                return 0
-            try:
-                resp = _execute_with_retry(lambda u=updates: (
-                    self._supabase.rpc('batch_update_qb_capabilities', {'p_updates': u}).execute()
-                ))
-                # RPC returns INTEGER count of rows updated
-                return int(resp.data) if resp and resp.data is not None else len(updates)
-            except Exception as ex:
-                logger.warning(f"[Enrich] classify batch update failed ({len(updates)} rows): {ex}")
-                return 0
-
         while True:
             result = _execute_with_retry(lambda o=offset: self._supabase.table('qb_operations').select(
-                'id, department, operation_name, machine, qb_capability_tag, qb_row_type_tag'
-            ).eq('client_id', self._client_id).eq('capability_tags', '[]').order('id').range(
+                'id, department, operation_name, machine, qb_row_type_tag'
+            ).eq('client_id', self._client_id).is_('capability_tags', 'null').order('id').range(
                 o, o + batch_size - 1
             ).execute())
 
@@ -584,9 +575,8 @@ class QuickbaseSync:
             if not rows:
                 break
 
-            pending: list[dict] = []
+            ids, tags_a, coat, sew, outs, rush_a, rtype = [], [], [], [], [], [], []
             for row in rows:
-                # Always run classifier for boolean flags + am_rush (QB doesn't have these)
                 result_cls = capability_classifier.classify(
                     self._supabase,
                     self._client_id,
@@ -595,48 +585,40 @@ class QuickbaseSync:
                     machine=row.get('machine'),
                     operation_name=row.get('operation_name'),
                 )
-
-                qb_cap = (row.get('qb_capability_tag') or '').strip()
                 qb_row = (row.get('qb_row_type_tag') or '').strip()
+                tags = result_cls['capability_tags']  # classifier only — NEVER copy qb_capability_tag
 
-                if qb_cap:
-                    # QB is source of truth for capability tag
-                    tags = [qb_cap]
-                    qb_primary += 1
-                else:
-                    # No QB tag — full classifier fallback
-                    tags = result_cls['capability_tags']
-                    if tags:
-                        classifier_used += 1
+                ids.append(row['id'])
+                tags_a.append(json.dumps(tags))   # JSON text; RPC casts text[] -> jsonb (mig 123)
+                coat.append(bool(result_cls['has_coating']))
+                sew.append(bool(result_cls['has_sewing']))
+                outs.append(bool(result_cls['has_outsource_component']))
+                rush_a.append(bool(result_cls['am_rush']))
+                rtype.append(qb_row or result_cls['row_type'] or None)
 
-                # Shape for the batch RPC: all text fields; SQL function casts.
-                # capability_tags is comma-separated (the RPC splits via string_to_array).
-                pending.append({
-                    'id':                      row['id'],
-                    'capability_tags':         ','.join(tags) if tags else '',
-                    'has_coating':             str(bool(result_cls['has_coating'])).lower(),
-                    'has_sewing':              str(bool(result_cls['has_sewing'])).lower(),
-                    'has_outsource_component': str(bool(result_cls['has_outsource_component'])).lower(),
-                    'am_rush':                 str(bool(result_cls['am_rush'])).lower(),
-                    'row_type':                qb_row or result_cls['row_type'] or '',
-                })
-
-                if len(pending) >= WRITE_CHUNK:
-                    total += _flush(pending)
-                    pending = []
-
-            # Flush trailing rows from this page
-            total += _flush(pending)
+            for ci in range(0, len(ids), WRITE_CHUNK):
+                j = ci + WRITE_CHUNK
+                try:
+                    _execute_with_retry(lambda a=ci, b=j: self._supabase.rpc('batch_update_classifications', {
+                        'p_ids': ids[a:b],
+                        'p_capability_tags': tags_a[a:b],
+                        'p_has_coating': coat[a:b],
+                        'p_has_sewing': sew[a:b],
+                        'p_has_outsource_component': outs[a:b],
+                        'p_am_rush': rush_a[a:b],
+                        'p_row_type': rtype[a:b],
+                    }).execute())
+                    total += len(ids[ci:j])
+                except Exception as ex:
+                    logger.warning(f"[Enrich] classify batch update failed ({j - ci} rows): {ex}")
 
             offset += len(rows)
             if len(rows) < batch_size:
                 break
             if offset % 5000 == 0:
-                logger.info(f"[Enrich] Classified {total} operations so far "
-                            f"(QB primary: {qb_primary}, classifier: {classifier_used})...")
+                logger.info(f"[Enrich] Classified {total} new operations so far...")
 
-        logger.info(f"[Enrich] Classified {total} operations for client {self._client_id} "
-                    f"(QB primary: {qb_primary}, classifier fallback: {classifier_used})")
+        logger.info(f"[Enrich] Classified {total} new operations for client {self._client_id}")
         return total
 
     def _join_contact_email(self) -> int:
