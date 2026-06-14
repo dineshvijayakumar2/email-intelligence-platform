@@ -122,6 +122,37 @@ def fmt_money(v):
     return f"${round(v):,}"
 
 
+def plain_timing(card):
+    """Rep-facing timing in plain words (no p50/p90 jargon). Rebuilt from the structured timing
+    evidence; the deck JSON is left as-is. p50 = the customer's typical gap between orders; p90 dropped."""
+    te = card["back"]["timing_evidence"]
+    st = te.get("status")
+    days = te.get("days_since_last_order")
+    p50 = te.get("p50_gap_days")
+    seas = te.get("seasonal") or {}
+    typ = f"they typically reorder about every {round(p50)} days" if p50 is not None else None
+
+    if st == "in_cadence" and days is not None and typ:
+        base = f"In cadence: last ordered {days} days ago; {typ}, so they're not due yet."
+    elif st == "due_soon" and days is not None and typ:
+        base = f"Due soon: last ordered {days} days ago; {typ}, so they're about due."
+    elif st == "overdue" and days is not None and typ:
+        base = f"Overdue: last ordered {days} days ago; {typ}, so they're past due."
+    elif st == "overdue" and days is not None:
+        base = f"Overdue: last ordered {days} days ago, well beyond their usual ordering pattern."
+    elif st == "dormant" and days is not None:
+        base = (f"Dormant: last ordered {days} days ago (about {days/365:.1f} years), so this is a "
+                f"reactivation, not a warm reorder.")
+    elif st == "single_order" and days is not None:
+        base = f"Only one order on record ({days} days ago), so there's no reorder pattern to read yet."
+    else:
+        base = "No order-date history to read a reorder timing from."
+
+    if seas.get("approaching") and seas.get("peak_month"):
+        base += f" They also tend to pick up around {seas['peak_month']}, which is coming up."
+    return base
+
+
 def pattern_line(card):
     gr = card["front"]["context"]["gap_rationale"]
     if not gr.get("pitched"):
@@ -176,7 +207,7 @@ def build_opportunities(doc, am, recs):
             pn = doc.add_paragraph()
             add_runs(pn, [("Not pitched: ", True, False, None, AMBER), (inf["not_pitched"], False, False, None, None)])
 
-        pt = doc.add_paragraph(); add_runs(pt, [("Timing: ", True, False, None, None), (f["timing"], False, False, None, None)])
+        pt = doc.add_paragraph(); add_runs(pt, [("Timing: ", True, False, None, None), (plain_timing(card), False, False, None, None)])
 
         fb = doc.add_paragraph()
         add_runs(fb, [("Your call:   ", True, False, None, BLUE),
