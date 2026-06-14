@@ -17,6 +17,7 @@ from typing import Optional, List, Dict, Any, Callable
 from datetime import datetime, timezone, timedelta
 
 from .ai_action_bucket_engine import compute_lifecycle_tier
+from .capability_resolution import caps_for_op
 
 logger = logging.getLogger(__name__)
 
@@ -700,22 +701,26 @@ class StrategicContextBuilder:
         """
         try:
             # ── Source 1: Operations-based tags (order history) ──
+            # Classifier-first via the shared resolver (capability_resolution.caps_for_op): the
+            # corrected op-name classifier wins; qb_capability_tag fills gaps. The old
+            # `qb_capability_tag IS NOT NULL` filter is REMOVED — it hid classifier-only ops
+            # (QB tag null but the classifier has an opinion), which must now be visible. We
+            # therefore page over all matched ops and let the resolver decide (generic ops with
+            # no capability resolve to [] and are skipped), matching the other capability sites.
             cap_counts: dict = {}
             process_set: set = set()
             offset = 0
             while True:
                 resp = self._execute_with_retry(
                     self.client.table("qb_operations")
-                    .select("qb_capability_tag, qb_process_tag")
+                    .select("capability_tags, qb_capability_tag, qb_process_tag")
                     .eq("client_id", self.client_id)
                     .eq("matched_company_id", company_id)
-                    .not_.is_("qb_capability_tag", "null")
                     .range(offset, offset + 999)
                 )
                 rows = resp.data or []
                 for r in rows:
-                    cap = (r.get("qb_capability_tag") or "").strip()
-                    if cap:
+                    for cap in caps_for_op(r):
                         cap_counts[cap] = cap_counts.get(cap, 0) + 1
                     proc = (r.get("qb_process_tag") or "").strip()
                     if proc:

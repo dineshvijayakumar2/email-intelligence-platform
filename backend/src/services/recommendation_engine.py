@@ -19,6 +19,8 @@ import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
+from .capability_resolution import caps_for_op
+
 logger = logging.getLogger(__name__)
 
 CACHE_TTL_HOURS = 24
@@ -30,23 +32,12 @@ CONCENTRATION_MIN_TOTAL_CONTACTS = 3       # > 2 total contacts for the filter (
 
 
 def _caps_for_op(op: dict) -> list:
-    """Capabilities for an operation: qb_capability_tag if present, else the classifier
-    capability_tags fallback. MUST match get_capability_rhythm's definition — qb_capability_tag
-    is NULL on ~40% of ops, and using it alone fabricates capability 'gaps' for work the
-    classifier already recognises (e.g. a customer who foils/embosses but has no QB tag)."""
-    qb = (op.get('qb_capability_tag') or '').strip()
-    if qb:
-        return [qb]
-    raw = op.get('capability_tags') or []
-    if isinstance(raw, str):
-        import json as _json
-        try:
-            raw = _json.loads(raw)
-        except (ValueError, TypeError):
-            raw = [t.strip() for t in raw.split(',') if t.strip()]
-    if not isinstance(raw, list):
-        return []
-    return [t.strip() for t in raw if isinstance(t, str) and len(t.strip()) > 1]
+    """Capabilities for an operation. Thin wrapper over the shared resolver so the precedence
+    lives in exactly one place (capability_resolution.caps_for_op): the corrected op-name
+    CLASSIFIER (capability_tags) wins; qb_capability_tag fills gaps only when the classifier is
+    silent. Inverts the old QB-first order, which mis-routed cello->Embellishment / fuse->Hard
+    Cover via QB's Department keying. MUST match get_capability_rhythm — the shared helper guarantees it."""
+    return caps_for_op(op)
 
 
 class RecommendationEngine:
@@ -287,7 +278,7 @@ class RecommendationEngine:
             all_capabilities: set = set()
 
             for op in operations:
-                caps = _caps_for_op(op)   # qb_capability_tag OR classifier fallback (matches rhythm)
+                caps = _caps_for_op(op)   # classifier-first, QB fills gaps (shared resolver, matches rhythm)
                 if not caps:
                     continue
                 all_capabilities.update(caps)
@@ -691,10 +682,10 @@ class RecommendationEngine:
                 # Will be populated from operations below — defer to capability_breakdown
                 categories = []
 
-            # Operation names + QB tags from qb_operations
+            # Operation names + capability/process tags from qb_operations
             ops_result = (
                 self._supabase.table('qb_operations')
-                .select('operation_name, department, qb_capability_tag, qb_process_tag, qb_embellishment_tag')
+                .select('operation_name, department, capability_tags, qb_capability_tag, qb_process_tag, qb_embellishment_tag')
                 .eq('matched_company_id', company_id)
                 .eq('client_id', self._client_id)
                 .execute()
@@ -712,13 +703,12 @@ class RecommendationEngine:
                     seen.add(op['operation'])
                     unique_ops.append(op)
 
-            # Aggregate QB tag breakdowns
+            # Aggregate capability breakdowns (classifier-first via shared resolver; QB fills gaps)
             cap_counts: dict = {}
             process_set: set = set()
             embellishment_set: set = set()
             for r in (ops_result.data or []):
-                cap = (r.get('qb_capability_tag') or '').strip()
-                if cap:
+                for cap in caps_for_op(r):
                     cap_counts[cap] = cap_counts.get(cap, 0) + 1
                 proc = (r.get('qb_process_tag') or '').strip()
                 if proc:

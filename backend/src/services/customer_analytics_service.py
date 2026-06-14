@@ -17,6 +17,8 @@ from collections import defaultdict
 from datetime import datetime, timezone, timedelta, date
 from typing import Optional
 
+from .capability_resolution import caps_for_op
+
 logger = logging.getLogger(__name__)
 
 CACHE_TTL_HOURS = 24
@@ -264,17 +266,8 @@ class CustomerAnalyticsService:
             if not email:
                 continue
 
-            # Prefer QB capability tag, fall back to classifier tags
-            qb_cap = (op.get('qb_capability_tag') or '').strip()
-            raw_tags = op.get('capability_tags') or []
-            if isinstance(raw_tags, str):
-                import json as _json
-                try:
-                    raw_tags = _json.loads(raw_tags)
-                except (ValueError, TypeError):
-                    raw_tags = [t.strip() for t in raw_tags.split(',') if t.strip()]
-            classifier_tags = raw_tags if isinstance(raw_tags, list) else []
-            tags = [qb_cap] if qb_cap else [t for t in classifier_tags if t and len(t) > 1]
+            # Classifier-first, QB fills gaps (shared resolver)
+            tags = caps_for_op(op)
             if not tags:
                 continue
 
@@ -542,23 +535,14 @@ class CustomerAnalyticsService:
             self._save_cache(company_id, 'capability_rhythm', result)
             return result
 
-        # Collect dates per capability tag — prefer QB tag, fall back to classifier
+        # Collect dates per capability tag — classifier-first, QB fills gaps (shared resolver)
         tag_dates = defaultdict(list)
         for op in ops:
             da = op.get('date_accepted')
             if not da:
                 continue
 
-            qb_cap = (op.get('qb_capability_tag') or '').strip()
-            raw_tags = op.get('capability_tags') or []
-            if isinstance(raw_tags, str):
-                import json as _json
-                try:
-                    raw_tags = _json.loads(raw_tags)
-                except (ValueError, TypeError):
-                    raw_tags = [t.strip() for t in raw_tags.split(',') if t.strip()]
-            classifier_tags = raw_tags if isinstance(raw_tags, list) else []
-            tags = [qb_cap] if qb_cap else [t for t in classifier_tags if t and len(t) > 1]
+            tags = caps_for_op(op)
             if not tags:
                 continue
 
