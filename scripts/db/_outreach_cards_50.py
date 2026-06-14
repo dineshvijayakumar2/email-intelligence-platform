@@ -9,8 +9,11 @@ DIFFERS from the earlier _outreach_prospects_50.py (which took top-50-BY-REVENUE
   * Selection universe = ALL customers, ranked by OPPORTUNITY STRENGTH, take top 50,
     so a small high-confidence well-timed account can beat a big saturated one.
   * Candidate pitch picked by  confidence x lift  (not lift alone).
-  * Timing = PERCENTILE-OF-OWN-GAPS (p50/p90 of the customer's own inter-order gaps),
-    not avg-interval.
+  * Timing = PERCENTILE-OF-OWN-GAPS (p50/p90 of the gaps between the customer's own ordering
+    OCCASIONS — orders within BURST_DAYS collapsed into one occasion), not avg-interval. This
+    matches the per-AM docs' cadence (_gen_am_docs_v2) so the deck's timing-driven ranking and the
+    rep-facing reorder rhythm agree: several jobs in the same fortnight no longer read as a tiny
+    median ("reorders every 4 days").
   * Gap is CONFIRMED at company grain = ZERO jobs in the pitched capability under the
     corrected qb-OR-classifier definition (caps_any, jobs>=1). The >=2-job basket
     threshold is only for rule-mining noise suppression; a 1-job cap is NOT a clean gap
@@ -53,7 +56,7 @@ PAGE = 1000
 TOPN = 50
 POOL = 120                  # email-ground this many top-prelim companies, then re-rank to 50
 WIN = 14
-TODAY = date(2026, 6, 11)
+TODAY = date(2026, 6, 15)
 MONTH_NAMES = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
@@ -68,6 +71,10 @@ EMB_FINISH_FLOOR = 2        # suppress a standalone-Embellishment pitch if the c
 RET_CONST = 0.30            # retention base for no-gap accounts (< a typical conf*lift ~0.45)
 STALE_CONTACT_DAYS = 90     # value contact flagged "confirm contact" if last active > this
 DORMANT_DAYS = 365
+BURST_DAYS = 14             # orders within this many days collapse into ONE ordering occasion (a
+                            # "project") for the reorder-cadence p50/p90, so several jobs in the same
+                            # fortnight don't read as "reorders every 4 days". Must match the value in
+                            # scripts/db/_gen_am_docs_v2.py (which reads the cadence back off these cards).
 EMAIL_CACHE = os.path.join(HERE, "_outreach_cards_email_cache.json")
 FORCE_EMAIL = os.environ.get("FORCE_EMAIL") == "1"
 
@@ -224,9 +231,14 @@ FROM basket b JOIN anyc a USING (cid) LEFT JOIN embj e ON e.cid = b.cid;
 $fn$;
 """
 
-# Per-company order RHYTHM over ALL companies: distinct order dates -> inter-order gaps
-# -> p50/p90 (percentile-of-own-gaps), first/last, monthly histogram (seasonality).
-RPC_GAPS = """
+# Per-company order RHYTHM over ALL companies. Cadence (p50/p90) is measured on ORDERING OCCASIONS,
+# not raw order dates: orders within BURST_DAYS of each other collapse into one occasion (a project),
+# and p50/p90 are the percentiles of the gaps BETWEEN occasions. This is the same occasion collapse
+# the per-AM docs use (_gen_am_docs_v2._tmp_cadence) — so a customer who placed several jobs in one
+# fortnight reads as a real reorder rhythm, not "every 4 days", and the timing rhythm factor that
+# drives the deck ranking agrees with the rep-facing line. first/last/n_orders and the monthly
+# seasonality histogram stay on the RAW distinct order dates (days-since-last is the actual last order).
+RPC_GAPS = f"""
 CREATE OR REPLACE FUNCTION _tmp_card_gaps(p_client uuid)
 RETURNS jsonb LANGUAGE sql STABLE
 SET search_path = public SET statement_timeout = '240s' AS $fn$
@@ -236,27 +248,40 @@ WITH dates AS (
   WHERE o.client_id = p_client AND o.matched_company_id IS NOT NULL
     AND o.date_accepted IS NOT NULL
 ),
-gaps AS (
-  SELECT cid, d, (d - lag(d) OVER (PARTITION BY cid ORDER BY d)) AS gap
+mk AS (   -- 1 marks the first order of a new occasion: the very first, or a gap > BURST_DAYS
+  SELECT cid, d,
+         CASE WHEN lag(d) OVER (PARTITION BY cid ORDER BY d) IS NULL
+                   OR d - lag(d) OVER (PARTITION BY cid ORDER BY d) > {BURST_DAYS}
+              THEN 1 ELSE 0 END AS newocc
   FROM dates
+),
+occ AS (   -- running occasion id per company
+  SELECT cid, d, sum(newocc) OVER (PARTITION BY cid ORDER BY d) AS oid FROM mk
+),
+occd AS (  -- one row per occasion, dated by its first order
+  SELECT cid, oid, min(d) AS odt FROM occ GROUP BY cid, oid
+),
+ogaps AS ( -- gap to the previous occasion (same-fortnight bursts collapsed); NULL for the first
+  SELECT cid, (odt - lag(odt) OVER (PARTITION BY cid ORDER BY odt)) AS gap FROM occd
 ),
 monthly AS (
   SELECT cid, extract(month from d)::int mo, count(*) c FROM dates GROUP BY cid, mo
 ),
-agg AS (
+meta AS (  -- raw-date facts: distinct order count + actual first/last order
+  SELECT cid, count(*) n_orders, min(d) first_d, max(d) last_d FROM dates GROUP BY cid
+),
+agg AS (   -- occasion-based cadence
   SELECT cid,
-         count(*) n_orders,
-         count(gap) n_gaps,
-         min(d) first_d, max(d) last_d,
+         count(*) n_occ,
          percentile_cont(0.5) WITHIN GROUP (ORDER BY gap) p50,
          percentile_cont(0.9) WITHIN GROUP (ORDER BY gap) p90
-  FROM gaps GROUP BY cid
+  FROM ogaps GROUP BY cid
 )
 SELECT coalesce(jsonb_agg(jsonb_build_object(
-  'cid', a.cid, 'n_orders', a.n_orders, 'n_gaps', a.n_gaps,
-  'first', a.first_d, 'last', a.last_d, 'p50', a.p50, 'p90', a.p90,
-  'monthly', (SELECT jsonb_object_agg(mo, c) FROM monthly m WHERE m.cid = a.cid))), '[]'::jsonb)
-FROM agg a;
+  'cid', m.cid, 'n_orders', m.n_orders, 'n_occ', a.n_occ,
+  'first', m.first_d, 'last', m.last_d, 'p50', a.p50, 'p90', a.p90,
+  'monthly', (SELECT jsonb_object_agg(mo, c) FROM monthly mm WHERE mm.cid = m.cid))), '[]'::jsonb)
+FROM meta m JOIN agg a USING (cid);
 $fn$;
 """
 
@@ -465,13 +490,13 @@ def filtered_pick(cid):
 
 
 # ════════════════════════════ PART 1.5: rhythm/timing (all companies) ═════
-print("\nCalling _tmp_card_gaps (all companies, percentile-of-own-gaps)...", flush=True)
+print("\nCalling _tmp_card_gaps (all companies, occasion-based cadence)...", flush=True)
 gaps_json = with_retry(lambda: sb.rpc("_tmp_card_gaps", {"p_client": CARBON8}).execute()).data or []
-comp_gap = {}     # cid -> {n_orders,n_gaps,first,last,p50,p90,monthly}
+comp_gap = {}     # cid -> {n_orders,n_occ,first,last,p50,p90,monthly}  (p50/p90 = occasion gaps)
 for r in gaps_json:
     comp_gap[r["cid"]] = {
         "n_orders": int(r.get("n_orders") or 0),
-        "n_gaps": int(r.get("n_gaps") or 0),
+        "n_occ": int(r.get("n_occ") or 0),
         "first": parse_date(r.get("first")), "last": parse_date(r.get("last")),
         "p50": fnum(r.get("p50")) if r.get("p50") is not None else None,
         "p90": fnum(r.get("p90")) if r.get("p90") is not None else None,
@@ -503,7 +528,8 @@ def timing_for(cid, recency_factor=None):
     is_app, peak, am = seasonal(cid)
     out = {"label": "no strong timing signal", "status": "unknown", "rhythm_factor": 1.0,
            "days_since_last": None, "p50": None, "p90": None, "last_order": None,
-           "n_orders": g["n_orders"] if g else 0, "approaching": False,
+           "n_orders": g["n_orders"] if g else 0, "n_occasions": g["n_occ"] if g else 0,
+           "approaching": False,
            "peak_month": peak, "approach_month": am, "math": "no order-date history"}
     if not g or not g["last"]:
         rf = 1.0
@@ -530,9 +556,13 @@ def timing_for(cid, recency_factor=None):
             out["label"] = f"in cadence — {days}d since last order, under p50 gap {round(p50)}d; no strong reorder signal"
             out["math"] = f"days_since={days} < p50={round(p50)}d"
         else:
-            out["status"], rf = "single_order", 1.0
-            out["label"] = f"single order on record ({days}d ago) — no cadence to read"
-            out["math"] = f"n_orders={g['n_orders']}, no inter-order gap"
+            out["status"], rf = "single_occasion", 1.0
+            if g["n_orders"] > 1:
+                out["label"] = (f"single ordering occasion on record ({days}d ago), "
+                                f"{g['n_orders']} orders clustered within {BURST_DAYS}d — no reorder rhythm to read")
+            else:
+                out["label"] = f"single order on record ({days}d ago) — no cadence to read"
+            out["math"] = f"n_orders={g['n_orders']}, n_occasions={g['n_occ']}, no inter-occasion gap"
     out["approaching"] = bool(is_app and out["status"] != "dormant")
     seas_mult = 1.15 if out["approaching"] else 1.0
     if out["approaching"]:
@@ -552,8 +582,23 @@ def opp_strength(base, rev, tf):
     return round(base * revenue_weight(rev) * tf, 4)
 
 
+# names (for conflict flag + labels) + EXCLUDE internal/cash-sale/test buckets from the deck entirely
+# (same JUNK filter the big-accounts engine uses). Without this an internal bucket like
+# "Cash Account - Kenneth" surfaces as a rep-facing outreach card.
+name_rows = fetch_all("customer_companies", "id, company_name",
+                      [lambda q: q.eq("client_id", CARBON8)])
+cid_name = {r["id"]: (r.get("company_name") or "") for r in name_rows}
+JUNK = re.compile(r"cash account|cash sale|sundry|walk[- ]?in|miscellaneous|\bmisc\b|internal|no customer|"
+                  r"test account|carbon8|^delivery$|freight|postage|courier|^general|on account|^samples?$", re.I)
+JUNK_CIDS = {cid for cid in comp_caps if JUNK.search(cid_name.get(cid, ""))}
+if JUNK_CIDS:
+    print(f"Excluding {len(JUNK_CIDS)} internal/cash/test companies from the deck: "
+          f"{sorted(cid_name.get(c) for c in JUNK_CIDS)[:8]}", flush=True)
+
 prelim = []
 for cid in comp_caps:
+    if cid in JUNK_CIDS:
+        continue
     rev = comp_rev[cid]
     cand = filtered_pick(cid)["kept"]             # industry-fit pick drives pool selection
     tm = timing_for(cid)                          # prelim: no recency
@@ -562,11 +607,6 @@ for cid in comp_caps:
 prelim.sort(key=lambda x: -x[1])
 pool_cids = [cid for cid, _, _ in prelim[:POOL]]
 print(f"\nPrelim ranking done over {len(prelim)} companies. Email-grounding top {len(pool_cids)}.", flush=True)
-
-# names for conflict flag + labels (cheap)
-name_rows = fetch_all("customer_companies", "id, company_name",
-                      [lambda q: q.eq("client_id", CARBON8)])
-cid_name = {r["id"]: (r.get("company_name") or "") for r in name_rows}
 
 # QB customer key map for pool (for quote linkage / value contact)
 qbcust = fetch_all("qb_customers", "matched_company_id, customer_key_id",
@@ -857,8 +897,9 @@ for cid in pool_cids:
             "gap_rationale": gap_rationale,
         },
         "timing_evidence": {
-            "p50_gap_days": tm["p50"], "p90_gap_days": tm["p90"],
+            "p50_gap_days": tm["p50"], "p90_gap_days": tm["p90"],   # OCCASION gaps (BURST_DAYS collapse)
             "days_since_last_order": tm["days_since_last"], "n_orders": tm["n_orders"],
+            "n_occasions": tm["n_occasions"],
             "window_label": tm["label"], "status": tm["status"], "percentile_math": tm["math"],
             "seasonal": {"approaching": tm["approaching"], "peak_month": (MONTH_NAMES[tm["peak_month"]] if tm["peak_month"] else None),
                          "approach_month": (MONTH_NAMES[tm["approach_month"]] if tm["approach_month"] else None)},
@@ -916,7 +957,7 @@ out = {
                                       f">={EMB_FINISH_FLOOR} qb_embellishment_tag finish jobs (Hot Foil/Spot UV/Deboss...). "
                                       "Signal-3 check beyond the 0-order gap-confirm — the Geoff Letchford trap; validated in cards_validation.json."),
         "floors": {"confidence": CONF_FLOOR, "support": SUPPORT_FLOOR, "lift": LIFT_FLOOR},
-        "timing": "percentile-of-own-gaps (p50/p90 of the customer's own inter-order gaps) + seasonality + email recency",
+        "timing": "percentile-of-own-gaps (p50/p90 of the gaps between the customer's ordering OCCASIONS — orders within BURST_DAYS=14 days collapsed into one occasion, so clustered same-project jobs don't read as a 4-day reorder cycle) + seasonality + email recency",
         "opportunity_strength": "base(conf*lift | RET_CONST) x log10(revenue) x timing_factor",
         "revenue_weight": "log10(revenue) — DAMPENED so conf/lift/timing can move the rank (raw revenue stored in factors.revenue for a raw re-rank)",
         "selection": f"all {len(prelim)} companies ranked by prelim opportunity; top {POOL} email-grounded; final top {TOPN}",

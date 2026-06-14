@@ -28,7 +28,7 @@ BIG = json.load(open(os.path.join(HERE, "big_accounts.json"), encoding="utf-8"))
 GEN_DATE = "2026-06-14"
 _y, _m, _d = GEN_DATE.split("-")
 DATESTAMP = f"{_d}-{_m}-{_y}"                   # Australian date format DD-MM-YYYY for the filename
-ONLY = ["Ehab", "Kenneth", "Mary", "Peter"]   # Nic + Linda already reviewed/committed
+ONLY = ["Nic", "Linda", "Ehab", "Kenneth", "Mary", "Peter"]   # all six — Nic/Linda re-included so their docs match the occasion-cadence deck regen (ranks/timing shifted)
 AM_FULL = {"Nic": "Nic Doyle", "Linda": "Linda D'Arcy", "Ehab": "Ehab Kamel",
            "Kenneth": "Kenneth Beck-Pedersen", "Mary": "Mary Serratore-Howe", "Peter": "Peter Musarra"}
 NO_MAILBOX = {"Mary", "Peter"}   # no AM mailbox -> contact/email recency may be missing
