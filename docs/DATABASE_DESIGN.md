@@ -234,7 +234,7 @@ Many-to-many junction between emails and contacts/companies with role tracking. 
 **Unique:** (email_id, email_address, role) | **Scale:** 458,211 rows (173 MB)
 
 #### `email_response_metrics`
-Calculated response times between email pairs.
+Calculated response times between email pairs. Pairs are formed by `response_time_tracker.py` as consecutive direction-changes **within a `canonical_thread_id`** (not the provider `thread_id`), and each pair is validated as the same conversation (normalized-subject match or the reply is addressed back to the original sender); auto-reply/OOO and automated/no-reply senders never anchor a pair. This pairing basis was corrected June 2026 (15.3c) — pairing on the provider `thread_id` had manufactured cross-conversation mis-pairs with implausibly fast latencies for some mailboxes. `is_auto_reply` flags the **responding** email; metric consumers filter on it.
 
 | Column | Type | Nullable | Default |
 |--------|------|----------|---------|
@@ -995,6 +995,7 @@ These replace row-by-row updates with single-statement bulk operations, reducing
 | `update_company_email_counts_from_junction(p_client_id)` | Recount from email_contact_links; SECURITY DEFINER, 30s timeout |
 | `update_contact_email_counts_from_junction(p_client_id)` | Recount from email_contact_links + set first/last_contacted_at from email dates; SECURITY DEFINER, 30s timeout |
 | `refresh_contact_email_metrics()` | Refresh materialized view; SECURITY DEFINER |
+| `am_structural_metrics(p_mailbox_id, p_client_id, p_start, p_end)` | AM coaching Tier-A: returns jsonb of the 4 structural metrics (exchange velocity, responsiveness, multithreading, follow-up persistence) for one mailbox over one window, plus window-independent recency. SECURITY DEFINER, 120s timeout. Migration 126 (task 15.2). Bases: emails+canonical_thread_id, email_response_metrics — NOT thread_status (mailbox_id 86% NULL). |
 
 ### 4.4 Seasonality & Outreach
 

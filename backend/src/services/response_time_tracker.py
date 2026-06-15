@@ -6,7 +6,11 @@ Part of 13-step extraction pipeline (used in Step 11)
 
 Features:
 - Calculates response times between inbound-outbound email pairs
-- Detects auto-replies (Out of Office, vacation responders)
+- Pairs within the CANONICAL thread (not the raw provider thread_id) and validates each pair
+  is the same conversation — prevents cross-conversation mis-pairs that produced implausibly
+  fast latencies for some mailboxes (15.3c)
+- Detects auto-replies (Out of Office, vacation responders) and excludes automated/no-reply
+  senders from anchoring a pair
 - Tracks bidirectional response times (you → them, them → you)
 - Populates email_response_metrics table
 - Updates contact/company avg_response_time fields
@@ -19,6 +23,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 import logging
 import re
+import json
 
 from ..database.supabase_client import SupabaseClient
 from ..utils.business_hours import calculate_business_seconds
@@ -85,6 +90,21 @@ class ResponseTimeTracker:
         'X-Auto-Response-Suppress',
     ]
 
+    # Automated / no-reply / system senders. An inbound from one of these is not a genuine
+    # human message to respond to, so it must not anchor a response pair (15.3c). These
+    # senders (couriers, mailer-daemon, notification bots) formed spurious near-instant
+    # "reply" pairs once the canonical-thread grouping put them next to an unrelated outbound.
+    AUTOMATED_SENDER_PATTERNS = [
+        r'no-?reply',
+        r'do-?not-?reply',
+        r'donotreply',
+        r'mailer-?daemon',
+        r'postmaster@',
+        r'notifications?@',
+        r'@notifications?\.',
+        r'bounces?@',
+    ]
+
     # Maximum reasonable response time (7 days)
     MAX_RESPONSE_TIME_SECONDS = 7 * 24 * 60 * 60
 
@@ -105,14 +125,37 @@ class ResponseTimeTracker:
 
     def _get_business_hours_config(self) -> BusinessHoursConfig:
         """
-        Fetch business hours config for the mailbox owner from user_profiles.
-        Cached after first call per tracker instance.
+        Fetch business hours config for the mailbox.
+
+        Timezone is sourced from clients.timezone (the authoritative zone for the client this
+        mailbox belongs to) — NOT user_profiles.timezone. user_profiles.timezone defaults to
+        'UTC' and is not maintained per AM; sourcing the zone from there caused the historical
+        backfill to evaluate business hours in UTC, zeroing ~85% of
+        business_hours_response_time_seconds for Carbon8 (Australia/Sydney). See
+        scripts/db/_recompute_bh_response_time.py for the one-off repair of that backlog.
+
+        The business-hours WINDOW (start/end) and business_days still come from user_profiles
+        (mailbox owner), falling back to 9-18 Mon-Fri. Cached per tracker instance.
         """
         if self._bh_config is not None:
             return self._bh_config
 
+        tz_name = 'UTC'
+        bh_start, bh_end, business_days = 9, 18, [1, 2, 3, 4, 5]
+
         try:
-            # mailbox → user_id → user_profiles
+            # Authoritative timezone: the client this mailbox belongs to.
+            cl = (
+                self.client.table('clients')
+                .select('timezone')
+                .eq('id', self.client_id)
+                .limit(1)
+                .execute()
+            )
+            if cl.data and cl.data[0].get('timezone'):
+                tz_name = cl.data[0]['timezone']
+
+            # Business-hours window/days: mailbox owner's profile (if set).
             mb = (
                 self.client.table('mailboxes')
                 .select('user_id')
@@ -121,30 +164,30 @@ class ResponseTimeTracker:
                 .execute()
             )
             user_id = (mb.data[0]['user_id'] if mb.data else None)
-
             if user_id:
                 up = (
                     self.client.table('user_profiles')
-                    .select('timezone, business_hours_start, business_hours_end, business_days')
+                    .select('business_hours_start, business_hours_end, business_days')
                     .eq('id', user_id)
                     .limit(1)
                     .execute()
                 )
                 if up.data:
                     row = up.data[0]
-                    self._bh_config = BusinessHoursConfig(
-                        timezone=row.get('timezone') or 'UTC',
-                        business_hours_start=row.get('business_hours_start', 9),
-                        business_hours_end=row.get('business_hours_end', 18),
-                        business_days=row.get('business_days') or [1, 2, 3, 4, 5],
-                    )
-                    logger.info(f"Business hours config: {self._bh_config.timezone} "
-                                f"{self._bh_config.business_hours_start}-{self._bh_config.business_hours_end}")
-                    return self._bh_config
+                    bh_start = row.get('business_hours_start', 9)
+                    bh_end = row.get('business_hours_end', 18)
+                    business_days = row.get('business_days') or [1, 2, 3, 4, 5]
         except Exception as e:
-            logger.warning(f"Could not fetch business hours config: {e}")
+            logger.warning(f"Could not fetch business hours config (using {tz_name} {bh_start}-{bh_end}): {e}")
 
-        self._bh_config = BusinessHoursConfig()
+        self._bh_config = BusinessHoursConfig(
+            timezone=tz_name,
+            business_hours_start=bh_start,
+            business_hours_end=bh_end,
+            business_days=business_days,
+        )
+        logger.info(f"Business hours config: tz={self._bh_config.timezone} (from clients.timezone) "
+                    f"{self._bh_config.business_hours_start}-{self._bh_config.business_hours_end}")
         return self._bh_config
 
     def calculate_response_times(self, limit: Optional[int] = None) -> List[ResponseMetric]:
@@ -187,17 +230,26 @@ class ResponseTimeTracker:
 
     def _fetch_threads(self, limit: Optional[int] = None) -> Dict[str, List[Dict]]:
         """
-        Fetch all emails grouped by thread_id, paginating in batches of 500.
+        Fetch all emails grouped by canonical_thread_id, paginating in batches of 500.
+
+        Grouping is by canonical_thread_id (the 4-tier resolved conversation), NOT the raw
+        provider thread_id (15.3c). For some mailboxes the provider thread_id over-collapses
+        distinct conversations, so pairing consecutive direction-changes inside a provider
+        thread manufactured cross-conversation "reply" pairs with implausibly fast latencies
+        (e.g. an inbound courier notification paired with an unrelated outbound quote seconds
+        later). canonical_thread_id is populated before this runs in the live pipeline
+        (orchestrator._assign_canonical_threads, step 9, precedes the engagement step 10).
 
         Args:
             limit: Optional limit for testing
 
         Returns:
-            Dict mapping thread_id to list of email dicts
+            Dict mapping canonical_thread_id to list of email dicts
         """
         PAGE_SIZE = 500
-        COLUMNS = ('id, thread_id, sent_date, subject, is_outbound, '
-                   'customer_contact_id, customer_company_id, raw_headers, processing_status')
+        COLUMNS = ('id, thread_id, canonical_thread_id, sent_date, subject, subject_normalized, '
+                   'sender_email, recipients, is_outbound, customer_contact_id, '
+                   'customer_company_id, raw_headers, processing_status')
         try:
             all_emails = []
             offset = 0
@@ -207,7 +259,7 @@ class ResponseTimeTracker:
                     self.client.table('emails')
                     .select(COLUMNS)
                     .eq('mailbox_id', self.mailbox_id)
-                    .not_.is_('thread_id', 'null')
+                    .not_.is_('canonical_thread_id', 'null')
                     .order('sent_date', desc=False)
                 )
 
@@ -230,15 +282,15 @@ class ResponseTimeTracker:
                     all_emails = all_emails[:limit]
                     break
 
-            # Group by thread_id
+            # Group by canonical_thread_id (resolved conversation), not provider thread_id.
             threads = {}
             for email in all_emails:
-                thread_id = email['thread_id']
-                if thread_id not in threads:
-                    threads[thread_id] = []
-                threads[thread_id].append(email)
+                ct_id = email.get('canonical_thread_id')
+                if not ct_id:
+                    continue
+                threads.setdefault(ct_id, []).append(email)
 
-            logger.info(f"Fetched {len(all_emails)} emails in {len(threads)} threads")
+            logger.info(f"Fetched {len(all_emails)} emails in {len(threads)} canonical threads")
 
             return threads
 
@@ -248,14 +300,24 @@ class ResponseTimeTracker:
 
     def _find_response_pairs(self, emails: List[Dict]) -> List[ResponseMetric]:
         """
-        Find response pairs within a thread
+        Find response pairs within a canonical thread.
 
-        A response pair is defined as:
+        A response pair is a consecutive direction change in the thread:
         - Inbound email followed by outbound email (we responded)
         - Outbound email followed by inbound email (they responded)
 
+        where ``current_email`` is the message being responded to and ``next_email`` is the
+        responding message. Two validity gates guard against spurious pairs (15.3c):
+
+        1. The message being responded to must be a genuine human message — not an
+           auto-reply/OOO and not from an automated/no-reply sender (couriers, mailer-daemon,
+           notification bots). These anchored near-instant fake "replies".
+        2. The pair must be the same conversation — the reply's normalized subject matches the
+           original, OR the reply is addressed back to the original sender. This catches
+           over-merged canonical threads that interleave unrelated sub-conversations.
+
         Args:
-            emails: Sorted list of emails in thread (by sent_date)
+            emails: Sorted list of emails in the canonical thread (by sent_date)
 
         Returns:
             List of ResponseMetric objects
@@ -269,46 +331,94 @@ class ResponseTimeTracker:
             current_outbound = current_email.get('is_outbound', False)
             next_outbound = next_email.get('is_outbound', False)
 
-            # Check if this is a response pair (direction changed)
-            if current_outbound != next_outbound:
-                # Calculate response time
-                current_time = datetime.fromisoformat(current_email['sent_date'].replace('Z', '+00:00'))
-                next_time = datetime.fromisoformat(next_email['sent_date'].replace('Z', '+00:00'))
+            # Must be a direction change to be a response pair
+            if current_outbound == next_outbound:
+                continue
 
-                response_time_seconds = int((next_time - current_time).total_seconds())
+            # Gate 1: the message being responded to must be a genuine human message.
+            if (self._is_auto_reply(current_email)
+                    or self._is_automated_sender(current_email.get('sender_email'))):
+                continue
 
-                # Ignore negative response times (data error) or unreasonably long times
-                if response_time_seconds <= 0 or response_time_seconds > self.MAX_RESPONSE_TIME_SECONDS:
-                    continue
+            # Gate 2: the pair must be the same conversation.
+            if not (self._subjects_match(current_email, next_email)
+                    or self._reply_addressed_back(current_email, next_email)):
+                continue
 
-                # Check if response is auto-reply
-                is_auto_reply = self._is_auto_reply(next_email)
+            # Calculate response time
+            current_time = datetime.fromisoformat(current_email['sent_date'].replace('Z', '+00:00'))
+            next_time = datetime.fromisoformat(next_email['sent_date'].replace('Z', '+00:00'))
 
-                # Calculate business hours response time
-                bh_config = self._get_business_hours_config()
-                bh_seconds = calculate_business_seconds(
-                    start_utc=current_time,
-                    end_utc=next_time,
-                    tz_name=bh_config.timezone,
-                    bh_start=bh_config.business_hours_start,
-                    bh_end=bh_config.business_hours_end,
-                    business_days=bh_config.business_days,
-                )
+            response_time_seconds = int((next_time - current_time).total_seconds())
 
-                # Create metric
-                metric = ResponseMetric(
-                    email_id=next_email['id'],
-                    responding_to_email_id=current_email['id'],
-                    response_time_seconds=response_time_seconds,
-                    is_auto_reply=is_auto_reply,
-                    responder_contact_id=next_email.get('customer_contact_id'),
-                    responder_company_id=next_email.get('customer_company_id'),
-                    business_hours_response_time_seconds=bh_seconds,
-                )
+            # Ignore negative response times (data error) or unreasonably long times
+            if response_time_seconds <= 0 or response_time_seconds > self.MAX_RESPONSE_TIME_SECONDS:
+                continue
 
-                metrics.append(metric)
+            # Check if response is auto-reply (stored flag; metric consumers filter on it)
+            is_auto_reply = self._is_auto_reply(next_email)
+
+            # Calculate business hours response time
+            bh_config = self._get_business_hours_config()
+            bh_seconds = calculate_business_seconds(
+                start_utc=current_time,
+                end_utc=next_time,
+                tz_name=bh_config.timezone,
+                bh_start=bh_config.business_hours_start,
+                bh_end=bh_config.business_hours_end,
+                business_days=bh_config.business_days,
+            )
+
+            # Create metric
+            metric = ResponseMetric(
+                email_id=next_email['id'],
+                responding_to_email_id=current_email['id'],
+                response_time_seconds=response_time_seconds,
+                is_auto_reply=is_auto_reply,
+                responder_contact_id=next_email.get('customer_contact_id'),
+                responder_company_id=next_email.get('customer_company_id'),
+                business_hours_response_time_seconds=bh_seconds,
+            )
+
+            metrics.append(metric)
 
         return metrics
+
+    def _is_automated_sender(self, sender_email: Optional[str]) -> bool:
+        """True if the sender address is an automated / no-reply / system mailbox."""
+        if not sender_email:
+            return False
+        s = sender_email.lower()
+        for pattern in self.AUTOMATED_SENDER_PATTERNS:
+            if re.search(pattern, s):
+                return True
+        return False
+
+    @staticmethod
+    def _subjects_match(a: Dict, b: Dict) -> bool:
+        """True if both emails share the same non-empty normalized subject (case-insensitive)."""
+        sa = (a.get('subject_normalized') or '').strip().lower()
+        sb = (b.get('subject_normalized') or '').strip().lower()
+        return bool(sa) and sa == sb
+
+    @staticmethod
+    def _reply_addressed_back(original: Dict, reply: Dict) -> bool:
+        """True if ``reply`` is addressed (in recipients) back to ``original``'s sender."""
+        sender = (original.get('sender_email') or '').strip().lower()
+        if not sender:
+            return False
+        recips = reply.get('recipients') or []
+        if isinstance(recips, str):
+            try:
+                recips = json.loads(recips)
+            except (ValueError, TypeError):
+                return False
+        if not isinstance(recips, list):
+            return False
+        for r in recips:
+            if isinstance(r, dict) and (r.get('email') or '').strip().lower() == sender:
+                return True
+        return False
 
     def _is_auto_reply(self, email: Dict) -> bool:
         """

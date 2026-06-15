@@ -812,6 +812,45 @@ Backend: `backend/src/services/ai_insights_engine.py`. Frontend: `frontend/src/c
 
 ---
 
+### 2.15 AM Communication-Quality Coaching — Tier-A Structural (task 15.2)
+
+#### What it does
+
+Computes four research-grounded structural communication metrics per Account Manager, **self-referentially** (each AM vs their own baseline over time) — explicitly **not** a cross-AM ranking (that is task 15.5, gated on the stalled-sync fix and the Tier-B content pilot). The four metrics, grounded in B2B sales-effectiveness research (`docs/design/AM_QUALITY_LAYER_DESIGN.md`):
+
+1. **Exchange velocity** — emails per active thread and per active week (Gong: the single strongest close predictor).
+2. **Responsiveness** — median reply latency to inbound (our outbound replies). Reported as raw latency, with a **business-hours** figure alongside it. The business-hours value was a timezone artifact (~85% zero) until it was recomputed and the source bug fixed in June 2026 (see limitations); it is now reliable for the live AMs (`business_hours_reliable=true`).
+3. **Multithreading** — distinct contacts engaged per company (Gong: critical to deal success).
+4. **Follow-up persistence** — after the customer goes silent, does the AM re-touch or let the thread go cold?
+
+#### What triggers it
+
+- `GET /ai/coaching/am/{am_id}/structural` — `am_id` is the AM's user id (`user_profiles.id` / `mailboxes.user_id`). Read-only. Access-controlled to callers who can see the AM's mailbox.
+
+#### What data it reads / how
+
+Heavy aggregation runs server-side in the `am_structural_metrics(mailbox, client, start, end)` SQL function (migration 126). The service (`am_coaching_service.py`) calls it three times per AM — a **trailing-12-month headline** window (where 15.1 found volume even, CV 0.41-0.62) plus **last-90d vs prior-90d** for the self-referential trend. Bases: `emails` + `canonical_thread_id` (NOT `thread_status`, whose `mailbox_id` is 86% NULL), and `email_response_metrics`.
+
+#### Honesty guards (built in)
+
+- **Staleness flag per AM:** a mailbox with no email in >14 days is flagged `is_stale` with "data current as of {date}", and its recent-window trend is marked **unreliable** — so a stalled sync (Ehab ~2026-05-21, Kenneth ~2026-05-16) does not read as the AM going quiet.
+- **Coverage on every metric** (e.g. responsiveness = X% of inbound) so thin coverage is visible.
+- **No-mailbox AMs** (Mary/Peter — not platform users) return a clear `email_coachable=false` / `no_mailbox` state, never zeros.
+
+#### Known limitations
+
+- `business_hours_response_time_seconds` **was** ~85% zero — a timezone artifact: the historical backfill read the business-hours zone from `user_profiles.timezone` (`'UTC'` for every Carbon8 owner) instead of `clients.timezone` (`Australia/Sydney`), so AEST/AEDT-business-hours replies (~23:00-08:00 UTC) fell outside the 9-18 window. **Fixed June 2026:** the backlog was recomputed for Carbon8 (`scripts/db/_recompute_bh_response_time.py`, idempotent on `email_id` — positive-bh share 13.4% → 94.3%), and the source was fixed (`response_time_tracker.py` now resolves the zone from `clients.timezone`, so new syncs do not regress). The service still keeps `raw` reply latency as the headline and retains a data-driven `business_hours_reliable` gate (≥50% positive-bh) as a **self-healing guard** that re-flags degradation if the artifact ever recurs.
+  - Note: `am_efficiency_analyzer.py` (a separate AM-efficiency path) was never affected — it already reads `clients.timezone` — but its exception fallback is a **fixed UTC+10 offset (non-DST)**, so if the IANA lookup fails it would be ~1h off during AEDT (Oct–Apr). The recomputed `email_response_metrics` path above uses the DST-aware `Australia/Sydney` zone throughout.
+- **Raw reply-latency mis-pairing — fixed June 2026 (15.3c).** The `median_raw_hours` figure showed implausibly fast medians for two AMs (Kenneth ~5.6 min, Ehab ~2.3 min) because `response_time_tracker.py` paired emails inside the **provider `thread_id`**, which over-collapses distinct conversations for some mailboxes — so an inbound about conversation A was paired with an unrelated outbound about conversation B sent seconds later (a fake near-instant "reply"). ~69–77% of those two AMs' sub-5-min pairs were such mis-pairs. **Fix:** the tracker now (1) pairs within `canonical_thread_id` (not provider `thread_id`), (2) validates each pair is the same conversation (normalized-subject match **or** the reply is addressed back to the original sender), and (3) excludes auto-reply/OOO and automated/no-reply senders from anchoring a pair. `email_response_metrics` was recomputed for Carbon8 (delete-then-insert — the fix changes which pairs exist). Verified medians are now plausible (Kenneth 0.094→0.820 h, Ehab 0.038→0.160 h; Nic/Linda essentially unchanged — they were always genuine) and **0 cross-canonical pairs remain** in the table. **Framing caveat:** even clean, "responsiveness" largely measures speed of one-line acknowledgements in a fast print-production workflow, so it should carry modest weight on the coaching surface.
+- Multi-mailbox AMs report the primary mailbox only (the 4 target AMs each have exactly one).
+- Self-referential only — cross-AM/management comparison is deliberately not built (15.5).
+
+#### Verified by
+
+Backend: `backend/src/services/am_coaching_service.py`, endpoint in `backend/src/routers/ai.py`, SQL in `scripts/migrations/126_am_structural_metrics.sql`. Reproduces the 15.1 readiness refresh (multithreading 1.64-1.71 vs audit 1.68-1.77; staleness fires for Ehab+Kenneth, not Nic+Linda).
+
+---
+
 ### 2.N Contact Intelligence (Persona Views)
 
 #### What it does
