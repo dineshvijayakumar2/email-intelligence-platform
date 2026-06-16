@@ -1,0 +1,2367 @@
+{
+  "generated_at": "2026-06-03T05:20:01Z",
+  "link_wrong_total": 791,
+  "domain_ranking": [
+    {
+      "domain": "deephouseprintstudio.com.au",
+      "distinct_quote_customers": 20,
+      "link_count": 115,
+      "likely_party": "Deephouse Print Studio",
+      "sample_customers": [
+        "Australian Jockey Club",
+        "Bdesigned Graphics",
+        "Blazze",
+        "Commonwealth Bank of Australia",
+        "Deepend Sydney"
+      ]
+    },
+    {
+      "domain": "emilyziz.com",
+      "distinct_quote_customers": 19,
+      "link_count": 75,
+      "likely_party": "Geoff Letchford Photography",
+      "sample_customers": [
+        "Alliance Francaise de Sydney",
+        "Australian Jockey Club",
+        "BRIGHT EYES BRISBANE",
+        "Bauer Media Group",
+        "Bdesigned Graphics"
+      ]
+    },
+    {
+      "domain": "geoffletchford.com",
+      "distinct_quote_customers": 14,
+      "link_count": 35,
+      "likely_party": "Geoff Letchford Photography",
+      "sample_customers": [
+        "BWD Creative",
+        "Cargill Moore",
+        "Commonwealth Bank of Australia",
+        "Detour Management",
+        "FUTURE VISION OPTOMETRIST"
+      ]
+    },
+    {
+      "domain": "rasicandpartners.com",
+      "distinct_quote_customers": 12,
+      "link_count": 16,
+      "likely_party": null,
+      "sample_customers": [
+        "6D VISION MIRANDA",
+        "Australian Jockey Club",
+        "Cargill Moore",
+        "Commonwealth Bank of Australia",
+        "DIY Invitations"
+      ]
+    },
+    {
+      "domain": "artis.net.au",
+      "distinct_quote_customers": 11,
+      "link_count": 13,
+      "likely_party": "Artis",
+      "sample_customers": [
+        "BWD Creative",
+        "Creative Sting",
+        "Detour Management",
+        "GRANATA EYECARE",
+        "JINDABYNE SPORTS"
+      ]
+    },
+    {
+      "domain": "thepropertyagency.com.au",
+      "distinct_quote_customers": 7,
+      "link_count": 13,
+      "likely_party": "The Property Agency",
+      "sample_customers": [
+        "BOONAH EYECARE",
+        "CASH ACCOUNT",
+        "Deco Mirrors",
+        "GRANATA EYECARE",
+        "Nestl? Australia Ltd"
+      ]
+    },
+    {
+      "domain": "hhglobal.com",
+      "distinct_quote_customers": 7,
+      "link_count": 8,
+      "likely_party": "HH Global",
+      "sample_customers": [
+        "CASH ACCOUNT",
+        "GOTO",
+        "GRANATA EYECARE",
+        "LIDA",
+        "Lizard Management & Production Pty Ltd"
+      ]
+    },
+    {
+      "domain": "georgjensen.com",
+      "distinct_quote_customers": 7,
+      "link_count": 32,
+      "likely_party": "Georg Jensen",
+      "sample_customers": [
+        "FUTURE VISION OPTOMETRIST",
+        "Harley Quinn",
+        "JINDABYNE SPORTS",
+        "Kwik Kopy Darling Harbour",
+        "NSW Ambulance"
+      ]
+    },
+    {
+      "domain": "rba.com.au",
+      "distinct_quote_customers": 7,
+      "link_count": 12,
+      "likely_party": null,
+      "sample_customers": [
+        "Australian Jockey Club",
+        "Detour Management",
+        "Dragonfly",
+        "FUTURE VISION OPTOMETRIST",
+        "Kwik Kopy Darling Harbour"
+      ]
+    },
+    {
+      "domain": "l-ldesign.com.au",
+      "distinct_quote_customers": 6,
+      "link_count": 15,
+      "likely_party": "L&L Design & Production",
+      "sample_customers": [
+        "Cheddar Pocket",
+        "FUTURE VISION OPTOMETRIST",
+        "HORSFALLS OPTOM ECHUCA",
+        "Kurz",
+        "Missy Bell"
+      ]
+    },
+    {
+      "domain": "tacitcommunications.com",
+      "distinct_quote_customers": 5,
+      "link_count": 6,
+      "likely_party": null,
+      "sample_customers": [
+        "Cargill Moore",
+        "Commonwealth Bank of Australia",
+        "FUTURE VISION OPTOMETRIST",
+        "HUNTER DISCOUNT SPECS",
+        "Tech Policy"
+      ]
+    },
+    {
+      "domain": "unsw.edu.au",
+      "distinct_quote_customers": 5,
+      "link_count": 6,
+      "likely_party": "Unsw",
+      "sample_customers": [
+        "Blazze",
+        "CSB Homes",
+        "Creative Sting",
+        "Damian Wheeler",
+        "Kwik Kopy Darling Harbour"
+      ]
+    },
+    {
+      "domain": "helenkaminski.com",
+      "distinct_quote_customers": 5,
+      "link_count": 7,
+      "likely_party": null,
+      "sample_customers": [
+        "Alliance Francaise de Sydney",
+        "Detour Management",
+        "FUTURE VISION OPTOMETRIST",
+        "HUNTER DISCOUNT SPECS",
+        "NATIONAL PHARMACIES ELIZABETH"
+      ]
+    },
+    {
+      "domain": "theselectedny.com",
+      "distinct_quote_customers": 5,
+      "link_count": 6,
+      "likely_party": null,
+      "sample_customers": [
+        "Detour Management",
+        "Dragonfly",
+        "FUTURE VISION OPTOMETRIST",
+        "Kwik Kopy Darling Harbour",
+        "TWINS OPTICAL"
+      ]
+    },
+    {
+      "domain": "meriton.com.au",
+      "distinct_quote_customers": 4,
+      "link_count": 18,
+      "likely_party": "Meriton Pty Ltd",
+      "sample_customers": [
+        "BOONAH EYECARE",
+        "CJ OPTICAL- EYECARE PLUS",
+        "Oceana Funds",
+        "Reload Agency"
+      ]
+    },
+    {
+      "domain": "carbon-creative.com.au",
+      "distinct_quote_customers": 4,
+      "link_count": 4,
+      "likely_party": null,
+      "sample_customers": [
+        "Cargill Moore",
+        "Commonwealth Bank of Australia",
+        "FUTURE VISION OPTOMETRIST",
+        "HUNTER DISCOUNT SPECS"
+      ]
+    },
+    {
+      "domain": "monacopg.com.au",
+      "distinct_quote_customers": 4,
+      "link_count": 9,
+      "likely_party": "Monaco Property Group",
+      "sample_customers": [
+        "BOONAH EYECARE",
+        "CSB Homes",
+        "L&L Design & Production",
+        "Missy Bell"
+      ]
+    },
+    {
+      "domain": "studioodea.com.au",
+      "distinct_quote_customers": 4,
+      "link_count": 5,
+      "likely_party": "Studioodea",
+      "sample_customers": [
+        "Ann Do",
+        "CLEARVIEW EYECARE OPTOMETRIST",
+        "Continuum  Marketing",
+        "Ebis Global"
+      ]
+    },
+    {
+      "domain": "fiskars.com",
+      "distinct_quote_customers": 4,
+      "link_count": 10,
+      "likely_party": "Fiskars",
+      "sample_customers": [
+        "Giant Squid",
+        "HORSFALLS OPTOM ECHUCA",
+        "SPECIAL EYES - PERTH",
+        "The Business Queen"
+      ]
+    },
+    {
+      "domain": "heapsnormal.com",
+      "distinct_quote_customers": 4,
+      "link_count": 13,
+      "likely_party": "Heaps Normal",
+      "sample_customers": [
+        "HUNTER DISCOUNT SPECS",
+        "Kwik Kopy Darling Harbour",
+        "Michael Webster",
+        "Tech Policy"
+      ]
+    },
+    {
+      "domain": "teamevent.com.au",
+      "distinct_quote_customers": 4,
+      "link_count": 4,
+      "likely_party": null,
+      "sample_customers": [
+        "Detour Management",
+        "HUNTER DISCOUNT SPECS",
+        "Narellan Pools",
+        "The Business Queen"
+      ]
+    },
+    {
+      "domain": "trustyboxes.com.au",
+      "distinct_quote_customers": 4,
+      "link_count": 4,
+      "likely_party": "Trusty Cases & Boxes",
+      "sample_customers": [
+        "Australian Jockey Club",
+        "Kwik Kopy Darling Harbour",
+        "The Business Queen",
+        "WARNER VILLAGE OPTOMETRIST"
+      ]
+    },
+    {
+      "domain": "sekisuihouse.com.au",
+      "distinct_quote_customers": 3,
+      "link_count": 8,
+      "likely_party": "Sekisuihouse",
+      "sample_customers": [
+        "Bakehouse Limited",
+        "Missy Bell",
+        "Studio Odea Pty Ltd"
+      ]
+    },
+    {
+      "domain": "metropolis.com.au",
+      "distinct_quote_customers": 3,
+      "link_count": 19,
+      "likely_party": "Metropolis",
+      "sample_customers": [
+        "Ann Do",
+        "Bright Print Group",
+        "Reload Agency"
+      ]
+    },
+    {
+      "domain": "goldcraft.com.au",
+      "distinct_quote_customers": 3,
+      "link_count": 3,
+      "likely_party": "Goldcraft",
+      "sample_customers": [
+        "JOY O'NEILL OPTOMETRIST",
+        "Kwik Kopy Darling Harbour",
+        "Studio Odea Pty Ltd"
+      ]
+    },
+    {
+      "domain": "bloomberg.net",
+      "distinct_quote_customers": 3,
+      "link_count": 3,
+      "likely_party": "Bloomberg Australia Pty Ltd",
+      "sample_customers": [
+        "Fast Lane Publicity",
+        "GOTO",
+        "LIDA"
+      ]
+    },
+    {
+      "domain": "easyprintbx.com.au",
+      "distinct_quote_customers": 3,
+      "link_count": 5,
+      "likely_party": "Easy Print",
+      "sample_customers": [
+        "Amberjules",
+        "Blazze",
+        "Kwik Kopy Darling Harbour"
+      ]
+    },
+    {
+      "domain": "thewoodroaster.com.au",
+      "distinct_quote_customers": 3,
+      "link_count": 4,
+      "likely_party": "The Wood Roaster",
+      "sample_customers": [
+        "Debut Management",
+        "Mirrah Foulkes",
+        "TWINS OPTICAL"
+      ]
+    },
+    {
+      "domain": "abadeen.com",
+      "distinct_quote_customers": 3,
+      "link_count": 10,
+      "likely_party": "Abadeen Administration Pty Ltd",
+      "sample_customers": [
+        "Deco Mirrors",
+        "Deepend Sydney",
+        "Nestl? Australia Ltd"
+      ]
+    },
+    {
+      "domain": "kurz.com.au",
+      "distinct_quote_customers": 3,
+      "link_count": 3,
+      "likely_party": "Kurz",
+      "sample_customers": [
+        "Eye Candy Optics",
+        "GRANATA EYECARE",
+        "Kwik Kopy Darling Harbour"
+      ]
+    },
+    {
+      "domain": "stephenlayfield.com",
+      "distinct_quote_customers": 3,
+      "link_count": 7,
+      "likely_party": "Layfield Design",
+      "sample_customers": [
+        "BRIGHT EYES PALMERSTON",
+        "L&L Design & Production",
+        "Studio Odea Pty Ltd"
+      ]
+    },
+    {
+      "domain": "thehorse.com.au",
+      "distinct_quote_customers": 3,
+      "link_count": 4,
+      "likely_party": null,
+      "sample_customers": [
+        "Alliance Francaise de Sydney",
+        "Detour Management",
+        "FUTURE VISION OPTOMETRIST"
+      ]
+    },
+    {
+      "domain": "levande.com.au",
+      "distinct_quote_customers": 3,
+      "link_count": 6,
+      "likely_party": "Levande",
+      "sample_customers": [
+        "Disrupt",
+        "Missy Bell",
+        "Studio Odea Pty Ltd"
+      ]
+    },
+    {
+      "domain": "1stchoiceprinting.com.au",
+      "distinct_quote_customers": 3,
+      "link_count": 3,
+      "likely_party": "1Stchoiceprinting",
+      "sample_customers": [
+        "BRIGHT EYES ASPLEY",
+        "Commonwealth Bank of Australia",
+        "Rasic and Partners"
+      ]
+    },
+    {
+      "domain": "simplebeautifulthings.com.au",
+      "distinct_quote_customers": 3,
+      "link_count": 5,
+      "likely_party": null,
+      "sample_customers": [
+        "Blacklist Studio",
+        "Blazze",
+        "Kwik Kopy Darling Harbour"
+      ]
+    },
+    {
+      "domain": "thejames.agency",
+      "distinct_quote_customers": 3,
+      "link_count": 3,
+      "likely_party": null,
+      "sample_customers": [
+        "Cheddar Pocket",
+        "Michael Webster",
+        "Missy Bell"
+      ]
+    },
+    {
+      "domain": "inkiris.com",
+      "distinct_quote_customers": 2,
+      "link_count": 3,
+      "likely_party": "Ink+Iris",
+      "sample_customers": [
+        "Missy Bell",
+        "Sydney Sake Society"
+      ]
+    },
+    {
+      "domain": "wsiairport.com.au",
+      "distinct_quote_customers": 2,
+      "link_count": 7,
+      "likely_party": "Western Sydney Airport",
+      "sample_customers": [
+        "JINDABYNE SPORTS",
+        "Study NSW"
+      ]
+    },
+    {
+      "domain": "rxww.com.au",
+      "distinct_quote_customers": 2,
+      "link_count": 5,
+      "likely_party": "EDGECLIFF EYES",
+      "sample_customers": [
+        "Dragonfly",
+        "MODERN EYECARE SPRINGVALE"
+      ]
+    },
+    {
+      "domain": "rikandralph.com",
+      "distinct_quote_customers": 2,
+      "link_count": 9,
+      "likely_party": "Rik + Ralph",
+      "sample_customers": [
+        "EDGECLIFF EYES",
+        "MODERN EYECARE SPRINGVALE"
+      ]
+    },
+    {
+      "domain": "collectiveobjective.co",
+      "distinct_quote_customers": 2,
+      "link_count": 6,
+      "likely_party": "Collective Objective",
+      "sample_customers": [
+        "FUTURE VISION OPTOMETRIST",
+        "GOTO"
+      ]
+    },
+    {
+      "domain": "borncurious.com.au",
+      "distinct_quote_customers": 2,
+      "link_count": 7,
+      "likely_party": "Born Curious",
+      "sample_customers": [
+        "JINDABYNE SPORTS",
+        "Worldwide Pitt Street"
+      ]
+    },
+    {
+      "domain": "theframingproject.com.au",
+      "distinct_quote_customers": 2,
+      "link_count": 2,
+      "likely_party": "The Framing Project",
+      "sample_customers": [
+        "T1FM Property",
+        "Volkanik Music"
+      ]
+    },
+    {
+      "domain": "fosterandpartners.com",
+      "distinct_quote_customers": 2,
+      "link_count": 5,
+      "likely_party": "Fosterandpartners",
+      "sample_customers": [
+        "Cheddar Pocket",
+        "Missy Bell"
+      ]
+    },
+    {
+      "domain": "35degreesnorth.com.au",
+      "distinct_quote_customers": 2,
+      "link_count": 6,
+      "likely_party": "35Degreesnorth",
+      "sample_customers": [
+        "CLEARVIEW EYECARE OPTOMETRIST",
+        "Nicholas J Baker"
+      ]
+    },
+    {
+      "domain": "buildcorp.com.au",
+      "distinct_quote_customers": 2,
+      "link_count": 2,
+      "likely_party": "Buildcorp",
+      "sample_customers": [
+        "Rasic and Partners",
+        "The Business Queen"
+      ]
+    },
+    {
+      "domain": "kazbarcreative.com.au",
+      "distinct_quote_customers": 2,
+      "link_count": 7,
+      "likely_party": "Kazbarcreative",
+      "sample_customers": [
+        "Missy Bell",
+        "R M OPTICAL TOOWOOMBA"
+      ]
+    },
+    {
+      "domain": "interflow.com.au",
+      "distinct_quote_customers": 2,
+      "link_count": 2,
+      "likely_party": "Outrace",
+      "sample_customers": [
+        "Catherine Fischer",
+        "Outrace"
+      ]
+    },
+    {
+      "domain": "vitalmove.com.au",
+      "distinct_quote_customers": 2,
+      "link_count": 10,
+      "likely_party": "Vitalmove",
+      "sample_customers": [
+        "Detour Management",
+        "HORSFALLS OPTOM ECHUCA"
+      ]
+    },
+    {
+      "domain": "edgecliffphysio.com.au",
+      "distinct_quote_customers": 2,
+      "link_count": 2,
+      "likely_party": "Edgecliff Physiotherapy",
+      "sample_customers": [
+        "CJ OPTICAL- EYECARE PLUS",
+        "Wardle Studio"
+      ]
+    },
+    {
+      "domain": "auroracreativeagency.com",
+      "distinct_quote_customers": 2,
+      "link_count": 2,
+      "likely_party": "Aurora Creative Agency",
+      "sample_customers": [
+        "Blacklist Studio",
+        "TWINS OPTICAL"
+      ]
+    },
+    {
+      "domain": "tafensw.edu.au",
+      "distinct_quote_customers": 2,
+      "link_count": 6,
+      "likely_party": "Tafensw",
+      "sample_customers": [
+        "GRANATA EYECARE",
+        "Warrior Princess"
+      ]
+    },
+    {
+      "domain": "rareid.com.au",
+      "distinct_quote_customers": 2,
+      "link_count": 2,
+      "likely_party": "Rare ID",
+      "sample_customers": [
+        "BOONAH EYECARE",
+        "Reload Agency"
+      ]
+    },
+    {
+      "domain": "govly.design",
+      "distinct_quote_customers": 2,
+      "link_count": 2,
+      "likely_party": "Govly",
+      "sample_customers": [
+        "Edit Retail",
+        "Missy Bell"
+      ]
+    },
+    {
+      "domain": "curiocommunications.com.au",
+      "distinct_quote_customers": 2,
+      "link_count": 3,
+      "likely_party": "Club VIP",
+      "sample_customers": [
+        "Clear Ideas",
+        "JINDABYNE SPORTS"
+      ]
+    },
+    {
+      "domain": "fdcbuilding.com.au",
+      "distinct_quote_customers": 2,
+      "link_count": 4,
+      "likely_party": "FDC Construction and Fitout",
+      "sample_customers": [
+        "NSW Ambulance",
+        "Rasic and Partners"
+      ]
+    },
+    {
+      "domain": "richardcrookes.com.au",
+      "distinct_quote_customers": 2,
+      "link_count": 3,
+      "likely_party": "Richardcrookes",
+      "sample_customers": [
+        "CSB Homes",
+        "Continuum  Marketing"
+      ]
+    },
+    {
+      "domain": "noffs.org.au",
+      "distinct_quote_customers": 2,
+      "link_count": 3,
+      "likely_party": null,
+      "sample_customers": [
+        "Blacklist Studio",
+        "Kwik Kopy Darling Harbour"
+      ]
+    },
+    {
+      "domain": "brandandco.com.au",
+      "distinct_quote_customers": 2,
+      "link_count": 2,
+      "likely_party": "Brand & Co.",
+      "sample_customers": [
+        "Department of Planning, Housing and Infrastructure",
+        "Eye Candy Optics"
+      ]
+    },
+    {
+      "domain": "fortis.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 15,
+      "likely_party": "Fortis",
+      "sample_customers": [
+        "Eye Candy Optics"
+      ]
+    },
+    {
+      "domain": "encour.co",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Encour",
+      "sample_customers": [
+        "Common Capital"
+      ]
+    },
+    {
+      "domain": "ralphlauren.com",
+      "distinct_quote_customers": 1,
+      "link_count": 2,
+      "likely_party": "Ralph Lauren Australia Pty Ltd",
+      "sample_customers": [
+        "Department of Planning, Housing and Infrastructure"
+      ]
+    },
+    {
+      "domain": "landmarkgr.com",
+      "distinct_quote_customers": 1,
+      "link_count": 24,
+      "likely_party": "Landmarkgr",
+      "sample_customers": [
+        "BOONAH EYECARE"
+      ]
+    },
+    {
+      "domain": "wearemci.com",
+      "distinct_quote_customers": 1,
+      "link_count": 22,
+      "likely_party": "Wearemci",
+      "sample_customers": [
+        "LIDA"
+      ]
+    },
+    {
+      "domain": "cbusproperty.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 4,
+      "likely_party": "Cbusproperty",
+      "sample_customers": [
+        "Bright Print Group"
+      ]
+    },
+    {
+      "domain": "lils.world",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Lils",
+      "sample_customers": [
+        "Missy Bell"
+      ]
+    },
+    {
+      "domain": "theandrewsgroup.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 3,
+      "likely_party": "The Andrews Group",
+      "sample_customers": [
+        "Brendon Fing C/- Cabana Bar"
+      ]
+    },
+    {
+      "domain": "inck.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": null,
+      "sample_customers": [
+        "SPECS SMART GWELUP"
+      ]
+    },
+    {
+      "domain": "radarsydney.com",
+      "distinct_quote_customers": 1,
+      "link_count": 2,
+      "likely_party": "Radarsydney",
+      "sample_customers": [
+        "Ebis Global"
+      ]
+    },
+    {
+      "domain": "thisisblow.com",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Blow",
+      "sample_customers": [
+        "LIDA"
+      ]
+    },
+    {
+      "domain": "justinecummins.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 5,
+      "likely_party": "Justinecummins",
+      "sample_customers": [
+        "SPECIAL EYES - PERTH"
+      ]
+    },
+    {
+      "domain": "studionota.co",
+      "distinct_quote_customers": 1,
+      "link_count": 6,
+      "likely_party": "Studio Nota",
+      "sample_customers": [
+        "STYLEYES CAMPBELLTOWN"
+      ]
+    },
+    {
+      "domain": "alixhiggins.com",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": null,
+      "sample_customers": [
+        "Macan  Properties"
+      ]
+    },
+    {
+      "domain": "ethics.org.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "The Ethics Centre",
+      "sample_customers": [
+        "FUTURE VISION OPTOMETRIST"
+      ]
+    },
+    {
+      "domain": "katvidovic.com",
+      "distinct_quote_customers": 1,
+      "link_count": 2,
+      "likely_party": "Katvidovic",
+      "sample_customers": [
+        "Missy Bell"
+      ]
+    },
+    {
+      "domain": "cropdcreative.com",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Bauer Media Group",
+      "sample_customers": [
+        "Kwik Kopy Darling Harbour"
+      ]
+    },
+    {
+      "domain": "hamiltonlane.com",
+      "distinct_quote_customers": 1,
+      "link_count": 2,
+      "likely_party": "Hamilton Lane",
+      "sample_customers": [
+        "Eleven Music"
+      ]
+    },
+    {
+      "domain": "alemais.com",
+      "distinct_quote_customers": 1,
+      "link_count": 4,
+      "likely_party": "ALEMAIS RAE PTY LIMITED",
+      "sample_customers": [
+        "TWINS OPTICAL"
+      ]
+    },
+    {
+      "domain": "faithfullthebrand.com",
+      "distinct_quote_customers": 1,
+      "link_count": 4,
+      "likely_party": "Faithfull The Brand",
+      "sample_customers": [
+        "OPTIONS EYECARE PEREGIAN BEACH"
+      ]
+    },
+    {
+      "domain": "templeandwebster.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 2,
+      "likely_party": "deborahhodotcom@gmail.com",
+      "sample_customers": [
+        "Missy Bell"
+      ]
+    },
+    {
+      "domain": "castlegroup.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 2,
+      "likely_party": "Castlegroup",
+      "sample_customers": [
+        "LANG LANG EYECARE"
+      ]
+    },
+    {
+      "domain": "sabbiagallery.com",
+      "distinct_quote_customers": 1,
+      "link_count": 5,
+      "likely_party": "Sabbia Gallery Pty Ltd",
+      "sample_customers": [
+        "UNDERWATER EXPLORER"
+      ]
+    },
+    {
+      "domain": "spicers.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Paperlinx",
+      "sample_customers": [
+        "Time & Place"
+      ]
+    },
+    {
+      "domain": "andonly.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 5,
+      "likely_party": "And Only",
+      "sample_customers": [
+        "BEAUTIFUL EYEWARES"
+      ]
+    },
+    {
+      "domain": "greensquaredc.com",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": null,
+      "sample_customers": [
+        "Nicholas J Baker"
+      ]
+    },
+    {
+      "domain": "wescout.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Monologue",
+      "sample_customers": [
+        "Missy Bell"
+      ]
+    },
+    {
+      "domain": "purepops.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Pure Pops",
+      "sample_customers": [
+        "NSW Ambulance"
+      ]
+    },
+    {
+      "domain": "pxpstudios.com",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Pxpstudios",
+      "sample_customers": [
+        "Kwik Kopy Darling Harbour"
+      ]
+    },
+    {
+      "domain": "characters.agency",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Characters",
+      "sample_customers": [
+        "Missy Bell"
+      ]
+    },
+    {
+      "domain": "designcollection.dk",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Bolia",
+      "sample_customers": [
+        "Volkanik Music"
+      ]
+    },
+    {
+      "domain": "pollenhospitality.com",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "SCCO Studio",
+      "sample_customers": [
+        "Vicki Gordon"
+      ]
+    },
+    {
+      "domain": "andrewlopez.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 2,
+      "likely_party": "Andrew Lopez Design",
+      "sample_customers": [
+        "FAMILY EYECARE"
+      ]
+    },
+    {
+      "domain": "armadaproperty.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Armadaproperty",
+      "sample_customers": [
+        "Missy Bell"
+      ]
+    },
+    {
+      "domain": "laver.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 4,
+      "likely_party": "Laver",
+      "sample_customers": [
+        "Kurz"
+      ]
+    },
+    {
+      "domain": "hightail.com",
+      "distinct_quote_customers": 1,
+      "link_count": 5,
+      "likely_party": "Hightail",
+      "sample_customers": [
+        "Studio Odea Pty Ltd"
+      ]
+    },
+    {
+      "domain": "mcsaatchi.com",
+      "distinct_quote_customers": 1,
+      "link_count": 5,
+      "likely_party": "M&C Saatchi World Services Australia Pty Ltd",
+      "sample_customers": [
+        "NATIONAL PHARMACIES ELIZABETH"
+      ]
+    },
+    {
+      "domain": "lincolnplace.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 4,
+      "likely_party": "Lincoln Place",
+      "sample_customers": [
+        "T1FM Property"
+      ]
+    },
+    {
+      "domain": "gracewright.co",
+      "distinct_quote_customers": 1,
+      "link_count": 3,
+      "likely_party": "Grace Wright",
+      "sample_customers": [
+        "Lizard Management & Production Pty Ltd"
+      ]
+    },
+    {
+      "domain": "sarahandsebastian.com",
+      "distinct_quote_customers": 1,
+      "link_count": 17,
+      "likely_party": "Sarah and Sebastian Pty Ltd",
+      "sample_customers": [
+        "Serrin Ainslie"
+      ]
+    },
+    {
+      "domain": "urbanpropertygroup.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 2,
+      "likely_party": "Urbanpropertygroup",
+      "sample_customers": [
+        "Ann Do"
+      ]
+    },
+    {
+      "domain": "tkelevator.com",
+      "distinct_quote_customers": 1,
+      "link_count": 2,
+      "likely_party": "TK Elevator Australia",
+      "sample_customers": [
+        "Cho Cho San"
+      ]
+    },
+    {
+      "domain": "intoprint.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "IntoPrint",
+      "sample_customers": [
+        "Serrin Ainslie"
+      ]
+    },
+    {
+      "domain": "fastprintservices.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Fast Print Services",
+      "sample_customers": [
+        "Kwik Kopy Darling Harbour"
+      ]
+    },
+    {
+      "domain": "seedprint.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Seed Print Group",
+      "sample_customers": [
+        "GM Holden"
+      ]
+    },
+    {
+      "domain": "deliveryagency.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Deliveryagency",
+      "sample_customers": [
+        "Volkanik Music"
+      ]
+    },
+    {
+      "domain": "westernsydney.edu.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "University of Western Sydney",
+      "sample_customers": [
+        "Quite So"
+      ]
+    },
+    {
+      "domain": "clickmedia.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 4,
+      "likely_party": "Click Media",
+      "sample_customers": [
+        "Lena Mirz"
+      ]
+    },
+    {
+      "domain": "muttiparma.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Muttiparma",
+      "sample_customers": [
+        "Missy Bell"
+      ]
+    },
+    {
+      "domain": "ridenson.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 2,
+      "likely_party": "Ridenson",
+      "sample_customers": [
+        "Deepend Sydney"
+      ]
+    },
+    {
+      "domain": "bntmanagement.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 4,
+      "likely_party": "BNT Management Pty Ltd",
+      "sample_customers": [
+        "HUNTER DISCOUNT SPECS"
+      ]
+    },
+    {
+      "domain": "pallasgroup.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 3,
+      "likely_party": "Fortis",
+      "sample_customers": [
+        "Eye Candy Optics"
+      ]
+    },
+    {
+      "domain": "jandco.studio",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Jandco",
+      "sample_customers": [
+        "DIY Invitations"
+      ]
+    },
+    {
+      "domain": "ubfips.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 3,
+      "likely_party": "UBF SALES",
+      "sample_customers": [
+        "Imogen Moss Design"
+      ]
+    },
+    {
+      "domain": "james.agency",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "James",
+      "sample_customers": [
+        "Studio Odea Pty Ltd"
+      ]
+    },
+    {
+      "domain": "jiksaw.com",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": null,
+      "sample_customers": [
+        "Missy Bell"
+      ]
+    },
+    {
+      "domain": "voiceswomen.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 2,
+      "likely_party": "Voiceswomen",
+      "sample_customers": [
+        "Blazze"
+      ]
+    },
+    {
+      "domain": "mcsaatchiws.com",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Mcsaatchiws",
+      "sample_customers": [
+        "NATIONAL PHARMACIES ELIZABETH"
+      ]
+    },
+    {
+      "domain": "ideateco.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 9,
+      "likely_party": "Ideateco",
+      "sample_customers": [
+        "Alliance Francaise de Sydney"
+      ]
+    },
+    {
+      "domain": "thetidescp.com",
+      "distinct_quote_customers": 1,
+      "link_count": 2,
+      "likely_party": "The Tides Creative Production",
+      "sample_customers": [
+        "Snap Neutral Bay"
+      ]
+    },
+    {
+      "domain": "thekidandco.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": null,
+      "sample_customers": [
+        "ICONTACT MT GRAVATT"
+      ]
+    },
+    {
+      "domain": "ascham.nsw.edu.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Ascham School",
+      "sample_customers": [
+        "Damian Wheeler"
+      ]
+    },
+    {
+      "domain": "hatrikhouse.com",
+      "distinct_quote_customers": 1,
+      "link_count": 2,
+      "likely_party": "Hatrikhouse",
+      "sample_customers": [
+        "Quite So"
+      ]
+    },
+    {
+      "domain": "peterkin.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Peterkin",
+      "sample_customers": [
+        "Disrupt"
+      ]
+    },
+    {
+      "domain": "jessicasepel.com",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": null,
+      "sample_customers": [
+        "PREVUE EYEWEAR ROBINA"
+      ]
+    },
+    {
+      "domain": "next-printing.com",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Next Printing",
+      "sample_customers": [
+        "Sydney Eisteddfod"
+      ]
+    },
+    {
+      "domain": "beareaglefire.com",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Bear Meets Eagle on Fire",
+      "sample_customers": [
+        "Rose McEwen"
+      ]
+    },
+    {
+      "domain": "rizer.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Rizer Pty Ltd",
+      "sample_customers": [
+        "Beth Weynberg"
+      ]
+    },
+    {
+      "domain": "reacongroup.com",
+      "distinct_quote_customers": 1,
+      "link_count": 2,
+      "likely_party": "Reacongroup",
+      "sample_customers": [
+        "Copybook Printing"
+      ]
+    },
+    {
+      "domain": "phaze.digital",
+      "distinct_quote_customers": 1,
+      "link_count": 3,
+      "likely_party": "Phaze",
+      "sample_customers": [
+        "THE SPEC OPTOMETRIST"
+      ]
+    },
+    {
+      "domain": "season-season.org",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Season Season",
+      "sample_customers": [
+        "Missy Bell"
+      ]
+    },
+    {
+      "domain": "circularquay.snap.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Circularquay",
+      "sample_customers": [
+        "TWINS OPTICAL"
+      ]
+    },
+    {
+      "domain": "flyersdirect.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": null,
+      "sample_customers": [
+        "UNDERWATER EXPLORER"
+      ]
+    },
+    {
+      "domain": "maisonpaper.com",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Maisonpaper",
+      "sample_customers": [
+        "Amanda Redgrave"
+      ]
+    },
+    {
+      "domain": "cicadainnovations.com",
+      "distinct_quote_customers": 1,
+      "link_count": 3,
+      "likely_party": "Cicadainnovations",
+      "sample_customers": [
+        "Bdesigned Graphics"
+      ]
+    },
+    {
+      "domain": "faastprint.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Faastprint",
+      "sample_customers": [
+        "Harley Quinn"
+      ]
+    },
+    {
+      "domain": "sendjolly.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 8,
+      "likely_party": "Jolly",
+      "sample_customers": [
+        "WILLIS & ELLIOTT OPTOMETRISTS"
+      ]
+    },
+    {
+      "domain": "theeventspace.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 7,
+      "likely_party": "The Event Space",
+      "sample_customers": [
+        "SUNBEAT NOW MAROOCHYDORE"
+      ]
+    },
+    {
+      "domain": "wetransfer.com",
+      "distinct_quote_customers": 1,
+      "link_count": 2,
+      "likely_party": "Wetransfer",
+      "sample_customers": [
+        "Max Build"
+      ]
+    },
+    {
+      "domain": "new-moon.com",
+      "distinct_quote_customers": 1,
+      "link_count": 4,
+      "likely_party": "New Moon",
+      "sample_customers": [
+        "BWD Creative"
+      ]
+    },
+    {
+      "domain": "upstate.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 3,
+      "likely_party": "UPSTATE",
+      "sample_customers": [
+        "Ashleigh Fedele"
+      ]
+    },
+    {
+      "domain": "copybook.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 2,
+      "likely_party": "Copybook",
+      "sample_customers": [
+        "Karly Morris"
+      ]
+    },
+    {
+      "domain": "inauro.io",
+      "distinct_quote_customers": 1,
+      "link_count": 2,
+      "likely_party": "Inauro",
+      "sample_customers": [
+        "Missy Bell"
+      ]
+    },
+    {
+      "domain": "printgraphics.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 2,
+      "likely_party": "Printgraphics",
+      "sample_customers": [
+        "Warrior Princess"
+      ]
+    },
+    {
+      "domain": "beltscan.com",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Sunday Collab",
+      "sample_customers": [
+        "Debut Management"
+      ]
+    },
+    {
+      "domain": "sunday-collab.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Sunday Collab",
+      "sample_customers": [
+        "Debut Management"
+      ]
+    },
+    {
+      "domain": "hkslates.com",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Centric Wealth",
+      "sample_customers": [
+        "The Business Queen"
+      ]
+    },
+    {
+      "domain": "theotherhemisphere.com",
+      "distinct_quote_customers": 1,
+      "link_count": 6,
+      "likely_party": "The Other Hemisphere",
+      "sample_customers": [
+        "Amberjules"
+      ]
+    },
+    {
+      "domain": "seemenow.net.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "See me now",
+      "sample_customers": [
+        "LIDA"
+      ]
+    },
+    {
+      "domain": "givewrap.org",
+      "distinct_quote_customers": 1,
+      "link_count": 4,
+      "likely_party": "Givewrap",
+      "sample_customers": [
+        "Narellan Pools"
+      ]
+    },
+    {
+      "domain": "tentableskitchen.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": null,
+      "sample_customers": [
+        "HORSFALLS OPTOM ECHUCA"
+      ]
+    },
+    {
+      "domain": "armadillo-co.com",
+      "distinct_quote_customers": 1,
+      "link_count": 2,
+      "likely_party": "Armadillo & Co",
+      "sample_customers": [
+        "Volkanik Music"
+      ]
+    },
+    {
+      "domain": "colourcopyshop.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": null,
+      "sample_customers": [
+        "Volkanik Music"
+      ]
+    },
+    {
+      "domain": "spaceful.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 2,
+      "likely_party": "Spaceful",
+      "sample_customers": [
+        "CLEARSIGHT OPTOMETRY"
+      ]
+    },
+    {
+      "domain": "white-noise.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Studio White Noise",
+      "sample_customers": [
+        "MISSION BEACH OPTOMETRIST"
+      ]
+    },
+    {
+      "domain": "ingenti.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 3,
+      "likely_party": "Al Goh",
+      "sample_customers": [
+        "James Harrison"
+      ]
+    },
+    {
+      "domain": "precisionpublicaffairs.com",
+      "distinct_quote_customers": 1,
+      "link_count": 2,
+      "likely_party": "Hello Yelo",
+      "sample_customers": [
+        "Missy Bell"
+      ]
+    },
+    {
+      "domain": "dahuaaustralia.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": null,
+      "sample_customers": [
+        "BLP Printing"
+      ]
+    },
+    {
+      "domain": "redleopardpr.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 2,
+      "likely_party": "Menangle Park DV Management Pty Ltd",
+      "sample_customers": [
+        "BLP Printing"
+      ]
+    },
+    {
+      "domain": "enigma.net.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Enigma",
+      "sample_customers": [
+        "Eye Candy Optics"
+      ]
+    },
+    {
+      "domain": "hurricanesgrill.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 5,
+      "likely_party": "Hurricanesgrill",
+      "sample_customers": [
+        "Giant Squid"
+      ]
+    },
+    {
+      "domain": "tourism.australia.com",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Tourism",
+      "sample_customers": [
+        "Missy Bell"
+      ]
+    },
+    {
+      "domain": "todaythebrave.com",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": null,
+      "sample_customers": [
+        "Samuel Sweeney"
+      ]
+    },
+    {
+      "domain": "buck.co",
+      "distinct_quote_customers": 1,
+      "link_count": 2,
+      "likely_party": "Buck Co",
+      "sample_customers": [
+        "Christie Fearns"
+      ]
+    },
+    {
+      "domain": "emac.net.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": null,
+      "sample_customers": [
+        "HORSFALLS OPTOM KYABRAM"
+      ]
+    },
+    {
+      "domain": "rationale.com",
+      "distinct_quote_customers": 1,
+      "link_count": 3,
+      "likely_party": null,
+      "sample_customers": [
+        "HORSFALLS OPTOM KYABRAM"
+      ]
+    },
+    {
+      "domain": "clubhouseproductions.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Clubhouseproductions",
+      "sample_customers": [
+        "Butter Stream Design"
+      ]
+    },
+    {
+      "domain": "unevenpress.com",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": null,
+      "sample_customers": [
+        "Kwik Kopy Darling Harbour"
+      ]
+    },
+    {
+      "domain": "bigpond.net.au",
+      "distinct_quote_customers": 1,
+      "link_count": 3,
+      "likely_party": "Isabel Shur",
+      "sample_customers": [
+        "HUNTER DISCOUNT SPECS"
+      ]
+    },
+    {
+      "domain": "frostcollective.com",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": null,
+      "sample_customers": [
+        "Bakehouse Limited"
+      ]
+    },
+    {
+      "domain": "incapisca.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Incapisca",
+      "sample_customers": [
+        "JOY O'NEILL OPTOMETRIST"
+      ]
+    },
+    {
+      "domain": "fisherpaykel.com",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Fisherpaykel",
+      "sample_customers": [
+        "Missy Bell"
+      ]
+    },
+    {
+      "domain": "colliers.com",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Colliers",
+      "sample_customers": [
+        "Studio Odea Pty Ltd"
+      ]
+    },
+    {
+      "domain": "popup-media.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Colliers",
+      "sample_customers": [
+        "Studio Odea Pty Ltd"
+      ]
+    },
+    {
+      "domain": "aspeninteriors.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Aspeninteriors",
+      "sample_customers": [
+        "Missy Bell"
+      ]
+    },
+    {
+      "domain": "scco.studio",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Scco",
+      "sample_customers": [
+        "Vicki Gordon"
+      ]
+    },
+    {
+      "domain": "wmkarchitecture.com",
+      "distinct_quote_customers": 1,
+      "link_count": 2,
+      "likely_party": null,
+      "sample_customers": [
+        "Mirrah Foulkes"
+      ]
+    },
+    {
+      "domain": "buckner.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Buckner",
+      "sample_customers": [
+        "NT OPTOMETRISTS"
+      ]
+    },
+    {
+      "domain": "platino.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 2,
+      "likely_party": "Platino",
+      "sample_customers": [
+        "E-2"
+      ]
+    },
+    {
+      "domain": "groundcrew.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 2,
+      "likely_party": "Groundcrew",
+      "sample_customers": [
+        "Dunne Realty Mosman"
+      ]
+    },
+    {
+      "domain": "fsreg.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "FS Reg",
+      "sample_customers": [
+        "Passenger Goods"
+      ]
+    },
+    {
+      "domain": "southernwildco.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Southernwildco",
+      "sample_customers": [
+        "Missy Bell"
+      ]
+    },
+    {
+      "domain": "centuria.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Centuria",
+      "sample_customers": [
+        "Harley Quinn"
+      ]
+    },
+    {
+      "domain": "beardedkitten.com",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Beardedkitten",
+      "sample_customers": [
+        "Missy Bell"
+      ]
+    },
+    {
+      "domain": "lgbtiqhealth.org.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": null,
+      "sample_customers": [
+        "Missy Bell"
+      ]
+    },
+    {
+      "domain": "live.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": null,
+      "sample_customers": [
+        "Lizard Management & Production Pty Ltd"
+      ]
+    },
+    {
+      "domain": "sydney.edu.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": null,
+      "sample_customers": [
+        "Lizard Management & Production Pty Ltd"
+      ]
+    },
+    {
+      "domain": "agileprintmedia.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 3,
+      "likely_party": "Agile Print Media",
+      "sample_customers": [
+        "Body Rox"
+      ]
+    },
+    {
+      "domain": "specialgroup.com",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": null,
+      "sample_customers": [
+        "FUTURE VISION OPTOMETRIST"
+      ]
+    },
+    {
+      "domain": "thebidcoordinator.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "The Bid Coordinator",
+      "sample_customers": [
+        "Bakehouse Limited"
+      ]
+    },
+    {
+      "domain": "headandheart.net.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": null,
+      "sample_customers": [
+        "L&L Design & Production"
+      ]
+    },
+    {
+      "domain": "agraphique.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "AGRAPHIQUE",
+      "sample_customers": [
+        "Double A Paper"
+      ]
+    },
+    {
+      "domain": "bostonprojects.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Bostonprojects",
+      "sample_customers": [
+        "CSB Homes"
+      ]
+    },
+    {
+      "domain": "drprint.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Dr Print",
+      "sample_customers": [
+        "Total Property Group"
+      ]
+    },
+    {
+      "domain": "aland.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Aland Developments Pty Ltd",
+      "sample_customers": [
+        "MENTONE OPTICAL SERVICE"
+      ]
+    },
+    {
+      "domain": "houstongroup.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Houston Group Pty Ltd",
+      "sample_customers": [
+        "FUTURE VISION OPTOMETRIST"
+      ]
+    },
+    {
+      "domain": "trenearprinting.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Trenear Printing Service Pty Ltd",
+      "sample_customers": [
+        "Total Property Group"
+      ]
+    },
+    {
+      "domain": "breville.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Breville",
+      "sample_customers": [
+        "JINDABYNE SPORTS"
+      ]
+    },
+    {
+      "domain": "medel.com",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "MED-EL Implant Systems Australasia Pty Ltd",
+      "sample_customers": [
+        "TWINS OPTICAL"
+      ]
+    },
+    {
+      "domain": "oceaniaregent.com",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": null,
+      "sample_customers": [
+        "SPECIAL EYES - PERTH"
+      ]
+    },
+    {
+      "domain": "rssc.com",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": null,
+      "sample_customers": [
+        "SPECIAL EYES - PERTH"
+      ]
+    },
+    {
+      "domain": "pelv.is",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": null,
+      "sample_customers": [
+        "Commonwealth Bank of Australia"
+      ]
+    },
+    {
+      "domain": "mcaslan.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Mcaslan",
+      "sample_customers": [
+        "FUTURE VISION OPTOMETRIST"
+      ]
+    },
+    {
+      "domain": "dext.cc",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Studio Odea Pty Ltd",
+      "sample_customers": [
+        "Alliance Francaise de Sydney"
+      ]
+    },
+    {
+      "domain": "platformco.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Platformco Investments Pty Ltd.",
+      "sample_customers": [
+        "Atoll Paper"
+      ]
+    },
+    {
+      "domain": "livelifegetactive.com",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Livelifegetactive",
+      "sample_customers": [
+        "HIGH ON VISION"
+      ]
+    },
+    {
+      "domain": "mcsaatchi.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": null,
+      "sample_customers": [
+        "NATIONAL PHARMACIES ELIZABETH"
+      ]
+    },
+    {
+      "domain": "florenceguild.com",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": null,
+      "sample_customers": [
+        "PEZZIMENTI OPTOMS"
+      ]
+    },
+    {
+      "domain": "evergreenpropertygroup.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Eat Fit Food",
+      "sample_customers": [
+        "Missy Bell"
+      ]
+    },
+    {
+      "domain": "ctrlprintgroup.com",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "CTRL Print Group",
+      "sample_customers": [
+        "Macan  Properties"
+      ]
+    },
+    {
+      "domain": "google.com",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": null,
+      "sample_customers": [
+        "BWD Creative"
+      ]
+    },
+    {
+      "domain": "regnology.net",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": null,
+      "sample_customers": [
+        "Missy Bell"
+      ]
+    },
+    {
+      "domain": "lisalarkindesign.com",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": null,
+      "sample_customers": [
+        "Missy Bell"
+      ]
+    },
+    {
+      "domain": "ellipseproperty.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 2,
+      "likely_party": "Ellipseproperty",
+      "sample_customers": [
+        "BEAUTIFUL EYEWARES"
+      ]
+    },
+    {
+      "domain": "tussletogether.com",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Tussle Together",
+      "sample_customers": [
+        "Missy Bell"
+      ]
+    },
+    {
+      "domain": "henrywilson.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": null,
+      "sample_customers": [
+        "Disrupt"
+      ]
+    },
+    {
+      "domain": "studiohenrywilson.com",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": null,
+      "sample_customers": [
+        "Disrupt"
+      ]
+    },
+    {
+      "domain": "fluidform.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Fluidform",
+      "sample_customers": [
+        "Cargill Moore"
+      ]
+    },
+    {
+      "domain": "snapchat.com",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Snapchat",
+      "sample_customers": [
+        "ANDREW WATKINS OPTOMETRISTS"
+      ]
+    },
+    {
+      "domain": "studytafensw.edu.au",
+      "distinct_quote_customers": 1,
+      "link_count": 2,
+      "likely_party": "Tafensw",
+      "sample_customers": [
+        "GRANATA EYECARE"
+      ]
+    },
+    {
+      "domain": "exitoadvisory.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": null,
+      "sample_customers": [
+        "Debut Management"
+      ]
+    },
+    {
+      "domain": "cleverclassroom.net.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Cleverclassroom",
+      "sample_customers": [
+        "CLEARVIEW EYECARE OPTOMETRIST"
+      ]
+    },
+    {
+      "domain": "drncskin.com",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Drncskin",
+      "sample_customers": [
+        "Department of Planning, Housing and Infrastructure"
+      ]
+    },
+    {
+      "domain": "good-design.org",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": null,
+      "sample_customers": [
+        "Alliance Francaise de Sydney"
+      ]
+    },
+    {
+      "domain": "accessdig.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Do One Good Thing",
+      "sample_customers": [
+        "Missy Bell"
+      ]
+    },
+    {
+      "domain": "serenityfamilyfunerals.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Jennifer Butcher",
+      "sample_customers": [
+        "Jack Flash Digital"
+      ]
+    },
+    {
+      "domain": "goldenhourcreative.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Goldenhourcreative",
+      "sample_customers": [
+        "Missy Bell"
+      ]
+    },
+    {
+      "domain": "manaseg.com",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Mana Group Oceania Pty Ltd",
+      "sample_customers": [
+        "Missy Bell"
+      ]
+    },
+    {
+      "domain": "betterbuilthomes.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Betterbuilthomes",
+      "sample_customers": [
+        "Unique Retailing"
+      ]
+    },
+    {
+      "domain": "thejygroup.com",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": null,
+      "sample_customers": [
+        "Ernst & Young Services CANCEL"
+      ]
+    },
+    {
+      "domain": "team.telstra.com",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": null,
+      "sample_customers": [
+        "Cheddar Pocket"
+      ]
+    },
+    {
+      "domain": "theplacecollective.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "The Place Collective",
+      "sample_customers": [
+        "Continuum  Marketing"
+      ]
+    },
+    {
+      "domain": "topshotprinting.com.au",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Top Shot Printing + Framing",
+      "sample_customers": [
+        "Nathan Kaw"
+      ]
+    },
+    {
+      "domain": "atpm.studio",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Atpm",
+      "sample_customers": [
+        "Eye Candy Optics"
+      ]
+    },
+    {
+      "domain": "raywhite.com",
+      "distinct_quote_customers": 1,
+      "link_count": 1,
+      "likely_party": "Ray White Estate Partnership Pty Ltd",
+      "sample_customers": [
+        "RACHEL CAUCHI OPTOM"
+      ]
+    }
+  ],
+  "distinct_customer_distribution": {
+    "20": 1,
+    "19": 1,
+    "14": 1,
+    "12": 1,
+    "11": 1,
+    "7": 4,
+    "6": 1,
+    "5": 4,
+    "4": 8,
+    "3": 14,
+    "2": 23,
+    "1": 175
+  },
+  "proposed_N": 3,
+  "classification": {
+    "broker_traffic": 350,
+    "genuine_contamination": 441,
+    "broker_domain_count": 36
+  },
+  "candidate_crosscheck": {
+    "total_candidates": 3214,
+    "unreviewed_candidates": 2092,
+    "broker_domains_matching_candidate": 16,
+    "broker_domains_total": 36,
+    "matches": [
+      {
+        "domain": "deephouseprintstudio.com.au",
+        "party": "Deephouse Print Studio",
+        "distinct_customers": 20,
+        "matched_candidate_norm": "house"
+      },
+      {
+        "domain": "rasicandpartners.com",
+        "party": null,
+        "distinct_customers": 12,
+        "matched_candidate_norm": "rasicandpartners"
+      },
+      {
+        "domain": "artis.net.au",
+        "party": "Artis",
+        "distinct_customers": 11,
+        "matched_candidate_norm": "artis"
+      },
+      {
+        "domain": "thepropertyagency.com.au",
+        "party": "The Property Agency",
+        "distinct_customers": 7,
+        "matched_candidate_norm": "property"
+      },
+      {
+        "domain": "rba.com.au",
+        "party": null,
+        "distinct_customers": 7,
+        "matched_candidate_norm": "urbanrevolutions"
+      },
+      {
+        "domain": "l-ldesign.com.au",
+        "party": "L&L Design & Production",
+        "distinct_customers": 6,
+        "matched_candidate_norm": "lldesignproduction"
+      },
+      {
+        "domain": "tacitcommunications.com",
+        "party": null,
+        "distinct_customers": 5,
+        "matched_candidate_norm": "communication"
+      },
+      {
+        "domain": "unsw.edu.au",
+        "party": "Unsw",
+        "distinct_customers": 5,
+        "matched_candidate_norm": "unswlawsociety"
+      },
+      {
+        "domain": "carbon-creative.com.au",
+        "party": null,
+        "distinct_customers": 4,
+        "matched_candidate_norm": "carbon"
+      },
+      {
+        "domain": "monacopg.com.au",
+        "party": "Monaco Property Group",
+        "distinct_customers": 4,
+        "matched_candidate_norm": "property"
+      },
+      {
+        "domain": "studioodea.com.au",
+        "party": "Studioodea",
+        "distinct_customers": 4,
+        "matched_candidate_norm": "studioodea"
+      },
+      {
+        "domain": "sekisuihouse.com.au",
+        "party": "Sekisuihouse",
+        "distinct_customers": 3,
+        "matched_candidate_norm": "house"
+      },
+      {
+        "domain": "metropolis.com.au",
+        "party": "Metropolis",
+        "distinct_customers": 3,
+        "matched_candidate_norm": "metropolisagency"
+      },
+      {
+        "domain": "goldcraft.com.au",
+        "party": "Goldcraft",
+        "distinct_customers": 3,
+        "matched_candidate_norm": "goldcraftembossing"
+      },
+      {
+        "domain": "stephenlayfield.com",
+        "party": "Layfield Design",
+        "distinct_customers": 3,
+        "matched_candidate_norm": "layfielddesign"
+      },
+      {
+        "domain": "thejames.agency",
+        "party": null,
+        "distinct_customers": 3,
+        "matched_candidate_norm": "james"
+      }
+    ]
+  }
+}

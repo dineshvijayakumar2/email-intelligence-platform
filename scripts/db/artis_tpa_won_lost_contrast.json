@@ -1,0 +1,367 @@
+{
+  "C14306": {
+    "name": "Artis",
+    "window_days": 14,
+    "cutoff": "2026-05-15",
+    "first_email": "2022-06-15",
+    "partA_counts": {
+      "won": 788,
+      "lost": 3055,
+      "won_linked": 533,
+      "lost_linked": 1390,
+      "excluded_no_contact": 0,
+      "excluded_presync": 1138,
+      "excluded_postcutoff": 85
+    },
+    "partA_features": {
+      "first_resp": {
+        "won": 0.9212278512844321,
+        "lost": 1.1549555650603556,
+        "separates": false
+      },
+      "reply_lat": {
+        "won": 4.654828354374588,
+        "lost": 9.014416218585803,
+        "separates": true
+      },
+      "followups": {
+        "won": 28.5234521575985,
+        "lost": 14.877697841726619,
+        "separates": true
+      },
+      "am_init": {
+        "won": 0.33583489681050654,
+        "lost": 0.60431654676259,
+        "separates": true
+      },
+      "exchanges": {
+        "won": 89.78236397748593,
+        "lost": 39.07122302158273,
+        "separates": true
+      },
+      "threads": {
+        "won": 28.454033771106943,
+        "lost": 23.392086330935253,
+        "separates": false
+      },
+      "contacts": {
+        "won": 3.716697936210131,
+        "lost": 2.9093525179856115,
+        "separates": true
+      },
+      "ss": {
+        "won": 0.0016023829991064277,
+        "lost": 0.0008280084385474939,
+        "separates": true
+      }
+    },
+    "partA_intent_won": {
+      "general_enquiry": 20310,
+      "quote_request": 3993,
+      "payment_query": 1431,
+      "job_approval": 16136,
+      "artwork_submission": 4734,
+      "action_required": 240,
+      "cancellation_intent": 37,
+      "other": 195,
+      "complaint": 95,
+      "fyi_update": 265,
+      "follow_up": 61,
+      "question": 39,
+      "escalation_to_management": 17,
+      "out_of_office": 32,
+      "pricing_inquiry": 28,
+      "invoice": 34,
+      "invoice_query": 16,
+      "purchase_order": 38,
+      "reorder": 6,
+      "quote": 20,
+      "positive_feedback": 1
+    },
+    "partA_intent_lost": {
+      "payment_query": 13526,
+      "general_enquiry": 11518,
+      "fyi_update": 992,
+      "other": 241,
+      "invoice": 387,
+      "quote_request": 17485,
+      "invoice_query": 165,
+      "pricing_inquiry": 277,
+      "action_required": 263,
+      "job_approval": 7255,
+      "artwork_submission": 1654,
+      "out_of_office": 40,
+      "reorder": 63,
+      "complaint": 68,
+      "quote": 20,
+      "follow_up": 32,
+      "question": 24,
+      "cancellation_intent": 13,
+      "positive_feedback": 15,
+      "purchase_order": 9,
+      "escalation_to_management": 5
+    },
+    "partB_contacts": [
+      {
+        "handle": "graphics",
+        "emails": [
+          "graphics@embellishinggroup.com.au",
+          "graphics@artis.net.au"
+        ],
+        "qb_q": 754,
+        "won": 604,
+        "strike": 80.1,
+        "won_val": 854427,
+        "em_from": 1018,
+        "em_to": 1443,
+        "threads": 688,
+        "reply_lat_hrs": 441.06744285870514,
+        "init_ratio": 0.6865889212827988,
+        "last": "2026-05-21",
+        "flag": "VALUE-DRIVER"
+      },
+      {
+        "handle": "accounts.pay",
+        "emails": [
+          "accounts.pay@artis.net.au"
+        ],
+        "qb_q": 2106,
+        "won": 84,
+        "strike": 4.0,
+        "won_val": 168394,
+        "em_from": 2,
+        "em_to": 321,
+        "threads": 320,
+        "reply_lat_hrs": 216.86138888888888,
+        "init_ratio": 0.00625,
+        "last": "2026-05-20",
+        "flag": "VOLUME-SINK"
+      },
+      {
+        "handle": "rowan",
+        "emails": [
+          "rowan@artis.net.au"
+        ],
+        "qb_q": 898,
+        "won": 125,
+        "strike": 13.9,
+        "won_val": 223914,
+        "em_from": 171,
+        "em_to": 347,
+        "threads": 232,
+        "reply_lat_hrs": 1544.9963612735542,
+        "init_ratio": 0.28448275862068967,
+        "last": "2026-05-22",
+        "flag": ""
+      },
+      {
+        "handle": "martin",
+        "emails": [
+          "martin@artis.net.au"
+        ],
+        "qb_q": 471,
+        "won": 130,
+        "strike": 27.6,
+        "won_val": 184528,
+        "em_from": 344,
+        "em_to": 597,
+        "threads": 469,
+        "reply_lat_hrs": 350.90422238372093,
+        "init_ratio": 0.31556503198294245,
+        "last": "2026-05-21",
+        "flag": "VALUE-DRIVER"
+      },
+      {
+        "handle": "mark",
+        "emails": [
+          "mark@artis.net.au"
+        ],
+        "qb_q": 769,
+        "won": 69,
+        "strike": 9.0,
+        "won_val": 139065,
+        "em_from": 403,
+        "em_to": 403,
+        "threads": 353,
+        "reply_lat_hrs": 538.5601006341329,
+        "init_ratio": 0.09631728045325778,
+        "last": "2026-05-18",
+        "flag": ""
+      }
+    ],
+    "caveat": "Ehab ~2wk unsynced -> recency understated"
+  },
+  "C13039": {
+    "name": "The Property Agency",
+    "window_days": 14,
+    "cutoff": "2026-05-15",
+    "first_email": "2022-05-03",
+    "partA_counts": {
+      "won": 301,
+      "lost": 504,
+      "won_linked": 135,
+      "lost_linked": 223,
+      "excluded_no_contact": 0,
+      "excluded_presync": 108,
+      "excluded_postcutoff": 7
+    },
+    "partA_features": {
+      "first_resp": {
+        "won": 2.0327466931216933,
+        "lost": 2.139572145061728,
+        "separates": false
+      },
+      "reply_lat": {
+        "won": 24.525046827739278,
+        "lost": 16.302409951592345,
+        "separates": true
+      },
+      "followups": {
+        "won": 17.133333333333333,
+        "lost": 15.73542600896861,
+        "separates": false
+      },
+      "am_init": {
+        "won": 0.26666666666666666,
+        "lost": 0.2556053811659193,
+        "separates": false
+      },
+      "exchanges": {
+        "won": 54.422222222222224,
+        "lost": 50.62331838565022,
+        "separates": false
+      },
+      "threads": {
+        "won": 14.066666666666666,
+        "lost": 13.161434977578475,
+        "separates": false
+      },
+      "contacts": {
+        "won": 2.8962962962962964,
+        "lost": 2.3721973094170403,
+        "separates": false
+      },
+      "ss": {
+        "won": 0.0,
+        "lost": 0.0,
+        "separates": false
+      }
+    },
+    "partA_intent_won": {
+      "quote_request": 893,
+      "general_enquiry": 3704,
+      "buying_signal": 23,
+      "job_approval": 1420,
+      "artwork_submission": 640,
+      "payment_query": 132,
+      "complaint": 35,
+      "other": 15,
+      "action_required": 1,
+      "cancellation_intent": 10,
+      "out_of_office": 13,
+      "reorder": 3
+    },
+    "partA_intent_lost": {
+      "general_enquiry": 5302,
+      "job_approval": 1884,
+      "quote_request": 1855,
+      "payment_query": 238,
+      "artwork_submission": 771,
+      "action_required": 6,
+      "cancellation_intent": 15,
+      "out_of_office": 13,
+      "complaint": 57,
+      "buying_signal": 38,
+      "other": 15,
+      "reorder": 2
+    },
+    "partB_contacts": [
+      {
+        "handle": "ry",
+        "emails": [
+          "ry@thepropertyagency.com.au"
+        ],
+        "qb_q": 436,
+        "won": 177,
+        "strike": 40.6,
+        "won_val": 684974,
+        "em_from": 338,
+        "em_to": 373,
+        "threads": 200,
+        "reply_lat_hrs": 463.37165516107825,
+        "init_ratio": 0.285,
+        "last": "2026-06-04",
+        "flag": "VALUE-DRIVER"
+      },
+      {
+        "handle": "ck",
+        "emails": [
+          "ck@thepropertyagency.com.au"
+        ],
+        "qb_q": 171,
+        "won": 62,
+        "strike": 36.3,
+        "won_val": 233000,
+        "em_from": 516,
+        "em_to": 357,
+        "threads": 206,
+        "reply_lat_hrs": 590.7261418554476,
+        "init_ratio": 0.6310679611650486,
+        "last": "2026-05-21",
+        "flag": "VALUE-DRIVER"
+      },
+      {
+        "handle": "hw",
+        "emails": [
+          "hw@thepropertyagency.com.au"
+        ],
+        "qb_q": 64,
+        "won": 27,
+        "strike": 42.2,
+        "won_val": 108207,
+        "em_from": 25,
+        "em_to": 2,
+        "threads": 17,
+        "reply_lat_hrs": 6870.474126984127,
+        "init_ratio": 0.8823529411764706,
+        "last": "2025-12-09",
+        "flag": "VALUE-DRIVER"
+      },
+      {
+        "handle": "jk",
+        "emails": [
+          "jk@thepropertyagency.com.au"
+        ],
+        "qb_q": 36,
+        "won": 9,
+        "strike": 25.0,
+        "won_val": 55184,
+        "em_from": 183,
+        "em_to": 229,
+        "threads": 98,
+        "reply_lat_hrs": 3.9199043715846997,
+        "init_ratio": 0.25510204081632654,
+        "last": "2026-06-03",
+        "flag": "VALUE-DRIVER"
+      },
+      {
+        "handle": "mi",
+        "emails": [
+          "mi@thepropertyagency.com.au"
+        ],
+        "qb_q": 42,
+        "won": 6,
+        "strike": 14.3,
+        "won_val": 42382,
+        "em_from": 1,
+        "em_to": 0,
+        "threads": 1,
+        "reply_lat_hrs": null,
+        "init_ratio": 1.0,
+        "last": "2022-11-21",
+        "flag": ""
+      }
+    ],
+    "caveat": "21% off-named-mailbox -> attribution noise"
+  }
+}

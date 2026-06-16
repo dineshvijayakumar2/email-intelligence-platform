@@ -1,0 +1,505 @@
+{
+  "phase1_counts": {
+    "trash_to_reset": 41803,
+    "nic_no_row": 16293,
+    "nic_mailbox_total": 24143,
+    "total_candidate": 58096
+  },
+  "phase2_validation": {
+    "n": 50,
+    "elapsed_s": 89.1,
+    "cost_usd": 0.0083,
+    "agreement_pct": 92.0,
+    "pilot_dist": {
+      "general_enquiry": 29,
+      "quote_request": 6,
+      "payment_query": 5,
+      "job_approval": 4,
+      "artwork_submission": 4,
+      "out_of_office": 1,
+      "complaint": 1
+    },
+    "driver_dist": {
+      "job_approval": 2,
+      "general_enquiry": 4,
+      "quote_request": 1,
+      "payment_query": 3
+    },
+    "content_skipped": 0,
+    "skip_reasons": {},
+    "sidebyside": [
+      {
+        "id": "0009c67e-d4a5-4c0d-aa57-599459bf42a0",
+        "pilot": "general_enquiry",
+        "driver": "job_approval"
+      },
+      {
+        "id": "000ed3e0-e419-4923-a0d0-4d0a451947be",
+        "pilot": "quote_request",
+        "driver": "job_approval"
+      },
+      {
+        "id": "00131805-ca71-4bb3-834e-e17ff08500d1",
+        "pilot": "general_enquiry",
+        "driver": "general_enquiry"
+      },
+      {
+        "id": "00239a42-6dbf-443c-86d7-e9a1c495e813",
+        "pilot": "general_enquiry",
+        "driver": "general_enquiry"
+      },
+      {
+        "id": "00293f32-6ec5-433d-ae9c-de7b78b9b2de",
+        "pilot": "general_enquiry",
+        "driver": "quote_request"
+      },
+      {
+        "id": "002b2600-7bd5-429e-809c-92e0ab8cce1b",
+        "pilot": "general_enquiry",
+        "driver": "general_enquiry"
+      },
+      {
+        "id": "002bab66-1e00-4c2d-9ca4-64f806488cf4",
+        "pilot": "general_enquiry",
+        "driver": "general_enquiry"
+      },
+      {
+        "id": "0033e4c3-937a-47d6-8621-ac0ccf8a6aa3",
+        "pilot": "payment_query",
+        "driver": "payment_query"
+      },
+      {
+        "id": "00417025-c11b-44e9-b5cc-a8eab894d947",
+        "pilot": "general_enquiry",
+        "driver": "general_enquiry"
+      },
+      {
+        "id": "00534896-1c8e-448d-a2de-f5e0258bb180",
+        "pilot": "payment_query",
+        "driver": "payment_query"
+      },
+      {
+        "id": "0055291d-c12a-467f-8b40-5de467fb7f03",
+        "pilot": "job_approval",
+        "driver": "payment_query"
+      },
+      {
+        "id": "008b9ee1-0167-46c3-9e08-83234180e158",
+        "pilot": "artwork_submission",
+        "driver": "artwork_submission"
+      },
+      {
+        "id": "00a9c557-02ca-4d00-92ff-3477ca8ba32a",
+        "pilot": "artwork_submission",
+        "driver": "artwork_submission"
+      },
+      {
+        "id": "00b03704-824d-462d-b806-81d6efdbd735",
+        "pilot": "general_enquiry",
+        "driver": "general_enquiry"
+      },
+      {
+        "id": "00b5d9c7-5f4b-4d35-8d7b-8dbf70f0d02d",
+        "pilot": "general_enquiry",
+        "driver": "general_enquiry"
+      },
+      {
+        "id": "00b6ba30-7733-48f2-b7e3-22e896474d3d",
+        "pilot": "artwork_submission",
+        "driver": "artwork_submission"
+      },
+      {
+        "id": "00b9195b-5e42-4b58-8209-a88476449276",
+        "pilot": "general_enquiry",
+        "driver": "general_enquiry"
+      },
+      {
+        "id": "00b93bdb-4d51-41cc-8c12-9887af86d66b",
+        "pilot": "job_approval",
+        "driver": "job_approval"
+      },
+      {
+        "id": "00c1ab0d-4079-4e3d-abf9-b59f7501dd76",
+        "pilot": "payment_query",
+        "driver": "payment_query"
+      },
+      {
+        "id": "00cf8ef6-cf44-4af8-8aa4-c4a4c3017a80",
+        "pilot": "artwork_submission",
+        "driver": "artwork_submission"
+      },
+      {
+        "id": "00d7c7ad-04a9-4dab-b1d1-7e11accb1d0b",
+        "pilot": "general_enquiry",
+        "driver": "general_enquiry"
+      },
+      {
+        "id": "00dfd2fb-588d-4c68-a3ff-8cf5ed457eb6",
+        "pilot": "general_enquiry",
+        "driver": "general_enquiry"
+      },
+      {
+        "id": "00e4a6fc-c9fc-472a-a109-4c8c6a028480",
+        "pilot": "quote_request",
+        "driver": "quote_request"
+      },
+      {
+        "id": "00eadd0b-c6f7-4d7a-9ec9-937355a31d3b",
+        "pilot": "general_enquiry",
+        "driver": "general_enquiry"
+      },
+      {
+        "id": "00eda443-dab5-4def-afc1-4da20bcb306f",
+        "pilot": "quote_request",
+        "driver": "quote_request"
+      },
+      {
+        "id": "00eef054-5798-4f03-8d9f-f56ef7079fba",
+        "pilot": "job_approval",
+        "driver": "job_approval"
+      },
+      {
+        "id": "00f0c4ad-6489-4821-b73b-84c6809e0089",
+        "pilot": "general_enquiry",
+        "driver": "general_enquiry"
+      },
+      {
+        "id": "01015cf3-087d-4fdd-b737-13474077c47c",
+        "pilot": "payment_query",
+        "driver": "payment_query"
+      },
+      {
+        "id": "01052951-4f1f-4aa2-a5ec-4ff75b6d1552",
+        "pilot": "payment_query",
+        "driver": "payment_query"
+      },
+      {
+        "id": "010cc9ce-8c79-4519-8d60-1dbf5fef7f5b",
+        "pilot": "general_enquiry",
+        "driver": "general_enquiry"
+      },
+      {
+        "id": "0117d2b8-fc6a-415a-8d53-d6432c52738d",
+        "pilot": "general_enquiry",
+        "driver": "general_enquiry"
+      },
+      {
+        "id": "011c8be9-8209-4f81-a021-0cbddf432395",
+        "pilot": "out_of_office",
+        "driver": "out_of_office"
+      },
+      {
+        "id": "01228d89-664f-4cdd-af38-0adba0cc5bae",
+        "pilot": "job_approval",
+        "driver": "job_approval"
+      },
+      {
+        "id": "012a50ea-a644-4316-87e0-3a7688a41084",
+        "pilot": "general_enquiry",
+        "driver": "general_enquiry"
+      },
+      {
+        "id": "01308a0a-9d7e-4f87-a94e-7299f23415b8",
+        "pilot": "general_enquiry",
+        "driver": "general_enquiry"
+      },
+      {
+        "id": "0141d86c-3b30-4c01-b863-911be22989ba",
+        "pilot": "general_enquiry",
+        "driver": "general_enquiry"
+      },
+      {
+        "id": "01526c95-a481-44f6-a3e3-2d87fd5eda15",
+        "pilot": "quote_request",
+        "driver": "quote_request"
+      },
+      {
+        "id": "0156e616-0332-4a1c-a977-a4dcd07d2f34",
+        "pilot": "general_enquiry",
+        "driver": "general_enquiry"
+      },
+      {
+        "id": "015f0fb0-2d10-414a-8fdf-d8c158598694",
+        "pilot": "general_enquiry",
+        "driver": "general_enquiry"
+      },
+      {
+        "id": "01603998-c99f-413c-9c44-e7c3b7b3ec79",
+        "pilot": "quote_request",
+        "driver": "quote_request"
+      },
+      {
+        "id": "016e73c3-f71f-4182-bf86-aa4faf7ce79a",
+        "pilot": "general_enquiry",
+        "driver": "general_enquiry"
+      },
+      {
+        "id": "017016ee-900e-49b1-9469-5f9eec236b4a",
+        "pilot": "general_enquiry",
+        "driver": "general_enquiry"
+      },
+      {
+        "id": "017e2641-9a18-49db-88c4-9732ca2f9b1f",
+        "pilot": "general_enquiry",
+        "driver": "general_enquiry"
+      },
+      {
+        "id": "018fa394-d64b-4d58-984b-351d3521b50e",
+        "pilot": "quote_request",
+        "driver": "quote_request"
+      },
+      {
+        "id": "019d550f-949c-4dca-8de3-1d11c760cc70",
+        "pilot": "general_enquiry",
+        "driver": "general_enquiry"
+      },
+      {
+        "id": "019db787-bcc1-47ad-8f72-67f3baec349b",
+        "pilot": "general_enquiry",
+        "driver": "general_enquiry"
+      },
+      {
+        "id": "01a345e0-ca6d-4caf-8c0d-26dc1de207b0",
+        "pilot": "general_enquiry",
+        "driver": "general_enquiry"
+      },
+      {
+        "id": "01b689d2-6e87-439d-8ddd-06e1013560b2",
+        "pilot": "general_enquiry",
+        "driver": "general_enquiry"
+      },
+      {
+        "id": "01baa715-1bc6-4f04-b2be-56a91baa1461",
+        "pilot": "general_enquiry",
+        "driver": "general_enquiry"
+      },
+      {
+        "id": "01bdca98-5771-4024-9c1c-69b76d8dcc68",
+        "pilot": "complaint",
+        "driver": "complaint"
+      }
+    ]
+  },
+  "phase4_nic": {
+    "job_id": "1885b00a-2070-49d5-ba18-a2e1e14788f9",
+    "status": "completed",
+    "completed_at": "2026-06-11T02:39:36",
+    "coverage_before_pct": 17.8,
+    "coverage_after_pct": 83.8,
+    "with_intent": 20242,
+    "mailbox_total": 24143,
+    "newly_classified": 15937,
+    "norow_before": 16293,
+    "norow_after": 29,
+    "est_cost_usd": 10.81,
+    "cost_per_email": 0.00068,
+    "content_skipped_in_mailbox": {
+      "folder_trash": 3328,
+      "trivial_body": 500,
+      "folder_spam": 67,
+      "folder_drafts": 45,
+      "bounce_or_delivery_failure": 11,
+      "automated_pattern": 4,
+      "forward_only": 1
+    },
+    "intent_distribution_newly_classified": {
+      "general_enquiry": 10191,
+      "job_approval": 2532,
+      "quote_request": 1309,
+      "payment_query": 984,
+      "artwork_submission": 480,
+      "out_of_office": 206,
+      "complaint": 84,
+      "other": 37,
+      "fyi_update": 33,
+      "action_required": 16,
+      "invoice_query": 15,
+      "reorder": 12,
+      "production_blocker": 12,
+      "cancellation_intent": 9,
+      "question": 7,
+      "escalation_to_management": 5,
+      "churn_signal": 3,
+      "pricing_inquiry": 1,
+      "legal_or_compliance": 1
+    },
+    "note": "3328 folder_trash rows in Nic mailbox remain skipped \u2014 they belong to the deferred trash-reset phase, NOT the no-row backfill (which is complete: no-row 16293->29).",
+    "sample_25": [
+      {
+        "intent": "general_enquiry",
+        "out": false,
+        "from": "mhanna@musterfire.com",
+        "subject": "Re: Printing Process ",
+        "snippet": "Ok, Thanks for the clarification. Kind regards, Mariana Hanna Creative Services & Marketing Manager MUSTERFIRE INTERNATIONAL PTY L"
+      },
+      {
+        "intent": "job_approval",
+        "out": true,
+        "from": "nic@carbon8.com.au",
+        "subject": "Re: Carbon8 quote Q707073 - Business Cards  Overprint S",
+        "snippet": "For Approval Nic Doyle / Senior Account Manager nic@carbon8.com.au / 0405 969 890 D 02 9539 5973 / T 02 9212 1313 Office: 72-78 Ad"
+      },
+      {
+        "intent": "general_enquiry",
+        "out": false,
+        "from": "prince@carbon8.com.au",
+        "subject": "Re: Mary  Libro  ",
+        "snippet": "Here Nic /Volumes/H Drive/__MASTER PRINT FOLDER/460454 Mary Libro BC /460454 Mary Libro BC.pdf Thanks, Prince From: Nic Doyle | Ca"
+      },
+      {
+        "intent": "general_enquiry",
+        "out": false,
+        "from": "nsworders@ballanddoggett.com.au",
+        "subject": "RE: J459261 Peachy case bund books -",
+        "snippet": "Hi Peter Just wanted to let you know the transfer for the Scarlet has not come in today \u2013 Pending when it arrives tomorrow would y"
+      },
+      {
+        "intent": "general_enquiry",
+        "out": false,
+        "from": "news@notice.alibaba.com",
+        "subject": "\ud83d\udcc8 Hi NIC, improve your offerings",
+        "snippet": "Expand your catalogue \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c \u200c "
+      },
+      {
+        "intent": "general_enquiry",
+        "out": true,
+        "from": "nic@carbon8.com.au",
+        "subject": "Re: Hand Packing Price  ",
+        "snippet": "Thanks Nic Doyle / Account Manager nic@carbon8.com.au / 0405 969 890 D 02 9539 5973 / T 02 9212 1313 Office: 72-78 Addison Rd, Mar"
+      },
+      {
+        "intent": "payment_query",
+        "out": true,
+        "from": "nic@carbon8.com.au",
+        "subject": "FW: Bank Detail Verification - INV3014803 20.08.2025",
+        "snippet": "Nic Doyle / Senior Account Manager nic@carbon8.com.au / 0405 969 890 D 02 9539 5973 / T 02 9212 1313 Office: 72-78 Addison Rd, Mar"
+      },
+      {
+        "intent": "job_approval",
+        "out": true,
+        "from": "nic@carbon8.com.au",
+        "subject": "Re: Westpac Perspectives 2026 / updated FA pdf / approv",
+        "snippet": "Print file for approval Nic Doyle / Senior Account Manager nic@carbon8.com.au / 0405 969 890 D 02 9539 5973 / T 02 9212 1313 Offic"
+      },
+      {
+        "intent": "payment_query",
+        "out": false,
+        "from": "sophia.dacy.c@gmail.com",
+        "subject": "Re: Carbon8 invoice INV3015965 - Sophia Flyer",
+        "snippet": "Thanks Nic, I believe it's correct. \"Wamboin means kangaroo in Wiradjuri\" should be at the top of the back page. Warmly __________"
+      },
+      {
+        "intent": "general_enquiry",
+        "out": false,
+        "from": "andrea@inck.com.au",
+        "subject": "Re: Inck Merchandise: URGENT Purchase Order #4988-4599 ",
+        "snippet": "Hi Nic, Reminder to send over the artwork proof asap for approval to prevent any delays. Thanks! Andrea Ling Order & Production Re"
+      },
+      {
+        "intent": "general_enquiry",
+        "out": false,
+        "from": "gpoole@paspaley.com.au",
+        "subject": "Re: Paspaley printing ",
+        "snippet": "Hi Nic, Please see the attached artwork for print. Specifications as per below: 200 GSM Matte finish 25cmx25cm Please let me know "
+      },
+      {
+        "intent": "artwork_submission",
+        "out": true,
+        "from": "nic@carbon8.com.au",
+        "subject": "Re: Template for Casebound book cover",
+        "snippet": "Please use the template to set up the ART all of the measurements are there - if its not set to the template production will send "
+      },
+      {
+        "intent": "artwork_submission",
+        "out": true,
+        "from": "nic@carbon8.com.au",
+        "subject": "Re: Flat Sheet printing  ",
+        "snippet": "Yes please Nic Doyle / Senior Account Manager nic@carbon8.com.au / 0405 969 890 D 02 9539 5973 / T 02 9212 1313 Office: 72-78 Addi"
+      },
+      {
+        "intent": "job_approval",
+        "out": true,
+        "from": "nic@carbon8.com.au",
+        "subject": "Re: Carbon8 quote Q701637v3 - Menus Cards",
+        "snippet": "Place cards for approval NB they will be printed on colorplan scarlet - * Leave notification \u2013 I will be on leave Thursday 13 th N"
+      },
+      {
+        "intent": "general_enquiry",
+        "out": true,
+        "from": "nic@carbon8.com.au",
+        "subject": "Re: A0 Board  ",
+        "snippet": "Hi Guys Just following up - can I confirm with the client ? From: Nic Doyle <nic@carbon8.com.au> Date: Thursday, 19 March 2026 at "
+      },
+      {
+        "intent": "general_enquiry",
+        "out": true,
+        "from": "nic@carbon8.com.au",
+        "subject": "Re: [External] Carbon8 quote Q709262 - Paper  Mockups",
+        "snippet": "I\u2019m still looking Nic Doyle / Senior Account Manager nic@carbon8.com.au / 0405 969 890 D 02 9539 5973 / T 02 9212 1313 Office: 72-"
+      },
+      {
+        "intent": "artwork_submission",
+        "out": false,
+        "from": "carlo.giannasca@frostcollective.com",
+        "subject": "Re: Personal project",
+        "snippet": "Hi Nic, You are welcome. Overall, I am very happy with the result. Ed\u2019s book looks great. Thanks so much for offering to do my boo"
+      },
+      {
+        "intent": "quote_request",
+        "out": false,
+        "from": "lucy@scoutstudios.com.au",
+        "subject": "Re: Quote",
+        "snippet": "Hi Nic, Portrait orientation for both options. For the cover, slightly thicker would be great :) Thanks Lucy ____________ Lucy Bea"
+      },
+      {
+        "intent": "general_enquiry",
+        "out": true,
+        "from": "nic@carbon8.com.au",
+        "subject": "Re: Mailing instructions - TAL print job, Our Contribut",
+        "snippet": "Received, When is the date the reports are needed ? Nic Doyle / Senior Account Manager nic@carbon8.com.au / 0405 969 890 D 02 9539"
+      },
+      {
+        "intent": "general_enquiry",
+        "out": false,
+        "from": "peter@carbon8.com.au",
+        "subject": "Re: MBA Annual Book ",
+        "snippet": "Unfortunately not. 5-6 days to complete 150 case bound books in amongst the factory volumes will not be possible unless we throw s"
+      },
+      {
+        "intent": "job_approval",
+        "out": true,
+        "from": "nic@carbon8.com.au",
+        "subject": "Re: Peachy ",
+        "snippet": "Confirming we are running as is client will repair with an art pen * Leave notification \u2013 I will be on leave Thursday 13 th Nic Do"
+      },
+      {
+        "intent": "general_enquiry",
+        "out": false,
+        "from": "michelle@kidwonder.com",
+        "subject": "Fwd: Just noticed",
+        "snippet": "Sorry Nic. I hope we haven\u2019t pushed go on those stamp paper sheets. The designer just realised the specs aren\u2019t correct / please s"
+      },
+      {
+        "intent": "artwork_submission",
+        "out": false,
+        "from": "delivery@hightail.com",
+        "subject": "Mc Aslen Brochure",
+        "snippet": "Carbon8 has shared 2 files . 2 files \u2022 83 MB total \"For approval \" PDF 460762 McAslen Booklet COVER 300Silk SS 5u.pdf 478.5 KB PDF"
+      },
+      {
+        "intent": "job_approval",
+        "out": true,
+        "from": "nic@carbon8.com.au",
+        "subject": "Re: A1 Sign for Moore Park // Spend & Save Promo",
+        "snippet": "All good send it over Nic Doyle / Account Manager nic@carbon8.com.au / 0405 969 890 D 02 9539 5973 / T 02 9212 1313 Office: 72-78 "
+      },
+      {
+        "intent": "general_enquiry",
+        "out": false,
+        "from": "hello@flashcouriers.com.au",
+        "subject": "A Flash Courier is coming to you",
+        "snippet": "Great News, A member of the Flash Couriers family will be doing a delivery to you. Please use this link to track your delivery. Yo"
+      }
+    ]
+  }
+}

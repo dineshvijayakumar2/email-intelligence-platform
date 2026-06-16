@@ -1,0 +1,125 @@
+{
+  "generated": "2026-06-12",
+  "check1_hardcover_antecedents": {
+    "Embellishment": {
+      "consequent": "Hard Cover Books",
+      "n_cards": 17,
+      "confidence_pct": 49.1,
+      "support_n": 83,
+      "lift": 3.559,
+      "base_rate_pct": 13.8
+    },
+    "Soft Cover Books": {
+      "consequent": "Hard Cover Books",
+      "n_cards": 6,
+      "confidence_pct": 31.5,
+      "support_n": 180,
+      "lift": 2.28,
+      "base_rate_pct": 13.8
+    }
+  },
+  "check2_3_capability_cleanliness": {
+    "hc_ops_total": 4217,
+    "hc_ops_genuine_casebinding": 1084,
+    "genuine_op_share_pct": 25.7,
+    "hc_buyers_current": 300,
+    "hc_buyers_genuine": 103,
+    "hc_buyers_with_any_genuine_job": 152,
+    "hc_buyers_ancillary_only": 148,
+    "ancillary_only_pct": 49.3,
+    "rules_current_vs_genuine": {
+      "soft_cover_to_hardcover": {
+        "current": 31.5,
+        "genuine": 13.1
+      },
+      "embellishment_to_hardcover": {
+        "current": 50.3,
+        "genuine": 21.1
+      }
+    }
+  },
+  "check4_embellishment_survivors": {
+    "n_embellishment_cards": 4,
+    "cards": [
+      {
+        "customer": "GLIDER GLOBAL",
+        "antecedent": "Hard Cover Books",
+        "confidence_pct": 27.7,
+        "lift": 3.559,
+        "consequent_is_genuine_embellishment": true,
+        "gap_zero_order": true
+      },
+      {
+        "customer": "Me and Amber",
+        "antecedent": "Hard Cover Books",
+        "confidence_pct": 27.7,
+        "lift": 3.559,
+        "consequent_is_genuine_embellishment": true,
+        "gap_zero_order": true
+      },
+      {
+        "customer": "Studio Garbett",
+        "antecedent": "Hard Cover Books",
+        "confidence_pct": 27.7,
+        "lift": 3.559,
+        "consequent_is_genuine_embellishment": true,
+        "gap_zero_order": true
+      },
+      {
+        "customer": "Lincoln Place",
+        "antecedent": "Hard Cover Books",
+        "confidence_pct": 27.7,
+        "lift": 3.559,
+        "consequent_is_genuine_embellishment": true,
+        "gap_zero_order": true
+      }
+    ]
+  },
+  "ownership": {
+    "kenneth_cards": [
+      {
+        "customer": "Sullivan Strumpf Fine Art Pty Ltd",
+        "pitch": "Hard Cover Books",
+        "rank": 2,
+        "am_basis": "am_job_last12mo",
+        "mode": "Kenneth Beck-Pedersen",
+        "recent_job_am": "Kenneth Beck-Pedersen",
+        "gap_conf": 49.1
+      },
+      {
+        "customer": "And Only",
+        "pitch": "Hard Cover Books",
+        "rank": 8,
+        "am_basis": "am_job_last12mo",
+        "mode": "Kenneth Beck-Pedersen",
+        "recent_job_am": "Kenneth Beck-Pedersen",
+        "gap_conf": 49.1
+      },
+      {
+        "customer": "Fior Restaurant",
+        "pitch": "Hard Cover Books",
+        "rank": 18,
+        "am_basis": "am_job_last12mo",
+        "mode": "Kenneth Beck-Pedersen",
+        "recent_job_am": "Kenneth Beck-Pedersen",
+        "gap_conf": 49.1
+      }
+    ],
+    "mary_original_two": [
+      {
+        "customer": "CoinOp",
+        "in_deck": false,
+        "note": "no longer in the 50-card deck"
+      },
+      {
+        "customer": "Chic Brisbane",
+        "in_deck": false,
+        "note": "no longer in the 50-card deck"
+      }
+    ]
+  },
+  "verdict": {
+    "hard_cover_is_inflated": true,
+    "summary": "Hard Cover Books is INFLATED like embellishment: only 25.7% of Hard-Cover-tagged ops are genuine casebinding; 49.3% of 'Hard Cover buyers' have NO genuine casebinding job (they qualify via 'Fuse back to back' mounting, perfect-binding, foil, etc). Soft-Cover->Hardcover 31.5%->13.1% genuine; Embellishment->Hardcover 50.3%->21.1% genuine."
+  }
+}

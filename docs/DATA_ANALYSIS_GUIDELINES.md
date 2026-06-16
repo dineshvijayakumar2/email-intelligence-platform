@@ -281,6 +281,208 @@ applies a **`T-Cancelled` prefilter** (`sync_operations` drops every record whos
 
 ---
 
+## 10. Building reports and client-facing documents
+
+Hard-won learnings from the Next-Best-Outreach card set (50 cards, six per-AM Word
+docs, a master markdown/PDF). Apply these when turning an analysis into a deliverable.
+Generator scripts and JSON outputs are the reproducible source: `_outreach_cards_50.py`,
+`_validate_cards_50.py`, `_assign_am.py`, `_gen_am_docs.py`, `_retier_master.py`,
+`_gen_master_pdf.py`, `_check_outsidesix_touch.py` (all read-only, throwaway).
+
+### 10.1 No long dashes in generated output
+
+Avoid em / en dashes (`—` `–`) in any document handed to a person. Use a plain hyphen,
+colon, or parentheses instead. The trap: they leak in from two places, so fixing only
+your own f-strings is not enough. They also arrive inside **data** you render (e.g. the
+timing label stored in the cards JSON is `"due soon - 142d ..."` with an em dash). Run a
+**sanitize pass over every rendered string**, not just literals:
+- docx: walk every run in `doc.paragraphs` **and** every table cell's paragraphs, replace
+  `— – ―` with `-` (see `_gen_am_docs._sanitize_doc`).
+- markdown: a global `replace("—","-")` on the whole text before rendering to PDF.
+- Write the guidance section dash-free too, or you contradict yourself.
+
+### 10.2 One canonical scale for percentages (the "4760%" bug)
+
+Decide whether a field is a **fraction** (`0.72`) or a **percent** (`72.1`) and never mix.
+We stored `front.confidence = 72.1` (percent) and `factors.confidence = 0.72` (fraction);
+a generator multiplied the percent by 100 again and printed **4760%** - and, worse,
+mis-tiered every card because `47.6 >= 0.50` is always true. Rule: do math on the fraction,
+format `* 100` exactly once at display, and **sanity-check outputs for impossible values**
+(no confidence > 100%; the only legitimate 3-digit token is `100%`).
+
+### 10.3 Tier on confidence AND lift (lift-aware), never confidence alone
+
+A 92%-confidence / lift-1.0 recommendation is **near-universal** (almost everyone buys it),
+which is weak, not strong. Canonical tiers used across all outreach docs:
+`Strong = conf >= 50% AND lift >= 1.5`; `Moderate = conf >= 35% AND lift >= 1.3`; else `Weak`.
+High confidence with lift near 1 means "broadly popular product," not "targeted gap."
+
+### 10.4 One definition and one label set across a document family
+
+When the same data ships as several documents (per-AM docx + master md + master PDF), a
+cross-reference must place each customer in the **same tier in every document**. Matching
+the *counts* is not enough - the *labels* and the *definition* must agree (we had the master
+calling the bottom tier "Low-signal" while the per-AM docs called it "Weak", so the same
+customer read as two different tiers). Verify by joining every document on customer name and
+asserting **zero tier mismatches** before hand-out.
+
+### 10.5 Do not let raw revenue swamp a composite score
+
+An opportunity score of `conf x lift x revenue x timing` with **raw** revenue (roughly a
+1000x dynamic range) collapses the ranking back to "top by revenue" and buries small,
+high-confidence, well-timed accounts. Dampen revenue (`log10`) so confidence / lift / timing
+can actually move the order, and **store the raw factors on every row** so the ranking can be
+re-derived or re-weighted without re-running the pull.
+
+### 10.6 Two-sided cards: action on the front, audit trail on the back
+
+Structure each recommendation as `{front, back}`: the front is the glanceable action (what
+to pitch, to whom, with what context, at what timing, plus the headline confidence); the back
+carries the evidence (the rule's conf / support / lift / base-rate, the zero-order gap
+confirmation, the contact's won-value and engagement, the order dates behind the timing). The
+back lets a reviewer spot-check any card without re-running the analysis.
+
+### 10.7 Confirm a "gap" is genuinely zero at company grain
+
+Before pitching a cross-sell, verify the customer has **zero** orders in it under the
+corrected definition - not merely below the rule-mining threshold. Use qb-OR-classifier
+(§5.1) for capability presence, and for a standalone-Embellishment pitch also check the
+`qb_embellishment_tag` finish signal (a customer who foils / embosses within other jobs
+already does embellishment - the Geoff Letchford trap). A capability with 1 job is not a
+clean gap; err toward "already has it."
+
+### 10.8 AM attribution: the QuickBase owner is not always the email-relationship owner
+
+Assign an account to an AM by the **mode of `am_customer`** over its operations (do not guess;
+flag no-AM, AM-outside-the-known-set, and split ownership separately). But the QB owner can be
+an AM with no mailbox while the real email thread runs through a different, mailbox-enabled AM.
+To find who can actually action a card, map `emails.mailbox_id -> mailboxes.user_id ->
+user_profiles.name` and take the **plurality mailbox-AM** (exclude the shared `hello@` box and
+non-AM boxes like Production). Example: Jefferies' QB owner has no mailbox, but 55 of 59 of its
+emails sit in Ehab's mailbox - so Ehab owns the relationship.
+
+### 10.9 Document tooling on this machine (Windows)
+
+- `python-docx` works for `.docx`. There is **no pandoc, LibreOffice, or wkhtmltopdf**, and the
+  Windows-Store Python sandbox **cannot read the skills-plugin directory** under
+  `AppData\Roaming\Claude\...` (so the docx skill's `soffice.py` / `validate.py` are
+  unreachable - `os.path.exists` returns False). For markdown -> PDF use **`xhtml2pdf`**
+  (pure-python): `markdown.markdown(text, extensions=["tables",...])` then `pisa.CreatePDF`.
+- Client `.docx`: portrait A4, tight (0.5in) margins; small (8pt) table font when a table has
+  many columns. Validate by round-tripping with `python-docx` and checking the zip + XML
+  well-formedness (the sandbox blocks the skill validator).
+- The Windows console is cp1252: wrap stdout (`io.TextIOWrapper(sys.stdout.buffer, "utf-8")`)
+  before printing `≥`, `·`, em dashes, etc., or the script crashes mid-run. Do **not** wrap
+  stdout twice (importing a second module that also wraps closes the buffer).
+
+### 10.10 Verify every artifact before hand-out
+
+Reconcile counts (all N accounted for, none duplicated or missing across the document set),
+scan for impossible values, round-trip-open each file, and de-dash. Keep the generator scripts
+and the JSON outputs (`outreach_cards_50.json`, `card_am_assignment.json`, etc.) as the
+reproducible record so any number on a card traces back to a row.
+
+### 10.11 Push heavy aggregates server-side, with a raised statement timeout
+
+Do not pull 600K operation rows to the client. Aggregate in a throwaway jsonb-returning RPC
+(dropped at the end) and add `SET statement_timeout = '240s'` to the function - the
+`service_role` default timeout is short and silently kills a multi-minute full-base scan with
+`57014 canceling statement due to statement timeout`. Cache the one expensive egress pull
+(e.g. pool emails) to a local JSON and refill it incrementally (§7, §8).
+
+### 10.12 Pilot a cheap slice before an expensive run; validate a new code path against a known-good one
+
+The most repeated win of this project was spending a few cents to avoid a wrong expensive run.
+Concrete instances: a feared $400 reclassification turned out to cost ~$36 once a 300-email
+pilot measured the real per-email cost; that same pilot exposed a driver that silently dropped
+~80% of a batch (an output-token-cap requeue the fast path ignored) before it ran on 58K. Rules:
+- For any run that costs real money or hours, pilot on a small representative slice first,
+  measure actual cost/throughput, and extrapolate. Do not trust the headline row count as the
+  cost basis (most of it may be legitimately pre-filtered).
+- When you replace a slow path with a faster one (e.g. an id-driven batch instead of the
+  orchestrator), the pilot validated the slow path, so re-validate the fast path against the
+  known-good output on a small sample before scaling. A fast path can quietly drop, re-order,
+  or under-enrich rows the slow path handled.
+- Put a hard cost-abort in long runs (stop if actual spend trends past ~1.3x the estimate) and
+  checkpoint per batch so an interruption resumes cleanly without double-spend.
+
+### 10.13 Distinguish a definitional blind spot from a code bug
+
+Several of the worst issues were not bugs: the code ran correctly on a wrong definition, so
+nothing threw and tests passed. Examples: a `folder_trash` pre-filter that silently excluded
+~20K real customer emails (folder location was treated as a proxy for irrelevance, but AMs
+delete resolved-but-real mail to Trash); `qb_capability_tag` being ~40% NULL so a "gap" was
+really a tagging hole (§5.1); standalone-Embellishment "gaps" that were finishes-within-jobs
+(§10.7). These are invisible to normal testing because the pipeline is behaving as written.
+Defenses:
+- When a number looks surprisingly clean or surprisingly large, spot-check the raw rows behind
+  it (read 20-30 actual records), not just the aggregate.
+- Be suspicious of any single field used as a proxy for a business concept (folder = irrelevant,
+  one tag = capability presence). Confirm the proxy against a second signal.
+- A correct computation on the wrong population is still wrong. Validate the population (what is
+  included / excluded and why), not only the math.
+
+### 10.14 Order-of-operations and idempotency for backfills
+
+When reprocessing data through a pipeline, the trigger and the order matter:
+- A code change to a pre-filter does not by itself reprocess already-skipped rows; they stay
+  `processing_status='skipped'` until explicitly reset. Fix the filter first, then reset, or
+  the next sync re-skips what you just reset (mop after fixing the tap, not before).
+- Idempotency protects spend: rows already `completed` / `skipped` are not re-fetched, so a
+  filter change is safe to ship without triggering a surprise reprocess; the reset is the
+  deliberate, separately-gated step.
+- Run backfills as a resumable server-side worker (survives restarts / sleep), not a local
+  script babysat across a session; report progress from durable DB state (row counts), not an
+  in-process counter that resets on restart.
+
+---
+
+## 11. Running an LLM-scored analysis (API keys + provider)
+
+When an ad-hoc analysis needs an LLM (e.g. scoring email content, classifying, judging), the
+keys and the call path are NOT what you'd guess. Learned on the Tier-B content-quality pilot
+(15.3); reference scripts `scripts/db/_tier_b_pilot_{sample,score,analyze}.py`.
+
+### 11.1 Provider: use OpenAI (gpt-4o). Anthropic is out of credits; Gemini is not preferred
+- The team uses the **OpenAI** credits. The `ANTHROPIC_API_KEY` is **out of credits** (direct
+  calls return 400 "credit balance too low"), and Gemini is not the chosen route. Default to
+  `gpt-4o` for judgment-quality work, `gpt-4o-mini` for cheap/bulk.
+- **Never silently fall back** to another model/provider on failure — raise, or record the item
+  as failed and exclude it (never fabricate a score). See `BEST_PRACTICES.md` / the no-fallback rule.
+
+### 11.2 Keys live (base64) in `system_settings`, NOT in `.env`
+- The API keys are **not** in `backend/.env.development` / `.env.production`. They are stored
+  **base64-encoded, per-client** in `system_settings` (keys `api_key_openai`, `api_key_anthropic`,
+  `api_key_google`).
+- Hydrate them into env the same way the platform does, before building the LLM:
+  ```python
+  from supabase import create_client
+  from src.services.ai_email_analyzer import _load_client_api_keys
+  sb = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
+  _load_client_api_keys(sb, CARBON8)   # decodes -> os.environ["OPENAI_API_KEY"] etc.
+  ```
+  (DB creds come from `.env.production`; `ANTHROPIC_API_KEY`/`GOOGLE_GENAI_API_KEY` are also in
+  `.env.development` but are NOT the OpenAI key — that one only comes from the DB.)
+
+### 11.3 Call `get_llm` directly, not the budget-gated `AIClient`
+- For a one-off analysis, build the model with
+  `from src.services.langchain_core import get_llm; llm = get_llm("gpt4o", temperature=0.0)`
+  and invoke with `[SystemMessage(...), HumanMessage(...)]`. Read tokens from
+  `resp.usage_metadata` and compute cost yourself (gpt-4o ≈ $2.50/$10.00 per 1M in/out).
+- **Avoid the production `AIClient` path** (`call_for_task`/`call_cheap`): it enforces a per-tenant
+  **daily budget gate** (default $2/day) that will block your run mid-way, and its spend lookups
+  read `ai_usage_log`. A one-off script calling `get_llm` directly does **not** write
+  `ai_usage_log` or any production table — keep it that way for read-only pilots.
+
+### 11.4 Pilot discipline carries over (§10.12)
+- Smoke-test on ~4 items first to confirm the key, model, and JSON parsing work and to measure
+  real per-item cost before the full run (200 blind-scored threads cost **$0.86** on gpt-4o).
+- Make the scorer **resumable** (skip items already in the output JSON) and **strict-JSON**
+  (extract `{...}`, repair with `json_repair`, validate ranges; on failure exclude + count, never
+  fabricate). For validation work, keep the LLM **blind** to the label it's being validated against.
+
+---
+
 ## Findings snapshot (post-cleanup coverage re-confirm)
 
 > From the definitive ordered + canonical-extraction run (window 2025-12-01..2026-05-15,

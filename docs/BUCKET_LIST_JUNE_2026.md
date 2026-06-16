@@ -7,6 +7,12 @@
 
 > **Current focus (9 June → Tuesday):** DB foundation is in good shape — the recent dual-ID/contamination work is complete or parked-and-safe (see *DB foundation remediation* under Carryover). Highest-stakes item before Tuesday is the **cross-sell shortlist**: shaping the saturation finding + bulletproof prospects into the demo. When the curated shortlist returns, that's where attention goes — not more foundation work.
 
+> **Reality update — 11 June:** The plan below stays as the long-range strategic reference, but events redirected the deliverable since 1 June. Reconciling honestly:
+> - The **9 June Jeff call redirected the deliverable** away from AM Comparison (Priority 1) and the cross-sell shortlist toward a **Next-Best-Outreach product** (per-customer: what to pitch / to whom / what context / what timing). This is now the **active deliverable** for the last-chance window.
+> - **AM Comparison (original Priority 1) is deferred** to the phase *after* the outreach cards land — not abandoned; it's the natural next pillar, benchmarked against **"what wins" + market best-practice, NOT an internal AM**.
+> - **Billing to Jeff has stopped** (his request); the **outreach cards are the proof-of-value** before the project's go/no-go.
+> - **Day-to-day tactical tracking for this active work lives in `docs/OUTREACH_PROJECT_LEDGER.md`** (the lean operational ledger); *this* file remains the strategic plan.
+
 ---
 
 ## Priority 1: AM Comparison (first deliverable, 4-5 weeks)
@@ -160,6 +166,8 @@ The 12 May ask was for AM comparison based on thread insights — language, resp
 
 Supabase egress quota exceeded in previous billing cycle. Grace period until 11 June. Current cycle at 21% of 250 GB. Remediation work prioritised by per-run egress impact. Full inventory in `BODY_TEXT_EGRESS_AUDIT.md`.
 
+> **Update — 11 June:** the grace-period deadline passed. The **Tier-3 fetch-then-truncate work was completed** (see below, 91.2% reduction on the role_classifier path) and ad-hoc analysis since has stayed egress-disciplined (server-side aggregation RPCs, metadata-only reads, truncation RPCs). Tier 1 (AI-pipeline batch body fetches) remains the open big-ticket item. Egress did not become a blocker through the deadline.
+
 ### Tier 1 — Highest egress (AI pipeline batch fetches)
 
 These pipelines legitimately need body content but pull full bodies when truncated portions would suffice. Per-run egress: ~2.5 MB per batch × hundreds of batches.
@@ -241,6 +249,8 @@ The same `qb_customers` dual numeric ID-space collision (field 3 `qb_record_id` 
 - [x] **email count canonicalisation (mig 117)** — counts from `emails.customer_company_id`, not `email_contact_links` (see CPU/cache section). `get_company_emails` endpoint + merge recompute aligned. Commit `3380daf`. **Needs backend deploy** for the endpoint half to take effect in UI.
 - [x] **qb_match_candidates cleanup** — rejected stale Blainey→LV / Payce→MH suggestions.
 - [x] **Option A Phase 1 (mig 118, non-destructive)** — added + backfilled `customer_companies.qb_customer_key_id` canonical shadow column (13,570 rows, name-aware; 14 ambiguous NULL). Nothing reads it yet. Commit `1aeb307`.
+- [x] **QB operations sync overflow (mig 119)** — ✅ DONE (11 June). `profit_pct` numeric overflow was silently dropping operation rows; bound made unbounded. **630,798 dropped rows recovered.**
+- [x] **Pagination `.order()` fix** — ✅ DONE (11 June). Ordered all paginated reads so `.range()` windows can't skip/overlap rows (the §3 ordered-pagination gotcha).
 
 **Parked-and-safe (DB foundation now in good shape — not the priority before Tuesday):**
 - [ ] **Option A Phase 2** — repoint 3 read-joins + 5 write-paths to `qb_customer_key_id` (site list in `option_a_migration_plan.json`). Deploy-coupled.
@@ -251,13 +261,24 @@ The same `qb_customers` dual numeric ID-space collision (field 3 `qb_record_id` 
 ### Known-issue cleanup
 - [x] `hello@carbon8.com.au` mailbox extraction coverage — resolved
 - [ ] 14 Carbon8 domain variant cleanup
-- [ ] 21 weekdays with no email data investigation
+- [x] **21 weekdays with no email data investigation** — ✅ DONE (11 June). Two root causes found: (1) a **Data Health bug** — the missing-days check fetched `sent_date` capped at PostgREST `db-max-rows` (1000) unordered, so it saw ~2 dates and false-flagged ~21 weekdays; fixed with server-side aggregation (mig 120). Data was never missing (10,636 emails across the window). (2) Genuine staleness from re-auth (see Mailbox readiness below).
+
+### Mailbox readiness — four-mailbox audit ✅ DONE (11 June)
+- [x] **Audit complete** — Nic & Linda **current + complete** (synced to today, 84%/92% classified, 0 no-row, 0 folder_trash). Ehab / Kenneth / Jeff / `hello@` are **stale on OAuth re-auth** — tokens expired mid-May, scheduler silently skips them; data frozen May 14–21 → now.
+- [x] **Re-auth surfaced** — Data Health page now shows the 4 paused mailboxes with their exact missing date ranges (mig 120; "Fetch Missing" can't fix them — they need the owner to reconnect Outlook).
+- [ ] **Re-auth action (held by choice)** — the 4 reconnections self-heal on the next sync cycle once AMs reconnect; **deliberately held until the first powerful outreach findings make the ask "invincible"** (see `OUTREACH_PROJECT_LEDGER.md` § BLOCKED). Until then, card timing for those accounts carries a staleness asterisk.
 
 ---
 
 ## Intent classifier improvements
 
 From 1 June general_enquiry sample analysis (45% noise, 55% real signal not distinguished).
+
+> **Progress — 11 June:**
+> - [x] **`folder_trash` pre-filter leak fixed at source** (committed) — the extraction pre-filter was blanket-skipping the whole Trash folder, but ~50% of this client's Trash is genuine customer mail (live quotes/approvals). Now Trash flows through the *content* filters (bounce/trivial) instead of folder; recovery validated cheap + real-signal-dominant.
+> - [x] **Nic mailbox classification backfill (10.9b)** — coverage 17.8% → 84%; the restored-mailbox no-row gap drained via the server-side worker (corrected pre-filter). Intent dist real-signal-dominant.
+> - [~] **`general_enquiry` catch-all quantified** — audit confirmed it's **52% of corpus** and **~39–57% recoverable** signal (the strongest cheap won/lost separator once rolled up). Finer-intent reclassification is scoped as a pilot but **not yet run** (chip 11.7-adjacent in `OUTREACH_PROJECT_LEDGER.md`); the per-email intent **rollup** (won/lost feature C, 11.8) is the lead item next phase.
+> - Caveat surfaced: numeric `sentiment_score` is effectively not built (284 non-zero of 281K) — deprioritised; categorical sentiment carries no won/lost signal.
 
 - [ ] Pre-classification noise filter — sender-domain heuristics for spam/marketing/automated/feedback-survey patterns (reduces classification API cost ~30%)
 - [ ] Decision: prompt refinement to add categories (job_instruction, delivery_and_logistics, pickup_coordination, technical_discussion, production_update, internal_communication) — requires re-classification of 145K emails, ~$30-50 API cost
@@ -286,6 +307,13 @@ From 1 June general_enquiry sample analysis (45% noise, 55% real signal not dist
 ### Staged worker rollout
 - [ ] Staged rollout: analytics → QB sync → reembed → remaining job types
 - [ ] Verify all Tier 2 BackgroundTasks callsites work correctly alongside workers
+
+### Capability correction — WAVE 2 (deferred from 13.7, 13-14 June)
+Context: 13.7 corrected capability tags via the classifier (`capability_tags` now clean; WAVE-1 SQL consumers flipped to classifier-overrides/QB-fills-gaps). The **embedding consumers were deliberately deferred** because their capability meaning is frozen into stored vectors — fixing them needs a **re-embed** (real compute/$ cost), not a code flip. Until done, the SQL path serves CORRECTED capabilities while the vector path serves STALE/polluted ones (split-brain).
+- [ ] **Confirm scope first (cheap, do before deciding):** do `vector_service.py:583`, `hybrid_retriever.py:384`, `langchain_tools.py:434` actually embed capability text? If capability labels aren't in the embedded text, WAVE 2 is a **non-issue** and this can close. (Claude Code to confirm while in those files during the WAVE-1 flip.)
+- [ ] **Confirm the Monday deck path is SQL-only for capability meaning** — recommendation engine / cards / industry-fit filter must read the SQL columns, NOT the vector/semantic layer, or the split-brain reaches the deliverable. (Expected SQL-only; verify before send.)
+- [ ] **If capability text IS embedded:** re-embed the affected ops/customers from corrected capabilities → write back to pgvector. Cost it (compute/$). Lower-stakes than the cards (semantic search is retrieval/ranking, not the hard capability gaps), so deferral is defensible if the deck is SQL-only.
+- [ ] Sequence: after the Monday deliverable lands. Fold into the staged `reembed` rollout above if it goes ahead.
 
 ### Operations Center UI consolidation
 - [ ] Final merge plan
@@ -337,4 +365,4 @@ From 1 June general_enquiry sample analysis (45% noise, 55% real signal not dist
 - Engagement score consolidation is technical debt with broad downstream impact — decision needed before Q6 build
 - Carryover QB data quality items (4,250 wrong names, 1,344 unmatched) affect insight accuracy. Should not be ignored indefinitely
 - Platform stabilisation runs in parallel; key items (RLS fix, email count refactor, body_text partition) need scheduling
-- Egress quota exceeded in previous cycle; grace period until 11 June. Current cycle at 21%. Primary remediation: body_text vertical partition + RPC wrappers for truncation. Tier 1 fixes require careful execution, not quick wins
+- Egress quota exceeded in previous cycle; grace period until 11 June. Current cycle at 21%. Primary remediation: body_text vertical partition + RPC wrappers for truncation. Tier 1 fixes require careful execution, not quick wins. _(11 June: grace-period deadline passed without becoming a blocker; Tier-3 truncation completed; Tier 1 still open.)_

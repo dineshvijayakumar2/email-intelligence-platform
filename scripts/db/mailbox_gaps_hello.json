@@ -1,0 +1,332 @@
+{
+  "mids": {
+    "Ehab": "92eba92f-b6be-4fbf-8c49-9f3b7c72ea74",
+    "Kenneth": "1332eba5-9121-4b55-91db-a37dd81d5d85",
+    "Nic": "5f3afeb3-a5f7-44b8-b657-ec972c92911d",
+    "Linda": "e1abc287-805b-4cee-8f95-0b47e1cd8f99",
+    "Hello": "c1157f56-79a0-4f0b-9dcf-2db257f0d5c4"
+  },
+  "gaps": {
+    "Ehab": {
+      "span_hi": "2026-05-21",
+      "span_lo": "2025-01-01",
+      "gap_runs": [
+        {
+          "end": "2025-01-08",
+          "days": 8,
+          "start": "2025-01-01",
+          "dow_end": "Wed",
+          "dow_start": "Wed"
+        },
+        {
+          "end": "2025-01-27",
+          "days": 4,
+          "start": "2025-01-24",
+          "dow_end": "Mon",
+          "dow_start": "Fri"
+        },
+        {
+          "end": "2025-02-03",
+          "days": 4,
+          "start": "2025-01-31",
+          "dow_end": "Mon",
+          "dow_start": "Fri"
+        },
+        {
+          "end": "2025-02-16",
+          "days": 3,
+          "start": "2025-02-14",
+          "dow_end": "Sun",
+          "dow_start": "Fri"
+        }
+      ],
+      "zero_days": 61,
+      "total_days": 506,
+      "median_daily_active": 101
+    },
+    "Kenneth": {
+      "span_hi": "2026-05-16",
+      "span_lo": "2025-01-01",
+      "gap_runs": [
+        {
+          "end": "2025-01-19",
+          "days": 12,
+          "start": "2025-01-08",
+          "dow_end": "Sun",
+          "dow_start": "Wed"
+        },
+        {
+          "end": "2025-01-06",
+          "days": 6,
+          "start": "2025-01-01",
+          "dow_end": "Mon",
+          "dow_start": "Wed"
+        },
+        {
+          "end": "2025-02-01",
+          "days": 4,
+          "start": "2025-01-29",
+          "dow_end": "Sat",
+          "dow_start": "Wed"
+        },
+        {
+          "end": "2025-01-27",
+          "days": 3,
+          "start": "2025-01-25",
+          "dow_end": "Mon",
+          "dow_start": "Sat"
+        },
+        {
+          "end": "2025-02-05",
+          "days": 3,
+          "start": "2025-02-03",
+          "dow_end": "Wed",
+          "dow_start": "Mon"
+        },
+        {
+          "end": "2025-02-15",
+          "days": 3,
+          "start": "2025-02-13",
+          "dow_end": "Sat",
+          "dow_start": "Thu"
+        },
+        {
+          "end": "2025-05-25",
+          "days": 3,
+          "start": "2025-05-23",
+          "dow_end": "Sun",
+          "dow_start": "Fri"
+        }
+      ],
+      "zero_days": 66,
+      "total_days": 501,
+      "median_daily_active": 59
+    },
+    "Nic": {
+      "span_hi": "2026-06-11",
+      "span_lo": "2025-01-01",
+      "gap_runs": [
+        {
+          "end": "2025-03-19",
+          "days": 78,
+          "start": "2025-01-01",
+          "dow_end": "Wed",
+          "dow_start": "Wed"
+        },
+        {
+          "end": "2025-05-13",
+          "days": 28,
+          "start": "2025-04-16",
+          "dow_end": "Tue",
+          "dow_start": "Wed"
+        },
+        {
+          "end": "2025-05-26",
+          "days": 12,
+          "start": "2025-05-15",
+          "dow_end": "Mon",
+          "dow_start": "Thu"
+        },
+        {
+          "end": "2025-04-13",
+          "days": 12,
+          "start": "2025-04-02",
+          "dow_end": "Sun",
+          "dow_start": "Wed"
+        },
+        {
+          "end": "2025-03-31",
+          "days": 6,
+          "start": "2025-03-26",
+          "dow_end": "Mon",
+          "dow_start": "Wed"
+        },
+        {
+          "end": "2025-06-01",
+          "days": 5,
+          "start": "2025-05-28",
+          "dow_end": "Sun",
+          "dow_start": "Wed"
+        },
+        {
+          "end": "2025-10-05",
+          "days": 5,
+          "start": "2025-10-01",
+          "dow_end": "Sun",
+          "dow_start": "Wed"
+        },
+        {
+          "end": "2025-03-24",
+          "days": 4,
+          "start": "2025-03-21",
+          "dow_end": "Mon",
+          "dow_start": "Fri"
+        },
+        {
+          "end": "2025-08-03",
+          "days": 3,
+          "start": "2025-08-01",
+          "dow_end": "Sun",
+          "dow_start": "Fri"
+        }
+      ],
+      "zero_days": 171,
+      "total_days": 527,
+      "median_daily_active": 44
+    },
+    "Linda": {
+      "span_hi": "2026-06-11",
+      "span_lo": "2025-01-01",
+      "gap_runs": [
+        {
+          "end": "2025-12-31",
+          "days": 7,
+          "start": "2025-12-25",
+          "dow_end": "Wed",
+          "dow_start": "Thu"
+        },
+        {
+          "end": "2025-06-11",
+          "days": 6,
+          "start": "2025-06-06",
+          "dow_end": "Wed",
+          "dow_start": "Fri"
+        },
+        {
+          "end": "2025-07-27",
+          "days": 5,
+          "start": "2025-07-23",
+          "dow_end": "Sun",
+          "dow_start": "Wed"
+        },
+        {
+          "end": "2025-05-20",
+          "days": 5,
+          "start": "2025-05-16",
+          "dow_end": "Tue",
+          "dow_start": "Fri"
+        },
+        {
+          "end": "2025-06-01",
+          "days": 5,
+          "start": "2025-05-28",
+          "dow_end": "Sun",
+          "dow_start": "Wed"
+        },
+        {
+          "end": "2025-05-25",
+          "days": 4,
+          "start": "2025-05-22",
+          "dow_end": "Sun",
+          "dow_start": "Thu"
+        },
+        {
+          "end": "2025-04-21",
+          "days": 4,
+          "start": "2025-04-18",
+          "dow_end": "Mon",
+          "dow_start": "Fri"
+        },
+        {
+          "end": "2025-05-04",
+          "days": 4,
+          "start": "2025-05-01",
+          "dow_end": "Sun",
+          "dow_start": "Thu"
+        },
+        {
+          "end": "2025-01-04",
+          "days": 4,
+          "start": "2025-01-01",
+          "dow_end": "Sat",
+          "dow_start": "Wed"
+        },
+        {
+          "end": "2025-04-27",
+          "days": 3,
+          "start": "2025-04-25",
+          "dow_end": "Sun",
+          "dow_start": "Fri"
+        },
+        {
+          "end": "2025-07-14",
+          "days": 3,
+          "start": "2025-07-12",
+          "dow_end": "Mon",
+          "dow_start": "Sat"
+        },
+        {
+          "end": "2025-03-29",
+          "days": 3,
+          "start": "2025-03-27",
+          "dow_end": "Sat",
+          "dow_start": "Thu"
+        },
+        {
+          "end": "2025-08-02",
+          "days": 3,
+          "start": "2025-07-31",
+          "dow_end": "Sat",
+          "dow_start": "Thu"
+        },
+        {
+          "end": "2025-03-09",
+          "days": 3,
+          "start": "2025-03-07",
+          "dow_end": "Sun",
+          "dow_start": "Fri"
+        }
+      ],
+      "zero_days": 112,
+      "total_days": 527,
+      "median_daily_active": 18
+    }
+  },
+  "hello_profile": {
+    "span": {
+      "hi": "2026-05-20",
+      "lo": "2020-08-18"
+    },
+    "total": 44153,
+    "inbound": 43131,
+    "outbound": 1022,
+    "folder_dist": {
+      "Inbox": 13906,
+      "Trash": 2529,
+      "Unknown": 4526,
+      "Inbox/Payments": 5530,
+      "_PIQ & MICROSOFT": 785,
+      "Inbox/Freight_couriers": 5245,
+      "Inbox/Hightail transfers": 5675,
+      "Drafts/Inbox 1/Freight_couriers": 1340,
+      "Inbox/PIQ - Auto reports history": 728,
+      "Drafts/Inbox 1/WeTransfer downloads": 820
+    },
+    "intent_dist": {
+      "null": 8,
+      "other": 68,
+      "reorder": 47,
+      "complaint": 62,
+      "fyi_update": 56,
+      "job_approval": 1110,
+      "file_delivery": 8,
+      "out_of_office": 375,
+      "payment_query": 5835,
+      "quote_request": 3229,
+      "general_enquiry": 21292,
+      "'<unclassified>'": 7051,
+      "artwork_submission": 4899,
+      "production_blocker": 32,
+      "escalation_to_management": 23
+    },
+    "top_domains": [
+      {
+        "n": 43131,
+        "dom": ""
+      }
+    ],
+    "noreply_like": 8022,
+    "with_company": 43940,
+    "internal_sender": 0
+  }
+}

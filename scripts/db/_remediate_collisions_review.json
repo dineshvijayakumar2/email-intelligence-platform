@@ -1,0 +1,205 @@
+[
+  {
+    "qb_key_id": "15048",
+    "qb_name": "Coco Republic",
+    "qb_revenue": 1022567.63,
+    "sb_name_collision": "Coco Republic",
+    "reason": "SB company of this name already matched to a different QB customer"
+  },
+  {
+    "qb_key_id": "16255",
+    "qb_name": "Sydney Theatre Company",
+    "qb_revenue": 40953.38,
+    "sb_name_collision": "Sydney Theatre Company",
+    "reason": "SB company of this name already matched to a different QB customer"
+  },
+  {
+    "qb_key_id": "25040",
+    "qb_name": "ID Collective",
+    "qb_revenue": 26677.72,
+    "sb_name_collision": "ID Collective",
+    "reason": "SB company of this name already matched to a different QB customer"
+  },
+  {
+    "qb_key_id": "17086",
+    "qb_name": "National Art School",
+    "qb_revenue": 6749.0,
+    "sb_name_collision": "National Art School",
+    "reason": "SB company of this name already matched to a different QB customer"
+  },
+  {
+    "qb_key_id": "36436",
+    "qb_name": "Foster + Partners",
+    "qb_revenue": 6644.48,
+    "sb_name_collision": "Foster + Partners",
+    "reason": "SB company of this name already matched to a different QB customer"
+  },
+  {
+    "qb_key_id": "25463",
+    "qb_name": "Poppie Pack",
+    "qb_revenue": 4525.58,
+    "sb_name_collision": "Poppie Pack",
+    "reason": "SB company of this name already matched to a different QB customer"
+  },
+  {
+    "qb_key_id": "32133",
+    "qb_name": "Ive Group",
+    "qb_revenue": 3289.1,
+    "sb_name_collision": "Ive Group",
+    "reason": "SB company of this name already matched to a different QB customer"
+  },
+  {
+    "qb_key_id": "32517",
+    "qb_name": "Megaphone Media",
+    "qb_revenue": 2809.09,
+    "sb_name_collision": "Megaphone Media",
+    "reason": "SB company of this name already matched to a different QB customer"
+  },
+  {
+    "qb_key_id": "34461",
+    "qb_name": "Catravenland pty ltd",
+    "qb_revenue": 422.73,
+    "sb_name_collision": "Catravenland pty ltd",
+    "reason": "SB company of this name already matched to a different QB customer"
+  },
+  {
+    "qb_key_id": "21622",
+    "qb_name": "katerina Pijaca",
+    "qb_revenue": 314.55,
+    "sb_name_collision": "katerina Pijaca",
+    "reason": "SB company of this name already matched to a different QB customer"
+  },
+  {
+    "qb_key_id": "31054",
+    "qb_name": "Jan Sarah",
+    "qb_revenue": 311.32,
+    "sb_name_collision": "Jan Sarah",
+    "reason": "SB company of this name already matched to a different QB customer"
+  },
+  {
+    "qb_key_id": "31367",
+    "qb_name": "Sarah Brown",
+    "qb_revenue": 201.82,
+    "sb_name_collision": "Sarah Brown",
+    "reason": "SB company of this name already matched to a different QB customer"
+  },
+  {
+    "qb_key_id": "30950",
+    "qb_name": "Site Minder",
+    "qb_revenue": 0.0,
+    "sb_name_collision": "Site Minder",
+    "reason": "SB company of this name already matched to a different QB customer"
+  },
+  {
+    "qb_key_id": "31232",
+    "qb_name": "Christine Washer",
+    "qb_revenue": 0.0,
+    "sb_name_collision": "Christine Washer",
+    "reason": "SB company of this name already matched to a different QB customer"
+  },
+  {
+    "qb_key_id": "33591",
+    "qb_name": "Era Co",
+    "qb_revenue": 0.0,
+    "sb_name_collision": "Era Co",
+    "reason": "SB company of this name already matched to a different QB customer"
+  },
+  {
+    "qb_key_id": "32170",
+    "qb_name": "LendPro",
+    "qb_revenue": 0.0,
+    "sb_name_collision": "LendPro",
+    "reason": "SB company of this name already matched to a different QB customer"
+  },
+  {
+    "qb_key_id": "31028",
+    "qb_name": "Art Pharmacy",
+    "qb_revenue": 0.0,
+    "sb_name_collision": "Art Pharmacy",
+    "reason": "SB company of this name already matched to a different QB customer"
+  },
+  {
+    "qb_key_id": "36350",
+    "qb_name": "Eden Studios",
+    "qb_revenue": 0.0,
+    "sb_name_collision": "Eden Studios",
+    "reason": "SB company of this name already matched to a different QB customer"
+  },
+  {
+    "qb_key_id": "32283",
+    "qb_name": "Angelica Lagos",
+    "qb_revenue": 0.0,
+    "sb_name_collision": "Angelica Lagos",
+    "reason": "SB company of this name already matched to a different QB customer"
+  },
+  {
+    "qb_key_id": "34271",
+    "qb_name": "Missy Minzy",
+    "qb_revenue": 0.0,
+    "sb_name_collision": "Missy Minzy",
+    "reason": "SB company of this name already matched to a different QB customer"
+  },
+  {
+    "qb_key_id": "36599",
+    "qb_name": "Versatile",
+    "qb_revenue": 0.0,
+    "sb_name_collision": "Versatile",
+    "reason": "SB company of this name already matched to a different QB customer"
+  },
+  {
+    "qb_key_id": "30172",
+    "qb_name": "Dont use",
+    "qb_revenue": 0.0,
+    "sb_name_collision": "Dont use",
+    "reason": "SB company of this name already matched to a different QB customer"
+  },
+  {
+    "qb_key_id": "31954",
+    "qb_name": "Avril Burt",
+    "qb_revenue": 0.0,
+    "sb_name_collision": "Avril Burt",
+    "reason": "SB company of this name already matched to a different QB customer"
+  },
+  {
+    "qb_key_id": "31400",
+    "qb_name": "Hutch Man designs",
+    "qb_revenue": 0.0,
+    "sb_name_collision": "Hutch Man designs",
+    "reason": "SB company of this name already matched to a different QB customer"
+  },
+  {
+    "qb_key_id": "32187",
+    "qb_name": "Greg Thomas",
+    "qb_revenue": 0.0,
+    "sb_name_collision": "Greg Thomas",
+    "reason": "SB company of this name already matched to a different QB customer"
+  },
+  {
+    "qb_key_id": "35277",
+    "qb_name": "Prince Claudio",
+    "qb_revenue": 0.0,
+    "sb_name_collision": "Prince Claudio",
+    "reason": "SB company of this name already matched to a different QB customer"
+  },
+  {
+    "qb_key_id": "31509",
+    "qb_name": "151 Property",
+    "qb_revenue": 0.0,
+    "sb_name_collision": "151 Property",
+    "reason": "SB company of this name already matched to a different QB customer"
+  },
+  {
+    "qb_key_id": "31058",
+    "qb_name": "Lauren Rugless",
+    "qb_revenue": 0.0,
+    "sb_name_collision": "Lauren Rugless",
+    "reason": "SB company of this name already matched to a different QB customer"
+  },
+  {
+    "qb_key_id": "30003",
+    "qb_name": "HM Focus",
+    "qb_revenue": 0.0,
+    "sb_name_collision": "HM Focus",
+    "reason": "SB company of this name already matched to a different QB customer"
+  }
+]

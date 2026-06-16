@@ -1,0 +1,1325 @@
+{
+  "generated_for": "per-AM outreach docs",
+  "six_ams": [
+    "Nic",
+    "Linda",
+    "Ehab",
+    "Kenneth",
+    "Mary",
+    "Peter"
+  ],
+  "split_threshold": 0.6,
+  "per_am_counts": {
+    "Nic": 15,
+    "Linda": 17,
+    "Ehab": 16,
+    "Kenneth": 0,
+    "Mary": 2,
+    "Peter": 0
+  },
+  "grounding_split": {
+    "Nic": {
+      "customers": 15,
+      "email_grounded": 13,
+      "pitch_only": 2,
+      "any_email_data": 15
+    },
+    "Linda": {
+      "customers": 17,
+      "email_grounded": 16,
+      "pitch_only": 1,
+      "any_email_data": 17
+    },
+    "Ehab": {
+      "customers": 16,
+      "email_grounded": 14,
+      "pitch_only": 2,
+      "any_email_data": 16
+    },
+    "Mary": {
+      "customers": 2,
+      "email_grounded": 2,
+      "pitch_only": 0,
+      "any_email_data": 2
+    }
+  },
+  "flags": {
+    "no_am": [],
+    "outside_six": [],
+    "split": [],
+    "reassigned": [
+      "Jet Technologies Australia Pty Ltd: Nathan Brown (departed) -> Nic",
+      "Jefferies (Australia) Pty Ltd: Nathan Brown (departed) -> Ehab",
+      "Forsight: Daniel Hall (departed) -> Nic"
+    ]
+  },
+  "raw_am_values": {
+    "Nic Doyle": 3816,
+    "Linda D'Arcy": 7114,
+    "Ehab Kamel": 7629,
+    "Mary Serratore-Howe": 2193,
+    "Kalani Evans": 16,
+    "Daniel Hall": 94,
+    "Nathan Brown": 1059
+  },
+  "cards": [
+    {
+      "rank": 1,
+      "customer": "Pegasus Media & Logistics",
+      "company_id": "961fae41-2212-4045-b2b6-c2203e72e134",
+      "pitch": "Wide Format",
+      "confidence": 72.1,
+      "lift": 1.972,
+      "timing_status": "due_soon",
+      "timing_label": "due soon \u2014 156d since last order vs p50 gap 82d; approaching Jul seasonal peak",
+      "am_distribution": {
+        "Nic Doyle": 318
+      },
+      "am_ops_total": 318,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Nic Doyle",
+      "am_mode_share": 1.0,
+      "am": "Nic",
+      "flag": null
+    },
+    {
+      "rank": 2,
+      "customer": "Studio Henry Wilson",
+      "company_id": "d93a31d9-e806-49c3-b8d4-817d8613fe68",
+      "pitch": "Wide Format",
+      "confidence": 71.9,
+      "lift": 1.966,
+      "timing_status": "due_soon",
+      "timing_label": "due soon \u2014 36d since last order vs p50 gap 22d",
+      "am_distribution": {
+        "Linda D'Arcy": 662
+      },
+      "am_ops_total": 662,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Linda D'Arcy",
+      "am_mode_share": 1.0,
+      "am": "Linda",
+      "flag": null
+    },
+    {
+      "rank": 3,
+      "customer": "Streaker",
+      "company_id": "dbc9c4ad-f7ca-45d5-a2a2-3fd24ae2051c",
+      "pitch": "Embellishment",
+      "confidence": 65.6,
+      "lift": 1.886,
+      "timing_status": "overdue",
+      "timing_label": "overdue \u2014 127d since last order vs p90 gap 104d; approaching Jul seasonal peak",
+      "am_distribution": {
+        "Ehab Kamel": 469
+      },
+      "am_ops_total": 469,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Ehab Kamel",
+      "am_mode_share": 1.0,
+      "am": "Ehab",
+      "flag": null
+    },
+    {
+      "rank": 4,
+      "customer": "See Me Now",
+      "company_id": "ec643791-551b-4064-9a35-1b7370a7e8d4",
+      "pitch": "Wide Format",
+      "confidence": 71.9,
+      "lift": 1.966,
+      "timing_status": "in_cadence",
+      "timing_label": "in cadence \u2014 42d since last order, under p50 gap 92d; no strong reorder signal",
+      "am_distribution": {
+        "Ehab Kamel": 617
+      },
+      "am_ops_total": 617,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Ehab Kamel",
+      "am_mode_share": 1.0,
+      "am": "Ehab",
+      "flag": null
+    },
+    {
+      "rank": 5,
+      "customer": "GLIDER GLOBAL",
+      "company_id": "43824cfd-8f71-4c47-91f5-2d7ee796c2e3",
+      "pitch": "Embellishment",
+      "confidence": 66.2,
+      "lift": 1.904,
+      "timing_status": "due_soon",
+      "timing_label": "due soon \u2014 76d since last order vs p50 gap 41d",
+      "am_distribution": {
+        "Nic Doyle": 311
+      },
+      "am_ops_total": 311,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Nic Doyle",
+      "am_mode_share": 1.0,
+      "am": "Nic",
+      "flag": null
+    },
+    {
+      "rank": 6,
+      "customer": "SHADES ADELAIDE AIRPORT",
+      "company_id": "e3fd8d26-4af2-4994-a56c-7ee378aaec99",
+      "pitch": "Wide Format",
+      "confidence": 71.9,
+      "lift": 1.966,
+      "timing_status": "in_cadence",
+      "timing_label": "in cadence \u2014 70d since last order, under p50 gap 235d; no strong reorder signal",
+      "am_distribution": {
+        "Ehab Kamel": 95
+      },
+      "am_ops_total": 95,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "none",
+        "email_grounded": false
+      },
+      "am_mode_raw": "Ehab Kamel",
+      "am_mode_share": 1.0,
+      "am": "Ehab",
+      "flag": null
+    },
+    {
+      "rank": 7,
+      "customer": "Me and Amber",
+      "company_id": "49976d61-250f-4dba-b77d-b6c2e421cfb4",
+      "pitch": "Embellishment",
+      "confidence": 66.2,
+      "lift": 1.904,
+      "timing_status": "in_cadence",
+      "timing_label": "in cadence \u2014 20d since last order, under p50 gap 121d; no strong reorder signal",
+      "am_distribution": {
+        "Nic Doyle": 280
+      },
+      "am_ops_total": 280,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Nic Doyle",
+      "am_mode_share": 1.0,
+      "am": "Nic",
+      "flag": null
+    },
+    {
+      "rank": 8,
+      "customer": "Architectus Australia Holdings Pty Ltd",
+      "company_id": "ccf8821e-47ec-4fb8-828f-43333b41f9bb",
+      "pitch": "Soft Cover Books",
+      "confidence": 59.9,
+      "lift": 2.275,
+      "timing_status": "due_soon",
+      "timing_label": "due soon \u2014 97d since last order vs p50 gap 60d",
+      "am_distribution": {
+        "Linda D'Arcy": 121
+      },
+      "am_ops_total": 121,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Linda D'Arcy",
+      "am_mode_share": 1.0,
+      "am": "Linda",
+      "flag": null
+    },
+    {
+      "rank": 9,
+      "customer": "Jet Technologies Australia Pty Ltd",
+      "company_id": "df8daa92-3630-4a63-8a54-516579ae9f4c",
+      "pitch": "Wide Format",
+      "confidence": 71.9,
+      "lift": 1.966,
+      "timing_status": "in_cadence",
+      "timing_label": "in cadence \u2014 111d since last order, under p50 gap 125d; no strong reorder signal",
+      "am_distribution": {
+        "Nathan Brown": 183
+      },
+      "am_ops_total": 183,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Nathan Brown",
+      "am_mode_share": 1.0,
+      "am": "Nic",
+      "flag": "reassigned",
+      "reassigned_from": "Nathan Brown",
+      "reassign_reason": "QB owner Nathan Brown departed; email relationship plurality Nic {'Nic': 33, 'Kenneth': 6}"
+    },
+    {
+      "rank": 10,
+      "customer": "Digital Transformation Agency",
+      "company_id": "2f9daf23-5513-41d6-b5f9-4111a031f5c4",
+      "pitch": "Embellishment",
+      "confidence": 62.9,
+      "lift": 1.81,
+      "timing_status": "due_soon",
+      "timing_label": "due soon \u2014 76d since last order vs p50 gap 16d",
+      "am_distribution": {
+        "Linda D'Arcy": 309
+      },
+      "am_ops_total": 309,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Linda D'Arcy",
+      "am_mode_share": 1.0,
+      "am": "Linda",
+      "flag": null
+    },
+    {
+      "rank": 11,
+      "customer": "Ideate Co",
+      "company_id": "4420b6b5-40d9-4450-8a67-b87940bc3211",
+      "pitch": "Embellishment",
+      "confidence": 62.9,
+      "lift": 1.81,
+      "timing_status": "overdue",
+      "timing_label": "overdue \u2014 70d since last order vs p90 gap 39d",
+      "am_distribution": {
+        "Linda D'Arcy": 74
+      },
+      "am_ops_total": 74,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Linda D'Arcy",
+      "am_mode_share": 1.0,
+      "am": "Linda",
+      "flag": null
+    },
+    {
+      "rank": 12,
+      "customer": "Studio Garbett",
+      "company_id": "a88d8be6-ac25-4fa4-8d8f-1584f005b77d",
+      "pitch": "Embellishment",
+      "confidence": 66.2,
+      "lift": 1.904,
+      "timing_status": "in_cadence",
+      "timing_label": "in cadence \u2014 94d since last order, under p50 gap 99d; no strong reorder signal",
+      "am_distribution": {
+        "Nic Doyle": 296
+      },
+      "am_ops_total": 296,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Nic Doyle",
+      "am_mode_share": 1.0,
+      "am": "Nic",
+      "flag": null
+    },
+    {
+      "rank": 13,
+      "customer": "Eco Outdoor",
+      "company_id": "e472f5a1-5d08-4b6c-bd6a-cc45bfce0d99",
+      "pitch": "Wide Format",
+      "confidence": 71.9,
+      "lift": 1.966,
+      "timing_status": "due_soon",
+      "timing_label": "due soon \u2014 104d since last order vs p50 gap 24d",
+      "am_distribution": {
+        "Nic Doyle": 123
+      },
+      "am_ops_total": 123,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Nic Doyle",
+      "am_mode_share": 1.0,
+      "am": "Nic",
+      "flag": null
+    },
+    {
+      "rank": 14,
+      "customer": "Akaysha Energy",
+      "company_id": "1ddbda8e-8781-4801-b401-20989ab3100d",
+      "pitch": "Embellishment",
+      "confidence": 62.9,
+      "lift": 1.81,
+      "timing_status": "overdue",
+      "timing_label": "overdue \u2014 357d since last order vs p90 gap 82d",
+      "am_distribution": {
+        "Linda D'Arcy": 95
+      },
+      "am_ops_total": 95,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Linda D'Arcy",
+      "am_mode_share": 1.0,
+      "am": "Linda",
+      "flag": null
+    },
+    {
+      "rank": 15,
+      "customer": "Sabbia Gallery Pty Ltd",
+      "company_id": "6349f11d-6aa4-457a-b4ff-b9552a3862df",
+      "pitch": "Embellishment",
+      "confidence": 62.9,
+      "lift": 1.81,
+      "timing_status": "in_cadence",
+      "timing_label": "in cadence \u2014 2d since last order, under p50 gap 27d; no strong reorder signal",
+      "am_distribution": {
+        "Linda D'Arcy": 544
+      },
+      "am_ops_total": 544,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Linda D'Arcy",
+      "am_mode_share": 1.0,
+      "am": "Linda",
+      "flag": null
+    },
+    {
+      "rank": 16,
+      "customer": "Department of Planning, Housing and Infrastructure",
+      "company_id": "110b7eb5-7f8d-49bd-957f-dacf72502abf",
+      "pitch": "Embellishment",
+      "confidence": 62.9,
+      "lift": 1.81,
+      "timing_status": "due_soon",
+      "timing_label": "due soon \u2014 84d since last order vs p50 gap 33d",
+      "am_distribution": {
+        "Nic Doyle": 199
+      },
+      "am_ops_total": 199,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Nic Doyle",
+      "am_mode_share": 1.0,
+      "am": "Nic",
+      "flag": null
+    },
+    {
+      "rank": 17,
+      "customer": "Block Branding",
+      "company_id": "0af713b4-618a-41c5-aa60-c675ee2c6f79",
+      "pitch": "Design Services",
+      "confidence": 92.3,
+      "lift": 1.082,
+      "timing_status": "overdue",
+      "timing_label": "overdue \u2014 43d since last order vs p90 gap 14d",
+      "am_distribution": {
+        "Nic Doyle": 115
+      },
+      "am_ops_total": 115,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Nic Doyle",
+      "am_mode_share": 1.0,
+      "am": "Nic",
+      "flag": null
+    },
+    {
+      "rank": 18,
+      "customer": "Lincoln Place",
+      "company_id": "36fa9a62-9d54-4309-922a-4187956fac68",
+      "pitch": "Embellishment",
+      "confidence": 66.2,
+      "lift": 1.904,
+      "timing_status": "in_cadence",
+      "timing_label": "in cadence \u2014 22d since last order, under p50 gap 158d; no strong reorder signal",
+      "am_distribution": {
+        "Linda D'Arcy": 107
+      },
+      "am_ops_total": 107,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Linda D'Arcy",
+      "am_mode_share": 1.0,
+      "am": "Linda",
+      "flag": null
+    },
+    {
+      "rank": 19,
+      "customer": "Levande Pty Ltd",
+      "company_id": "07c816c0-68ed-4fa7-8896-1110418139da",
+      "pitch": "Embellishment",
+      "confidence": 62.9,
+      "lift": 1.81,
+      "timing_status": "due_soon",
+      "timing_label": "due soon \u2014 10d since last order vs p50 gap 10d",
+      "am_distribution": {
+        "Linda D'Arcy": 109
+      },
+      "am_ops_total": 109,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Linda D'Arcy",
+      "am_mode_share": 1.0,
+      "am": "Linda",
+      "flag": null
+    },
+    {
+      "rank": 20,
+      "customer": "Tribe Studio",
+      "company_id": "c406722e-f2e8-4b34-bcda-421fa0ed4c37",
+      "pitch": "Wide Format",
+      "confidence": 71.9,
+      "lift": 1.966,
+      "timing_status": "in_cadence",
+      "timing_label": "in cadence \u2014 52d since last order, under p50 gap 153d; no strong reorder signal",
+      "am_distribution": {
+        "Linda D'Arcy": 188
+      },
+      "am_ops_total": 188,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Linda D'Arcy",
+      "am_mode_share": 1.0,
+      "am": "Linda",
+      "flag": null
+    },
+    {
+      "rank": 21,
+      "customer": "Freedom",
+      "company_id": "b04ec5de-ab67-441e-a64f-dd9272329ab1",
+      "pitch": "Hard Cover Books",
+      "confidence": 31.3,
+      "lift": 2.275,
+      "timing_status": "overdue",
+      "timing_label": "overdue \u2014 101d since last order vs p90 gap 48d; approaching Jul seasonal peak",
+      "am_distribution": {
+        "Nic Doyle": 1301
+      },
+      "am_ops_total": 1301,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Nic Doyle",
+      "am_mode_share": 1.0,
+      "am": "Nic",
+      "flag": null
+    },
+    {
+      "rank": 22,
+      "customer": "Ball & Doggett",
+      "company_id": "bced26b3-9cd0-4a08-8cda-54431b6424fd",
+      "pitch": "Embellishment",
+      "confidence": 62.9,
+      "lift": 1.81,
+      "timing_status": "in_cadence",
+      "timing_label": "in cadence \u2014 9d since last order, under p50 gap 41d; no strong reorder signal",
+      "am_distribution": {
+        "Ehab Kamel": 257
+      },
+      "am_ops_total": 257,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Ehab Kamel",
+      "am_mode_share": 1.0,
+      "am": "Ehab",
+      "flag": null
+    },
+    {
+      "rank": 23,
+      "customer": "SCCO Studio",
+      "company_id": "7a25ba00-2656-425e-bb60-5f1f6875fecb",
+      "pitch": "Embellishment",
+      "confidence": 66.2,
+      "lift": 1.904,
+      "timing_status": "in_cadence",
+      "timing_label": "in cadence \u2014 184d since last order, under p50 gap 310d; no strong reorder signal",
+      "am_distribution": {
+        "Ehab Kamel": 170
+      },
+      "am_ops_total": 170,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Ehab Kamel",
+      "am_mode_share": 1.0,
+      "am": "Ehab",
+      "flag": null
+    },
+    {
+      "rank": 24,
+      "customer": "Dilcara",
+      "company_id": "7d71aae0-6e2d-4eae-842d-2488159995d0",
+      "pitch": "Soft Cover Books",
+      "confidence": 59.9,
+      "lift": 2.275,
+      "timing_status": "overdue",
+      "timing_label": "overdue \u2014 148d since last order vs p90 gap 48d",
+      "am_distribution": {
+        "Linda D'Arcy": 54
+      },
+      "am_ops_total": 54,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Linda D'Arcy",
+      "am_mode_share": 1.0,
+      "am": "Linda",
+      "flag": null
+    },
+    {
+      "rank": 25,
+      "customer": "Jefferies (Australia) Pty Ltd",
+      "company_id": "c270ed76-f1fa-4ee6-823a-0a076f94f0b6",
+      "pitch": "Wide Format",
+      "confidence": 72.1,
+      "lift": 1.972,
+      "timing_status": "in_cadence",
+      "timing_label": "in cadence \u2014 7d since last order, under p50 gap 18d; no strong reorder signal",
+      "am_distribution": {
+        "Nathan Brown": 876
+      },
+      "am_ops_total": 876,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Nathan Brown",
+      "am_mode_share": 1.0,
+      "am": "Ehab",
+      "flag": "reassigned",
+      "reassigned_from": "Nathan Brown",
+      "reassign_reason": "QB owner Nathan Brown departed; email relationship plurality Ehab {'Ehab': 55, 'Linda': 1}"
+    },
+    {
+      "rank": 26,
+      "customer": "Carbon Creative",
+      "company_id": "cba1cbcc-bae2-46b0-8811-c9c0a12016ff",
+      "pitch": "Embellishment",
+      "confidence": 62.9,
+      "lift": 1.81,
+      "timing_status": "in_cadence",
+      "timing_label": "in cadence \u2014 51d since last order, under p50 gap 166d; no strong reorder signal",
+      "am_distribution": {
+        "Ehab Kamel": 144
+      },
+      "am_ops_total": 144,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Ehab Kamel",
+      "am_mode_share": 1.0,
+      "am": "Ehab",
+      "flag": null
+    },
+    {
+      "rank": 27,
+      "customer": "Beckett's Bar and Dining",
+      "company_id": "0905cb57-808a-4db1-9df2-cb73523088c2",
+      "pitch": "Soft Cover Books",
+      "confidence": 59.9,
+      "lift": 2.275,
+      "timing_status": "due_soon",
+      "timing_label": "due soon \u2014 234d since last order vs p50 gap 75d",
+      "am_distribution": {
+        "Nic Doyle": 236,
+        "Kalani Evans": 16
+      },
+      "am_ops_total": 252,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "qb_only_no_email",
+        "email_grounded": false
+      },
+      "am_mode_raw": "Nic Doyle",
+      "am_mode_share": 0.937,
+      "am": "Nic",
+      "flag": null
+    },
+    {
+      "rank": 28,
+      "customer": "Arms Of Eve",
+      "company_id": "4609e1d8-6d5b-4c11-a052-0ba7f0b9e6aa",
+      "pitch": "Embellishment",
+      "confidence": 62.9,
+      "lift": 1.81,
+      "timing_status": "in_cadence",
+      "timing_label": "in cadence \u2014 43d since last order, under p50 gap 84d; no strong reorder signal",
+      "am_distribution": {
+        "Ehab Kamel": 282
+      },
+      "am_ops_total": 282,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Ehab Kamel",
+      "am_mode_share": 1.0,
+      "am": "Ehab",
+      "flag": null
+    },
+    {
+      "rank": 29,
+      "customer": "CoinOp Operations Pty Ltd",
+      "company_id": "0e68a979-e499-4843-b0b8-eb2f29b93357",
+      "pitch": "Soft Cover Books",
+      "confidence": 47.6,
+      "lift": 1.81,
+      "timing_status": "due_soon",
+      "timing_label": "due soon \u2014 21d since last order vs p50 gap 12d",
+      "am_distribution": {
+        "Mary Serratore-Howe": 1100
+      },
+      "am_ops_total": 1100,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Mary Serratore-Howe",
+      "am_mode_share": 1.0,
+      "am": "Mary",
+      "flag": null
+    },
+    {
+      "rank": 30,
+      "customer": "CTRL Print Group",
+      "company_id": "09b01415-5f1a-4c0c-8860-ad29b1f386ec",
+      "pitch": "Wide Format",
+      "confidence": 52.8,
+      "lift": 1.444,
+      "timing_status": "overdue",
+      "timing_label": "overdue \u2014 195d since last order vs p90 gap 180d; approaching Jul seasonal peak",
+      "am_distribution": {
+        "Ehab Kamel": 184
+      },
+      "am_ops_total": 184,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Ehab Kamel",
+      "am_mode_share": 1.0,
+      "am": "Ehab",
+      "flag": null
+    },
+    {
+      "rank": 31,
+      "customer": "Sterling Black",
+      "company_id": "e8be10d9-a4ee-4467-9b80-5623e9044718",
+      "pitch": "Wide Format",
+      "confidence": 71.9,
+      "lift": 1.966,
+      "timing_status": "in_cadence",
+      "timing_label": "in cadence \u2014 181d since last order, under p50 gap 251d; no strong reorder signal",
+      "am_distribution": {
+        "Linda D'Arcy": 134
+      },
+      "am_ops_total": 134,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Linda D'Arcy",
+      "am_mode_share": 1.0,
+      "am": "Linda",
+      "flag": null
+    },
+    {
+      "rank": 32,
+      "customer": "Sydney Eisteddfod",
+      "company_id": "ab7dd727-3cd9-4366-b484-72ef172d4658",
+      "pitch": "Embellishment",
+      "confidence": 62.9,
+      "lift": 1.81,
+      "timing_status": "in_cadence",
+      "timing_label": "in cadence \u2014 9d since last order, under p50 gap 16d; no strong reorder signal; approaching Jul seasonal peak",
+      "am_distribution": {
+        "Ehab Kamel": 286
+      },
+      "am_ops_total": 286,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Ehab Kamel",
+      "am_mode_share": 1.0,
+      "am": "Ehab",
+      "flag": null
+    },
+    {
+      "rank": 33,
+      "customer": "Chic Brisbane Management",
+      "company_id": "49b6338e-33e4-4343-bbc7-8206b19b45ea",
+      "pitch": "Soft Cover Books",
+      "confidence": 47.6,
+      "lift": 1.81,
+      "timing_status": "overdue",
+      "timing_label": "overdue \u2014 294d since last order vs p90 gap 225d",
+      "am_distribution": {
+        "Mary Serratore-Howe": 1093
+      },
+      "am_ops_total": 1093,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Mary Serratore-Howe",
+      "am_mode_share": 1.0,
+      "am": "Mary",
+      "flag": null
+    },
+    {
+      "rank": 34,
+      "customer": "ABC Publicity",
+      "company_id": "326353a8-410c-4292-aa5c-d9678b9cc948",
+      "pitch": "Embellishment",
+      "confidence": 62.9,
+      "lift": 1.81,
+      "timing_status": "in_cadence",
+      "timing_label": "in cadence \u2014 8d since last order, under p50 gap 138d; no strong reorder signal",
+      "am_distribution": {
+        "Nic Doyle": 114
+      },
+      "am_ops_total": 114,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "qb_only_no_email",
+        "email_grounded": false
+      },
+      "am_mode_raw": "Nic Doyle",
+      "am_mode_share": 1.0,
+      "am": "Nic",
+      "flag": null
+    },
+    {
+      "rank": 35,
+      "customer": "Georg Jensen",
+      "company_id": "86f28118-7ffa-4aae-91ba-cc70fca10f71",
+      "pitch": "Embellishment",
+      "confidence": 66.2,
+      "lift": 1.904,
+      "timing_status": "due_soon",
+      "timing_label": "due soon \u2014 23d since last order vs p50 gap 8d",
+      "am_distribution": {
+        "Ehab Kamel": 1865
+      },
+      "am_ops_total": 1865,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Ehab Kamel",
+      "am_mode_share": 1.0,
+      "am": "Ehab",
+      "flag": null
+    },
+    {
+      "rank": 36,
+      "customer": "Bear Meets Eagle on Fire",
+      "company_id": "0dd9a6cd-d86a-4cd8-a07b-1482cd61e413",
+      "pitch": "Embellishment",
+      "confidence": 62.9,
+      "lift": 1.81,
+      "timing_status": "in_cadence",
+      "timing_label": "in cadence \u2014 7d since last order, under p50 gap 57d; no strong reorder signal",
+      "am_distribution": {
+        "Nic Doyle": 153,
+        "Linda D'Arcy": 85
+      },
+      "am_ops_total": 238,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Nic Doyle",
+      "am_mode_share": 0.643,
+      "am": "Nic",
+      "flag": null
+    },
+    {
+      "rank": 37,
+      "customer": "DesignDavey Pty Ltd",
+      "company_id": "5ddea004-6787-417b-85f8-2c1d8a3056f9",
+      "pitch": "Wide Format",
+      "confidence": 52.8,
+      "lift": 1.444,
+      "timing_status": "overdue",
+      "timing_label": "overdue \u2014 332d since last order vs p90 gap 308d",
+      "am_distribution": {
+        "Ehab Kamel": 293
+      },
+      "am_ops_total": 293,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Ehab Kamel",
+      "am_mode_share": 1.0,
+      "am": "Ehab",
+      "flag": null
+    },
+    {
+      "rank": 38,
+      "customer": "Meluka Honey Pty Ltd",
+      "company_id": "7efb9b95-e004-4767-b863-dbf8e6c9797e",
+      "pitch": "Soft Cover Books",
+      "confidence": 47.6,
+      "lift": 1.81,
+      "timing_status": "due_soon",
+      "timing_label": "due soon \u2014 141d since last order vs p50 gap 130d; approaching Jul seasonal peak",
+      "am_distribution": {
+        "Nic Doyle": 293
+      },
+      "am_ops_total": 293,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Nic Doyle",
+      "am_mode_share": 1.0,
+      "am": "Nic",
+      "flag": null
+    },
+    {
+      "rank": 39,
+      "customer": "Menangle Park DV Management Pty Ltd",
+      "company_id": "551b0d7e-2d1d-4cb5-97f6-511cc923e5b5",
+      "pitch": "Design Services",
+      "confidence": 91.6,
+      "lift": 1.074,
+      "timing_status": "due_soon",
+      "timing_label": "due soon \u2014 37d since last order vs p50 gap 14d",
+      "am_distribution": {
+        "Linda D'Arcy": 108
+      },
+      "am_ops_total": 108,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Linda D'Arcy",
+      "am_mode_share": 1.0,
+      "am": "Linda",
+      "flag": null
+    },
+    {
+      "rank": 40,
+      "customer": "Dahua Group Sydney Project 2 Pty Ltd",
+      "company_id": "57ecbb1e-7fd2-400c-b32f-f75582a9dcc7",
+      "pitch": "Embellishment",
+      "confidence": 62.9,
+      "lift": 1.81,
+      "timing_status": "in_cadence",
+      "timing_label": "in cadence \u2014 105d since last order, under p50 gap 110d; no strong reorder signal",
+      "am_distribution": {
+        "Linda D'Arcy": 123
+      },
+      "am_ops_total": 123,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Linda D'Arcy",
+      "am_mode_share": 1.0,
+      "am": "Linda",
+      "flag": null
+    },
+    {
+      "rank": 41,
+      "customer": "Givewrap",
+      "company_id": "5b92fcfd-ffd4-433a-81e4-c46c47552adf",
+      "pitch": "Soft Cover Books",
+      "confidence": 47.6,
+      "lift": 1.81,
+      "timing_status": "overdue",
+      "timing_label": "overdue \u2014 107d since last order vs p90 gap 49d",
+      "am_distribution": {
+        "Ehab Kamel": 753
+      },
+      "am_ops_total": 753,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Ehab Kamel",
+      "am_mode_share": 1.0,
+      "am": "Ehab",
+      "flag": null
+    },
+    {
+      "rank": 42,
+      "customer": "Karimbla Constructions Services (NSW) Pty Ltd",
+      "company_id": "9d410477-4b4b-4a5f-b458-7ab5e5815fa7",
+      "pitch": "Embellishment",
+      "confidence": 62.9,
+      "lift": 1.81,
+      "timing_status": "in_cadence",
+      "timing_label": "in cadence \u2014 111d since last order, under p50 gap 211d; no strong reorder signal",
+      "am_distribution": {
+        "Linda D'Arcy": 198
+      },
+      "am_ops_total": 198,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Linda D'Arcy",
+      "am_mode_share": 1.0,
+      "am": "Linda",
+      "flag": null
+    },
+    {
+      "rank": 43,
+      "customer": "MED-EL Implant Systems Australasia Pty Ltd",
+      "company_id": "08140c1e-c391-4543-8bd8-90ede6a6393e",
+      "pitch": "Hard Cover Books",
+      "confidence": 31.3,
+      "lift": 2.275,
+      "timing_status": "due_soon",
+      "timing_label": "due soon \u2014 30d since last order vs p50 gap 14d",
+      "am_distribution": {
+        "Ehab Kamel": 2042
+      },
+      "am_ops_total": 2042,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Ehab Kamel",
+      "am_mode_share": 1.0,
+      "am": "Ehab",
+      "flag": null
+    },
+    {
+      "rank": 44,
+      "customer": "Forsight",
+      "company_id": "88e3cccc-3e55-4c9c-9441-78ef5cc45e0c",
+      "pitch": "Embellishment",
+      "confidence": 65.6,
+      "lift": 1.886,
+      "timing_status": "in_cadence",
+      "timing_label": "in cadence \u2014 21d since last order, under p50 gap 225d; no strong reorder signal",
+      "am_distribution": {
+        "Daniel Hall": 94
+      },
+      "am_ops_total": 94,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Daniel Hall",
+      "am_mode_share": 1.0,
+      "am": "Nic",
+      "flag": "reassigned",
+      "reassigned_from": "Daniel Hall",
+      "reassign_reason": "QB owner Daniel Hall departed; email relationship plurality Nic {'Nic': 66, 'Kenneth': 1}"
+    },
+    {
+      "rank": 45,
+      "customer": "Meriton Pty Ltd",
+      "company_id": "6053d052-42f0-4a9c-98e6-ad82f37f2f1d",
+      "pitch": "Hard Cover Books",
+      "confidence": 31.3,
+      "lift": 2.275,
+      "timing_status": "due_soon",
+      "timing_label": "due soon \u2014 8d since last order vs p50 gap 6d",
+      "am_distribution": {
+        "Linda D'Arcy": 2907
+      },
+      "am_ops_total": 2907,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Linda D'Arcy",
+      "am_mode_share": 1.0,
+      "am": "Linda",
+      "flag": null
+    },
+    {
+      "rank": 46,
+      "customer": "SCEGGS",
+      "company_id": "ae8db36a-c6e4-41ee-8b25-32a812aaf43e",
+      "pitch": "Embellishment",
+      "confidence": 62.9,
+      "lift": 1.81,
+      "timing_status": "in_cadence",
+      "timing_label": "in cadence \u2014 70d since last order, under p50 gap 256d; no strong reorder signal",
+      "am_distribution": {
+        "Nic Doyle": 77
+      },
+      "am_ops_total": 77,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Nic Doyle",
+      "am_mode_share": 1.0,
+      "am": "Nic",
+      "flag": null
+    },
+    {
+      "rank": 47,
+      "customer": "WARNER VILLAGE OPTOMETRIST",
+      "company_id": "469d6d7c-29ce-455c-b466-62cb99a32075",
+      "pitch": "Embellishment",
+      "confidence": 62.9,
+      "lift": 1.81,
+      "timing_status": "due_soon",
+      "timing_label": "due soon \u2014 70d since last order vs p50 gap 14d",
+      "am_distribution": {
+        "Ehab Kamel": 103
+      },
+      "am_ops_total": 103,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "none",
+        "email_grounded": false
+      },
+      "am_mode_raw": "Ehab Kamel",
+      "am_mode_share": 1.0,
+      "am": "Ehab",
+      "flag": null
+    },
+    {
+      "rank": 48,
+      "customer": "Cheddar Pocket",
+      "company_id": "329227f5-88db-418f-9230-cba4ee471287",
+      "pitch": "Design Services",
+      "confidence": 87.1,
+      "lift": 1.021,
+      "timing_status": "overdue",
+      "timing_label": "overdue \u2014 205d since last order vs p90 gap 31d",
+      "am_distribution": {
+        "Linda D'Arcy": 61
+      },
+      "am_ops_total": 61,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "none",
+        "email_grounded": false
+      },
+      "am_mode_raw": "Linda D'Arcy",
+      "am_mode_share": 1.0,
+      "am": "Linda",
+      "flag": null
+    },
+    {
+      "rank": 49,
+      "customer": "Tech Policy",
+      "company_id": "45eff1a8-4cc5-4e76-8dd7-07a265c6ebf0",
+      "pitch": "Embellishment",
+      "confidence": 62.9,
+      "lift": 1.81,
+      "timing_status": "overdue",
+      "timing_label": "overdue \u2014 204d since last order vs p90 gap 63d",
+      "am_distribution": {
+        "Ehab Kamel": 69
+      },
+      "am_ops_total": 69,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Ehab Kamel",
+      "am_mode_share": 1.0,
+      "am": "Ehab",
+      "flag": null
+    },
+    {
+      "rank": 50,
+      "customer": "J A Wales Printing",
+      "company_id": "0242a61e-1135-4826-bfb1-4c3493d55247",
+      "pitch": "Soft Cover Books",
+      "confidence": 47.6,
+      "lift": 1.81,
+      "timing_status": "in_cadence",
+      "timing_label": "in cadence \u2014 13d since last order, under p50 gap 16d; no strong reorder signal",
+      "am_distribution": {
+        "Linda D'Arcy": 1235
+      },
+      "am_ops_total": 1235,
+      "am_ops_null": 0,
+      "grounding": {
+        "email_present": true,
+        "timing_available": true,
+        "contact_status": "engaged",
+        "email_grounded": true
+      },
+      "am_mode_raw": "Linda D'Arcy",
+      "am_mode_share": 1.0,
+      "am": "Linda",
+      "flag": null
+    }
+  ]
+}

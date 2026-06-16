@@ -1,0 +1,483 @@
+{
+  "generated": "2026-06-12",
+  "field": "qb_customers.industry (MKTG: Industry)",
+  "coverage": {
+    "qb_customers_grain": {
+      "customers": 15182,
+      "non_null_pct": 99.6,
+      "not_selected_pct": 83.7,
+      "usable_industry_pct": 12.6,
+      "usable_n": 1912
+    },
+    "all_matched_companies": {
+      "companies": 13574,
+      "usable_industry": 1825,
+      "usable_pct": 13.4,
+      "not_selected": 11220,
+      "not_selected_pct": 82.7,
+      "revenue": 7011134,
+      "revenue_usable": 6631499,
+      "revenue_weighted_coverage_pct": 94.6
+    },
+    "companies_with_12mo_revenue": {
+      "companies": 648,
+      "usable_industry": 532,
+      "usable_pct": 82.1,
+      "not_selected": 69,
+      "not_selected_pct": 10.6,
+      "revenue": 7011134,
+      "revenue_usable": 6631499,
+      "revenue_weighted_coverage_pct": 94.6
+    },
+    "companies_rev>=10k": {
+      "companies": 135,
+      "usable_industry": 127,
+      "usable_pct": 94.1,
+      "not_selected": 4,
+      "not_selected_pct": 3.0,
+      "revenue": 5757588,
+      "revenue_usable": 5605570,
+      "revenue_weighted_coverage_pct": 97.4
+    },
+    "deck_50": {
+      "companies": 50,
+      "usable_industry": 47,
+      "usable_pct": 94.0,
+      "not_selected": 2,
+      "not_selected_pct": 4.0,
+      "revenue": 589503,
+      "revenue_usable": 573268,
+      "revenue_weighted_coverage_pct": 97.2
+    }
+  },
+  "distribution": {
+    "distinct_values": 17,
+    "values": {
+      "Not Selected": 12658,
+      "Creative Arts & Design": 461,
+      "Small Business or Individual": 454,
+      "Advertising & Marketing": 268,
+      "Corporate & Professional": 246,
+      "Property & Real Estate": 200,
+      "Hospitality Food & Beverage": 138,
+      "Trade Printers": 128,
+      "Luxury Brands": 118,
+      "Small business or individual": 99,
+      "Retail & POS": 86,
+      "Government & NFP": 76,
+      "Industrial & Manufacturing": 71,
+      "Education & Training": 65,
+      "Healthcare & Medical": 46,
+      "Print Industry / Broker / Supplier": 9,
+      "Extinct": 4
+    }
+  },
+  "reliability_sample": [
+    {
+      "customer": "Studio Messa Pty Ltd",
+      "industry": "Creative Arts & Design",
+      "rev12": 66632,
+      "buys": [
+        "Embellishment",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Wide Format"
+      ]
+    },
+    {
+      "customer": "Emily Ziz Style Studio",
+      "industry": "Creative Arts & Design",
+      "rev12": 63437,
+      "buys": [
+        "Wide Format"
+      ]
+    },
+    {
+      "customer": "Special Group",
+      "industry": "Advertising & Marketing",
+      "rev12": 56824,
+      "buys": [
+        "Soft Cover Books",
+        "Wide Format"
+      ]
+    },
+    {
+      "customer": "BNT Management Pty Ltd",
+      "industry": "Advertising & Marketing",
+      "rev12": 35893,
+      "buys": [
+        "Embellishment",
+        "Soft Cover Books"
+      ]
+    },
+    {
+      "customer": "Bloomberg Australia Pty Ltd",
+      "industry": "Corporate & Professional",
+      "rev12": 70292,
+      "buys": [
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Wide Format"
+      ]
+    },
+    {
+      "customer": "Q Report",
+      "industry": "Corporate & Professional",
+      "rev12": 64515,
+      "buys": [
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Wide Format"
+      ]
+    },
+    {
+      "customer": "HH Global",
+      "industry": "Property & Real Estate",
+      "rev12": 376430,
+      "buys": [
+        "Embellishment",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Wide Format"
+      ]
+    },
+    {
+      "customer": "The Property Agency",
+      "industry": "Property & Real Estate",
+      "rev12": 374304,
+      "buys": [
+        "Embellishment",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Wide Format"
+      ]
+    },
+    {
+      "customer": "Australia's Oyster Coast Pty Ltd",
+      "industry": "Hospitality Food & Beverage",
+      "rev12": 48384,
+      "buys": [
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Wide Format"
+      ]
+    },
+    {
+      "customer": "Urban Purveyor Group",
+      "industry": "Hospitality Food & Beverage",
+      "rev12": 45387,
+      "buys": [
+        "Display/Installation",
+        "Embellishment",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Wide Format"
+      ]
+    },
+    {
+      "customer": "Artis",
+      "industry": "Trade Printers",
+      "rev12": 420742,
+      "buys": [
+        "Embellishment",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Wide Format"
+      ]
+    },
+    {
+      "customer": "Geoff Letchford Photography",
+      "industry": "Trade Printers",
+      "rev12": 153295,
+      "buys": [
+        "Embellishment",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Wide Format"
+      ]
+    },
+    {
+      "customer": "Bulgari Australia",
+      "industry": "Luxury Brands",
+      "rev12": 28889,
+      "buys": [
+        "Embellishment",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Wide Format"
+      ]
+    },
+    {
+      "customer": "Camilla",
+      "industry": "Luxury Brands",
+      "rev12": 22882,
+      "buys": [
+        "flat/finishing only"
+      ]
+    },
+    {
+      "customer": "Maui Jim",
+      "industry": "Retail & POS",
+      "rev12": 211012,
+      "buys": [
+        "Display/Installation",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Wide Format"
+      ]
+    },
+    {
+      "customer": "Freedom",
+      "industry": "Retail & POS",
+      "rev12": 93330,
+      "buys": [
+        "Soft Cover Books",
+        "Wide Format"
+      ]
+    },
+    {
+      "customer": "Anglicare",
+      "industry": "Government & NFP",
+      "rev12": 35844,
+      "buys": [
+        "Embellishment",
+        "Hard Cover Books",
+        "Wide Format"
+      ]
+    },
+    {
+      "customer": "Digital Transformation Agency",
+      "industry": "Government & NFP",
+      "rev12": 22608,
+      "buys": [
+        "Soft Cover Books"
+      ]
+    },
+    {
+      "customer": "CoinOp Operations Pty Ltd",
+      "industry": "Industrial & Manufacturing",
+      "rev12": 52508,
+      "buys": [
+        "Wide Format"
+      ]
+    },
+    {
+      "customer": "CHERY MOTORS | OMODA | JAECOO",
+      "industry": "Industrial & Manufacturing",
+      "rev12": 43155,
+      "buys": [
+        "Wide Format"
+      ]
+    },
+    {
+      "customer": "UNSW Sydney",
+      "industry": "Education & Training",
+      "rev12": 54374,
+      "buys": [
+        "Soft Cover Books",
+        "Wide Format"
+      ]
+    },
+    {
+      "customer": "State Library of New South Wales",
+      "industry": "Education & Training",
+      "rev12": 19502,
+      "buys": [
+        "Soft Cover Books",
+        "Wide Format"
+      ]
+    },
+    {
+      "customer": "MED-EL Implant Systems Australasia Pty Ltd",
+      "industry": "Healthcare & Medical",
+      "rev12": 41478,
+      "buys": [
+        "Soft Cover Books",
+        "Wide Format"
+      ]
+    },
+    {
+      "customer": "HCF",
+      "industry": "Healthcare & Medical",
+      "rev12": 10422,
+      "buys": [
+        "Soft Cover Books"
+      ]
+    },
+    {
+      "customer": "Kwik Kopy Darling Harbour",
+      "industry": "Print Industry / Broker / Supplier",
+      "rev12": 1718,
+      "buys": [
+        "flat/finishing only"
+      ]
+    }
+  ],
+  "buying_mix": {
+    "Creative Arts & Design": {
+      "n": 305,
+      "pct": {
+        "Flat Sheets": 92,
+        "Soft Cover Books": 34,
+        "Hard Cover Books": 17,
+        "Wide Format": 43,
+        "Embellishment": 9,
+        "Specialty Finishing": 95,
+        "Design Services": 87,
+        "Display/Installation": 4
+      }
+    },
+    "Advertising & Marketing": {
+      "n": 168,
+      "pct": {
+        "Flat Sheets": 94,
+        "Soft Cover Books": 31,
+        "Hard Cover Books": 26,
+        "Wide Format": 58,
+        "Embellishment": 12,
+        "Specialty Finishing": 97,
+        "Design Services": 90,
+        "Display/Installation": 5
+      }
+    },
+    "Luxury Brands": {
+      "n": 73,
+      "pct": {
+        "Flat Sheets": 99,
+        "Soft Cover Books": 36,
+        "Hard Cover Books": 27,
+        "Wide Format": 40,
+        "Embellishment": 10,
+        "Specialty Finishing": 97,
+        "Design Services": 88,
+        "Display/Installation": 1
+      }
+    },
+    "Education & Training": {
+      "n": 45,
+      "pct": {
+        "Flat Sheets": 93,
+        "Soft Cover Books": 47,
+        "Hard Cover Books": 9,
+        "Wide Format": 40,
+        "Embellishment": 4,
+        "Specialty Finishing": 100,
+        "Design Services": 82,
+        "Display/Installation": 0
+      }
+    },
+    "Hospitality Food & Beverage": {
+      "n": 95,
+      "pct": {
+        "Flat Sheets": 94,
+        "Soft Cover Books": 24,
+        "Hard Cover Books": 12,
+        "Wide Format": 53,
+        "Embellishment": 13,
+        "Specialty Finishing": 96,
+        "Design Services": 84,
+        "Display/Installation": 5
+      }
+    },
+    "Retail & POS": {
+      "n": 57,
+      "pct": {
+        "Flat Sheets": 81,
+        "Soft Cover Books": 32,
+        "Hard Cover Books": 23,
+        "Wide Format": 54,
+        "Embellishment": 9,
+        "Specialty Finishing": 96,
+        "Design Services": 89,
+        "Display/Installation": 7
+      }
+    },
+    "Industrial & Manufacturing": {
+      "n": 38,
+      "pct": {
+        "Flat Sheets": 89,
+        "Soft Cover Books": 32,
+        "Hard Cover Books": 13,
+        "Wide Format": 50,
+        "Embellishment": 3,
+        "Specialty Finishing": 95,
+        "Design Services": 76,
+        "Display/Installation": 5
+      }
+    },
+    "Property & Real Estate": {
+      "n": 117,
+      "pct": {
+        "Flat Sheets": 98,
+        "Soft Cover Books": 51,
+        "Hard Cover Books": 32,
+        "Wide Format": 55,
+        "Embellishment": 25,
+        "Specialty Finishing": 98,
+        "Design Services": 77,
+        "Display/Installation": 4
+      }
+    },
+    "Corporate & Professional": {
+      "n": 151,
+      "pct": {
+        "Flat Sheets": 95,
+        "Soft Cover Books": 28,
+        "Hard Cover Books": 13,
+        "Wide Format": 38,
+        "Embellishment": 8,
+        "Specialty Finishing": 97,
+        "Design Services": 82,
+        "Display/Installation": 3
+      }
+    },
+    "Trade Printers": {
+      "n": 92,
+      "pct": {
+        "Flat Sheets": 98,
+        "Soft Cover Books": 64,
+        "Hard Cover Books": 28,
+        "Wide Format": 46,
+        "Embellishment": 16,
+        "Specialty Finishing": 98,
+        "Design Services": 95,
+        "Display/Installation": 1
+      }
+    },
+    "Government & NFP": {
+      "n": 45,
+      "pct": {
+        "Flat Sheets": 96,
+        "Soft Cover Books": 56,
+        "Hard Cover Books": 9,
+        "Wide Format": 42,
+        "Embellishment": 4,
+        "Specialty Finishing": 100,
+        "Design Services": 76,
+        "Display/Installation": 4
+      }
+    },
+    "Healthcare & Medical": {
+      "n": 26,
+      "pct": {
+        "Flat Sheets": 96,
+        "Soft Cover Books": 31,
+        "Hard Cover Books": 8,
+        "Wide Format": 31,
+        "Embellishment": 8,
+        "Specialty Finishing": 96,
+        "Design Services": 92,
+        "Display/Installation": 0
+      }
+    }
+  },
+  "verdict": {
+    "rating": "NEEDS-ENRICHMENT",
+    "nuance": "READY for the high-value segment, NEEDS-ENRICHMENT for the long tail",
+    "population": "Raw usable coverage only 12.6% (83.7% is \"Not Selected\"), BUT 94% of high-revenue companies and 97% of revenue already carry a usable industry; the deck-50 is 94% covered. The Not-Selected mass is the inactive long tail.",
+    "vocabulary": "CLEAN: 17 distinct values = ~13 real industries (controlled vocabulary, not free-text sprawl). Fix the casing duplicate (Small Business or Individual x2); Not Selected/Extinct/Small-Business are non-industries.",
+    "reliability": "HIGH: ~24/25 sampled labels plausibly correct from name+orders (e.g. Bulgari/Camilla->Luxury, UNSW->Education, MED-EL->Healthcare, CHERY->Manufacturing). Where filled, it is accurate \u2014 the OPPOSITE of the capability-tag pollution.",
+    "signal": "REAL: industries have distinct buying profiles (Property/Luxury high on hardcover+embellishment; Retail/Hospitality high on wide-format+display; Education/Govt high on soft-cover, low embellishment). Industry-aware recs WOULD differ from generic.",
+    "enrichment_scope": "Low-risk fill-the-gaps (not fix-the-data): existing 1,912 correct labels are a clean validation set; clean 13-bucket target; customer name+email-domain+order-history are strong features. Minimal pass = ~116 revenue-active companies missing a label (<$1, near-complete coverage of what matters). Full base = ~12,600 Not-Selected via an LLM pass (~$15-65 Haiku), mostly inactive tail."
+  }
+}

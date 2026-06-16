@@ -1,0 +1,4430 @@
+[
+  {
+    "company_id": "003d185d-a349-430c-905c-b5ed95151950",
+    "company_name": "NOOSA SPRINGS",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "006900b2-eaf0-4658-8dec-6ce7fb943720",
+    "company_name": "Nancy Wu",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "0072818b-7bc6-4d54-bb60-aacbe5afdb89",
+    "company_name": "RPS Australia East Pty Ltd - DO NOT USE",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "00c65120-49e8-4684-ae19-fe67579c79b6",
+    "company_name": "Kim Gerard",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "011793bf-bc1a-4ce7-ae02-2bdd51e05115",
+    "company_name": "Sydney Sake Society",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "013903e5-6470-4906-90f3-104ad152b74e",
+    "company_name": "Lara Sisson",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "01d6237e-2174-4d68-88c4-6202082a8110",
+    "company_name": "Lightning Print",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "03845aa8-293b-42a2-8280-bc38ce7d22a8",
+    "company_name": "Eurobrands",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "03a71beb-8e59-411c-9277-cbdb8a6654a1",
+    "company_name": "Autohead",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "04487db2-f067-4873-ac39-31d11ab2c55f",
+    "company_name": "Jess Ashpole",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "04ca51df-86d6-4997-9ee4-68718d04453f",
+    "company_name": "Safeman Australia",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "05512760-3bb6-491e-b4e7-aa826420fd56",
+    "company_name": "FPP",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "05644d79-44ea-4b3c-be51-149235baaee6",
+    "company_name": "1440",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "059a8642-6c63-43df-8dcd-a92e9bc2593e",
+    "company_name": "Georga Hilliard",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "05ec516d-04a2-4cbc-9239-6eb7de47077f",
+    "company_name": "Design + Motion",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "063fa83e-0886-4189-8c34-00d9b0a05518",
+    "company_name": "Romel Model Management",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "068aca9e-55a6-404a-8f98-74802daf94a1",
+    "company_name": "Nick Beel Design",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "0694906a-7c27-44b7-b810-5f0f7cf00533",
+    "company_name": "Sharon Wyer",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "07b3c38a-59f3-400e-8b1b-74f724b89949",
+    "company_name": "Nathan Tran",
+    "was_qb_matched": true,
+    "lost_contacts": 3
+  },
+  {
+    "company_id": "07f10a80-6393-44d4-a0d8-19a44e2ef2af",
+    "company_name": "Wonder and Wander",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "0801849f-81cc-4a87-93b7-00005556ef16",
+    "company_name": "MY OPTOMETRIST FOOTSCRAY",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "08ebd044-3912-4655-a0cc-1e7418e922a4",
+    "company_name": "Allie's Foods",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "095cd7c4-ace1-4b98-bf51-16a6c15a95c5",
+    "company_name": "Nicola Fox",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "0a521d71-e3c6-4d3b-a2fe-64de2aca7301",
+    "company_name": "CDMA",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "0ad9383a-d694-47df-be3a-3515dbd55694",
+    "company_name": "Burson-Marsteller",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "0af0fdba-216e-4e7e-add5-a9abf9c6c4d2",
+    "company_name": "Elect Printing",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "0b0a9379-5308-4c74-b58d-c932f9dc37c1",
+    "company_name": "DUET1, DUET2, DUET3, DIHL",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "0b181002-b1f1-409f-a7fb-f44497b79340",
+    "company_name": "Caroline  Reznik",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "0b3f5217-42b6-4c3e-8ce2-69f3b465f49f",
+    "company_name": "Eloise Kent",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "0b8f12e7-ebfc-4f3f-8522-4bcb609b5e31",
+    "company_name": "Max Build",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "0e0091a8-958c-4201-82cf-d744cfb23fa6",
+    "company_name": "KEVIN HACKETT OPTOMETRIST",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "0e5c95a7-0617-412a-bab8-1b6386923d3f",
+    "company_name": "XIXI Chen",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "0e7295da-3ffa-43a1-9224-36d490aa0714",
+    "company_name": "Publicis Sapient",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "0fadad26-2d59-4e6b-9ce8-1a22f11a9976",
+    "company_name": "Sommwines",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "0fbfb72d-7fbc-4706-bb27-93f90bc01e15",
+    "company_name": "ELITE EYEWEAR PTY LTD",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "102ff5f7-3bd0-406e-a496-cf6547b5499f",
+    "company_name": "Spark 44 Sydney",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "10a21de5-765a-4fdc-a37d-d2dbc52c6cb2",
+    "company_name": "5th Colour Print Management Pty Ltd",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "114dd544-a995-421c-97c7-b8a9d1520d7d",
+    "company_name": "Quite So",
+    "was_qb_matched": true,
+    "lost_contacts": 7
+  },
+  {
+    "company_id": "114f33bb-c532-4443-9a7b-38a954497f19",
+    "company_name": "AuShield  (Division of GeeCo Pty Ltd)",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "11d96e2f-8fe2-4d94-a9ec-3349e155dcf9",
+    "company_name": "Sims For Property",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "11dc7575-919a-4da4-aadb-04e46aaab8ec",
+    "company_name": "PMA Global",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "126d8c98-0920-4671-ab7c-2971fb5ce6e6",
+    "company_name": "Y&R Group",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "130610fe-8e06-4d67-a768-866b489de3ac",
+    "company_name": "Skin Divinity Cosmetic Clinic",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "1316061a-2dec-4cbe-bc21-67cc0d129a26",
+    "company_name": "Synergy Solutions",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "139d7cd2-dcb6-4f24-8d74-ffa48fac3499",
+    "company_name": "EYECARE PLUS RAMSGATE",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "13b839da-d439-421f-aa33-dce88994e88c",
+    "company_name": "Babicka Vodka",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "13e7005d-4a6d-4b7d-82a9-699018d574c2",
+    "company_name": "Drive IQ",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "13ea595c-5654-455a-bbcd-f6e935d33bd1",
+    "company_name": "CORAL SEA EYECARE",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "1440e8da-ca30-4cfa-a7e5-6f7069e01208",
+    "company_name": "Rachael Audrey Anger",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "14aff55a-f997-440a-a118-a196aaac3a00",
+    "company_name": "James Marquet",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "14fc2846-3dc2-4112-ab31-265cdfac68e3",
+    "company_name": "Wine Box Republic",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "15772ef7-006d-4a05-b795-392d6f99c989",
+    "company_name": "Alix Pashley",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "1584a39d-1d26-4eac-91e2-e2cdc5f88f9a",
+    "company_name": "Gabby and Ash Wilding",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "159dbff4-88ab-467c-a8ea-d12fd4fd4707",
+    "company_name": "RESORT SUNGLASSES",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "15a1896c-8dc8-4934-8a64-09c16250757c",
+    "company_name": "Cosmostudio",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "16512ab6-3560-45e8-993e-a06e257693b9",
+    "company_name": "PwC",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "16bae1da-5fd7-4315-bb29-f039b187b0f5",
+    "company_name": "Tim George Design",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "1781409d-c492-4ac8-b209-fe6d62c332b3",
+    "company_name": "The Conscience",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "179870e5-30e6-4512-aca9-0ccfd0feb1ed",
+    "company_name": "Ryan Jones Building Co",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "179a330e-d2d8-4ed4-b66a-363af42af472",
+    "company_name": "Gateway",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "184f71e6-1720-457c-b6f4-8e2b7a9009b4",
+    "company_name": "Paper Plane Projects",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "185a2b9c-4f8b-458c-9328-58616b9d94b3",
+    "company_name": "Hugh Van Schaick",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "18d61b8c-a8e6-4964-99a2-f32619f6102f",
+    "company_name": "E-2",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "19381f8a-9521-4119-a8da-5889a62abec9",
+    "company_name": "1001 SUNGLASS STATION HAYMARKE",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "194987bb-104a-415c-a6cc-0c663aa72ec0",
+    "company_name": "RAY LONG FISHING WORLD GEELONG",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "196dff09-82db-4e69-87cf-d8216e50fde7",
+    "company_name": "BeeBio Australia Pty Ltd",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "1a827e9c-eba1-4ccc-94b6-ec55ac84852f",
+    "company_name": "Callum Brandwyk",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "1a8fc433-f9ff-4336-83ca-233fa0d746fa",
+    "company_name": "Blueprint Labs",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "1aac9caf-ebcc-4d67-9fc7-8c7c97db2ddf",
+    "company_name": "George Patterson",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "1abcb90e-ff65-4b0f-b88d-fb50bc420524",
+    "company_name": "BRIGHT EYES PICCADILLY",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "1af45e40-3ec3-455a-9783-18bec86ef6e6",
+    "company_name": "Bonnie Fay",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "1bc04a05-5eb4-4d1f-bb7e-d8a29101afdc",
+    "company_name": "Mirrah Foulkes",
+    "was_qb_matched": true,
+    "lost_contacts": 4
+  },
+  {
+    "company_id": "1c6c177b-1c68-40eb-8a53-f977af2329b1",
+    "company_name": "PMG Integrated Communications",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "1d005b78-80f7-4fde-8410-26e7c02ebc85",
+    "company_name": "Amplify Brand Experience",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "1d3a9569-239c-429a-b08a-c28df509378f",
+    "company_name": "Josh  Bush",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "1d6bfda7-6691-41d7-924b-549d4fd902df",
+    "company_name": "Joel  Patful",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "1dddfc79-a8ec-45c5-90e9-92d1ddec882c",
+    "company_name": "Dogs NSW",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "1e1b1d58-950b-4596-8251-b1fff92825d9",
+    "company_name": "Sarah Cummings",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "1e7588ef-1b6f-4df1-93d4-d7856f6833bf",
+    "company_name": "Palazzo Collezioni",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "1f276d69-9a09-43f0-bca6-d567d1c1e201",
+    "company_name": "WM Media Pty Ltd",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "1f42f5d2-07f8-4fce-a528-ab14e6e9d240",
+    "company_name": "Jonathan Cami",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "2018e342-924c-42d3-b0ea-baae47092e3a",
+    "company_name": "Li Wang",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "202a842a-fe90-4d7e-8c9f-b50b396c5fa3",
+    "company_name": "Sancta College",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "205a97fa-2dcd-4b87-a92e-863a823f9a73",
+    "company_name": "Form Studio",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "205d2a7e-a7ef-4a6c-acde-977174195967",
+    "company_name": "Mastermind Consulting",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "20c59985-3f8e-4374-85a3-6aa3cb6ac39b",
+    "company_name": "ICONTACT OPTICAL CARINDALE",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "21087d9a-4412-474e-aca8-d15fcf4decad",
+    "company_name": "STRATHFIELD EYE CARE",
+    "was_qb_matched": true,
+    "lost_contacts": 4
+  },
+  {
+    "company_id": "21219175-ea27-44e9-8922-24c966f2081a",
+    "company_name": "Domie PTY LTD",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "21420193-c8bf-4b22-90ad-fb96d7e7ee10",
+    "company_name": "Bulga Underground Operations",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "21647995-8d72-492a-b9e1-aa541d9f0387",
+    "company_name": "Two  and Co",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "21dfc6d3-ff35-4051-b929-640e81bd780f",
+    "company_name": "The Life Style Edit",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "21f135bb-0b5f-4b3f-b59a-8cacbe2fb25a",
+    "company_name": "Sustainable Salons",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "21fd63d9-8c37-4ba5-9e1d-0f40e1636698",
+    "company_name": "Bondi Bikkies",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "22817e67-4a04-4b49-9580-3c683e48cd92",
+    "company_name": "IVE Group",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "233a1fb5-955b-4a4b-888d-7acba32294f9",
+    "company_name": "ICONTACT BLACKTOWN",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "2343ab31-8f00-4bc1-beb0-21378be85a3b",
+    "company_name": "KAS",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "2354aba8-1a9a-49e7-bea9-4e7a647c723c",
+    "company_name": "Laura Bruzzese",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "2396eb94-10fc-4aa6-83e4-6783770802ff",
+    "company_name": "Crown Street School",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "23e0e4c9-9540-4e17-840f-e7d2adf4b8dc",
+    "company_name": "Douglas Press",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "240eca70-37bf-4db6-a60c-c5889f82de72",
+    "company_name": "Designs by Stefan",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "2440a89a-a607-4331-b591-1bd2c2bd9a67",
+    "company_name": "MANDURAH DUTY FREE & CAMERA",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "247d1f37-5692-4264-9f7b-5266ac339946",
+    "company_name": "Sian Bedford",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "258be01b-4524-49ce-9a36-3bf95376cd91",
+    "company_name": "Yasmin Malouf",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "25d8f05d-7cba-4fba-b180-4f6b89016895",
+    "company_name": "Brickfields Consulting",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "26065160-cd32-4968-b9c2-4ba354ab7faf",
+    "company_name": "Dara Pty Ltd",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "260a82cc-80e5-4a49-bafb-4efddcb4d074",
+    "company_name": "CSB Homes",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "27025325-ae31-433d-a69c-696d8f6ac738",
+    "company_name": "The Known Agency",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "274d0edd-426c-4846-ae53-cc5124ff994a",
+    "company_name": "SDP Calligrapher + Designer",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "278f7a14-8893-4779-96cb-a4cdc14ef5f2",
+    "company_name": "Eleven Music",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "27d9316a-4f92-4775-9dea-b4703a11c352",
+    "company_name": "Emily Sandstrom",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "27e514e4-3ec3-4805-b68f-ec41de81e8be",
+    "company_name": "BLINK FAMILY VISION",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "283b8fb3-5936-4547-93bd-d5e27a0dd279",
+    "company_name": "QUT HEALTH CLINICS",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "28ef2c9f-4273-419b-9665-f31b41df4eb0",
+    "company_name": "MELBOURNE OPTICAL",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "292fb67f-2733-4e49-9b7f-c2ca37039d24",
+    "company_name": "Zuffa Australia LLC",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "2947f22d-ac2a-41b1-bc93-341ba986b85a",
+    "company_name": "ELANORA COUNTRY CLUB",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "29a5cc86-8dbc-454f-8a0e-22545597a5a1",
+    "company_name": "Davidson Design",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "2a31030d-50db-4d0f-90c7-d06d82319229",
+    "company_name": "Ernst & Young Services CANCEL",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "2a66f23c-feb9-4a51-b56c-17539c21633d",
+    "company_name": "Yolanda Tan",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "2abca549-a443-42e3-b987-12a8692a86b5",
+    "company_name": "Katrina Sokias",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "2b550463-2f80-4991-9435-7d3a1b706ced",
+    "company_name": "CBRE Limited",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "2b5ddb70-4aa1-4438-865c-b370ed2bd9e2",
+    "company_name": "Payce Mangement Pty Ltd",
+    "was_qb_matched": false,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "2bf16982-3808-4d56-a109-17620f87a464",
+    "company_name": "Annabel & Lloyd",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "2c6dbbb1-1322-48d1-bf15-b5bc59a43df7",
+    "company_name": "BRENNAN & SMITH INVERELL",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "2cf6ce7e-3b2a-41e6-be65-79d8d712ef11",
+    "company_name": "Dan Coman",
+    "was_qb_matched": true,
+    "lost_contacts": 3
+  },
+  {
+    "company_id": "2e292d56-1931-4bc8-a470-8769361e8746",
+    "company_name": "OPTICRAFT",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "2e718690-8714-4af6-b3b5-5dcc0b7ae875",
+    "company_name": "Lansdowne Vineyard",
+    "was_qb_matched": true,
+    "lost_contacts": 3
+  },
+  {
+    "company_id": "2e808492-0f73-4277-84b9-cf8548ad96a3",
+    "company_name": "Trading in Style",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "2eaf78a9-5102-45bb-b5a1-d80a38f4a849",
+    "company_name": "Kate Milligan",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "2f090e15-2564-468a-98a9-41dcddf557a5",
+    "company_name": "TAMWORTH VISION CENTRE",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "2f4a74a8-b67a-4719-9244-f47b4878774f",
+    "company_name": "Winworth dont use",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "3059137b-21fb-4999-9230-84b2f56585f8",
+    "company_name": "MYSPEC SYDNEY",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "305d967d-d563-4235-a4e6-d53a85707549",
+    "company_name": "Axle Capital",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "3086aba4-72d1-46f4-af06-0372c3e488f5",
+    "company_name": "BRIGHT EYES ASPLEY",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "308e51b3-19f5-4f42-9950-03e24ab234e4",
+    "company_name": "Savannah PR",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "309b5805-15c3-4c2c-9950-d6d7a6d57da3",
+    "company_name": "R&G Creations Pty Ltd Mollymook Seaview Apartments",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "30a173b7-f609-4c06-8823-85e381558bc4",
+    "company_name": "Kate Hemmings",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "30a2bd75-e800-4e14-af72-b85f82b14144",
+    "company_name": "Monkhouse",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "30d415fa-ba99-4ef3-9c8b-7db957b20a2f",
+    "company_name": "Fairfax Media Publications Pty Ltd",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "30e476b3-559c-43f2-b347-8548a82ddc6b",
+    "company_name": "World of Misha",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "30ee285d-2cce-4f31-8489-178020800c05",
+    "company_name": "Kate Marsh",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "3102b19c-fe37-4f3c-81e8-57f52bf8cc74",
+    "company_name": "Gough Recruitment SINGAPORE",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "310a3069-a694-4465-aac2-f4f53de17b6a",
+    "company_name": "Dan Meyers",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "3159e687-7ad4-4697-9e45-0c92d5ebb38c",
+    "company_name": "The Fitness Playground",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "31d28108-ab8d-4b75-bb4a-afa4adf07b1f",
+    "company_name": "Virtuoso",
+    "was_qb_matched": false,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "32078409-b787-4d6e-8df7-d6bfeaaa8717",
+    "company_name": "East43",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "329f731e-101c-484b-824a-2199cc73ef6a",
+    "company_name": "Brave Circus",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "32a320e4-4fa8-42fd-abe1-939ef44772c6",
+    "company_name": "PARKES OPTICAL SERVICES",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "32e840a1-a743-497e-83d0-9864f99c8271",
+    "company_name": "PPI Lindfield Developments Pty Ltd",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "343fa413-237c-47c8-bb18-f4fd7fa6a2ff",
+    "company_name": "Brown Bear Publishing",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "34e8ceb8-6b19-4b87-aaa4-f794a635d3f8",
+    "company_name": "Taylor Hawkins",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "34e8d125-9e7a-4136-94b9-c743eed51c14",
+    "company_name": "PEOPLECARE",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "35b0f80d-0823-417a-86cb-1aab6b0afa87",
+    "company_name": "ICONTACT MT GRAVATT",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "35b1e6f7-7280-4ab3-b6ce-dc8ecea01895",
+    "company_name": "Outrace",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "35ddd2ce-a3fc-4026-a9fd-f7963d3e0978",
+    "company_name": "Eye Candy Optics",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "366464c7-e623-4d37-9f5e-20d4764657e8",
+    "company_name": "Craig Walker",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "3683942d-5975-4736-ac76-89c8ff32b2d4",
+    "company_name": "PAUL HARVEY OPTICAL PEEL ST",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "369cb6f0-3065-4d8d-b907-16993231a64d",
+    "company_name": "Banksia Pacific",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "36a9d10f-ebce-4cd6-99d9-4f7e53798d6f",
+    "company_name": "M.A.P (Management and Production)",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "3715412d-9f0e-4e50-8a0f-0b48a3913059",
+    "company_name": "Richard Glover",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "37b04c75-0ff3-4427-b9f3-957bed039565",
+    "company_name": "Andrew Svensen",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "37fac889-b909-41ed-a8ef-3b35b0bb5886",
+    "company_name": "NEW VISION EYEWEAR",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "382b5a8f-f1e9-4fbf-86e6-776032b0eaec",
+    "company_name": "ABERNETHY OWENS WOODVALE",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "387b1a33-a5be-4abf-8caf-93a0d358c2a0",
+    "company_name": "Scandia Procurement Services",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "38b2edff-646e-4f40-845e-2f1633dbf95e",
+    "company_name": "Downer EDI Works",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "3925c444-ba26-4dcb-9ece-01f73ef6c340",
+    "company_name": "Corowa RSL",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "39a1abf0-1368-4589-8020-98592e3919e0",
+    "company_name": "Annie Chung",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "39fdc767-c146-4ff2-956d-d6dbd6314890",
+    "company_name": "STIHL Australia",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "3a03bad3-562f-45a1-8234-1feee6a2c096",
+    "company_name": "Meikin Property No.1 Pty Ltd",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "3a04552b-f0d0-4369-a536-8259c6fb85d5",
+    "company_name": "Emily Moss",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "3a38f891-093c-4362-8630-ade024b7badc",
+    "company_name": "Carl Kapp",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "3a3d1305-cd81-448c-a92a-6a70c325a6a4",
+    "company_name": "Faast Print",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "3a4c8179-6e4a-446a-a503-0e9df48462e4",
+    "company_name": "Space Furniture",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "3a5aa19b-9770-4264-8a0d-17167d8af680",
+    "company_name": "12 Spices Pty Ltd",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "3a703434-b75c-4067-a916-f60d4d5aa5a1",
+    "company_name": "Holiday Trading",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "3a767750-3a40-43be-9237-2dcc9948025e",
+    "company_name": "York Property",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "3a9134d7-f071-4fe5-8262-90dde30b502a",
+    "company_name": "CMD (Chef's on the Run)",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "3a9ba806-c354-4eb1-b144-24c3c28ec147",
+    "company_name": "Pepper It",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "3addc356-4f95-4e4f-93df-ed2c98fa09dc",
+    "company_name": "Connect Media",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "3adfc80c-d49e-4f48-b028-c0cbd71c22fd",
+    "company_name": "Avatree",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "3b2f0bf9-fd36-4250-9e85-9173355a7552",
+    "company_name": "Humble Access",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "3b315338-e099-4156-951f-6b611ff4d8c9",
+    "company_name": "Ellen Huang",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "3b48d300-be37-4da3-b104-efd0c7a9eb8d",
+    "company_name": "G-Nius Mobile Intelligence Pty Ltd",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "3b5cf1b1-a421-437d-866e-fafc2160963c",
+    "company_name": "ANDREW WATKINS OPTOMETRISTS",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "3b85a885-d4ab-4b9b-9f34-8b4a77090d7d",
+    "company_name": "Unions NSW",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "3bae2304-e962-4bc0-9f1d-b1fae24a3e92",
+    "company_name": "esca",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "3bc65422-fe2f-43bc-8312-8f223bdc7ca6",
+    "company_name": "EYECARE PLUS SAN REMO",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "3bef5c6a-c579-4339-adac-116054224059",
+    "company_name": "Tamara Gellikovic",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "3d0c22ce-00e7-4d0f-a3fe-4ea0889cb9a4",
+    "company_name": "EYELINES HOBART",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "3d23962f-479c-4cf8-942e-3f9e7b61fe39",
+    "company_name": "1One Design CREDIT HOLD",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "3d239db5-f309-4c27-94e8-021018bf9202",
+    "company_name": "Equator Design",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "3dcf5f27-f10a-4469-8585-dba7fba957f4",
+    "company_name": "Tselmuun Amgalantuya",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "3dd966ac-3f00-4e7e-bc7f-133507792bd6",
+    "company_name": "CRV Strategic Communication",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "3ddbb070-84dc-4a85-8b23-800e273185b6",
+    "company_name": "Pinacle Valve Solutions",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "3e6cea5e-4071-4b7a-8445-8a4f51b334a9",
+    "company_name": "The20",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "3e8c24be-be34-41c2-a121-57199a09f981",
+    "company_name": "DIG Capital Advisory",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "3fad7db3-b1a8-4fda-a806-836b43fd2511",
+    "company_name": "Livia Forte",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "4049ce3e-9912-4dd7-9a11-201411ec7a90",
+    "company_name": "Sydney Philharmonia",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "40a5246e-d782-4519-90f3-230d832ab573",
+    "company_name": "Semola Cafe",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "41234c39-7bcb-4726-a380-bfa724c49721",
+    "company_name": "Gritty Pretty",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "41298ae8-867c-4181-beb5-b2900b444de7",
+    "company_name": "Fidem Property + Construction",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "4160f3c0-232e-4a88-aeb6-0b96492a4567",
+    "company_name": "Digital  Rush",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "418001e9-5bac-4417-bdb2-79fb4a738aea",
+    "company_name": "Matilda  bay",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "41b2a420-0e84-448e-bf87-dc6eeb16b156",
+    "company_name": "Uberbrand Trading Pty Ltd",
+    "was_qb_matched": false,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "41c70e3c-87be-4bb4-a009-d304d99c9c74",
+    "company_name": "1001 OPTICAL HORNSBY",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "41ca73dc-47ab-4780-bab3-26186193ac5c",
+    "company_name": "Katherine Vakas",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "41ede574-b923-4a43-9c74-13b227eb5b7a",
+    "company_name": "Neil Pollock",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "4220a2c1-8fe7-45a0-a89d-089e6f6d070a",
+    "company_name": "Paul Gittany",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "425dac44-a11e-430a-826b-3334b6a38757",
+    "company_name": "Georgina Lowry",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "42d2644e-83c4-41b3-b108-5bc7ae670ae4",
+    "company_name": "Cup and String",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "42fb52bb-82c7-4250-910e-4f7fb1e968cc",
+    "company_name": "Debut Management",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "436d6358-6056-4254-8c43-c4ee0f2d25d6",
+    "company_name": "Duffy Design",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "4379199b-68e0-4448-a96d-fadc76a910c5",
+    "company_name": "Roger and Yenny",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "43d0c98a-89b1-49bd-a183-d16154598d3b",
+    "company_name": "OPTOMETRY ON OSMOND",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "44c10301-d977-4894-86a4-3f244f9ba945",
+    "company_name": "KEVIN PAISLEY PORTLAND",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "4522991a-d0e7-43c8-9e42-9fd4df18bd15",
+    "company_name": "Jimmy Raper  Photography",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "48b58443-94c9-4d61-8ed8-a952d4e292a1",
+    "company_name": "SPECTACLES 2-4-1 BUNBURY",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "496adcb6-825c-4d60-a8a2-0b754fd8d3e8",
+    "company_name": "kun",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "49b1f8ac-0d58-431d-8f25-4ecaf7d1a67e",
+    "company_name": "Adrian Fitipaldes",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "49fd1b02-4f7a-4478-9cd9-762ce3ee53f2",
+    "company_name": "Kate Crewes",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "4a0fa17a-d413-4af9-be39-66967c1b9e3c",
+    "company_name": "Mary Tanios",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "4a440882-b45f-4b78-b659-7ec166b24ad7",
+    "company_name": "MORDIALLOC OPTICAL PTY LTD",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "4a70ff30-8c5a-4700-bba7-2150fff596af",
+    "company_name": "EYES IN STYLE",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "4a890feb-10bd-483a-bcfc-f5bc185fd7d1",
+    "company_name": "Chris Horgan",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "4ab1e769-9cb0-40ed-ad09-667f762d9a58",
+    "company_name": "Mentor Aviation Services",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "4b39c1f9-e68d-4132-8663-3639c1c87369",
+    "company_name": "Environmental Leadership Australia",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "4bd344b9-8a41-4472-bb29-491e0d741056",
+    "company_name": "Triggerworx Massage",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "4c28434b-cfa7-42a9-b91a-0f6f3a378a75",
+    "company_name": "Institute for Culture and Society",
+    "was_qb_matched": true,
+    "lost_contacts": 3
+  },
+  {
+    "company_id": "4c2d5356-ef83-4707-9b86-69b6b8816161",
+    "company_name": "Harley Quinn",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "4c5222b2-8203-4f00-a8f6-b8bcb6c8c856",
+    "company_name": "The Beauty Chef",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "4c62df1d-2dc2-4114-b5df-a3e999a37df3",
+    "company_name": "Marcel",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "4c69e9a1-d9af-4769-aca0-79c96074a54f",
+    "company_name": "EYELINE OPTICAL",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "4d7b1b17-b0e2-456d-965a-70165fff5cfb",
+    "company_name": "Rawson Homes",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "4dd2c816-21b8-4f18-8004-d3db2ede9ef6",
+    "company_name": "Mark Wilson Photography",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "4e2a5e61-aa5a-4609-9a43-f0d6ce42411e",
+    "company_name": "Ella Sutherland",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "4ec8842e-48e4-48d8-8e0d-6947994b000f",
+    "company_name": "DURKIN & BLACK GRAND CENTRAL",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "4ef49494-7766-4163-8bff-c6ee7bfcd976",
+    "company_name": "Cityscape Design & Print",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "4f189743-182f-4d1e-a4c9-c82f6f312c51",
+    "company_name": "Australian College of Optometry",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "4f6399fc-6c22-469c-9c5a-17748336631c",
+    "company_name": "Wun Shin",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "4fa8a6fd-bbf5-4e57-9299-851d963c2cc9",
+    "company_name": "OLIVER WOO OPTOMETRIST",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "5034bc0a-b61a-44e9-972e-c28c09fb1899",
+    "company_name": "Converse",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "504c0c00-6dd3-46b9-ac06-dbe37a5240b7",
+    "company_name": "Th University of Sydney Chau Chak Wing Museum",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "50c2c574-b2fb-40be-a0e2-276b85b5aa67",
+    "company_name": "Fabricus",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "513ac0d9-1807-4531-aff7-66b5dfc4324a",
+    "company_name": "Spare 31",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "5151d15f-660a-44a9-9468-af2aa4f8d08f",
+    "company_name": "Caiyen Tse",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "51f95025-dd88-4288-b2d6-c9213b161056",
+    "company_name": "Francesca Macri",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "52a09dee-c83c-43ec-bb4d-533ea5d2b175",
+    "company_name": "Barker Gray",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "536d49e1-c368-45ef-a92b-32e026ecf3b0",
+    "company_name": "Vladimir Mendigorin",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "53abc134-bbaa-4a48-9429-1de958f68396",
+    "company_name": "Link Group",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "5444fba5-4803-4a5a-871a-5ec66ae22e37",
+    "company_name": "Saxon Shing",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "5509794b-fdfc-4ccb-a761-701ebe4ada70",
+    "company_name": "Tealium",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "5671bf2e-ae92-425d-85de-4d41e58666f1",
+    "company_name": "Propeller",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "5688727a-8a20-4b44-a5eb-91b67b48e807",
+    "company_name": "SUNGLASS SPECTACULAR BROADWAY",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "56b2d502-2f79-462f-9442-f62fbc3fa655",
+    "company_name": "Pippa Noble",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "56cde043-a07b-4bce-b854-cad5f3079251",
+    "company_name": "PENRY ROUTSON CAMPERDOWN",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "57660703-dcd3-42d6-b3f9-7bffc11e6e07",
+    "company_name": "Bankstown Sports",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "586f272b-a7c3-4b2a-9b20-987924f2d8a4",
+    "company_name": "BRIGHT EYES CAPALABA",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "58d56e44-b590-4f67-a8e7-8eb6670b7a38",
+    "company_name": "Candy Brokers",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "58fbedf5-5907-4b8b-9716-83c350cb97b9",
+    "company_name": "Amberjules",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "5902ba62-356e-46dc-aa97-80da7412506c",
+    "company_name": "Run Partners",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "594a359f-e83b-4ebf-a067-65139f2b64b2",
+    "company_name": "Village Motors North Lakes",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "59816cd8-de32-4c36-84ad-3b21f121abe4",
+    "company_name": "SPECS SMART GWELUP",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "5a695dcc-5e67-472c-96d4-e8a382f41f9c",
+    "company_name": "Climbfit",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "5a8e0391-ff34-41f5-8ba9-617ab3718c48",
+    "company_name": "Ausgal Design",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "5ab42962-0da7-4a96-8670-2e119cf969b6",
+    "company_name": "Rachael Eussen",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "5aeabb15-62a2-480e-8d67-bf49667a5a01",
+    "company_name": "Drink Sloe Pty Ltd",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "5b659f0a-df0c-46af-9bf5-e560e3a14f2c",
+    "company_name": "Cathrin Machin Contemporary",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "5b870e30-366b-427a-a0d2-7ba2666e3279",
+    "company_name": "Pactapac",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "5b8b5702-09ae-4581-844a-bb01f3f5d78b",
+    "company_name": "Ginger & Smart",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "5c5a0c71-302e-4e0b-9e35-6b762d292b5f",
+    "company_name": "Georgia Dixon",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "5ca81f9f-c566-44f1-b259-abd8008bd667",
+    "company_name": "Anna-Marie Kwakye",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "5d21e0b0-5910-4afc-9448-26f12e3e332a",
+    "company_name": "UNDERWATER EXPLORER",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "5d892908-8c81-4c73-a2fc-419b8d9348ca",
+    "company_name": "Melissa Coles",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "5d91640d-b4b4-4ebf-be5a-db6039635950",
+    "company_name": "SUNGLASS CITY PLAZA",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "5e9bf01b-1187-440a-98da-1e385aa6d5df",
+    "company_name": "Aime Mentoring",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "5fb092ef-a7e0-4332-b7f3-f52d4a838082",
+    "company_name": "D Constructions",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "6001072a-a3f7-4e3a-be2e-96aef5436b86",
+    "company_name": "DJR TEO",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "60aeffe2-8389-49f1-b28c-dfe9fdfb157d",
+    "company_name": "Gary Bigeni",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "615f25c6-2f25-4e36-ab04-7d4fb5c34ea4",
+    "company_name": "Julian Black",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "61703239-a2a0-4ec6-b061-f8f2957cdb93",
+    "company_name": "Chisel Productions",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "6196e9cb-7ac0-4cd7-ac4c-5b7f9fc52aa7",
+    "company_name": "Uptown Sydney CBD Inc",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "61cc3297-4d43-4718-a6ac-7c51639b5a4a",
+    "company_name": "Thomas Eizinger",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "624420af-0a4c-4f83-9c67-3d4a23ec2e0b",
+    "company_name": "HANKS OPTOMETRISTS CANNONVALE",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "62a547aa-4b92-4d19-a2e1-664a9fb2931f",
+    "company_name": "Samantha Reinke",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "62f76b0a-1df4-4216-b2db-17c97dbf8ac5",
+    "company_name": "David Collier",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "63bbe4be-0ea5-4107-a5d5-48ccc1c48c89",
+    "company_name": "Rachel Wong",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "63f4cd6c-278e-406b-823a-fe1b040e32ee",
+    "company_name": "Rebecca de Gorter",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "646b1e8f-b91f-42ef-a567-fdce30503041",
+    "company_name": "NuLend",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "647bda7f-8ff1-45fe-a34a-8aa44e2b8b3f",
+    "company_name": "Alex Keating",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "6544dd75-57a9-4b2c-b0e1-31138688f9ce",
+    "company_name": "Folke",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "658da4f8-5746-4bc6-9870-e5a270836bd0",
+    "company_name": "Progress Printing",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "65cced1a-4449-4c82-8329-16480bbcad4f",
+    "company_name": "Sabine Pagan",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "661ba798-e9cd-4238-aafa-bb283eeadf51",
+    "company_name": "KALAMUNDA OPTICAL",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "66365e6e-ec12-4857-8ab2-220a344c68ff",
+    "company_name": "Allure-EPM",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "664c8157-7b3b-47a0-83f2-1c7181b3f5df",
+    "company_name": "Jacqui Vicario",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "66b0b6e7-eaff-4088-b904-b03b890d7421",
+    "company_name": "TRIVEN Group",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "670ff97c-0ac9-439f-a995-2391ebc30928",
+    "company_name": "Elizabeth Green",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "671702f7-0c99-49db-8e5f-7fd9e966af90",
+    "company_name": "FUTURE VISION OPTOMETRIST",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "677ae1e3-416e-4a3d-bd7c-aa94471709dd",
+    "company_name": "Abstract Touring",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "67caadbd-0721-4aeb-bb6d-fd877be5e5bf",
+    "company_name": "Artstarter Design",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "67d51968-6f38-4f03-b372-93e564282f16",
+    "company_name": "Tess Cohen",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "68707f58-6aa9-40c2-bd02-55fe77d986cf",
+    "company_name": "Carat",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "696190f2-ae9a-4f20-965a-95e79eda1d73",
+    "company_name": "John Respondek",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "699e984f-6eef-48e8-90ad-a0945aa23097",
+    "company_name": "Meshki",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "6a6e46f7-798f-411d-bfa9-2334d3bfb84f",
+    "company_name": "Kieren Cini",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "6a766afa-2107-415c-963f-6927b09e8298",
+    "company_name": "Samantha Waldon",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "6b67ee7a-ce00-4740-bfb0-fd7cb3ed05bd",
+    "company_name": "ASHFIELD EYECARE",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "6b878324-fb7e-4c50-b76b-41d11fd1ac41",
+    "company_name": "Continuum  Marketing",
+    "was_qb_matched": true,
+    "lost_contacts": 12
+  },
+  {
+    "company_id": "6bd0f424-a30e-4b81-9305-91e97c61155e",
+    "company_name": "Jos Maple",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "6c8228ff-0aff-4054-881e-0dc77f14a232",
+    "company_name": "Monkey King Trading Pty Ltd",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "6cb6a29a-b98a-405b-8554-13104b86ef0b",
+    "company_name": "Lightwell Pty Ltd",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "6d2bb322-fd0a-469c-b446-86faccf958be",
+    "company_name": "EYELAND OPTICAL",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "6d7a9481-6e58-4d30-aca1-75acc35840a2",
+    "company_name": "Nicole Farah",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "6d7c55c4-df34-41fe-87ef-3c8b1496171c",
+    "company_name": "Flat Pack Global",
+    "was_qb_matched": true,
+    "lost_contacts": 7
+  },
+  {
+    "company_id": "6da72e27-dd8a-4cda-986c-748be30f7a16",
+    "company_name": "David Beynon",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "6dcd822d-a5c5-472c-9ea1-0b749d218c7f",
+    "company_name": "Four Winds",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "6dcff5e9-e1be-449e-af1a-3e933a9bc170",
+    "company_name": "Natalie Collis",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "6e1d1a41-2952-4d77-b505-0d9fbfe92f50",
+    "company_name": "The Orchard",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "6ea9382d-529a-4d17-8280-90b1bc8a5883",
+    "company_name": "Sahh Boutique",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "6f35507a-59fa-4d8a-b756-7ff3abcb5433",
+    "company_name": "Granny  Flat Solutions",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "6fdae1ec-8689-4232-8a30-b2c3f51d2a14",
+    "company_name": "FOR BEAUTIFUL EYES",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "7059dbca-80a7-46fd-bd55-4a1e0df27abd",
+    "company_name": "Cabra Print",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "709ba7c5-1b39-43bf-9b7d-86c296ad1f2e",
+    "company_name": "PETER MOORE OPTICAL HOUSE",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "70b21530-858c-4e0d-898e-1fced152ceca",
+    "company_name": "GLAMOUR EYES PARADISE POINT",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "712b459c-55dd-4281-908b-09048b9e5b7e",
+    "company_name": "GM Holden",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "714d8b23-b56c-4158-a7d0-6d435cd8af2e",
+    "company_name": "Alex Jacobs",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "7197720c-dca9-4e3a-b336-77aea9de1b1b",
+    "company_name": "Australian Jockey Club",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "724d1db3-c1ef-4f26-bc50-288ca4d5e0ef",
+    "company_name": "ALFRESCO EMPORIUM - QLD",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "7259f8bf-4e70-49fc-8c9e-9539c394b5a5",
+    "company_name": "Tuomas A. Laitinen",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "726fda38-64da-43ce-8069-a9de50dc2a56",
+    "company_name": "In  One Projects",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "72975d69-4577-48e9-991c-d4386ff4c747",
+    "company_name": "Justine Morrison",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "72d60ace-e5d4-48c3-a493-a19653341930",
+    "company_name": "EYECATCHERS OPTICAL CHATSWOOD",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "73cb50e5-9c74-46e6-9842-37abfa2e5f75",
+    "company_name": "Elof Hannson",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "747b4aca-7094-4e9c-9655-36466383afb4",
+    "company_name": "The Station Agency",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "748b3ae0-b3d4-45bc-8fef-8cc3b5d70d15",
+    "company_name": "Mark Marin",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "74aa7445-49ba-4ebc-a0c9-38ef6d272964",
+    "company_name": "Julie Pon",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "7509fc4d-ec07-4acc-9df7-be0b250d8f18",
+    "company_name": "Nicolette Hegyes",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "7526cc2e-f833-4bb5-aea9-b0e7b4c5997e",
+    "company_name": "Designed by Insight",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "752ca690-cefc-4ae2-b52f-1442eeb06e96",
+    "company_name": "Butchers Block",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "7539ada3-af80-4ae4-9bf2-aa3a5b42a0c6",
+    "company_name": "Amanda Tam",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "75478299-b29e-4481-81cd-dc406550b5da",
+    "company_name": "EYEWEAR PERFECTION-DA RIN OPTO",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "757db3b3-2f98-41d0-a884-91d1ef632f20",
+    "company_name": "NBC Universal International",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "759a9164-ca44-4821-ab34-bab4bf8e0865",
+    "company_name": "Angelina Joseph",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "760d5d04-a506-47b1-9b21-c393bf46cac8",
+    "company_name": "Reckitt",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "761c213f-769e-4cf9-a9a2-7d8dc3024962",
+    "company_name": "The Midnight Special",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "76340fd6-f1b5-4775-a3ec-ad06e59970e4",
+    "company_name": "Performance Space",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "7641c9a5-a5a3-4a96-97e5-37b3faf65cd7",
+    "company_name": "Uniting Org",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "7670ca1b-f7ea-4038-94c1-9ebcdd1f010e",
+    "company_name": "Spare 14",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "769fb4b5-dd32-4b0b-a299-8d5e9dfc2988",
+    "company_name": "NEWVISION EYEWEAR",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "76d1c857-9a62-4f79-a40c-5a1796bd0de9",
+    "company_name": "DRS Industries",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "7731f065-7084-42f6-b852-f4fec5c82ecb",
+    "company_name": "Emma Cao",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "774b57ac-a5f1-48dc-b0fa-8a4385bbd1c1",
+    "company_name": "Johann Andre Pereira",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "7919d192-29e3-4638-8aff-b31df0da1958",
+    "company_name": "Claires Creative Design",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "7975e02d-57e8-4b43-920b-7a440f96f764",
+    "company_name": "BRUCE MELLICK OPTOMETRY",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "7a04e1f7-bd99-42eb-9ee0-74eafe2eaad4",
+    "company_name": "Wes Shaw Design",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "7aa6963e-b3c8-4a9e-b4f5-03723e3bb9be",
+    "company_name": "Nuzest",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "7b7c9a96-d277-4dae-b3f3-41e56606e4d1",
+    "company_name": "Passenger Goods",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "7b9033d5-7f3e-40a3-8af6-72dd8f39aba6",
+    "company_name": "EYE DESIGN OPTOMETRIST",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "7bdd0753-7f00-4058-bb27-b4d790369028",
+    "company_name": "Cassandra Simonetti",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "7bed3882-8796-4e58-a301-f5ec9e500448",
+    "company_name": "Andpeople",
+    "was_qb_matched": true,
+    "lost_contacts": 3
+  },
+  {
+    "company_id": "7c0945c2-ef13-41d7-9838-2c97bde9a332",
+    "company_name": "Lane Creative",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "7c544db5-8889-4d93-9213-160470725598",
+    "company_name": "Avenew",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "7cd668dd-b1eb-428c-b0ba-6b6b2546a3c4",
+    "company_name": "Angela Percival",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "7d3d9875-d2c1-418b-945f-f7b1b4b1f260",
+    "company_name": "Good Shape PT",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "7d93742b-5a07-4c37-9bf5-7f47ee8dd80a",
+    "company_name": "Integralads",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "7e148026-5ed9-4c09-8672-fcf5e0c82769",
+    "company_name": "Popov Bass Architects",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "7e1ef95a-b201-4069-ac2b-67745ceab605",
+    "company_name": "Watermark Creative",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "7ec29db4-f312-4cad-9e37-d2d2b067f212",
+    "company_name": "Casette",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "7ed252f7-6619-47ba-818d-c65e8b48c3e9",
+    "company_name": "Catherine Fischer",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "7f28c5c8-2cd2-45b5-a954-54b4ff1babbe",
+    "company_name": "FRANK FILOCAMO LEICHHARDT",
+    "was_qb_matched": true,
+    "lost_contacts": 4
+  },
+  {
+    "company_id": "8046fcee-a5bc-4ac8-936c-35c93f6f80ae",
+    "company_name": "BLP Printing",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "8079a74a-6152-47f1-9447-ef22f9dc94da",
+    "company_name": "NATIONAL PHARMACIES GLENUNGA",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "81c60c4e-195a-4a82-baa7-0bb843cea948",
+    "company_name": "KR Creative",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "8231b7c9-27eb-4b82-a5c5-3cdc4d9cbd2c",
+    "company_name": "Encore Group Pty Ltd",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "824db48c-527d-4630-a9df-b2b12e041741",
+    "company_name": "Spare 10",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "83291dab-3c00-49df-b7b1-6faede7430e0",
+    "company_name": "Skeleton Hand Creative",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "83f04bc4-3176-44e9-846b-3291aa6e5f86",
+    "company_name": "Rehana  Badat",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "846b7807-09ae-4e10-a1d4-ab8f276acc2f",
+    "company_name": "Sam Abbott",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "8508db46-e2b1-45cb-a54b-71a59a776e0a",
+    "company_name": "Mathew Mak",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "853e8e79-e79a-40ce-bcf1-43e804061af7",
+    "company_name": "Field Theory",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "8556b459-a33c-4d7c-b378-8fea519e3384",
+    "company_name": "Ausbuy",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "86d0c3b4-4937-4246-a787-3baf553dd6d9",
+    "company_name": "Ming Sin Melanie Tsoi",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "875124da-5fce-457e-8601-47110bfbb347",
+    "company_name": "SUNGLASS CITY",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "877699a2-64dd-4f4f-9185-d8af217407ed",
+    "company_name": "Alanna Smit",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "87a6df60-346e-4b93-9e92-c7a5e725c0d4",
+    "company_name": "Empire Group",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "88531f0a-dc2e-48aa-b556-a2c25a5b86da",
+    "company_name": "Marketforce International Pty Ltd",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "885511eb-a4cc-4ee5-82f4-d8be5c709ae9",
+    "company_name": "Head On",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "8892c02d-5c4e-4c01-a1f5-c9311f1ba0f3",
+    "company_name": "Platino",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "889b9d10-43ea-46e9-987a-4c1f732f8fc1",
+    "company_name": "Georgia Mather",
+    "was_qb_matched": true,
+    "lost_contacts": 4
+  },
+  {
+    "company_id": "8a0e6a04-95d5-4573-9c1c-2ca91b5382c2",
+    "company_name": "BGS Printing",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "8ad46d09-fa32-4854-9758-ea302f2730d4",
+    "company_name": "TEACHERS EYECARE MELBOURNE",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "8b0b7f94-f3ec-46a8-b3cb-5402c2456d1b",
+    "company_name": "Wade Marsden",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "8b69ed98-6af5-4e91-9511-c6ebce8802fb",
+    "company_name": "Natalie Miller",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "8b8b613b-4f6f-48f6-9fa9-9ab283b24c87",
+    "company_name": "Kaizen Tea",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "8bc6e78f-8bb1-40d6-8776-4aae9a8980a9",
+    "company_name": "Visit Paddington",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "8bfcc45c-e884-4d18-9fc7-297b1fa4b126",
+    "company_name": "Face Models",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "8c33c923-006b-4032-911f-0cd396f31498",
+    "company_name": "Jock Davidson Design",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "8ce59d6c-d428-4a7b-9d75-aedfbdb73a21",
+    "company_name": "PRO DIVE CAIRNS",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "8d1b76b4-8b66-4117-8876-c5e26e2279e7",
+    "company_name": "Deanna Waters",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "8d31992f-04f1-4846-ac5f-300f679e0d4d",
+    "company_name": "PATRICK EGAN OPTICAL",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "8e2115fb-b48b-46bc-b344-bf35da3ea673",
+    "company_name": "Aled George",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "8f7760c1-2897-4a27-a67f-b9d0fc7ce9be",
+    "company_name": "ICONTACT HORNSBY",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "8fc20579-a4d0-437a-95f2-391db8097acb",
+    "company_name": "Amelia Schremmer",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "8fec1d2a-73f5-410d-ac73-9678fe57c9f9",
+    "company_name": "Chapter Agency",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "90fb2a10-fe54-4a77-a2b4-537cffd78cd6",
+    "company_name": "Davis Jensen",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "910fb58b-7004-4f46-a5c2-7f10e0fe49a4",
+    "company_name": "RUSSELL ZAHN OPTOMETRIST",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "92952461-781e-477b-be8b-2297304eb555",
+    "company_name": "WWF Australia",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "92ba6ac2-5e88-461a-916d-adadac8ae3db",
+    "company_name": "Umamu",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "92c83759-7cea-4d45-b71d-0d7624262137",
+    "company_name": "Paola Calvano",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "941051ca-8858-44b1-a13d-d6761729533c",
+    "company_name": "KEVIN PAISLEY HORSHAM",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "944a7618-a8a1-430f-ba1b-6d74b235dab3",
+    "company_name": "PRIMARY EYECARE",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "94d5a6fc-f599-4efd-b689-fcca6941980c",
+    "company_name": "Fiona  Isaacs",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "94db1a8e-37b8-4589-8ae2-6597565ef2c8",
+    "company_name": "Dreams in Colour",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "9518afd6-3f56-41fa-8bc4-9d61acd8739d",
+    "company_name": "Cancer Institute",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "95ee5a03-d5b6-475a-922f-3428018a4002",
+    "company_name": "Vertifix",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "966d35cf-3a31-4455-8708-403da339e15e",
+    "company_name": "BRIGHT EYES HINKLER CENTRAL",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "9752ada0-b775-444c-99ab-87738b03297d",
+    "company_name": "Lisa Akkari",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "975b33fc-6123-49d5-b0db-ef8d1f768c6b",
+    "company_name": "Uniting Care Australia on behalf of the Aged Care Collaboration",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "9760dfeb-1d02-4e5f-a6c7-b87b9f2f0f61",
+    "company_name": "Tom Howe",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "9775d786-ff43-440d-93c3-eb4b7fe9a70f",
+    "company_name": "Gamble Investigations International",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "97e7e47b-1708-4862-a69f-86e69ebe0318",
+    "company_name": "HAWKEN EYES LAUNDON OPTICAL",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "97f176bb-837a-414b-a642-eff6df050e3c",
+    "company_name": "Climate 200",
+    "was_qb_matched": true,
+    "lost_contacts": 3
+  },
+  {
+    "company_id": "982902eb-0823-427e-bd49-00acb80e1c37",
+    "company_name": "FOS Developments",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "984a3cfb-dea8-4753-a263-7158f2042465",
+    "company_name": "Design King",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "985b5d89-534e-485a-9daf-1114f988ea8b",
+    "company_name": "Veronica AU",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "990fec1d-cda4-425c-b237-92d058c0dc92",
+    "company_name": "BUPA OPTICAL",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "99d02448-4534-4843-a015-f5cb0d77f8c5",
+    "company_name": "General Optical Pty Ltd",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "9a5e94c4-86f4-4b05-a1b8-30e1a9086936",
+    "company_name": "Babyushka",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "9abcbb0e-6851-4e8b-b112-83f4c732c628",
+    "company_name": "Rustrum  Pty LTD",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "9aea246f-e674-4f9e-84cc-d0afbf1a4a2d",
+    "company_name": "Furnished Property don use",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "9aef4c2b-a905-4d17-a0cf-9173692b5d18",
+    "company_name": "Ben Hopewell",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "9af6d5fd-ad4b-4914-b8c6-d1fd89a0c699",
+    "company_name": "Event Advisers",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "9af94c0f-c646-4af4-b990-914c1033745f",
+    "company_name": "JRD",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "9afa5759-76a6-40b2-a4c5-b36b0d189319",
+    "company_name": "Slav Calandra",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "9b64ce3c-56a5-4696-9973-ac4f9826fe87",
+    "company_name": "a meli design",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "9be54a94-1fe8-409a-9d4e-f42fcffa9adb",
+    "company_name": "General  Assembly",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "9c1c7f7e-a2b8-4728-b4da-9925a61a7b30",
+    "company_name": "Kyron Audio",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "9c372306-01ba-4007-a2a0-cb5e2eecb566",
+    "company_name": "Diamond Build Group",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "9cb3110e-2fe5-41c5-8a02-4930d950345a",
+    "company_name": "EMI Music",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "9cbc1412-1d72-4eb9-bd08-ee67798f65ea",
+    "company_name": "Amy Barrington",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "9cf5b609-f6ae-400c-953c-d34fce618a83",
+    "company_name": "Anna Lynch",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "9d106c21-5840-4bb4-b288-46a4d8c5fb5f",
+    "company_name": "Callay Group PL",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "9dc7bfdd-725c-4ee0-8dfd-789663bc5cd6",
+    "company_name": "Blazze",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "9e0155d5-0357-49d5-bc71-ad0625546cc8",
+    "company_name": "Fertility Breakthrough",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "9e21a3b9-b2a5-43fc-8a59-0403e2fcdcea",
+    "company_name": "Joy Chen",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "9e3940b1-199b-4c93-8fa5-3651c6c8cc57",
+    "company_name": "Northwood Green",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "9e4667ae-b829-416d-b225-9053ea3c3c7c",
+    "company_name": "Josef Geranio",
+    "was_qb_matched": true,
+    "lost_contacts": 3
+  },
+  {
+    "company_id": "9ec09013-3714-483a-af60-1a4409e12f7d",
+    "company_name": "Louise Vieusseux",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "9edb5f12-2eff-4287-a6e5-2f6f79308cc4",
+    "company_name": "Brighton Saddlery",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "9f80def5-9917-46ec-a920-5ef46aaffe2c",
+    "company_name": "Bandicoot Imaging",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "a01e4e56-1115-45cb-9e4f-5ea60afb9766",
+    "company_name": "Allen Jack Cottier",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "a0f2d30a-bde6-4d6d-bc01-563dc1464f6c",
+    "company_name": "Inspired Brands",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "a14b7659-32a9-48e6-84ff-05b4428bc49e",
+    "company_name": "Brandition",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "a173fb63-8fda-4654-9390-07aa4313f9d4",
+    "company_name": "Malcolm Reading Consultants",
+    "was_qb_matched": false,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "a1f6f4d0-e51c-4c31-8d8e-62b75433cca0",
+    "company_name": "KALBARRI SURF SHOP",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "a2cc31ae-718c-4b21-85c5-a7a05240a5b4",
+    "company_name": "Follow Studios",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "a319576d-c10b-4c40-af12-24ed1b3ffed4",
+    "company_name": "Blainey North",
+    "was_qb_matched": false,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "a3379dc1-09a0-42ad-a4a1-802a21eafe48",
+    "company_name": "MEDIOPTICS",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "a35760dc-9332-4652-a5ef-ae41ae864593",
+    "company_name": "BRIGHT EYES BRISBANE",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "a3656d36-fd41-4d22-b21c-43bb7206b52b",
+    "company_name": "Paula Marchant",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "a37c5b48-6bfd-4897-bd1b-667703e6013b",
+    "company_name": "R M OPTICAL",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "a38dde26-e886-44fe-8812-7085633cf9e4",
+    "company_name": "Louisa Farley",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "a39d1f58-f147-4ff4-a704-af3db14b55ef",
+    "company_name": "EYECANDY OPTOM (WA)",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "a417c6dc-62ba-423f-ad4c-6c94b1315e28",
+    "company_name": "Simon Willis",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "a45688d3-b852-4c58-8758-3f3e42ab4563",
+    "company_name": "Gap Marketing & Management",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "a4e20375-6087-4032-87c4-0d41e66495c1",
+    "company_name": "Amellia Kate Scerri",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "a56cec02-511b-4482-9033-347180a2c661",
+    "company_name": "JUST SUNNIES BURLEIGH",
+    "was_qb_matched": true,
+    "lost_contacts": 3
+  },
+  {
+    "company_id": "a588e2b9-9dcc-41ea-90a1-a4d2ccc6aae8",
+    "company_name": "HAWTHORN VISION",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "a5a84a08-4545-4119-95b4-e844672b51f7",
+    "company_name": "Killanoodle",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "a61efa2e-7152-4504-9f67-6480651fb330",
+    "company_name": "PARIS MIKI MIRANDA",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "a649a3d5-4af0-48b4-8704-de396524706c",
+    "company_name": "Dakota Corporation Pty Ltd",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "a74774a8-9baa-4313-ad8d-77f2ce8eb148",
+    "company_name": "Think Truck",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "a7b24e79-ae38-43c5-bb62-d67096031369",
+    "company_name": "Alyssia Ducaud",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "a7e46391-d3a0-41d6-9ce5-89075fc2e457",
+    "company_name": "PAUL FELL OPTOMETRY",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "a8d221b3-f92e-4b53-ba84-bb8e994e5cf7",
+    "company_name": "Alexa Keirnan",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "a8e1345f-0e56-4ba9-b266-fe32289e7d37",
+    "company_name": "Esem",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "a988a99a-29b6-4692-a22c-487c457f39e0",
+    "company_name": "Bespoke Promotions",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "a9b16ef4-4dc7-4483-8e38-8a64021fd2e5",
+    "company_name": "Skyline Print and Design",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "a9eb48a1-d4db-4469-9679-3ed428f3c9aa",
+    "company_name": "Golden Hour Creative",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "a9fac29a-b71d-430b-b5af-d96f59ed0835",
+    "company_name": "Design Arena",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "aa3fb531-ce92-4704-9bba-eb5f29cdfe89",
+    "company_name": "Sapient Razorfish",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "aad0a300-90eb-49fb-ba8b-6e9d3624eb8b",
+    "company_name": "POL Clothing",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "aaef93ab-fdfc-456e-acd8-5eeeaf315397",
+    "company_name": "Ovarian Cancer Australia",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "ab04dd1f-b220-4c28-998d-dc3722a6d818",
+    "company_name": "Elias, Gates and Associates Pty Ltd",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "ab10100d-4fab-42f6-be23-c4356dff5c14",
+    "company_name": "Terra Ferma Pty Ltd",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "abc99d3d-6f48-467e-b65d-10c268ce6625",
+    "company_name": "NATIONAL PHARMACIES ELIZABETH",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "ac42a6b5-15f3-4349-9327-7c8db1e0a83f",
+    "company_name": "Standle",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "ac879891-f227-40c3-8000-e267578eac60",
+    "company_name": "EYECARE PLUS RAYMOND TERRACE",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "ad56c362-a9fa-4929-ade7-9126e79203c8",
+    "company_name": "Alliance Geotechnical & environmental Solutions",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "adea5f3e-ecf8-44f4-aa6f-d31104ce907f",
+    "company_name": "Tommy Tang",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "ae3d41f9-f992-450e-9448-a9f2591b8463",
+    "company_name": "Jeremy How",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "aec05fd4-aac4-4980-82f3-61e90cd02978",
+    "company_name": "The Upside",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "aed6e931-d8a9-47fe-8900-1406f0f95dc6",
+    "company_name": "BEAUTIFUL EYEWARES",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "aee9b68c-5bc5-43db-ac1d-3a29accbef7b",
+    "company_name": "McGrath Projects",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "af0927b6-effc-4000-9007-9da48ff213ff",
+    "company_name": "McRAE Constructions",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "af5c3d53-e092-4e7c-ae99-24dd746b6802",
+    "company_name": "IVEO",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "af6e2125-9455-4a2f-9049-a461b6cf7a16",
+    "company_name": "Scott Holliday",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "afd404f1-eda3-43e8-989d-831dbddf26a3",
+    "company_name": "HUNTER DISCOUNT SPECS NELSON",
+    "was_qb_matched": true,
+    "lost_contacts": 4
+  },
+  {
+    "company_id": "b0669e5b-23dd-44dd-9798-2f6e1790f7ef",
+    "company_name": "The Stationery Boss",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "b0d24f71-9aad-40a5-bf02-9016898d41ac",
+    "company_name": "THE EYE SHOP SHEPPARTON",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "b1024645-35e2-4489-bea8-0adaa04ffbe0",
+    "company_name": "BLUE DOG PORT DOUGLAS",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "b1423282-d49b-4cb6-a61e-c92d1d5d5d79",
+    "company_name": "Melhuish & Co",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "b18be011-87e3-4ca3-9780-fbec6789f811",
+    "company_name": "Brendon Fing C/- Cabana Bar",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "b237bca0-7044-402e-b65f-6ea70c20145c",
+    "company_name": "Sarah Jane",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "b250e4be-9d6e-41d6-b682-fbfd26fe6e90",
+    "company_name": "EYECARE PLUS JINDALEE",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "b289d873-560a-4118-9957-fa6f60ba1016",
+    "company_name": "Dean Smith",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "b2ad00a6-07c0-4dbd-89c1-947700d48347",
+    "company_name": "Aniss Adler",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "b2dda7f8-0dc1-40bc-ab88-c530f3beacd8",
+    "company_name": "David Woolley",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "b2e9059a-985f-41aa-98a2-ece7ca3dbf58",
+    "company_name": "Allen & Overy",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "b2ebac94-477d-4bd9-973a-13d0c3750e94",
+    "company_name": "Antonio Jiminez",
+    "was_qb_matched": true,
+    "lost_contacts": 3
+  },
+  {
+    "company_id": "b395f295-8006-4b61-83c9-aff3c6e260fd",
+    "company_name": "Limelights Sport",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "b471ce17-79e1-41eb-9a3b-de614736f29d",
+    "company_name": "Rebecca Taghizadeh",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "b476464f-c1a5-44b5-b050-791bdc854f74",
+    "company_name": "Jacinda Jackson",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "b482d4e4-23a3-4314-8b00-0f6b8645882f",
+    "company_name": "Cardygoons",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "b4e6f9e8-f652-4dd1-aebb-49cb8268943f",
+    "company_name": "Natalie Boog",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "b5107365-822d-4248-894b-cee75cb6e844",
+    "company_name": "Thanks Thomas",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "b52dac9b-e45d-44bf-afca-9a79bc8058f3",
+    "company_name": "Sophie French",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "b6607209-2c0d-4d94-b80c-ce940fd9b288",
+    "company_name": "Real Constructions",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "b6d65e6f-8900-498a-b92a-326b41d8653f",
+    "company_name": "Elixr Health Clubs",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "b7262afd-2c21-4e3c-9ba8-7e19e7aec601",
+    "company_name": "Kwik Kopy Tuggerah",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "b7ead476-fa75-4365-8069-be2a2d71ed91",
+    "company_name": "Prestige Safaris",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "b7f3c94d-ba1d-409c-81f0-e1cec3ca1d60",
+    "company_name": "Louis and Co.",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "b8513bfa-4a5f-4e19-9251-c06da8ccc3f9",
+    "company_name": "Donna Hay Magazine",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "b85f718f-1852-48bb-8e9c-79e87e53a061",
+    "company_name": "Simon Wiltshire",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "b88de9b9-2506-46fb-b75c-cb92370ba130",
+    "company_name": "The Commercial",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "b8992b69-71d0-4c21-817b-d5f635c006af",
+    "company_name": "Gough Recruitment NZ",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "b8a39580-1d51-44ac-a35b-959845661909",
+    "company_name": "Simone Gorcan",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "b8b02a5a-b7d1-46c6-b588-d6f9bb5a8adb",
+    "company_name": "Jason Tamas",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "b913b698-85c6-454a-ab24-bb7dfc15a9ff",
+    "company_name": "Foxtel Box Office",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "b988895a-bdee-4277-8ea2-3f3be6e6e583",
+    "company_name": "Aurecon Group",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "b99ca770-97b4-4e9c-85cf-09febbe823cb",
+    "company_name": "Crown Solicitor\u00e2\u20ac\u2122s Office \u00e2\u20ac\u201c Special Commission of Inquiry",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "b9ab9868-ce03-4784-842d-cdd1f3e8fa26",
+    "company_name": "The Pyjama Foundation",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "b9d7b187-a2da-4218-b507-749ed0f8df7d",
+    "company_name": "Nic Gossage",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "ba48ce4b-a197-443e-9352-e9563507a842",
+    "company_name": "AIE OPTICAL SINGLETON",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "ba581607-ba83-4e8b-b24b-70db0f754281",
+    "company_name": "Contony",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "bba667f9-1e8c-47b4-8ff6-cba808110d3c",
+    "company_name": "Hugh Stewart",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "bbc3e64b-4e43-48d9-b98d-de24905e65d3",
+    "company_name": "Caleyi Consulting",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "bc8e088a-24b9-4f9e-812e-7c7fb56d34ec",
+    "company_name": "Soroush",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "bce8d8bd-6df6-4a64-b93e-8fc32a9eb31a",
+    "company_name": "Miriam Elia",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "bcfec9fc-e4ed-4f72-a4f3-0eb3b146dd18",
+    "company_name": "Allen & Unwin",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "bd388913-7b51-4a8c-a655-f1a85a7efb2a",
+    "company_name": "Nonnas Grocer",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "bd81308d-01b4-4829-9da6-007b8f0c41da",
+    "company_name": "Global PR Pty Ltd",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "bde67426-3103-4e1c-bca1-9bb32c48fab1",
+    "company_name": "KLBC",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "be0b31e6-a052-4dcd-949b-8ffb2c1cb5c4",
+    "company_name": "Megan Waterhouse",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "bf33825e-389e-44d6-a90d-54a10ea7df6c",
+    "company_name": "Effie Anastasopoulos",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "bf42266f-c683-4f41-a511-8fba1cfd7e19",
+    "company_name": "Juan  Parra Caicedo",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "bf783619-1144-4e14-87d9-1b30641b3d65",
+    "company_name": "Maggie Stein",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "c032bb52-1395-4cbd-894a-8001bca2dad7",
+    "company_name": "MVP  print",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "c04a03b2-2038-4e44-9fad-cdb38dbf23d7",
+    "company_name": "EYECLARITY - HOPPERS CROSSING",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "c073d715-b866-4d2b-9db7-da0b49101f3f",
+    "company_name": "STEPHEN DALY OPTOMETRIST",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "c0bb87ed-94b1-4f39-b15c-301a4ccfbd5c",
+    "company_name": "Max Fullalove",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "c0d08a52-511d-4d28-86a2-0165a0137608",
+    "company_name": "NEOS",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "c12c8eb3-4f4e-4175-b8bd-bff1c99a7f22",
+    "company_name": "Alex Pisani",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "c18bdf52-77fb-49f3-a4b2-38a4a105a68e",
+    "company_name": "Pollen Hospitality",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "c1d86247-2c92-4889-9aaf-7acb663c48a0",
+    "company_name": "Julie Sief",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "c1f81d1f-85ae-49fa-9452-2fdb3e116ac2",
+    "company_name": "Felicity Coonan",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "c200d0f0-cfb1-4d02-89ee-ae52139b5fc2",
+    "company_name": "Alanah McKelllar",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "c28b51bc-c2f5-4c7a-9de8-26980dbc15ce",
+    "company_name": "Evolve Gaming PC",
+    "was_qb_matched": true,
+    "lost_contacts": 3
+  },
+  {
+    "company_id": "c2b4b26a-2acc-47ac-a94e-8c8e4856a89d",
+    "company_name": "MO & Co",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "c2e095ec-ff32-43c9-b6c7-e7f9067ee2a0",
+    "company_name": "Bailey Nelson",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "c3321a44-5a5d-49d9-af5c-2e9a85766d55",
+    "company_name": "Adam Moses",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "c33a1294-9eef-4417-aaf8-14009a00abf6",
+    "company_name": "Bemond Renovations",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "c372f6f3-6e01-4254-ab7e-0d917ac6a509",
+    "company_name": "Daniel Cohen",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "c3f9c759-236d-4839-a272-64b2b308ab5a",
+    "company_name": "Sally Hankin",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "c490e61c-aaf7-4b78-a1d1-e8f8c1efbdfc",
+    "company_name": "Ginger and The Ghost",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "c4f4bc59-0d77-4f71-8851-054cfb2d8033",
+    "company_name": "Moet Hennessy Australia",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "c531c4e5-7952-47c7-8bb6-9d79bf488bc8",
+    "company_name": "Herringbone",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "c53466b0-3be6-43a3-a4ac-ea91a05a9ec9",
+    "company_name": "EYECARE PLUS",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "c59c1dd9-3785-4a15-8b6e-a6460c59ddfa",
+    "company_name": "PRIMARY EYECARE KOGARAH",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "c5ab8c52-ac5a-4740-8351-d1f5672734ab",
+    "company_name": "John Griffin",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "c5d72150-50b6-4936-9629-cbae734c2377",
+    "company_name": "Erskine and Kent Pty Ltd",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "c5ea6cc3-f130-40bf-b1e7-5fd10300ab30",
+    "company_name": "GULF & RANGES OPTOMETRIST",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "c6147a1d-9935-440e-bc6f-6f9b0a2a4121",
+    "company_name": "Cav Con",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "c6864fd9-be45-4975-ad83-f7a4dd829927",
+    "company_name": "MediaMonks",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "c6f7218b-3ec3-4b56-ba75-eab8515de6a8",
+    "company_name": "HARRIS,BLAKE & PARSONS CROYD",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "c8cb01b0-995b-4564-ad31-823538fded5a",
+    "company_name": "Diamond Creative",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "c96e5ff1-9fcb-4168-99b7-164f6d156043",
+    "company_name": "Catherine Martire",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "c991afcf-1f18-4353-9ea7-26cbacd0a4a5",
+    "company_name": "MKTG",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "c9b3f84c-be1c-4343-af95-24eb58e35f65",
+    "company_name": "Fast Lane Publicity",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "ca40d549-9ea3-45bb-a2eb-3a8b00559697",
+    "company_name": "Ilana Bodenstein",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "ca63b036-0df4-4a13-a4ee-cca8cd3836aa",
+    "company_name": "Jessica Tang",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "ca83b5a3-8c95-441b-aa6b-ca3bdc67c958",
+    "company_name": "DO NOT USE Proactive Graphics",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "caaf5718-4824-41c1-ae0d-1c8af279bb0e",
+    "company_name": "Activate Miracles Holistic Therapies",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "cab599e9-ce1c-4f6e-a2a2-1a7c084174b0",
+    "company_name": "VISION MICHAEL HARE BENOWA",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "cb159044-f649-479d-86d6-dea594e1f45c",
+    "company_name": "Daniel Bauer",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "cb16e5eb-ab5f-4d7a-bde2-02195acd040b",
+    "company_name": "EYEMAN",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "cc580249-d089-4a2f-88a2-6f1f71d4208f",
+    "company_name": "COLLINS STREET OPTOMETRISTS",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "cce16191-b7ba-401b-93da-dde76f830578",
+    "company_name": "Diana Hartshorn",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "cd236e2c-edf3-4447-a05f-35233feda022",
+    "company_name": "Jane Burton Taylor",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "cd3e4311-9ae2-46dc-884b-59eb7ab40b01",
+    "company_name": "Keith Prowse Travel",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "cd7745a9-0d4d-47ce-b7b1-1eb9175757f5",
+    "company_name": "Morgan Whinray",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "cdacd53d-7fb0-4010-9c7b-8f9e56748224",
+    "company_name": "Sarah Parker",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "ce6c58e3-b46e-41c4-a102-d14804780ca2",
+    "company_name": "Dianne Fakhr",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "cef5607a-e645-42e2-b49c-c0465388f6ff",
+    "company_name": "Natalie Hunfalvay",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "cf5057de-e53f-46a2-9f94-fab200b3fe3a",
+    "company_name": "Regal Health",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "cf5fd45e-7cab-4114-91c9-eb0ab3ce17d0",
+    "company_name": "AKQA",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "d01a9209-7cc3-40ab-af9b-a7cfc9e953d2",
+    "company_name": "Macan  Properties",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "d025afc8-1743-4572-842b-aff4290b65f7",
+    "company_name": "Sean Stuart",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "d0937692-acbd-4ed5-a4c2-7448d48eed51",
+    "company_name": "W3 Productions",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "d0c35652-a388-49e3-b820-f85c993f0e80",
+    "company_name": "THE OPTICAL EDGE CHERMSIDE",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "d191c869-11c1-4fba-9e89-91aa927dbda7",
+    "company_name": "CLEARSIGHT OPTOMETRY",
+    "was_qb_matched": true,
+    "lost_contacts": 3
+  },
+  {
+    "company_id": "d19514d1-0d78-4258-a5a1-0241e453e775",
+    "company_name": "Cake Wines",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "d1f50c4f-2f96-4ed9-8999-2238eccff582",
+    "company_name": "Access Digital",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "d228e9cc-456f-4f10-88fb-4064cf884fd1",
+    "company_name": "DigitasLBI Australia",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "d27aa661-af4d-486d-92ac-0feddc125c80",
+    "company_name": "Museum of Australian Democracy",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "d2a37beb-e8e2-475d-89dc-b17e130dcab8",
+    "company_name": "Kira Powell",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "d2a49f36-27d8-4929-8e69-2f40842bd5c7",
+    "company_name": "Sarah Estens",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "d3053992-42ac-4266-9cc5-c0274dd63668",
+    "company_name": "Bespoke Trading Company",
+    "was_qb_matched": true,
+    "lost_contacts": 3
+  },
+  {
+    "company_id": "d31b829b-9351-494b-9f18-f34084286bb5",
+    "company_name": "Evolution Displays",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "d358b9c9-02e0-43f9-9f2c-2f47ea8114d0",
+    "company_name": "The Penguin Empire",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "d360a820-3dbf-460e-9f8c-4f7e285551ed",
+    "company_name": "Twinloop Binding",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "d449e8fc-d523-4bd8-a2a8-400570d9aaf0",
+    "company_name": "Sarah Weston",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "d45a3e07-7875-4e89-bb3d-0619ceaaac19",
+    "company_name": "Crown Group Retail",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "d46df401-4059-44a1-ab91-d20deefc89ae",
+    "company_name": "CAL Marketing",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "d4ab33fb-9433-4234-9e63-2f315f62d2ed",
+    "company_name": "Emilio Carlo",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "d527acd4-c0a7-4945-ac05-91d328386f6e",
+    "company_name": "EYES IN DESIGN MOSMAN",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "d57d577c-99c6-4299-bb9e-23d528252f16",
+    "company_name": "Crown Hotel",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "d5e73025-1994-4a96-9b8b-5053aa11ec2c",
+    "company_name": "available",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "d66d5121-7765-43f9-930b-4ddb5e311c28",
+    "company_name": "C3 Church City",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "d6c30247-38aa-4856-af82-cd9e1512a492",
+    "company_name": "Eco World",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "d6c6fa5a-924f-457d-9304-aaa920a52c3e",
+    "company_name": "DAVID LAWRENCE FITNESS",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "d857ed22-d856-44db-a525-943f94bc45a0",
+    "company_name": "Karly Morris",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "d8ad2fe6-32ae-45cc-af1e-66e10990a800",
+    "company_name": "WENDY HO OPTIQUE",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "d8e15a20-445b-42ce-8a10-999e796c55c5",
+    "company_name": "Tech Policy",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "d9319b3b-7776-47f2-b83c-643e96ef3892",
+    "company_name": "Inglow Investment Two Pty Ltd",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "d9cca0df-8acb-4001-8e4a-05053f768b1c",
+    "company_name": "Vanessa Robinson",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "da160086-c1a0-4431-902c-94caa55edc4e",
+    "company_name": "ICON EYEWEAR",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "daa3c7fc-0187-4781-9b67-e7aaaa8040bf",
+    "company_name": "Rachael Durrant",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "daab0c28-5b67-4f05-bce9-d562facc0be8",
+    "company_name": "The Australian Ballet",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "dabfedd2-5da7-4149-b8fb-3fcdb6fd4551",
+    "company_name": "NSW Land Registry Services",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "dac109ff-c151-4483-a9b5-a3106e614bc5",
+    "company_name": "Kevin Nobrega",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "dacc6103-ec48-493f-8c46-5c1718bd645f",
+    "company_name": "Domenica Colarco",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "db615bfc-697c-46a0-a8da-4e5493d35299",
+    "company_name": "Cody Photography",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "dbc97bde-2fe6-4781-81a9-2f1e3ec6a7f7",
+    "company_name": "Tigerlily",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "dc04bf11-5065-4c3a-859d-b6062cf995f7",
+    "company_name": "Noa Harper",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "dc059a58-4b3a-42f1-8275-fb47f85fb72c",
+    "company_name": "EYES OF CLAREMONT",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "dcb5c63a-83e3-4303-b27e-8a583404b8a6",
+    "company_name": "Botanica Brands Pty Ltd",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "dd36f4d6-41a5-4593-8833-99d2bf206d6a",
+    "company_name": "Unidays",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "dd68f84a-3fa0-4293-b597-87ebb4cdffee",
+    "company_name": "Jacqueline Fogarty",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "dd85c2d7-1803-4824-97da-75c0be6224b7",
+    "company_name": "Designworks",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "dde7a83a-73d3-4ecb-b916-7a3a30a1d55c",
+    "company_name": "Fanfare Prints",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "ddf7970c-461a-48a4-aa1e-c8b45c74435f",
+    "company_name": "Your Home Away From Home",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "ddfc1506-61d5-4fc7-8419-202125035c2d",
+    "company_name": "Blue Print",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "de3aac64-8479-4b5d-8c13-58534c051394",
+    "company_name": "Social Printing",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "de5aea09-9128-47ba-a312-3d43d432b771",
+    "company_name": "DPS Constructions NSW",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "df00ca69-15d8-4394-b912-6a2a6aadd5f8",
+    "company_name": "Tina Andrew",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "dfc15588-42e3-4885-96f0-cda8f9a91c1a",
+    "company_name": "PETER DODDS OPTOMETRIST",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "e01ed048-b1bb-4553-a0c8-54d8ca302b2f",
+    "company_name": "NORTHERN EYES PTY LTD",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "e02774c2-f80b-4bb4-b366-21a6e9cc77af",
+    "company_name": "VISIONARY OPTICAL",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "e0288bf6-1225-4221-924b-879bb281d5a3",
+    "company_name": "James Tamas",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "e0f49aa0-8547-498d-8236-55feb4e59d8d",
+    "company_name": "Buster Moxham",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "e150fa09-6e23-49e9-9394-b099968819a5",
+    "company_name": "Grayson Cooke",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "e172877f-13a4-4397-8338-64b81dacadfe",
+    "company_name": "Cooper St Clothing",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "e1a51bcf-25c5-4df2-beeb-79925428f5c5",
+    "company_name": "Mardi Lowe",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "e2e598bf-be8b-47dc-be0e-586fa5c97671",
+    "company_name": "Kwik Kopy Brookvale",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "e2f2f743-dbe7-4a17-91e0-de980cea4b2f",
+    "company_name": "Levanon And Kogan",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "e2f9979d-149a-4116-92c2-f119f3b235e0",
+    "company_name": "OPTIONS EYECARE NOOSAVILLE",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "e2fe7397-c23e-494f-a3ab-e4621fe7a88a",
+    "company_name": "Mondottica",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "e33c386b-ae5f-48f3-85d9-adca056cc6d5",
+    "company_name": "Alleanza Architecture",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "e37c414f-d075-42e5-88a0-96a8a004f31d",
+    "company_name": "Phoenix Creative Management",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "e3dc5e52-aeea-4a59-8f2c-ea8f4a944f9b",
+    "company_name": "Glebe Point Diner",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "e442bb0e-1c22-4c6f-9ff1-aecd2cbc157b",
+    "company_name": "CLEARVIEW EYECARE OPTOMETRIST",
+    "was_qb_matched": true,
+    "lost_contacts": 5
+  },
+  {
+    "company_id": "e51ee0b5-07b3-4305-8e5d-2676d9b43d9b",
+    "company_name": "YOUNG EYES OPTOMETRIST",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "e5609333-40d4-4db3-8002-f803601ce0d0",
+    "company_name": "Test C8 Trade Level 8 Customer",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "e59f1e6e-8e5e-4487-9081-fd98d43e4c3d",
+    "company_name": "WestBourne Lane",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "e60a9cdc-83c8-4b13-83ba-e9ebc7e317c4",
+    "company_name": "Hannah Clifton",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "e67793f2-d666-4622-ab32-3eecbce5c469",
+    "company_name": "H & E  Architects",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "e6aca117-047c-474c-885d-ebdaf1d80612",
+    "company_name": "Cash Account - Pete M",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "e6e9bc6a-4e5e-414e-9769-97c5df6f0bc2",
+    "company_name": "Wardle Studio",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "e77b456d-4b03-44b6-af20-1a2bb67774f9",
+    "company_name": "Kate Baker",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "e7f85f93-f36f-433b-a0a6-e3a4e09f1eb4",
+    "company_name": "NATIONAL PHARMACIES NORWOOD",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "e89da028-a001-4ff4-9945-595e3b7de5af",
+    "company_name": "Azelia Maynard",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "e911eb0c-bea5-44fe-a2fa-640eca316bb9",
+    "company_name": "Stitch And Hide",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "e988cd21-f2ba-44f2-89f6-773451106f37",
+    "company_name": "SIMPSON OPTOMETRY",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "e9c9d3ec-6fd0-4451-b3e8-77a7aad6d8fd",
+    "company_name": "Ze Studio",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "ea1da168-7c4b-4509-a8b6-43ad7c62ec09",
+    "company_name": "RITA THURSTON OPTOMETRIST",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "ea903c87-a766-4941-bf9d-e95893836a72",
+    "company_name": "Tuan Ky",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "eb1587c0-6718-4a24-8e5d-ae14a5d4281e",
+    "company_name": "Rosie Karkash",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "eb3bd038-11c0-4ea4-8497-d0a07787aa7f",
+    "company_name": "DA RIN OPTOMETRIST WELLINGTON",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "eb5010d2-1471-438d-b11d-b44fc306bb18",
+    "company_name": "Rope & Pulley",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "eb5e38c2-977f-4248-8469-d331c82af403",
+    "company_name": "Elise Vella",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "ebcdc87a-e497-4dcf-8b57-0d9a2edf27a8",
+    "company_name": "Ultimate  Binding",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "ebe82710-3583-484d-b050-704d3cfa2648",
+    "company_name": "Ashlee Weatherstone",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "ec2307d9-ad9f-4ed8-96d6-a1121af13f03",
+    "company_name": "BANKS Journal",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "ecc1c7a9-0e3a-46e5-b954-66723e11fe9f",
+    "company_name": "Attractivo",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "ed0aa2a2-9805-48ca-b63e-a38674db77af",
+    "company_name": "EPPING EYECARE CENTRE",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "ed1e7d0a-48ec-40fb-8f40-3bebf7c2e2c6",
+    "company_name": "Belinda Kassoua",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "ed70b8c9-8b02-44bc-9733-13e57d86cb92",
+    "company_name": "Michael Vicig",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "ed9d94ae-4fc2-4144-aacc-6e6ef5a06e31",
+    "company_name": "Janai Anselmi Styling",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "edf175d9-dc9e-4c0d-9913-c2ee7fb015f9",
+    "company_name": "Angela Chun",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "eeafc051-e40d-4032-a073-2aee96f546a6",
+    "company_name": "Rachael  Louise Medi SPA",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "efb50ec3-945e-4665-bfad-e176e0568333",
+    "company_name": "Nathan Kaw",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "f012ec6b-3943-432f-b385-fce666f1afc0",
+    "company_name": "Diva Wilson",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "f061d176-0d50-4222-be9e-7744bebc6bf6",
+    "company_name": "KF Plastics",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "f0ec7bd5-9a11-4776-b6ac-c530e530b960",
+    "company_name": "Wigs By Vanity",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "f11f6d8b-179c-462a-9cf1-8916c9ffae24",
+    "company_name": "EYECARE PLUS TORONTO",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "f123e1c9-8f7e-46fc-b0d6-b4ff0992683c",
+    "company_name": "Jessica Ainsworth Design",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "f13b7fc5-1f17-4e3c-9142-9b41beb3fe9b",
+    "company_name": "ICONTACT MELBOURNE",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "f1e57f90-b0a9-4622-94d1-7603a5759f65",
+    "company_name": "BARRY GAINFORD EYECARE",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "f1fa3f67-9509-46f8-bcdb-49f2d357628f",
+    "company_name": "Thomas Ricciardiello",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "f1ff2b28-6cde-4b5d-a9c2-86045bd49d0b",
+    "company_name": "Mariana Hannah",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "f2060d48-5a05-4821-8a87-21754432e080",
+    "company_name": "MJ By Design",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "f276652e-9ec7-4237-8107-922e84570b72",
+    "company_name": "ADEL EYECARE",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "f2b7fbac-ea2a-4133-87ac-2add88cc938f",
+    "company_name": "Samantha Bailey",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "f2d83e88-2e6d-435f-98a8-4340c53b7cc0",
+    "company_name": "Emily Kraljevic",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "f3627f16-22cd-4e6d-b75d-4921ea24fc2b",
+    "company_name": "Gallery 2010",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "f4743f53-b381-48c9-9289-78d334b5b401",
+    "company_name": "KEVIN PAISLEY BALLARAT",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "f4a494e3-e7f3-48f2-940b-46859bfdaa86",
+    "company_name": "THE EYECARE COMPANY TOP RYDE",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "f4b20603-2987-4d1a-95ea-b172f9195564",
+    "company_name": "SEE & SAVE EYEWEAR OPTOMETRIST",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "f56cdaa3-55d1-4e1d-b684-6ea8d396867b",
+    "company_name": "Apex Signage",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "f57437d6-def3-4f47-8a16-1bc6b784f929",
+    "company_name": "Marie-Charlotte Chatelain",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "f58347ac-47f5-496a-baec-1673b3d69162",
+    "company_name": "SMART EYES OPTICAL",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "f60034cd-01fc-4f44-afd5-0776433ff572",
+    "company_name": "Vitor  Queiroz",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "f6251834-59bf-4b5b-8164-8125ce284f69",
+    "company_name": "Eden Floral Design",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "f65cd6ac-532a-4347-898c-1d54e7865af0",
+    "company_name": "Kurv",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "f668c5c7-dca6-4a09-a59f-d3abbb416fe6",
+    "company_name": "Sean Emery",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "f67731f0-4def-4cca-945b-6f0f07f804d0",
+    "company_name": "Panovscott Architects",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "f695216b-f3b3-4f2e-8874-de09f25f9608",
+    "company_name": "Hosking Trade",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "f6ea8c1a-530b-430c-bd76-a68883b69718",
+    "company_name": "August Street",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "f7029986-4b94-42af-8ca1-d64780940010",
+    "company_name": "Corey Cordova",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "f7c19241-b859-4e8a-8341-b0f12bafc762",
+    "company_name": "GEORGE TSENKAS",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "f7c5e60d-2212-44a4-9f66-c87f3ffc215b",
+    "company_name": "Judy Newman",
+    "was_qb_matched": true,
+    "lost_contacts": 4
+  },
+  {
+    "company_id": "f7f9c01b-aece-4579-8fda-8e2553e05bf1",
+    "company_name": "The Jacky Winter Group",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "f8de79a4-1fdd-41c2-9c03-7ad20ca12caf",
+    "company_name": "Nadine Richardson",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "f959b407-bc32-450b-89f0-4f3169ff416c",
+    "company_name": "Christie Baker",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "f9ac4d31-f9e5-4c6b-a4fe-1b988ef7584f",
+    "company_name": "Alexandra Macoustra",
+    "was_qb_matched": true,
+    "lost_contacts": 3
+  },
+  {
+    "company_id": "f9d820c3-f507-4915-ab50-5b445c4f727a",
+    "company_name": "Livingstone",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "fa3e1c2d-4121-44a7-9751-2c3314d76578",
+    "company_name": "Spare 23",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "fa75ab79-1d80-4c1a-a4b7-7dba2c1202ab",
+    "company_name": "SUNBEAT NOW MAROOCHYDORE",
+    "was_qb_matched": true,
+    "lost_contacts": 3
+  },
+  {
+    "company_id": "fa986c3d-3c61-42ac-b558-1563ad9615f3",
+    "company_name": "Lights Camera Business",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "fb019540-e3a4-4fad-ab03-d6e45d0ade85",
+    "company_name": "CLACHER & HOOK OPTOMETRISTS",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "fb026f3a-730f-4f5a-b86e-05b33414fedb",
+    "company_name": "Beau Annable",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "fbbff20f-5ef6-4797-9314-d681f129bceb",
+    "company_name": "Hospitality Equipment",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "fc8f1d06-8393-4023-8def-09b008271328",
+    "company_name": "WILD WEST SURF",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "fd0d7237-81ce-484f-aa71-ecce60882c9f",
+    "company_name": "Golightly PR",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "fda69ece-284e-4bbe-90a9-792691720193",
+    "company_name": "SCANLAN THEODORE - cancel",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "fe47118a-90c1-4a0b-8c6d-f8376ccd67ee",
+    "company_name": "Darsh Company Pty Ltd",
+    "was_qb_matched": true,
+    "lost_contacts": 2
+  },
+  {
+    "company_id": "feaeb6f5-0e51-4de7-936c-4471fe124124",
+    "company_name": "Jack Lin",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  },
+  {
+    "company_id": "ff6f32fa-7bbf-46f7-a408-91d1499c1901",
+    "company_name": "Milk and Honey United",
+    "was_qb_matched": true,
+    "lost_contacts": 1
+  }
+]

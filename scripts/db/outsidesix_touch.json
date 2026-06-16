@@ -1,0 +1,68 @@
+{
+  "mailbox_ams": [
+    "Ehab",
+    "Kenneth",
+    "Linda",
+    "Nic"
+  ],
+  "results": [
+    {
+      "rank": 9,
+      "customer": "Jet Technologies Australia Pty Ltd",
+      "qb_plurality_am": "Nathan Brown",
+      "qb_distribution": {
+        "Nathan Brown": 183
+      },
+      "email_touch_by_mailbox": {
+        "Nic": 33,
+        "Production": 4,
+        "hello@ (shared)": 5,
+        "Kenneth": 6
+      },
+      "mailbox_am_touches": {
+        "Nic": 33,
+        "Kenneth": 6
+      },
+      "plurality_mailbox_am": "Nic",
+      "total_emails": 48
+    },
+    {
+      "rank": 25,
+      "customer": "Jefferies (Australia) Pty Ltd",
+      "qb_plurality_am": "Nathan Brown",
+      "qb_distribution": {
+        "Nathan Brown": 876
+      },
+      "email_touch_by_mailbox": {
+        "Ehab": 55,
+        "hello@ (shared)": 3,
+        "Linda": 1
+      },
+      "mailbox_am_touches": {
+        "Ehab": 55,
+        "Linda": 1
+      },
+      "plurality_mailbox_am": "Ehab",
+      "total_emails": 59
+    },
+    {
+      "rank": 44,
+      "customer": "Forsight",
+      "qb_plurality_am": "Daniel Hall",
+      "qb_distribution": {
+        "Daniel Hall": 94
+      },
+      "email_touch_by_mailbox": {
+        "Nic": 66,
+        "Kenneth": 1,
+        "hello@ (shared)": 5
+      },
+      "mailbox_am_touches": {
+        "Nic": 66,
+        "Kenneth": 1
+      },
+      "plurality_mailbox_am": "Nic",
+      "total_emails": 72
+    }
+  ]
+}

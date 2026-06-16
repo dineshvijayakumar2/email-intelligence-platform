@@ -1,0 +1,127 @@
+{
+  "generated": "2026-06-12",
+  "client": "Carbon8",
+  "mode": "read-only investigation",
+  "check1_cello_in_embellishment": {
+    "question": "Is cello/cellophane/lamination classified under the Embellishment capability?",
+    "finding": "YES. QB's qb_capability_tag tags celloglaze film finishes (Matt cello, Gloss/Velvet/Soft-touch/Anti-scuff celloglaze, Matte/Gloss film) as 'Embellishment'. Plain 'Cello' -> Specialty Finishing; 'Matt laminate 6yr' -> Wide Format; but the celloglaze variants -> Embellishment.",
+    "before": {
+      "emb_buyers_incl_cello": 757,
+      "sc_to_emb_conf": 63.1
+    },
+    "after_cello_removed": {
+      "emb_buyers_genuine": 169,
+      "sc_to_emb_conf": 15.7
+    },
+    "cello_only_buyers": 588,
+    "pct_of_emb_base_that_is_cello": 77.7,
+    "verdict": "CONFIRMED. 77.7% of 'embellishment buyers' qualify only via cello/coating; removing cello drops soft-cover->embellishment from 63% to 16%."
+  },
+  "check2_withinjob_finishes": {
+    "question": "Does 'buys embellishment' count customers who only apply finishes WITHIN other jobs?",
+    "finding": "YES. Of genuine-embellishment buyers (foil/UV/emboss), almost all apply it as a finish within book/sheet jobs, not as a standalone embellishment product.",
+    "before_genuine": 169,
+    "after_standalone_only": 3,
+    "withinjob_only_buyers": 166,
+    "sc_to_emb_standalone_conf": 0.2,
+    "verdict": "CONFIRMED. 166 of 169 genuine-embellishment buyers are within-job finishers; standalone embellishment is near-zero (3 companies), sc->emb standalone = 0.2%."
+  },
+  "check3_hardcover_wideformat_artifact": {
+    "question": "Is hardcover->wideformat actually cover printing (part of the book), not a cross-sell?",
+    "finding": "NO. WF operation_names for hardcover+WF companies are signage/large-format (Printing, Zund cutting, banners, decals, pull-ups, mounting, laminate) - ZERO cover/case/cloth/linen ops. Only 9.1% of their WF jobs share a job_no with hardcover (bundled projects, not covers).",
+    "hc_buyers": 300,
+    "hc_and_wf": 216,
+    "wf_cover_share_by_samejob": 9.1,
+    "wf_cover_share_by_opname": 0.0,
+    "verdict": "REFUTED. The 72% hardcover->wideformat is a genuine co-purchase (lift ~2), not a cover-printing artifact. Reps' intuition is wrong on this one."
+  },
+  "check4_corrected_vs_reps_intuition": {
+    "soft_cover_to_embellishment": {
+      "card": 63.1,
+      "cello_removed": 15.7,
+      "standalone": 0.2,
+      "reps_estimate": "10-15%",
+      "verdict": "CONFIRMED. Cello-removed 15.7% lands at the top of the reps' 10-15% range; standalone is ~0%."
+    },
+    "hard_cover_to_wide_format": {
+      "card": 72.0,
+      "cover_removed": 57.0,
+      "reps_estimate": "~10%",
+      "verdict": "NOT CONFIRMED. Even removing same-job WF only drops 72% -> 57%, nowhere near 10%; WF is real signage."
+    }
+  },
+  "check5_recent_jobmanager_vs_customer_am": {
+    "question": "Is recent job manager (am_job) the truth vs unreliable am_customer?",
+    "cards_that_would_change": 6,
+    "of_total": 50,
+    "diffs": [
+      {
+        "rank": 9,
+        "customer": "Jet Technologies Australia Pty Ltd",
+        "cur_am_customer": "Nathan Brown",
+        "recency_am_job_last12": "Nic",
+        "recent5_am_job": "Nic",
+        "last12_dist": {
+          "Nic Doyle": 3
+        }
+      },
+      {
+        "rank": 20,
+        "customer": "Tribe Studio",
+        "cur_am_customer": "Linda D'Arcy",
+        "recency_am_job_last12": "Ehab",
+        "recent5_am_job": "Jacky",
+        "last12_dist": {
+          "Ehab Kamel": 1,
+          "Linda D'Arcy": 1
+        }
+      },
+      {
+        "rank": 22,
+        "customer": "Ball & Doggett",
+        "cur_am_customer": "Ehab Kamel",
+        "recency_am_job_last12": "Kenneth",
+        "recent5_am_job": "Kenneth",
+        "last12_dist": {
+          "Kenneth Beck-Pedersen": 4
+        }
+      },
+      {
+        "rank": 23,
+        "customer": "SCCO Studio",
+        "cur_am_customer": "Ehab Kamel",
+        "recency_am_job_last12": "Linda",
+        "recent5_am_job": "Linda",
+        "last12_dist": {
+          "Linda D'Arcy": 2
+        }
+      },
+      {
+        "rank": 25,
+        "customer": "Jefferies (Australia) Pty Ltd",
+        "cur_am_customer": "Nathan Brown",
+        "recency_am_job_last12": "Ehab",
+        "recent5_am_job": "Ehab",
+        "last12_dist": {
+          "Ehab Kamel": 1
+        }
+      },
+      {
+        "rank": 44,
+        "customer": "Forsight",
+        "cur_am_customer": "Daniel Hall",
+        "recency_am_job_last12": "Nic",
+        "recent5_am_job": "Nic",
+        "last12_dist": {
+          "Nic Doyle": 4
+        }
+      }
+    ],
+    "verdict": "CONFIRMED (partial). 6 of 50 change under recency-weighted am_job. 3 are the departed-AM accounts already reassigned (Jet->Nic, Jefferies->Ehab, Forsight->Nic) - which exactly matches the recent-job manager, validating that fix. 3 active-AM discrepancies: Ball & Doggett (Ehab->Kenneth, 4 recent jobs), SCCO Studio (Ehab->Linda), Tribe Studio (Linda->Ehab, weak tie)."
+  },
+  "fixes_needed": {
+    "embellishment_definition": "YES - high priority. 25 of 50 cards pitch Embellishment; the soft-cover->embellishment rule falls from 63% to 15.7% once cello is removed - BELOW the 25% confidence floor. Most embellishment cross-sell pitches are a cello artifact and would not survive a corrected definition. Recommend: reclassify celloglaze out of Embellishment (it is a lamination finish, ~Specialty Finishing), then regenerate the cards.",
+    "hardcover_wideformat": "NO - the 72% is genuine.",
+    "am_assignment_basis": "CONSIDER - switch the assignment basis from am_customer-mode to recency-weighted am_job; 3 active cards (Ball & Doggett, SCCO, Tribe) would re-owner, plus it independently confirms the departed-AM reassignments."
+  }
+}

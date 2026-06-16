@@ -1,0 +1,3721 @@
+{
+  "generated": "2026-06-04",
+  "client": "Carbon8",
+  "n_customers_base": 2165,
+  "capability_base_rates": {
+    "Design Services": 1851,
+    "Display / Installation": 3,
+    "Display/Installation": 57,
+    "Embellishment": 755,
+    "Flat Sheets": 1934,
+    "Hard Cover Books": 294,
+    "Soft Cover Books": 565,
+    "Specialty Finishing": 1953,
+    "Wide Format": 788
+  },
+  "association_rules": [
+    {
+      "from": "Display/Installation",
+      "to": "Hard Cover Books",
+      "support": 19,
+      "confidence": 0.333,
+      "lift": 2.455,
+      "py": 0.136
+    },
+    {
+      "from": "Hard Cover Books",
+      "to": "Display/Installation",
+      "support": 19,
+      "confidence": 0.065,
+      "lift": 2.455,
+      "py": 0.026
+    },
+    {
+      "from": "Hard Cover Books",
+      "to": "Soft Cover Books",
+      "support": 176,
+      "confidence": 0.599,
+      "lift": 2.294,
+      "py": 0.261
+    },
+    {
+      "from": "Soft Cover Books",
+      "to": "Hard Cover Books",
+      "support": 176,
+      "confidence": 0.312,
+      "lift": 2.294,
+      "py": 0.136
+    },
+    {
+      "from": "Display/Installation",
+      "to": "Embellishment",
+      "support": 39,
+      "confidence": 0.684,
+      "lift": 1.962,
+      "py": 0.349
+    },
+    {
+      "from": "Embellishment",
+      "to": "Display/Installation",
+      "support": 39,
+      "confidence": 0.052,
+      "lift": 1.962,
+      "py": 0.026
+    },
+    {
+      "from": "Hard Cover Books",
+      "to": "Wide Format",
+      "support": 210,
+      "confidence": 0.714,
+      "lift": 1.962,
+      "py": 0.364
+    },
+    {
+      "from": "Wide Format",
+      "to": "Hard Cover Books",
+      "support": 210,
+      "confidence": 0.266,
+      "lift": 1.962,
+      "py": 0.136
+    },
+    {
+      "from": "Display/Installation",
+      "to": "Wide Format",
+      "support": 40,
+      "confidence": 0.702,
+      "lift": 1.928,
+      "py": 0.364
+    },
+    {
+      "from": "Wide Format",
+      "to": "Display/Installation",
+      "support": 40,
+      "confidence": 0.051,
+      "lift": 1.928,
+      "py": 0.026
+    },
+    {
+      "from": "Embellishment",
+      "to": "Hard Cover Books",
+      "support": 195,
+      "confidence": 0.258,
+      "lift": 1.902,
+      "py": 0.136
+    },
+    {
+      "from": "Hard Cover Books",
+      "to": "Embellishment",
+      "support": 195,
+      "confidence": 0.663,
+      "lift": 1.902,
+      "py": 0.349
+    },
+    {
+      "from": "Embellishment",
+      "to": "Soft Cover Books",
+      "support": 359,
+      "confidence": 0.475,
+      "lift": 1.822,
+      "py": 0.261
+    },
+    {
+      "from": "Soft Cover Books",
+      "to": "Embellishment",
+      "support": 359,
+      "confidence": 0.635,
+      "lift": 1.822,
+      "py": 0.349
+    },
+    {
+      "from": "Display/Installation",
+      "to": "Soft Cover Books",
+      "support": 25,
+      "confidence": 0.439,
+      "lift": 1.681,
+      "py": 0.261
+    },
+    {
+      "from": "Soft Cover Books",
+      "to": "Display/Installation",
+      "support": 25,
+      "confidence": 0.044,
+      "lift": 1.681,
+      "py": 0.026
+    },
+    {
+      "from": "Soft Cover Books",
+      "to": "Wide Format",
+      "support": 299,
+      "confidence": 0.529,
+      "lift": 1.454,
+      "py": 0.364
+    },
+    {
+      "from": "Wide Format",
+      "to": "Soft Cover Books",
+      "support": 299,
+      "confidence": 0.379,
+      "lift": 1.454,
+      "py": 0.261
+    },
+    {
+      "from": "Embellishment",
+      "to": "Wide Format",
+      "support": 360,
+      "confidence": 0.477,
+      "lift": 1.31,
+      "py": 0.364
+    },
+    {
+      "from": "Wide Format",
+      "to": "Embellishment",
+      "support": 360,
+      "confidence": 0.457,
+      "lift": 1.31,
+      "py": 0.349
+    }
+  ],
+  "min_support": 15,
+  "min_lift": 1.15,
+  "prospects": [
+    {
+      "company_id": "3049a752-532c-46f3-852c-4a1cdc55e759",
+      "customer": "Centuria",
+      "revenue": 205664,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Display/Installation",
+        "Embellishment",
+        "Flat Sheets",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": "Hard Cover Books",
+      "lift": 2.455,
+      "rec_from": "Display/Installation",
+      "rec_confidence": 0.333,
+      "rec_support": 19,
+      "evidence": "33% of customers who buy Display/Installation also buy Hard Cover Books (lift 2.455, 19 customers); this customer buys Display/Installation but not Hard Cover Books.",
+      "all_gap_recs": [
+        {
+          "capability": "Hard Cover Books",
+          "best_from": "Display/Installation",
+          "lift": 2.455,
+          "confidence": 0.333,
+          "support": 19
+        }
+      ],
+      "value_contact": {
+        "email": "melinda.jensen@centuria.com.au",
+        "won_val": 99439,
+        "won": 81,
+        "strike": 71.1,
+        "em_from": 118,
+        "em_to": 173,
+        "two_way": true
+      },
+      "value_contact_str": "melinda.jensen@centuria.com.au (won $99,439, strike 71.1%, two-way)",
+      "won_intent_mix": [
+        {
+          "intent": "general_enquiry",
+          "pct": 46.2
+        },
+        {
+          "intent": "job_approval",
+          "pct": 20.2
+        },
+        {
+          "intent": "payment_query",
+          "pct": 15.7
+        },
+        {
+          "intent": "quote_request",
+          "pct": 8.8
+        },
+        {
+          "intent": "artwork_submission",
+          "pct": 6.0
+        }
+      ],
+      "won_linked": 69,
+      "lost_linked": 18,
+      "framing": "Execution-led \u2014 reference their live jobs and turnaround; position Hard Cover Books as an add-on to current production runs.",
+      "timing": {
+        "status": "overdue_warm",
+        "rhythm_factor": 1.3,
+        "approaching": false,
+        "reason": "last order 27d ago vs ~2d cadence \u2014 overdue, prime reorder window",
+        "days_since_last": 27,
+        "avg_interval": 2,
+        "peak_month": 8,
+        "approach_month": 7,
+        "last_order": "2026-05-08"
+      },
+      "timing_factor": 1.3,
+      "recency_factor": 1.0,
+      "days_since_email": 20,
+      "last_email": "2026-05-15",
+      "when": "last order 27d ago vs ~2d cadence \u2014 overdue, prime reorder window; warm \u2014 last email 20d ago",
+      "opportunity_strength": 16.957
+    },
+    {
+      "company_id": "b04ec5de-ab67-441e-a64f-dd9272329ab1",
+      "customer": "Freedom",
+      "revenue": 399798,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Embellishment",
+        "Flat Sheets",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": "Hard Cover Books",
+      "lift": 2.294,
+      "rec_from": "Soft Cover Books",
+      "rec_confidence": 0.312,
+      "rec_support": 176,
+      "evidence": "31% of customers who buy Soft Cover Books also buy Hard Cover Books (lift 2.294, 176 customers); this customer buys Soft Cover Books but not Hard Cover Books.",
+      "all_gap_recs": [
+        {
+          "capability": "Hard Cover Books",
+          "best_from": "Soft Cover Books",
+          "lift": 2.294,
+          "confidence": 0.312,
+          "support": 176
+        }
+      ],
+      "value_contact": {
+        "email": "hiedy.casas@freedom.com.au",
+        "won_val": 158051,
+        "won": 13,
+        "strike": 76.5,
+        "em_from": 45,
+        "em_to": 73,
+        "two_way": true
+      },
+      "value_contact_str": "hiedy.casas@freedom.com.au (won $158,051, strike 76.5%, two-way)",
+      "won_intent_mix": [
+        {
+          "intent": "general_enquiry",
+          "pct": 100.0
+        }
+      ],
+      "won_linked": 4,
+      "lost_linked": 2,
+      "framing": "Consultative \u2014 lead with a short portfolio review; introduce Hard Cover Books as the obvious next capability for their account.",
+      "timing": {
+        "status": "overdue_warm",
+        "rhythm_factor": 1.3,
+        "approaching": true,
+        "reason": "last order 94d ago vs ~8d cadence \u2014 overdue, prime reorder window; Jul is their seasonal peak; approach window (Jun) is open",
+        "days_since_last": 94,
+        "avg_interval": 8,
+        "peak_month": 7,
+        "approach_month": 6,
+        "last_order": "2026-03-02"
+      },
+      "timing_factor": 1.271,
+      "recency_factor": 0.85,
+      "days_since_email": 80,
+      "last_email": "2026-03-16",
+      "when": "last order 94d ago vs ~8d cadence \u2014 overdue, prime reorder window; Jul is their seasonal peak; approach window (Jun) is open; cooling \u2014 last email 80d ago",
+      "opportunity_strength": 16.333
+    },
+    {
+      "company_id": "08140c1e-c391-4543-8bd8-90ede6a6393e",
+      "customer": "MED-EL Implant Systems Australasia Pty Ltd",
+      "revenue": 177545,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Embellishment",
+        "Flat Sheets",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": "Hard Cover Books",
+      "lift": 2.294,
+      "rec_from": "Soft Cover Books",
+      "rec_confidence": 0.312,
+      "rec_support": 176,
+      "evidence": "31% of customers who buy Soft Cover Books also buy Hard Cover Books (lift 2.294, 176 customers); this customer buys Soft Cover Books but not Hard Cover Books.",
+      "all_gap_recs": [
+        {
+          "capability": "Hard Cover Books",
+          "best_from": "Soft Cover Books",
+          "lift": 2.294,
+          "confidence": 0.312,
+          "support": 176
+        }
+      ],
+      "value_contact": {
+        "email": "clare.tamas@medel.com",
+        "won_val": 134072,
+        "won": 68,
+        "strike": 62.4,
+        "em_from": 57,
+        "em_to": 85,
+        "two_way": true
+      },
+      "value_contact_str": "clare.tamas@medel.com (won $134,072, strike 62.4%, two-way)",
+      "won_intent_mix": [
+        {
+          "intent": "general_enquiry",
+          "pct": 34.4
+        },
+        {
+          "intent": "job_approval",
+          "pct": 22.0
+        },
+        {
+          "intent": "quote_request",
+          "pct": 14.9
+        },
+        {
+          "intent": "payment_query",
+          "pct": 5.7
+        },
+        {
+          "intent": "question",
+          "pct": 5.7
+        }
+      ],
+      "won_linked": 15,
+      "lost_linked": 8,
+      "framing": "Execution-led \u2014 reference their live jobs and turnaround; position Hard Cover Books as an add-on to current production runs.",
+      "timing": {
+        "status": "overdue_warm",
+        "rhythm_factor": 1.3,
+        "approaching": false,
+        "reason": "last order 85d ago vs ~5d cadence \u2014 overdue, prime reorder window",
+        "days_since_last": 85,
+        "avg_interval": 5,
+        "peak_month": 8,
+        "approach_month": 7,
+        "last_order": "2026-03-11"
+      },
+      "timing_factor": 1.3,
+      "recency_factor": 1.0,
+      "days_since_email": 17,
+      "last_email": "2026-05-18",
+      "when": "last order 85d ago vs ~5d cadence \u2014 overdue, prime reorder window; warm \u2014 last email 17d ago",
+      "opportunity_strength": 15.654
+    },
+    {
+      "company_id": "894d664d-d076-40d9-9056-694e4c5e428e",
+      "customer": "Delibrand",
+      "revenue": 131091,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Embellishment",
+        "Flat Sheets",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": "Hard Cover Books",
+      "lift": 2.294,
+      "rec_from": "Soft Cover Books",
+      "rec_confidence": 0.312,
+      "rec_support": 176,
+      "evidence": "31% of customers who buy Soft Cover Books also buy Hard Cover Books (lift 2.294, 176 customers); this customer buys Soft Cover Books but not Hard Cover Books.",
+      "all_gap_recs": [
+        {
+          "capability": "Hard Cover Books",
+          "best_from": "Soft Cover Books",
+          "lift": 2.294,
+          "confidence": 0.312,
+          "support": 176
+        }
+      ],
+      "value_contact": {
+        "email": "brent@delibrand.com.au",
+        "won_val": 126054,
+        "won": 47,
+        "strike": 44.3,
+        "em_from": 60,
+        "em_to": 73,
+        "two_way": true
+      },
+      "value_contact_str": "brent@delibrand.com.au (won $126,054, strike 44.3%, two-way)",
+      "won_intent_mix": [
+        {
+          "intent": "general_enquiry",
+          "pct": 80.0
+        },
+        {
+          "intent": "quote_request",
+          "pct": 20.0
+        }
+      ],
+      "won_linked": 4,
+      "lost_linked": 5,
+      "framing": "Quote-led \u2014 open with a spec'd, priced Hard Cover Books sample tied to a recent job; they engage on concrete quotes.",
+      "timing": {
+        "status": "overdue_warm",
+        "rhythm_factor": 1.3,
+        "approaching": false,
+        "reason": "last order 84d ago vs ~9d cadence \u2014 overdue, prime reorder window",
+        "days_since_last": 84,
+        "avg_interval": 9,
+        "peak_month": 1,
+        "approach_month": 12,
+        "last_order": "2026-03-12"
+      },
+      "timing_factor": 1.3,
+      "recency_factor": 1.0,
+      "days_since_email": 31,
+      "last_email": "2026-05-04",
+      "when": "last order 84d ago vs ~9d cadence \u2014 overdue, prime reorder window; warm \u2014 last email 31d ago",
+      "opportunity_strength": 15.262
+    },
+    {
+      "company_id": "6fd9db67-39e2-4b84-ad09-3d6eb7738891",
+      "customer": "ACS (Australian Computer Society)",
+      "revenue": 174695,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Embellishment",
+        "Flat Sheets",
+        "Soft Cover Books",
+        "Specialty Finishing"
+      ],
+      "recommended": "Hard Cover Books",
+      "lift": 2.294,
+      "rec_from": "Soft Cover Books",
+      "rec_confidence": 0.312,
+      "rec_support": 176,
+      "evidence": "31% of customers who buy Soft Cover Books also buy Hard Cover Books (lift 2.294, 176 customers); this customer buys Soft Cover Books but not Hard Cover Books.",
+      "all_gap_recs": [
+        {
+          "capability": "Hard Cover Books",
+          "best_from": "Soft Cover Books",
+          "lift": 2.294,
+          "confidence": 0.312,
+          "support": 176
+        },
+        {
+          "capability": "Wide Format",
+          "best_from": "Soft Cover Books",
+          "lift": 1.454,
+          "confidence": 0.529,
+          "support": 299
+        }
+      ],
+      "value_contact": {
+        "email": "troy.steer@acs.org.au",
+        "won_val": 161508,
+        "won": 25,
+        "strike": 73.5,
+        "em_from": 3,
+        "em_to": 15,
+        "two_way": false
+      },
+      "value_contact_str": "troy.steer@acs.org.au (won $161,508, strike 73.5%, low two-way engagement)",
+      "won_intent_mix": [],
+      "won_linked": 0,
+      "lost_linked": 0,
+      "framing": "Insufficient email signal \u2014 introduce Hard Cover Books via the value contact with a concrete example.",
+      "timing": {
+        "status": "overdue_warm",
+        "rhythm_factor": 1.3,
+        "approaching": false,
+        "reason": "last order 290d ago vs ~12d cadence \u2014 overdue, prime reorder window",
+        "days_since_last": 290,
+        "avg_interval": 12,
+        "peak_month": 11,
+        "approach_month": 10,
+        "last_order": "2025-08-18"
+      },
+      "timing_factor": 1.105,
+      "recency_factor": 0.85,
+      "days_since_email": 78,
+      "last_email": "2026-03-18",
+      "when": "last order 290d ago vs ~12d cadence \u2014 overdue, prime reorder window; cooling \u2014 last email 78d ago",
+      "opportunity_strength": 13.288
+    },
+    {
+      "company_id": "b47ad668-87cd-4733-8622-446ebbfb1668",
+      "customer": "Sullivan Strumpf Fine Art Pty Ltd",
+      "revenue": 161602,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Embellishment",
+        "Flat Sheets",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": "Hard Cover Books",
+      "lift": 2.294,
+      "rec_from": "Soft Cover Books",
+      "rec_confidence": 0.312,
+      "rec_support": 176,
+      "evidence": "31% of customers who buy Soft Cover Books also buy Hard Cover Books (lift 2.294, 176 customers); this customer buys Soft Cover Books but not Hard Cover Books.",
+      "all_gap_recs": [
+        {
+          "capability": "Hard Cover Books",
+          "best_from": "Soft Cover Books",
+          "lift": 2.294,
+          "confidence": 0.312,
+          "support": 176
+        }
+      ],
+      "value_contact": {
+        "email": "ursula@sullivanstrumpf.com",
+        "won_val": 9714,
+        "won": 4,
+        "strike": 57.1,
+        "em_from": 18,
+        "em_to": 7,
+        "two_way": true
+      },
+      "value_contact_str": "ursula@sullivanstrumpf.com (won $9,714, strike 57.1%, two-way)",
+      "won_intent_mix": [],
+      "won_linked": 0,
+      "lost_linked": 1,
+      "framing": "Insufficient email signal \u2014 introduce Hard Cover Books via the value contact with a concrete example.",
+      "timing": {
+        "status": "overdue_warm",
+        "rhythm_factor": 1.3,
+        "approaching": false,
+        "reason": "last order 52d ago vs ~15d cadence \u2014 overdue, prime reorder window",
+        "days_since_last": 52,
+        "avg_interval": 15,
+        "peak_month": 8,
+        "approach_month": 7,
+        "last_order": "2026-04-13"
+      },
+      "timing_factor": 1.105,
+      "recency_factor": 0.85,
+      "days_since_email": 134,
+      "last_email": "2026-01-21",
+      "when": "last order 52d ago vs ~15d cadence \u2014 overdue, prime reorder window; cooling \u2014 last email 134d ago",
+      "opportunity_strength": 13.203
+    },
+    {
+      "company_id": "6053d052-42f0-4a9c-98e6-ad82f37f2f1d",
+      "customer": "Meriton Pty Ltd",
+      "revenue": 150751,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Embellishment",
+        "Flat Sheets",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": "Hard Cover Books",
+      "lift": 2.294,
+      "rec_from": "Soft Cover Books",
+      "rec_confidence": 0.312,
+      "rec_support": 176,
+      "evidence": "31% of customers who buy Soft Cover Books also buy Hard Cover Books (lift 2.294, 176 customers); this customer buys Soft Cover Books but not Hard Cover Books.",
+      "all_gap_recs": [
+        {
+          "capability": "Hard Cover Books",
+          "best_from": "Soft Cover Books",
+          "lift": 2.294,
+          "confidence": 0.312,
+          "support": 176
+        }
+      ],
+      "value_contact": {
+        "email": "jahleenm@meriton.com.au",
+        "won_val": 125407,
+        "won": 79,
+        "strike": 71.8,
+        "em_from": 98,
+        "em_to": 5,
+        "two_way": true
+      },
+      "value_contact_str": "jahleenm@meriton.com.au (won $125,407, strike 71.8%, two-way)",
+      "won_intent_mix": [
+        {
+          "intent": "general_enquiry",
+          "pct": 44.6
+        },
+        {
+          "intent": "job_approval",
+          "pct": 32.4
+        },
+        {
+          "intent": "quote_request",
+          "pct": 12.2
+        },
+        {
+          "intent": "artwork_submission",
+          "pct": 9.8
+        },
+        {
+          "intent": "production_blocker",
+          "pct": 0.5
+        }
+      ],
+      "won_linked": 64,
+      "lost_linked": 18,
+      "framing": "Execution-led \u2014 reference their live jobs and turnaround; position Hard Cover Books as an add-on to current production runs.",
+      "timing": {
+        "status": "steady",
+        "rhythm_factor": 1.0,
+        "approaching": false,
+        "reason": "steady ~43d cadence (last order 31d ago)",
+        "days_since_last": 31,
+        "avg_interval": 43,
+        "peak_month": 11,
+        "approach_month": 10,
+        "last_order": "2026-05-04"
+      },
+      "timing_factor": 1.0,
+      "recency_factor": 1.0,
+      "days_since_email": -2,
+      "last_email": "2026-06-06",
+      "when": "steady ~43d cadence (last order 31d ago); warm \u2014 last email 0d ago",
+      "opportunity_strength": 11.879
+    },
+    {
+      "company_id": "ba2744f1-d4e8-4412-94c8-bc73ee4fc5ff",
+      "customer": "Emily Ziz Style Studio",
+      "revenue": 111199,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Flat Sheets",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": "Hard Cover Books",
+      "lift": 1.962,
+      "rec_from": "Wide Format",
+      "rec_confidence": 0.266,
+      "rec_support": 210,
+      "evidence": "26% of customers who buy Wide Format also buy Hard Cover Books (lift 1.962, 210 customers); this customer buys Wide Format but not Hard Cover Books.",
+      "all_gap_recs": [
+        {
+          "capability": "Hard Cover Books",
+          "best_from": "Wide Format",
+          "lift": 1.962,
+          "confidence": 0.266,
+          "support": 210
+        },
+        {
+          "capability": "Soft Cover Books",
+          "best_from": "Wide Format",
+          "lift": 1.454,
+          "confidence": 0.379,
+          "support": 299
+        },
+        {
+          "capability": "Embellishment",
+          "best_from": "Wide Format",
+          "lift": 1.31,
+          "confidence": 0.457,
+          "support": 360
+        }
+      ],
+      "value_contact": {
+        "email": "emma@emilyziz.com",
+        "won_val": 147235,
+        "won": 135,
+        "strike": 81.8,
+        "em_from": 536,
+        "em_to": 693,
+        "two_way": true
+      },
+      "value_contact_str": "emma@emilyziz.com (won $147,235, strike 81.8%, two-way)",
+      "won_intent_mix": [
+        {
+          "intent": "general_enquiry",
+          "pct": 52.4
+        },
+        {
+          "intent": "job_approval",
+          "pct": 20.4
+        },
+        {
+          "intent": "quote_request",
+          "pct": 9.1
+        },
+        {
+          "intent": "payment_query",
+          "pct": 9.0
+        },
+        {
+          "intent": "artwork_submission",
+          "pct": 5.0
+        }
+      ],
+      "won_linked": 129,
+      "lost_linked": 24,
+      "framing": "Execution-led \u2014 reference their live jobs and turnaround; position Hard Cover Books as an add-on to current production runs.",
+      "timing": {
+        "status": "steady",
+        "rhythm_factor": 1.0,
+        "approaching": false,
+        "reason": "steady ~38d cadence (last order 28d ago)",
+        "days_since_last": 28,
+        "avg_interval": 38,
+        "peak_month": 8,
+        "approach_month": 7,
+        "last_order": "2026-05-07"
+      },
+      "timing_factor": 1.0,
+      "recency_factor": 1.0,
+      "days_since_email": 15,
+      "last_email": "2026-05-20",
+      "when": "steady ~38d cadence (last order 28d ago); warm \u2014 last email 15d ago",
+      "opportunity_strength": 9.9
+    },
+    {
+      "company_id": "a58fd4c9-b5bf-4561-91cf-9879ec50548e",
+      "customer": "Public House Management Group",
+      "revenue": 590085,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Display/Installation",
+        "Embellishment",
+        "Flat Sheets",
+        "Hard Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": "Soft Cover Books",
+      "lift": 2.294,
+      "rec_from": "Hard Cover Books",
+      "rec_confidence": 0.599,
+      "rec_support": 176,
+      "evidence": "59% of customers who buy Hard Cover Books also buy Soft Cover Books (lift 2.294, 176 customers); this customer buys Hard Cover Books but not Soft Cover Books.",
+      "all_gap_recs": [
+        {
+          "capability": "Soft Cover Books",
+          "best_from": "Hard Cover Books",
+          "lift": 2.294,
+          "confidence": 0.599,
+          "support": 176
+        }
+      ],
+      "value_contact": {
+        "email": "caleb.beckman@phmg.com.au",
+        "won_val": 3202,
+        "won": 3,
+        "strike": 33.3,
+        "em_from": 0,
+        "em_to": 0,
+        "two_way": false
+      },
+      "value_contact_str": "caleb.beckman@phmg.com.au (won $3,202, strike 33.3%, low two-way engagement)",
+      "won_intent_mix": [],
+      "won_linked": 0,
+      "lost_linked": 0,
+      "framing": "Insufficient email signal \u2014 introduce Soft Cover Books via the value contact with a concrete example.",
+      "timing": {
+        "status": "dormant",
+        "rhythm_factor": 0.55,
+        "approaching": false,
+        "reason": "dormant \u2014 last order 960d (~2.6y) ago; reactivation play, not a warm reorder",
+        "days_since_last": 960,
+        "avg_interval": 37,
+        "peak_month": 8,
+        "approach_month": 7,
+        "last_order": "2023-10-18"
+      },
+      "timing_factor": 0.275,
+      "recency_factor": 0.5,
+      "days_since_email": 990,
+      "last_email": "2023-09-18",
+      "when": "dormant \u2014 last order 960d (~2.6y) ago; reactivation play, not a warm reorder; cold \u2014 last email 990d ago",
+      "opportunity_strength": 3.641
+    },
+    {
+      "company_id": "b26c7910-53e1-4058-bed5-56c9a1ae1074",
+      "customer": "Alias Pty Ltd",
+      "revenue": 231113,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Embellishment",
+        "Flat Sheets",
+        "Hard Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": "Soft Cover Books",
+      "lift": 2.294,
+      "rec_from": "Hard Cover Books",
+      "rec_confidence": 0.599,
+      "rec_support": 176,
+      "evidence": "59% of customers who buy Hard Cover Books also buy Soft Cover Books (lift 2.294, 176 customers); this customer buys Hard Cover Books but not Soft Cover Books.",
+      "all_gap_recs": [
+        {
+          "capability": "Soft Cover Books",
+          "best_from": "Hard Cover Books",
+          "lift": 2.294,
+          "confidence": 0.599,
+          "support": 176
+        }
+      ],
+      "value_contact": {
+        "email": "ali@aliascreative.com.au",
+        "won_val": 163910,
+        "won": 28,
+        "strike": 43.8,
+        "em_from": 38,
+        "em_to": 12,
+        "two_way": true
+      },
+      "value_contact_str": "ali@aliascreative.com.au (won $163,910, strike 43.8%, two-way)",
+      "won_intent_mix": [
+        {
+          "intent": "general_enquiry",
+          "pct": 76.2
+        },
+        {
+          "intent": "job_approval",
+          "pct": 9.5
+        },
+        {
+          "intent": "artwork_submission",
+          "pct": 7.9
+        },
+        {
+          "intent": "quote_request",
+          "pct": 4.8
+        },
+        {
+          "intent": "payment_query",
+          "pct": 1.6
+        }
+      ],
+      "won_linked": 5,
+      "lost_linked": 6,
+      "framing": "Execution-led \u2014 reference their live jobs and turnaround; position Soft Cover Books as an add-on to current production runs.",
+      "timing": {
+        "status": "dormant",
+        "rhythm_factor": 0.55,
+        "approaching": false,
+        "reason": "dormant \u2014 last order 426d (~1.2y) ago; reactivation play, not a warm reorder",
+        "days_since_last": 426,
+        "avg_interval": 2,
+        "peak_month": 10,
+        "approach_month": 9,
+        "last_order": "2025-04-04"
+      },
+      "timing_factor": 0.275,
+      "recency_factor": 0.5,
+      "days_since_email": 413,
+      "last_email": "2025-04-17",
+      "when": "dormant \u2014 last order 426d (~1.2y) ago; reactivation play, not a warm reorder; cold \u2014 last email 413d ago",
+      "opportunity_strength": 3.384
+    },
+    {
+      "company_id": "d92b92f7-a125-409f-b598-e055d1fccc1c",
+      "customer": "Momento Pro Pty Ltd ***In Liquidator",
+      "revenue": 114759,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Embellishment",
+        "Flat Sheets",
+        "Soft Cover Books",
+        "Specialty Finishing"
+      ],
+      "recommended": "Hard Cover Books",
+      "lift": 2.294,
+      "rec_from": "Soft Cover Books",
+      "rec_confidence": 0.312,
+      "rec_support": 176,
+      "evidence": "31% of customers who buy Soft Cover Books also buy Hard Cover Books (lift 2.294, 176 customers); this customer buys Soft Cover Books but not Hard Cover Books.",
+      "all_gap_recs": [
+        {
+          "capability": "Hard Cover Books",
+          "best_from": "Soft Cover Books",
+          "lift": 2.294,
+          "confidence": 0.312,
+          "support": 176
+        },
+        {
+          "capability": "Wide Format",
+          "best_from": "Soft Cover Books",
+          "lift": 1.454,
+          "confidence": 0.529,
+          "support": 299
+        }
+      ],
+      "value_contact": {
+        "email": "geoff@momento.com.au",
+        "won_val": 44466,
+        "won": 32,
+        "strike": 25.6,
+        "em_from": 38,
+        "em_to": 0,
+        "two_way": true
+      },
+      "value_contact_str": "geoff@momento.com.au (won $44,466, strike 25.6%, two-way)",
+      "won_intent_mix": [],
+      "won_linked": 0,
+      "lost_linked": 5,
+      "framing": "Insufficient email signal \u2014 introduce Hard Cover Books via the value contact with a concrete example.",
+      "timing": {
+        "status": "dormant",
+        "rhythm_factor": 0.55,
+        "approaching": false,
+        "reason": "dormant \u2014 last order 783d (~2.1y) ago; reactivation play, not a warm reorder",
+        "days_since_last": 783,
+        "avg_interval": 4,
+        "peak_month": 11,
+        "approach_month": 10,
+        "last_order": "2024-04-12"
+      },
+      "timing_factor": 0.275,
+      "recency_factor": 0.5,
+      "days_since_email": 742,
+      "last_email": "2024-05-23",
+      "when": "dormant \u2014 last order 783d (~2.1y) ago; reactivation play, not a warm reorder; cold \u2014 last email 742d ago",
+      "opportunity_strength": 3.192
+    },
+    {
+      "company_id": "1a08f439-1e7e-4db6-8569-0b86849d1562",
+      "customer": "Pacific Blue Health",
+      "revenue": 234873,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Embellishment",
+        "Flat Sheets",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": "Hard Cover Books",
+      "lift": 1.962,
+      "rec_from": "Wide Format",
+      "rec_confidence": 0.266,
+      "rec_support": 210,
+      "evidence": "26% of customers who buy Wide Format also buy Hard Cover Books (lift 1.962, 210 customers); this customer buys Wide Format but not Hard Cover Books.",
+      "all_gap_recs": [
+        {
+          "capability": "Hard Cover Books",
+          "best_from": "Wide Format",
+          "lift": 1.962,
+          "confidence": 0.266,
+          "support": 210
+        },
+        {
+          "capability": "Soft Cover Books",
+          "best_from": "Embellishment",
+          "lift": 1.822,
+          "confidence": 0.475,
+          "support": 359
+        }
+      ],
+      "value_contact": {
+        "email": "mattf@pacificbluehealth.com.au",
+        "won_val": 77493,
+        "won": 4,
+        "strike": 57.1,
+        "em_from": 0,
+        "em_to": 1,
+        "two_way": false
+      },
+      "value_contact_str": "mattf@pacificbluehealth.com.au (won $77,493, strike 57.1%, low two-way engagement)",
+      "won_intent_mix": [],
+      "won_linked": 0,
+      "lost_linked": 0,
+      "framing": "Insufficient email signal \u2014 introduce Hard Cover Books via the value contact with a concrete example.",
+      "timing": {
+        "status": "dormant",
+        "rhythm_factor": 0.55,
+        "approaching": false,
+        "reason": "dormant \u2014 last order 1604d (~4.4y) ago; reactivation play, not a warm reorder",
+        "days_since_last": 1604,
+        "avg_interval": 12,
+        "peak_month": 2,
+        "approach_month": 1,
+        "last_order": "2022-01-12"
+      },
+      "timing_factor": 0.275,
+      "recency_factor": 0.5,
+      "days_since_email": 942,
+      "last_email": "2023-11-05",
+      "when": "dormant \u2014 last order 1604d (~4.4y) ago; reactivation play, not a warm reorder; cold \u2014 last email 942d ago",
+      "opportunity_strength": 2.898
+    },
+    {
+      "company_id": "51e72d07-e322-4fd6-8f51-5a6548a7d004",
+      "customer": "Artis",
+      "revenue": 1925959,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Embellishment",
+        "Flat Sheets",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": null,
+      "lift": null,
+      "rec_from": null,
+      "rec_confidence": null,
+      "rec_support": null,
+      "evidence": "no untapped high-lift capability (buys full predicted set)",
+      "all_gap_recs": [],
+      "value_contact": {
+        "email": "graphics@artis.net.au",
+        "won_val": 857110,
+        "won": 605,
+        "strike": 80.1,
+        "em_from": 1016,
+        "em_to": 1443,
+        "two_way": true
+      },
+      "value_contact_str": "graphics@artis.net.au (won $857,110, strike 80.1%, two-way)",
+      "won_intent_mix": [
+        {
+          "intent": "general_enquiry",
+          "pct": 42.6
+        },
+        {
+          "intent": "job_approval",
+          "pct": 33.8
+        },
+        {
+          "intent": "artwork_submission",
+          "pct": 9.9
+        },
+        {
+          "intent": "quote_request",
+          "pct": 8.4
+        },
+        {
+          "intent": "payment_query",
+          "pct": 3.0
+        }
+      ],
+      "won_linked": 532,
+      "lost_linked": 1386,
+      "framing": null,
+      "timing": {
+        "status": "overdue_warm",
+        "rhythm_factor": 1.3,
+        "approaching": false,
+        "reason": "last order 28d ago vs near-daily cadence \u2014 overdue, prime reorder window",
+        "days_since_last": 28,
+        "avg_interval": 0,
+        "peak_month": 11,
+        "approach_month": 10,
+        "last_order": "2026-05-07"
+      },
+      "timing_factor": 1.3,
+      "recency_factor": 1.0,
+      "days_since_email": 13,
+      "last_email": "2026-05-22",
+      "when": "last order 28d ago vs near-daily cadence \u2014 overdue, prime reorder window; warm \u2014 last email 13d ago",
+      "opportunity_strength": 0.0
+    },
+    {
+      "company_id": "3781d5e3-c87d-44e7-8992-829425964e79",
+      "customer": "HH Global",
+      "revenue": 1517298,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Embellishment",
+        "Flat Sheets",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": null,
+      "lift": null,
+      "rec_from": null,
+      "rec_confidence": null,
+      "rec_support": null,
+      "evidence": "no untapped high-lift capability (buys full predicted set)",
+      "all_gap_recs": [],
+      "value_contact": {
+        "email": "belinda.trpcevski@hhglobal.com",
+        "won_val": 1931708,
+        "won": 180,
+        "strike": 28.9,
+        "em_from": 802,
+        "em_to": 449,
+        "two_way": true
+      },
+      "value_contact_str": "belinda.trpcevski@hhglobal.com (won $1,931,708, strike 28.9%, two-way)",
+      "won_intent_mix": [
+        {
+          "intent": "general_enquiry",
+          "pct": 55.2
+        },
+        {
+          "intent": "job_approval",
+          "pct": 22.3
+        },
+        {
+          "intent": "quote_request",
+          "pct": 11.9
+        },
+        {
+          "intent": "artwork_submission",
+          "pct": 8.3
+        },
+        {
+          "intent": "complaint",
+          "pct": 0.5
+        }
+      ],
+      "won_linked": 82,
+      "lost_linked": 156,
+      "framing": null,
+      "timing": {
+        "status": "overdue_warm",
+        "rhythm_factor": 1.3,
+        "approaching": false,
+        "reason": "last order 29d ago vs ~9d cadence \u2014 overdue, prime reorder window",
+        "days_since_last": 29,
+        "avg_interval": 9,
+        "peak_month": 6,
+        "approach_month": 5,
+        "last_order": "2026-05-06"
+      },
+      "timing_factor": 1.3,
+      "recency_factor": 1.0,
+      "days_since_email": 6,
+      "last_email": "2026-05-29",
+      "when": "last order 29d ago vs ~9d cadence \u2014 overdue, prime reorder window; warm \u2014 last email 6d ago",
+      "opportunity_strength": 0.0
+    },
+    {
+      "company_id": "32876f34-2bc3-408d-95eb-00ea860d61a3",
+      "customer": "The Property Agency",
+      "revenue": 1222699,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Embellishment",
+        "Flat Sheets",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": null,
+      "lift": null,
+      "rec_from": null,
+      "rec_confidence": null,
+      "rec_support": null,
+      "evidence": "no untapped high-lift capability (buys full predicted set)",
+      "all_gap_recs": [],
+      "value_contact": {
+        "email": "ry@thepropertyagency.com.au",
+        "won_val": 684974,
+        "won": 177,
+        "strike": 40.4,
+        "em_from": 344,
+        "em_to": 378,
+        "two_way": true
+      },
+      "value_contact_str": "ry@thepropertyagency.com.au (won $684,974, strike 40.4%, two-way)",
+      "won_intent_mix": [
+        {
+          "intent": "general_enquiry",
+          "pct": 53.8
+        },
+        {
+          "intent": "job_approval",
+          "pct": 20.6
+        },
+        {
+          "intent": "quote_request",
+          "pct": 13.0
+        },
+        {
+          "intent": "artwork_submission",
+          "pct": 9.3
+        },
+        {
+          "intent": "payment_query",
+          "pct": 1.9
+        }
+      ],
+      "won_linked": 122,
+      "lost_linked": 172,
+      "framing": null,
+      "timing": {
+        "status": "overdue_warm",
+        "rhythm_factor": 1.3,
+        "approaching": false,
+        "reason": "last order 27d ago vs ~12d cadence \u2014 overdue, prime reorder window",
+        "days_since_last": 27,
+        "avg_interval": 12,
+        "peak_month": 9,
+        "approach_month": 8,
+        "last_order": "2026-05-08"
+      },
+      "timing_factor": 1.3,
+      "recency_factor": 1.0,
+      "days_since_email": -5,
+      "last_email": "2026-06-09",
+      "when": "last order 27d ago vs ~12d cadence \u2014 overdue, prime reorder window; warm \u2014 last email 0d ago",
+      "opportunity_strength": 0.0
+    },
+    {
+      "company_id": "6b5fa7f4-0031-40e4-9f1c-d11b551dae25",
+      "customer": "Maui Jim",
+      "revenue": 1016965,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Display / Installation",
+        "Display/Installation",
+        "Embellishment",
+        "Flat Sheets",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": null,
+      "lift": null,
+      "rec_from": null,
+      "rec_confidence": null,
+      "rec_support": null,
+      "evidence": "no untapped high-lift capability (buys full predicted set)",
+      "all_gap_recs": [],
+      "value_contact": {
+        "email": "robert.garrett@kering.com",
+        "won_val": 1013786,
+        "won": 3877,
+        "strike": 87.5,
+        "em_from": 21,
+        "em_to": 3,
+        "two_way": true
+      },
+      "value_contact_str": "robert.garrett@kering.com (won $1,013,786, strike 87.5%, two-way)",
+      "won_intent_mix": [
+        {
+          "intent": "general_enquiry",
+          "pct": 58.8
+        },
+        {
+          "intent": "job_approval",
+          "pct": 30.8
+        },
+        {
+          "intent": "complaint",
+          "pct": 10.4
+        }
+      ],
+      "won_linked": 361,
+      "lost_linked": 38,
+      "framing": null,
+      "timing": {
+        "status": "overdue_warm",
+        "rhythm_factor": 1.3,
+        "approaching": false,
+        "reason": "last order 28d ago vs ~2d cadence \u2014 overdue, prime reorder window",
+        "days_since_last": 28,
+        "avg_interval": 2,
+        "peak_month": 8,
+        "approach_month": 7,
+        "last_order": "2026-05-07"
+      },
+      "timing_factor": 1.3,
+      "recency_factor": 1.0,
+      "days_since_email": -5,
+      "last_email": "2026-06-09",
+      "when": "last order 28d ago vs ~2d cadence \u2014 overdue, prime reorder window; warm \u2014 last email 0d ago",
+      "opportunity_strength": 0.0
+    },
+    {
+      "company_id": "a3b30357-8c76-479f-97d0-104e6184a7bc",
+      "customer": "Urban Purveyor Group",
+      "revenue": 680655,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Display/Installation",
+        "Embellishment",
+        "Flat Sheets",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": null,
+      "lift": null,
+      "rec_from": null,
+      "rec_confidence": null,
+      "rec_support": null,
+      "evidence": "no untapped high-lift capability (buys full predicted set)",
+      "all_gap_recs": [],
+      "value_contact": {
+        "email": "lauren.lopez@rockpool.com",
+        "won_val": 105639,
+        "won": 362,
+        "strike": 97.8,
+        "em_from": 0,
+        "em_to": 0,
+        "two_way": false
+      },
+      "value_contact_str": "lauren.lopez@rockpool.com (won $105,639, strike 97.8%, low two-way engagement)",
+      "won_intent_mix": [
+        {
+          "intent": "general_enquiry",
+          "pct": 100.0
+        }
+      ],
+      "won_linked": 1,
+      "lost_linked": 0,
+      "framing": null,
+      "timing": {
+        "status": "overdue_warm",
+        "rhythm_factor": 1.3,
+        "approaching": false,
+        "reason": "last order 28d ago vs ~3d cadence \u2014 overdue, prime reorder window",
+        "days_since_last": 28,
+        "avg_interval": 3,
+        "peak_month": 1,
+        "approach_month": 12,
+        "last_order": "2026-05-07"
+      },
+      "timing_factor": 1.3,
+      "recency_factor": 1.0,
+      "days_since_email": 15,
+      "last_email": "2026-05-20",
+      "when": "last order 28d ago vs ~3d cadence \u2014 overdue, prime reorder window; warm \u2014 last email 15d ago",
+      "opportunity_strength": 0.0
+    },
+    {
+      "company_id": "39a9a0a5-40c5-460e-87d5-a054372e824e",
+      "customer": "Peachy Print Australia Pty Ltd",
+      "revenue": 500911,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Embellishment",
+        "Flat Sheets",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": null,
+      "lift": null,
+      "rec_from": null,
+      "rec_confidence": null,
+      "rec_support": null,
+      "evidence": "no untapped high-lift capability (buys full predicted set)",
+      "all_gap_recs": [],
+      "value_contact": {
+        "email": "bruce@peachyprint.com.au",
+        "won_val": 376251,
+        "won": 216,
+        "strike": 30.6,
+        "em_from": 105,
+        "em_to": 68,
+        "two_way": true
+      },
+      "value_contact_str": "bruce@peachyprint.com.au (won $376,251, strike 30.6%, two-way)",
+      "won_intent_mix": [
+        {
+          "intent": "general_enquiry",
+          "pct": 49.8
+        },
+        {
+          "intent": "job_approval",
+          "pct": 33.2
+        },
+        {
+          "intent": "quote_request",
+          "pct": 11.7
+        },
+        {
+          "intent": "artwork_submission",
+          "pct": 2.7
+        },
+        {
+          "intent": "complaint",
+          "pct": 1.8
+        }
+      ],
+      "won_linked": 22,
+      "lost_linked": 66,
+      "framing": null,
+      "timing": {
+        "status": "overdue_warm",
+        "rhythm_factor": 1.3,
+        "approaching": true,
+        "reason": "last order 30d ago vs ~2d cadence \u2014 overdue, prime reorder window; Jul is their seasonal peak; approach window (Jun) is open",
+        "days_since_last": 30,
+        "avg_interval": 2,
+        "peak_month": 7,
+        "approach_month": 6,
+        "last_order": "2026-05-05"
+      },
+      "timing_factor": 1.495,
+      "recency_factor": 1.0,
+      "days_since_email": -1,
+      "last_email": "2026-06-05",
+      "when": "last order 30d ago vs ~2d cadence \u2014 overdue, prime reorder window; Jul is their seasonal peak; approach window (Jun) is open; warm \u2014 last email 0d ago",
+      "opportunity_strength": 0.0
+    },
+    {
+      "company_id": "e725ef42-e80d-4efd-a58c-8d6ac12d2780",
+      "customer": "Q Report",
+      "revenue": 489377,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Embellishment",
+        "Flat Sheets",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": null,
+      "lift": null,
+      "rec_from": null,
+      "rec_confidence": null,
+      "rec_support": null,
+      "evidence": "no untapped high-lift capability (buys full predicted set)",
+      "all_gap_recs": [],
+      "value_contact": {
+        "email": "liran@qreport.com.au",
+        "won_val": 158174,
+        "won": 12,
+        "strike": 30.8,
+        "em_from": 0,
+        "em_to": 0,
+        "two_way": false
+      },
+      "value_contact_str": "liran@qreport.com.au (won $158,174, strike 30.8%, low two-way engagement)",
+      "won_intent_mix": [
+        {
+          "intent": "general_enquiry",
+          "pct": 87.5
+        },
+        {
+          "intent": "production_blocker",
+          "pct": 12.5
+        }
+      ],
+      "won_linked": 6,
+      "lost_linked": 5,
+      "framing": null,
+      "timing": {
+        "status": "overdue_warm",
+        "rhythm_factor": 1.3,
+        "approaching": true,
+        "reason": "last order 36d ago vs ~19d cadence \u2014 overdue, prime reorder window; Jul is their seasonal peak; approach window (Jun) is open",
+        "days_since_last": 36,
+        "avg_interval": 19,
+        "peak_month": 7,
+        "approach_month": 6,
+        "last_order": "2026-04-29"
+      },
+      "timing_factor": 1.495,
+      "recency_factor": 1.0,
+      "days_since_email": 34,
+      "last_email": "2026-05-01",
+      "when": "last order 36d ago vs ~19d cadence \u2014 overdue, prime reorder window; Jul is their seasonal peak; approach window (Jun) is open; warm \u2014 last email 34d ago",
+      "opportunity_strength": 0.0
+    },
+    {
+      "company_id": "f0434a06-bdc3-4aa0-88d6-dc29c2e11ec4",
+      "customer": "Mirvac Projects Pty Ltd",
+      "revenue": 359616,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Embellishment",
+        "Flat Sheets",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": null,
+      "lift": null,
+      "rec_from": null,
+      "rec_confidence": null,
+      "rec_support": null,
+      "evidence": "no untapped high-lift capability (buys full predicted set)",
+      "all_gap_recs": [],
+      "value_contact": {
+        "email": "annette.rossetto@mirvac.com",
+        "won_val": 490304,
+        "won": 199,
+        "strike": 53.9,
+        "em_from": 296,
+        "em_to": 238,
+        "two_way": true
+      },
+      "value_contact_str": "annette.rossetto@mirvac.com (won $490,304, strike 53.9%, two-way)",
+      "won_intent_mix": [
+        {
+          "intent": "general_enquiry",
+          "pct": 46.3
+        },
+        {
+          "intent": "job_approval",
+          "pct": 31.0
+        },
+        {
+          "intent": "quote_request",
+          "pct": 13.7
+        },
+        {
+          "intent": "artwork_submission",
+          "pct": 5.9
+        },
+        {
+          "intent": "payment_query",
+          "pct": 1.4
+        }
+      ],
+      "won_linked": 116,
+      "lost_linked": 76,
+      "framing": null,
+      "timing": {
+        "status": "overdue_warm",
+        "rhythm_factor": 1.3,
+        "approaching": true,
+        "reason": "last order 48d ago vs ~26d cadence \u2014 overdue, prime reorder window; Jul is their seasonal peak; approach window (Jun) is open",
+        "days_since_last": 48,
+        "avg_interval": 26,
+        "peak_month": 7,
+        "approach_month": 6,
+        "last_order": "2026-04-17"
+      },
+      "timing_factor": 1.495,
+      "recency_factor": 1.0,
+      "days_since_email": 13,
+      "last_email": "2026-05-22",
+      "when": "last order 48d ago vs ~26d cadence \u2014 overdue, prime reorder window; Jul is their seasonal peak; approach window (Jun) is open; warm \u2014 last email 13d ago",
+      "opportunity_strength": 0.0
+    },
+    {
+      "company_id": "d41f9ca1-0ce6-438e-a12e-647d07249e1c",
+      "customer": "Coco Republic",
+      "revenue": 334142,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Embellishment",
+        "Flat Sheets",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": null,
+      "lift": null,
+      "rec_from": null,
+      "rec_confidence": null,
+      "rec_support": null,
+      "evidence": "no untapped high-lift capability (buys full predicted set)",
+      "all_gap_recs": [],
+      "value_contact": null,
+      "value_contact_str": "no QB-won contact identified",
+      "won_intent_mix": [],
+      "won_linked": 0,
+      "lost_linked": 0,
+      "framing": null,
+      "timing": {
+        "status": "overdue_warm",
+        "rhythm_factor": 1.3,
+        "approaching": false,
+        "reason": "last order 168d ago vs ~1d cadence \u2014 overdue, prime reorder window",
+        "days_since_last": 168,
+        "avg_interval": 1,
+        "peak_month": 9,
+        "approach_month": 8,
+        "last_order": "2025-12-18"
+      },
+      "timing_factor": 1.105,
+      "recency_factor": 0.85,
+      "days_since_email": 143,
+      "last_email": "2026-01-12",
+      "when": "last order 168d ago vs ~1d cadence \u2014 overdue, prime reorder window; cooling \u2014 last email 143d ago",
+      "opportunity_strength": 0.0
+    },
+    {
+      "company_id": "68e9344b-1a43-4ef4-802f-7760877df4a9",
+      "customer": "Rare ID",
+      "revenue": 330245,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Embellishment",
+        "Flat Sheets",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": null,
+      "lift": null,
+      "rec_from": null,
+      "rec_confidence": null,
+      "rec_support": null,
+      "evidence": "no untapped high-lift capability (buys full predicted set)",
+      "all_gap_recs": [],
+      "value_contact": {
+        "email": "peter@rareid.com.au",
+        "won_val": 467199,
+        "won": 82,
+        "strike": 32.4,
+        "em_from": 375,
+        "em_to": 565,
+        "two_way": true
+      },
+      "value_contact_str": "peter@rareid.com.au (won $467,199, strike 32.4%, two-way)",
+      "won_intent_mix": [
+        {
+          "intent": "general_enquiry",
+          "pct": 61.5
+        },
+        {
+          "intent": "job_approval",
+          "pct": 19.0
+        },
+        {
+          "intent": "quote_request",
+          "pct": 12.2
+        },
+        {
+          "intent": "artwork_submission",
+          "pct": 5.0
+        },
+        {
+          "intent": "payment_query",
+          "pct": 0.9
+        }
+      ],
+      "won_linked": 67,
+      "lost_linked": 83,
+      "framing": null,
+      "timing": {
+        "status": "steady",
+        "rhythm_factor": 1.0,
+        "approaching": false,
+        "reason": "steady ~58d cadence (last order 45d ago)",
+        "days_since_last": 45,
+        "avg_interval": 58,
+        "peak_month": 10,
+        "approach_month": 9,
+        "last_order": "2026-04-20"
+      },
+      "timing_factor": 1.0,
+      "recency_factor": 1.0,
+      "days_since_email": -5,
+      "last_email": "2026-06-09",
+      "when": "steady ~58d cadence (last order 45d ago); warm \u2014 last email 0d ago",
+      "opportunity_strength": 0.0
+    },
+    {
+      "company_id": "869e837f-2dde-4e4b-8716-99ad2ceab42b",
+      "customer": "Delivery",
+      "revenue": 290804,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Embellishment",
+        "Flat Sheets",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": null,
+      "lift": null,
+      "rec_from": null,
+      "rec_confidence": null,
+      "rec_support": null,
+      "evidence": "no untapped high-lift capability (buys full predicted set)",
+      "all_gap_recs": [],
+      "value_contact": null,
+      "value_contact_str": "no QB-won contact identified",
+      "won_intent_mix": [],
+      "won_linked": 0,
+      "lost_linked": 0,
+      "framing": null,
+      "timing": {
+        "status": "steady",
+        "rhythm_factor": 1.0,
+        "approaching": false,
+        "reason": "steady ~61d cadence (last order 42d ago)",
+        "days_since_last": 42,
+        "avg_interval": 61,
+        "peak_month": 8,
+        "approach_month": 7,
+        "last_order": "2026-04-23"
+      },
+      "timing_factor": 1.0,
+      "recency_factor": 1.0,
+      "days_since_email": 30,
+      "last_email": "2026-05-05",
+      "when": "steady ~61d cadence (last order 42d ago); warm \u2014 last email 30d ago",
+      "opportunity_strength": 0.0
+    },
+    {
+      "company_id": "d2636883-6dfb-4cfb-9c31-6e9798c55351",
+      "customer": "Trusty Cases & Boxes",
+      "revenue": 285109,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Embellishment",
+        "Flat Sheets",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": null,
+      "lift": null,
+      "rec_from": null,
+      "rec_confidence": null,
+      "rec_support": null,
+      "evidence": "no untapped high-lift capability (buys full predicted set)",
+      "all_gap_recs": [],
+      "value_contact": {
+        "email": "david@trustyboxes.com.au",
+        "won_val": 215485,
+        "won": 70,
+        "strike": 19.3,
+        "em_from": 244,
+        "em_to": 136,
+        "two_way": true
+      },
+      "value_contact_str": "david@trustyboxes.com.au (won $215,485, strike 19.3%, two-way)",
+      "won_intent_mix": [
+        {
+          "intent": "general_enquiry",
+          "pct": 52.3
+        },
+        {
+          "intent": "quote_request",
+          "pct": 23.5
+        },
+        {
+          "intent": "job_approval",
+          "pct": 16.8
+        },
+        {
+          "intent": "payment_query",
+          "pct": 3.7
+        },
+        {
+          "intent": "artwork_submission",
+          "pct": 2.1
+        }
+      ],
+      "won_linked": 17,
+      "lost_linked": 65,
+      "framing": null,
+      "timing": {
+        "status": "overdue_warm",
+        "rhythm_factor": 1.3,
+        "approaching": false,
+        "reason": "last order 216d ago vs ~5d cadence \u2014 overdue, prime reorder window",
+        "days_since_last": 216,
+        "avg_interval": 5,
+        "peak_month": 9,
+        "approach_month": 8,
+        "last_order": "2025-10-31"
+      },
+      "timing_factor": 1.105,
+      "recency_factor": 0.85,
+      "days_since_email": 169,
+      "last_email": "2025-12-17",
+      "when": "last order 216d ago vs ~5d cadence \u2014 overdue, prime reorder window; cooling \u2014 last email 169d ago",
+      "opportunity_strength": 0.0
+    },
+    {
+      "company_id": "0cbc1d8b-3e19-4d6f-9bed-b5c4629bb399",
+      "customer": "Carbon8",
+      "revenue": 206233,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Embellishment",
+        "Flat Sheets",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": null,
+      "lift": null,
+      "rec_from": null,
+      "rec_confidence": null,
+      "rec_support": null,
+      "evidence": "no untapped high-lift capability (buys full predicted set)",
+      "all_gap_recs": [],
+      "value_contact": {
+        "email": "colin@carbon8.com.au",
+        "won_val": 25651,
+        "won": 57,
+        "strike": 34.3,
+        "em_from": 18,
+        "em_to": 1,
+        "two_way": true
+      },
+      "value_contact_str": "colin@carbon8.com.au (won $25,651, strike 34.3%, two-way)",
+      "won_intent_mix": [
+        {
+          "intent": "general_enquiry",
+          "pct": 76.5
+        },
+        {
+          "intent": "artwork_submission",
+          "pct": 8.9
+        },
+        {
+          "intent": "job_approval",
+          "pct": 6.0
+        },
+        {
+          "intent": "complaint",
+          "pct": 1.9
+        },
+        {
+          "intent": "quote_request",
+          "pct": 1.9
+        }
+      ],
+      "won_linked": 90,
+      "lost_linked": 38,
+      "framing": null,
+      "timing": {
+        "status": "overdue_warm",
+        "rhythm_factor": 1.3,
+        "approaching": true,
+        "reason": "last order 29d ago vs ~15d cadence \u2014 overdue, prime reorder window; Jul is their seasonal peak; approach window (Jun) is open",
+        "days_since_last": 29,
+        "avg_interval": 15,
+        "peak_month": 7,
+        "approach_month": 6,
+        "last_order": "2026-05-06"
+      },
+      "timing_factor": 1.495,
+      "recency_factor": 1.0,
+      "days_since_email": -5,
+      "last_email": "2026-06-09",
+      "when": "last order 29d ago vs ~15d cadence \u2014 overdue, prime reorder window; Jul is their seasonal peak; approach window (Jun) is open; warm \u2014 last email 0d ago",
+      "opportunity_strength": 0.0
+    },
+    {
+      "company_id": "9e46260b-2a89-4d02-abde-20096aa2e13b",
+      "customer": "Geoff Letchford Photography",
+      "revenue": 201903,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Embellishment",
+        "Flat Sheets",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": null,
+      "lift": null,
+      "rec_from": null,
+      "rec_confidence": null,
+      "rec_support": null,
+      "evidence": "no untapped high-lift capability (buys full predicted set)",
+      "all_gap_recs": [],
+      "value_contact": {
+        "email": "cs@geoffletchford.com",
+        "won_val": 100913,
+        "won": 29,
+        "strike": 38.7,
+        "em_from": 54,
+        "em_to": 118,
+        "two_way": true
+      },
+      "value_contact_str": "cs@geoffletchford.com (won $100,913, strike 38.7%, two-way)",
+      "won_intent_mix": [
+        {
+          "intent": "general_enquiry",
+          "pct": 42.6
+        },
+        {
+          "intent": "job_approval",
+          "pct": 22.9
+        },
+        {
+          "intent": "quote_request",
+          "pct": 14.0
+        },
+        {
+          "intent": "artwork_submission",
+          "pct": 10.6
+        },
+        {
+          "intent": "payment_query",
+          "pct": 6.4
+        }
+      ],
+      "won_linked": 28,
+      "lost_linked": 42,
+      "framing": null,
+      "timing": {
+        "status": "overdue_warm",
+        "rhythm_factor": 1.3,
+        "approaching": true,
+        "reason": "last order 63d ago vs ~1d cadence \u2014 overdue, prime reorder window; Jul is their seasonal peak; approach window (Jun) is open",
+        "days_since_last": 63,
+        "avg_interval": 1,
+        "peak_month": 7,
+        "approach_month": 6,
+        "last_order": "2026-04-02"
+      },
+      "timing_factor": 1.495,
+      "recency_factor": 1.0,
+      "days_since_email": 43,
+      "last_email": "2026-04-22",
+      "when": "last order 63d ago vs ~1d cadence \u2014 overdue, prime reorder window; Jul is their seasonal peak; approach window (Jun) is open; warm \u2014 last email 43d ago",
+      "opportunity_strength": 0.0
+    },
+    {
+      "company_id": "1313bb10-ba66-463f-9ae6-d156fd720a56",
+      "customer": "James Creative Agency Pty Ltd",
+      "revenue": 201558,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Embellishment",
+        "Flat Sheets",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": null,
+      "lift": null,
+      "rec_from": null,
+      "rec_confidence": null,
+      "rec_support": null,
+      "evidence": "no untapped high-lift capability (buys full predicted set)",
+      "all_gap_recs": [],
+      "value_contact": {
+        "email": "kevin@thejames.agency",
+        "won_val": 118479,
+        "won": 34,
+        "strike": 42.5,
+        "em_from": 2,
+        "em_to": 2,
+        "two_way": false
+      },
+      "value_contact_str": "kevin@thejames.agency (won $118,479, strike 42.5%, low two-way engagement)",
+      "won_intent_mix": [
+        {
+          "intent": "payment_query",
+          "pct": 92.3
+        },
+        {
+          "intent": "general_enquiry",
+          "pct": 7.7
+        }
+      ],
+      "won_linked": 5,
+      "lost_linked": 1,
+      "framing": null,
+      "timing": {
+        "status": "overdue_warm",
+        "rhythm_factor": 1.3,
+        "approaching": false,
+        "reason": "last order 34d ago vs ~7d cadence \u2014 overdue, prime reorder window",
+        "days_since_last": 34,
+        "avg_interval": 7,
+        "peak_month": 10,
+        "approach_month": 9,
+        "last_order": "2026-05-01"
+      },
+      "timing_factor": 1.3,
+      "recency_factor": 1.0,
+      "days_since_email": 27,
+      "last_email": "2026-05-08",
+      "when": "last order 34d ago vs ~7d cadence \u2014 overdue, prime reorder window; warm \u2014 last email 27d ago",
+      "opportunity_strength": 0.0
+    },
+    {
+      "company_id": "2fc55c0b-909b-4dbe-9d3c-c115de12337a",
+      "customer": "Andrew Hoyne Design Pty Ltd",
+      "revenue": 191961,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Embellishment",
+        "Flat Sheets",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": null,
+      "lift": null,
+      "rec_from": null,
+      "rec_confidence": null,
+      "rec_support": null,
+      "evidence": "no untapped high-lift capability (buys full predicted set)",
+      "all_gap_recs": [],
+      "value_contact": {
+        "email": "lbutler@hoyne.com.au",
+        "won_val": 263277,
+        "won": 79,
+        "strike": 33.8,
+        "em_from": 292,
+        "em_to": 376,
+        "two_way": true
+      },
+      "value_contact_str": "lbutler@hoyne.com.au (won $263,277, strike 33.8%, two-way)",
+      "won_intent_mix": [
+        {
+          "intent": "general_enquiry",
+          "pct": 60.5
+        },
+        {
+          "intent": "payment_query",
+          "pct": 15.2
+        },
+        {
+          "intent": "job_approval",
+          "pct": 12.0
+        },
+        {
+          "intent": "artwork_submission",
+          "pct": 6.7
+        },
+        {
+          "intent": "quote_request",
+          "pct": 5.5
+        }
+      ],
+      "won_linked": 30,
+      "lost_linked": 41,
+      "framing": null,
+      "timing": {
+        "status": "overdue_warm",
+        "rhythm_factor": 1.3,
+        "approaching": false,
+        "reason": "last order 45d ago vs ~4d cadence \u2014 overdue, prime reorder window",
+        "days_since_last": 45,
+        "avg_interval": 4,
+        "peak_month": 9,
+        "approach_month": 8,
+        "last_order": "2026-04-20"
+      },
+      "timing_factor": 1.3,
+      "recency_factor": 1.0,
+      "days_since_email": -4,
+      "last_email": "2026-06-08",
+      "when": "last order 45d ago vs ~4d cadence \u2014 overdue, prime reorder window; warm \u2014 last email 0d ago",
+      "opportunity_strength": 0.0
+    },
+    {
+      "company_id": "620eda56-bd98-4ac4-b73f-3bddb8f81e3d",
+      "customer": "Blow",
+      "revenue": 163438,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Embellishment",
+        "Flat Sheets",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": null,
+      "lift": null,
+      "rec_from": null,
+      "rec_confidence": null,
+      "rec_support": null,
+      "evidence": "no untapped high-lift capability (buys full predicted set)",
+      "all_gap_recs": [],
+      "value_contact": {
+        "email": "nick@thisisblow.com",
+        "won_val": 176950,
+        "won": 191,
+        "strike": 60.1,
+        "em_from": 167,
+        "em_to": 129,
+        "two_way": true
+      },
+      "value_contact_str": "nick@thisisblow.com (won $176,950, strike 60.1%, two-way)",
+      "won_intent_mix": [
+        {
+          "intent": "general_enquiry",
+          "pct": 42.5
+        },
+        {
+          "intent": "job_approval",
+          "pct": 25.9
+        },
+        {
+          "intent": "quote_request",
+          "pct": 15.4
+        },
+        {
+          "intent": "payment_query",
+          "pct": 8.5
+        },
+        {
+          "intent": "artwork_submission",
+          "pct": 4.7
+        }
+      ],
+      "won_linked": 29,
+      "lost_linked": 14,
+      "framing": null,
+      "timing": {
+        "status": "due_soon",
+        "rhythm_factor": 1.15,
+        "approaching": false,
+        "reason": "last order 31d ago, past their ~25d cadence \u2014 due soon",
+        "days_since_last": 31,
+        "avg_interval": 25,
+        "peak_month": 4,
+        "approach_month": 3,
+        "last_order": "2026-05-04"
+      },
+      "timing_factor": 1.15,
+      "recency_factor": 1.0,
+      "days_since_email": 29,
+      "last_email": "2026-05-06",
+      "when": "last order 31d ago, past their ~25d cadence \u2014 due soon; warm \u2014 last email 29d ago",
+      "opportunity_strength": 0.0
+    },
+    {
+      "company_id": "ed87be4d-c2bd-4ed9-b04c-447e83f54915",
+      "customer": "Australia's Oyster Coast Pty Ltd",
+      "revenue": 156388,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Embellishment",
+        "Flat Sheets",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": null,
+      "lift": null,
+      "rec_from": null,
+      "rec_confidence": null,
+      "rec_support": null,
+      "evidence": "no untapped high-lift capability (buys full predicted set)",
+      "all_gap_recs": [],
+      "value_contact": {
+        "email": "marketing@aoc.group",
+        "won_val": 57096,
+        "won": 25,
+        "strike": 59.5,
+        "em_from": 40,
+        "em_to": 41,
+        "two_way": true
+      },
+      "value_contact_str": "marketing@aoc.group (won $57,096, strike 59.5%, two-way)",
+      "won_intent_mix": [
+        {
+          "intent": "general_enquiry",
+          "pct": 45.5
+        },
+        {
+          "intent": "job_approval",
+          "pct": 25.6
+        },
+        {
+          "intent": "quote_request",
+          "pct": 14.9
+        },
+        {
+          "intent": "artwork_submission",
+          "pct": 7.4
+        },
+        {
+          "intent": "payment_query",
+          "pct": 5.0
+        }
+      ],
+      "won_linked": 16,
+      "lost_linked": 8,
+      "framing": null,
+      "timing": {
+        "status": "overdue_warm",
+        "rhythm_factor": 1.3,
+        "approaching": false,
+        "reason": "last order 84d ago vs ~8d cadence \u2014 overdue, prime reorder window",
+        "days_since_last": 84,
+        "avg_interval": 8,
+        "peak_month": 8,
+        "approach_month": 7,
+        "last_order": "2026-03-12"
+      },
+      "timing_factor": 1.3,
+      "recency_factor": 1.0,
+      "days_since_email": 15,
+      "last_email": "2026-05-20",
+      "when": "last order 84d ago vs ~8d cadence \u2014 overdue, prime reorder window; warm \u2014 last email 15d ago",
+      "opportunity_strength": 0.0
+    },
+    {
+      "company_id": "0c801f82-e68b-4cca-a41c-3beba545669c",
+      "customer": "Next Printing",
+      "revenue": 145121,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Embellishment",
+        "Flat Sheets",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": null,
+      "lift": null,
+      "rec_from": null,
+      "rec_confidence": null,
+      "rec_support": null,
+      "evidence": "no untapped high-lift capability (buys full predicted set)",
+      "all_gap_recs": [],
+      "value_contact": null,
+      "value_contact_str": "no QB-won contact identified",
+      "won_intent_mix": [],
+      "won_linked": 0,
+      "lost_linked": 0,
+      "framing": null,
+      "timing": {
+        "status": "overdue_warm",
+        "rhythm_factor": 1.3,
+        "approaching": false,
+        "reason": "last order 36d ago vs ~9d cadence \u2014 overdue, prime reorder window",
+        "days_since_last": 36,
+        "avg_interval": 9,
+        "peak_month": 11,
+        "approach_month": 10,
+        "last_order": "2026-04-29"
+      },
+      "timing_factor": 1.3,
+      "recency_factor": 1.0,
+      "days_since_email": 14,
+      "last_email": "2026-05-21",
+      "when": "last order 36d ago vs ~9d cadence \u2014 overdue, prime reorder window; warm \u2014 last email 14d ago",
+      "opportunity_strength": 0.0
+    },
+    {
+      "company_id": "bc3eda53-1585-4c55-923b-3ec45bdf093a",
+      "customer": "Charles Lloyd",
+      "revenue": 142287,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Display/Installation",
+        "Embellishment",
+        "Flat Sheets",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": null,
+      "lift": null,
+      "rec_from": null,
+      "rec_confidence": null,
+      "rec_support": null,
+      "evidence": "no untapped high-lift capability (buys full predicted set)",
+      "all_gap_recs": [],
+      "value_contact": {
+        "email": "jessica@charleslloyd.net",
+        "won_val": 42137,
+        "won": 31,
+        "strike": 32.0,
+        "em_from": 9,
+        "em_to": 5,
+        "two_way": true
+      },
+      "value_contact_str": "jessica@charleslloyd.net (won $42,137, strike 32.0%, two-way)",
+      "won_intent_mix": [
+        {
+          "intent": "general_enquiry",
+          "pct": 42.3
+        },
+        {
+          "intent": "job_approval",
+          "pct": 25.6
+        },
+        {
+          "intent": "quote_request",
+          "pct": 21.9
+        },
+        {
+          "intent": "artwork_submission",
+          "pct": 5.3
+        },
+        {
+          "intent": "payment_query",
+          "pct": 2.6
+        }
+      ],
+      "won_linked": 19,
+      "lost_linked": 19,
+      "framing": null,
+      "timing": {
+        "status": "overdue_warm",
+        "rhythm_factor": 1.3,
+        "approaching": false,
+        "reason": "last order 37d ago vs ~3d cadence \u2014 overdue, prime reorder window",
+        "days_since_last": 37,
+        "avg_interval": 3,
+        "peak_month": 10,
+        "approach_month": 9,
+        "last_order": "2026-04-28"
+      },
+      "timing_factor": 1.3,
+      "recency_factor": 1.0,
+      "days_since_email": 21,
+      "last_email": "2026-05-14",
+      "when": "last order 37d ago vs ~3d cadence \u2014 overdue, prime reorder window; warm \u2014 last email 21d ago",
+      "opportunity_strength": 0.0
+    },
+    {
+      "company_id": "ee1d2767-efc1-4306-8ac0-3699f4bfb4aa",
+      "customer": "Boston Marketing",
+      "revenue": 142082,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Embellishment",
+        "Flat Sheets",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": null,
+      "lift": null,
+      "rec_from": null,
+      "rec_confidence": null,
+      "rec_support": null,
+      "evidence": "no untapped high-lift capability (buys full predicted set)",
+      "all_gap_recs": [],
+      "value_contact": {
+        "email": "sue-ella@bostonprojects.com.au",
+        "won_val": 20473,
+        "won": 8,
+        "strike": 57.1,
+        "em_from": 63,
+        "em_to": 71,
+        "two_way": true
+      },
+      "value_contact_str": "sue-ella@bostonprojects.com.au (won $20,473, strike 57.1%, two-way)",
+      "won_intent_mix": [
+        {
+          "intent": "general_enquiry",
+          "pct": 38.5
+        },
+        {
+          "intent": "payment_query",
+          "pct": 25.8
+        },
+        {
+          "intent": "job_approval",
+          "pct": 19.7
+        },
+        {
+          "intent": "quote_request",
+          "pct": 8.0
+        },
+        {
+          "intent": "artwork_submission",
+          "pct": 6.6
+        }
+      ],
+      "won_linked": 19,
+      "lost_linked": 6,
+      "framing": null,
+      "timing": {
+        "status": "steady",
+        "rhythm_factor": 1.0,
+        "approaching": false,
+        "reason": "steady ~96d cadence (last order 34d ago)",
+        "days_since_last": 34,
+        "avg_interval": 96,
+        "peak_month": 8,
+        "approach_month": 7,
+        "last_order": "2026-05-01"
+      },
+      "timing_factor": 1.0,
+      "recency_factor": 1.0,
+      "days_since_email": -4,
+      "last_email": "2026-06-08",
+      "when": "steady ~96d cadence (last order 34d ago); warm \u2014 last email 0d ago",
+      "opportunity_strength": 0.0
+    },
+    {
+      "company_id": "1cdbe831-6f47-4c82-8b61-4d0bbd9d68a0",
+      "customer": "Opus Agency AU Pty Ltd (Fka) The Company We Keep Pty Ltd",
+      "revenue": 141606,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Embellishment",
+        "Flat Sheets",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": null,
+      "lift": null,
+      "rec_from": null,
+      "rec_confidence": null,
+      "rec_support": null,
+      "evidence": "no untapped high-lift capability (buys full predicted set)",
+      "all_gap_recs": [],
+      "value_contact": {
+        "email": "dejana_jokanovic@opusagency.com",
+        "won_val": 9568,
+        "won": 5,
+        "strike": 55.6,
+        "em_from": 76,
+        "em_to": 56,
+        "two_way": true
+      },
+      "value_contact_str": "dejana_jokanovic@opusagency.com (won $9,568, strike 55.6%, two-way)",
+      "won_intent_mix": [
+        {
+          "intent": "general_enquiry",
+          "pct": 60.0
+        },
+        {
+          "intent": "quote_request",
+          "pct": 16.2
+        },
+        {
+          "intent": "job_approval",
+          "pct": 15.0
+        },
+        {
+          "intent": "artwork_submission",
+          "pct": 6.2
+        },
+        {
+          "intent": "general",
+          "pct": 1.2
+        }
+      ],
+      "won_linked": 9,
+      "lost_linked": 8,
+      "framing": null,
+      "timing": {
+        "status": "overdue_warm",
+        "rhythm_factor": 1.3,
+        "approaching": true,
+        "reason": "last order 49d ago vs ~6d cadence \u2014 overdue, prime reorder window; Jul is their seasonal peak; approach window (Jun) is open",
+        "days_since_last": 49,
+        "avg_interval": 6,
+        "peak_month": 7,
+        "approach_month": 6,
+        "last_order": "2026-04-16"
+      },
+      "timing_factor": 1.495,
+      "recency_factor": 1.0,
+      "days_since_email": -5,
+      "last_email": "2026-06-09",
+      "when": "last order 49d ago vs ~6d cadence \u2014 overdue, prime reorder window; Jul is their seasonal peak; approach window (Jun) is open; warm \u2014 last email 0d ago",
+      "opportunity_strength": 0.0
+    },
+    {
+      "company_id": "bfffd6ef-67c0-45f3-8244-d34f69e8b88b",
+      "customer": "EM Branding Pty Ltd",
+      "revenue": 138934,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Display/Installation",
+        "Embellishment",
+        "Flat Sheets",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": null,
+      "lift": null,
+      "rec_from": null,
+      "rec_confidence": null,
+      "rec_support": null,
+      "evidence": "no untapped high-lift capability (buys full predicted set)",
+      "all_gap_recs": [],
+      "value_contact": {
+        "email": "xc@emcstudio.com.au",
+        "won_val": 112238,
+        "won": 56,
+        "strike": 44.8,
+        "em_from": 80,
+        "em_to": 87,
+        "two_way": true
+      },
+      "value_contact_str": "xc@emcstudio.com.au (won $112,238, strike 44.8%, two-way)",
+      "won_intent_mix": [
+        {
+          "intent": "general_enquiry",
+          "pct": 62.2
+        },
+        {
+          "intent": "job_approval",
+          "pct": 16.0
+        },
+        {
+          "intent": "artwork_submission",
+          "pct": 8.5
+        },
+        {
+          "intent": "quote_request",
+          "pct": 8.2
+        },
+        {
+          "intent": "payment_query",
+          "pct": 5.1
+        }
+      ],
+      "won_linked": 13,
+      "lost_linked": 10,
+      "framing": null,
+      "timing": {
+        "status": "overdue_warm",
+        "rhythm_factor": 1.3,
+        "approaching": false,
+        "reason": "last order 174d ago vs ~6d cadence \u2014 overdue, prime reorder window",
+        "days_since_last": 174,
+        "avg_interval": 6,
+        "peak_month": 9,
+        "approach_month": 8,
+        "last_order": "2025-12-12"
+      },
+      "timing_factor": 1.3,
+      "recency_factor": 1.0,
+      "days_since_email": 7,
+      "last_email": "2026-05-28",
+      "when": "last order 174d ago vs ~6d cadence \u2014 overdue, prime reorder window; warm \u2014 last email 7d ago",
+      "opportunity_strength": 0.0
+    },
+    {
+      "company_id": "56828538-a5ab-4043-8a3f-cbf15802b825",
+      "customer": "Howatson + Company",
+      "revenue": 135120,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Display/Installation",
+        "Embellishment",
+        "Flat Sheets",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": null,
+      "lift": null,
+      "rec_from": null,
+      "rec_confidence": null,
+      "rec_support": null,
+      "evidence": "no untapped high-lift capability (buys full predicted set)",
+      "all_gap_recs": [],
+      "value_contact": {
+        "email": "holly.alexander@howatsonco.com.au",
+        "won_val": 65740,
+        "won": 13,
+        "strike": 46.4,
+        "em_from": 14,
+        "em_to": 41,
+        "two_way": true
+      },
+      "value_contact_str": "holly.alexander@howatsonco.com.au (won $65,740, strike 46.4%, two-way)",
+      "won_intent_mix": [
+        {
+          "intent": "general_enquiry",
+          "pct": 52.9
+        },
+        {
+          "intent": "job_approval",
+          "pct": 23.5
+        },
+        {
+          "intent": "quote_request",
+          "pct": 17.6
+        },
+        {
+          "intent": "artwork_submission",
+          "pct": 5.9
+        }
+      ],
+      "won_linked": 4,
+      "lost_linked": 5,
+      "framing": null,
+      "timing": {
+        "status": "overdue_warm",
+        "rhythm_factor": 1.3,
+        "approaching": false,
+        "reason": "last order 55d ago vs ~37d cadence \u2014 overdue, prime reorder window",
+        "days_since_last": 55,
+        "avg_interval": 37,
+        "peak_month": 11,
+        "approach_month": 10,
+        "last_order": "2026-04-10"
+      },
+      "timing_factor": 1.3,
+      "recency_factor": 1.0,
+      "days_since_email": 14,
+      "last_email": "2026-05-21",
+      "when": "last order 55d ago vs ~37d cadence \u2014 overdue, prime reorder window; warm \u2014 last email 14d ago",
+      "opportunity_strength": 0.0
+    },
+    {
+      "company_id": "76a7085d-b712-40ef-be9c-dc91062350a9",
+      "customer": "SJB Architects",
+      "revenue": 135037,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Embellishment",
+        "Flat Sheets",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": null,
+      "lift": null,
+      "rec_from": null,
+      "rec_confidence": null,
+      "rec_support": null,
+      "evidence": "no untapped high-lift capability (buys full predicted set)",
+      "all_gap_recs": [],
+      "value_contact": {
+        "email": "equittenden@sjb.com.au",
+        "won_val": 82416,
+        "won": 30,
+        "strike": 52.6,
+        "em_from": 26,
+        "em_to": 52,
+        "two_way": true
+      },
+      "value_contact_str": "equittenden@sjb.com.au (won $82,416, strike 52.6%, two-way)",
+      "won_intent_mix": [
+        {
+          "intent": "job_approval",
+          "pct": 29.0
+        },
+        {
+          "intent": "quote_request",
+          "pct": 20.3
+        },
+        {
+          "intent": "general_enquiry",
+          "pct": 18.8
+        },
+        {
+          "intent": "artwork_submission",
+          "pct": 14.5
+        },
+        {
+          "intent": "payment_query",
+          "pct": 13.0
+        }
+      ],
+      "won_linked": 7,
+      "lost_linked": 8,
+      "framing": null,
+      "timing": {
+        "status": "overdue_warm",
+        "rhythm_factor": 1.3,
+        "approaching": false,
+        "reason": "last order 80d ago vs ~9d cadence \u2014 overdue, prime reorder window",
+        "days_since_last": 80,
+        "avg_interval": 9,
+        "peak_month": 8,
+        "approach_month": 7,
+        "last_order": "2026-03-16"
+      },
+      "timing_factor": 1.3,
+      "recency_factor": 1.0,
+      "days_since_email": 16,
+      "last_email": "2026-05-19",
+      "when": "last order 80d ago vs ~9d cadence \u2014 overdue, prime reorder window; warm \u2014 last email 16d ago",
+      "opportunity_strength": 0.0
+    },
+    {
+      "company_id": "132c531e-5dea-4a92-919f-8c9ff740c658",
+      "customer": "Frost Design Pty Ltd",
+      "revenue": 133663,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Embellishment",
+        "Flat Sheets",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": null,
+      "lift": null,
+      "rec_from": null,
+      "rec_confidence": null,
+      "rec_support": null,
+      "evidence": "no untapped high-lift capability (buys full predicted set)",
+      "all_gap_recs": [],
+      "value_contact": {
+        "email": "inez.ritchie@frostcollective.com.au",
+        "won_val": 16315,
+        "won": 11,
+        "strike": 57.9,
+        "em_from": 6,
+        "em_to": 8,
+        "two_way": true
+      },
+      "value_contact_str": "inez.ritchie@frostcollective.com.au (won $16,315, strike 57.9%, two-way)",
+      "won_intent_mix": [
+        {
+          "intent": "general_enquiry",
+          "pct": 40.9
+        },
+        {
+          "intent": "job_approval",
+          "pct": 22.7
+        },
+        {
+          "intent": "quote_request",
+          "pct": 18.2
+        },
+        {
+          "intent": "payment_query",
+          "pct": 13.6
+        },
+        {
+          "intent": "artwork_submission",
+          "pct": 4.5
+        }
+      ],
+      "won_linked": 7,
+      "lost_linked": 11,
+      "framing": null,
+      "timing": {
+        "status": "overdue_warm",
+        "rhythm_factor": 1.3,
+        "approaching": true,
+        "reason": "last order 41d ago vs ~6d cadence \u2014 overdue, prime reorder window; Jul is their seasonal peak; approach window (Jun) is open",
+        "days_since_last": 41,
+        "avg_interval": 6,
+        "peak_month": 7,
+        "approach_month": 6,
+        "last_order": "2026-04-24"
+      },
+      "timing_factor": 1.495,
+      "recency_factor": 1.0,
+      "days_since_email": 19,
+      "last_email": "2026-05-16",
+      "when": "last order 41d ago vs ~6d cadence \u2014 overdue, prime reorder window; Jul is their seasonal peak; approach window (Jun) is open; warm \u2014 last email 19d ago",
+      "opportunity_strength": 0.0
+    },
+    {
+      "company_id": "2f102c74-36d1-4d1f-8a3c-0f4749af8aef",
+      "customer": "Metropolis Agency Pty Ltd",
+      "revenue": 129910,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Embellishment",
+        "Flat Sheets",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": null,
+      "lift": null,
+      "rec_from": null,
+      "rec_confidence": null,
+      "rec_support": null,
+      "evidence": "no untapped high-lift capability (buys full predicted set)",
+      "all_gap_recs": [],
+      "value_contact": {
+        "email": "ibutcher@metropolis.com.au",
+        "won_val": 9724,
+        "won": 3,
+        "strike": 15.8,
+        "em_from": 100,
+        "em_to": 81,
+        "two_way": true
+      },
+      "value_contact_str": "ibutcher@metropolis.com.au (won $9,724, strike 15.8%, two-way)",
+      "won_intent_mix": [
+        {
+          "intent": "general_enquiry",
+          "pct": 59.0
+        },
+        {
+          "intent": "quote_request",
+          "pct": 19.0
+        },
+        {
+          "intent": "job_approval",
+          "pct": 14.8
+        },
+        {
+          "intent": "artwork_submission",
+          "pct": 3.3
+        },
+        {
+          "intent": "payment_query",
+          "pct": 1.9
+        }
+      ],
+      "won_linked": 7,
+      "lost_linked": 5,
+      "framing": null,
+      "timing": {
+        "status": "steady",
+        "rhythm_factor": 1.0,
+        "approaching": false,
+        "reason": "steady ~102d cadence (last order 29d ago)",
+        "days_since_last": 29,
+        "avg_interval": 102,
+        "peak_month": 9,
+        "approach_month": 8,
+        "last_order": "2026-05-06"
+      },
+      "timing_factor": 1.0,
+      "recency_factor": 1.0,
+      "days_since_email": -1,
+      "last_email": "2026-06-05",
+      "when": "steady ~102d cadence (last order 29d ago); warm \u2014 last email 0d ago",
+      "opportunity_strength": 0.0
+    },
+    {
+      "company_id": "2748ea05-4e0d-49dc-a8f1-d8f56f2c122c",
+      "customer": "Paspaley Pearling Co Pty Ltd",
+      "revenue": 127948,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Embellishment",
+        "Flat Sheets",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": null,
+      "lift": null,
+      "rec_from": null,
+      "rec_confidence": null,
+      "rec_support": null,
+      "evidence": "no untapped high-lift capability (buys full predicted set)",
+      "all_gap_recs": [],
+      "value_contact": {
+        "email": "jhu@paspaley.com.au",
+        "won_val": 3133,
+        "won": 7,
+        "strike": 100.0,
+        "em_from": 26,
+        "em_to": 25,
+        "two_way": true
+      },
+      "value_contact_str": "jhu@paspaley.com.au (won $3,133, strike 100.0%, two-way)",
+      "won_intent_mix": [
+        {
+          "intent": "general_enquiry",
+          "pct": 55.6
+        },
+        {
+          "intent": "job_approval",
+          "pct": 22.2
+        },
+        {
+          "intent": "quote_request",
+          "pct": 22.2
+        }
+      ],
+      "won_linked": 6,
+      "lost_linked": 3,
+      "framing": null,
+      "timing": {
+        "status": "overdue_warm",
+        "rhythm_factor": 1.3,
+        "approaching": false,
+        "reason": "last order 65d ago vs ~3d cadence \u2014 overdue, prime reorder window",
+        "days_since_last": 65,
+        "avg_interval": 3,
+        "peak_month": 9,
+        "approach_month": 8,
+        "last_order": "2026-03-31"
+      },
+      "timing_factor": 1.3,
+      "recency_factor": 1.0,
+      "days_since_email": 3,
+      "last_email": "2026-06-01",
+      "when": "last order 65d ago vs ~3d cadence \u2014 overdue, prime reorder window; warm \u2014 last email 3d ago",
+      "opportunity_strength": 0.0
+    },
+    {
+      "company_id": "75c1f050-1600-47ac-bf23-bc028af881fc",
+      "customer": "Deephouse Print Studio",
+      "revenue": 125830,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Embellishment",
+        "Flat Sheets",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": null,
+      "lift": null,
+      "rec_from": null,
+      "rec_confidence": null,
+      "rec_support": null,
+      "evidence": "no untapped high-lift capability (buys full predicted set)",
+      "all_gap_recs": [],
+      "value_contact": {
+        "email": "info@deephouseprintstudio.com.au",
+        "won_val": 139103,
+        "won": 51,
+        "strike": 25.5,
+        "em_from": 262,
+        "em_to": 247,
+        "two_way": true
+      },
+      "value_contact_str": "info@deephouseprintstudio.com.au (won $139,103, strike 25.5%, two-way)",
+      "won_intent_mix": [
+        {
+          "intent": "quote_request",
+          "pct": 34.0
+        },
+        {
+          "intent": "general_enquiry",
+          "pct": 28.3
+        },
+        {
+          "intent": "job_approval",
+          "pct": 23.5
+        },
+        {
+          "intent": "payment_query",
+          "pct": 6.8
+        },
+        {
+          "intent": "artwork_submission",
+          "pct": 6.4
+        }
+      ],
+      "won_linked": 36,
+      "lost_linked": 85,
+      "framing": null,
+      "timing": {
+        "status": "overdue_warm",
+        "rhythm_factor": 1.3,
+        "approaching": true,
+        "reason": "last order 41d ago vs ~6d cadence \u2014 overdue, prime reorder window; Jul is their seasonal peak; approach window (Jun) is open",
+        "days_since_last": 41,
+        "avg_interval": 6,
+        "peak_month": 7,
+        "approach_month": 6,
+        "last_order": "2026-04-24"
+      },
+      "timing_factor": 1.495,
+      "recency_factor": 1.0,
+      "days_since_email": 15,
+      "last_email": "2026-05-20",
+      "when": "last order 41d ago vs ~6d cadence \u2014 overdue, prime reorder window; Jul is their seasonal peak; approach window (Jun) is open; warm \u2014 last email 15d ago",
+      "opportunity_strength": 0.0
+    },
+    {
+      "company_id": "05c599aa-dcf5-4586-b8ee-63bf167825bc",
+      "customer": "Studio Odea Pty Ltd",
+      "revenue": 125307,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Embellishment",
+        "Flat Sheets",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": null,
+      "lift": null,
+      "rec_from": null,
+      "rec_confidence": null,
+      "rec_support": null,
+      "evidence": "no untapped high-lift capability (buys full predicted set)",
+      "all_gap_recs": [],
+      "value_contact": {
+        "email": "luca@studioodea.com.au",
+        "won_val": 53278,
+        "won": 10,
+        "strike": 55.6,
+        "em_from": 86,
+        "em_to": 102,
+        "two_way": true
+      },
+      "value_contact_str": "luca@studioodea.com.au (won $53,278, strike 55.6%, two-way)",
+      "won_intent_mix": [
+        {
+          "intent": "general_enquiry",
+          "pct": 58.0
+        },
+        {
+          "intent": "quote_request",
+          "pct": 16.8
+        },
+        {
+          "intent": "job_approval",
+          "pct": 15.4
+        },
+        {
+          "intent": "artwork_submission",
+          "pct": 8.2
+        },
+        {
+          "intent": "complaint",
+          "pct": 0.6
+        }
+      ],
+      "won_linked": 39,
+      "lost_linked": 53,
+      "framing": null,
+      "timing": {
+        "status": "overdue_warm",
+        "rhythm_factor": 1.3,
+        "approaching": false,
+        "reason": "last order 31d ago vs ~4d cadence \u2014 overdue, prime reorder window",
+        "days_since_last": 31,
+        "avg_interval": 4,
+        "peak_month": 8,
+        "approach_month": 7,
+        "last_order": "2026-05-04"
+      },
+      "timing_factor": 1.3,
+      "recency_factor": 1.0,
+      "days_since_email": -5,
+      "last_email": "2026-06-09",
+      "when": "last order 31d ago vs ~4d cadence \u2014 overdue, prime reorder window; warm \u2014 last email 0d ago",
+      "opportunity_strength": 0.0
+    },
+    {
+      "company_id": "195b07d0-e880-4d68-bd75-5f88b61de4dd",
+      "customer": "M&C Saatchi",
+      "revenue": 124489,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Display/Installation",
+        "Embellishment",
+        "Flat Sheets",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": null,
+      "lift": null,
+      "rec_from": null,
+      "rec_confidence": null,
+      "rec_support": null,
+      "evidence": "no untapped high-lift capability (buys full predicted set)",
+      "all_gap_recs": [],
+      "value_contact": {
+        "email": "grant.morrell@mcsaatchi.com.au",
+        "won_val": 32069,
+        "won": 31,
+        "strike": 57.4,
+        "em_from": 6,
+        "em_to": 5,
+        "two_way": true
+      },
+      "value_contact_str": "grant.morrell@mcsaatchi.com.au (won $32,069, strike 57.4%, two-way)",
+      "won_intent_mix": [
+        {
+          "intent": "general_enquiry",
+          "pct": 65.2
+        },
+        {
+          "intent": "quote_request",
+          "pct": 17.4
+        },
+        {
+          "intent": "job_approval",
+          "pct": 13.0
+        },
+        {
+          "intent": "artwork_submission",
+          "pct": 4.3
+        }
+      ],
+      "won_linked": 9,
+      "lost_linked": 17,
+      "framing": null,
+      "timing": {
+        "status": "overdue_warm",
+        "rhythm_factor": 1.3,
+        "approaching": false,
+        "reason": "last order 58d ago vs ~3d cadence \u2014 overdue, prime reorder window",
+        "days_since_last": 58,
+        "avg_interval": 3,
+        "peak_month": 10,
+        "approach_month": 9,
+        "last_order": "2026-04-07"
+      },
+      "timing_factor": 1.3,
+      "recency_factor": 1.0,
+      "days_since_email": 36,
+      "last_email": "2026-04-29",
+      "when": "last order 58d ago vs ~3d cadence \u2014 overdue, prime reorder window; warm \u2014 last email 36d ago",
+      "opportunity_strength": 0.0
+    },
+    {
+      "company_id": "0b0023c9-5e4b-416f-9cb7-605b87b79fc2",
+      "customer": "Focus Print Group",
+      "revenue": 124061,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Embellishment",
+        "Flat Sheets",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": null,
+      "lift": null,
+      "rec_from": null,
+      "rec_confidence": null,
+      "rec_support": null,
+      "evidence": "no untapped high-lift capability (buys full predicted set)",
+      "all_gap_recs": [],
+      "value_contact": {
+        "email": "sales@focusprintgroup.com.au",
+        "won_val": 52929,
+        "won": 9,
+        "strike": 42.9,
+        "em_from": 43,
+        "em_to": 52,
+        "two_way": true
+      },
+      "value_contact_str": "sales@focusprintgroup.com.au (won $52,929, strike 42.9%, two-way)",
+      "won_intent_mix": [
+        {
+          "intent": "general_enquiry",
+          "pct": 51.7
+        },
+        {
+          "intent": "quote_request",
+          "pct": 19.0
+        },
+        {
+          "intent": "job_approval",
+          "pct": 17.2
+        },
+        {
+          "intent": "artwork_submission",
+          "pct": 3.4
+        },
+        {
+          "intent": "fyi_update",
+          "pct": 3.4
+        }
+      ],
+      "won_linked": 3,
+      "lost_linked": 9,
+      "framing": null,
+      "timing": {
+        "status": "overdue_warm",
+        "rhythm_factor": 1.3,
+        "approaching": false,
+        "reason": "last order 50d ago vs ~9d cadence \u2014 overdue, prime reorder window",
+        "days_since_last": 50,
+        "avg_interval": 9,
+        "peak_month": 9,
+        "approach_month": 8,
+        "last_order": "2026-04-15"
+      },
+      "timing_factor": 1.3,
+      "recency_factor": 1.0,
+      "days_since_email": 16,
+      "last_email": "2026-05-19",
+      "when": "last order 50d ago vs ~9d cadence \u2014 overdue, prime reorder window; warm \u2014 last email 16d ago",
+      "opportunity_strength": 0.0
+    },
+    {
+      "company_id": "03b5eb86-4be1-4f3a-a58d-2b13919949fd",
+      "customer": "PIM Group Australia Pty Ltd",
+      "revenue": 122947,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Embellishment",
+        "Flat Sheets",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": null,
+      "lift": null,
+      "rec_from": null,
+      "rec_confidence": null,
+      "rec_support": null,
+      "evidence": "no untapped high-lift capability (buys full predicted set)",
+      "all_gap_recs": [],
+      "value_contact": {
+        "email": "kathy@pimgroup.com.au",
+        "won_val": 26681,
+        "won": 7,
+        "strike": 26.9,
+        "em_from": 5,
+        "em_to": 6,
+        "two_way": true
+      },
+      "value_contact_str": "kathy@pimgroup.com.au (won $26,681, strike 26.9%, two-way)",
+      "won_intent_mix": [
+        {
+          "intent": "quote_request",
+          "pct": 33.3
+        },
+        {
+          "intent": "general_enquiry",
+          "pct": 33.3
+        },
+        {
+          "intent": "job_approval",
+          "pct": 33.3
+        }
+      ],
+      "won_linked": 1,
+      "lost_linked": 0,
+      "framing": null,
+      "timing": {
+        "status": "overdue_warm",
+        "rhythm_factor": 1.3,
+        "approaching": true,
+        "reason": "last order 77d ago vs ~5d cadence \u2014 overdue, prime reorder window; Jul is their seasonal peak; approach window (Jun) is open",
+        "days_since_last": 77,
+        "avg_interval": 5,
+        "peak_month": 7,
+        "approach_month": 6,
+        "last_order": "2026-03-19"
+      },
+      "timing_factor": 1.495,
+      "recency_factor": 1.0,
+      "days_since_email": 36,
+      "last_email": "2026-04-29",
+      "when": "last order 77d ago vs ~5d cadence \u2014 overdue, prime reorder window; Jul is their seasonal peak; approach window (Jun) is open; warm \u2014 last email 36d ago",
+      "opportunity_strength": 0.0
+    },
+    {
+      "company_id": "db60c960-e2a0-4c4b-9d49-3294b9a56cdb",
+      "customer": "Brand & Co.",
+      "revenue": 117322,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Embellishment",
+        "Flat Sheets",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": null,
+      "lift": null,
+      "rec_from": null,
+      "rec_confidence": null,
+      "rec_support": null,
+      "evidence": "no untapped high-lift capability (buys full predicted set)",
+      "all_gap_recs": [],
+      "value_contact": {
+        "email": "meg@brandandco.com.au",
+        "won_val": 282160,
+        "won": 75,
+        "strike": 46.0,
+        "em_from": 111,
+        "em_to": 64,
+        "two_way": true
+      },
+      "value_contact_str": "meg@brandandco.com.au (won $282,160, strike 46.0%, two-way)",
+      "won_intent_mix": [
+        {
+          "intent": "general_enquiry",
+          "pct": 56.6
+        },
+        {
+          "intent": "job_approval",
+          "pct": 17.4
+        },
+        {
+          "intent": "quote_request",
+          "pct": 13.1
+        },
+        {
+          "intent": "artwork_submission",
+          "pct": 8.3
+        },
+        {
+          "intent": "payment_query",
+          "pct": 4.6
+        }
+      ],
+      "won_linked": 28,
+      "lost_linked": 37,
+      "framing": null,
+      "timing": {
+        "status": "overdue_warm",
+        "rhythm_factor": 1.3,
+        "approaching": false,
+        "reason": "last order 128d ago vs ~9d cadence \u2014 overdue, prime reorder window",
+        "days_since_last": 128,
+        "avg_interval": 9,
+        "peak_month": 10,
+        "approach_month": 9,
+        "last_order": "2026-01-27"
+      },
+      "timing_factor": 1.3,
+      "recency_factor": 1.0,
+      "days_since_email": -5,
+      "last_email": "2026-06-09",
+      "when": "last order 128d ago vs ~9d cadence \u2014 overdue, prime reorder window; warm \u2014 last email 0d ago",
+      "opportunity_strength": 0.0
+    },
+    {
+      "company_id": "9c8fc713-b3ad-47c7-a9a8-81d6823eaba2",
+      "customer": "AUSTRALIAN CAPITAL EQUITY",
+      "revenue": 116954,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Embellishment",
+        "Flat Sheets",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": null,
+      "lift": null,
+      "rec_from": null,
+      "rec_confidence": null,
+      "rec_support": null,
+      "evidence": "no untapped high-lift capability (buys full predicted set)",
+      "all_gap_recs": [],
+      "value_contact": {
+        "email": "chris.cross@acequity.com.au",
+        "won_val": 60559,
+        "won": 15,
+        "strike": 48.4,
+        "em_from": 4,
+        "em_to": 17,
+        "two_way": false
+      },
+      "value_contact_str": "chris.cross@acequity.com.au (won $60,559, strike 48.4%, low two-way engagement)",
+      "won_intent_mix": [
+        {
+          "intent": "general_enquiry",
+          "pct": 37.5
+        },
+        {
+          "intent": "artwork_submission",
+          "pct": 25.0
+        },
+        {
+          "intent": "quote_request",
+          "pct": 12.5
+        },
+        {
+          "intent": "job_approval",
+          "pct": 12.5
+        },
+        {
+          "intent": "payment_query",
+          "pct": 12.5
+        }
+      ],
+      "won_linked": 1,
+      "lost_linked": 0,
+      "framing": null,
+      "timing": {
+        "status": "overdue_warm",
+        "rhythm_factor": 1.3,
+        "approaching": false,
+        "reason": "last order 184d ago vs ~98d cadence \u2014 overdue, prime reorder window",
+        "days_since_last": 184,
+        "avg_interval": 98,
+        "peak_month": 11,
+        "approach_month": 10,
+        "last_order": "2025-12-02"
+      },
+      "timing_factor": 1.105,
+      "recency_factor": 0.85,
+      "days_since_email": 178,
+      "last_email": "2025-12-08",
+      "when": "last order 184d ago vs ~98d cadence \u2014 overdue, prime reorder window; cooling \u2014 last email 178d ago",
+      "opportunity_strength": 0.0
+    },
+    {
+      "company_id": "099ffe81-b604-462c-a5c6-5ffcd8ca0b5f",
+      "customer": "Hogan Print",
+      "revenue": 114291,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Embellishment",
+        "Flat Sheets",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": null,
+      "lift": null,
+      "rec_from": null,
+      "rec_confidence": null,
+      "rec_support": null,
+      "evidence": "no untapped high-lift capability (buys full predicted set)",
+      "all_gap_recs": [],
+      "value_contact": {
+        "email": "peter@hoganprint.com.au",
+        "won_val": 74296,
+        "won": 78,
+        "strike": 46.2,
+        "em_from": 25,
+        "em_to": 12,
+        "two_way": true
+      },
+      "value_contact_str": "peter@hoganprint.com.au (won $74,296, strike 46.2%, two-way)",
+      "won_intent_mix": [
+        {
+          "intent": "general_enquiry",
+          "pct": 47.8
+        },
+        {
+          "intent": "quote_request",
+          "pct": 21.7
+        },
+        {
+          "intent": "job_approval",
+          "pct": 17.4
+        },
+        {
+          "intent": "artwork_submission",
+          "pct": 4.3
+        },
+        {
+          "intent": "invoice_query",
+          "pct": 4.3
+        }
+      ],
+      "won_linked": 7,
+      "lost_linked": 6,
+      "framing": null,
+      "timing": {
+        "status": "overdue_warm",
+        "rhythm_factor": 1.3,
+        "approaching": false,
+        "reason": "last order 104d ago vs ~7d cadence \u2014 overdue, prime reorder window",
+        "days_since_last": 104,
+        "avg_interval": 7,
+        "peak_month": 11,
+        "approach_month": 10,
+        "last_order": "2026-02-20"
+      },
+      "timing_factor": 1.3,
+      "recency_factor": 1.0,
+      "days_since_email": 6,
+      "last_email": "2026-05-29",
+      "when": "last order 104d ago vs ~7d cadence \u2014 overdue, prime reorder window; warm \u2014 last email 6d ago",
+      "opportunity_strength": 0.0
+    },
+    {
+      "company_id": "e621a1d7-3f1b-49e4-aae3-5fa4fd9ce1ae",
+      "customer": "Fourth Wall Events Pty Ltd",
+      "revenue": 114199,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Display/Installation",
+        "Embellishment",
+        "Flat Sheets",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": null,
+      "lift": null,
+      "rec_from": null,
+      "rec_confidence": null,
+      "rec_support": null,
+      "evidence": "no untapped high-lift capability (buys full predicted set)",
+      "all_gap_recs": [],
+      "value_contact": {
+        "email": "sarah@fourthwall.com.au",
+        "won_val": 20031,
+        "won": 6,
+        "strike": 26.1,
+        "em_from": 5,
+        "em_to": 22,
+        "two_way": true
+      },
+      "value_contact_str": "sarah@fourthwall.com.au (won $20,031, strike 26.1%, two-way)",
+      "won_intent_mix": [
+        {
+          "intent": "general_enquiry",
+          "pct": 50.4
+        },
+        {
+          "intent": "job_approval",
+          "pct": 23.8
+        },
+        {
+          "intent": "artwork_submission",
+          "pct": 11.5
+        },
+        {
+          "intent": "quote_request",
+          "pct": 11.5
+        },
+        {
+          "intent": "payment_query",
+          "pct": 1.8
+        }
+      ],
+      "won_linked": 24,
+      "lost_linked": 44,
+      "framing": null,
+      "timing": {
+        "status": "overdue_warm",
+        "rhythm_factor": 1.3,
+        "approaching": true,
+        "reason": "last order 71d ago vs ~4d cadence \u2014 overdue, prime reorder window; Jul is their seasonal peak; approach window (Jun) is open",
+        "days_since_last": 71,
+        "avg_interval": 4,
+        "peak_month": 7,
+        "approach_month": 6,
+        "last_order": "2026-03-25"
+      },
+      "timing_factor": 1.495,
+      "recency_factor": 1.0,
+      "days_since_email": -1,
+      "last_email": "2026-06-05",
+      "when": "last order 71d ago vs ~4d cadence \u2014 overdue, prime reorder window; Jul is their seasonal peak; approach window (Jun) is open; warm \u2014 last email 0d ago",
+      "opportunity_strength": 0.0
+    },
+    {
+      "company_id": "bcfe54f4-0523-4d1b-8100-6094bc1852e2",
+      "customer": "The Fold Group",
+      "revenue": 113735,
+      "conflict_flag": null,
+      "basket": [
+        "Design Services",
+        "Embellishment",
+        "Flat Sheets",
+        "Hard Cover Books",
+        "Soft Cover Books",
+        "Specialty Finishing",
+        "Wide Format"
+      ],
+      "recommended": null,
+      "lift": null,
+      "rec_from": null,
+      "rec_confidence": null,
+      "rec_support": null,
+      "evidence": "no untapped high-lift capability (buys full predicted set)",
+      "all_gap_recs": [],
+      "value_contact": {
+        "email": "marcus@thefoldgroup.com.au",
+        "won_val": 85426,
+        "won": 52,
+        "strike": 18.0,
+        "em_from": 75,
+        "em_to": 73,
+        "two_way": true
+      },
+      "value_contact_str": "marcus@thefoldgroup.com.au (won $85,426, strike 18.0%, two-way)",
+      "won_intent_mix": [
+        {
+          "intent": "quote_request",
+          "pct": 35.1
+        },
+        {
+          "intent": "general_enquiry",
+          "pct": 30.4
+        },
+        {
+          "intent": "job_approval",
+          "pct": 21.6
+        },
+        {
+          "intent": "artwork_submission",
+          "pct": 9.5
+        },
+        {
+          "intent": "payment_query",
+          "pct": 2.7
+        }
+      ],
+      "won_linked": 12,
+      "lost_linked": 76,
+      "framing": null,
+      "timing": {
+        "status": "overdue_warm",
+        "rhythm_factor": 1.3,
+        "approaching": false,
+        "reason": "last order 42d ago vs ~5d cadence \u2014 overdue, prime reorder window",
+        "days_since_last": 42,
+        "avg_interval": 5,
+        "peak_month": 8,
+        "approach_month": 7,
+        "last_order": "2026-04-23"
+      },
+      "timing_factor": 1.3,
+      "recency_factor": 1.0,
+      "days_since_email": -5,
+      "last_email": "2026-06-09",
+      "when": "last order 42d ago vs ~5d cadence \u2014 overdue, prime reorder window; warm \u2014 last email 0d ago",
+      "opportunity_strength": 0.0
+    }
+  ],
+  "caveats": [
+    "QB (operations) is ground truth; platform display not used.",
+    "Capability = qb_capability_tag (8-item space) \u2014 coarse but fully traceable.",
+    "Email grounding via contact+temporal \u00b114d proximity (validated).",
+    "Deferred QB-conflict companies flagged (conflict_flag); 4 unresolved, 2 remediated 2026-06-08.",
+    "Within-client; lift rules computed across the full Carbon8 customer base."
+  ]
+}

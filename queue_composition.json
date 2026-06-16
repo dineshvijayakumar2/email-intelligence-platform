@@ -1,0 +1,156 @@
+{
+  "params": {
+    "client_id": "241d7b99-f099-4557-96e5-212c4af10812",
+    "generated_at": "2026-06-08T07:13:44.109475+00:00",
+    "source": "qb_match_candidates (reviewed=False)",
+    "total_candidates": 617,
+    "unit": "candidate row = one (sb_company, qb_customer) staged pair",
+    "revenue_method": "QB customer total_invoiced, deduped by resolved qb_customer within each category",
+    "category_definitions": {
+      "duality_artifact": "record_id/key_id duality (stored row internally inconsistent); FALSE",
+      "cosmetic_variant": "name-pass, single-QB, unmatched SB, names equal after suffix/abbrev/space/punct/case normalization",
+      "genuine_ambiguous": "multi-QB fan-out / duplicate-QB-record / shared-contact bridge / single name near-match needing human judgment",
+      "new_unmatched_data": "weak name guess; real QB customer with no confident SB match (needs matching, not a bug)",
+      "other_unclear": "stale (QB already matched) + unclassified"
+    }
+  },
+  "category_breakdown": {
+    "duality_artifact": {
+      "count": 0,
+      "revenue": 0.0
+    },
+    "cosmetic_variant": {
+      "count": 1,
+      "revenue": 0.0
+    },
+    "genuine_ambiguous": {
+      "count": 460,
+      "revenue": 1504105.08
+    },
+    "new_unmatched_data": {
+      "count": 82,
+      "revenue": 65193.4
+    },
+    "other_unclear": {
+      "count": 74,
+      "revenue": 1585398.08
+    }
+  },
+  "genuine_ambiguous_sub_reasons": {
+    "multi_qb_fanout": {
+      "count": 331,
+      "revenue": 1470417.65
+    },
+    "shared_contact_bridge": {
+      "count": 5,
+      "revenue": 1030433.5
+    },
+    "duplicate_qb_record": {
+      "count": 5,
+      "revenue": 1027436.85
+    },
+    "name_near_match_confirm": {
+      "count": 119,
+      "revenue": 27596.82
+    }
+  },
+  "other_unclear_sub_reasons": {
+    "stale_qb_already_matched": {
+      "count": 74,
+      "revenue": 1585398.08
+    }
+  },
+  "headline": {
+    "avoidable": {
+      "categories": [
+        "duality_artifact",
+        "cosmetic_variant"
+      ],
+      "count": 1,
+      "count_pct": 0.2,
+      "revenue": 0.0,
+      "revenue_pct": 0.0
+    },
+    "genuine": {
+      "categories": [
+        "genuine_ambiguous",
+        "new_unmatched_data"
+      ],
+      "count": 542,
+      "count_pct": 87.8,
+      "revenue": 1569298.48,
+      "revenue_pct": 49.7
+    },
+    "other_unclear": {
+      "count": 74,
+      "revenue": 1585398.08
+    },
+    "duplicate_qb_record_avoidable_via_dedup": {
+      "count": 5,
+      "revenue": 1027436.85
+    },
+    "total": {
+      "count": 617,
+      "revenue": 3154696.56
+    }
+  },
+  "last_week_growth": {
+    "window_start": "2026-06-01T07:13:44.109475+00:00",
+    "created_at_by_day": {
+      "2026-06-08": 617
+    },
+    "created_at_is_single_day": true,
+    "candidates_created_in_window": 617,
+    "composition": {
+      "duality_artifact": {
+        "count": 0,
+        "revenue": 0.0
+      },
+      "cosmetic_variant": {
+        "count": 1,
+        "revenue": 0.0
+      },
+      "genuine_ambiguous": {
+        "count": 460,
+        "revenue": 1504105.08
+      },
+      "new_unmatched_data": {
+        "count": 82,
+        "revenue": 65193.4
+      },
+      "other_unclear": {
+        "count": 74,
+        "revenue": 1585398.08
+      }
+    },
+    "WARNING": "Staging deletes+reinserts ALL unreviewed candidates every sync, so created_at = last sync time, not first-appearance. With created_at on a single day, last-week organic growth CANNOT be measured from this table. The composition shown = the whole queue (proxy for 'what the latest sync staged'). To measure true net drift, snapshot the queue over time or diff qb_customers.matched_company_id between syncs."
+  },
+  "samples": {
+    "duality_artifact_15": [],
+    "cosmetic_variant_15": [
+      {
+        "candidate_id": "6f96818e-0a8f-4bfb-bb8a-93c9c0197b99",
+        "sb_company_name": "Groupgsa",
+        "qb_record_id": "34882",
+        "qb_customer_id": "34882",
+        "qb_name": "GroupGSA Pty Ltd",
+        "record_space_customer": "GroupGSA Pty Ltd",
+        "key_space_customer": "Easy Peasy Cakes",
+        "match_method": "domain_root",
+        "match_score": 65.0,
+        "revenue": 0.0,
+        "sub_reason": "name_normalises_equal",
+        "detail": {
+          "sb": "Groupgsa",
+          "qb": "GroupGSA Pty Ltd",
+          "method": "domain_root",
+          "rel": "suffix_abbrev",
+          "ratio": 100.0,
+          "sb_already_matched": false,
+          "qb_already_matched": false,
+          "n_qb_for_company": 1
+        }
+      }
+    ]
+  }
+}

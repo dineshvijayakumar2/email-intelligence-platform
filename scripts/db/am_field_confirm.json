@@ -1,0 +1,33 @@
+{
+  "method_used": "mode of qb_operations.am_customer (operations-level)",
+  "compared_to": "qb_customers.account_manager (field #16, customer master)",
+  "match": 47,
+  "differ": 3,
+  "no_field16": 0,
+  "differences": [
+    {
+      "rank": 6,
+      "customer": "SHADES ADELAIDE AIRPORT",
+      "ops_am_customer": "Ehab Kamel",
+      "field16_account_manager": [
+        "The Carbon8 Team"
+      ]
+    },
+    {
+      "rank": 47,
+      "customer": "WARNER VILLAGE OPTOMETRIST",
+      "ops_am_customer": "Ehab Kamel",
+      "field16_account_manager": [
+        "The Carbon8 Team"
+      ]
+    },
+    {
+      "rank": 48,
+      "customer": "Cheddar Pocket",
+      "ops_am_customer": "Linda D'Arcy",
+      "field16_account_manager": [
+        "The Carbon8 Team"
+      ]
+    }
+  ]
+}

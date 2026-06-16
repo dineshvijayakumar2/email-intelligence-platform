@@ -1,0 +1,77 @@
+{
+  "q1": {
+    "clean": 48,
+    "split": 2,
+    "most_split": [
+      {
+        "customer": "Bear Meets Eagle on Fire",
+        "dominant_pct": 65,
+        "ams": {
+          "Nic Doyle": 11,
+          "Linda D'Arcy": 6
+        }
+      },
+      {
+        "customer": "Beckett's Bar and Dining",
+        "dominant_pct": 90,
+        "ams": {
+          "Nic Doyle": 19,
+          "Kalani Evans": 2
+        }
+      }
+    ]
+  },
+  "q2": {
+    "Kenneth": {
+      "owned": 171,
+      "present": 189,
+      "in_scored": 111,
+      "in_top50": 0,
+      "best_rank": 12,
+      "best_real": {
+        "account": "Sullivan Strumpf Fine Art Pty Ltd",
+        "prelim_rank": 48,
+        "revenue": 161602,
+        "pitch": "Hard Cover Books 31% / lift 2.28",
+        "note": "rank is revenue-driven; pitch confidence modest. Junk bucket Cash Account-Kenneth (#12) excluded."
+      },
+      "has_mailbox": true
+    },
+    "Peter": {
+      "owned": 81,
+      "present": 99,
+      "in_scored": 57,
+      "in_top50": 0,
+      "best_rank": 98,
+      "best_real": {
+        "account": "Shane Gibson Studio",
+        "prelim_rank": 98,
+        "revenue": 4369,
+        "pitch": "Embellishment 63% / lift 1.81"
+      },
+      "has_mailbox": false
+    }
+  },
+  "q3": [
+    {
+      "customer": "Jet Technologies Australia Pty Ltd",
+      "qb_owner": "Nathan Brown",
+      "reassign_to": "Nic"
+    },
+    {
+      "customer": "Jefferies (Australia) Pty Ltd",
+      "qb_owner": "Nathan Brown",
+      "reassign_to": "Ehab"
+    },
+    {
+      "customer": "Forsight",
+      "qb_owner": "Daniel Hall",
+      "reassign_to": "Nic"
+    }
+  ],
+  "prelim_cutoffs": {
+    "top50": 4.8898,
+    "pool120": 3.9554,
+    "scored_universe": 2174
+  }
+}

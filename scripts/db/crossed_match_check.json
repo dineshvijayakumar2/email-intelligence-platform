@@ -1,0 +1,254 @@
+{
+ "mode": "READ-ONLY \u2014 no writes",
+ "client_id": "241d7b99-f099-4557-96e5-212c4af10812",
+ "method": "reverse-match from qb_customers.matched_company_id; exclude cosmetic / email-verified / broker",
+ "counts": {
+  "reverse_matched_pairs": 13571,
+  "name_match_clean": 13541,
+  "excluded_cosmetic_variant": 12,
+  "excluded_email_verified_correct": 0,
+  "excluded_broker_domain": 1,
+  "GENUINE_CROSSED": 17
+ },
+ "revenue_at_stake": 52125.39,
+ "crossed_matches": [
+  {
+   "sb_company_id": "e9b80e6e-8f9d-48eb-9e95-60e8e2fe49c3",
+   "sb_name": "Louis Vuitton",
+   "wrong_qb_name": "Blainey North",
+   "wrong_qb_key_id": "15235",
+   "wrong_qb_record_id": "29737",
+   "wrong_qb_revenue": 29318.82,
+   "correct_qb_candidates": [
+    {
+     "customer_key_id": "29737",
+     "qb_record_id": "44057",
+     "qb_name": "Louis Vuitton",
+     "total_invoiced": 10161.39
+    }
+   ],
+   "correct_exists": true,
+   "sb_contact_domains": []
+  },
+  {
+   "sb_company_id": "5284582d-5fcd-42e0-8d12-d3afbf791b25",
+   "sb_name": "The Make Haus",
+   "wrong_qb_name": "Payce Mangement Pty Ltd",
+   "wrong_qb_key_id": "18244",
+   "wrong_qb_record_id": "34817",
+   "wrong_qb_revenue": 7293.18,
+   "correct_qb_candidates": [
+    {
+     "customer_key_id": "34817",
+     "qb_record_id": "32849",
+     "qb_name": "The Make Haus",
+     "total_invoiced": 3295.36
+    }
+   ],
+   "correct_exists": true,
+   "sb_contact_domains": []
+  },
+  {
+   "sb_company_id": "f9048122-aaad-4505-b28d-a92bf4ba81cf",
+   "sb_name": "Waded",
+   "wrong_qb_name": "National Art School",
+   "wrong_qb_key_id": "17086",
+   "wrong_qb_record_id": "43946",
+   "wrong_qb_revenue": 6749.0,
+   "correct_qb_candidates": [],
+   "correct_exists": false,
+   "sb_contact_domains": [
+    "gmail.com"
+   ]
+  },
+  {
+   "sb_company_id": "f044dbe2-6a71-4198-a357-1afef83dc127",
+   "sb_name": "Sheryn & Iain",
+   "wrong_qb_name": "IAIN TODD",
+   "wrong_qb_key_id": "20440",
+   "wrong_qb_record_id": "33807",
+   "wrong_qb_revenue": 3481.87,
+   "correct_qb_candidates": [],
+   "correct_exists": false,
+   "sb_contact_domains": [
+    "gmail.com"
+   ]
+  },
+  {
+   "sb_company_id": "de2751cc-6167-42c8-978d-9a548900850d",
+   "sb_name": "Thesocietysalon",
+   "wrong_qb_name": "Tomboy Enterprises",
+   "wrong_qb_key_id": "36028",
+   "wrong_qb_record_id": "31604",
+   "wrong_qb_revenue": 2371.98,
+   "correct_qb_candidates": [],
+   "correct_exists": false,
+   "sb_contact_domains": [
+    "thesocietysalon.com.au"
+   ]
+  },
+  {
+   "sb_company_id": "ad0fd944-74fd-4c76-9292-0fdef3a3422f",
+   "sb_name": "Flintwood",
+   "wrong_qb_name": "Virtuoso",
+   "wrong_qb_key_id": "23231",
+   "wrong_qb_record_id": "30647",
+   "wrong_qb_revenue": 1581.82,
+   "correct_qb_candidates": [
+    {
+     "customer_key_id": "30647",
+     "qb_record_id": "31062",
+     "qb_name": "Flintwood",
+     "total_invoiced": 0.0
+    }
+   ],
+   "correct_exists": true,
+   "sb_contact_domains": [
+    "virtuoso.com"
+   ]
+  },
+  {
+   "sb_company_id": "8638e94d-761c-4639-9b64-1b8417517b3b",
+   "sb_name": "Zane Edwards",
+   "wrong_qb_name": "Marcus Whale",
+   "wrong_qb_key_id": "35117",
+   "wrong_qb_record_id": "34615",
+   "wrong_qb_revenue": 1077.27,
+   "correct_qb_candidates": [],
+   "correct_exists": false,
+   "sb_contact_domains": [
+    "gmail.com"
+   ]
+  },
+  {
+   "sb_company_id": "b8f0836a-d076-4bb1-b4ee-2d7bf4ddf628",
+   "sb_name": "stein.maggie@gmail.com",
+   "wrong_qb_name": "Maggie Stein",
+   "wrong_qb_key_id": "25510",
+   "wrong_qb_record_id": "41324",
+   "wrong_qb_revenue": 135.45,
+   "correct_qb_candidates": [],
+   "correct_exists": false,
+   "sb_contact_domains": [
+    "gmail.com"
+   ]
+  },
+  {
+   "sb_company_id": "36f7b934-7136-4c31-a643-d93c804d0f74",
+   "sb_name": "Sydstu",
+   "wrong_qb_name": "Alyssia Ducaud",
+   "wrong_qb_key_id": "30843",
+   "wrong_qb_record_id": "31085",
+   "wrong_qb_revenue": 116.0,
+   "correct_qb_candidates": [],
+   "correct_exists": false,
+   "sb_contact_domains": [
+    "sydstu.catholic.edu.au"
+   ]
+  },
+  {
+   "sb_company_id": "bafbb42e-af81-4d06-9441-70ad0ec60434",
+   "sb_name": "Squarespace",
+   "wrong_qb_name": "Caroline  Reznik",
+   "wrong_qb_key_id": "31193",
+   "wrong_qb_record_id": "31120",
+   "wrong_qb_revenue": 0.0,
+   "correct_qb_candidates": [],
+   "correct_exists": false,
+   "sb_contact_domains": [
+    "squarespace.com",
+    "squarespace.info"
+   ]
+  },
+  {
+   "sb_company_id": "cc15d2c4-00c8-4ec3-97f2-87c5ca537f41",
+   "sb_name": "Claire Taylor",
+   "wrong_qb_name": "Greyspace",
+   "wrong_qb_key_id": "31416",
+   "wrong_qb_record_id": "42633",
+   "wrong_qb_revenue": 0.0,
+   "correct_qb_candidates": [],
+   "correct_exists": false,
+   "sb_contact_domains": [
+    "claire-taylor.com.au",
+    "gmail.com"
+   ]
+  },
+  {
+   "sb_company_id": "9e1c6949-502b-4330-bfee-ce8314c02b11",
+   "sb_name": "Pmg",
+   "wrong_qb_name": "Print Media Group",
+   "wrong_qb_key_id": "28170",
+   "wrong_qb_record_id": "30915",
+   "wrong_qb_revenue": 0.0,
+   "correct_qb_candidates": [],
+   "correct_exists": false,
+   "sb_contact_domains": [
+    "pmg.com.au"
+   ]
+  },
+  {
+   "sb_company_id": "d62f5fe7-287d-462d-84f8-6ef74822f117",
+   "sb_name": "Y7Mail",
+   "wrong_qb_name": "Test",
+   "wrong_qb_key_id": "28144",
+   "wrong_qb_record_id": "41611",
+   "wrong_qb_revenue": 0.0,
+   "correct_qb_candidates": [],
+   "correct_exists": false,
+   "sb_contact_domains": [
+    "y7mail.com"
+   ]
+  },
+  {
+   "sb_company_id": "3bae2304-e962-4bc0-9f1d-b1fae24a3e92",
+   "sb_name": "esca",
+   "wrong_qb_name": "FOCUS OPTICAL ALBANY WA",
+   "wrong_qb_key_id": "14338",
+   "wrong_qb_record_id": "35606",
+   "wrong_qb_revenue": 0.0,
+   "correct_qb_candidates": [],
+   "correct_exists": false,
+   "sb_contact_domains": []
+  },
+  {
+   "sb_company_id": "d499d12a-e21d-4572-a6eb-baa29724316f",
+   "sb_name": "Drtsirbas",
+   "wrong_qb_name": "Dr Angelo Tsirbas",
+   "wrong_qb_key_id": "36154",
+   "wrong_qb_record_id": "33101",
+   "wrong_qb_revenue": 0.0,
+   "correct_qb_candidates": [],
+   "correct_exists": false,
+   "sb_contact_domains": [
+    "drtsirbas.com"
+   ]
+  },
+  {
+   "sb_company_id": "421fbdb6-6bfa-4e15-86c8-0a056ac23ae2",
+   "sb_name": "D F",
+   "wrong_qb_name": "Deborah Fernando",
+   "wrong_qb_key_id": "31819",
+   "wrong_qb_record_id": "42835",
+   "wrong_qb_revenue": 0.0,
+   "correct_qb_candidates": [],
+   "correct_exists": false,
+   "sb_contact_domains": [
+    "gmail.com"
+   ]
+  },
+  {
+   "sb_company_id": "7fba89c4-fb4d-4562-a50a-7073f855beaf",
+   "sb_name": "Conprint",
+   "wrong_qb_name": "Contact Print",
+   "wrong_qb_key_id": "28174",
+   "wrong_qb_record_id": "33891",
+   "wrong_qb_revenue": 0.0,
+   "correct_qb_candidates": [],
+   "correct_exists": false,
+   "sb_contact_domains": [
+    "conprint.com.au"
+   ]
+  }
+ ]
+}

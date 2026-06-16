@@ -1,0 +1,335 @@
+{
+ "mode": "READ-ONLY dry-run (fix #1: count from emails.customer_company_id)",
+ "client_id": "241d7b99-f099-4557-96e5-212c4af10812",
+ "totals": {
+  "companies": 20773,
+  "qb_matched": 13585,
+  "total_emails_changes": 8139,
+  "contact_count_changes": 3808,
+  "zero_link_companies_now_counted": 1200,
+  "stored_total_emails_sum": 404849,
+  "new_total_emails_sum": 293444
+ },
+ "zero_link_fixed_sample": [
+  {
+   "name": "Elsa Regn\u00e9r",
+   "qb": null,
+   "stored_emails": 0,
+   "new_emails": 2508,
+   "stored_contacts": 1,
+   "new_contacts": 1
+  },
+  {
+   "name": "Emily Ziz Style Studio",
+   "qb": "44344",
+   "stored_emails": 0,
+   "new_emails": 1967,
+   "stored_contacts": 0,
+   "new_contacts": 2
+  },
+  {
+   "name": "First Choice Printing",
+   "qb": "34080",
+   "stored_emails": 0,
+   "new_emails": 482,
+   "stored_contacts": 0,
+   "new_contacts": 2
+  },
+  {
+   "name": "Nynee85@hotmail.com",
+   "qb": null,
+   "stored_emails": 0,
+   "new_emails": 422,
+   "stored_contacts": 1,
+   "new_contacts": 1
+  },
+  {
+   "name": "Bulgari Australia",
+   "qb": "31093",
+   "stored_emails": 0,
+   "new_emails": 414,
+   "stored_contacts": 1,
+   "new_contacts": 6
+  },
+  {
+   "name": "ALEMAIS RAE PTY LIMITED",
+   "qb": "44445",
+   "stored_emails": 0,
+   "new_emails": 390,
+   "stored_contacts": 0,
+   "new_contacts": 1
+  },
+  {
+   "name": "Rik + Ralph",
+   "qb": "44447",
+   "stored_emails": 0,
+   "new_emails": 271,
+   "stored_contacts": 0,
+   "new_contacts": 3
+  },
+  {
+   "name": "Tourism",
+   "qb": null,
+   "stored_emails": 229,
+   "new_emails": 260,
+   "stored_contacts": 10,
+   "new_contacts": 6
+  },
+  {
+   "name": "630 Agency",
+   "qb": "33563",
+   "stored_emails": 0,
+   "new_emails": 248,
+   "stored_contacts": 0,
+   "new_contacts": 1
+  },
+  {
+   "name": "Jared Hancock",
+   "qb": null,
+   "stored_emails": 0,
+   "new_emails": 213,
+   "stored_contacts": 1,
+   "new_contacts": 1
+  },
+  {
+   "name": "Spicers",
+   "qb": "35010",
+   "stored_emails": 0,
+   "new_emails": 198,
+   "stored_contacts": 0,
+   "new_contacts": 1
+  },
+  {
+   "name": "The Growth Activists",
+   "qb": "33219",
+   "stored_emails": 0,
+   "new_emails": 155,
+   "stored_contacts": 0,
+   "new_contacts": 3
+  },
+  {
+   "name": "Reacon Group Pty Ltd (Administrators Appointed)",
+   "qb": "44112",
+   "stored_emails": 0,
+   "new_emails": 135,
+   "stored_contacts": 0,
+   "new_contacts": 4
+  },
+  {
+   "name": "Outdoor Media Association",
+   "qb": "44418",
+   "stored_emails": 0,
+   "new_emails": 123,
+   "stored_contacts": 0,
+   "new_contacts": 2
+  },
+  {
+   "name": "Cn Koten",
+   "qb": null,
+   "stored_emails": 195,
+   "new_emails": 121,
+   "stored_contacts": 1,
+   "new_contacts": 1
+  },
+  {
+   "name": "Carbon Creative",
+   "qb": "34011",
+   "stored_emails": 69,
+   "new_emails": 118,
+   "stored_contacts": 1,
+   "new_contacts": 2
+  },
+  {
+   "name": "EnviroPrint Australia",
+   "qb": "34740",
+   "stored_emails": 0,
+   "new_emails": 114,
+   "stored_contacts": 1,
+   "new_contacts": 0
+  },
+  {
+   "name": "Studio Nota",
+   "qb": "34004",
+   "stored_emails": 0,
+   "new_emails": 106,
+   "stored_contacts": 0,
+   "new_contacts": 1
+  },
+  {
+   "name": "Tech Policy",
+   "qb": "44652",
+   "stored_emails": 0,
+   "new_emails": 99,
+   "stored_contacts": 5,
+   "new_contacts": 5
+  },
+  {
+   "name": "Fior Restaurant",
+   "qb": "34025",
+   "stored_emails": 0,
+   "new_emails": 98,
+   "stored_contacts": 1,
+   "new_contacts": 2
+  },
+  {
+   "name": "P.Johnson",
+   "qb": "33095",
+   "stored_emails": 0,
+   "new_emails": 97,
+   "stored_contacts": 0,
+   "new_contacts": 2
+  },
+  {
+   "name": "Pegasus Media & Logistics",
+   "qb": "32625",
+   "stored_emails": 0,
+   "new_emails": 93,
+   "stored_contacts": 0,
+   "new_contacts": 6
+  },
+  {
+   "name": "Bec & Bridge",
+   "qb": "32574",
+   "stored_emails": 0,
+   "new_emails": 92,
+   "stored_contacts": 0,
+   "new_contacts": 10
+  },
+  {
+   "name": "Jolly",
+   "qb": "44287",
+   "stored_emails": 0,
+   "new_emails": 89,
+   "stored_contacts": 0,
+   "new_contacts": 5
+  },
+  {
+   "name": "SCCO Studio",
+   "qb": "44096",
+   "stored_emails": 0,
+   "new_emails": 84,
+   "stored_contacts": 0,
+   "new_contacts": 2
+  },
+  {
+   "name": "Chequemates",
+   "qb": "34699",
+   "stored_emails": 0,
+   "new_emails": 82,
+   "stored_contacts": 0,
+   "new_contacts": 1
+  },
+  {
+   "name": "Central Element Pty Ltd",
+   "qb": "34908",
+   "stored_emails": 0,
+   "new_emails": 81,
+   "stored_contacts": 1,
+   "new_contacts": 2
+  },
+  {
+   "name": "Philip Sue Art",
+   "qb": "44624",
+   "stored_emails": 67,
+   "new_emails": 80,
+   "stored_contacts": 1,
+   "new_contacts": 1
+  },
+  {
+   "name": "Active Mail",
+   "qb": "35006",
+   "stored_emails": 0,
+   "new_emails": 79,
+   "stored_contacts": 0,
+   "new_contacts": 2
+  },
+  {
+   "name": "TaxFix",
+   "qb": "34054",
+   "stored_emails": 0,
+   "new_emails": 79,
+   "stored_contacts": 0,
+   "new_contacts": 1
+  },
+  {
+   "name": "Faithfull The Brand",
+   "qb": "44347",
+   "stored_emails": 0,
+   "new_emails": 78,
+   "stored_contacts": 0,
+   "new_contacts": 3
+  },
+  {
+   "name": "Studio White Noise",
+   "qb": "33646",
+   "stored_emails": 0,
+   "new_emails": 72,
+   "stored_contacts": 0,
+   "new_contacts": 2
+  },
+  {
+   "name": "FDC Construction and Fitout",
+   "qb": "32782",
+   "stored_emails": 0,
+   "new_emails": 72,
+   "stored_contacts": 0,
+   "new_contacts": 2
+  },
+  {
+   "name": "Silvia Rubio Herrada",
+   "qb": null,
+   "stored_emails": 0,
+   "new_emails": 70,
+   "stored_contacts": 1,
+   "new_contacts": 1
+  },
+  {
+   "name": "Judy Ingram",
+   "qb": "30569",
+   "stored_emails": 1,
+   "new_emails": 69,
+   "stored_contacts": 1,
+   "new_contacts": 1
+  },
+  {
+   "name": "Koten Machinery",
+   "qb": "44824",
+   "stored_emails": 0,
+   "new_emails": 65,
+   "stored_contacts": 0,
+   "new_contacts": 1
+  },
+  {
+   "name": "Spitting Image Graphics Pty Ltd",
+   "qb": "44099",
+   "stored_emails": 0,
+   "new_emails": 64,
+   "stored_contacts": 0,
+   "new_contacts": 1
+  },
+  {
+   "name": "Kew Bellevue Hill Pty Ltd ATFKew Bellevue Hill Unit Trust",
+   "qb": "44592",
+   "stored_emails": 0,
+   "new_emails": 62,
+   "stored_contacts": 0,
+   "new_contacts": 1
+  },
+  {
+   "name": "Dahua Group Sydney Project 2 Pty Ltd",
+   "qb": "33515",
+   "stored_emails": 0,
+   "new_emails": 60,
+   "stored_contacts": 0,
+   "new_contacts": 2
+  },
+  {
+   "name": "Grace Wright",
+   "qb": "44464",
+   "stored_emails": 0,
+   "new_emails": 57,
+   "stored_contacts": 0,
+   "new_contacts": 1
+  }
+ ]
+}

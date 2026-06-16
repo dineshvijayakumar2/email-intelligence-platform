@@ -1,0 +1,62 @@
+{
+  "dry_run": false,
+  "planned": 9,
+  "skipped": [],
+  "applied": 9,
+  "rows": [
+    {
+      "kind": "CLEAN",
+      "company": "Q Report",
+      "rightful": "Q Report",
+      "impostor": null
+    },
+    {
+      "kind": "CROSS_WIRE",
+      "company": "Avril Burt",
+      "rightful": "Avril Burt",
+      "impostor": "Rebecca Leuzzi"
+    },
+    {
+      "kind": "CROSS_WIRE",
+      "company": "Christine Washer",
+      "rightful": "Christine Washer",
+      "impostor": "Rachel Taylor"
+    },
+    {
+      "kind": "CROSS_WIRE",
+      "company": "Lauren Rugless",
+      "rightful": "Lauren Rugless",
+      "impostor": "Karen Kong"
+    },
+    {
+      "kind": "CROSS_WIRE",
+      "company": "Missy Minzy",
+      "rightful": "Missy Minzy",
+      "impostor": "Chad Edwards"
+    },
+    {
+      "kind": "CROSS_WIRE",
+      "company": "ERA Co",
+      "rightful": "Era Co",
+      "impostor": "Bluetooth SIG, Inc"
+    },
+    {
+      "kind": "CROSS_WIRE",
+      "company": "Hutch Man designs",
+      "rightful": "Hutch Man designs",
+      "impostor": "Nareeda McInnes"
+    },
+    {
+      "kind": "CROSS_WIRE",
+      "company": "Eden Studios",
+      "rightful": "Eden Studios",
+      "impostor": "Bambra Press"
+    },
+    {
+      "kind": "CROSS_WIRE",
+      "company": "Lendpro",
+      "rightful": "LendPro",
+      "impostor": "Louise Hazell"
+    }
+  ]
+}

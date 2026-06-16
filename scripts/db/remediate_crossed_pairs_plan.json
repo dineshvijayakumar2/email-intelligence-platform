@@ -1,0 +1,106 @@
+{
+ "mode": "DRY-RUN \u2014 no DB writes",
+ "client_id": "241d7b99-f099-4557-96e5-212c4af10812",
+ "pairs": [
+  {
+   "label": "Louis Vuitton",
+   "survivor": {
+    "id": "0c836d3a-9d43-45ae-8cd5-1b22a2438726",
+    "name": "Louisvuitton",
+    "qb_customer_id": "44057",
+    "method": "email_lookup",
+    "qb_total_revenue": 10161.39,
+    "contact_count": 4,
+    "total_emails": 6
+   },
+   "victim": {
+    "id": "e9b80e6e-8f9d-48eb-9e95-60e8e2fe49c3",
+    "name": "Louis Vuitton",
+    "qb_customer_id": "29737",
+    "method": "email_lookup",
+    "qb_total_revenue_CONTAMINATED": 29318.82,
+    "contact_count": 0,
+    "total_emails": 0
+   },
+   "actions": {
+    "1_rename_survivor_to": "Louis Vuitton",
+    "2_drop_contaminated_link": "victim qb_customer_id=29737 discarded with victim row",
+    "3_clear_wrong_qb_match": {
+     "qb_customers_id": "bb66f102-fb9a-4d68-8c37-1d4dc7897037",
+     "customer_name": "Blainey North",
+     "customer_key_id": "15235",
+     "qb_record_id": "29737",
+     "total_invoiced": 29318.82,
+     "currently_matched_company_id": "e9b80e6e-8f9d-48eb-9e95-60e8e2fe49c3",
+     "matches_victim": true,
+     "repoint_target": [
+      {
+       "id": "8170d6da-f1f8-40af-afbc-cfb30d5f8bd5",
+       "name": "Blainey North"
+      }
+     ]
+    }
+   },
+   "fk_repoint_counts": {
+    "qb_operations.matched_company_id": 212
+   },
+   "cascade_drop_counts": {},
+   "contacts_move": 0,
+   "contacts_dropped_as_dup": 0,
+   "revenue_after": {
+    "survivor_keeps": 10161.39,
+    "contaminated_removed": 29318.82
+   }
+  },
+  {
+   "label": "The Make Haus",
+   "survivor": {
+    "id": "0448ab6d-770f-40f8-9993-b07fe83a621a",
+    "name": "Themakehaus",
+    "qb_customer_id": "32849",
+    "method": "email_lookup",
+    "qb_total_revenue": 3295.36,
+    "contact_count": 1,
+    "total_emails": 6
+   },
+   "victim": {
+    "id": "5284582d-5fcd-42e0-8d12-d3afbf791b25",
+    "name": "The Make Haus",
+    "qb_customer_id": "34817",
+    "method": "email_lookup",
+    "qb_total_revenue_CONTAMINATED": 7293.18,
+    "contact_count": 0,
+    "total_emails": 0
+   },
+   "actions": {
+    "1_rename_survivor_to": "The Make Haus",
+    "2_drop_contaminated_link": "victim qb_customer_id=34817 discarded with victim row",
+    "3_clear_wrong_qb_match": {
+     "qb_customers_id": "f9e7440a-561e-49d5-854b-f43f5e7f64ae",
+     "customer_name": "Payce Mangement Pty Ltd",
+     "customer_key_id": "18244",
+     "qb_record_id": "34817",
+     "total_invoiced": 7293.18,
+     "currently_matched_company_id": "5284582d-5fcd-42e0-8d12-d3afbf791b25",
+     "matches_victim": true,
+     "repoint_target": [
+      {
+       "id": "2b5ddb70-4aa1-4438-865c-b370ed2bd9e2",
+       "name": "Payce Mangement Pty Ltd"
+      }
+     ]
+    }
+   },
+   "fk_repoint_counts": {
+    "qb_operations.matched_company_id": 51
+   },
+   "cascade_drop_counts": {},
+   "contacts_move": 0,
+   "contacts_dropped_as_dup": 0,
+   "revenue_after": {
+    "survivor_keeps": 3295.36,
+    "contaminated_removed": 7293.18
+   }
+  }
+ ]
+}

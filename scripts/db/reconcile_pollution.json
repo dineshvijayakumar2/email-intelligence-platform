@@ -1,0 +1,530 @@
+{
+  "freshness": {
+    "rows": 631261,
+    "last_synced": "2026-06-13T06:06:43.896723+00:00",
+    "last_qb_modified": null
+  },
+  "op_trace": {
+    "emb_foil_by_dept": [
+      {
+        "ops": 1367,
+        "department": "Outwork",
+        "rawtag_emb": 0
+      },
+      {
+        "ops": 372,
+        "department": "Post-print finishing/embellishme",
+        "rawtag_emb": 372
+      },
+      {
+        "ops": 301,
+        "department": "Case Making",
+        "rawtag_emb": 0
+      },
+      {
+        "ops": 277,
+        "department": "Case-making, gluing",
+        "rawtag_emb": 0
+      },
+      {
+        "ops": 213,
+        "department": "Digital foil",
+        "rawtag_emb": 213
+      },
+      {
+        "ops": 97,
+        "department": "Foiling outsource",
+        "rawtag_emb": 97
+      },
+      {
+        "ops": 43,
+        "department": "Production",
+        "rawtag_emb": 0
+      },
+      {
+        "ops": 42,
+        "department": "Embellishment",
+        "rawtag_emb": 42
+      },
+      {
+        "ops": 25,
+        "department": "Inhouse foil / emboss",
+        "rawtag_emb": 25
+      },
+      {
+        "ops": 22,
+        "department": "Emboss outsource",
+        "rawtag_emb": 22
+      },
+      {
+        "ops": 20,
+        "department": "Coating",
+        "rawtag_emb": 0
+      },
+      {
+        "ops": 9,
+        "department": "Hand Bindery",
+        "rawtag_emb": 0
+      },
+      {
+        "ops": 4,
+        "department": "Digital sheetfed print",
+        "rawtag_emb": 0
+      }
+    ],
+    "emb_cello_samples": [
+      {
+        "op": "Matte",
+        "ops": 47,
+        "dept": "Post-print finishing/embellishme",
+        "rawtag": "Embellishment",
+        "machine": "Celloglazer - Autobond",
+        "job_title": "Business cards"
+      },
+      {
+        "op": "Matte",
+        "ops": 16,
+        "dept": "Post-print finishing/embellishme",
+        "rawtag": "Embellishment",
+        "machine": "Celloglazer - Autobond",
+        "job_title": "Business Cards"
+      },
+      {
+        "op": "Matte",
+        "ops": 15,
+        "dept": "Post-print finishing/embellishme",
+        "rawtag": "Embellishment",
+        "machine": "Celloglazer - Autobond",
+        "job_title": "Perfect bound books"
+      },
+      {
+        "op": "Anti-scuff matte",
+        "ops": 15,
+        "dept": "Post-print finishing/embellishme",
+        "rawtag": "Embellishment",
+        "machine": "Celloglazer - Autobond",
+        "job_title": "Argyle Synthetic A3 Menus"
+      },
+      {
+        "op": "Velvet celloglaze",
+        "ops": 15,
+        "dept": "Post-print finishing/embellishme",
+        "rawtag": "Embellishment",
+        "machine": "Celloglazer - Autobond",
+        "job_title": "Centuria Business cards"
+      },
+      {
+        "op": "Matt cello",
+        "ops": 14,
+        "dept": "Post-print finishing/embellishme",
+        "rawtag": "Embellishment",
+        "machine": "Celloglazer - Autobond",
+        "job_title": "Business cards"
+      },
+      {
+        "op": "scuff-resistant matte celloglaze",
+        "ops": 13,
+        "dept": "Post-print finishing/embellishme",
+        "rawtag": "Embellishment",
+        "machine": "Celloglazer - Autobond",
+        "job_title": "Business cards"
+      },
+      {
+        "op": "Matte",
+        "ops": 13,
+        "dept": "Post-print finishing/embellishme",
+        "rawtag": "Embellishment",
+        "machine": "Celloglazer - Autobond",
+        "job_title": "Business Card"
+      },
+      {
+        "op": "Matte",
+        "ops": 12,
+        "dept": "Post-print finishing/embellishme",
+        "rawtag": "Embellishment",
+        "machine": "Celloglazer - Autobond",
+        "job_title": "Business cards - 1 kind"
+      },
+      {
+        "op": "Matte",
+        "ops": 11,
+        "dept": "Post-print finishing/embellishme",
+        "rawtag": "Embellishment",
+        "machine": "Celloglazer - Autobond",
+        "job_title": "Overprint Shells"
+      },
+      {
+        "op": "Anti-scuff matte",
+        "ops": 9,
+        "dept": "Post-print finishing/embellishme",
+        "rawtag": "Embellishment",
+        "machine": "Celloglazer - Autobond",
+        "job_title": "Business cards"
+      },
+      {
+        "op": "Matte",
+        "ops": 8,
+        "dept": "Post-print finishing/embellishme",
+        "rawtag": "Embellishment",
+        "machine": "Celloglazer - Autobond",
+        "job_title": "Stickers"
+      },
+      {
+        "op": "Anti-scuff matte",
+        "ops": 8,
+        "dept": "Post-print finishing/embellishme",
+        "rawtag": "Embellishment",
+        "machine": "Celloglazer - Autobond",
+        "job_title": "Hurricane's Grill Cronulla Menus"
+      },
+      {
+        "op": "Anti-scuff gloss",
+        "ops": 8,
+        "dept": "Post-print finishing/embellishme",
+        "rawtag": "Embellishment",
+        "machine": "Celloglazer - Autobond",
+        "job_title": "ITEM 2 - SPECIAL CARDS - RAINBOW FOILBOARD (NO VARIABLE DATA)"
+      },
+      {
+        "op": "Matt cello",
+        "ops": 8,
+        "dept": "Post-print finishing/embellishme",
+        "rawtag": "Embellishment",
+        "machine": "Celloglazer - Autobond",
+        "job_title": "Business Cards"
+      },
+      {
+        "op": "Matte",
+        "ops": 8,
+        "dept": "Post-print finishing/embellishme",
+        "rawtag": "Embellishment",
+        "machine": "Celloglazer - Autobond",
+        "job_title": "A2 Posters"
+      },
+      {
+        "op": "silver celloglaze",
+        "ops": 8,
+        "dept": "Post-print finishing/embellishme",
+        "rawtag": "Embellishment",
+        "machine": "Celloglazer - Autobond",
+        "job_title": "Jigsaw Puzzle Box Wrap"
+      },
+      {
+        "op": "Matt cello",
+        "ops": 7,
+        "dept": "Post-print finishing/embellishme",
+        "rawtag": "Embellishment",
+        "machine": "Celloglazer - Autobond",
+        "job_title": "A5 COMMIT CARDS"
+      },
+      {
+        "op": "Matte",
+        "ops": 7,
+        "dept": "Post-print finishing/embellishme",
+        "rawtag": "Embellishment",
+        "machine": "Celloglazer - Autobond",
+        "job_title": "Cards"
+      },
+      {
+        "op": "Anti-scuff matte",
+        "ops": 7,
+        "dept": "Post-print finishing/embellishme",
+        "rawtag": "Embellishment",
+        "machine": "Celloglazer - Autobond",
+        "job_title": "Hakata Maru Menus"
+      }
+    ],
+    "hc_nonkey_samples": [
+      {
+        "op": "Fuse back to back",
+        "ops": 13,
+        "dept": "Case-making, gluing",
+        "rawtag": "Hard Cover Books",
+        "machine": "Teco gluing ",
+        "job_title": "Business cards"
+      },
+      {
+        "op": "Fuse back to back",
+        "ops": 11,
+        "dept": "Case-making, gluing",
+        "rawtag": "Hard Cover Books",
+        "machine": "Teco gluing ",
+        "job_title": "Gift Vouchers (Superfine fused)"
+      },
+      {
+        "op": "Fuse back to back",
+        "ops": 8,
+        "dept": "Case-making, gluing",
+        "rawtag": "Hard Cover Books",
+        "machine": "Teco gluing ",
+        "job_title": "Gift Vouchers (Superfine fused) NEW PRICING 1-4 Unique Vouchers"
+      },
+      {
+        "op": "Fuse back to back",
+        "ops": 7,
+        "dept": "Case Making",
+        "rawtag": "Hard Cover Books",
+        "machine": "Teco gluing ",
+        "job_title": "Gift Vouchers (Superfine fused) NEW PRICING 1-4 Unique Vouchers"
+      },
+      {
+        "op": "Fuse back to back",
+        "ops": 6,
+        "dept": "Case-making, gluing",
+        "rawtag": "Hard Cover Books",
+        "machine": "Teco gluing ",
+        "job_title": "Bundanon Names "
+      },
+      {
+        "op": "Fuse back to back",
+        "ops": 6,
+        "dept": "Case-making, gluing",
+        "rawtag": "Hard Cover Books",
+        "machine": "Teco gluing ",
+        "job_title": "Fused Gift Vouchers"
+      },
+      {
+        "op": "Fuse back to back",
+        "ops": 6,
+        "dept": "Case-making, gluing",
+        "rawtag": "Hard Cover Books",
+        "machine": "Teco gluing ",
+        "job_title": "Business Cards  "
+      },
+      {
+        "op": "Fuse back to back",
+        "ops": 6,
+        "dept": "Case-making, gluing",
+        "rawtag": "Hard Cover Books",
+        "machine": "Teco gluing ",
+        "job_title": "Business Cards "
+      },
+      {
+        "op": "Fuse back to back",
+        "ops": 5,
+        "dept": "Case-making, gluing",
+        "rawtag": "Hard Cover Books",
+        "machine": "Teco gluing ",
+        "job_title": "Business Cards"
+      },
+      {
+        "op": "Fuse back to back",
+        "ops": 5,
+        "dept": "Case-making, gluing",
+        "rawtag": "Hard Cover Books",
+        "machine": "Teco gluing ",
+        "job_title": "Red Balloon"
+      },
+      {
+        "op": "Fuse back to back",
+        "ops": 5,
+        "dept": "Case-making, gluing",
+        "rawtag": "Hard Cover Books",
+        "machine": "Teco gluing ",
+        "job_title": "Fused Business Cards"
+      },
+      {
+        "op": "Fuse back to back",
+        "ops": 5,
+        "dept": "Case Making",
+        "rawtag": "Hard Cover Books",
+        "machine": "Teco gluing ",
+        "job_title": "Business Cards  Overprint Shells"
+      },
+      {
+        "op": "Section sewing binding  OUTSOURCE",
+        "ops": 5,
+        "dept": "Sewn binding",
+        "rawtag": "Hard Cover Books",
+        "machine": "Outsource",
+        "job_title": "A4 portrait books"
+      },
+      {
+        "op": "Fuse back to back",
+        "ops": 4,
+        "dept": "Case-making, gluing",
+        "rawtag": "Hard Cover Books",
+        "machine": "Teco gluing ",
+        "job_title": "Swing Tags (black gloss foil option)"
+      },
+      {
+        "op": "Fuse or mounting",
+        "ops": 4,
+        "dept": "Case-making, gluing",
+        "rawtag": "Hard Cover Books",
+        "machine": "Teco gluing ",
+        "job_title": "A4 Strut Card"
+      },
+      {
+        "op": "Fuse back to back",
+        "ops": 4,
+        "dept": "Case-making, gluing",
+        "rawtag": "Hard Cover Books",
+        "machine": "Teco gluing ",
+        "job_title": "Layflat Books"
+      },
+      {
+        "op": "Fuse back to back",
+        "ops": 4,
+        "dept": "Case-making, gluing",
+        "rawtag": "Hard Cover Books",
+        "machine": "Teco gluing ",
+        "job_title": "Business Cards  Overprint Shells"
+      },
+      {
+        "op": "Fuse back to back",
+        "ops": 4,
+        "dept": "Case-making, gluing",
+        "rawtag": "Hard Cover Books",
+        "machine": "Teco gluing ",
+        "job_title": "A5 Fused Invites"
+      },
+      {
+        "op": "Fuse back to back",
+        "ops": 4,
+        "dept": "Case-making, gluing",
+        "rawtag": "Hard Cover Books",
+        "machine": "Teco gluing ",
+        "job_title": "Fused Gift Certificate"
+      },
+      {
+        "op": "Fuse back to back",
+        "ops": 4,
+        "dept": "Case-making, gluing",
+        "rawtag": "Hard Cover Books",
+        "machine": "Teco gluing ",
+        "job_title": "Menus and bar items"
+      }
+    ],
+    "hc_casebind_by_dept": [
+      {
+        "ops": 1436,
+        "rawtag_hc": 442,
+        "department": "Bindery"
+      },
+      {
+        "ops": 490,
+        "rawtag_hc": 430,
+        "department": "Case Making"
+      },
+      {
+        "ops": 419,
+        "rawtag_hc": 351,
+        "department": "Case-making, gluing"
+      },
+      {
+        "ops": 115,
+        "rawtag_hc": 115,
+        "department": "Hand Bindery"
+      },
+      {
+        "ops": 66,
+        "rawtag_hc": 0,
+        "department": "Design"
+      },
+      {
+        "ops": 23,
+        "rawtag_hc": 0,
+        "department": "Outwork"
+      }
+    ],
+    "hc_fuse_rawtag_dist": [
+      {
+        "ops": 1322,
+        "rawtag": "Hard Cover Books"
+      },
+      {
+        "ops": 143,
+        "rawtag": "Specialty Finishing"
+      }
+    ],
+    "emb_cello_rawtag_dist": [
+      {
+        "ops": 6594,
+        "rawtag": "Embellishment"
+      },
+      {
+        "ops": 1578,
+        "rawtag": "Specialty Finishing"
+      },
+      {
+        "ops": 1270,
+        "rawtag": "Wide Format"
+      },
+      {
+        "ops": 99,
+        "rawtag": "Soft Cover Books"
+      },
+      {
+        "ops": 40,
+        "rawtag": "Design Services"
+      },
+      {
+        "ops": 10,
+        "rawtag": "(NULL)"
+      },
+      {
+        "ops": 1,
+        "rawtag": "Hard Cover Books"
+      }
+    ],
+    "hc_nonkey_taggedHC_by_dept": [
+      {
+        "ops": 1329,
+        "department": "Case-making, gluing",
+        "distinct_ops": 7
+      },
+      {
+        "ops": 625,
+        "department": "Case Making",
+        "distinct_ops": 11
+      },
+      {
+        "ops": 465,
+        "department": "Bindery",
+        "distinct_ops": 47
+      },
+      {
+        "ops": 251,
+        "department": "Sewn binding",
+        "distinct_ops": 12
+      },
+      {
+        "ops": 159,
+        "department": "Hand Bindery",
+        "distinct_ops": 35
+      },
+      {
+        "ops": 21,
+        "department": "Spine Colour",
+        "distinct_ops": 4
+      }
+    ],
+    "emb_cello_taggedEmb_by_dept": [
+      {
+        "ops": 6590,
+        "department": "Post-print finishing/embellishme",
+        "distinct_ops": 18
+      },
+      {
+        "ops": 4,
+        "department": "Digital foil",
+        "distinct_ops": 1
+      }
+    ]
+  },
+  "magnitude": {
+    "eff_hc_all": 300,
+    "raw_hc_all": 297,
+    "eff_emb_all": 757,
+    "raw_emb_all": 736,
+    "eff_hc_genuine": 107,
+    "raw_hc_genuine": 104,
+    "eff_emb_genuine": 169,
+    "raw_emb_genuine": 130,
+    "eff_emb_only_cello": 588,
+    "eff_hc_only_nonkey": 193,
+    "raw_emb_only_cello": 606,
+    "raw_hc_only_nonkey": 193
+  }
+}

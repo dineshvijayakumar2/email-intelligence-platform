@@ -1,0 +1,109 @@
+{
+  "model": "gpt-4o",
+  "n_won": 100,
+  "n_lost": 100,
+  "failed": 0,
+  "cost_usd": 0.8622,
+  "length_balance": {
+    "mean_n_out_won": 2.51,
+    "mean_n_out_lost": 2.59
+  },
+  "dimensions": {
+    "discovery": {
+      "won_mean": 1.06,
+      "lost_mean": 1.1,
+      "won_median": 1.0,
+      "lost_median": 1.0,
+      "won_hist": [
+        95,
+        4,
+        1,
+        0,
+        0
+      ],
+      "lost_hist": [
+        93,
+        4,
+        3,
+        0,
+        0
+      ],
+      "cliffs_delta": -0.021,
+      "cliffs_ci": [
+        -0.09,
+        0.049
+      ],
+      "cliffs_magnitude": "negligible",
+      "cohens_d": -0.118,
+      "mwu_p": 0.5369,
+      "spearman_score_nout": 0.205,
+      "spearman_score_chars": 0.261,
+      "stratified_delta": -0.021,
+      "verdict": "HOLLOW \u2014 won\u2248lost; do NOT ship this dimension (drop or redesign)."
+    },
+    "consultative": {
+      "won_mean": 1.17,
+      "lost_mean": 1.16,
+      "won_median": 1.0,
+      "lost_median": 1.0,
+      "won_hist": [
+        87,
+        10,
+        2,
+        1,
+        0
+      ],
+      "lost_hist": [
+        86,
+        12,
+        2,
+        0,
+        0
+      ],
+      "cliffs_delta": -0.008,
+      "cliffs_ci": [
+        -0.101,
+        0.083
+      ],
+      "cliffs_magnitude": "negligible",
+      "cohens_d": 0.022,
+      "mwu_p": 0.8658,
+      "spearman_score_nout": 0.364,
+      "spearman_score_chars": 0.362,
+      "stratified_delta": -0.002,
+      "verdict": "HOLLOW \u2014 won\u2248lost; do NOT ship this dimension (drop or redesign)."
+    },
+    "answer_responsiveness": {
+      "won_mean": 2.88,
+      "lost_mean": 2.84,
+      "won_median": 3.0,
+      "lost_median": 3.0,
+      "won_hist": [
+        25,
+        4,
+        47,
+        6,
+        18
+      ],
+      "lost_hist": [
+        30,
+        5,
+        39,
+        3,
+        23
+      ],
+      "cliffs_delta": 0.022,
+      "cliffs_ci": [
+        -0.128,
+        0.175
+      ],
+      "cliffs_magnitude": "negligible",
+      "cohens_d": 0.028,
+      "mwu_p": 0.7709,
+      "spearman_score_nout": 0.236,
+      "spearman_score_chars": 0.475,
+      "stratified_delta": 0.037,
+      "verdict": "HOLLOW \u2014 won\u2248lost; do NOT ship this dimension (drop or redesign)."
+    }
+  }
+}

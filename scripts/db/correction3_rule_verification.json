@@ -1,0 +1,103 @@
+{
+  "minimal_rules": 34,
+  "full_rules": 37,
+  "minimal_strong": 10,
+  "full_strong": 12,
+  "emb_base_minimal": 15.5,
+  "emb_base_full": 15.3,
+  "hc_base_minimal": 8.5,
+  "hc_base_full": 8.3,
+  "strong_only_minimal": [],
+  "strong_only_full": [
+    "Display/Installation->Embellishment",
+    "Display/Installation->Soft Cover Books"
+  ],
+  "strong_moved_gt5pts": [
+    {
+      "rule": "Display/Installation->Wide Format",
+      "minimal": [
+        70.2,
+        40,
+        1.92
+      ],
+      "full": [
+        76.1,
+        54,
+        2.04
+      ]
+    }
+  ],
+  "borderline_calls_immaterial": false,
+  "minimal_strong_rules": [
+    {
+      "from": "Hard Cover Books",
+      "to": "Wide Format",
+      "conf": 83.2,
+      "n": 154,
+      "lift": 2.28
+    },
+    {
+      "from": "Hard Cover Books",
+      "to": "Soft Cover Books",
+      "conf": 76.8,
+      "n": 142,
+      "lift": 2.73
+    },
+    {
+      "from": "Display/Installation",
+      "to": "Wide Format",
+      "conf": 70.2,
+      "n": 40,
+      "lift": 1.92
+    },
+    {
+      "from": "Hard Cover Books",
+      "to": "Embellishment",
+      "conf": 59.5,
+      "n": 110,
+      "lift": 3.85
+    },
+    {
+      "from": "Embellishment",
+      "to": "Wide Format",
+      "conf": 57.1,
+      "n": 192,
+      "lift": 1.56
+    },
+    {
+      "from": "Embellishment",
+      "to": "Soft Cover Books",
+      "conf": 57.1,
+      "n": 192,
+      "lift": 2.03
+    },
+    {
+      "from": "Soft Cover Books",
+      "to": "Wide Format",
+      "conf": 51.8,
+      "n": 317,
+      "lift": 1.42
+    },
+    {
+      "from": "Wide Format",
+      "to": "Soft Cover Books",
+      "conf": 39.9,
+      "n": 317,
+      "lift": 1.42
+    },
+    {
+      "from": "Embellishment",
+      "to": "Hard Cover Books",
+      "conf": 32.7,
+      "n": 110,
+      "lift": 3.85
+    },
+    {
+      "from": "Soft Cover Books",
+      "to": "Embellishment",
+      "conf": 31.4,
+      "n": 192,
+      "lift": 2.03
+    }
+  ]
+}

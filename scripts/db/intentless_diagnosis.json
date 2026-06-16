@@ -1,0 +1,99 @@
+{
+  "counts": {
+    "dup_rows": 0,
+    "null_also": {
+      "avg_proc_ms": null,
+      "summary_null": 56435,
+      "urgency_null": 56435,
+      "sentiment_null": 56435,
+      "input_tokens_pos": 0,
+      "raw_response_present": 10
+    },
+    "ai_rows_total": 281771,
+    "null_by_mailbox": {
+      "Nic Outlook Mac": 3526,
+      "Jeff Love | Carbon8 ": 1325,
+      "Production PC Outlook": 3443,
+      "Ehab Carbon8 Outlook 2": 9673,
+      "Kenneth Carbon8 outlook": 4512,
+      "Hello Carbon8 OutlookMac": 30664,
+      "Linda carbon8 outlook Mac": 3292
+    },
+    "null_model_used": {
+      "<null>": 56425,
+      "claude-haiku-4-5-20251001": 10
+    },
+    "null_intent_rows": 56435,
+    "ai_distinct_emails": 281771,
+    "null_error_patterns": {
+      "pre_filter: spam": 68,
+      "pre_filter: folder_spam": 815,
+      "pre_filter: folder_trash": 41992,
+      "pre_filter: forward_only": 193,
+      "pre_filter: trivial_body": 9494,
+      "pre_filter: folder_drafts": 478,
+      "pre_filter: automated_pattern": 520,
+      "pre_filter: rule_based_or_auto_reply": 2474,
+      "pre_filter: bounce_or_delivery_failure": 401
+    },
+    "null_prompt_version": {
+      "v1.2": 70,
+      "v1.3": 9510,
+      "86a8e8e0": 23457,
+      "fae9cbf0": 23398
+    },
+    "null_processing_status": {
+      "skipped": 56435
+    },
+    "null_by_processed_month": {
+      "2026-03": 691,
+      "2026-04": 34733,
+      "2026-05": 20427,
+      "2026-06": 584
+    },
+    "null_email_rescued_by_dup": 0,
+    "null_intent_distinct_emails": 56435
+  },
+  "no_row": {
+    "n": 16367,
+    "by_mailbox": {
+      "Nic Outlook Mac": 16270,
+      "Jeff Love | Carbon8 ": 4,
+      "Production PC Outlook": 10,
+      "Ehab Carbon8 Outlook 2": 51,
+      "Kenneth Carbon8 outlook": 21,
+      "Hello Carbon8 OutlookMac": 5,
+      "Linda carbon8 outlook Mac": 6
+    }
+  },
+  "body_length_sample": {
+    "null": {
+      "n": 12000,
+      "p50": 803.5,
+      "p90": 7992.1,
+      "p99": 35505.28,
+      "pop": "null",
+      "empty": 2286,
+      "maxlen": 644236
+    },
+    "ok": {
+      "n": 12000,
+      "p50": 2126.5,
+      "p90": 12874.8,
+      "p99": 37754.19,
+      "pop": "ok",
+      "empty": 4,
+      "maxlen": 390689
+    },
+    "norow": {
+      "n": 12000,
+      "p50": 1628.5,
+      "p90": 7279.6,
+      "p99": 22908.21,
+      "pop": "norow",
+      "empty": 246,
+      "maxlen": 89142
+    }
+  },
+  "sample_limit": 12000
+}

@@ -1,0 +1,12 @@
+{
+  "already_correct": 4076,
+  "wrong_target_exists": 1011,
+  "need_company_create": 1176,
+  "need_company_link": 211,
+  "need_company_review": 538,
+  "ambiguous": 0,
+  "not_qb_known": 14575,
+  "qb_custs_needing_company": 1564,
+  "contaminated_companies": 664,
+  "name_mismatch_companies": 1378
+}

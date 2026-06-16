@@ -1,0 +1,786 @@
+[
+  {
+    "norm": "inkmediagroup",
+    "canonical": "Ink Media Group",
+    "reason": "qb conflict: artifact 'INK  MEDIA GROUP' qb=33542 $18,254 vs canonical qb=31245 $15,554",
+    "group_size": 2,
+    "group": [
+      {
+        "id": "588d6f76",
+        "name": "Ink Media Group",
+        "qid": "31245",
+        "method": "contact_chain",
+        "stale_rev": 15554.04
+      },
+      {
+        "id": "de9a9ccf",
+        "name": "INK  MEDIA GROUP",
+        "qid": "33542",
+        "method": "email_lookup",
+        "stale_rev": 18253.62
+      }
+    ],
+    "distinct_qb_customers": 2,
+    "evidence": {
+      "32439": {
+        "name": "INK  MEDIA GROUP",
+        "code": "C22415",
+        "rec": "31245",
+        "total_invoiced": 0.0,
+        "recency": 9999,
+        "quotes": 2,
+        "won": 0,
+        "jobs": 0,
+        "job_rev": 0,
+        "job_last": null
+      },
+      "32441": {
+        "name": "Ink Media Group",
+        "code": "C22412",
+        "rec": "33542",
+        "total_invoiced": 18253.62,
+        "recency": 370,
+        "quotes": 16,
+        "won": 6,
+        "jobs": 11,
+        "job_rev": 24370.15,
+        "job_last": "2025-04-23"
+      }
+    }
+  },
+  {
+    "norm": "melhuishco",
+    "canonical": "Melhuishco",
+    "reason": "qb conflict: artifact 'Melhuish & Co' qb=30308 $4,010 vs canonical qb=30963 $6,612",
+    "group_size": 2,
+    "group": [
+      {
+        "id": "b1423282",
+        "name": "Melhuish & Co",
+        "qid": "30308",
+        "method": "email_lookup",
+        "stale_rev": 4010.0
+      },
+      {
+        "id": "f9d4d2c9",
+        "name": "Melhuishco",
+        "qid": "30963",
+        "method": "email_lookup",
+        "stale_rev": 6611.63
+      }
+    ],
+    "distinct_qb_customers": 2,
+    "evidence": {
+      "20084": {
+        "name": "Melhuish & Co.",
+        "code": "C15178",
+        "rec": "30308",
+        "total_invoiced": 4010.0,
+        "recency": 2933,
+        "quotes": 4,
+        "won": 2,
+        "jobs": 3,
+        "job_rev": 3793.5,
+        "job_last": "2018-04-10"
+      },
+      "29794": {
+        "name": "Melhuishco",
+        "code": "C19774",
+        "rec": "30963",
+        "total_invoiced": 6611.63,
+        "recency": 650,
+        "quotes": 7,
+        "won": 1,
+        "jobs": 3,
+        "job_rev": 6448.33,
+        "job_last": "2024-07-30"
+      }
+    }
+  },
+  {
+    "norm": "themakehaus",
+    "canonical": "Themakehaus",
+    "reason": "qb conflict: artifact 'The Make Haus' qb=34817 $7,293 vs canonical qb=32849 $3,295",
+    "group_size": 2,
+    "group": [
+      {
+        "id": "0448ab6d",
+        "name": "Themakehaus",
+        "qid": "32849",
+        "method": "email_lookup",
+        "stale_rev": 3295.36
+      },
+      {
+        "id": "5284582d",
+        "name": "The Make Haus",
+        "qid": "34817",
+        "method": "email_lookup",
+        "stale_rev": 7293.18
+      }
+    ],
+    "distinct_qb_customers": 2,
+    "evidence": {
+      "18244": {
+        "name": "Payce Mangement Pty Ltd",
+        "code": "C13343",
+        "rec": "34817",
+        "total_invoiced": 7293.18,
+        "recency": 3198,
+        "quotes": 7,
+        "won": 5,
+        "jobs": 15,
+        "job_rev": 22872.13,
+        "job_last": "2017-08-02"
+      },
+      "34817": {
+        "name": "The Make Haus",
+        "code": "C23796",
+        "rec": "32849",
+        "total_invoiced": 3295.36,
+        "recency": 371,
+        "quotes": 7,
+        "won": 2,
+        "jobs": 3,
+        "job_rev": 3213.33,
+        "job_last": "2025-05-01"
+      }
+    }
+  },
+  {
+    "norm": "poppiepack",
+    "canonical": "Poppiepack",
+    "reason": "qb conflict: artifact 'Poppie Pack' qb=34369 $4,526 vs canonical qb=30870 $2,474",
+    "group_size": 2,
+    "group": [
+      {
+        "id": "4defbb0b",
+        "name": "Poppiepack",
+        "qid": "30870",
+        "method": "exact_name",
+        "stale_rev": 2473.73
+      },
+      {
+        "id": "c173a654",
+        "name": "Poppie Pack",
+        "qid": "34369",
+        "method": "email_lookup",
+        "stale_rev": 4525.58
+      }
+    ],
+    "distinct_qb_customers": 2,
+    "evidence": {
+      "31866": {
+        "name": "Poppie Pack",
+        "code": "C21840",
+        "rec": "34369",
+        "total_invoiced": 0.0,
+        "recency": 9999,
+        "quotes": 0,
+        "won": 0,
+        "jobs": 0,
+        "job_rev": 0,
+        "job_last": null
+      },
+      "26705": {
+        "name": "Poppie Pack",
+        "code": "C18768",
+        "rec": "30870",
+        "total_invoiced": 0.0,
+        "recency": 9999,
+        "quotes": 1,
+        "won": 0,
+        "jobs": 0,
+        "job_rev": 0,
+        "job_last": null
+      }
+    }
+  },
+  {
+    "norm": "4idsolutions",
+    "canonical": "4ID Solutions",
+    "reason": "qb conflict: artifact '4 ID Solutions' qb=33451 $5,725 vs canonical qb=37069 $7,646",
+    "group_size": 2,
+    "group": [
+      {
+        "id": "6ff6d2e9",
+        "name": "4 ID Solutions",
+        "qid": "33451",
+        "method": "exact_name",
+        "stale_rev": 5725.47
+      },
+      {
+        "id": "be88712d",
+        "name": "4ID Solutions",
+        "qid": "37069",
+        "method": "contact_chain",
+        "stale_rev": 7646.32
+      }
+    ],
+    "distinct_qb_customers": 2,
+    "evidence": {
+      "16072": {
+        "name": "4ID Solutions",
+        "code": "C11078",
+        "rec": "37069",
+        "total_invoiced": 0.0,
+        "recency": 9999,
+        "quotes": 1,
+        "won": 0,
+        "jobs": 0,
+        "job_rev": 0,
+        "job_last": null
+      },
+      "19010": {
+        "name": "4 ID Solutions",
+        "code": "C14105",
+        "rec": "33451",
+        "total_invoiced": 5725.47,
+        "recency": 3143,
+        "quotes": 7,
+        "won": 5,
+        "jobs": 6,
+        "job_rev": 5535.37,
+        "job_last": "2017-10-04"
+      }
+    }
+  },
+  {
+    "norm": "cocorepublic",
+    "canonical": "Cocorepublic",
+    "reason": "qb conflict: artifact 'Coco Republic' qb=43406 $1,022,568 vs canonical qb=43414 $318",
+    "group_size": 2,
+    "group": [
+      {
+        "id": "ab73a9e0",
+        "name": "Coco Republic",
+        "qid": "43406",
+        "method": "email_lookup",
+        "stale_rev": 1022567.63
+      },
+      {
+        "id": "d41f9ca1",
+        "name": "Cocorepublic",
+        "qid": "43414",
+        "method": "exact_name",
+        "stale_rev": 318.18
+      }
+    ],
+    "distinct_qb_customers": 2,
+    "evidence": {
+      "35657": {
+        "name": "Coco Republic",
+        "code": "C24664",
+        "rec": "43414",
+        "total_invoiced": 0.0,
+        "recency": 9999,
+        "quotes": 0,
+        "won": 0,
+        "jobs": 0,
+        "job_rev": 0,
+        "job_last": null
+      },
+      "34933": {
+        "name": "Coco Republic",
+        "code": "C23912",
+        "rec": "43406",
+        "total_invoiced": 0.0,
+        "recency": 9999,
+        "quotes": 0,
+        "won": 0,
+        "jobs": 0,
+        "job_rev": 0,
+        "job_last": null
+      }
+    }
+  },
+  {
+    "norm": "cocogun",
+    "canonical": "Co Co Gun",
+    "reason": "qb conflict: artifact 'Cocogun' qb=30952 $1,141 vs canonical qb=32847 $37,966",
+    "group_size": 2,
+    "group": [
+      {
+        "id": "2d757bb1",
+        "name": "Cocogun",
+        "qid": "30952",
+        "method": "exact_name",
+        "stale_rev": 1140.91
+      },
+      {
+        "id": "5ecfecd1",
+        "name": "Co Co Gun",
+        "qid": "32847",
+        "method": "email_lookup",
+        "stale_rev": 37965.77
+      }
+    ],
+    "distinct_qb_customers": 2,
+    "evidence": {
+      "29678": {
+        "name": "Co Co Gun",
+        "code": "C19660",
+        "rec": "30952",
+        "total_invoiced": 1140.91,
+        "recency": 2378,
+        "quotes": 0,
+        "won": 0,
+        "jobs": 1,
+        "job_rev": 1115.91,
+        "job_last": "2019-11-06"
+      },
+      "34814": {
+        "name": "Cocogun",
+        "code": "C23793",
+        "rec": "32847",
+        "total_invoiced": 37965.77,
+        "recency": 220,
+        "quotes": 15,
+        "won": 7,
+        "jobs": 21,
+        "job_rev": 36638.76,
+        "job_last": "2025-09-29"
+      }
+    }
+  },
+  {
+    "norm": "louisvuitton",
+    "canonical": "Louisvuitton",
+    "reason": "qb conflict: artifact 'Louis Vuitton' qb=29737 $29,319 vs canonical qb=44057 $10,161",
+    "group_size": 2,
+    "group": [
+      {
+        "id": "0c836d3a",
+        "name": "Louisvuitton",
+        "qid": "44057",
+        "method": "email_lookup",
+        "stale_rev": 10161.39
+      },
+      {
+        "id": "e9b80e6e",
+        "name": "Louis Vuitton",
+        "qid": "29737",
+        "method": "email_lookup",
+        "stale_rev": 29318.82
+      }
+    ],
+    "distinct_qb_customers": 2,
+    "evidence": {
+      "29737": {
+        "name": "Louis Vuitton",
+        "code": "C19717",
+        "rec": "44057",
+        "total_invoiced": 10161.39,
+        "recency": 831,
+        "quotes": 10,
+        "won": 7,
+        "jobs": 14,
+        "job_rev": 9916.67,
+        "job_last": "2024-01-19"
+      },
+      "15235": {
+        "name": "Blainey North",
+        "code": "C10163",
+        "rec": "29737",
+        "total_invoiced": 29318.82,
+        "recency": 349,
+        "quotes": 34,
+        "won": 12,
+        "jobs": 26,
+        "job_rev": 27327.12,
+        "job_last": "2025-05-27"
+      }
+    }
+  },
+  {
+    "norm": "milkandhoneyunited",
+    "canonical": "Milkandhoneyunited",
+    "reason": "qb conflict: artifact 'Milk and Honey United' qb=34069 $5,782 vs canonical qb=43270 $616",
+    "group_size": 2,
+    "group": [
+      {
+        "id": "54e8878d",
+        "name": "Milkandhoneyunited",
+        "qid": "43270",
+        "method": "email_lookup",
+        "stale_rev": 616.36
+      },
+      {
+        "id": "ff6f32fa",
+        "name": "Milk and Honey United",
+        "qid": "34069",
+        "method": "email_lookup",
+        "stale_rev": 5782.47
+      }
+    ],
+    "distinct_qb_customers": 2,
+    "evidence": {
+      "16927": {
+        "name": "Carbon8",
+        "code": "C12441",
+        "rec": "34069",
+        "total_invoiced": 5782.47,
+        "recency": 21,
+        "quotes": 481,
+        "won": 256,
+        "jobs": 385,
+        "job_rev": 52315.58,
+        "job_last": "2026-05-28"
+      },
+      "34069": {
+        "name": "Milk and Honey United",
+        "code": "C23046",
+        "rec": "43270",
+        "total_invoiced": 616.36,
+        "recency": 1257,
+        "quotes": 2,
+        "won": 1,
+        "jobs": 1,
+        "job_rev": 568.64,
+        "job_last": "2022-12-01"
+      }
+    }
+  },
+  {
+    "norm": "azbcreative",
+    "canonical": "AZBcreative",
+    "reason": "qb conflict: artifact 'AZB Creative' qb=42088 $1,112 vs canonical qb=44283 $2,270",
+    "group_size": 2,
+    "group": [
+      {
+        "id": "b3560f25",
+        "name": "AZBcreative",
+        "qid": "44283",
+        "method": "email_lookup",
+        "stale_rev": 2270.05
+      },
+      {
+        "id": "d6999903",
+        "name": "AZB Creative",
+        "qid": "42088",
+        "method": "email_lookup",
+        "stale_rev": 1111.82
+      }
+    ],
+    "distinct_qb_customers": 2,
+    "evidence": {
+      "35361": {
+        "name": "AZBcreative",
+        "code": "C24348",
+        "rec": "44283",
+        "total_invoiced": 2270.05,
+        "recency": 1109,
+        "quotes": 0,
+        "won": 0,
+        "jobs": 0,
+        "job_rev": 0,
+        "job_last": null
+      },
+      "30162": {
+        "name": "AZB Creative",
+        "code": "C20142",
+        "rec": "42088",
+        "total_invoiced": 1111.82,
+        "recency": 2273,
+        "quotes": 1,
+        "won": 1,
+        "jobs": 2,
+        "job_rev": 1111.8200000000002,
+        "job_last": "2020-02-19"
+      }
+    }
+  },
+  {
+    "norm": "digitalrush",
+    "canonical": "Digitalrush",
+    "reason": "qb conflict: artifact 'Digital  Rush' qb=31209 $4,593 vs canonical qb=34083 $0",
+    "group_size": 2,
+    "group": [
+      {
+        "id": "4160f3c0",
+        "name": "Digital  Rush",
+        "qid": "31209",
+        "method": "email_lookup",
+        "stale_rev": 4593.19
+      },
+      {
+        "id": "642a2d0a",
+        "name": "Digitalrush",
+        "qid": "34083",
+        "method": "contact_chain",
+        "stale_rev": 0.0
+      }
+    ],
+    "distinct_qb_customers": 2,
+    "evidence": {
+      "32114": {
+        "name": "Digital  Rush",
+        "code": "C22088",
+        "rec": "31209",
+        "total_invoiced": 0.0,
+        "recency": 9999,
+        "quotes": 0,
+        "won": 0,
+        "jobs": 0,
+        "job_rev": 0,
+        "job_last": null
+      },
+      "17997": {
+        "name": "Digital Rush Pty Ltd",
+        "code": "C13091",
+        "rec": "34083",
+        "total_invoiced": 0.0,
+        "recency": 9999,
+        "quotes": 2,
+        "won": 0,
+        "jobs": 0,
+        "job_rev": 0,
+        "job_last": null
+      }
+    }
+  },
+  {
+    "norm": "wesshawdesign",
+    "canonical": "Wesshawdesign",
+    "reason": "qb conflict: artifact 'Wes Shaw Design' qb=30474 $1,055 vs canonical qb=34279 $35,574",
+    "group_size": 2,
+    "group": [
+      {
+        "id": "7a04e1f7",
+        "name": "Wes Shaw Design",
+        "qid": "30474",
+        "method": "email_lookup",
+        "stale_rev": 1054.54
+      },
+      {
+        "id": "cd4b0ba8",
+        "name": "Wesshawdesign",
+        "qid": "34279",
+        "method": "email_lookup",
+        "stale_rev": 35573.65
+      }
+    ],
+    "distinct_qb_customers": 2,
+    "evidence": {
+      "20928": {
+        "name": "Dimeo",
+        "code": "C16014",
+        "rec": "30474",
+        "total_invoiced": 1054.54,
+        "recency": 2911,
+        "quotes": 2,
+        "won": 1,
+        "jobs": 3,
+        "job_rev": 917.77,
+        "job_last": "2018-05-22"
+      },
+      "30474": {
+        "name": "Wes Shaw Design",
+        "code": "C20451",
+        "rec": "34279",
+        "total_invoiced": 35573.65,
+        "recency": 609,
+        "quotes": 22,
+        "won": 6,
+        "jobs": 14,
+        "job_rev": 34843.23,
+        "job_last": "2024-08-30"
+      }
+    }
+  },
+  {
+    "norm": "regroup",
+    "canonical": "Re.Group",
+    "reason": "qb conflict: artifact 'Re-Group' qb=33819 $3,762 vs canonical qb=42894 $1,486",
+    "group_size": 2,
+    "group": [
+      {
+        "id": "08a27a9b",
+        "name": "Re-Group",
+        "qid": "33819",
+        "method": "exact_name",
+        "stale_rev": 3761.82
+      },
+      {
+        "id": "71a5298d",
+        "name": "Re.Group",
+        "qid": "42894",
+        "method": "email_lookup",
+        "stale_rev": 1486.36
+      }
+    ],
+    "distinct_qb_customers": 2,
+    "evidence": {
+      "21155": {
+        "name": "Re-Group",
+        "code": "C16233",
+        "rec": "33819",
+        "total_invoiced": 3761.82,
+        "recency": 2874,
+        "quotes": 2,
+        "won": 2,
+        "jobs": 2,
+        "job_rev": 3761.82,
+        "job_last": "2018-06-28"
+      },
+      "31993": {
+        "name": "Re.Group",
+        "code": "C21966",
+        "rec": "42894",
+        "total_invoiced": 1486.36,
+        "recency": 1844,
+        "quotes": 0,
+        "won": 0,
+        "jobs": 1,
+        "job_rev": 1486.36,
+        "job_last": "2021-04-21"
+      }
+    }
+  },
+  {
+    "norm": "publicissapient",
+    "canonical": "Publicissapient",
+    "reason": "qb conflict: artifact 'Publicis Sapient' qb=33559 $10,157 vs canonical qb=31461 $432",
+    "group_size": 2,
+    "group": [
+      {
+        "id": "0e7295da",
+        "name": "Publicis Sapient",
+        "qid": "33559",
+        "method": "email_lookup",
+        "stale_rev": 10157.01
+      },
+      {
+        "id": "5d7365b8",
+        "name": "Publicissapient",
+        "qid": "31461",
+        "method": "contact_chain",
+        "stale_rev": 432.38
+      }
+    ],
+    "distinct_qb_customers": 2,
+    "evidence": {
+      "34890": {
+        "name": "Publicis Sapient",
+        "code": "C23869",
+        "rec": "33559",
+        "total_invoiced": 10157.01,
+        "recency": 630,
+        "quotes": 8,
+        "won": 3,
+        "jobs": 13,
+        "job_rev": 9444.46,
+        "job_last": "2024-08-19"
+      },
+      "34687": {
+        "name": "Publicis Sapient",
+        "code": "C23666",
+        "rec": "31461",
+        "total_invoiced": 0.0,
+        "recency": 9999,
+        "quotes": 1,
+        "won": 0,
+        "jobs": 0,
+        "job_rev": 0,
+        "job_last": null
+      }
+    }
+  },
+  {
+    "norm": "matthewely",
+    "canonical": "Matthewely",
+    "reason": "qb conflict: artifact 'Matthew Ely' qb=29762 $10,418 vs canonical qb=32713 $70,337",
+    "group_size": 2,
+    "group": [
+      {
+        "id": "27b7a920",
+        "name": "Matthewely",
+        "qid": "32713",
+        "method": "email_lookup",
+        "stale_rev": 70337.35
+      },
+      {
+        "id": "47ff9936",
+        "name": "Matthew Ely",
+        "qid": "29762",
+        "method": "email_lookup",
+        "stale_rev": 10418.18
+      }
+    ],
+    "distinct_qb_customers": 2,
+    "evidence": {
+      "15751": {
+        "name": "Layfield Design",
+        "code": "C10728",
+        "rec": "29762",
+        "total_invoiced": 10418.18,
+        "recency": 180,
+        "quotes": 22,
+        "won": 12,
+        "jobs": 23,
+        "job_rev": 13385.15,
+        "job_last": "2025-11-12"
+      },
+      "29762": {
+        "name": "Matthew Ely",
+        "code": "C19744",
+        "rec": "32713",
+        "total_invoiced": 70337.35,
+        "recency": 76,
+        "quotes": 50,
+        "won": 31,
+        "jobs": 76,
+        "job_rev": 69396.73,
+        "job_last": "2026-05-26"
+      }
+    }
+  },
+  {
+    "norm": "spacenow",
+    "canonical": "Spacenow",
+    "reason": "qb conflict: artifact 'Space Now' qb=31410 $4,751 vs canonical qb=32175 $1,474",
+    "group_size": 2,
+    "group": [
+      {
+        "id": "8efadba4",
+        "name": "Space Now",
+        "qid": "31410",
+        "method": "email_lookup",
+        "stale_rev": 4750.61
+      },
+      {
+        "id": "d8232d87",
+        "name": "Spacenow",
+        "qid": "32175",
+        "method": "email_lookup",
+        "stale_rev": 1473.62
+      }
+    ],
+    "distinct_qb_customers": 2,
+    "evidence": {
+      "34343": {
+        "name": "Climate 200",
+        "code": "C23322",
+        "rec": "31410",
+        "total_invoiced": 4750.61,
+        "recency": 1082,
+        "quotes": 0,
+        "won": 0,
+        "jobs": 5,
+        "job_rev": 4574.67,
+        "job_last": "2023-05-25"
+      },
+      "31410": {
+        "name": "Space Now",
+        "code": "C21385",
+        "rec": "32175",
+        "total_invoiced": 1473.62,
+        "recency": 934,
+        "quotes": 7,
+        "won": 3,
+        "jobs": 5,
+        "job_rev": 1152.26,
+        "job_last": "2023-10-20"
+      }
+    }
+  }
+]

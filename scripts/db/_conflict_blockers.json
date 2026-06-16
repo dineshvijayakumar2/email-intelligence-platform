@@ -1,0 +1,609 @@
+{
+  "counts": {
+    "DUP_COMPANY": 19,
+    "CHAIN": 5,
+    "LEGIT_OTHER": 0
+  },
+  "rows": [
+    {
+      "class": "DUP_COMPANY",
+      "company": {
+        "id": "e9b80e6e-8f9d-48eb-9e95-60e8e2fe49c3",
+        "name": "Louis Vuitton",
+        "contacts": 3,
+        "emails": 5
+      },
+      "wrong_owner": {
+        "name": "Blainey North",
+        "key": "15235"
+      },
+      "rightful_qb": {
+        "id": "f0c31749-6c08-486e-a044-e097aa6609a1",
+        "name": "Louis Vuitton",
+        "key": "29737"
+      },
+      "blocker_company": {
+        "id": "0c836d3a-9d43-45ae-8cd5-1b22a2438726",
+        "name": "Louisvuitton",
+        "method": "email_lookup",
+        "contacts": 6,
+        "emails": 1
+      }
+    },
+    {
+      "class": "DUP_COMPANY",
+      "company": {
+        "id": "47ff9936-bf0e-49f4-a71b-06b4141236ab",
+        "name": "Matthew Ely",
+        "contacts": 1,
+        "emails": 122
+      },
+      "wrong_owner": {
+        "name": "Layfield Design",
+        "key": "15751"
+      },
+      "rightful_qb": {
+        "id": "507ea680-5d3f-47a8-b1b9-39e21a74db9d",
+        "name": "Matthew Ely",
+        "key": "29762"
+      },
+      "blocker_company": {
+        "id": "27b7a920-e69d-4f25-9563-b0ae3400cf43",
+        "name": "Matthewely",
+        "method": "email_lookup",
+        "contacts": 8,
+        "emails": 31
+      }
+    },
+    {
+      "class": "DUP_COMPANY",
+      "company": {
+        "id": "5284582d-5fcd-42e0-8d12-d3afbf791b25",
+        "name": "The Make Haus",
+        "contacts": 1,
+        "emails": 1
+      },
+      "wrong_owner": {
+        "name": "Payce Mangement Pty Ltd",
+        "key": "18244"
+      },
+      "rightful_qb": {
+        "id": "23dd32bc-2c2e-4cad-9761-3b389c4ecf2f",
+        "name": "The Make Haus",
+        "key": "34817"
+      },
+      "blocker_company": {
+        "id": "0448ab6d-770f-40f8-9993-b07fe83a621a",
+        "name": "Themakehaus",
+        "method": "email_lookup",
+        "contacts": 2,
+        "emails": 10
+      }
+    },
+    {
+      "class": "DUP_COMPANY",
+      "company": {
+        "id": "ff6f32fa-7bbf-46f7-a408-91d1499c1901",
+        "name": "Milk and Honey United",
+        "contacts": 0,
+        "emails": 0
+      },
+      "wrong_owner": {
+        "name": "Carbon8",
+        "key": "16927"
+      },
+      "rightful_qb": {
+        "id": "77330a55-9377-46b1-a61a-9d4cc9b834d0",
+        "name": "Milk and Honey United",
+        "key": "34069"
+      },
+      "blocker_company": {
+        "id": "54e8878d-999e-4626-87e2-2ed81907b370",
+        "name": "Milkandhoneyunited",
+        "method": "email_lookup",
+        "contacts": 2,
+        "emails": 0
+      }
+    },
+    {
+      "class": "DUP_COMPANY",
+      "company": {
+        "id": "8efadba4-f299-460c-a48a-b5ecaa56f5aa",
+        "name": "Space Now",
+        "contacts": 3,
+        "emails": 0
+      },
+      "wrong_owner": {
+        "name": "Climate 200",
+        "key": "34343"
+      },
+      "rightful_qb": {
+        "id": "47c48056-e496-4a7c-a1ec-5885e048db54",
+        "name": "Space Now",
+        "key": "31410"
+      },
+      "blocker_company": {
+        "id": "d8232d87-58ed-416c-9516-e171c3e02073",
+        "name": "Spacenow",
+        "method": "email_lookup",
+        "contacts": 5,
+        "emails": 0
+      }
+    },
+    {
+      "class": "DUP_COMPANY",
+      "company": {
+        "id": "179f8f3c-88ae-4fc3-9450-0fae9febe713",
+        "name": "Mary Libro",
+        "contacts": 1,
+        "emails": 0
+      },
+      "wrong_owner": {
+        "name": "Anthony Napoli",
+        "key": "17165"
+      },
+      "rightful_qb": {
+        "id": "66914c8e-200a-4cd9-87f8-bd684f7d7204",
+        "name": "Mary Libro",
+        "key": "29809"
+      },
+      "blocker_company": {
+        "id": "be2fca33-f2b4-4dbf-aa15-869892d68752",
+        "name": "Marylibro",
+        "method": "email_lookup",
+        "contacts": 2,
+        "emails": 30
+      }
+    },
+    {
+      "class": "CHAIN",
+      "company": {
+        "id": "ad0fd944-74fd-4c76-9292-0fdef3a3422f",
+        "name": "Flintwood",
+        "contacts": 1,
+        "emails": 1
+      },
+      "wrong_owner": {
+        "name": "Virtuoso",
+        "key": "23231"
+      },
+      "rightful_qb": {
+        "id": "ba13b952-4b43-4459-9acf-6c5ffd879ac1",
+        "name": "Flintwood",
+        "key": "30647"
+      },
+      "blocker_company": {
+        "id": "1418a055-d6bd-4a5e-aef0-2ecbe47e955d",
+        "name": "Positive Invest",
+        "method": "email_lookup",
+        "contacts": 1,
+        "emails": 0
+      }
+    },
+    {
+      "class": "DUP_COMPANY",
+      "company": {
+        "id": "7a04e1f7-bd99-42eb-9ee0-74eafe2eaad4",
+        "name": "Wes Shaw Design",
+        "contacts": 0,
+        "emails": 0
+      },
+      "wrong_owner": {
+        "name": "Dimeo",
+        "key": "20928"
+      },
+      "rightful_qb": {
+        "id": "f1712cfd-66d6-4bf6-9b13-8ea62c8ac7c2",
+        "name": "Wes Shaw Design",
+        "key": "30474"
+      },
+      "blocker_company": {
+        "id": "cd4b0ba8-d8e5-45b2-becc-c5a7b73a6d59",
+        "name": "Wesshawdesign",
+        "method": "email_lookup",
+        "contacts": 4,
+        "emails": 10
+      }
+    },
+    {
+      "class": "DUP_COMPANY",
+      "company": {
+        "id": "21dfc6d3-ff35-4051-b929-640e81bd780f",
+        "name": "The Life Style Edit",
+        "contacts": 0,
+        "emails": 0
+      },
+      "wrong_owner": {
+        "name": "Greencliff realty",
+        "key": "18444"
+      },
+      "rightful_qb": {
+        "id": "52d19b5c-115a-4cc1-b395-ad062e102a3f",
+        "name": "The Life Style Edit",
+        "key": "29954"
+      },
+      "blocker_company": {
+        "id": "3bbd3a50-038a-4fab-ba15-1e746694a2a8",
+        "name": "Thelifestyleedit",
+        "method": "email_lookup",
+        "contacts": 3,
+        "emails": 0
+      }
+    },
+    {
+      "class": "DUP_COMPANY",
+      "company": {
+        "id": "6d55c07b-f506-49b1-afcd-6c35a460b574",
+        "name": "Studio Air",
+        "contacts": 1,
+        "emails": 0
+      },
+      "wrong_owner": {
+        "name": "Paula Chrystello",
+        "key": "26913"
+      },
+      "rightful_qb": {
+        "id": "04444271-8cd6-436d-8da7-5284f2973b2a",
+        "name": "Studio Air",
+        "key": "33886"
+      },
+      "blocker_company": {
+        "id": "e252f258-fb4e-43b3-9ec1-d7cccc6cb918",
+        "name": "Studioair",
+        "method": "email_lookup",
+        "contacts": 4,
+        "emails": 3
+      }
+    },
+    {
+      "class": "CHAIN",
+      "company": {
+        "id": "97f176bb-837a-414b-a642-eff6df050e3c",
+        "name": "Climate 200",
+        "contacts": 0,
+        "emails": 0
+      },
+      "wrong_owner": {
+        "name": "Leah Giselle Spadone",
+        "key": "31347"
+      },
+      "rightful_qb": {
+        "id": "fcfeabd4-12a6-49f7-a65a-63fc38fa97ed",
+        "name": "Climate 200",
+        "key": "34343"
+      },
+      "blocker_company": {
+        "id": "8efadba4-f299-460c-a48a-b5ecaa56f5aa",
+        "name": "Space Now",
+        "method": "email_lookup",
+        "contacts": 3,
+        "emails": 0
+      }
+    },
+    {
+      "class": "DUP_COMPANY",
+      "company": {
+        "id": "d89e719e-a63d-45db-b2f0-c2f7734f4961",
+        "name": "Among Equals",
+        "contacts": 2,
+        "emails": 2
+      },
+      "wrong_owner": {
+        "name": "Meshki",
+        "key": "33854"
+      },
+      "rightful_qb": {
+        "id": "8c99be75-595f-4eeb-90da-f093027ff94e",
+        "name": "Among Equals",
+        "key": "32425"
+      },
+      "blocker_company": {
+        "id": "5e191938-0664-4371-91f2-8065ee57b822",
+        "name": "Amongequals",
+        "method": "email_lookup",
+        "contacts": 3,
+        "emails": 3
+      }
+    },
+    {
+      "class": "CHAIN",
+      "company": {
+        "id": "699e984f-6eef-48e8-90ad-a0945aa23097",
+        "name": "Meshki",
+        "contacts": 0,
+        "emails": 0
+      },
+      "wrong_owner": {
+        "name": "Cameron Girdlestone",
+        "key": "23359"
+      },
+      "rightful_qb": {
+        "id": "86656286-6699-4cab-a4ec-9d4505601a36",
+        "name": "Meshki",
+        "key": "33854"
+      },
+      "blocker_company": {
+        "id": "d89e719e-a63d-45db-b2f0-c2f7734f4961",
+        "name": "Among Equals",
+        "method": "email_lookup",
+        "contacts": 2,
+        "emails": 2
+      }
+    },
+    {
+      "class": "CHAIN",
+      "company": {
+        "id": "a8d221b3-f92e-4b53-ba84-bb8e994e5cf7",
+        "name": "Alexa Keirnan",
+        "contacts": 0,
+        "emails": 0
+      },
+      "wrong_owner": {
+        "name": "Allie Sallay",
+        "key": "24512"
+      },
+      "rightful_qb": {
+        "id": "cf8f48b3-e5fe-4642-b326-3d1d1d5fff47",
+        "name": "Alexa Keirnan",
+        "key": "30694"
+      },
+      "blocker_company": {
+        "id": "fb39170a-9acb-4b39-ae75-01e32664592a",
+        "name": "Boom Studios",
+        "method": "email_lookup",
+        "contacts": 1,
+        "emails": 0
+      }
+    },
+    {
+      "class": "CHAIN",
+      "company": {
+        "id": "ebe02e4c-2999-4226-88c3-f1731c5c18b0",
+        "name": "Bec Morris Design",
+        "contacts": 1,
+        "emails": 0
+      },
+      "wrong_owner": {
+        "name": "Ezra VanderJagt",
+        "key": "31241"
+      },
+      "rightful_qb": {
+        "id": "41456861-46a6-4941-81bf-a0ba87560cc4",
+        "name": "Bec Morris Design",
+        "key": "32427"
+      },
+      "blocker_company": {
+        "id": "1bc83f7e-0188-4aff-bab2-0147c95a855b",
+        "name": "Becmorris",
+        "method": "contact_chain",
+        "contacts": 1,
+        "emails": 0
+      }
+    },
+    {
+      "class": "DUP_COMPANY",
+      "company": {
+        "id": "10b2c5a0-ed5b-4866-b9ec-d7ee2b1a5566",
+        "name": "3rdspace",
+        "contacts": 1,
+        "emails": 0
+      },
+      "wrong_owner": {
+        "name": "Lil's Cards",
+        "key": "36273"
+      },
+      "rightful_qb": {
+        "id": "6a2de9c1-74ac-43ad-af9e-3f392055a9b0",
+        "name": "3rd Space",
+        "key": "19060"
+      },
+      "blocker_company": {
+        "id": "ba197f95-9991-4bb0-94d6-f7ba101dfaa9",
+        "name": "3rd Space",
+        "method": "exact_name",
+        "contacts": 0,
+        "emails": 0
+      }
+    },
+    {
+      "class": "DUP_COMPANY",
+      "company": {
+        "id": "1418a055-d6bd-4a5e-aef0-2ecbe47e955d",
+        "name": "Positive Invest",
+        "contacts": 1,
+        "emails": 0
+      },
+      "wrong_owner": {
+        "name": "Flintwood",
+        "key": "30647"
+      },
+      "rightful_qb": {
+        "id": "8967d894-f770-466b-b64f-d18a3c306317",
+        "name": "Positive Invest",
+        "key": "31062"
+      },
+      "blocker_company": {
+        "id": "db7737b2-6e81-4be5-b25d-b46c767ede78",
+        "name": "Positiveinvest",
+        "method": "email_lookup",
+        "contacts": 12,
+        "emails": 58
+      }
+    },
+    {
+      "class": "DUP_COMPANY",
+      "company": {
+        "id": "15c7ed1a-ec67-4658-ba60-3ee91e069134",
+        "name": "Design United",
+        "contacts": 1,
+        "emails": 0
+      },
+      "wrong_owner": {
+        "name": "Pixels Media",
+        "key": "34190"
+      },
+      "rightful_qb": {
+        "id": "10155b40-c586-4a20-aef6-73cd119aab55",
+        "name": "Design United",
+        "key": "28387"
+      },
+      "blocker_company": {
+        "id": "c6014d27-0d97-42c2-8c85-adea1fe19631",
+        "name": "Designunited",
+        "method": "email_lookup",
+        "contacts": 6,
+        "emails": 7
+      }
+    },
+    {
+      "class": "DUP_COMPANY",
+      "company": {
+        "id": "27025325-ae31-433d-a69c-696d8f6ac738",
+        "name": "The Known Agency",
+        "contacts": 0,
+        "emails": 0
+      },
+      "wrong_owner": {
+        "name": "Everest Financial Group",
+        "key": "15480"
+      },
+      "rightful_qb": {
+        "id": "c7c6e5ea-1941-4ee8-baa1-c9e3545a5e52",
+        "name": "The Known Agency",
+        "key": "36576"
+      },
+      "blocker_company": {
+        "id": "46079b87-0366-4af3-9480-4f83d991c729",
+        "name": "Theknownagency",
+        "method": "email_lookup",
+        "contacts": 4,
+        "emails": 17
+      }
+    },
+    {
+      "class": "DUP_COMPANY",
+      "company": {
+        "id": "8b8b613b-4f6f-48f6-9fa9-9ab283b24c87",
+        "name": "Kaizen Tea",
+        "contacts": 0,
+        "emails": 0
+      },
+      "wrong_owner": {
+        "name": "MEYER OPTICA",
+        "key": "14525"
+      },
+      "rightful_qb": {
+        "id": "fb079e66-c9e7-426d-b2a4-b7d855b524b8",
+        "name": "Kaizen Tea",
+        "key": "35792"
+      },
+      "blocker_company": {
+        "id": "54fd5d8f-f713-4c5a-9f54-a84033d815df",
+        "name": "Kaizentea",
+        "method": "email_lookup",
+        "contacts": 2,
+        "emails": 7
+      }
+    },
+    {
+      "class": "DUP_COMPANY",
+      "company": {
+        "id": "c38f1cba-f680-40b3-8887-f52758580135",
+        "name": "Advanced Navigation",
+        "contacts": 1,
+        "emails": 0
+      },
+      "wrong_owner": {
+        "name": "Uberbrand Trading Pty Ltd",
+        "key": "15003"
+      },
+      "rightful_qb": {
+        "id": "a65d8c94-b92f-46f0-93ec-c3fdf06d12c8",
+        "name": "Advanced Navigation",
+        "key": "36237"
+      },
+      "blocker_company": {
+        "id": "7e759234-d3da-4d3b-95c2-b8dd364ecea4",
+        "name": "Advancednavigation",
+        "method": "email_lookup",
+        "contacts": 3,
+        "emails": 14
+      }
+    },
+    {
+      "class": "DUP_COMPANY",
+      "company": {
+        "id": "ce598bf5-72cd-42d4-bedf-1d2d9ea3b988",
+        "name": "Arms Of Eve",
+        "contacts": 1,
+        "emails": 1
+      },
+      "wrong_owner": {
+        "name": "Budget Tyres & Mechanical",
+        "key": "35401"
+      },
+      "rightful_qb": {
+        "id": "eab317f9-14cc-4380-b69a-20a69b6a0672",
+        "name": "Arms Of Eve",
+        "key": "34662"
+      },
+      "blocker_company": {
+        "id": "4609e1d8-6d5b-4c11-a052-0ba7f0b9e6aa",
+        "name": "Armsofeve",
+        "method": "email_lookup",
+        "contacts": 7,
+        "emails": 75
+      }
+    },
+    {
+      "class": "DUP_COMPANY",
+      "company": {
+        "id": "d8e15a20-445b-42ce-8a10-999e796c55c5",
+        "name": "Tech Policy",
+        "contacts": 0,
+        "emails": 0
+      },
+      "wrong_owner": {
+        "name": "Bendalls Group",
+        "key": "15219"
+      },
+      "rightful_qb": {
+        "id": "0974ef9d-a4f2-449c-83e9-6388ae16e449",
+        "name": "Tech Policy",
+        "key": "36369"
+      },
+      "blocker_company": {
+        "id": "45eff1a8-4cc5-4e76-8dd7-07a265c6ebf0",
+        "name": "Techpolicy",
+        "method": "email_lookup",
+        "contacts": 5,
+        "emails": 99
+      }
+    },
+    {
+      "class": "DUP_COMPANY",
+      "company": {
+        "id": "fb39170a-9acb-4b39-ae75-01e32664592a",
+        "name": "Boom Studios",
+        "contacts": 1,
+        "emails": 0
+      },
+      "wrong_owner": {
+        "name": "Alexa Keirnan",
+        "key": "30694"
+      },
+      "rightful_qb": {
+        "id": "93a0de24-6028-4d08-955d-9adbd3f59039",
+        "name": "Boom Studios",
+        "key": "31067"
+      },
+      "blocker_company": {
+        "id": "abfecf3d-150e-4d70-92c9-be7e785127c2",
+        "name": "Boomstudios",
+        "method": "email_lookup",
+        "contacts": 5,
+        "emails": 20
+      }
+    }
+  ]
+}

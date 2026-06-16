@@ -1,0 +1,539 @@
+{
+  "dry_run": false,
+  "mergeable_clusters": 5,
+  "skipped_clusters": [
+    {
+      "canon": "healthandperformancecollective",
+      "reason": "multiple distinct QB-linked members",
+      "members": [
+        {
+          "id": "00c0978a-a5ea-4135-80ba-22fa6a2778b4",
+          "name": "Healthandperformancecollective",
+          "qb": "33950"
+        },
+        {
+          "id": "76ba090f-e0f0-44e3-a65d-982704288bd5",
+          "name": "Health and Performance Collective",
+          "qb": "33938"
+        }
+      ]
+    },
+    {
+      "canon": "themakehaus",
+      "reason": "multiple distinct QB-linked members",
+      "members": [
+        {
+          "id": "0448ab6d-770f-40f8-9993-b07fe83a621a",
+          "name": "Themakehaus",
+          "qb": "32849"
+        },
+        {
+          "id": "5284582d-5fcd-42e0-8d12-d3afbf791b25",
+          "name": "The Make Haus",
+          "qb": "34817"
+        }
+      ]
+    },
+    {
+      "canon": "mcmullinandco",
+      "reason": "multiple distinct QB-linked members",
+      "members": [
+        {
+          "id": "0b48ae90-51ed-44ef-a15f-ec2fe389c217",
+          "name": "McMullin and Co",
+          "qb": "31634"
+        },
+        {
+          "id": "f42d0b63-cf18-4dfa-b8c9-bd12d5dba440",
+          "name": "Mc Mullin and Co",
+          "qb": "31629"
+        }
+      ]
+    },
+    {
+      "canon": "louisvuitton",
+      "reason": "multiple distinct QB-linked members",
+      "members": [
+        {
+          "id": "0c836d3a-9d43-45ae-8cd5-1b22a2438726",
+          "name": "Louisvuitton",
+          "qb": "44057"
+        },
+        {
+          "id": "e9b80e6e-8f9d-48eb-9e95-60e8e2fe49c3",
+          "name": "Louis Vuitton",
+          "qb": "29737"
+        }
+      ]
+    },
+    {
+      "canon": "positiveinvest",
+      "reason": "multiple distinct QB-linked members",
+      "members": [
+        {
+          "id": "1418a055-d6bd-4a5e-aef0-2ecbe47e955d",
+          "name": "Positive Invest",
+          "qb": "31062"
+        },
+        {
+          "id": "db7737b2-6e81-4be5-b25d-b46c767ede78",
+          "name": "Positiveinvest",
+          "qb": "33524"
+        }
+      ]
+    },
+    {
+      "canon": "brightprintgroup",
+      "reason": "multiple distinct QB-linked members",
+      "members": [
+        {
+          "id": "145f2129-8868-4696-90d4-368dd1cbf1af",
+          "name": "Brightprintgroup",
+          "qb": "41666"
+        },
+        {
+          "id": "e9379327-5085-4ab6-8cea-5c7e60d4b208",
+          "name": "Bright Print Group",
+          "qb": "36398"
+        }
+      ]
+    },
+    {
+      "canon": "designunited",
+      "reason": "multiple distinct QB-linked members",
+      "members": [
+        {
+          "id": "15c7ed1a-ec67-4658-ba60-3ee91e069134",
+          "name": "Design United",
+          "qb": "43315"
+        },
+        {
+          "id": "c6014d27-0d97-42c2-8c85-adea1fe19631",
+          "name": "Designunited",
+          "qb": "34190"
+        }
+      ]
+    },
+    {
+      "canon": "heroprint",
+      "reason": "multiple distinct QB-linked members",
+      "members": [
+        {
+          "id": "166176c9-45ef-464a-aeb0-861fbbfe8c89",
+          "name": "Heroprint",
+          "qb": "41683"
+        },
+        {
+          "id": "4e7d9ef6-e155-426f-926e-dc46139dce08",
+          "name": "Hero Print",
+          "qb": "34043"
+        }
+      ]
+    },
+    {
+      "canon": "marylibro",
+      "reason": "multiple distinct QB-linked members",
+      "members": [
+        {
+          "id": "179f8f3c-88ae-4fc3-9450-0fae9febe713",
+          "name": "Mary Libro",
+          "qb": "29809"
+        },
+        {
+          "id": "be2fca33-f2b4-4dbf-aa15-869892d68752",
+          "name": "Marylibro",
+          "qb": "44058"
+        }
+      ]
+    },
+    {
+      "canon": "sydneychildrenshospitalfoundation",
+      "reason": "multiple distinct QB-linked members",
+      "members": [
+        {
+          "id": "27a3b24f-7af2-4f91-9c63-3d71cc74882d",
+          "name": "Sydney Childrens Hospital Foundation",
+          "qb": "37455"
+        },
+        {
+          "id": "8b8a64aa-6f63-4ede-b12a-27ddd410eb76",
+          "name": "Sydney Children's Hospital Foundation",
+          "qb": "34783"
+        }
+      ]
+    },
+    {
+      "canon": "matthewely",
+      "reason": "multiple distinct QB-linked members",
+      "members": [
+        {
+          "id": "27b7a920-e69d-4f25-9563-b0ae3400cf43",
+          "name": "Matthewely",
+          "qb": "32713"
+        },
+        {
+          "id": "47ff9936-bf0e-49f4-a71b-06b4141236ab",
+          "name": "Matthew Ely",
+          "qb": "29762"
+        }
+      ]
+    },
+    {
+      "canon": "cocogun",
+      "reason": "multiple distinct QB-linked members",
+      "members": [
+        {
+          "id": "2d757bb1-265f-48ff-b8ab-8e8537e77cda",
+          "name": "Cocogun",
+          "qb": "30952"
+        },
+        {
+          "id": "5ecfecd1-5101-4da7-a1df-acf40bff4384",
+          "name": "Co Co Gun",
+          "qb": "32847"
+        }
+      ]
+    },
+    {
+      "canon": "autosportsgroup",
+      "reason": "multiple distinct QB-linked members",
+      "members": [
+        {
+          "id": "3556f6e2-3d2f-4b4b-8e33-8723c869b711",
+          "name": "Autosports Group",
+          "qb": "39952"
+        },
+        {
+          "id": "7118d7e3-f8f8-4eb9-82ae-77d88c55f862",
+          "name": "Auto Sports Group",
+          "qb": "34611"
+        }
+      ]
+    },
+    {
+      "canon": "armsofeve",
+      "reason": "multiple distinct QB-linked members",
+      "members": [
+        {
+          "id": "4609e1d8-6d5b-4c11-a052-0ba7f0b9e6aa",
+          "name": "Armsofeve",
+          "qb": "44136"
+        },
+        {
+          "id": "ce598bf5-72cd-42d4-bedf-1d2d9ea3b988",
+          "name": "Arms Of Eve",
+          "qb": "34662"
+        }
+      ]
+    },
+    {
+      "canon": "poppiepack",
+      "reason": "multiple distinct QB-linked members",
+      "members": [
+        {
+          "id": "4defbb0b-5921-41f7-ac0f-32ee022822f2",
+          "name": "Poppiepack",
+          "qb": "30870"
+        },
+        {
+          "id": "c173a654-1e6c-4f18-bac3-4f12b137f281",
+          "name": "Poppie Pack",
+          "qb": "34369"
+        }
+      ]
+    },
+    {
+      "canon": "inkmediagroup",
+      "reason": "multiple distinct QB-linked members",
+      "members": [
+        {
+          "id": "588d6f76-cb1c-4237-8b09-a7ab789e0ea3",
+          "name": "Ink Media Group",
+          "qb": "33982"
+        },
+        {
+          "id": "de9a9ccf-7cb0-4d09-b86f-15c8abc416f1",
+          "name": "INK  MEDIA GROUP",
+          "qb": "33542"
+        }
+      ]
+    },
+    {
+      "canon": "amongequals",
+      "reason": "multiple distinct QB-linked members",
+      "members": [
+        {
+          "id": "5e191938-0664-4371-91f2-8065ee57b822",
+          "name": "Amongequals",
+          "qb": "32760"
+        },
+        {
+          "id": "d89e719e-a63d-45db-b2f0-c2f7734f4961",
+          "name": "Among Equals",
+          "qb": "32425"
+        }
+      ]
+    },
+    {
+      "canon": "specialtprint",
+      "reason": "multiple distinct QB-linked members",
+      "members": [
+        {
+          "id": "62c918a6-f3a3-4dcb-a938-8dc15252314e",
+          "name": "Special T Print",
+          "qb": "34053"
+        },
+        {
+          "id": "a2ca89a7-0763-4fc1-95cb-7edb9309bfd3",
+          "name": "Specialtprint",
+          "qb": "41672"
+        }
+      ]
+    },
+    {
+      "canon": "studioair",
+      "reason": "multiple distinct QB-linked members",
+      "members": [
+        {
+          "id": "6d55c07b-f506-49b1-afcd-6c35a460b574",
+          "name": "Studio Air",
+          "qb": "33886"
+        },
+        {
+          "id": "e252f258-fb4e-43b3-9ec1-d7cccc6cb918",
+          "name": "Studioair",
+          "qb": "33142"
+        }
+      ]
+    },
+    {
+      "canon": "advancednavigation",
+      "reason": "multiple distinct QB-linked members",
+      "members": [
+        {
+          "id": "7e759234-d3da-4d3b-95c2-b8dd364ecea4",
+          "name": "Advancednavigation",
+          "qb": "33114"
+        },
+        {
+          "id": "c38f1cba-f680-40b3-8887-f52758580135",
+          "name": "Advanced Navigation",
+          "qb": "36237"
+        }
+      ]
+    },
+    {
+      "canon": "spacenow",
+      "reason": "multiple distinct QB-linked members",
+      "members": [
+        {
+          "id": "8efadba4-f299-460c-a48a-b5ecaa56f5aa",
+          "name": "Space Now",
+          "qb": "31410"
+        },
+        {
+          "id": "d8232d87-58ed-416c-9516-e171c3e02073",
+          "name": "Spacenow",
+          "qb": "32175"
+        }
+      ]
+    },
+    {
+      "canon": "shapr",
+      "reason": "multiple distinct QB-linked members",
+      "members": [
+        {
+          "id": "9ead37fd-32ef-4b67-8041-7ccbb93f94a3",
+          "name": "SHA PR",
+          "qb": "32588"
+        },
+        {
+          "id": "fef2f608-dc43-4103-9b40-913bb0d50367",
+          "name": "Shapr",
+          "qb": "30282"
+        }
+      ]
+    },
+    {
+      "canon": "scarletalliance",
+      "reason": "multiple distinct QB-linked members",
+      "members": [
+        {
+          "id": "a7de1c45-ebcb-44e8-8f49-60da917a3fec",
+          "name": "Scarletalliance",
+          "qb": "31412"
+        },
+        {
+          "id": "bd0fecb0-ceea-4fa0-b865-1923a0c00dbd",
+          "name": "Scarlet Alliance",
+          "qb": "43748"
+        }
+      ]
+    },
+    {
+      "canon": "cocorepublic",
+      "reason": "multiple distinct QB-linked members",
+      "members": [
+        {
+          "id": "ab73a9e0-de31-4189-9042-364f7e94a8d5",
+          "name": "Coco Republic",
+          "qb": "43406"
+        },
+        {
+          "id": "d41f9ca1-0ce6-438e-a12e-647d07249e1c",
+          "name": "Cocorepublic",
+          "qb": "43414"
+        }
+      ]
+    },
+    {
+      "canon": "boomstudios",
+      "reason": "multiple distinct QB-linked members",
+      "members": [
+        {
+          "id": "abfecf3d-150e-4d70-92c9-be7e785127c2",
+          "name": "Boomstudios",
+          "qb": "32743"
+        },
+        {
+          "id": "fb39170a-9acb-4b39-ae75-01e32664592a",
+          "name": "Boom Studios",
+          "qb": "31067"
+        }
+      ]
+    },
+    {
+      "canon": "azbcreative",
+      "reason": "multiple distinct QB-linked members",
+      "members": [
+        {
+          "id": "b3560f25-7815-4ce1-be88-3c41dd9c441f",
+          "name": "AZBcreative",
+          "qb": "44283"
+        },
+        {
+          "id": "d6999903-67da-4b3b-9b54-a7da53b4e65d",
+          "name": "AZB Creative",
+          "qb": "42088"
+        }
+      ]
+    },
+    {
+      "canon": "4cabling",
+      "reason": "multiple distinct QB-linked members",
+      "members": [
+        {
+          "id": "f1fecbaf-bf6e-4119-a75c-4fc6d6454c2e",
+          "name": "4Cabling",
+          "qb": "41086"
+        },
+        {
+          "id": "fedb51ba-c3cb-4d9b-9354-539fec0e52ef",
+          "name": "4 Cabling",
+          "qb": "44327"
+        }
+      ]
+    }
+  ],
+  "contacts_moved": 11,
+  "dup_contact_skips": 0,
+  "emails_relinked": 254,
+  "domains_transferred": 5,
+  "companies_emptied": 5,
+  "clusters": [
+    {
+      "canon": "spiritsplatform",
+      "survivor_id": "e40220e2-6dfb-4ffd-b39b-444af250992e",
+      "survivor_name": "Spiritsplatform",
+      "survivor_qb": "33935",
+      "losers": [
+        {
+          "id": "1111b1bf-8e7d-4468-a702-7854ae83d2ad",
+          "name": "Spirits Platform",
+          "moved": 1,
+          "domains": []
+        }
+      ],
+      "moved": 1,
+      "dup_skips": 0,
+      "emails_relinked": 0
+    },
+    {
+      "canon": "qreport",
+      "survivor_id": "e725ef42-e80d-4efd-a58c-8d6ac12d2780",
+      "survivor_name": "Q Report",
+      "survivor_qb": "44536",
+      "losers": [
+        {
+          "id": "521e0e72-9280-4ecf-aeb2-ffc51d78f539",
+          "name": "Qreport",
+          "moved": 5,
+          "domains": [
+            "qreport.com.au"
+          ]
+        }
+      ],
+      "moved": 5,
+      "dup_skips": 0,
+      "emails_relinked": 232
+    },
+    {
+      "canon": "echoechotextiles",
+      "survivor_id": "6a6f42d7-0d43-4d81-9c81-6d33d0849405",
+      "survivor_name": "Echoechotextiles",
+      "survivor_qb": "32395",
+      "losers": [
+        {
+          "id": "f1263d2f-dc67-4024-aac0-bee9f253f6de",
+          "name": "Echo Echo Textiles",
+          "moved": 1,
+          "domains": [
+            "thinkpositiveprints.com"
+          ]
+        }
+      ],
+      "moved": 1,
+      "dup_skips": 0,
+      "emails_relinked": 0
+    },
+    {
+      "canon": "giantsquid",
+      "survivor_id": "ecca1320-548d-4723-93be-2e4c8116943b",
+      "survivor_name": "Giantsquid",
+      "survivor_qb": "34927",
+      "losers": [
+        {
+          "id": "806a5d50-686b-486c-b1c8-201ed6eb0dfb",
+          "name": "Giant Squid",
+          "moved": 3,
+          "domains": [
+            "giantsquid.com.au",
+            "hurricanesgrill.com.au"
+          ]
+        }
+      ],
+      "moved": 3,
+      "dup_skips": 0,
+      "emails_relinked": 22
+    },
+    {
+      "canon": "australianprintedribbon",
+      "survivor_id": "a632848b-5c49-49e2-afbd-f6e7347ec03d",
+      "survivor_name": "Australian Printed Ribbon",
+      "survivor_qb": "34951",
+      "losers": [
+        {
+          "id": "d1673afc-14b6-40a1-bc41-66bf1c8095f6",
+          "name": "Australianprintedribbon",
+          "moved": 1,
+          "domains": [
+            "australianprintedribbon.com.au"
+          ]
+        }
+      ],
+      "moved": 1,
+      "dup_skips": 0,
+      "emails_relinked": 0
+    }
+  ]
+}

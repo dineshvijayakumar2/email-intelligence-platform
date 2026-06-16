@@ -1,0 +1,562 @@
+{
+  "email_lookup_total": 5132,
+  "benign_variant": 5078,
+  "orphan_label": 38,
+  "genuinely_wrong": 16,
+  "remediation_counts": {
+    "UNLINK": 11,
+    "RELINK": 4,
+    "CONFLICT": 1
+  },
+  "genuinely_wrong_rows": [
+    {
+      "company": {
+        "id": "3a618786-951e-4950-8dae-10cb21993187",
+        "company_name": "Stihl",
+        "qb_customer_id": "32590",
+        "qb_matched_at": "2026-06-03T11:27:29.3036+00:00",
+        "total_revenue": null
+      },
+      "wrong_customer": {
+        "id": "63995375-4189-41a3-a6da-05ab3713d7ed",
+        "name": "STIHL Australia",
+        "key": "16210"
+      },
+      "kind": "UNLINK",
+      "rightful": null
+    },
+    {
+      "company": {
+        "id": "2eedfb77-795b-4248-9b78-327b038d8422",
+        "company_name": "Sydneytheatre",
+        "qb_customer_id": "29777",
+        "qb_matched_at": "2026-06-03T11:27:29.3036+00:00",
+        "total_revenue": null
+      },
+      "wrong_customer": {
+        "id": "02d5598c-b8e6-4d70-a690-7381fc1601cc",
+        "name": "Sydney Theatre Company",
+        "key": "16255"
+      },
+      "kind": "UNLINK",
+      "rightful": null
+    },
+    {
+      "company": {
+        "id": "86430a11-6c94-4058-bc9c-785c2e67abc9",
+        "company_name": "Satellitedigital",
+        "qb_customer_id": "34050",
+        "qb_matched_at": "2026-06-03T10:55:27.408012+00:00",
+        "total_revenue": null
+      },
+      "wrong_customer": {
+        "id": "0930bb5a-70e9-4b07-9294-a9329f717b28",
+        "name": "Satellite Digital Printing",
+        "key": "16119"
+      },
+      "kind": "UNLINK",
+      "rightful": null
+    },
+    {
+      "company": {
+        "id": "d261a428-79cc-4dcd-8bfe-9913067ee6f5",
+        "company_name": "Nas",
+        "qb_customer_id": "43946",
+        "qb_matched_at": "2026-06-03T11:27:29.3036+00:00",
+        "total_revenue": null
+      },
+      "wrong_customer": {
+        "id": "59d2796a-3de8-4cbf-9e62-129e4a32ee13",
+        "name": "National Art School",
+        "key": "17086"
+      },
+      "kind": "UNLINK",
+      "rightful": null
+    },
+    {
+      "company": {
+        "id": "f044dbe2-6a71-4198-a357-1afef83dc127",
+        "company_name": "Sheryn & Iain",
+        "qb_customer_id": "33807",
+        "qb_matched_at": "2026-06-03T10:55:27.408012+00:00",
+        "total_revenue": null
+      },
+      "wrong_customer": {
+        "id": "613a0e33-725d-4865-965e-5e885fb994c0",
+        "name": "IAIN TODD",
+        "key": "20440"
+      },
+      "kind": "UNLINK",
+      "rightful": null
+    },
+    {
+      "company": {
+        "id": "124147a2-a335-47b7-8fbc-871e4dbaa42f",
+        "company_name": "Arup",
+        "qb_customer_id": "29799",
+        "qb_matched_at": "2026-06-03T10:55:27.408012+00:00",
+        "total_revenue": null
+      },
+      "wrong_customer": {
+        "id": "cf493306-da27-4847-91eb-6c1fea428abf",
+        "name": "Arup Pty Ltd",
+        "key": "16714"
+      },
+      "kind": "UNLINK",
+      "rightful": null
+    },
+    {
+      "company": {
+        "id": "ad0fd944-74fd-4c76-9292-0fdef3a3422f",
+        "company_name": "Flintwood",
+        "qb_customer_id": "30647",
+        "qb_matched_at": "2026-06-03T10:55:27.408012+00:00",
+        "total_revenue": null
+      },
+      "wrong_customer": {
+        "id": "4a71f56c-0f22-4141-b76d-12b123630714",
+        "name": "Virtuoso",
+        "key": "23231"
+      },
+      "kind": "RELINK",
+      "rightful": {
+        "id": "ba13b952-4b43-4459-9acf-6c5ffd879ac1",
+        "name": "Flintwood",
+        "key": "30647",
+        "matched_company_id": null
+      }
+    },
+    {
+      "company": {
+        "id": "97f176bb-837a-414b-a642-eff6df050e3c",
+        "company_name": "Climate 200",
+        "qb_customer_id": "34343",
+        "qb_matched_at": "2026-06-03T07:32:49.841723+00:00",
+        "total_revenue": null
+      },
+      "wrong_customer": {
+        "id": "c83f1064-4d56-4b79-8a5b-9badd2cb5bd8",
+        "name": "Leah Giselle Spadone",
+        "key": "31347"
+      },
+      "kind": "RELINK",
+      "rightful": {
+        "id": "fcfeabd4-12a6-49f7-a65a-63fc38fa97ed",
+        "name": "Climate 200",
+        "key": "34343",
+        "matched_company_id": null
+      }
+    },
+    {
+      "company": {
+        "id": "699e984f-6eef-48e8-90ad-a0945aa23097",
+        "company_name": "Meshki",
+        "qb_customer_id": "33854",
+        "qb_matched_at": "2026-06-03T07:32:49.841723+00:00",
+        "total_revenue": null
+      },
+      "wrong_customer": {
+        "id": "ca48fb0a-d0c2-4336-8342-e2382f362bf6",
+        "name": "Cameron Girdlestone",
+        "key": "23359"
+      },
+      "kind": "RELINK",
+      "rightful": {
+        "id": "86656286-6699-4cab-a4ec-9d4505601a36",
+        "name": "Meshki",
+        "key": "33854",
+        "matched_company_id": null
+      }
+    },
+    {
+      "company": {
+        "id": "a8d221b3-f92e-4b53-ba84-bb8e994e5cf7",
+        "company_name": "Alexa Keirnan",
+        "qb_customer_id": "30694",
+        "qb_matched_at": "2026-06-03T07:32:49.841723+00:00",
+        "total_revenue": null
+      },
+      "wrong_customer": {
+        "id": "e90b22f1-932e-42a5-b5ff-b0babb365049",
+        "name": "Allie Sallay",
+        "key": "24512"
+      },
+      "kind": "RELINK",
+      "rightful": {
+        "id": "cf8f48b3-e5fe-4642-b326-3d1d1d5fff47",
+        "name": "Alexa Keirnan",
+        "key": "30694",
+        "matched_company_id": null
+      }
+    },
+    {
+      "company": {
+        "id": "ebe02e4c-2999-4226-88c3-f1731c5c18b0",
+        "company_name": "Bec Morris Design",
+        "qb_customer_id": "42561",
+        "qb_matched_at": "2026-06-03T11:27:29.3036+00:00",
+        "total_revenue": null
+      },
+      "wrong_customer": {
+        "id": "4c595253-ab07-4850-9d40-1ac8869cb5cb",
+        "name": "Ezra VanderJagt",
+        "key": "31241"
+      },
+      "kind": "CONFLICT",
+      "rightful": {
+        "id": "41456861-46a6-4941-81bf-a0ba87560cc4",
+        "name": "Bec Morris Design",
+        "key": "32427",
+        "matched_company_id": "1bc83f7e-0188-4aff-bab2-0147c95a855b"
+      }
+    },
+    {
+      "company": {
+        "id": "203a6ade-54b1-4fda-a69b-3f55e72dfc9e",
+        "company_name": "Sarah Suttle",
+        "qb_customer_id": "39185",
+        "qb_matched_at": "2026-06-03T11:27:29.3036+00:00",
+        "total_revenue": null
+      },
+      "wrong_customer": {
+        "id": "56475558-48c9-4a0c-ac7f-3c97979de64c",
+        "name": "Sarah",
+        "key": "19686"
+      },
+      "kind": "UNLINK",
+      "rightful": null
+    },
+    {
+      "company": {
+        "id": "3bae2304-e962-4bc0-9f1d-b1fae24a3e92",
+        "company_name": "esca",
+        "qb_customer_id": "35606",
+        "qb_matched_at": "2026-06-03T07:32:49.841723+00:00",
+        "total_revenue": null
+      },
+      "wrong_customer": {
+        "id": "9322917c-1b5c-46a2-abac-2cb3f0df6f53",
+        "name": "FOCUS OPTICAL ALBANY WA",
+        "key": "14338"
+      },
+      "kind": "UNLINK",
+      "rightful": null
+    },
+    {
+      "company": {
+        "id": "9e1c6949-502b-4330-bfee-ce8314c02b11",
+        "company_name": "Pmg",
+        "qb_customer_id": "30915",
+        "qb_matched_at": "2026-06-03T11:27:29.3036+00:00",
+        "total_revenue": null
+      },
+      "wrong_customer": {
+        "id": "e7dd9c31-c09e-4fed-aafa-7a680e551bf3",
+        "name": "Print Media Group",
+        "key": "28170"
+      },
+      "kind": "UNLINK",
+      "rightful": null
+    },
+    {
+      "company": {
+        "id": "d62f5fe7-287d-462d-84f8-6ef74822f117",
+        "company_name": "Y7Mail",
+        "qb_customer_id": "41611",
+        "qb_matched_at": "2026-06-03T11:27:29.3036+00:00",
+        "total_revenue": null
+      },
+      "wrong_customer": {
+        "id": "732aa5c1-1a7d-444b-98a5-ce498022889e",
+        "name": "Test",
+        "key": "28144"
+      },
+      "kind": "UNLINK",
+      "rightful": null
+    },
+    {
+      "company": {
+        "id": "ef9e0fe6-2d4f-4f3a-b855-3ff3a1d24e77",
+        "company_name": "Food",
+        "qb_customer_id": "38730",
+        "qb_matched_at": "2026-06-03T10:55:27.408012+00:00",
+        "total_revenue": null
+      },
+      "wrong_customer": {
+        "id": "1c438cf9-a26d-4707-aa45-316581e00268",
+        "name": "Foodcare",
+        "key": "18963"
+      },
+      "kind": "UNLINK",
+      "rightful": null
+    }
+  ],
+  "orphan_label_rows": [
+    {
+      "id": "0585e388-1851-4994-bc41-b2c7a663573a",
+      "company_name": "Ascham",
+      "qb_customer_id": "33632",
+      "qb_matched_at": "2026-05-13T02:27:06.60502+00:00",
+      "total_revenue": null
+    },
+    {
+      "id": "0a84cf97-cd36-4bd9-b5a7-32335606fc4d",
+      "company_name": "CJ OPTICAL- EYECARE PLUS",
+      "qb_customer_id": "35576",
+      "qb_matched_at": "2026-06-03T07:32:49.841723+00:00",
+      "total_revenue": null
+    },
+    {
+      "id": "10b2c5a0-ed5b-4866-b9ec-d7ee2b1a5566",
+      "company_name": "3rdspace",
+      "qb_customer_id": "44481",
+      "qb_matched_at": "2026-06-03T10:55:27.408012+00:00",
+      "total_revenue": null
+    },
+    {
+      "id": "1111b1bf-8e7d-4468-a702-7854ae83d2ad",
+      "company_name": "Spirits Platform",
+      "qb_customer_id": "33935",
+      "qb_matched_at": "2026-06-03T10:20:38.133354+00:00",
+      "total_revenue": null
+    },
+    {
+      "id": "1126e6cf-8e16-46ec-829a-34518cadbdf8",
+      "company_name": "UNTAMED FLIES AND TACKLE",
+      "qb_customer_id": "36149",
+      "qb_matched_at": "2026-06-03T07:32:49.841723+00:00",
+      "total_revenue": null
+    },
+    {
+      "id": "1418a055-d6bd-4a5e-aef0-2ecbe47e955d",
+      "company_name": "Positive Invest",
+      "qb_customer_id": "31062",
+      "qb_matched_at": "2026-06-03T11:27:29.3036+00:00",
+      "total_revenue": null
+    },
+    {
+      "id": "15c7ed1a-ec67-4658-ba60-3ee91e069134",
+      "company_name": "Design United",
+      "qb_customer_id": "43315",
+      "qb_matched_at": "2026-06-03T11:27:29.3036+00:00",
+      "total_revenue": null
+    },
+    {
+      "id": "179f8f3c-88ae-4fc3-9450-0fae9febe713",
+      "company_name": "Mary Libro",
+      "qb_customer_id": "29809",
+      "qb_matched_at": "2026-06-03T11:27:29.3036+00:00",
+      "total_revenue": null
+    },
+    {
+      "id": "21dfc6d3-ff35-4051-b929-640e81bd780f",
+      "company_name": "The Life Style Edit",
+      "qb_customer_id": "29954",
+      "qb_matched_at": "2026-06-03T07:32:49.841723+00:00",
+      "total_revenue": null
+    },
+    {
+      "id": "27025325-ae31-433d-a69c-696d8f6ac738",
+      "company_name": "The Known Agency",
+      "qb_customer_id": "36576",
+      "qb_matched_at": "2026-06-03T07:32:49.841723+00:00",
+      "total_revenue": null
+    },
+    {
+      "id": "2b5ddb70-4aa1-4438-865c-b370ed2bd9e2",
+      "company_name": "Payce Mangement Pty Ltd",
+      "qb_customer_id": "34817",
+      "qb_matched_at": "2026-05-14T05:18:33.725552+00:00",
+      "total_revenue": null
+    },
+    {
+      "id": "31d28108-ab8d-4b75-bb4a-afa4adf07b1f",
+      "company_name": "Virtuoso",
+      "qb_customer_id": "30647",
+      "qb_matched_at": "2026-05-14T05:18:33.725552+00:00",
+      "total_revenue": null
+    },
+    {
+      "id": "3bea3055-9436-4863-9720-67106fa456eb",
+      "company_name": "Matthew Covington",
+      "qb_customer_id": "36004",
+      "qb_matched_at": "2026-06-03T07:32:49.841723+00:00",
+      "total_revenue": null
+    },
+    {
+      "id": "41b2a420-0e84-448e-bf87-dc6eeb16b156",
+      "company_name": "Uberbrand Trading Pty Ltd",
+      "qb_customer_id": "36237",
+      "qb_matched_at": "2026-05-14T05:18:33.725552+00:00",
+      "total_revenue": null
+    },
+    {
+      "id": "453869ca-3328-4d87-a593-725047ba3639",
+      "company_name": "Layfield Design",
+      "qb_customer_id": "29762",
+      "qb_matched_at": "2026-06-03T07:32:49.841723+00:00",
+      "total_revenue": null
+    },
+    {
+      "id": "47ff9936-bf0e-49f4-a71b-06b4141236ab",
+      "company_name": "Matthew Ely",
+      "qb_customer_id": "29762",
+      "qb_matched_at": "2026-06-03T10:55:27.408012+00:00",
+      "total_revenue": null
+    },
+    {
+      "id": "5284582d-5fcd-42e0-8d12-d3afbf791b25",
+      "company_name": "The Make Haus",
+      "qb_customer_id": "34817",
+      "qb_matched_at": "2026-06-03T10:55:27.408012+00:00",
+      "total_revenue": null
+    },
+    {
+      "id": "597b8c7c-57f1-49e3-adc6-0013735815c8",
+      "company_name": "EnviroPrint Australia",
+      "qb_customer_id": "34740",
+      "qb_matched_at": "2026-05-12T09:05:16.575344+00:00",
+      "total_revenue": null
+    },
+    {
+      "id": "5d79a112-0095-4989-88e4-d0e2b86cec12",
+      "company_name": "Anthony Napoli",
+      "qb_customer_id": "29809",
+      "qb_matched_at": "2026-06-02T14:27:01.85007+00:00",
+      "total_revenue": null
+    },
+    {
+      "id": "6b569858-9dc1-4bb3-b960-702fc0a3fc63",
+      "company_name": "Paula Chrystello",
+      "qb_customer_id": "33886",
+      "qb_matched_at": "2026-05-14T05:18:33.725552+00:00",
+      "total_revenue": null
+    },
+    {
+      "id": "6d55c07b-f506-49b1-afcd-6c35a460b574",
+      "company_name": "Studio Air",
+      "qb_customer_id": "33886",
+      "qb_matched_at": "2026-06-03T10:55:27.408012+00:00",
+      "total_revenue": null
+    },
+    {
+      "id": "7a04e1f7-bd99-42eb-9ee0-74eafe2eaad4",
+      "company_name": "Wes Shaw Design",
+      "qb_customer_id": "30474",
+      "qb_matched_at": "2026-06-03T07:32:49.841723+00:00",
+      "total_revenue": null
+    },
+    {
+      "id": "806a5d50-686b-486c-b1c8-201ed6eb0dfb",
+      "company_name": "Giant Squid",
+      "qb_customer_id": "34927",
+      "qb_matched_at": "2026-06-03T10:20:38.133354+00:00",
+      "total_revenue": null
+    },
+    {
+      "id": "8b8b613b-4f6f-48f6-9fa9-9ab283b24c87",
+      "company_name": "Kaizen Tea",
+      "qb_customer_id": "35792",
+      "qb_matched_at": "2026-06-03T07:32:49.841723+00:00",
+      "total_revenue": null
+    },
+    {
+      "id": "8ca369db-6fb6-4265-b6cb-9e76e8a78cb2",
+      "company_name": "Precision Public Affairs",
+      "qb_customer_id": "30515",
+      "qb_matched_at": "2026-05-19T12:22:05.625475+00:00",
+      "total_revenue": null
+    },
+    {
+      "id": "8efadba4-f299-460c-a48a-b5ecaa56f5aa",
+      "company_name": "Space Now",
+      "qb_customer_id": "31410",
+      "qb_matched_at": "2026-06-03T11:27:29.3036+00:00",
+      "total_revenue": null
+    },
+    {
+      "id": "a173fb63-8fda-4654-9390-07aa4313f9d4",
+      "company_name": "Malcolm Reading Consultants",
+      "qb_customer_id": "30770",
+      "qb_matched_at": "2026-06-03T07:32:49.841723+00:00",
+      "total_revenue": null
+    },
+    {
+      "id": "a319576d-c10b-4c40-af12-24ed1b3ffed4",
+      "company_name": "Blainey North",
+      "qb_customer_id": "29737",
+      "qb_matched_at": "2026-05-14T05:18:33.725552+00:00",
+      "total_revenue": null
+    },
+    {
+      "id": "c38f1cba-f680-40b3-8887-f52758580135",
+      "company_name": "Advanced Navigation",
+      "qb_customer_id": "36237",
+      "qb_matched_at": "2026-06-03T11:27:29.3036+00:00",
+      "total_revenue": null
+    },
+    {
+      "id": "ce598bf5-72cd-42d4-bedf-1d2d9ea3b988",
+      "company_name": "Arms Of Eve",
+      "qb_customer_id": "34662",
+      "qb_matched_at": "2026-06-03T10:55:27.408012+00:00",
+      "total_revenue": null
+    },
+    {
+      "id": "d4f975b9-c632-49fb-8e14-f1c0519a17ea",
+      "company_name": "3 Gift Girls",
+      "qb_customer_id": "34416",
+      "qb_matched_at": "2026-06-03T07:32:49.841723+00:00",
+      "total_revenue": null
+    },
+    {
+      "id": "d89e719e-a63d-45db-b2f0-c2f7734f4961",
+      "company_name": "Among Equals",
+      "qb_customer_id": "32425",
+      "qb_matched_at": "2026-06-03T11:27:29.3036+00:00",
+      "total_revenue": null
+    },
+    {
+      "id": "d8e15a20-445b-42ce-8a10-999e796c55c5",
+      "company_name": "Tech Policy",
+      "qb_customer_id": "36369",
+      "qb_matched_at": "2026-06-03T07:32:49.841723+00:00",
+      "total_revenue": null
+    },
+    {
+      "id": "e9b80e6e-8f9d-48eb-9e95-60e8e2fe49c3",
+      "company_name": "Louis Vuitton",
+      "qb_customer_id": "29737",
+      "qb_matched_at": "2026-06-03T10:55:27.408012+00:00",
+      "total_revenue": null
+    },
+    {
+      "id": "f1263d2f-dc67-4024-aac0-bee9f253f6de",
+      "company_name": "Echo Echo Textiles",
+      "qb_customer_id": "32395",
+      "qb_matched_at": "2026-06-03T10:20:38.133354+00:00",
+      "total_revenue": null
+    },
+    {
+      "id": "f9048122-aaad-4505-b28d-a92bf4ba81cf",
+      "company_name": "Waded",
+      "qb_customer_id": "43946",
+      "qb_matched_at": "2026-06-03T10:55:27.408012+00:00",
+      "total_revenue": null
+    },
+    {
+      "id": "fb39170a-9acb-4b39-ae75-01e32664592a",
+      "company_name": "Boom Studios",
+      "qb_customer_id": "31067",
+      "qb_matched_at": "2026-06-03T11:27:29.3036+00:00",
+      "total_revenue": null
+    },
+    {
+      "id": "ff6f32fa-7bbf-46f7-a408-91d1499c1901",
+      "company_name": "Milk and Honey United",
+      "qb_customer_id": "34069",
+      "qb_matched_at": "2026-06-03T07:32:49.841723+00:00",
+      "total_revenue": null
+    }
+  ]
+}

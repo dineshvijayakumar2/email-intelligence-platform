@@ -1,0 +1,354 @@
+{
+  "task": "AM-coaching readiness REFRESH vs 12.3 (am_coaching_readiness.json)",
+  "today": "2026-06-15",
+  "trailing_12_months": [
+    "2025-07",
+    "2025-08",
+    "2025-09",
+    "2025-10",
+    "2025-11",
+    "2025-12",
+    "2026-01",
+    "2026-02",
+    "2026-03",
+    "2026-04",
+    "2026-05",
+    "2026-06"
+  ],
+  "method": "read-only; server-side aggregates; bases carried from _am_coaching_readiness.py",
+  "am_records": {
+    "Nic Doyle": {
+      "mailbox_id": "5f3afeb3-a5f7-44b8-b657-ec972c92911d",
+      "recency": {
+        "date_last": "2026-06-15",
+        "date_first": "2018-06-01",
+        "last30": 2657,
+        "last90": 8330,
+        "base_123_date_last": "2026-06-12",
+        "moved": true
+      },
+      "volume": {
+        "emails_total": 24540,
+        "inbound": 13480,
+        "outbound": 11060,
+        "base_123_emails": 24393,
+        "delta_emails": 147
+      },
+      "response_metrics": {
+        "rows": 8431,
+        "non_auto": 8300,
+        "bh_populated": 8431,
+        "pct_of_inbound": 62.5,
+        "recoverable_pairs": 8389,
+        "capture_vs_recoverable_pct": 100.5,
+        "last_created": "2026-06-12",
+        "base_123_rows": 1001,
+        "base_123_pct_inbound": 7.5,
+        "delta_rows": 7430
+      },
+      "evenness": {
+        "cv_last12": 0.46,
+        "monthly_last12": {
+          "2025-07": 886,
+          "2025-08": 831,
+          "2025-09": 931,
+          "2025-10": 839,
+          "2025-11": 2945,
+          "2025-12": 2353,
+          "2026-01": 2172,
+          "2026-02": 2850,
+          "2026-03": 2871,
+          "2026-04": 2749,
+          "2026-05": 3001,
+          "2026-06": 1179
+        },
+        "base_123_cv_allhistory": 1.89
+      },
+      "tier_a": {
+        "initiation": {
+          "computable": true,
+          "threaded_pct": 100.0
+        },
+        "response_latency": {
+          "computable": true,
+          "rows": 8431,
+          "pct_of_inbound": 62.5
+        },
+        "thread_depth_exchange": {
+          "computable": true,
+          "threads": 9697,
+          "multi_pct": 39.8,
+          "two_sided_pct": 26.6,
+          "avg_emails_per_thread": 2.51
+        },
+        "follow_up_cadence": {
+          "computable": true,
+          "outbound": 11060
+        },
+        "multithreading": {
+          "computable": true,
+          "companies": 852,
+          "avg_contacts_per_company": 1.68,
+          "multithreaded_companies": 226,
+          "multithreaded_pct": 26.5
+        }
+      },
+      "pilot_linkage": {
+        "won_threads": 578,
+        "lost_threads": 299,
+        "linked_threads": 877
+      }
+    },
+    "Linda D'Arcy": {
+      "mailbox_id": "e1abc287-805b-4cee-8f95-0b47e1cd8f99",
+      "recency": {
+        "date_last": "2026-06-15",
+        "date_first": "2023-09-03",
+        "last30": 4410,
+        "last90": 14432,
+        "base_123_date_last": "2026-06-12",
+        "moved": true
+      },
+      "volume": {
+        "emails_total": 40200,
+        "inbound": 22652,
+        "outbound": 17548,
+        "base_123_emails": 39878,
+        "delta_emails": 322
+      },
+      "response_metrics": {
+        "rows": 16309,
+        "non_auto": 16237,
+        "bh_populated": 16309,
+        "pct_of_inbound": 72.0,
+        "recoverable_pairs": 16231,
+        "capture_vs_recoverable_pct": 100.5,
+        "last_created": "2026-06-12",
+        "base_123_rows": 10767,
+        "base_123_pct_inbound": 47.9,
+        "delta_rows": 5542
+      },
+      "evenness": {
+        "cv_last12": 0.62,
+        "monthly_last12": {
+          "2025-07": 52,
+          "2025-08": 138,
+          "2025-09": 196,
+          "2025-10": 3420,
+          "2025-11": 4055,
+          "2025-12": 2916,
+          "2026-01": 2857,
+          "2026-02": 4183,
+          "2026-03": 4994,
+          "2026-04": 5035,
+          "2026-05": 4793,
+          "2026-06": 2214
+        },
+        "base_123_cv_allhistory": 1.42
+      },
+      "tier_a": {
+        "initiation": {
+          "computable": true,
+          "threaded_pct": 100.0
+        },
+        "response_latency": {
+          "computable": true,
+          "rows": 16309,
+          "pct_of_inbound": 72.0
+        },
+        "thread_depth_exchange": {
+          "computable": true,
+          "threads": 13578,
+          "multi_pct": 53.2,
+          "two_sided_pct": 37.1,
+          "avg_emails_per_thread": 2.96
+        },
+        "follow_up_cadence": {
+          "computable": true,
+          "outbound": 17548
+        },
+        "multithreading": {
+          "computable": true,
+          "companies": 716,
+          "avg_contacts_per_company": 1.76,
+          "multithreaded_companies": 211,
+          "multithreaded_pct": 29.5
+        }
+      },
+      "pilot_linkage": {
+        "won_threads": 995,
+        "lost_threads": 513,
+        "linked_threads": 1508
+      }
+    },
+    "Ehab Kamel": {
+      "mailbox_id": "92eba92f-b6be-4fbf-8c49-9f3b7c72ea74",
+      "recency": {
+        "date_last": "2026-05-21",
+        "date_first": "2022-08-02",
+        "last30": 356,
+        "last90": 4317,
+        "base_123_date_last": "2026-05-21",
+        "moved": false
+      },
+      "volume": {
+        "emails_total": 48506,
+        "inbound": 27796,
+        "outbound": 20710,
+        "base_123_emails": 48506,
+        "delta_emails": 0
+      },
+      "response_metrics": {
+        "rows": 18539,
+        "non_auto": 18022,
+        "bh_populated": 18515,
+        "pct_of_inbound": 66.7,
+        "recoverable_pairs": 19343,
+        "capture_vs_recoverable_pct": 95.8,
+        "last_created": "2026-06-12",
+        "base_123_rows": 16011,
+        "base_123_pct_inbound": 57.6,
+        "delta_rows": 2528
+      },
+      "evenness": {
+        "cv_last12": 0.41,
+        "monthly_last12": {
+          "2025-07": 3254,
+          "2025-08": 3025,
+          "2025-09": 3234,
+          "2025-10": 3495,
+          "2025-11": 3298,
+          "2025-12": 1802,
+          "2026-01": 1909,
+          "2026-02": 3014,
+          "2026-03": 2520,
+          "2026-04": 1882,
+          "2026-05": 1413,
+          "2026-06": 0
+        },
+        "base_123_cv_allhistory": 1.14
+      },
+      "tier_a": {
+        "initiation": {
+          "computable": true,
+          "threaded_pct": 100.0
+        },
+        "response_latency": {
+          "computable": true,
+          "rows": 18539,
+          "pct_of_inbound": 66.7
+        },
+        "thread_depth_exchange": {
+          "computable": true,
+          "threads": 15349,
+          "multi_pct": 49.8,
+          "two_sided_pct": 34.3,
+          "avg_emails_per_thread": 3.19
+        },
+        "follow_up_cadence": {
+          "computable": true,
+          "outbound": 20710
+        },
+        "multithreading": {
+          "computable": true,
+          "companies": 987,
+          "avg_contacts_per_company": 1.77,
+          "multithreaded_companies": 243,
+          "multithreaded_pct": 24.6
+        }
+      },
+      "pilot_linkage": {
+        "won_threads": 1477,
+        "lost_threads": 837,
+        "linked_threads": 2314
+      }
+    },
+    "Kenneth Beck-Pedersen": {
+      "mailbox_id": "1332eba5-9121-4b55-91db-a37dd81d5d85",
+      "recency": {
+        "date_last": "2026-05-16",
+        "date_first": "2013-07-15",
+        "last30": 9,
+        "last90": 7302,
+        "base_123_date_last": "2026-05-16",
+        "moved": false
+      },
+      "volume": {
+        "emails_total": 30843,
+        "inbound": 19227,
+        "outbound": 11616,
+        "base_123_emails": 30843,
+        "delta_emails": 0
+      },
+      "response_metrics": {
+        "rows": 10586,
+        "non_auto": 10285,
+        "bh_populated": 10581,
+        "pct_of_inbound": 55.1,
+        "recoverable_pairs": 8749,
+        "capture_vs_recoverable_pct": 121.0,
+        "last_created": "2026-06-12",
+        "base_123_rows": 8592,
+        "base_123_pct_inbound": 44.7,
+        "delta_rows": 1994
+      },
+      "evenness": {
+        "cv_last12": 0.45,
+        "monthly_last12": {
+          "2025-07": 1481,
+          "2025-08": 1296,
+          "2025-09": 2159,
+          "2025-10": 2406,
+          "2025-11": 2818,
+          "2025-12": 1802,
+          "2026-01": 1725,
+          "2026-02": 2443,
+          "2026-03": 3328,
+          "2026-04": 3733,
+          "2026-05": 1983,
+          "2026-06": 0
+        },
+        "base_123_cv_allhistory": 3.1
+      },
+      "tier_a": {
+        "initiation": {
+          "computable": true,
+          "threaded_pct": 100.0
+        },
+        "response_latency": {
+          "computable": true,
+          "rows": 10586,
+          "pct_of_inbound": 55.1
+        },
+        "thread_depth_exchange": {
+          "computable": true,
+          "threads": 12747,
+          "multi_pct": 36.4,
+          "two_sided_pct": 23.1,
+          "avg_emails_per_thread": 2.39
+        },
+        "follow_up_cadence": {
+          "computable": true,
+          "outbound": 11616
+        },
+        "multithreading": {
+          "computable": true,
+          "companies": 1647,
+          "avg_contacts_per_company": 1.73,
+          "multithreaded_companies": 410,
+          "multithreaded_pct": 24.9
+        }
+      },
+      "pilot_linkage": {
+        "won_threads": 65,
+        "lost_threads": 28,
+        "linked_threads": 93
+      }
+    }
+  },
+  "pilot_linkage_pooled": {
+    "linked_threads": 4792,
+    "won_threads": 3115,
+    "lost_threads": 1677
+  }
+}

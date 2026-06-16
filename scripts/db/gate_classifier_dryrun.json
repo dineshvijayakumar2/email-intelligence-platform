@@ -1,0 +1,290 @@
+{
+  "universe": 2211,
+  "base_rates": {
+    "Soft Cover Books": {
+      "companies": 614,
+      "pct": 27.8
+    },
+    "Specialty Finishing": {
+      "companies": 2144,
+      "pct": 97.0
+    },
+    "Flat Sheets": {
+      "companies": 1986,
+      "pct": 89.8
+    },
+    "Design Services": {
+      "companies": 1908,
+      "pct": 86.3
+    },
+    "Wide Format": {
+      "companies": 858,
+      "pct": 38.8
+    },
+    "Embellishment": {
+      "companies": 335,
+      "pct": 15.2
+    },
+    "Hard Cover Books": {
+      "companies": 186,
+      "pct": 8.4
+    },
+    "Display / Installation": {
+      "companies": 46,
+      "pct": 2.1
+    }
+  },
+  "rule_count": 34,
+  "rules": [
+    {
+      "from": "Soft Cover Books",
+      "to": "Flat Sheets",
+      "conf": 100.0,
+      "support": 614,
+      "lift": 1.11
+    },
+    {
+      "from": "Display / Installation",
+      "to": "Wide Format",
+      "conf": 100.0,
+      "support": 46,
+      "lift": 2.58
+    },
+    {
+      "from": "Embellishment",
+      "to": "Specialty Finishing",
+      "conf": 99.7,
+      "support": 334,
+      "lift": 1.03
+    },
+    {
+      "from": "Embellishment",
+      "to": "Flat Sheets",
+      "conf": 99.7,
+      "support": 334,
+      "lift": 1.11
+    },
+    {
+      "from": "Hard Cover Books",
+      "to": "Specialty Finishing",
+      "conf": 99.5,
+      "support": 185,
+      "lift": 1.03
+    },
+    {
+      "from": "Soft Cover Books",
+      "to": "Specialty Finishing",
+      "conf": 99.2,
+      "support": 609,
+      "lift": 1.02
+    },
+    {
+      "from": "Hard Cover Books",
+      "to": "Flat Sheets",
+      "conf": 98.9,
+      "support": 184,
+      "lift": 1.1
+    },
+    {
+      "from": "Wide Format",
+      "to": "Specialty Finishing",
+      "conf": 98.3,
+      "support": 843,
+      "lift": 1.01
+    },
+    {
+      "from": "Flat Sheets",
+      "to": "Specialty Finishing",
+      "conf": 98.0,
+      "support": 1947,
+      "lift": 1.01
+    },
+    {
+      "from": "Display / Installation",
+      "to": "Specialty Finishing",
+      "conf": 97.8,
+      "support": 45,
+      "lift": 1.01
+    },
+    {
+      "from": "Design Services",
+      "to": "Specialty Finishing",
+      "conf": 97.6,
+      "support": 1862,
+      "lift": 1.01
+    },
+    {
+      "from": "Display / Installation",
+      "to": "Design Services",
+      "conf": 95.7,
+      "support": 44,
+      "lift": 1.11
+    },
+    {
+      "from": "Embellishment",
+      "to": "Design Services",
+      "conf": 94.0,
+      "support": 315,
+      "lift": 1.09
+    },
+    {
+      "from": "Soft Cover Books",
+      "to": "Design Services",
+      "conf": 92.2,
+      "support": 566,
+      "lift": 1.07
+    },
+    {
+      "from": "Wide Format",
+      "to": "Design Services",
+      "conf": 92.2,
+      "support": 791,
+      "lift": 1.07
+    },
+    {
+      "from": "Hard Cover Books",
+      "to": "Design Services",
+      "conf": 91.9,
+      "support": 171,
+      "lift": 1.07
+    },
+    {
+      "from": "Design Services",
+      "to": "Flat Sheets",
+      "conf": 91.0,
+      "support": 1737,
+      "lift": 1.01
+    },
+    {
+      "from": "Specialty Finishing",
+      "to": "Flat Sheets",
+      "conf": 90.8,
+      "support": 1947,
+      "lift": 1.01
+    },
+    {
+      "from": "Flat Sheets",
+      "to": "Design Services",
+      "conf": 87.5,
+      "support": 1737,
+      "lift": 1.01
+    },
+    {
+      "from": "Specialty Finishing",
+      "to": "Design Services",
+      "conf": 86.8,
+      "support": 1862,
+      "lift": 1.01
+    },
+    {
+      "from": "Hard Cover Books",
+      "to": "Wide Format",
+      "conf": 86.0,
+      "support": 160,
+      "lift": 2.22
+    },
+    {
+      "from": "Hard Cover Books",
+      "to": "Soft Cover Books",
+      "conf": 79.6,
+      "support": 148,
+      "lift": 2.87
+    },
+    {
+      "from": "Hard Cover Books",
+      "to": "Embellishment",
+      "conf": 58.6,
+      "support": 109,
+      "lift": 3.87
+    },
+    {
+      "from": "Embellishment",
+      "to": "Wide Format",
+      "conf": 57.9,
+      "support": 194,
+      "lift": 1.49
+    },
+    {
+      "from": "Embellishment",
+      "to": "Soft Cover Books",
+      "conf": 57.0,
+      "support": 191,
+      "lift": 2.05
+    },
+    {
+      "from": "Soft Cover Books",
+      "to": "Wide Format",
+      "conf": 54.6,
+      "support": 335,
+      "lift": 1.41
+    },
+    {
+      "from": "Design Services",
+      "to": "Wide Format",
+      "conf": 41.5,
+      "support": 791,
+      "lift": 1.07
+    },
+    {
+      "from": "Specialty Finishing",
+      "to": "Wide Format",
+      "conf": 39.3,
+      "support": 843,
+      "lift": 1.01
+    },
+    {
+      "from": "Wide Format",
+      "to": "Soft Cover Books",
+      "conf": 39.0,
+      "support": 335,
+      "lift": 1.41
+    },
+    {
+      "from": "Embellishment",
+      "to": "Hard Cover Books",
+      "conf": 32.5,
+      "support": 109,
+      "lift": 3.87
+    },
+    {
+      "from": "Soft Cover Books",
+      "to": "Embellishment",
+      "conf": 31.1,
+      "support": 191,
+      "lift": 2.05
+    },
+    {
+      "from": "Flat Sheets",
+      "to": "Soft Cover Books",
+      "conf": 30.9,
+      "support": 614,
+      "lift": 1.11
+    },
+    {
+      "from": "Design Services",
+      "to": "Soft Cover Books",
+      "conf": 29.7,
+      "support": 566,
+      "lift": 1.07
+    },
+    {
+      "from": "Specialty Finishing",
+      "to": "Soft Cover Books",
+      "conf": 28.4,
+      "support": 609,
+      "lift": 1.02
+    }
+  ],
+  "audit_reference": {
+    "embellishment_pct": 15.3,
+    "hard_cover_pct": 8.3,
+    "tol_pct": 1.0
+  },
+  "actual": {
+    "embellishment_companies": 335,
+    "embellishment_pct": 15.2,
+    "hard_cover_companies": 186,
+    "hard_cover_pct": 8.4
+  },
+  "gate_pass": true
+}

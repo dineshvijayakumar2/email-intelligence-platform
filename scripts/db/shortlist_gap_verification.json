@@ -1,0 +1,317 @@
+{
+  "Geoff Letchford Photography": {
+    "company_id": "9e46260b-2a89-4d02-abde-20096aa2e13b",
+    "customer_keys": [
+      "35985"
+    ],
+    "recommended": "Embellishment",
+    "basket_contains_rec": false,
+    "company_grain": {
+      "ops": 0,
+      "distinct_jobs": 0,
+      "revenue": 0
+    },
+    "key_grain": {
+      "ops": 0,
+      "distinct_jobs": 0,
+      "revenue": 0
+    },
+    "grain_consistent": true,
+    "all_capabilities_company_grain": {
+      "Specialty Finishing": {
+        "ops": 415,
+        "jobs": 92,
+        "rev": 9029
+      },
+      "Soft Cover Books": {
+        "ops": 433,
+        "jobs": 88,
+        "rev": 46025
+      },
+      "Hard Cover Books": {
+        "ops": 226,
+        "jobs": 86,
+        "rev": 34903
+      },
+      "Wide Format": {
+        "ops": 356,
+        "jobs": 78,
+        "rev": 21877
+      },
+      "Flat Sheets": {
+        "ops": 646,
+        "jobs": 90,
+        "rev": 75302
+      },
+      "Design Services": {
+        "ops": 90,
+        "jobs": 50,
+        "rev": 3326
+      }
+    },
+    "field_collision_check": {
+      "qb_embellishment_tag_ops": 157,
+      "qb_embellishment_tag_jobs": 84,
+      "qb_embellishment_tag_values": [
+        "Hot Foil",
+        "Spot UV"
+      ]
+    },
+    "contact_attribution_rec_cap": {},
+    "verdict": "GAP CONFIRMED",
+    "substitute": null,
+    "framing_caveat": "CAPABILITY GAP IS REAL (0 Embellishment-capability orders, grain-confirmed), BUT this customer already applies embellishment FINISHES on 84 jobs (qb_embellishment_tag, a different field: ['Hot Foil', 'Spot UV']). Do NOT frame as \"you do not do embellishment\" \u2014 they foil/spot-UV regularly. Frame as the standalone Embellishment capability/service line distinct from in-line finishes, and have a human confirm what the Embellishment capability tag denotes vs the finish tag before send.",
+    "verdict_nuance": "GAP CONFIRMED (taxonomy) \u2014 FRAMING CAUTION",
+    "verdict_final": "ALREADY BUYS \u2014 PULL",
+    "platform_definition_jobs": 16,
+    "final_note": "qb_capability_tag Embellishment=0 BUT classifier capability_tags shows 16 Embellishment jobs (debossing/stamping dies) + 84 jobs with qb_embellishment_tag Hot Foil/Spot UV. Company genuinely does embellishment. Recommendation was a FALSE GAP from relying on qb_capability_tag alone (41% null on this company). PULL."
+  },
+  "Studio Odea Pty Ltd": {
+    "company_id": "05c599aa-dcf5-4586-b8ee-63bf167825bc",
+    "customer_keys": [
+      "34416"
+    ],
+    "recommended": "Embellishment",
+    "basket_contains_rec": false,
+    "company_grain": {
+      "ops": 0,
+      "distinct_jobs": 0,
+      "revenue": 0
+    },
+    "key_grain": {
+      "ops": 0,
+      "distinct_jobs": 0,
+      "revenue": 0
+    },
+    "grain_consistent": true,
+    "all_capabilities_company_grain": {
+      "Specialty Finishing": {
+        "ops": 316,
+        "jobs": 80,
+        "rev": 12353
+      },
+      "Soft Cover Books": {
+        "ops": 47,
+        "jobs": 25,
+        "rev": 13318
+      },
+      "Flat Sheets": {
+        "ops": 445,
+        "jobs": 80,
+        "rev": 64599
+      },
+      "Wide Format": {
+        "ops": 146,
+        "jobs": 24,
+        "rev": 13515
+      },
+      "Design Services": {
+        "ops": 15,
+        "jobs": 11,
+        "rev": 2410
+      },
+      "Hard Cover Books": {
+        "ops": 53,
+        "jobs": 14,
+        "rev": 17253
+      }
+    },
+    "field_collision_check": {
+      "qb_embellishment_tag_ops": 47,
+      "qb_embellishment_tag_jobs": 22,
+      "qb_embellishment_tag_values": [
+        "Deboss / Emboss",
+        "Digital Foil",
+        "Hot Foil",
+        "Laser Cut",
+        "Spot UV"
+      ]
+    },
+    "contact_attribution_rec_cap": {},
+    "verdict": "GAP CONFIRMED",
+    "substitute": null,
+    "framing_caveat": "CAPABILITY GAP IS REAL (0 Embellishment-capability orders, grain-confirmed), BUT this customer already applies embellishment FINISHES on 22 jobs (qb_embellishment_tag, a different field: ['Deboss / Emboss', 'Digital Foil', 'Hot Foil', 'Laser Cut', 'Spot UV']). Do NOT frame as \"you do not do embellishment\" \u2014 they foil/spot-UV regularly. Frame as the standalone Embellishment capability/service line distinct from in-line finishes, and have a human confirm what the Embellishment capability tag denotes vs the finish tag before send.",
+    "verdict_nuance": "GAP CONFIRMED (taxonomy) \u2014 FRAMING CAUTION",
+    "verdict_final": "ALREADY BUYS \u2014 PULL",
+    "platform_definition_jobs": 8,
+    "final_note": "qb_capability_tag Embellishment=0 BUT classifier shows 8 Embellishment jobs (Hot foil stamping, stamping dies) + qb_embellishment_tag finishes. FALSE GAP from qb_capability_tag alone (46% null). PULL."
+  },
+  "MED-EL Implant Systems Australasia Pty Ltd": {
+    "company_id": "08140c1e-c391-4543-8bd8-90ede6a6393e",
+    "customer_keys": [
+      "28066"
+    ],
+    "recommended": "Hard Cover Books",
+    "basket_contains_rec": false,
+    "company_grain": {
+      "ops": 0,
+      "distinct_jobs": 0,
+      "revenue": 0
+    },
+    "key_grain": {
+      "ops": 0,
+      "distinct_jobs": 0,
+      "revenue": 0
+    },
+    "grain_consistent": true,
+    "all_capabilities_company_grain": {
+      "Wide Format": {
+        "ops": 34,
+        "jobs": 10,
+        "rev": 1706
+      },
+      "Flat Sheets": {
+        "ops": 487,
+        "jobs": 117,
+        "rev": 118220
+      },
+      "Design Services": {
+        "ops": 260,
+        "jobs": 100,
+        "rev": 8288
+      },
+      "Specialty Finishing": {
+        "ops": 339,
+        "jobs": 117,
+        "rev": 19372
+      },
+      "Embellishment": {
+        "ops": 60,
+        "jobs": 59,
+        "rev": 12883
+      },
+      "Soft Cover Books": {
+        "ops": 44,
+        "jobs": 41,
+        "rev": 16379
+      }
+    },
+    "field_collision_check": {},
+    "contact_attribution_rec_cap": {},
+    "verdict": "GAP CONFIRMED",
+    "substitute": null,
+    "framing_caveat": null,
+    "verdict_final": "GAP CONFIRMED",
+    "platform_definition_jobs": 0,
+    "final_note": "Clean under both qb tag (0) and classifier (0)."
+  },
+  "Meriton Pty Ltd": {
+    "company_id": "6053d052-42f0-4a9c-98e6-ad82f37f2f1d",
+    "customer_keys": [
+      "35576"
+    ],
+    "recommended": "Hard Cover Books",
+    "basket_contains_rec": false,
+    "company_grain": {
+      "ops": 0,
+      "distinct_jobs": 0,
+      "revenue": 0
+    },
+    "key_grain": {
+      "ops": 0,
+      "distinct_jobs": 0,
+      "revenue": 0
+    },
+    "grain_consistent": true,
+    "all_capabilities_company_grain": {
+      "Design Services": {
+        "ops": 159,
+        "jobs": 73,
+        "rev": 6760
+      },
+      "Specialty Finishing": {
+        "ops": 713,
+        "jobs": 166,
+        "rev": 21826
+      },
+      "Flat Sheets": {
+        "ops": 673,
+        "jobs": 166,
+        "rev": 82543
+      },
+      "Wide Format": {
+        "ops": 126,
+        "jobs": 23,
+        "rev": 25085
+      },
+      "Soft Cover Books": {
+        "ops": 57,
+        "jobs": 34,
+        "rev": 9130
+      },
+      "Embellishment": {
+        "ops": 11,
+        "jobs": 11,
+        "rev": 1101
+      }
+    },
+    "field_collision_check": {},
+    "contact_attribution_rec_cap": {},
+    "verdict": "GAP CONFIRMED",
+    "substitute": null,
+    "framing_caveat": null,
+    "verdict_final": "GAP CONFIRMED",
+    "platform_definition_jobs": 1,
+    "final_note": "qb tag 0; classifier 1 job = spurious (\"Adds set-up charge + per unit\", not a real hardcover order). Negligible, gap stands."
+  },
+  "Emily Ziz Style Studio": {
+    "company_id": "ba2744f1-d4e8-4412-94c8-bc73ee4fc5ff",
+    "customer_keys": [
+      "35770"
+    ],
+    "recommended": "Hard Cover Books",
+    "basket_contains_rec": false,
+    "company_grain": {
+      "ops": 0,
+      "distinct_jobs": 0,
+      "revenue": 0
+    },
+    "key_grain": {
+      "ops": 0,
+      "distinct_jobs": 0,
+      "revenue": 0
+    },
+    "grain_consistent": true,
+    "all_capabilities_company_grain": {
+      "Wide Format": {
+        "ops": 792,
+        "jobs": 212,
+        "rev": 95303
+      },
+      "Design Services": {
+        "ops": 180,
+        "jobs": 100,
+        "rev": 5953
+      },
+      "Specialty Finishing": {
+        "ops": 207,
+        "jobs": 201,
+        "rev": 2505
+      },
+      "Flat Sheets": {
+        "ops": 96,
+        "jobs": 33,
+        "rev": 7438
+      }
+    },
+    "field_collision_check": {},
+    "contact_attribution_rec_cap": {},
+    "verdict": "GAP CONFIRMED",
+    "substitute": null,
+    "framing_caveat": null,
+    "verdict_final": "GAP CONFIRMED",
+    "platform_definition_jobs": 0,
+    "final_note": "Clean under both qb tag (0) and classifier (0)."
+  },
+  "_meta": {
+    "frontend_timing_method": "OLD mean-interval: get_capability_rhythm (customer_analytics_service.py:591) uses overdue_threshold = avg_interval*1.3, due_soon if days_since>avg*0.9. The platform screen does NOT use the corrected percentile-of-own-gaps logic \u2014 so the doc framing will differ from what Jeff sees on screen until the platform is updated.",
+    "grain_finding": "All baskets computed at company grain (matched_company_id x qb_capability_tag); verification confirms company-grain == qb_customer_id key-grain for all 5. No grain mismatch.",
+    "geoff_letchford_resolution": "0 Embellishment-CAPABILITY orders (real gap). The frontend \"Embellishment (6)/(2)\" was qb_embellishment_tag (Hot Foil/Spot UV finishes on 84 jobs) \u2014 a different field, attributed per-contact. Capability recommendation valid; framing caution applies.",
+    "CRITICAL_capability_definition": "qb_capability_tag is NULL on ~40% of operations. Basket/recommendation used qb_capability_tag ONLY, creating FALSE GAPS. The platform rhythm card uses qb_capability_tag OR classifier capability_tags fallback. Re-verified all 5 under the platform definition: Geoff Letchford (16 jobs) and Studio Odea (8 jobs) DO embellishment -> 2 recs PULLED. 3 Hard Cover Books recs (MED-EL, Meriton, Emily Ziz) confirmed clean. ACTION: rerun the whole top-50 basket with the qb+classifier capability definition; current gaps may be overstated.",
+    "shortlist_after_pull": [
+      "MED-EL -> Hard Cover Books",
+      "Meriton -> Hard Cover Books",
+      "Emily Ziz -> Hard Cover Books"
+    ]
+  }
+}

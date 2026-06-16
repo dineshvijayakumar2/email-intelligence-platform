@@ -44,6 +44,7 @@ from ..services.ai_entity_aggregator import init_entity_aggregator, get_entity_a
 from ..services.ai_digest_generator import init_digest_generator, get_digest_generator
 from ..services.ai_usage_tracker import init_usage_tracker, get_usage_tracker
 from ..services.ai_client import get_ai_settings, update_ai_settings
+from ..services.am_coaching_service import init_coaching_service, get_coaching_service
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +65,7 @@ def init_ai_router(supabase_client):
     init_entity_aggregator(supabase_client)
     init_usage_tracker(supabase_client)
     init_digest_generator(supabase_client)
+    init_coaching_service(supabase_client)
 
     # Load persisted settings from DB (survives restarts)
     _load_persisted_api_keys()
@@ -113,6 +115,54 @@ def _default_date_range(date_from: str = None, date_to: str = None, lookback_day
     if not date_to:
         date_to = datetime.utcnow().isoformat()
     return date_from, date_to
+
+
+# ============================================================================
+# AM COACHING — Tier-A structural quality layer (task 15.2)
+# ============================================================================
+
+@router.get("/coaching/am/{am_id}/structural")
+async def get_am_structural_coaching(
+    am_id: str,
+    current_user: dict = Depends(get_current_user),
+    accessible_ids: list = Depends(get_accessible_mailbox_ids),
+):
+    """
+    Per-AM Tier-A communication-quality STRUCTURAL metrics, self-referential
+    (this AM vs their own baseline over time) — NOT a cross-AM ranking.
+
+    `am_id` is the AM's user id (user_profiles.id / mailboxes.user_id), consistent with
+    am_performance_snapshots. AMs with no mailbox (Mary/Peter) return a clear
+    `email_coachable=false` no-mailbox state — never zeros.
+
+    Metrics (see docs/design/AM_QUALITY_LAYER_DESIGN.md): exchange_velocity, responsiveness,
+    multithreading, follow_up_persistence. Each carries its coverage; the response includes a
+    per-AM staleness flag so a stalled sync does not read as the AM going quiet.
+    """
+    svc = get_coaching_service()
+    if not svc:
+        raise HTTPException(status_code=503, detail="Coaching service not initialized")
+
+    # ── access control: caller must be able to see this AM's mailbox(es) ──
+    mailboxes = svc.get_am_mailboxes(am_id)
+    if mailboxes:
+        am_mailbox_ids = {m["id"] for m in mailboxes}
+        if not (am_mailbox_ids & set(accessible_ids or [])):
+            raise HTTPException(status_code=403, detail="You don't have access to this AM's mailbox")
+    # No-mailbox AMs: the returned state reveals only "no mailbox / not email-coachable" (no email
+    # data), so an authenticated caller is sufficient — there is nothing mailbox-scoped to gate on.
+
+    try:
+        result = svc.compute_structural(am_id)
+    except Exception as e:
+        logger.error(f"compute_structural failed for {am_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to compute coaching metrics: {str(e)[:200]}")
+
+    if result.get("state") == "unknown_am":
+        raise HTTPException(status_code=404, detail=f"AM {am_id} not found (no user profile or mailbox)")
+
+    audit_from_user(current_user, "view_am_coaching", "user", resource_id=am_id)
+    return result
 
 
 # ============================================================================

@@ -1,0 +1,5012 @@
+{
+  "model": "gpt-4o",
+  "blind": true,
+  "tokens": {
+    "input": 282033,
+    "output": 15714
+  },
+  "cost_usd": 0.8622,
+  "failed_cts": [],
+  "results": [
+    {
+      "ct": "0824d27a-f125-47b8-8cf1-13d615b1e65a",
+      "am": "Nic",
+      "label": "won",
+      "won": true,
+      "n_out": 2,
+      "n_in": 4,
+      "bucket": "2",
+      "out_chars": 2099,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 2,
+          "evidence": "The PDF yes. I thought there nay have been a bigger file in the link"
+        },
+        "overall_note": "AM focuses on file access, lacks discovery and consultative engagement."
+      }
+    },
+    {
+      "ct": "8562501f-5eb3-4a55-aaca-bb380cec92e0",
+      "am": "Nic",
+      "label": "won",
+      "won": true,
+      "n_out": 2,
+      "n_in": 0,
+      "bucket": "2",
+      "out_chars": 761,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Apologies this is printing as we speak we had a machine issue late last week, revised timing is Wed"
+        },
+        "overall_note": "Pure logistics, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "68802f55-b3ee-49ec-9bf9-e68da5bf431b",
+      "am": "Nic",
+      "label": "won",
+      "won": true,
+      "n_out": 2,
+      "n_in": 1,
+      "bucket": "2",
+      "out_chars": 3026,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 2,
+          "evidence": "Just a note with white foil, we find white foil is not the best embelishment"
+        },
+        "answer_responsiveness": {
+          "score": 4,
+          "evidence": "Samples are on their way"
+        },
+        "overall_note": "AM provides minimal consultation and no discovery; responds well to sample request."
+      }
+    },
+    {
+      "ct": "f3e09dac-bf48-4f36-8d5d-9ae7d8991e65",
+      "am": "Nic",
+      "label": "won",
+      "won": true,
+      "n_out": 2,
+      "n_in": 2,
+      "bucket": "2",
+      "out_chars": 234,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": "For approval"
+        },
+        "overall_note": "Pure logistics, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "95e15707-c847-4898-ae49-5d37fe50caf1",
+      "am": "Nic",
+      "label": "won",
+      "won": true,
+      "n_out": 2,
+      "n_in": 2,
+      "bucket": "2",
+      "out_chars": 1114,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Quote attached, Give me the ok and I\u2019ll activate the job"
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "Yes payment before pick up, thanks Tim"
+        },
+        "overall_note": "Pure order-taking, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "fcd6b0a7-86c7-490b-ad17-dc11d3505bda",
+      "am": "Nic",
+      "label": "won",
+      "won": true,
+      "n_out": 5,
+      "n_in": 10,
+      "bucket": "5+",
+      "out_chars": 3152,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 2,
+          "evidence": "Can We bump up to another x50 sheets so order is 750"
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Updated PO for x 800"
+        },
+        "overall_note": "AM mostly handles logistics, lacks open-ended questions and consultative advice."
+      }
+    },
+    {
+      "ct": "0d535f99-ad2a-4013-9144-61975d937b40",
+      "am": "Nic",
+      "label": "won",
+      "won": true,
+      "n_out": 9,
+      "n_in": 11,
+      "bucket": "5+",
+      "out_chars": 8506,
+      "scores": {
+        "discovery": {
+          "score": 2,
+          "evidence": "do you still want me to quote that or do you have another option ?"
+        },
+        "consultative": {
+          "score": 3,
+          "evidence": "I feel the bigger quantities will be more suited to Offset"
+        },
+        "answer_responsiveness": {
+          "score": 4,
+          "evidence": "68pp is too thick for us to saddle stitch - we will need to PUR is that ok ?"
+        },
+        "overall_note": "AM asks some clarifying questions, offers limited advice, mostly responsive."
+      }
+    },
+    {
+      "ct": "08d98f89-6686-4705-99fc-d82f061328f7",
+      "am": "Nic",
+      "label": "won",
+      "won": true,
+      "n_out": 7,
+      "n_in": 8,
+      "bucket": "5+",
+      "out_chars": 3635,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "NOTED I\u2019ll need those logos ASAP"
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Let me get back to you - probably Mon Next week"
+        },
+        "overall_note": "AM focuses on logistics, lacks discovery and consultative engagement."
+      }
+    },
+    {
+      "ct": "ca0dbce2-a56c-483c-b19d-6ff61f98f0fb",
+      "am": "Nic",
+      "label": "won",
+      "won": true,
+      "n_out": 1,
+      "n_in": 1,
+      "bucket": "1",
+      "out_chars": 672,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": "Can I have a price to make a knife and 4 up"
+        },
+        "overall_note": "AM's email is purely logistical, lacks discovery and consultative elements."
+      }
+    },
+    {
+      "ct": "7c3406ce-6451-4d70-a78f-90f32e857982",
+      "am": "Nic",
+      "label": "won",
+      "won": true,
+      "n_out": 1,
+      "n_in": 2,
+      "bucket": "1",
+      "out_chars": 630,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "End of next week ok ?"
+        },
+        "overall_note": "Pure logistics, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "75ab99bf-52be-49e1-ab6e-3fb430daec2b",
+      "am": "Nic",
+      "label": "won",
+      "won": true,
+      "n_out": 1,
+      "n_in": 0,
+      "bucket": "1",
+      "out_chars": 610,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": ""
+        },
+        "overall_note": "Pure logistics email with no discovery or consultative elements."
+      }
+    },
+    {
+      "ct": "deb23884-8e20-4c21-91ca-d3c6814b0091",
+      "am": "Nic",
+      "label": "won",
+      "won": true,
+      "n_out": 1,
+      "n_in": 2,
+      "bucket": "1",
+      "out_chars": 987,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Yes that\u2019s fine - I need to put some extra Art in"
+        },
+        "overall_note": "AM confirms delay but lacks discovery and consultative effort."
+      }
+    },
+    {
+      "ct": "56161747-1530-4c58-bc01-785cfcf68e19",
+      "am": "Nic",
+      "label": "won",
+      "won": true,
+      "n_out": 1,
+      "n_in": 0,
+      "bucket": "1",
+      "out_chars": 261,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": "price for x 3 of the Books"
+        },
+        "overall_note": "Pure price quote, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "6d30aab4-5776-419d-a075-3a48d6e2e833",
+      "am": "Nic",
+      "label": "won",
+      "won": true,
+      "n_out": 1,
+      "n_in": 0,
+      "bucket": "1",
+      "out_chars": 289,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "New pricing offers significant savings with the new stock"
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": ""
+        },
+        "overall_note": "Pure price-focused message, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "fc74730c-1bda-4447-a650-b18300dc8850",
+      "am": "Nic",
+      "label": "won",
+      "won": true,
+      "n_out": 1,
+      "n_in": 3,
+      "bucket": "1",
+      "out_chars": 980,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": ""
+        },
+        "overall_note": "AM's email lacks engagement, discovery, and responsiveness."
+      }
+    },
+    {
+      "ct": "84b6696b-193f-4528-b5b6-f137bdb4221b",
+      "am": "Nic",
+      "label": "won",
+      "won": true,
+      "n_out": 1,
+      "n_in": 2,
+      "bucket": "1",
+      "out_chars": 222,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": ""
+        },
+        "overall_note": "AM's email lacks discovery, consultative advice, and responsiveness."
+      }
+    },
+    {
+      "ct": "8e3c2157-9047-43a5-819e-c1318443ed0b",
+      "am": "Nic",
+      "label": "won",
+      "won": true,
+      "n_out": 4,
+      "n_in": 5,
+      "bucket": "3-4",
+      "out_chars": 1133,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Quote attached - i have not included any delivery costs"
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Confirming these are A5 as quoted or A4 as supplied art"
+        },
+        "overall_note": "AM focuses on logistics and confirmation, lacks discovery and consultative depth."
+      }
+    },
+    {
+      "ct": "c3e4fe46-7b8b-45ac-8203-611843faaaff",
+      "am": "Nic",
+      "label": "won",
+      "won": true,
+      "n_out": 4,
+      "n_in": 0,
+      "bucket": "3-4",
+      "out_chars": 6052,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "These should be delivered already"
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Yes this PM"
+        },
+        "overall_note": "AM provides logistical updates but lacks discovery and consultative engagement."
+      }
+    },
+    {
+      "ct": "90de83ad-2c46-4688-803e-0546b8170bf4",
+      "am": "Nic",
+      "label": "won",
+      "won": true,
+      "n_out": 4,
+      "n_in": 4,
+      "bucket": "3-4",
+      "out_chars": 6052,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "Just delivered to International House, 3 Sussex St Barangaroo NSW 2000"
+        },
+        "overall_note": "AM's emails are purely logistical, no discovery or consultative elements."
+      }
+    },
+    {
+      "ct": "64ac6282-f805-49be-bf73-78898e088d29",
+      "am": "Linda",
+      "label": "won",
+      "won": true,
+      "n_out": 1,
+      "n_in": 3,
+      "bucket": "1",
+      "out_chars": 1513,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Is this 250 cards - 3 colours each name (84 cards of each colour)?"
+        },
+        "overall_note": "AM clarifies quantity but lacks discovery and consultative engagement."
+      }
+    },
+    {
+      "ct": "03db3c87-6b15-48dd-8aa9-ed033c38d30c",
+      "am": "Linda",
+      "label": "won",
+      "won": true,
+      "n_out": 1,
+      "n_in": 2,
+      "bucket": "1",
+      "out_chars": 586,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "I wont get earlier than Friday with hard copy proofing."
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "I wont get earlier than Friday with hard copy proofing."
+        },
+        "overall_note": "AM focuses on logistics, no open questions or consultative advice."
+      }
+    },
+    {
+      "ct": "e0c7d04f-5cc7-4863-8918-43b0e1316b0a",
+      "am": "Linda",
+      "label": "won",
+      "won": true,
+      "n_out": 1,
+      "n_in": 2,
+      "bucket": "1",
+      "out_chars": 407,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "PDF or hard copy proof?"
+        },
+        "overall_note": "AM asks a logistics question, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "bc5af84f-f1d2-452f-bc8f-2f74a86edc20",
+      "am": "Linda",
+      "label": "won",
+      "won": true,
+      "n_out": 1,
+      "n_in": 1,
+      "bucket": "1",
+      "out_chars": 377,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": ""
+        },
+        "overall_note": "AM sent a quote with no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "f7cf1823-3120-4e7a-bb92-f04032579d7f",
+      "am": "Linda",
+      "label": "won",
+      "won": true,
+      "n_out": 1,
+      "n_in": 3,
+      "bucket": "1",
+      "out_chars": 1513,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "I will jump onto these quotes for you. Back to you asap."
+        },
+        "overall_note": "AM provides prompt response but lacks discovery and consultative elements."
+      }
+    },
+    {
+      "ct": "27826652-3d53-40ef-ad61-e5dd23338560",
+      "am": "Linda",
+      "label": "won",
+      "won": true,
+      "n_out": 5,
+      "n_in": 6,
+      "bucket": "5+",
+      "out_chars": 2143,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 2,
+          "evidence": "I asked prince to make it 490mm wide to allow for tabs"
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "I asked prince to make it 490mm wide to allow for tabs"
+        },
+        "overall_note": "Minimal discovery, some consultative effort, basic responsiveness."
+      }
+    },
+    {
+      "ct": "09a37353-7862-4897-9d6e-781115504888",
+      "am": "Linda",
+      "label": "won",
+      "won": true,
+      "n_out": 6,
+      "n_in": 4,
+      "bucket": "5+",
+      "out_chars": 7224,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": "Do you want the tabs collated or supplied by kind?"
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Confirming that they are only single sided now not double sided?"
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "file is not set up with any backs"
+        },
+        "overall_note": "AM focuses on logistics and confirmation, lacks open-ended questions or consultative advice."
+      }
+    },
+    {
+      "ct": "55548f3e-bb2f-46c0-9d35-b810338180b5",
+      "am": "Linda",
+      "label": "won",
+      "won": true,
+      "n_out": 9,
+      "n_in": 7,
+      "bucket": "5+",
+      "out_chars": 4182,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 2,
+          "evidence": "No I can despatch them as 2 deliveries"
+        },
+        "answer_responsiveness": {
+          "score": 4,
+          "evidence": "Let me requote based on file"
+        },
+        "overall_note": "AM is responsive but lacks discovery and consultative depth."
+      }
+    },
+    {
+      "ct": "29fbbd03-f773-41ec-b24d-d67eebe367da",
+      "am": "Linda",
+      "label": "won",
+      "won": true,
+      "n_out": 5,
+      "n_in": 6,
+      "bucket": "5+",
+      "out_chars": 5248,
+      "scores": {
+        "discovery": {
+          "score": 2,
+          "evidence": "Is that 64pp + the 2pp fold out?"
+        },
+        "consultative": {
+          "score": 4,
+          "evidence": "That won\u2019t work for section sewn .. it has to be 4pp sections for the folding \u2013 60/64pp"
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "Allow 6mm for spine"
+        },
+        "overall_note": "AM clarifies specs, advises on constraints, but limited open-ended discovery."
+      }
+    },
+    {
+      "ct": "a6dca7f9-7364-4e97-9d27-54fbbcf54921",
+      "am": "Linda",
+      "label": "won",
+      "won": true,
+      "n_out": 6,
+      "n_in": 4,
+      "bucket": "5+",
+      "out_chars": 2398,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 4,
+          "evidence": "The proof will be with you on Tuesday morning"
+        },
+        "overall_note": "AM focuses on logistics, lacks discovery and consultative engagement."
+      }
+    },
+    {
+      "ct": "a051230e-c000-48ec-a19f-873556c8960a",
+      "am": "Linda",
+      "label": "won",
+      "won": true,
+      "n_out": 6,
+      "n_in": 4,
+      "bucket": "5+",
+      "out_chars": 2847,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Thanks I will requote it and get over to you."
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Correct"
+        },
+        "overall_note": "AM provides logistical responses, lacks discovery and consultative engagement."
+      }
+    },
+    {
+      "ct": "f9d5c987-94d6-412a-9068-114c2812ea56",
+      "am": "Linda",
+      "label": "won",
+      "won": true,
+      "n_out": 4,
+      "n_in": 3,
+      "bucket": "3-4",
+      "out_chars": 5531,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Please confirm specs for Cards as I deleted this quote"
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Lets hold till we get the final file."
+        },
+        "overall_note": "AM focuses on logistics and specs, lacks discovery and consultative elements."
+      }
+    },
+    {
+      "ct": "8036cf2d-09b7-4065-9c6c-62df833378a5",
+      "am": "Linda",
+      "label": "won",
+      "won": true,
+      "n_out": 4,
+      "n_in": 2,
+      "bucket": "3-4",
+      "out_chars": 3740,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Let me know if you would like me to order the envelopes"
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "The print file won\u2019t open \u2013 could you please resend"
+        },
+        "overall_note": "AM focuses on logistics, lacks discovery and consultative engagement."
+      }
+    },
+    {
+      "ct": "93f19557-7629-42b6-bd98-134f71e25e0c",
+      "am": "Linda",
+      "label": "won",
+      "won": true,
+      "n_out": 3,
+      "n_in": 1,
+      "bucket": "3-4",
+      "out_chars": 2257,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "The file I had was A5 \u2026 let me requote for DL now"
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "The file I had was A5 \u2026 let me requote for DL now"
+        },
+        "overall_note": "AM corrects file size but doesn't explore needs or advise."
+      }
+    },
+    {
+      "ct": "50484bd2-0c33-4cae-af7d-b6ad87bd2d07",
+      "am": "Linda",
+      "label": "won",
+      "won": true,
+      "n_out": 4,
+      "n_in": 8,
+      "bucket": "3-4",
+      "out_chars": 1610,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Only if proof approved today"
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "To get your job out for Thursday I really need quote and proof approval today"
+        },
+        "overall_note": "AM focuses on logistics, lacks discovery and consultative engagement."
+      }
+    },
+    {
+      "ct": "b218a10c-4e91-4f7e-bc11-1240570f8667",
+      "am": "Linda",
+      "label": "won",
+      "won": true,
+      "n_out": 3,
+      "n_in": 1,
+      "bucket": "3-4",
+      "out_chars": 1964,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "By the way did you know that we produce Finishes Boards ?"
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": ""
+        },
+        "overall_note": "AM's emails lack discovery, consultative advice, and responsiveness."
+      }
+    },
+    {
+      "ct": "9f7e6cca-d4bc-4a7e-9146-c6639a06ea90",
+      "am": "Linda",
+      "label": "won",
+      "won": true,
+      "n_out": 3,
+      "n_in": 1,
+      "bucket": "3-4",
+      "out_chars": 1035,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "By the way did you know that we produce Finishes Boards ?"
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": ""
+        },
+        "overall_note": "AM's emails lack discovery, consultative advice, and responsiveness."
+      }
+    },
+    {
+      "ct": "5b6f8a05-4dba-4e50-9d0b-a503e22346a2",
+      "am": "Linda",
+      "label": "won",
+      "won": true,
+      "n_out": 3,
+      "n_in": 2,
+      "bucket": "3-4",
+      "out_chars": 1196,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": "Thanks Mark"
+        },
+        "overall_note": "AM's emails lack discovery, consultative advice, and responsiveness."
+      }
+    },
+    {
+      "ct": "b1124a7b-7280-439d-936f-0aba65b40b67",
+      "am": "Linda",
+      "label": "won",
+      "won": true,
+      "n_out": 4,
+      "n_in": 3,
+      "bucket": "3-4",
+      "out_chars": 1888,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 2,
+          "evidence": "I will also proof the 1 x200 at the same time if you want"
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "That matches what I have \u2026 For one plan it makes no different."
+        },
+        "overall_note": "AM confirms details and offers proofing, but lacks open-ended discovery."
+      }
+    },
+    {
+      "ct": "cd76d7bb-fa87-42ee-bd46-34c76dbb4f30",
+      "am": "Linda",
+      "label": "won",
+      "won": true,
+      "n_out": 2,
+      "n_in": 2,
+      "bucket": "2",
+      "out_chars": 1343,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 2,
+          "evidence": "Could you advise quote number or project name"
+        },
+        "overall_note": "AM asks for project name but doesn't explore needs or advise."
+      }
+    },
+    {
+      "ct": "30c2aa47-4b76-4036-9623-f11898b0dbd9",
+      "am": "Linda",
+      "label": "won",
+      "won": true,
+      "n_out": 2,
+      "n_in": 2,
+      "bucket": "2",
+      "out_chars": 957,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "we impose 2 up on larger sheets so just needed to check"
+        },
+        "overall_note": "AM focused on logistics, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "78f99d4c-f5f0-4668-aeb4-0225f94a9715",
+      "am": "Linda",
+      "label": "won",
+      "won": true,
+      "n_out": 2,
+      "n_in": 1,
+      "bucket": "2",
+      "out_chars": 626,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "By the way did you know that we produce Finishes Boards ?"
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": ""
+        },
+        "overall_note": "AM's emails lack discovery, consultative advice, and responsiveness."
+      }
+    },
+    {
+      "ct": "7a382dd5-adda-4211-8178-c22f2eeacf87",
+      "am": "Linda",
+      "label": "won",
+      "won": true,
+      "n_out": 2,
+      "n_in": 2,
+      "bucket": "2",
+      "out_chars": 2797,
+      "scores": {
+        "discovery": {
+          "score": 2,
+          "evidence": "Are the floorplates folded or supplied flat?"
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "This has all been quoted on Pacesetter Satin so I will quote on that stock."
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "This has all been quoted on Pacesetter Satin so I will quote on that stock."
+        },
+        "overall_note": "Minimal discovery, no consultative advice, basic responsiveness."
+      }
+    },
+    {
+      "ct": "34805ccc-46eb-433c-b5e7-652d136c3613",
+      "am": "Linda",
+      "label": "won",
+      "won": true,
+      "n_out": 2,
+      "n_in": 1,
+      "bucket": "2",
+      "out_chars": 708,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 2,
+          "evidence": "Note that it needs to be a DL mailer to fit into the DLX envelope"
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": ""
+        },
+        "overall_note": "AM provides logistical info but lacks discovery and full responsiveness."
+      }
+    },
+    {
+      "ct": "92e5f6d9-8471-4382-af0f-22e13359fe8e",
+      "am": "Linda",
+      "label": "won",
+      "won": true,
+      "n_out": 2,
+      "n_in": 1,
+      "bucket": "2",
+      "out_chars": 578,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": "I will update to saddle stitch"
+        },
+        "overall_note": "AM misinterpreted request for staple bind, not saddle stitch."
+      }
+    },
+    {
+      "ct": "4843059a-7c3b-4160-9f96-287718ea9bbc",
+      "am": "Linda",
+      "label": "won",
+      "won": true,
+      "n_out": 2,
+      "n_in": 0,
+      "bucket": "2",
+      "out_chars": 626,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": ""
+        },
+        "overall_note": "Pure logistics and feature mention, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "d91ed4e5-1856-4c27-a403-e3a856756048",
+      "am": "Linda",
+      "label": "won",
+      "won": true,
+      "n_out": 2,
+      "n_in": 1,
+      "bucket": "2",
+      "out_chars": 610,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": ""
+        },
+        "overall_note": "AM emails contain no questions or customer-focused advice."
+      }
+    },
+    {
+      "ct": "e81c8520-0fb7-4714-b153-1590900ae053",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 1,
+      "n_in": 1,
+      "bucket": "1",
+      "out_chars": 1513,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Quoted on 110gsm Revive Eco for better print quality."
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Please find attached quote."
+        },
+        "overall_note": "AM provides quote but lacks discovery and consultative engagement."
+      }
+    },
+    {
+      "ct": "eaded5d0-d118-418d-b57b-c28d5def326a",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 1,
+      "n_in": 1,
+      "bucket": "1",
+      "out_chars": 1513,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Quote attached"
+        },
+        "overall_note": "AM provides quote without exploring needs or advising."
+      }
+    },
+    {
+      "ct": "3dadb155-a8e2-45be-8af7-37cdd3b22a87",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 1,
+      "n_in": 0,
+      "bucket": "1",
+      "out_chars": 1388,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": "Please find attached quote."
+        },
+        "overall_note": "AM provides a quote without addressing the customer's issue."
+      }
+    },
+    {
+      "ct": "03995f30-67f3-4960-b2d1-74785fc9a036",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 1,
+      "n_in": 1,
+      "bucket": "1",
+      "out_chars": 1513,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Quote attached."
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Quote attached."
+        },
+        "overall_note": "AM provides a quote without exploring needs or offering advice."
+      }
+    },
+    {
+      "ct": "a0f60813-a568-46c5-804a-9b0b5082b585",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 1,
+      "n_in": 1,
+      "bucket": "1",
+      "out_chars": 998,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Please find attached quote as requested."
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Please allow 3mm for the spine"
+        },
+        "overall_note": "AM provides quote but lacks discovery and consultative engagement."
+      }
+    },
+    {
+      "ct": "2d426eca-3e2b-44aa-a314-aa28f8e86086",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 1,
+      "n_in": 2,
+      "bucket": "1",
+      "out_chars": 712,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "Please find attached quote and PDF proof for approval."
+        },
+        "overall_note": "Pure logistics response, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "834dd42d-de1e-4707-8efb-99b4875a8231",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 1,
+      "n_in": 1,
+      "bucket": "1",
+      "out_chars": 1513,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Please find attached quote."
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Please find attached quote."
+        },
+        "overall_note": "AM provides quote without exploring needs or advising."
+      }
+    },
+    {
+      "ct": "56fb4965-f30a-4b56-a6f0-5fa5995fd32c",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 1,
+      "n_in": 1,
+      "bucket": "1",
+      "out_chars": 789,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Please find attached quote and PDF proof for approval."
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "Can you please confirm full delivery address?"
+        },
+        "overall_note": "Pure logistics, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "3a30f56a-30e4-4bbc-93dd-743b45a29b93",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 1,
+      "n_in": 0,
+      "bucket": "1",
+      "out_chars": 893,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Please find attached PDF proofs and quote for approval."
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Please find attached PDF proofs and quote for approval."
+        },
+        "overall_note": "AM provides quote but lacks discovery and consultative engagement."
+      }
+    },
+    {
+      "ct": "6b68b5ad-2121-4d54-93dc-ba91e7d789c0",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 1,
+      "n_in": 0,
+      "bucket": "1",
+      "out_chars": 1513,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Please find attached revised quote. Please allow 4mm spine."
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "Please find attached revised quote. Please allow 4mm spine."
+        },
+        "overall_note": "Pure logistics, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "4123ca72-0284-4936-9f7d-2f9674fd36e0",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 1,
+      "n_in": 0,
+      "bucket": "1",
+      "out_chars": 1513,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Please find quote for review."
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": "Please find quote for review."
+        },
+        "overall_note": "AM provides a quote link without addressing customer queries."
+      }
+    },
+    {
+      "ct": "e8b36123-feb0-47e8-93a3-9b8e6752a59d",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 1,
+      "n_in": 2,
+      "bucket": "1",
+      "out_chars": 773,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": "Can you please confirm how many posters (A0 & A1) you need and delivery address please?"
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Can you please confirm how many posters (A0 & A1) you need and delivery address please?"
+        },
+        "overall_note": "AM focuses on logistics, no exploration of customer needs."
+      }
+    },
+    {
+      "ct": "8133e712-d153-4a8b-a4b1-b3e1b84f68e5",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 1,
+      "n_in": 0,
+      "bucket": "1",
+      "out_chars": 543,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": ""
+        },
+        "overall_note": "Pure logistics, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "21fd31bc-aa76-4c7b-8efc-066da9e5c8ea",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 1,
+      "n_in": 0,
+      "bucket": "1",
+      "out_chars": 489,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": ""
+        },
+        "overall_note": "Pure logistics and feature dump, no engagement."
+      }
+    },
+    {
+      "ct": "95e33f3b-6b6f-41e7-a2d3-b3f806264fb7",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 1,
+      "n_in": 1,
+      "bucket": "1",
+      "out_chars": 876,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Please find attached quote and PDF proof for approval."
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Please find attached quote and PDF proof for approval."
+        },
+        "overall_note": "AM provides quote and proof, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "fbc2a6e8-1210-47d6-b59f-4c52d2c8999c",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 1,
+      "n_in": 0,
+      "bucket": "1",
+      "out_chars": 880,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Please review this quote for me. Page 1 to bind the job inhouse. Page 2 to bind at Marvel"
+        },
+        "overall_note": "AM provides a quote link but lacks discovery and consultative elements."
+      }
+    },
+    {
+      "ct": "4ddb5ff7-408b-4d89-888b-a1bd4f293c0d",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 1,
+      "n_in": 1,
+      "bucket": "1",
+      "out_chars": 1250,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "Please find attached quote."
+        },
+        "overall_note": "Pure logistics, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "ee5d0bc9-c549-4bf1-a5ea-b4fe01323d3a",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 1,
+      "n_in": 2,
+      "bucket": "1",
+      "out_chars": 1513,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Spine width 3mm Hinge 8mm"
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Please find attached revised quote. Spine width 3mm Hinge 8mm"
+        },
+        "overall_note": "AM provides revised quote but lacks open-ended questions or consultative advice."
+      }
+    },
+    {
+      "ct": "4d64c7d4-cddc-449d-a581-ef8e1df5f697",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 1,
+      "n_in": 1,
+      "bucket": "1",
+      "out_chars": 1414,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Updated quote attached."
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Updated quote attached."
+        },
+        "overall_note": "AM provides updated quote but lacks discovery and consultative engagement."
+      }
+    },
+    {
+      "ct": "bfd102ad-1d83-4e64-85c9-e3033f3d00ec",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 1,
+      "n_in": 0,
+      "bucket": "1",
+      "out_chars": 1513,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "Please find attached quote."
+        },
+        "overall_note": "Pure logistics, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "ae858624-1c62-4eb1-99c1-a577ca2deb15",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 1,
+      "n_in": 0,
+      "bucket": "1",
+      "out_chars": 1159,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Please find attached quote."
+        },
+        "answer_responsiveness": {
+          "score": 2,
+          "evidence": "Please find attached quote."
+        },
+        "overall_note": "AM provides quote but lacks engagement or exploration of needs."
+      }
+    },
+    {
+      "ct": "6e33d54c-abba-4949-b2bc-314bf3d1239a",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 1,
+      "n_in": 1,
+      "bucket": "1",
+      "out_chars": 1208,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Quote attached."
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Quote attached."
+        },
+        "overall_note": "AM provides quote without exploring needs or advising."
+      }
+    },
+    {
+      "ct": "1b803fe4-ae41-4980-9136-296710da3f70",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 1,
+      "n_in": 0,
+      "bucket": "1",
+      "out_chars": 397,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": ""
+        },
+        "overall_note": "Pure feature/price dump with no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "f5c278c2-aa3f-4151-a4aa-c38b1d0a4413",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 1,
+      "n_in": 2,
+      "bucket": "1",
+      "out_chars": 1513,
+      "scores": {
+        "discovery": {
+          "score": 3,
+          "evidence": "What is the qty? For the text stock, what weight is it? For the foiling on the cover and dust jacket, are you able to share draft artwork"
+        },
+        "consultative": {
+          "score": 2,
+          "evidence": "For the shipping box, what material you prefer?"
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "For the text stock, what weight is it? For the foiling on the cover and dust jacket, are you able to share draft artwork"
+        },
+        "overall_note": "AM asks some clarifying questions but lacks deeper exploration of customer's goals."
+      }
+    },
+    {
+      "ct": "cfa67555-4e65-4ebb-8ef7-77d743e83219",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 2,
+      "n_in": 0,
+      "bucket": "2",
+      "out_chars": 1493,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": ""
+        },
+        "overall_note": "AM only sent a quote, no questions or advice, didn't address post coat request."
+      }
+    },
+    {
+      "ct": "88d48e7a-e46f-4a1b-943c-50124ff24593",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 2,
+      "n_in": 1,
+      "bucket": "2",
+      "out_chars": 970,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Quote attached"
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": "Quote attached"
+        },
+        "overall_note": "AM provides quote without addressing specific customer specs or needs."
+      }
+    },
+    {
+      "ct": "1b0638ec-7d48-4e8b-a2c0-49f11a55a6fc",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 2,
+      "n_in": 2,
+      "bucket": "2",
+      "out_chars": 3026,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Can you please resupply artwork, the link below is not working?"
+        },
+        "overall_note": "AM focuses on logistics, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "2b5ced0c-6b3a-458d-b49c-f992e3c9215a",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 2,
+      "n_in": 1,
+      "bucket": "2",
+      "out_chars": 753,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Thanks"
+        },
+        "overall_note": "Pure logistics, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "b65d33df-2d6a-442c-8ac4-76328d56ec23",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 2,
+      "n_in": 2,
+      "bucket": "2",
+      "out_chars": 1421,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Satin and Silk are very similar stock."
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Satin and Silk are very similar stock."
+        },
+        "overall_note": "Minimal engagement, mostly logistics and brief clarification."
+      }
+    },
+    {
+      "ct": "718bf2c6-12a2-4f40-925e-927f4de77e1b",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 2,
+      "n_in": 2,
+      "bucket": "2",
+      "out_chars": 1827,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "PDF proofs for approval. https://spaces.hightail.com/receive/rg8yhJ3yrQ"
+        },
+        "overall_note": "AM provides proofs as requested, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "a31f4d2a-8d1a-4f6d-bfeb-0d29b39e5032",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 2,
+      "n_in": 1,
+      "bucket": "2",
+      "out_chars": 771,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "Revised quote attached."
+        },
+        "overall_note": "Pure logistics, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "bc54df4c-01ac-4527-a285-ea82830ee22a",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 2,
+      "n_in": 2,
+      "bucket": "2",
+      "out_chars": 3026,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "Thanks for the order. PDF proof https://drive.google.com/"
+        },
+        "overall_note": "AM's emails are purely logistical, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "5ca88b5b-3a0e-49fd-8b8e-3f2cf884aad6",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 2,
+      "n_in": 2,
+      "bucket": "2",
+      "out_chars": 2344,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Will be packed approx. 25 books per A4 box"
+        },
+        "overall_note": "AM provides logistics info but lacks discovery and consultative engagement."
+      }
+    },
+    {
+      "ct": "df2138f9-254c-49f0-9841-e23a01d56488",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 2,
+      "n_in": 1,
+      "bucket": "2",
+      "out_chars": 1490,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": ""
+        },
+        "overall_note": "AM emails are purely logistical, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "1af3e67d-106e-4a32-b869-91919cb1d1d0",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 2,
+      "n_in": 2,
+      "bucket": "2",
+      "out_chars": 778,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Please find attached quote and PDF proof for approval."
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Please find attached quote and PDF proof for approval."
+        },
+        "overall_note": "AM provided quote and proof but no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "ccf188c6-a03c-40ad-8dfd-e8a992123075",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 2,
+      "n_in": 0,
+      "bucket": "2",
+      "out_chars": 777,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Please find attached quote options."
+        },
+        "answer_responsiveness": {
+          "score": 2,
+          "evidence": "Thanks for confirming. Can you please confirm the thread colour?"
+        },
+        "overall_note": "Minimal engagement, mostly logistics and confirmation."
+      }
+    },
+    {
+      "ct": "61f7fa64-d439-4209-9357-92c1c387d68e",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 2,
+      "n_in": 2,
+      "bucket": "2",
+      "out_chars": 768,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": "Can you please let me know when do you need the programs and confirm delivery address?"
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Please find attached quote for approval."
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Can you please let me know when do you need the programs and confirm delivery address?"
+        },
+        "overall_note": "AM focuses on logistics, lacks discovery and consultative engagement."
+      }
+    },
+    {
+      "ct": "7b220d09-250f-4652-a173-41d87c8a324d",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 2,
+      "n_in": 0,
+      "bucket": "2",
+      "out_chars": 1372,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "Please find attached quote."
+        },
+        "overall_note": "Pure logistics, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "6bbe72c8-2f74-4861-b7f0-95389ade062b",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 2,
+      "n_in": 1,
+      "bucket": "2",
+      "out_chars": 1237,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Please find attached quote."
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Ideally we need artwork by Tuesday 21 April please."
+        },
+        "overall_note": "AM provides quote and deadline, lacks discovery and consultative elements."
+      }
+    },
+    {
+      "ct": "dfbd5ec8-6eb9-44c2-9f27-cf5b7aed76aa",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 2,
+      "n_in": 3,
+      "bucket": "2",
+      "out_chars": 813,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": "Can you please advise what size is the poster?"
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Can you please advise what size is the poster?"
+        },
+        "overall_note": "AM asks only a closed question about size, no consultative advice."
+      }
+    },
+    {
+      "ct": "b5cbf5dd-98be-410a-978a-119ca744e2fe",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 7,
+      "n_in": 1,
+      "bucket": "5+",
+      "out_chars": 2549,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Yes, that is correct."
+        },
+        "overall_note": "AM's emails are logistical, with no discovery or consultative elements."
+      }
+    },
+    {
+      "ct": "933722e8-bc2f-4328-b177-6c84503a3f16",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 7,
+      "n_in": 7,
+      "bucket": "5+",
+      "out_chars": 6034,
+      "scores": {
+        "discovery": {
+          "score": 2,
+          "evidence": "With the folders, do you want gusset? And how many pockets?"
+        },
+        "consultative": {
+          "score": 3,
+          "evidence": "I don\u2019t think that you will need gusset for the brochure."
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Please find attached quote."
+        },
+        "overall_note": "Limited discovery, some consultative advice, partial responsiveness."
+      }
+    },
+    {
+      "ct": "927d5a90-30cc-4fa6-9381-28a509606aa2",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 5,
+      "n_in": 4,
+      "bucket": "5+",
+      "out_chars": 1973,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Please find attached quote. Can do Friday COB pick up."
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Please find PDF proof for the floorplates."
+        },
+        "overall_note": "AM focused on logistics and order processing, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "8e3bdcc5-c950-4c8e-ae5d-0222c2121c7f",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 5,
+      "n_in": 4,
+      "bucket": "5+",
+      "out_chars": 2055,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Yes please, total page count to be 36pp including cover."
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "Yes please, total page count to be 36pp including cover."
+        },
+        "overall_note": "AM is responsive but lacks discovery and consultative engagement."
+      }
+    },
+    {
+      "ct": "c4611a37-428e-452c-9512-e278fe172dbb",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 3,
+      "n_in": 2,
+      "bucket": "3-4",
+      "out_chars": 3206,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 2,
+          "evidence": "Quoted with an economical white uncoated paper."
+        },
+        "answer_responsiveness": {
+          "score": 4,
+          "evidence": "The book is 70pp which is it too thick to saddle stitch."
+        },
+        "overall_note": "AM responds to requests but lacks open-ended questions or deep consultative advice."
+      }
+    },
+    {
+      "ct": "9db558dd-826d-4f4a-941a-e914591cd2eb",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 3,
+      "n_in": 3,
+      "bucket": "3-4",
+      "out_chars": 1697,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "I\u2019ve discounted a bit but this job is 8 kinds."
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Please find attached revised quote."
+        },
+        "overall_note": "AM provides quotes but lacks discovery and consultative engagement."
+      }
+    },
+    {
+      "ct": "1fb717b0-ceb0-4cfa-ac62-7e1dbed1d5b8",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 4,
+      "n_in": 5,
+      "bucket": "3-4",
+      "out_chars": 2784,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": "Can I just confirm the size is 500x100mm?"
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Please find attached quotes."
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Quotes attached"
+        },
+        "overall_note": "Minimal engagement, mostly logistics and order-taking."
+      }
+    },
+    {
+      "ct": "9ea9af27-411e-4608-9531-38af4047f0b0",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 3,
+      "n_in": 2,
+      "bucket": "3-4",
+      "out_chars": 1973,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": "Please find attached PDF proof for approvl."
+        },
+        "overall_note": "AM's emails are purely logistical, lacking discovery or consultative elements."
+      }
+    },
+    {
+      "ct": "24b30e7f-2980-47e7-8399-8ac78be28283",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 4,
+      "n_in": 6,
+      "bucket": "3-4",
+      "out_chars": 2411,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 2,
+          "evidence": "For the intro and photo, we would suggest a 5mm PVC to limit bowing"
+        },
+        "answer_responsiveness": {
+          "score": 4,
+          "evidence": "Please find attached combined quote for the 2mm PVC."
+        },
+        "overall_note": "AM provides quotes and suggestions but lacks open-ended questions."
+      }
+    },
+    {
+      "ct": "d91e5121-091b-42b2-87f4-455489417cbc",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 4,
+      "n_in": 5,
+      "bucket": "3-4",
+      "out_chars": 2415,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "Please find attached PDF proof for approval."
+        },
+        "overall_note": "AM's emails are purely logistical, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "3c6f9ad7-381d-4917-997a-a19651217257",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 3,
+      "n_in": 4,
+      "bucket": "3-4",
+      "out_chars": 2219,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Yes, the quote include couriers to the 4 different addresses."
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "Yes, the quote include couriers to the 4 different addresses."
+        },
+        "overall_note": "AM provides direct answers but lacks discovery and consultative engagement."
+      }
+    },
+    {
+      "ct": "74a8ea35-c0ce-4595-8cd4-48108b2fb685",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 4,
+      "n_in": 4,
+      "bucket": "3-4",
+      "out_chars": 5838,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Please fin attached quote."
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Can you please resupply artwork in PDF?"
+        },
+        "overall_note": "AM focuses on logistics, lacks discovery and consultative engagement."
+      }
+    },
+    {
+      "ct": "4b7c4707-da04-4dde-8edc-5adf52f1be6a",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 3,
+      "n_in": 3,
+      "bucket": "3-4",
+      "out_chars": 2003,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Will check with production and get back to you about timing."
+        },
+        "overall_note": "AM provides quotes and logistics, lacks discovery and consultative engagement."
+      }
+    },
+    {
+      "ct": "1237a542-9208-43c9-a645-bf8934c4a60e",
+      "am": "Ehab",
+      "label": "won",
+      "won": true,
+      "n_out": 3,
+      "n_in": 2,
+      "bucket": "3-4",
+      "out_chars": 2733,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 2,
+          "evidence": "A3 will not be the same price as A4. If you want to quote the A3 we can\u2019t section sew it but we can do Perfect Bind"
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "A3 will not be the same price as A4."
+        },
+        "overall_note": "AM answers pricing question directly but lacks discovery and consultative depth."
+      }
+    },
+    {
+      "ct": "8f07a8a1-eb61-40ba-b00c-ab39266a2205",
+      "am": "Nic",
+      "label": "lost",
+      "won": false,
+      "n_out": 2,
+      "n_in": 7,
+      "bucket": "2",
+      "out_chars": 3026,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "I have item 6 I need NEW - Item 7 - Menu Cards FA - HERE"
+        },
+        "overall_note": "AM focuses on logistics, lacks discovery and consultative engagement."
+      }
+    },
+    {
+      "ct": "cb029b49-ee75-43e6-92af-af7b4f5f14c8",
+      "am": "Nic",
+      "label": "lost",
+      "won": false,
+      "n_out": 2,
+      "n_in": 1,
+      "bucket": "2",
+      "out_chars": 415,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 2,
+          "evidence": "this Cover material i A little expensive if you want to have a look at other option"
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": "Perfect see you then"
+        },
+        "overall_note": "AM fails to address customer's question about logo affecting price."
+      }
+    },
+    {
+      "ct": "e0eb5ecc-86cf-43c6-9eb2-1c36d811f1cd",
+      "am": "Nic",
+      "label": "lost",
+      "won": false,
+      "n_out": 2,
+      "n_in": 3,
+      "bucket": "2",
+      "out_chars": 543,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "Correct"
+        },
+        "overall_note": "AM provides a direct answer but lacks discovery and consultative engagement."
+      }
+    },
+    {
+      "ct": "8cf9e15f-6f43-41f6-9248-fb50e9f53385",
+      "am": "Nic",
+      "label": "lost",
+      "won": false,
+      "n_out": 2,
+      "n_in": 2,
+      "bucket": "2",
+      "out_chars": 714,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Link in my signature"
+        },
+        "overall_note": "Pure logistics, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "dda671c6-02ec-4fda-a27c-78ac9b4e5377",
+      "am": "Nic",
+      "label": "lost",
+      "won": false,
+      "n_out": 2,
+      "n_in": 3,
+      "bucket": "2",
+      "out_chars": 1706,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 2,
+          "evidence": "Stock size is too big to fit through the Gluer - we would need to put down Mounting film"
+        },
+        "answer_responsiveness": {
+          "score": 4,
+          "evidence": "600mm"
+        },
+        "overall_note": "AM provides logistical info but lacks open-ended questions or deep consultative advice."
+      }
+    },
+    {
+      "ct": "fefe3580-e069-4965-976a-d899958fcd22",
+      "am": "Nic",
+      "label": "lost",
+      "won": false,
+      "n_out": 7,
+      "n_in": 0,
+      "bucket": "5+",
+      "out_chars": 3193,
+      "scores": {
+        "discovery": {
+          "score": 2,
+          "evidence": "Are these a permanent solution or do they need to be removable"
+        },
+        "consultative": {
+          "score": 2,
+          "evidence": "If you need a 2mm thick card to fit the blocks I\u2019ll need to requote"
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Just waiting on an instal cost"
+        },
+        "overall_note": "Limited discovery and consultative effort; mostly logistics-focused."
+      }
+    },
+    {
+      "ct": "6ab88fb4-cd1a-49f5-ba03-0a5b3c16ad61",
+      "am": "Nic",
+      "label": "lost",
+      "won": false,
+      "n_out": 10,
+      "n_in": 11,
+      "bucket": "5+",
+      "out_chars": 4599,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Not at this price point - I can send some over on Monday"
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Ive sent over a couple of Samples let me know your preference"
+        },
+        "overall_note": "AM mostly handles logistics, lacks discovery and consultative depth."
+      }
+    },
+    {
+      "ct": "60043c31-f9cf-4817-987e-2203f6bf4f4c",
+      "am": "Nic",
+      "label": "lost",
+      "won": false,
+      "n_out": 14,
+      "n_in": 2,
+      "bucket": "5+",
+      "out_chars": 6209,
+      "scores": {
+        "discovery": {
+          "score": 2,
+          "evidence": "Do you think this will be a recurring job ?"
+        },
+        "consultative": {
+          "score": 2,
+          "evidence": "order some extras for JIC our cost"
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "I am just waiting on the Shipping of the Tubes"
+        },
+        "overall_note": "Mostly logistics-focused, limited discovery and consultative engagement."
+      }
+    },
+    {
+      "ct": "bf60fd0c-ebf1-46eb-9003-9a33facb90aa",
+      "am": "Nic",
+      "label": "lost",
+      "won": false,
+      "n_out": 1,
+      "n_in": 1,
+      "bucket": "1",
+      "out_chars": 779,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Its fine - It takes a little time to work these things out"
+        },
+        "overall_note": "AM reassures but lacks discovery or consultative engagement."
+      }
+    },
+    {
+      "ct": "c875bbfb-7c23-4991-ae0e-34b54096a3d4",
+      "am": "Nic",
+      "label": "lost",
+      "won": false,
+      "n_out": 1,
+      "n_in": 2,
+      "bucket": "1",
+      "out_chars": 546,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "let me know how I can help when you are ready"
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": "let me know how I can help when you are ready"
+        },
+        "overall_note": "AM offers no discovery, consultative advice, or specific response."
+      }
+    },
+    {
+      "ct": "fc0361af-58db-496a-a5ff-efc88924feaf",
+      "am": "Nic",
+      "label": "lost",
+      "won": false,
+      "n_out": 1,
+      "n_in": 1,
+      "bucket": "1",
+      "out_chars": 288,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": ""
+        },
+        "overall_note": "AM's email is a pure logistics message with no discovery or consultative elements."
+      }
+    },
+    {
+      "ct": "31299141-27b0-46ae-9486-4c04abebb4cb",
+      "am": "Nic",
+      "label": "lost",
+      "won": false,
+      "n_out": 1,
+      "n_in": 1,
+      "bucket": "1",
+      "out_chars": 491,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": ""
+        },
+        "overall_note": "AM's email contains no discovery, consultative advice, or responsiveness."
+      }
+    },
+    {
+      "ct": "fba36498-6737-4836-8823-803f693fcd37",
+      "am": "Nic",
+      "label": "lost",
+      "won": false,
+      "n_out": 1,
+      "n_in": 0,
+      "bucket": "1",
+      "out_chars": 222,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": ""
+        },
+        "overall_note": "Pure logistics, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "c6e773f1-df74-4984-97af-85890af30de4",
+      "am": "Nic",
+      "label": "lost",
+      "won": false,
+      "n_out": 1,
+      "n_in": 2,
+      "bucket": "1",
+      "out_chars": 222,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": ""
+        },
+        "overall_note": "AM did not respond to customer queries or provide any consultative advice."
+      }
+    },
+    {
+      "ct": "1c71fe36-98f8-4dcf-b662-8402b055dbf0",
+      "am": "Nic",
+      "label": "lost",
+      "won": false,
+      "n_out": 1,
+      "n_in": 1,
+      "bucket": "1",
+      "out_chars": 222,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": ""
+        },
+        "overall_note": "AM did not respond to customer's request for questions."
+      }
+    },
+    {
+      "ct": "5ef3028c-6f0b-43b9-95ec-b734f704e95f",
+      "am": "Nic",
+      "label": "lost",
+      "won": false,
+      "n_out": 1,
+      "n_in": 0,
+      "bucket": "1",
+      "out_chars": 222,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": ""
+        },
+        "overall_note": "No questions, advice, or responsiveness; pure logistics."
+      }
+    },
+    {
+      "ct": "a185e9cf-c2fa-4f2a-8b30-261e02a0dda8",
+      "am": "Nic",
+      "label": "lost",
+      "won": false,
+      "n_out": 3,
+      "n_in": 0,
+      "bucket": "3-4",
+      "out_chars": 4199,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": "Yes - I didn\u2019t quote case bound because of Budget ? shall I quote it up ?"
+        },
+        "consultative": {
+          "score": 2,
+          "evidence": "Can\u2019t do lay flat though - only section sewn and we will need to Leave out the acetate pages"
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Looks Fine Can\u2019t do lay flat though - only section sewn"
+        },
+        "overall_note": "AM focuses on logistics, lacks open-ended questions and consultative advice."
+      }
+    },
+    {
+      "ct": "4034c9b2-fbba-4da9-aa9d-ff278135f976",
+      "am": "Nic",
+      "label": "lost",
+      "won": false,
+      "n_out": 3,
+      "n_in": 3,
+      "bucket": "3-4",
+      "out_chars": 1336,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Was planning on this but can change"
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "Yes and gold digital foil on the front"
+        },
+        "overall_note": "AM provides direct answers but lacks discovery and consultative depth."
+      }
+    },
+    {
+      "ct": "6b7868c2-afd7-41dc-9bed-81228ec26267",
+      "am": "Nic",
+      "label": "lost",
+      "won": false,
+      "n_out": 3,
+      "n_in": 2,
+      "bucket": "3-4",
+      "out_chars": 1990,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": "What is the Budget ?"
+        },
+        "consultative": {
+          "score": 3,
+          "evidence": "For $1 each You would need to drop the silver foil board and the elastic"
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "For That Budget I Can offer a standard Printed A5 Presentation folder"
+        },
+        "overall_note": "Limited discovery, some consultative advice, fully responsive."
+      }
+    },
+    {
+      "ct": "0b1142f1-6095-4842-a981-a7e7f93c81ee",
+      "am": "Linda",
+      "label": "lost",
+      "won": false,
+      "n_out": 1,
+      "n_in": 1,
+      "bucket": "1",
+      "out_chars": 225,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": ""
+        },
+        "overall_note": "AM's email is purely logistical, no engagement or discovery."
+      }
+    },
+    {
+      "ct": "af35dd3e-eae8-4971-95f1-005117adf493",
+      "am": "Linda",
+      "label": "lost",
+      "won": false,
+      "n_out": 1,
+      "n_in": 1,
+      "bucket": "1",
+      "out_chars": 377,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": ""
+        },
+        "overall_note": "AM did not respond to customer's question about product lids."
+      }
+    },
+    {
+      "ct": "aac25b64-0ed4-4d36-9b56-5598b6ab7890",
+      "am": "Linda",
+      "label": "lost",
+      "won": false,
+      "n_out": 1,
+      "n_in": 2,
+      "bucket": "1",
+      "out_chars": 835,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Please use the transfer link in my signature"
+        },
+        "overall_note": "AM provides logistics info but lacks discovery and consultative engagement."
+      }
+    },
+    {
+      "ct": "0506b013-9064-4682-b325-957b567c24ab",
+      "am": "Linda",
+      "label": "lost",
+      "won": false,
+      "n_out": 1,
+      "n_in": 1,
+      "bucket": "1",
+      "out_chars": 425,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "I can match to the current proof outer blue"
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "I can match to the current proof outer blue if you want me to get these moving"
+        },
+        "overall_note": "AM confirms action based on customer approval, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "b4748803-77a3-4cfd-8be0-a0a4271eb819",
+      "am": "Linda",
+      "label": "lost",
+      "won": false,
+      "n_out": 1,
+      "n_in": 3,
+      "bucket": "1",
+      "out_chars": 847,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": "I would need to know exactly which quote it is though as there are so many"
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "If files are with me today then no problem."
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "If files are with me today then no problem."
+        },
+        "overall_note": "AM focuses on logistics, lacks discovery and consultative engagement."
+      }
+    },
+    {
+      "ct": "334cd2d8-7a3d-49a9-b004-02f1d511d221",
+      "am": "Linda",
+      "label": "lost",
+      "won": false,
+      "n_out": 6,
+      "n_in": 1,
+      "bucket": "5+",
+      "out_chars": 2059,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": "Can you confirm what the extra deboss is?"
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Yes, that includes the debossing. I will quote for a card with no deboss"
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Yes, that includes the debossing. I will quote for a card with no deboss"
+        },
+        "overall_note": "Minimal discovery and consultative effort; basic responsiveness."
+      }
+    },
+    {
+      "ct": "84f49458-f539-465a-a17f-8861a7c0ca7a",
+      "am": "Linda",
+      "label": "lost",
+      "won": false,
+      "n_out": 8,
+      "n_in": 1,
+      "bucket": "5+",
+      "out_chars": 2453,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": "So 12pp + 4pp? Linda"
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Please let me know if you would also like an offset quote"
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Ok I went off the file that was attached I will update Linda"
+        },
+        "overall_note": "Minimal discovery and consultative effort; basic responsiveness."
+      }
+    },
+    {
+      "ct": "41523810-f6bf-4920-953a-49c8b48c5c34",
+      "am": "Linda",
+      "label": "lost",
+      "won": false,
+      "n_out": 8,
+      "n_in": 6,
+      "bucket": "5+",
+      "out_chars": 4164,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 2,
+          "evidence": "I am taking 2 pages off the cover and adding back into the text"
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "can you confirm as page counts dont match the files"
+        },
+        "overall_note": "AM focuses on logistics and updates, lacks open-ended questions."
+      }
+    },
+    {
+      "ct": "f500c1c7-51b9-4c8d-8e32-41cd7a028273",
+      "am": "Linda",
+      "label": "lost",
+      "won": false,
+      "n_out": 5,
+      "n_in": 6,
+      "bucket": "5+",
+      "out_chars": 2935,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": "Could you confirm that the enevlope has no printing or foiling?"
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Of which specs - the job we produced last year or the specs you sent over?"
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Please confirm that you are looking to produce the same cards again"
+        },
+        "overall_note": "AM focuses on logistics and specs, lacks open-ended questions or consultative advice."
+      }
+    },
+    {
+      "ct": "cac5ef64-64aa-4e1b-af3e-c44a5a36238f",
+      "am": "Linda",
+      "label": "lost",
+      "won": false,
+      "n_out": 5,
+      "n_in": 2,
+      "bucket": "5+",
+      "out_chars": 1748,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": ""
+        },
+        "overall_note": "AM's emails lack discovery, consultative advice, and responsiveness."
+      }
+    },
+    {
+      "ct": "b2951795-d6b0-47ea-8215-98452f71a586",
+      "am": "Linda",
+      "label": "lost",
+      "won": false,
+      "n_out": 9,
+      "n_in": 6,
+      "bucket": "5+",
+      "out_chars": 3733,
+      "scores": {
+        "discovery": {
+          "score": 2,
+          "evidence": "Am I foiling any of these (Penthouse)?"
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "I will base quote on the files not the original specs"
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Specs say residences 202 kinds but file is only 150 kinds"
+        },
+        "overall_note": "AM focuses on logistics, lacks open-ended questions and consultative advice."
+      }
+    },
+    {
+      "ct": "b9f6e6e4-7028-448f-943d-f22aa00dc1ff",
+      "am": "Linda",
+      "label": "lost",
+      "won": false,
+      "n_out": 3,
+      "n_in": 1,
+      "bucket": "3-4",
+      "out_chars": 729,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": "Let me get it to you"
+        },
+        "overall_note": "AM's emails lack discovery, consultative advice, and responsiveness."
+      }
+    },
+    {
+      "ct": "0884ed24-dbf9-4349-b6dc-ef58186ed731",
+      "am": "Linda",
+      "label": "lost",
+      "won": false,
+      "n_out": 3,
+      "n_in": 2,
+      "bucket": "3-4",
+      "out_chars": 1333,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": ""
+        },
+        "overall_note": "AM's emails lack discovery, consultative advice, and responsiveness."
+      }
+    },
+    {
+      "ct": "4b0f30ab-87a9-4472-8d1f-26b61b7903f2",
+      "am": "Linda",
+      "label": "lost",
+      "won": false,
+      "n_out": 3,
+      "n_in": 2,
+      "bucket": "3-4",
+      "out_chars": 2137,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "I will update the quote now"
+        },
+        "overall_note": "AM's emails lack discovery and consultative elements, minimal responsiveness."
+      }
+    },
+    {
+      "ct": "894c80e2-0e4e-496b-bbb6-37570bb7d3f4",
+      "am": "Linda",
+      "label": "lost",
+      "won": false,
+      "n_out": 3,
+      "n_in": 3,
+      "bucket": "3-4",
+      "out_chars": 2697,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": "What information do you require?"
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "We can supply a template for the case bound once the book is booked in and payment is made."
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "3mm bleed Fogra 39 Print ready PDF \u2013 text and end papers single pages"
+        },
+        "overall_note": "AM lacks open-ended questions, offers minimal consultative advice, partially answers customer."
+      }
+    },
+    {
+      "ct": "3355eee6-06b9-4988-8ea6-93dd92eae70b",
+      "am": "Linda",
+      "label": "lost",
+      "won": false,
+      "n_out": 3,
+      "n_in": 4,
+      "bucket": "3-4",
+      "out_chars": 2862,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 2,
+          "evidence": "If this has gold foiling I would not get this done in time"
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Going to be the same as the previous job"
+        },
+        "overall_note": "Minimal discovery, some consultative advice, partial responsiveness."
+      }
+    },
+    {
+      "ct": "d7799a98-b57c-4b65-b568-30e76cd1fa12",
+      "am": "Linda",
+      "label": "lost",
+      "won": false,
+      "n_out": 4,
+      "n_in": 7,
+      "bucket": "3-4",
+      "out_chars": 2896,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": "Could you please send through the following Pantone colours required Stock required Binding required Delivery instructions"
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "I need to know the following to enable me to quote \u2013 colours are not relevant for this part of the quote"
+        },
+        "answer_responsiveness": {
+          "score": 2,
+          "evidence": "Could I please grab a print file with crop marks and bleed"
+        },
+        "overall_note": "AM focuses on logistics, lacks open-ended questions and consultative advice."
+      }
+    },
+    {
+      "ct": "897cd526-c1b0-4871-a186-fec0704382ef",
+      "am": "Linda",
+      "label": "lost",
+      "won": false,
+      "n_out": 3,
+      "n_in": 6,
+      "bucket": "3-4",
+      "out_chars": 4539,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "My quote is on uncoated stock with matt varnish \u2013 no gloss anywhere"
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "My quote is on uncoated stock with matt varnish \u2013 no gloss anywhere"
+        },
+        "overall_note": "AM provides basic info, no open-ended questions or consultative advice."
+      }
+    },
+    {
+      "ct": "55b72032-d10c-4841-96ff-1bd812ba8c89",
+      "am": "Linda",
+      "label": "lost",
+      "won": false,
+      "n_out": 4,
+      "n_in": 1,
+      "bucket": "3-4",
+      "out_chars": 1840,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Please find your quote attached for review."
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": "If you have any questions, feel free to get in touch."
+        },
+        "overall_note": "AM's emails are purely logistical with no discovery or consultative elements."
+      }
+    },
+    {
+      "ct": "aeeb0795-dd60-447a-81bb-7817bd6bc0d3",
+      "am": "Linda",
+      "label": "lost",
+      "won": false,
+      "n_out": 2,
+      "n_in": 2,
+      "bucket": "2",
+      "out_chars": 1652,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 2,
+          "evidence": "Can you send me the link to what you are looking at"
+        },
+        "overall_note": "AM's emails lack discovery and consultative elements, minimal responsiveness."
+      }
+    },
+    {
+      "ct": "730ae3ad-99e4-44ff-9518-00c614dbe1d6",
+      "am": "Linda",
+      "label": "lost",
+      "won": false,
+      "n_out": 2,
+      "n_in": 0,
+      "bucket": "2",
+      "out_chars": 626,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": ""
+        },
+        "overall_note": "No open-ended questions or customer-focused advice."
+      }
+    },
+    {
+      "ct": "263a632a-d604-4e5f-9d9e-15f6c3f41e66",
+      "am": "Linda",
+      "label": "lost",
+      "won": false,
+      "n_out": 2,
+      "n_in": 0,
+      "bucket": "2",
+      "out_chars": 1218,
+      "scores": {
+        "discovery": {
+          "score": 3,
+          "evidence": "Do you have the artwork as what I quoted was a logo on the front cover as per Whitton Lane specs as previous Am I just quoting the boxes this time?"
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "It is out of date so I will have to requote"
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "I have this old quote but nothing else. It is out of date so I will have to requote"
+        },
+        "overall_note": "Limited discovery, no consultative advice, partial responsiveness."
+      }
+    },
+    {
+      "ct": "dca3839e-8383-4db6-9d8e-2329329fb141",
+      "am": "Linda",
+      "label": "lost",
+      "won": false,
+      "n_out": 2,
+      "n_in": 1,
+      "bucket": "2",
+      "out_chars": 2100,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": "Please let me know if you have any questions"
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "I have quoted the 28pp option"
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "Let me know if there are any changes to any parts"
+        },
+        "overall_note": "AM focuses on logistics, lacks discovery and consultative engagement."
+      }
+    },
+    {
+      "ct": "57538c09-e2a9-4810-a7de-d0332ba6d9d0",
+      "am": "Linda",
+      "label": "lost",
+      "won": false,
+      "n_out": 2,
+      "n_in": 0,
+      "bucket": "2",
+      "out_chars": 438,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "We are not really very competitive on small jobs printing on boards"
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "We are not really very competitive on small jobs printing on boards"
+        },
+        "overall_note": "Minimal engagement; no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "455fdd10-af68-4d63-8c3f-fafae5663d1f",
+      "am": "Linda",
+      "label": "lost",
+      "won": false,
+      "n_out": 2,
+      "n_in": 0,
+      "bucket": "2",
+      "out_chars": 602,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": ""
+        },
+        "overall_note": "No questions, advice, or responsiveness; only logistics and contact info."
+      }
+    },
+    {
+      "ct": "1f5a6627-7a60-46f1-a2e6-07066b666e10",
+      "am": "Linda",
+      "label": "lost",
+      "won": false,
+      "n_out": 2,
+      "n_in": 0,
+      "bucket": "2",
+      "out_chars": 602,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": ""
+        },
+        "overall_note": "AM messages contain only logistics and contact details."
+      }
+    },
+    {
+      "ct": "b816dca3-b444-4e1a-a1fd-be8b062b6e0d",
+      "am": "Linda",
+      "label": "lost",
+      "won": false,
+      "n_out": 2,
+      "n_in": 2,
+      "bucket": "2",
+      "out_chars": 802,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": ""
+        },
+        "overall_note": "AM messages contain no questions or responses to customer inquiries."
+      }
+    },
+    {
+      "ct": "56533a09-c81c-4548-9104-9b478fc700ad",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 1,
+      "n_in": 1,
+      "bucket": "1",
+      "out_chars": 1074,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Note the artwork is portrait not landscape."
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Please find attached quote."
+        },
+        "overall_note": "Pure logistics, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "6aa01563-e4df-47b6-8672-9dbd0280ab20",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 1,
+      "n_in": 0,
+      "bucket": "1",
+      "out_chars": 344,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": ""
+        },
+        "overall_note": "Pure logistics, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "29eeef0b-7721-4624-92d1-532969ec9483",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 1,
+      "n_in": 1,
+      "bucket": "1",
+      "out_chars": 1353,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": "Please find attached quote."
+        },
+        "overall_note": "AM provides a quote without addressing cost-reduction inquiry."
+      }
+    },
+    {
+      "ct": "1c8a1f05-2afd-4cb9-9184-d819dbcbc519",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 1,
+      "n_in": 0,
+      "bucket": "1",
+      "out_chars": 1513,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "Quote attached"
+        },
+        "overall_note": "Pure order-taking, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "e98b14ac-ae33-47c4-8ce0-89b8bcd743d7",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 1,
+      "n_in": 1,
+      "bucket": "1",
+      "out_chars": 1513,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Quote attached."
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Quote attached."
+        },
+        "overall_note": "AM provides quote without exploring needs or advising."
+      }
+    },
+    {
+      "ct": "a9630deb-dfb0-47f6-8627-ff12e3b1eb0d",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 1,
+      "n_in": 0,
+      "bucket": "1",
+      "out_chars": 717,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "Quote attached"
+        },
+        "overall_note": "Pure logistics, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "1616e734-6a85-4c29-934a-359d438180a3",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 1,
+      "n_in": 1,
+      "bucket": "1",
+      "out_chars": 1405,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Note, the artwork is supplied as A5 not A4."
+        },
+        "overall_note": "AM only points out artwork size discrepancy, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "4cbae02f-5f03-48d4-a8ac-e7a20820024e",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 1,
+      "n_in": 0,
+      "bucket": "1",
+      "out_chars": 373,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Please find attached quote as requested."
+        },
+        "overall_note": "Pure logistics, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "ce860850-a0d2-46b9-9ec7-227644c566e3",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 1,
+      "n_in": 1,
+      "bucket": "1",
+      "out_chars": 1347,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Quote attached."
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "Quote attached."
+        },
+        "overall_note": "Pure logistics, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "b4acd83f-e2d6-44e2-89a1-f7332f3e3140",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 1,
+      "n_in": 0,
+      "bucket": "1",
+      "out_chars": 1513,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Quote attached"
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "Quote attached"
+        },
+        "overall_note": "Pure logistics, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "bcc0a636-17de-45f2-8c8f-cf2318575642",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 1,
+      "n_in": 0,
+      "bucket": "1",
+      "out_chars": 354,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": "Please see attached revised quote."
+        },
+        "overall_note": "Pure logistics, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "786229dc-5a1e-46e9-8760-fe3b9c905e96",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 1,
+      "n_in": 0,
+      "bucket": "1",
+      "out_chars": 884,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Please find attached quote."
+        },
+        "overall_note": "AM provides quote but lacks discovery and consultative engagement."
+      }
+    },
+    {
+      "ct": "94782b55-8516-4a38-a0e9-00a259471f8c",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 1,
+      "n_in": 1,
+      "bucket": "1",
+      "out_chars": 1513,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": "Quote attached"
+        },
+        "overall_note": "AM provides a quote without any engagement or exploration of needs."
+      }
+    },
+    {
+      "ct": "283d4ec0-b666-4578-b9c7-0e6529a6934e",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 1,
+      "n_in": 0,
+      "bucket": "1",
+      "out_chars": 332,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": ""
+        },
+        "overall_note": "Pure logistics, no questions or consultative advice."
+      }
+    },
+    {
+      "ct": "37f3174d-080c-4855-a78c-170d3096bac9",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 1,
+      "n_in": 0,
+      "bucket": "1",
+      "out_chars": 1116,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Please find attached quote."
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Please find attached quote."
+        },
+        "overall_note": "AM provides quote but lacks discovery and consultative engagement."
+      }
+    },
+    {
+      "ct": "ee116153-745a-45ef-9a8c-f2ba5e12c7ef",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 1,
+      "n_in": 1,
+      "bucket": "1",
+      "out_chars": 1513,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Please find attached revised quote."
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Page 1: full document Page 2: reduced version"
+        },
+        "overall_note": "AM provides quotes but lacks discovery and consultative engagement."
+      }
+    },
+    {
+      "ct": "82014c88-0b3d-480f-bf33-a29eda90cce7",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 1,
+      "n_in": 0,
+      "bucket": "1",
+      "out_chars": 1513,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "Quote attached"
+        },
+        "overall_note": "Pure logistics, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "fc568f8c-bffd-4aa7-8762-709b20ad7bae",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 1,
+      "n_in": 1,
+      "bucket": "1",
+      "out_chars": 1513,
+      "scores": {
+        "discovery": {
+          "score": 3,
+          "evidence": "Can I please get more details as I don\u2019t recall doing this job before? What is the size? Is it printed in colour or black and white? Is wiro bound?"
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Please find attached quote. Will need artwork today please to be able to deliver by for Tuesday of Next Week"
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Please find attached quote. Will need artwork today please to be able to deliver by for Tuesday of Next Week"
+        },
+        "overall_note": "AM asks some clarifying questions but mainly focuses on logistics and quote."
+      }
+    },
+    {
+      "ct": "7a29269f-7bb5-4bbe-b561-1ce0a0e5079b",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 1,
+      "n_in": 4,
+      "bucket": "1",
+      "out_chars": 372,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Please find attached quote option using 3mm White PVC."
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": "Please find attached quote option using 3mm White PVC."
+        },
+        "overall_note": "AM provided a quote without addressing customer's recyclability concern."
+      }
+    },
+    {
+      "ct": "a7dc0679-d0ee-48fb-acdd-81401e058f22",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 1,
+      "n_in": 1,
+      "bucket": "1",
+      "out_chars": 1513,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": "Please find attached quote. Page 1: A3 book 380pp Page 2: A4 book 380pp"
+        },
+        "overall_note": "AM provided a quote without addressing specific customer options."
+      }
+    },
+    {
+      "ct": "2d30fb9b-e997-463f-9043-145d03747e26",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 1,
+      "n_in": 0,
+      "bucket": "1",
+      "out_chars": 886,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": "Please find attached quote."
+        },
+        "overall_note": "AM provides a quote without addressing customer's specific questions."
+      }
+    },
+    {
+      "ct": "d2ac6e5c-245d-43a5-8963-a872ef53a1cb",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 1,
+      "n_in": 0,
+      "bucket": "1",
+      "out_chars": 1513,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Quote attached"
+        },
+        "overall_note": "AM provides quote but lacks discovery or consultative engagement."
+      }
+    },
+    {
+      "ct": "9595c65a-e202-4928-8f76-2f54f61d50a9",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 1,
+      "n_in": 0,
+      "bucket": "1",
+      "out_chars": 82,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": ""
+        },
+        "overall_note": "Pure logistics with no discovery or consultative elements."
+      }
+    },
+    {
+      "ct": "4d91f3af-be8a-4afe-825c-d7a2c04910ef",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 1,
+      "n_in": 0,
+      "bucket": "1",
+      "out_chars": 330,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": ""
+        },
+        "overall_note": "Pure logistics with no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "d998b45b-1e7c-4343-a8bf-9733d72a4769",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 2,
+      "n_in": 1,
+      "bucket": "2",
+      "out_chars": 1197,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Please find attached quote. Turnaround - STD: Approx. 5 business days after art approval"
+        },
+        "overall_note": "Minimal engagement; no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "a01b2f93-e231-490e-bf94-dc41dc511d62",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 2,
+      "n_in": 0,
+      "bucket": "2",
+      "out_chars": 944,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Please find attached quote."
+        },
+        "overall_note": "Pure logistics, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "3ab424a3-b23d-4c7f-aa8c-dcdc6536f722",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 2,
+      "n_in": 0,
+      "bucket": "2",
+      "out_chars": 1736,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "Quote attached"
+        },
+        "overall_note": "Pure logistics, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "df15d582-37b2-4463-b90d-fbe65fec3091",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 2,
+      "n_in": 2,
+      "bucket": "2",
+      "out_chars": 1710,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "Revised quote attached"
+        },
+        "overall_note": "AM only provided revised quotes, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "b47bb0fa-a1e5-4c67-a8cb-79d114b89311",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 2,
+      "n_in": 1,
+      "bucket": "2",
+      "out_chars": 3026,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 2,
+          "evidence": "Just checking in to see if you had the chance to review the attached quote"
+        },
+        "overall_note": "AM did not ask open-ended questions or provide consultative advice."
+      }
+    },
+    {
+      "ct": "8cf6c3de-f0bd-4a97-aeb3-2a7a3ce538cd",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 2,
+      "n_in": 3,
+      "bucket": "2",
+      "out_chars": 1745,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "Size is 127cm wide x 42cm high"
+        },
+        "overall_note": "AM provides logistics and confirms size, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "681551ce-e147-44f6-b7da-bd3fb597c67d",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 2,
+      "n_in": 0,
+      "bucket": "2",
+      "out_chars": 1315,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Note: Colourplan Sapphire doesn\u2019t come in 350gsm"
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Please find attached quote. Note: Colourplan Sapphire doesn\u2019t come in 350gsm"
+        },
+        "overall_note": "AM provides quote and notes a spec issue but lacks deeper engagement."
+      }
+    },
+    {
+      "ct": "fa79da5f-f669-4288-bbb9-a70fe8c4e78f",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 2,
+      "n_in": 2,
+      "bucket": "2",
+      "out_chars": 1976,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 2,
+          "evidence": "Can get a break down cost but that will be more expensive"
+        },
+        "answer_responsiveness": {
+          "score": 4,
+          "evidence": "Will be printing direct. Can get a break down cost"
+        },
+        "overall_note": "AM provides direct answers but lacks discovery and consultative depth."
+      }
+    },
+    {
+      "ct": "1d755397-4a73-4f18-a80a-d411b6c6973f",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 2,
+      "n_in": 1,
+      "bucket": "2",
+      "out_chars": 1910,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Please find attached quote. Note, this is not a food safe grade product"
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "Please supply artwork as a one PDF with fortunes setup front and back."
+        },
+        "overall_note": "AM provides logistics info, no discovery or consultative engagement."
+      }
+    },
+    {
+      "ct": "9e345df8-5cd8-4711-8449-a9a061c8c95e",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 2,
+      "n_in": 0,
+      "bucket": "2",
+      "out_chars": 1067,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 2,
+          "evidence": "adding the flap waste a lot of cover stock which is very expensive"
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": ""
+        },
+        "overall_note": "Minimal discovery and consultative effort; lacks direct engagement."
+      }
+    },
+    {
+      "ct": "faf61cc8-6e54-4fd5-bcf3-b48ef237ea7e",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 2,
+      "n_in": 1,
+      "bucket": "2",
+      "out_chars": 1260,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "Please find attached quote."
+        },
+        "overall_note": "Pure logistics, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "7b8f4c70-c192-4ab2-b724-86eeff13154b",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 2,
+      "n_in": 0,
+      "bucket": "2",
+      "out_chars": 1736,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "Please find attached quote."
+        },
+        "overall_note": "AM provided quote as requested, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "40065ff9-2724-4f9f-aa4f-c0111f8c164a",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 2,
+      "n_in": 0,
+      "bucket": "2",
+      "out_chars": 1736,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "Quote attached"
+        },
+        "overall_note": "Pure logistics, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "2448f5ca-280c-42b1-9253-946181f14011",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 2,
+      "n_in": 0,
+      "bucket": "2",
+      "out_chars": 1233,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Please find attached quote."
+        },
+        "overall_note": "AM provides quote but lacks discovery and consultative engagement."
+      }
+    },
+    {
+      "ct": "0f520961-d01d-4de2-9d6f-3cfe70ef200b",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 2,
+      "n_in": 1,
+      "bucket": "2",
+      "out_chars": 1296,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 1,
+          "evidence": "Thanks Karl"
+        },
+        "overall_note": "AM provides no discovery, consultative advice, or meaningful response."
+      }
+    },
+    {
+      "ct": "d678095d-c0b0-42c5-aee6-8f13b913b0a9",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 2,
+      "n_in": 0,
+      "bucket": "2",
+      "out_chars": 1689,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "Please find attached quote."
+        },
+        "overall_note": "Pure logistics, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "95065832-18cd-4750-bec1-1a5c749730f5",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 5,
+      "n_in": 5,
+      "bucket": "5+",
+      "out_chars": 2611,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 2,
+          "evidence": "we can also do 80gsm ecoStar but the revive prints better"
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "Yes this is B2 The lightest recycled stock is the 110gsm"
+        },
+        "overall_note": "AM provides clear answers but lacks open-ended questions or deep consultative advice."
+      }
+    },
+    {
+      "ct": "1f49325a-de47-4540-8b3a-5a3fb90bc9fa",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 5,
+      "n_in": 3,
+      "bucket": "5+",
+      "out_chars": 3526,
+      "scores": {
+        "discovery": {
+          "score": 2,
+          "evidence": "For the Poster, are we folding the image in or out?"
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Poster quote attached."
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Thanks for the artwork, will get PDF proofs to you shortly."
+        },
+        "overall_note": "Minimal discovery and consultative effort; mostly logistics and order-taking."
+      }
+    },
+    {
+      "ct": "02f4903d-eb61-402e-a82a-dafbf8ba2833",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 7,
+      "n_in": 4,
+      "bucket": "5+",
+      "out_chars": 2378,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": "Can you please let me know how we were placed with the pricing submitted?"
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Please find attached quote option (page 4 \u2013 2mm screenboard)"
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Thanks for the feedback. Can you please let me know how we were placed with the pricing submitted?"
+        },
+        "overall_note": "Minimal discovery and consultative effort; mostly logistics and pricing."
+      }
+    },
+    {
+      "ct": "d39ab608-9708-443b-b67b-a324680008af",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 6,
+      "n_in": 5,
+      "bucket": "5+",
+      "out_chars": 4301,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Yes"
+        },
+        "overall_note": "AM provides quotes but lacks discovery and consultative engagement."
+      }
+    },
+    {
+      "ct": "763ff7e9-1d04-4f1f-b455-877394cec8e9",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 4,
+      "n_in": 2,
+      "bucket": "3-4",
+      "out_chars": 6052,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": "Should you have any queries or require extra options please don\u2019t hesitate to get in touch."
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Please find attached quote."
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Just checking in to see if you had the chance to review the attached quote."
+        },
+        "overall_note": "AM's emails lack open-ended questions and consultative advice, mostly logistical."
+      }
+    },
+    {
+      "ct": "cab3e969-a820-446c-9dbe-2bb3ef364536",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 4,
+      "n_in": 5,
+      "bucket": "3-4",
+      "out_chars": 4577,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 3,
+          "evidence": "to get the text grain direction long grain we will need to run it 2 up on the sheet and that will double the cost."
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "The cover grain direction will be long grain parallel to the spine but the text will be short grain"
+        },
+        "overall_note": "AM provides clear answers but lacks open-ended questions to explore customer needs."
+      }
+    },
+    {
+      "ct": "64793c4f-e190-4213-a871-2c49587233d5",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 4,
+      "n_in": 4,
+      "bucket": "3-4",
+      "out_chars": 3723,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Please find attached quote."
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "The other one is quite complex and we are looking into it."
+        },
+        "overall_note": "AM provides quotes and acknowledges complexity but lacks discovery and consultative engagement."
+      }
+    },
+    {
+      "ct": "6a5ae878-9e97-431e-8c36-c47723fcbd06",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 3,
+      "n_in": 32,
+      "bucket": "3-4",
+      "out_chars": 815,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 2,
+          "evidence": "Please find new PDF proofs for approval."
+        },
+        "overall_note": "AM's emails lack discovery and consultative elements, focus on logistics."
+      }
+    },
+    {
+      "ct": "3c8f0523-4a1e-47f1-a093-086c09159f4e",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 3,
+      "n_in": 0,
+      "bucket": "3-4",
+      "out_chars": 1043,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "Please find attached quote."
+        },
+        "overall_note": "Pure logistics, no discovery or consultative effort."
+      }
+    },
+    {
+      "ct": "98afe735-1ac8-4a18-a274-feea99b3c138",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 3,
+      "n_in": 1,
+      "bucket": "3-4",
+      "out_chars": 4539,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 2,
+          "evidence": "Just checking in to see if you had the chance to review the attached quote"
+        },
+        "overall_note": "AM's emails lack discovery and consultative elements, focus on logistics."
+      }
+    },
+    {
+      "ct": "46fbb80f-55b3-48bc-95c9-87f32cc8fb9a",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 3,
+      "n_in": 1,
+      "bucket": "3-4",
+      "out_chars": 3424,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": "Should you have any queries or require extra options please don\u2019t hesitate to get in touch."
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": "Please find attached quote."
+        },
+        "answer_responsiveness": {
+          "score": 3,
+          "evidence": "Just checking in to see if you had the chance to review the attached quote."
+        },
+        "overall_note": "AM provides quote and follows up, but lacks discovery and consultative engagement."
+      }
+    },
+    {
+      "ct": "b6d625a6-e545-499f-a98b-77a8ba4f1b93",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 4,
+      "n_in": 4,
+      "bucket": "3-4",
+      "out_chars": 4664,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": "Please let me know which option you are looking to produce, 2pp or 4pp"
+        },
+        "consultative": {
+          "score": 2,
+          "evidence": "Printed proof will cost $120.0 + GST and timing will be very tight for Monday."
+        },
+        "answer_responsiveness": {
+          "score": 4,
+          "evidence": "If we get artwork approved by tomorrow morning we can have the cards ready by Monday."
+        },
+        "overall_note": "AM mostly handles logistics, with minimal discovery and consultative effort."
+      }
+    },
+    {
+      "ct": "311be3f2-21f4-4097-9c53-78278f125803",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 3,
+      "n_in": 3,
+      "bucket": "3-4",
+      "out_chars": 2666,
+      "scores": {
+        "discovery": {
+          "score": 3,
+          "evidence": "Do you have a budget in mind that you can share"
+        },
+        "consultative": {
+          "score": 2,
+          "evidence": "I'll look into an option to fit."
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "Freight included is $30.0 to 1 Sydney Metro address."
+        },
+        "overall_note": "AM addresses logistics well but lacks deep consultative engagement."
+      }
+    },
+    {
+      "ct": "44044255-e6b3-4c83-84ca-36cd27533c44",
+      "am": "Ehab",
+      "label": "lost",
+      "won": false,
+      "n_out": 3,
+      "n_in": 1,
+      "bucket": "3-4",
+      "out_chars": 3956,
+      "scores": {
+        "discovery": {
+          "score": 1,
+          "evidence": ""
+        },
+        "consultative": {
+          "score": 1,
+          "evidence": ""
+        },
+        "answer_responsiveness": {
+          "score": 5,
+          "evidence": "Please find attached quote options Page 1: single sided Page 2: double sided"
+        },
+        "overall_note": "AM provides quotes as requested but lacks discovery and consultative engagement."
+      }
+    }
+  ]
+}

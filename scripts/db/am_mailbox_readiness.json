@@ -1,0 +1,166 @@
+{
+  "mailboxes": {
+    "Ehab": {
+      "id": "92eba92f-b6be-4fbf-8c49-9f3b7c72ea74",
+      "name": "Ehab Carbon8 Outlook 2",
+      "sync_enabled": false,
+      "is_active": true,
+      "mailbox_type": "outlook_live",
+      "last_sync_at": "2026-05-21T01:19:23.423236+00:00",
+      "last_synced_at": null,
+      "last_extraction_at": "2026-05-21T02:21:07.340981+00:00"
+    },
+    "Kenneth": {
+      "id": "1332eba5-9121-4b55-91db-a37dd81d5d85",
+      "name": "Kenneth Carbon8 outlook",
+      "sync_enabled": false,
+      "is_active": true,
+      "mailbox_type": "outlook_live",
+      "last_sync_at": "2026-05-16T22:17:47.771491+00:00",
+      "last_synced_at": null,
+      "last_extraction_at": "2026-05-16T21:19:57.921371+00:00"
+    },
+    "Nic": {
+      "id": "5f3afeb3-a5f7-44b8-b657-ec972c92911d",
+      "name": "Nic Outlook Mac",
+      "sync_enabled": false,
+      "is_active": true,
+      "mailbox_type": "outlook_live",
+      "last_sync_at": "2026-06-11T06:17:44.223863+00:00",
+      "last_synced_at": null,
+      "last_extraction_at": "2026-06-11T07:35:04.284502+00:00"
+    },
+    "Linda": {
+      "id": "e1abc287-805b-4cee-8f95-0b47e1cd8f99",
+      "name": "Linda carbon8 outlook Mac",
+      "sync_enabled": false,
+      "is_active": true,
+      "mailbox_type": "outlook_live",
+      "last_sync_at": "2026-06-11T06:19:05.324964+00:00",
+      "last_synced_at": null,
+      "last_extraction_at": "2026-06-11T07:35:55.570414+00:00"
+    }
+  },
+  "audit": {
+    "Ehab": {
+      "norow": 0,
+      "total": 48506,
+      "last_30d": 797,
+      "max_date": "2026-05-21",
+      "min_date": "2022-08-02",
+      "after_may15": 459,
+      "with_ai_row": 48506,
+      "with_intent": 39118,
+      "with_company": 46685,
+      "with_contact": 46706,
+      "folder_trash_skipped": 0
+    },
+    "Kenneth": {
+      "norow": 21,
+      "total": 30843,
+      "last_30d": 733,
+      "max_date": "2026-05-16",
+      "min_date": "2013-07-15",
+      "after_may15": 167,
+      "with_ai_row": 30822,
+      "with_intent": 26310,
+      "with_company": 30730,
+      "with_contact": 30760,
+      "folder_trash_skipped": 0
+    },
+    "Nic": {
+      "norow": 29,
+      "total": 24282,
+      "last_30d": 2882,
+      "max_date": "2026-06-11",
+      "min_date": "2018-06-01",
+      "after_may15": 2434,
+      "with_ai_row": 24253,
+      "with_intent": 20293,
+      "with_company": 23934,
+      "with_contact": 24279,
+      "folder_trash_skipped": 0
+    },
+    "Linda": {
+      "norow": 6,
+      "total": 39592,
+      "last_30d": 4694,
+      "max_date": "2026-06-11",
+      "min_date": "2023-09-03",
+      "after_may15": 4014,
+      "with_ai_row": 39586,
+      "with_intent": 36279,
+      "with_company": 39345,
+      "with_contact": 39522,
+      "folder_trash_skipped": 0
+    }
+  },
+  "today": "2026-06-11",
+  "per_mailbox_plan": {
+    "Ehab": {
+      "current": false,
+      "complete": true,
+      "max_date": "2026-05-21",
+      "gap_days": 21,
+      "est_gap_emails": 560,
+      "classified_pct": 81,
+      "linkage_pct": 96,
+      "norow": 0,
+      "folder_trash": 0,
+      "action": "NEEDS-SYNC",
+      "cause": "OAuth token expired (outlook_sync_error: Authentication expired) \u2014 re-auth required",
+      "trigger": "AM reconnects Outlook OAuth in platform; stored delta_links then catch-up sync May 21->now; new emails auto-classify via pipeline",
+      "cost_time": "re-auth ~1min (human); catch-up ~560 emails auto-classified ~$0.40, minutes"
+    },
+    "Kenneth": {
+      "current": false,
+      "complete": true,
+      "max_date": "2026-05-16",
+      "gap_days": 26,
+      "est_gap_emails": 635,
+      "classified_pct": 85,
+      "linkage_pct": 100,
+      "norow": 21,
+      "folder_trash": 0,
+      "action": "NEEDS-SYNC",
+      "cause": "OAuth token expired \u2014 re-auth required (same as Ehab)",
+      "trigger": "AM reconnects Outlook OAuth; delta catch-up May 16->now; auto-classify",
+      "cost_time": "re-auth ~1min; catch-up ~635 emails ~$0.45, minutes"
+    },
+    "Nic": {
+      "current": true,
+      "complete": true,
+      "max_date": "2026-06-11",
+      "gap_days": 0,
+      "est_gap_emails": 0,
+      "classified_pct": 84,
+      "linkage_pct": 100,
+      "norow": 29,
+      "folder_trash": 0,
+      "action": "CURRENT-AND-COMPLETE",
+      "cause": "synced today; 10.9b no-row backfill completed 02:39 (was 17.8%->84%)",
+      "trigger": "none",
+      "cost_time": "none"
+    },
+    "Linda": {
+      "current": true,
+      "complete": true,
+      "max_date": "2026-06-11",
+      "gap_days": 0,
+      "est_gap_emails": 0,
+      "classified_pct": 92,
+      "linkage_pct": 100,
+      "norow": 6,
+      "folder_trash": 0,
+      "action": "CURRENT-AND-COMPLETE",
+      "cause": "synced today; classification+linkage healthy",
+      "trigger": "none",
+      "cost_time": "none"
+    }
+  },
+  "notes": [
+    "\"complete\"=synced data fully ai-rowed+classified (unclassified remainder is legit content-skip: trivial/spam/bounce/drafts; 0 norow, 0 folder_trash). No classification backfill needed for any of the 4.",
+    "folder_trash=0 on current emails for all 4 \u2014 the trash backlog is NOT in these AM mailboxes (it was the Hello shared inbox / orphaned ai rows). Nic Phase-4 3328 was transient, reclassified by a re-sync today.",
+    "Ehab/Kenneth complete on SYNCED data but missing ~3wk (the sync gap is the only fix; classification follows automatically once synced)."
+  ]
+}

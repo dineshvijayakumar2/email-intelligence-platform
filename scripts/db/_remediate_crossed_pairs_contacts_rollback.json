@@ -1,0 +1,64 @@
+{
+ "mode": "EXECUTE",
+ "generated_at": "2026-06-09T05:02:04.138796+00:00",
+ "client_id": "241d7b99-f099-4557-96e5-212c4af10812",
+ "clusters": [
+  {
+   "label": "Louis Vuitton <- Blainey North",
+   "survivor_id": "0c836d3a-9d43-45ae-8cd5-1b22a2438726",
+   "own_id": "8170d6da-f1f8-40af-afbc-cfb30d5f8bd5",
+   "foreign_domain": "blaineynorth.com",
+   "survivor_domains_old": [
+    "blaineynorth.com",
+    "louisvuitton.com"
+   ],
+   "survivor_domains_new": [
+    "louisvuitton.com"
+   ],
+   "own_domains_old": [
+    "blaineynorth.com"
+   ],
+   "own_domains_new": [
+    "blaineynorth.com"
+   ],
+   "moved_contact_ids": [
+    "4d59296c-3f89-4702-b004-04980cbfc98f",
+    "4ad7243a-9fe9-4d34-ab8f-e3433c6c44f3",
+    "91022af2-76ff-4001-bf01-f747d3399c7b"
+   ],
+   "moved_email_ids": [
+    "56daeda6-a47f-4b94-852e-65e2e96d8cbc",
+    "bf2bc76c-75bb-4f2a-aa7f-1f4da541a3ca",
+    "bc7e9643-fda0-4b7a-a720-85993ebab6c9",
+    "833b277c-92ee-4545-a93a-81e634d08863"
+   ],
+   "moved_link_ids": [],
+   "moved_thread_status_ids": []
+  },
+  {
+   "label": "The Make Haus <- Payce",
+   "survivor_id": "0448ab6d-770f-40f8-9993-b07fe83a621a",
+   "own_id": "2b5ddb70-4aa1-4438-865c-b370ed2bd9e2",
+   "foreign_domain": "payce.com.au",
+   "survivor_domains_old": [
+    "payce.com.au",
+    "themakehaus.com.au"
+   ],
+   "survivor_domains_new": [
+    "themakehaus.com.au"
+   ],
+   "own_domains_old": [],
+   "own_domains_new": [
+    "payce.com.au"
+   ],
+   "moved_contact_ids": [
+    "5afc5b15-5d51-4547-8c99-7e840db63ad9"
+   ],
+   "moved_email_ids": [
+    "69e745e1-2c43-46cf-8b91-ae7429a20c33"
+   ],
+   "moved_link_ids": [],
+   "moved_thread_status_ids": []
+  }
+ ]
+}

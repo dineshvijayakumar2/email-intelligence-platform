@@ -1,0 +1,1405 @@
+{
+  "generated": "2026-06-10",
+  "method": {
+    "capability": "qb_capability_tag if non-empty else classifier capability_tags (len>1); >=2 distinct job_no for adoption (matches _caps_for_op / get_capability_rhythm)",
+    "adoption_date": "min(date_accepted) over qualifying jobs",
+    "rule": "X->Y conf = of X-adopters, share adopting Y strictly after X within window; thresholds support>=30, conf_12m>=0.25",
+    "static_comparison": "capability-level co-occurrence confidence P(Y|X), time-blind (counts Y even if adopted before X)",
+    "trigger_window": "median_delay + buffer (buffer=max(90d,0.5*median)); customer in-window if days_since_X_adopt<=window and Y not adopted",
+    "warmth": "warm=email within 60d with activity; cooling<=180d; silent otherwise",
+    "ranking": "conf_12m x log10(trailing_12m_revenue) x warmth_factor",
+    "backtest": "X-adopters with >=12m post-X observation; hit=adopted Y within 12m of X; vs unconditional Y-adopter base rate"
+  },
+  "caveats": [
+    "QB ground truth, Carbon8 only. Capability adoption is QB-job derived; email is not used to decide adoption.",
+    "Adoption dates pre-date email sync (email covers ~2025+), so early sequences rely purely on QB job history \u2014 fine, QB is the label source.",
+    "Backtest base rate is the unconditional lifetime Y-adopter share; it is a conservative reference, not a matched 12m-window control \u2014 lift is indicative, not causal.",
+    "Design Services / Flat Sheets / Specialty Finishing are near-universal (>=1850 adopters) so rules INTO them are high-confidence but low-actionability (everyone gets there); the actionable signal is rules into the rarer caps (Hard/Soft Cover, Embellishment, Wide Format, Display).",
+    "Ehab mailbox ~2wk sync lag understates warmth on his accounts."
+  ],
+  "capability_universe": [
+    {
+      "capability": "Specialty Finishing",
+      "adopters": 1953
+    },
+    {
+      "capability": "Flat Sheets",
+      "adopters": 1934
+    },
+    {
+      "capability": "Design Services",
+      "adopters": 1851
+    },
+    {
+      "capability": "Wide Format",
+      "adopters": 788
+    },
+    {
+      "capability": "Embellishment",
+      "adopters": 755
+    },
+    {
+      "capability": "Soft Cover Books",
+      "adopters": 565
+    },
+    {
+      "capability": "Hard Cover Books",
+      "adopters": 294
+    },
+    {
+      "capability": "Display/Installation",
+      "adopters": 59
+    }
+  ],
+  "n_customers": 2165,
+  "simultaneity_diagnostic": {
+    "multi_cap_customers": 2047,
+    "cap_pairs_same_first_date_pct": 0.5367,
+    "cap_pairs_within_30d_pct": 0.6221
+  },
+  "step2_strong_rules": [],
+  "step2_all_rules": [
+    {
+      "x": "Specialty Finishing",
+      "y": "Flat Sheets",
+      "support": 1953,
+      "conf_6m": 0.0466,
+      "conf_12m": 0.0589,
+      "n_y_after_6m": 91,
+      "n_y_after_12m": 115,
+      "median_delay_d": 51,
+      "p25_delay_d": 20.0,
+      "p75_delay_d": 153.0
+    },
+    {
+      "x": "Specialty Finishing",
+      "y": "Design Services",
+      "support": 1953,
+      "conf_6m": 0.0456,
+      "conf_12m": 0.0563,
+      "n_y_after_6m": 89,
+      "n_y_after_12m": 110,
+      "median_delay_d": 40.5,
+      "p25_delay_d": 9.0,
+      "p75_delay_d": 150.2
+    },
+    {
+      "x": "Specialty Finishing",
+      "y": "Wide Format",
+      "support": 1953,
+      "conf_6m": 0.0855,
+      "conf_12m": 0.1167,
+      "n_y_after_6m": 167,
+      "n_y_after_12m": 228,
+      "median_delay_d": 98.5,
+      "p25_delay_d": 24.5,
+      "p75_delay_d": 187.2
+    },
+    {
+      "x": "Specialty Finishing",
+      "y": "Embellishment",
+      "support": 1953,
+      "conf_6m": 0.0773,
+      "conf_12m": 0.1009,
+      "n_y_after_6m": 151,
+      "n_y_after_12m": 197,
+      "median_delay_d": 74,
+      "p25_delay_d": 24.0,
+      "p75_delay_d": 173.5
+    },
+    {
+      "x": "Specialty Finishing",
+      "y": "Soft Cover Books",
+      "support": 1953,
+      "conf_6m": 0.0614,
+      "conf_12m": 0.084,
+      "n_y_after_6m": 120,
+      "n_y_after_12m": 164,
+      "median_delay_d": 93.0,
+      "p25_delay_d": 41.2,
+      "p75_delay_d": 210.8
+    },
+    {
+      "x": "Specialty Finishing",
+      "y": "Hard Cover Books",
+      "support": 1953,
+      "conf_6m": 0.0251,
+      "conf_12m": 0.0425,
+      "n_y_after_6m": 49,
+      "n_y_after_12m": 83,
+      "median_delay_d": 131,
+      "p25_delay_d": 22.0,
+      "p75_delay_d": 224.0
+    },
+    {
+      "x": "Specialty Finishing",
+      "y": "Display/Installation",
+      "support": 1953,
+      "conf_6m": 0.0072,
+      "conf_12m": 0.0102,
+      "n_y_after_6m": 14,
+      "n_y_after_12m": 20,
+      "median_delay_d": 69.0,
+      "p25_delay_d": 29.8,
+      "p75_delay_d": 215.5
+    },
+    {
+      "x": "Flat Sheets",
+      "y": "Specialty Finishing",
+      "support": 1934,
+      "conf_6m": 0.0631,
+      "conf_12m": 0.0807,
+      "n_y_after_6m": 122,
+      "n_y_after_12m": 156,
+      "median_delay_d": 71.5,
+      "p25_delay_d": 22.5,
+      "p75_delay_d": 172.5
+    },
+    {
+      "x": "Flat Sheets",
+      "y": "Design Services",
+      "support": 1934,
+      "conf_6m": 0.0548,
+      "conf_12m": 0.0667,
+      "n_y_after_6m": 106,
+      "n_y_after_12m": 129,
+      "median_delay_d": 62,
+      "p25_delay_d": 15.0,
+      "p75_delay_d": 151.5
+    },
+    {
+      "x": "Flat Sheets",
+      "y": "Wide Format",
+      "support": 1934,
+      "conf_6m": 0.0843,
+      "conf_12m": 0.1153,
+      "n_y_after_6m": 163,
+      "n_y_after_12m": 223,
+      "median_delay_d": 94,
+      "p25_delay_d": 29.0,
+      "p75_delay_d": 189.0
+    },
+    {
+      "x": "Flat Sheets",
+      "y": "Embellishment",
+      "support": 1934,
+      "conf_6m": 0.0905,
+      "conf_12m": 0.1127,
+      "n_y_after_6m": 175,
+      "n_y_after_12m": 218,
+      "median_delay_d": 78.0,
+      "p25_delay_d": 20.8,
+      "p75_delay_d": 160.2
+    },
+    {
+      "x": "Flat Sheets",
+      "y": "Soft Cover Books",
+      "support": 1934,
+      "conf_6m": 0.062,
+      "conf_12m": 0.0843,
+      "n_y_after_6m": 120,
+      "n_y_after_12m": 163,
+      "median_delay_d": 93,
+      "p25_delay_d": 42.0,
+      "p75_delay_d": 211.0
+    },
+    {
+      "x": "Flat Sheets",
+      "y": "Hard Cover Books",
+      "support": 1934,
+      "conf_6m": 0.0295,
+      "conf_12m": 0.046,
+      "n_y_after_6m": 57,
+      "n_y_after_12m": 89,
+      "median_delay_d": 127,
+      "p25_delay_d": 28.5,
+      "p75_delay_d": 216.5
+    },
+    {
+      "x": "Flat Sheets",
+      "y": "Display/Installation",
+      "support": 1934,
+      "conf_6m": 0.0078,
+      "conf_12m": 0.0109,
+      "n_y_after_6m": 15,
+      "n_y_after_12m": 21,
+      "median_delay_d": 84,
+      "p25_delay_d": 31.5,
+      "p75_delay_d": 234.0
+    },
+    {
+      "x": "Design Services",
+      "y": "Specialty Finishing",
+      "support": 1851,
+      "conf_6m": 0.0675,
+      "conf_12m": 0.087,
+      "n_y_after_6m": 125,
+      "n_y_after_12m": 161,
+      "median_delay_d": 64,
+      "p25_delay_d": 21.0,
+      "p75_delay_d": 164.5
+    },
+    {
+      "x": "Design Services",
+      "y": "Flat Sheets",
+      "support": 1851,
+      "conf_6m": 0.0556,
+      "conf_12m": 0.0708,
+      "n_y_after_6m": 103,
+      "n_y_after_12m": 131,
+      "median_delay_d": 56,
+      "p25_delay_d": 19.0,
+      "p75_delay_d": 161.0
+    },
+    {
+      "x": "Design Services",
+      "y": "Wide Format",
+      "support": 1851,
+      "conf_6m": 0.0967,
+      "conf_12m": 0.1313,
+      "n_y_after_6m": 179,
+      "n_y_after_12m": 243,
+      "median_delay_d": 93,
+      "p25_delay_d": 31.0,
+      "p75_delay_d": 189.0
+    },
+    {
+      "x": "Design Services",
+      "y": "Embellishment",
+      "support": 1851,
+      "conf_6m": 0.0951,
+      "conf_12m": 0.1216,
+      "n_y_after_6m": 176,
+      "n_y_after_12m": 225,
+      "median_delay_d": 75,
+      "p25_delay_d": 23.0,
+      "p75_delay_d": 168.0
+    },
+    {
+      "x": "Design Services",
+      "y": "Soft Cover Books",
+      "support": 1851,
+      "conf_6m": 0.0637,
+      "conf_12m": 0.0886,
+      "n_y_after_6m": 118,
+      "n_y_after_12m": 164,
+      "median_delay_d": 97.0,
+      "p25_delay_d": 43.8,
+      "p75_delay_d": 217.8
+    },
+    {
+      "x": "Design Services",
+      "y": "Hard Cover Books",
+      "support": 1851,
+      "conf_6m": 0.0335,
+      "conf_12m": 0.0535,
+      "n_y_after_6m": 62,
+      "n_y_after_12m": 99,
+      "median_delay_d": 121,
+      "p25_delay_d": 22.0,
+      "p75_delay_d": 217.0
+    },
+    {
+      "x": "Design Services",
+      "y": "Display/Installation",
+      "support": 1851,
+      "conf_6m": 0.0081,
+      "conf_12m": 0.0119,
+      "n_y_after_6m": 15,
+      "n_y_after_12m": 22,
+      "median_delay_d": 76.0,
+      "p25_delay_d": 25.0,
+      "p75_delay_d": 228.0
+    },
+    {
+      "x": "Wide Format",
+      "y": "Specialty Finishing",
+      "support": 788,
+      "conf_6m": 0.0419,
+      "conf_12m": 0.0457,
+      "n_y_after_6m": 33,
+      "n_y_after_12m": 36,
+      "median_delay_d": 52.0,
+      "p25_delay_d": 22.0,
+      "p75_delay_d": 83.5
+    },
+    {
+      "x": "Wide Format",
+      "y": "Flat Sheets",
+      "support": 788,
+      "conf_6m": 0.0698,
+      "conf_12m": 0.0825,
+      "n_y_after_6m": 55,
+      "n_y_after_12m": 65,
+      "median_delay_d": 64,
+      "p25_delay_d": 25.5,
+      "p75_delay_d": 113.0
+    },
+    {
+      "x": "Wide Format",
+      "y": "Design Services",
+      "support": 788,
+      "conf_6m": 0.033,
+      "conf_12m": 0.0393,
+      "n_y_after_6m": 26,
+      "n_y_after_12m": 31,
+      "median_delay_d": 35,
+      "p25_delay_d": 8.0,
+      "p75_delay_d": 120.0
+    },
+    {
+      "x": "Wide Format",
+      "y": "Embellishment",
+      "support": 788,
+      "conf_6m": 0.0863,
+      "conf_12m": 0.118,
+      "n_y_after_6m": 68,
+      "n_y_after_12m": 93,
+      "median_delay_d": 70,
+      "p25_delay_d": 17.0,
+      "p75_delay_d": 201.5
+    },
+    {
+      "x": "Wide Format",
+      "y": "Soft Cover Books",
+      "support": 788,
+      "conf_6m": 0.0723,
+      "conf_12m": 0.099,
+      "n_y_after_6m": 57,
+      "n_y_after_12m": 78,
+      "median_delay_d": 80.0,
+      "p25_delay_d": 26.8,
+      "p75_delay_d": 202.0
+    },
+    {
+      "x": "Wide Format",
+      "y": "Hard Cover Books",
+      "support": 788,
+      "conf_6m": 0.033,
+      "conf_12m": 0.0584,
+      "n_y_after_6m": 26,
+      "n_y_after_12m": 46,
+      "median_delay_d": 115.5,
+      "p25_delay_d": 27.5,
+      "p75_delay_d": 218.8
+    },
+    {
+      "x": "Wide Format",
+      "y": "Display/Installation",
+      "support": 788,
+      "conf_6m": 0.0114,
+      "conf_12m": 0.019,
+      "n_y_after_6m": 9,
+      "n_y_after_12m": 15,
+      "median_delay_d": 92,
+      "p25_delay_d": 41.0,
+      "p75_delay_d": 237.0
+    },
+    {
+      "x": "Embellishment",
+      "y": "Specialty Finishing",
+      "support": 755,
+      "conf_6m": 0.0543,
+      "conf_12m": 0.0649,
+      "n_y_after_6m": 41,
+      "n_y_after_12m": 49,
+      "median_delay_d": 70,
+      "p25_delay_d": 25.5,
+      "p75_delay_d": 128.0
+    },
+    {
+      "x": "Embellishment",
+      "y": "Flat Sheets",
+      "support": 755,
+      "conf_6m": 0.0225,
+      "conf_12m": 0.0278,
+      "n_y_after_6m": 17,
+      "n_y_after_12m": 21,
+      "median_delay_d": 29,
+      "p25_delay_d": 9.0,
+      "p75_delay_d": 104.0
+    },
+    {
+      "x": "Embellishment",
+      "y": "Design Services",
+      "support": 755,
+      "conf_6m": 0.0371,
+      "conf_12m": 0.045,
+      "n_y_after_6m": 28,
+      "n_y_after_12m": 34,
+      "median_delay_d": 86.0,
+      "p25_delay_d": 21.8,
+      "p75_delay_d": 171.2
+    },
+    {
+      "x": "Embellishment",
+      "y": "Wide Format",
+      "support": 755,
+      "conf_6m": 0.0914,
+      "conf_12m": 0.1272,
+      "n_y_after_6m": 69,
+      "n_y_after_12m": 96,
+      "median_delay_d": 84.5,
+      "p25_delay_d": 29.2,
+      "p75_delay_d": 206.5
+    },
+    {
+      "x": "Embellishment",
+      "y": "Soft Cover Books",
+      "support": 755,
+      "conf_6m": 0.0861,
+      "conf_12m": 0.1205,
+      "n_y_after_6m": 65,
+      "n_y_after_12m": 91,
+      "median_delay_d": 88,
+      "p25_delay_d": 36.0,
+      "p75_delay_d": 217.0
+    },
+    {
+      "x": "Embellishment",
+      "y": "Hard Cover Books",
+      "support": 755,
+      "conf_6m": 0.049,
+      "conf_12m": 0.0848,
+      "n_y_after_6m": 37,
+      "n_y_after_12m": 64,
+      "median_delay_d": 161.0,
+      "p25_delay_d": 26.8,
+      "p75_delay_d": 261.2
+    },
+    {
+      "x": "Embellishment",
+      "y": "Display/Installation",
+      "support": 755,
+      "conf_6m": 0.0106,
+      "conf_12m": 0.0146,
+      "n_y_after_6m": 8,
+      "n_y_after_12m": 11,
+      "median_delay_d": 59,
+      "p25_delay_d": 29.0,
+      "p75_delay_d": 222.0
+    },
+    {
+      "x": "Soft Cover Books",
+      "y": "Specialty Finishing",
+      "support": 565,
+      "conf_6m": 0.0336,
+      "conf_12m": 0.0389,
+      "n_y_after_6m": 19,
+      "n_y_after_12m": 22,
+      "median_delay_d": 74.0,
+      "p25_delay_d": 29.0,
+      "p75_delay_d": 155.8
+    },
+    {
+      "x": "Soft Cover Books",
+      "y": "Flat Sheets",
+      "support": 565,
+      "conf_6m": 0.0018,
+      "conf_12m": 0.0018,
+      "n_y_after_6m": 1,
+      "n_y_after_12m": 1,
+      "median_delay_d": 8,
+      "p25_delay_d": null,
+      "p75_delay_d": null
+    },
+    {
+      "x": "Soft Cover Books",
+      "y": "Design Services",
+      "support": 565,
+      "conf_6m": 0.0372,
+      "conf_12m": 0.0389,
+      "n_y_after_6m": 21,
+      "n_y_after_12m": 22,
+      "median_delay_d": 83.5,
+      "p25_delay_d": 5.8,
+      "p75_delay_d": 141.2
+    },
+    {
+      "x": "Soft Cover Books",
+      "y": "Wide Format",
+      "support": 565,
+      "conf_6m": 0.092,
+      "conf_12m": 0.1274,
+      "n_y_after_6m": 52,
+      "n_y_after_12m": 72,
+      "median_delay_d": 95.5,
+      "p25_delay_d": 38.2,
+      "p75_delay_d": 188.0
+    },
+    {
+      "x": "Soft Cover Books",
+      "y": "Embellishment",
+      "support": 565,
+      "conf_6m": 0.0673,
+      "conf_12m": 0.0956,
+      "n_y_after_6m": 38,
+      "n_y_after_12m": 54,
+      "median_delay_d": 91.0,
+      "p25_delay_d": 23.5,
+      "p75_delay_d": 206.5
+    },
+    {
+      "x": "Soft Cover Books",
+      "y": "Hard Cover Books",
+      "support": 565,
+      "conf_6m": 0.0407,
+      "conf_12m": 0.0796,
+      "n_y_after_6m": 23,
+      "n_y_after_12m": 45,
+      "median_delay_d": 180,
+      "p25_delay_d": 77.0,
+      "p75_delay_d": 254.0
+    },
+    {
+      "x": "Soft Cover Books",
+      "y": "Display/Installation",
+      "support": 565,
+      "conf_6m": 0.0053,
+      "conf_12m": 0.0053,
+      "n_y_after_6m": 3,
+      "n_y_after_12m": 3,
+      "median_delay_d": 84,
+      "p25_delay_d": null,
+      "p75_delay_d": null
+    },
+    {
+      "x": "Hard Cover Books",
+      "y": "Specialty Finishing",
+      "support": 294,
+      "conf_6m": 0.0306,
+      "conf_12m": 0.0374,
+      "n_y_after_6m": 9,
+      "n_y_after_12m": 11,
+      "median_delay_d": 96,
+      "p25_delay_d": 70.0,
+      "p75_delay_d": 154.0
+    },
+    {
+      "x": "Hard Cover Books",
+      "y": "Flat Sheets",
+      "support": 294,
+      "conf_6m": 0.0272,
+      "conf_12m": 0.0272,
+      "n_y_after_6m": 8,
+      "n_y_after_12m": 8,
+      "median_delay_d": 20.0,
+      "p25_delay_d": 11.0,
+      "p75_delay_d": 69.5
+    },
+    {
+      "x": "Hard Cover Books",
+      "y": "Design Services",
+      "support": 294,
+      "conf_6m": 0.0374,
+      "conf_12m": 0.0442,
+      "n_y_after_6m": 11,
+      "n_y_after_12m": 13,
+      "median_delay_d": 76,
+      "p25_delay_d": 12.0,
+      "p75_delay_d": 138.0
+    },
+    {
+      "x": "Hard Cover Books",
+      "y": "Wide Format",
+      "support": 294,
+      "conf_6m": 0.1122,
+      "conf_12m": 0.1497,
+      "n_y_after_6m": 33,
+      "n_y_after_12m": 44,
+      "median_delay_d": 66.0,
+      "p25_delay_d": 23.8,
+      "p75_delay_d": 183.5
+    },
+    {
+      "x": "Hard Cover Books",
+      "y": "Embellishment",
+      "support": 294,
+      "conf_6m": 0.0782,
+      "conf_12m": 0.0952,
+      "n_y_after_6m": 23,
+      "n_y_after_12m": 28,
+      "median_delay_d": 101.5,
+      "p25_delay_d": 37.5,
+      "p75_delay_d": 177.8
+    },
+    {
+      "x": "Hard Cover Books",
+      "y": "Soft Cover Books",
+      "support": 294,
+      "conf_6m": 0.0884,
+      "conf_12m": 0.1429,
+      "n_y_after_6m": 26,
+      "n_y_after_12m": 42,
+      "median_delay_d": 118.0,
+      "p25_delay_d": 46.2,
+      "p75_delay_d": 227.0
+    },
+    {
+      "x": "Hard Cover Books",
+      "y": "Display/Installation",
+      "support": 294,
+      "conf_6m": 0.017,
+      "conf_12m": 0.0238,
+      "n_y_after_6m": 5,
+      "n_y_after_12m": 7,
+      "median_delay_d": 59,
+      "p25_delay_d": 7.0,
+      "p75_delay_d": 208.0
+    },
+    {
+      "x": "Display/Installation",
+      "y": "Specialty Finishing",
+      "support": 59,
+      "conf_6m": 0.0339,
+      "conf_12m": 0.0508,
+      "n_y_after_6m": 2,
+      "n_y_after_12m": 3,
+      "median_delay_d": 72,
+      "p25_delay_d": null,
+      "p75_delay_d": null
+    },
+    {
+      "x": "Display/Installation",
+      "y": "Flat Sheets",
+      "support": 59,
+      "conf_6m": 0.0169,
+      "conf_12m": 0.0339,
+      "n_y_after_6m": 1,
+      "n_y_after_12m": 2,
+      "median_delay_d": 136.0,
+      "p25_delay_d": null,
+      "p75_delay_d": null
+    },
+    {
+      "x": "Display/Installation",
+      "y": "Design Services",
+      "support": 59,
+      "conf_6m": 0.0847,
+      "conf_12m": 0.0847,
+      "n_y_after_6m": 5,
+      "n_y_after_12m": 5,
+      "median_delay_d": 19,
+      "p25_delay_d": 7.0,
+      "p75_delay_d": 84.5
+    },
+    {
+      "x": "Display/Installation",
+      "y": "Wide Format",
+      "support": 59,
+      "conf_6m": 0.1017,
+      "conf_12m": 0.1356,
+      "n_y_after_6m": 6,
+      "n_y_after_12m": 8,
+      "median_delay_d": 105.5,
+      "p25_delay_d": 31.2,
+      "p75_delay_d": 217.5
+    },
+    {
+      "x": "Display/Installation",
+      "y": "Embellishment",
+      "support": 59,
+      "conf_6m": 0.1525,
+      "conf_12m": 0.2034,
+      "n_y_after_6m": 9,
+      "n_y_after_12m": 12,
+      "median_delay_d": 54.0,
+      "p25_delay_d": 26.8,
+      "p75_delay_d": 198.2
+    },
+    {
+      "x": "Display/Installation",
+      "y": "Soft Cover Books",
+      "support": 59,
+      "conf_6m": 0.0847,
+      "conf_12m": 0.1017,
+      "n_y_after_6m": 5,
+      "n_y_after_12m": 6,
+      "median_delay_d": 111.0,
+      "p25_delay_d": 22.5,
+      "p75_delay_d": 196.0
+    },
+    {
+      "x": "Display/Installation",
+      "y": "Hard Cover Books",
+      "support": 59,
+      "conf_6m": 0.0678,
+      "conf_12m": 0.1017,
+      "n_y_after_6m": 4,
+      "n_y_after_12m": 6,
+      "median_delay_d": 68.5,
+      "p25_delay_d": 31.2,
+      "p75_delay_d": 229.5
+    }
+  ],
+  "step3_static_vs_temporal": [
+    {
+      "x": "Display/Installation",
+      "y": "Embellishment",
+      "support": 59,
+      "static_conf": 0.661,
+      "temporal_conf_12m": 0.2034,
+      "temporal_minus_static": -0.4576,
+      "median_delay_d": 54.0,
+      "strong_temporal": false
+    },
+    {
+      "x": "Hard Cover Books",
+      "y": "Wide Format",
+      "support": 294,
+      "static_conf": 0.7143,
+      "temporal_conf_12m": 0.1497,
+      "temporal_minus_static": -0.5646,
+      "median_delay_d": 66.0,
+      "strong_temporal": false
+    },
+    {
+      "x": "Hard Cover Books",
+      "y": "Soft Cover Books",
+      "support": 294,
+      "static_conf": 0.5986,
+      "temporal_conf_12m": 0.1429,
+      "temporal_minus_static": -0.4557,
+      "median_delay_d": 118.0,
+      "strong_temporal": false
+    },
+    {
+      "x": "Display/Installation",
+      "y": "Wide Format",
+      "support": 59,
+      "static_conf": 0.7119,
+      "temporal_conf_12m": 0.1356,
+      "temporal_minus_static": -0.5763,
+      "median_delay_d": 105.5,
+      "strong_temporal": false
+    },
+    {
+      "x": "Design Services",
+      "y": "Wide Format",
+      "support": 1851,
+      "static_conf": 0.3938,
+      "temporal_conf_12m": 0.1313,
+      "temporal_minus_static": -0.2625,
+      "median_delay_d": 93,
+      "strong_temporal": false
+    },
+    {
+      "x": "Soft Cover Books",
+      "y": "Wide Format",
+      "support": 565,
+      "static_conf": 0.5292,
+      "temporal_conf_12m": 0.1274,
+      "temporal_minus_static": -0.4018,
+      "median_delay_d": 95.5,
+      "strong_temporal": false
+    },
+    {
+      "x": "Embellishment",
+      "y": "Wide Format",
+      "support": 755,
+      "static_conf": 0.4768,
+      "temporal_conf_12m": 0.1272,
+      "temporal_minus_static": -0.3496,
+      "median_delay_d": 84.5,
+      "strong_temporal": false
+    },
+    {
+      "x": "Design Services",
+      "y": "Embellishment",
+      "support": 1851,
+      "static_conf": 0.3911,
+      "temporal_conf_12m": 0.1216,
+      "temporal_minus_static": -0.2695,
+      "median_delay_d": 75,
+      "strong_temporal": false
+    },
+    {
+      "x": "Embellishment",
+      "y": "Soft Cover Books",
+      "support": 755,
+      "static_conf": 0.4755,
+      "temporal_conf_12m": 0.1205,
+      "temporal_minus_static": -0.355,
+      "median_delay_d": 88,
+      "strong_temporal": false
+    },
+    {
+      "x": "Wide Format",
+      "y": "Embellishment",
+      "support": 788,
+      "static_conf": 0.4569,
+      "temporal_conf_12m": 0.118,
+      "temporal_minus_static": -0.3389,
+      "median_delay_d": 70,
+      "strong_temporal": false
+    },
+    {
+      "x": "Specialty Finishing",
+      "y": "Wide Format",
+      "support": 1953,
+      "static_conf": 0.3886,
+      "temporal_conf_12m": 0.1167,
+      "temporal_minus_static": -0.2719,
+      "median_delay_d": 98.5,
+      "strong_temporal": false
+    },
+    {
+      "x": "Flat Sheets",
+      "y": "Wide Format",
+      "support": 1934,
+      "static_conf": 0.3469,
+      "temporal_conf_12m": 0.1153,
+      "temporal_minus_static": -0.2316,
+      "median_delay_d": 94,
+      "strong_temporal": false
+    },
+    {
+      "x": "Flat Sheets",
+      "y": "Embellishment",
+      "support": 1934,
+      "static_conf": 0.3795,
+      "temporal_conf_12m": 0.1127,
+      "temporal_minus_static": -0.2668,
+      "median_delay_d": 78.0,
+      "strong_temporal": false
+    },
+    {
+      "x": "Display/Installation",
+      "y": "Soft Cover Books",
+      "support": 59,
+      "static_conf": 0.4237,
+      "temporal_conf_12m": 0.1017,
+      "temporal_minus_static": -0.322,
+      "median_delay_d": 111.0,
+      "strong_temporal": false
+    },
+    {
+      "x": "Display/Installation",
+      "y": "Hard Cover Books",
+      "support": 59,
+      "static_conf": 0.322,
+      "temporal_conf_12m": 0.1017,
+      "temporal_minus_static": -0.2203,
+      "median_delay_d": 68.5,
+      "strong_temporal": false
+    },
+    {
+      "x": "Specialty Finishing",
+      "y": "Embellishment",
+      "support": 1953,
+      "static_conf": 0.3738,
+      "temporal_conf_12m": 0.1009,
+      "temporal_minus_static": -0.2729,
+      "median_delay_d": 74,
+      "strong_temporal": false
+    },
+    {
+      "x": "Wide Format",
+      "y": "Soft Cover Books",
+      "support": 788,
+      "static_conf": 0.3794,
+      "temporal_conf_12m": 0.099,
+      "temporal_minus_static": -0.2804,
+      "median_delay_d": 80.0,
+      "strong_temporal": false
+    },
+    {
+      "x": "Soft Cover Books",
+      "y": "Embellishment",
+      "support": 565,
+      "static_conf": 0.6354,
+      "temporal_conf_12m": 0.0956,
+      "temporal_minus_static": -0.5398,
+      "median_delay_d": 91.0,
+      "strong_temporal": false
+    },
+    {
+      "x": "Hard Cover Books",
+      "y": "Embellishment",
+      "support": 294,
+      "static_conf": 0.6633,
+      "temporal_conf_12m": 0.0952,
+      "temporal_minus_static": -0.5681,
+      "median_delay_d": 101.5,
+      "strong_temporal": false
+    },
+    {
+      "x": "Design Services",
+      "y": "Soft Cover Books",
+      "support": 1851,
+      "static_conf": 0.2815,
+      "temporal_conf_12m": 0.0886,
+      "temporal_minus_static": -0.1929,
+      "median_delay_d": 97.0,
+      "strong_temporal": false
+    },
+    {
+      "x": "Design Services",
+      "y": "Specialty Finishing",
+      "support": 1851,
+      "static_conf": 0.9211,
+      "temporal_conf_12m": 0.087,
+      "temporal_minus_static": -0.8341,
+      "median_delay_d": 64,
+      "strong_temporal": false
+    },
+    {
+      "x": "Embellishment",
+      "y": "Hard Cover Books",
+      "support": 755,
+      "static_conf": 0.2583,
+      "temporal_conf_12m": 0.0848,
+      "temporal_minus_static": -0.1735,
+      "median_delay_d": 161.0,
+      "strong_temporal": false
+    },
+    {
+      "x": "Display/Installation",
+      "y": "Design Services",
+      "support": 59,
+      "static_conf": 0.9492,
+      "temporal_conf_12m": 0.0847,
+      "temporal_minus_static": -0.8645,
+      "median_delay_d": 19,
+      "strong_temporal": false
+    },
+    {
+      "x": "Flat Sheets",
+      "y": "Soft Cover Books",
+      "support": 1934,
+      "static_conf": 0.2916,
+      "temporal_conf_12m": 0.0843,
+      "temporal_minus_static": -0.2073,
+      "median_delay_d": 93,
+      "strong_temporal": false
+    },
+    {
+      "x": "Specialty Finishing",
+      "y": "Soft Cover Books",
+      "support": 1953,
+      "static_conf": 0.2837,
+      "temporal_conf_12m": 0.084,
+      "temporal_minus_static": -0.1997,
+      "median_delay_d": 93.0,
+      "strong_temporal": false
+    },
+    {
+      "x": "Wide Format",
+      "y": "Flat Sheets",
+      "support": 788,
+      "static_conf": 0.8515,
+      "temporal_conf_12m": 0.0825,
+      "temporal_minus_static": -0.769,
+      "median_delay_d": 64,
+      "strong_temporal": false
+    },
+    {
+      "x": "Flat Sheets",
+      "y": "Specialty Finishing",
+      "support": 1934,
+      "static_conf": 0.925,
+      "temporal_conf_12m": 0.0807,
+      "temporal_minus_static": -0.8443,
+      "median_delay_d": 71.5,
+      "strong_temporal": false
+    },
+    {
+      "x": "Soft Cover Books",
+      "y": "Hard Cover Books",
+      "support": 565,
+      "static_conf": 0.3115,
+      "temporal_conf_12m": 0.0796,
+      "temporal_minus_static": -0.2319,
+      "median_delay_d": 180,
+      "strong_temporal": false
+    },
+    {
+      "x": "Design Services",
+      "y": "Flat Sheets",
+      "support": 1851,
+      "static_conf": 0.906,
+      "temporal_conf_12m": 0.0708,
+      "temporal_minus_static": -0.8352,
+      "median_delay_d": 56,
+      "strong_temporal": false
+    },
+    {
+      "x": "Flat Sheets",
+      "y": "Design Services",
+      "support": 1934,
+      "static_conf": 0.8671,
+      "temporal_conf_12m": 0.0667,
+      "temporal_minus_static": -0.8004,
+      "median_delay_d": 62,
+      "strong_temporal": false
+    },
+    {
+      "x": "Embellishment",
+      "y": "Specialty Finishing",
+      "support": 755,
+      "static_conf": 0.9669,
+      "temporal_conf_12m": 0.0649,
+      "temporal_minus_static": -0.902,
+      "median_delay_d": 70,
+      "strong_temporal": false
+    },
+    {
+      "x": "Specialty Finishing",
+      "y": "Flat Sheets",
+      "support": 1953,
+      "static_conf": 0.916,
+      "temporal_conf_12m": 0.0589,
+      "temporal_minus_static": -0.8571,
+      "median_delay_d": 51,
+      "strong_temporal": false
+    },
+    {
+      "x": "Wide Format",
+      "y": "Hard Cover Books",
+      "support": 788,
+      "static_conf": 0.2665,
+      "temporal_conf_12m": 0.0584,
+      "temporal_minus_static": -0.2081,
+      "median_delay_d": 115.5,
+      "strong_temporal": false
+    },
+    {
+      "x": "Specialty Finishing",
+      "y": "Design Services",
+      "support": 1953,
+      "static_conf": 0.873,
+      "temporal_conf_12m": 0.0563,
+      "temporal_minus_static": -0.8167,
+      "median_delay_d": 40.5,
+      "strong_temporal": false
+    },
+    {
+      "x": "Design Services",
+      "y": "Hard Cover Books",
+      "support": 1851,
+      "static_conf": 0.1518,
+      "temporal_conf_12m": 0.0535,
+      "temporal_minus_static": -0.0983,
+      "median_delay_d": 121,
+      "strong_temporal": false
+    },
+    {
+      "x": "Display/Installation",
+      "y": "Specialty Finishing",
+      "support": 59,
+      "static_conf": 0.9153,
+      "temporal_conf_12m": 0.0508,
+      "temporal_minus_static": -0.8645,
+      "median_delay_d": 72,
+      "strong_temporal": false
+    },
+    {
+      "x": "Flat Sheets",
+      "y": "Hard Cover Books",
+      "support": 1934,
+      "static_conf": 0.1494,
+      "temporal_conf_12m": 0.046,
+      "temporal_minus_static": -0.1034,
+      "median_delay_d": 127,
+      "strong_temporal": false
+    },
+    {
+      "x": "Wide Format",
+      "y": "Specialty Finishing",
+      "support": 788,
+      "static_conf": 0.9632,
+      "temporal_conf_12m": 0.0457,
+      "temporal_minus_static": -0.9175,
+      "median_delay_d": 52.0,
+      "strong_temporal": false
+    },
+    {
+      "x": "Embellishment",
+      "y": "Design Services",
+      "support": 755,
+      "static_conf": 0.9589,
+      "temporal_conf_12m": 0.045,
+      "temporal_minus_static": -0.9139,
+      "median_delay_d": 86.0,
+      "strong_temporal": false
+    },
+    {
+      "x": "Hard Cover Books",
+      "y": "Design Services",
+      "support": 294,
+      "static_conf": 0.9558,
+      "temporal_conf_12m": 0.0442,
+      "temporal_minus_static": -0.9116,
+      "median_delay_d": 76,
+      "strong_temporal": false
+    },
+    {
+      "x": "Specialty Finishing",
+      "y": "Hard Cover Books",
+      "support": 1953,
+      "static_conf": 0.148,
+      "temporal_conf_12m": 0.0425,
+      "temporal_minus_static": -0.1055,
+      "median_delay_d": 131,
+      "strong_temporal": false
+    },
+    {
+      "x": "Wide Format",
+      "y": "Design Services",
+      "support": 788,
+      "static_conf": 0.9251,
+      "temporal_conf_12m": 0.0393,
+      "temporal_minus_static": -0.8858,
+      "median_delay_d": 35,
+      "strong_temporal": false
+    },
+    {
+      "x": "Soft Cover Books",
+      "y": "Specialty Finishing",
+      "support": 565,
+      "static_conf": 0.9805,
+      "temporal_conf_12m": 0.0389,
+      "temporal_minus_static": -0.9416,
+      "median_delay_d": 74.0,
+      "strong_temporal": false
+    },
+    {
+      "x": "Soft Cover Books",
+      "y": "Design Services",
+      "support": 565,
+      "static_conf": 0.9221,
+      "temporal_conf_12m": 0.0389,
+      "temporal_minus_static": -0.8832,
+      "median_delay_d": 83.5,
+      "strong_temporal": false
+    },
+    {
+      "x": "Hard Cover Books",
+      "y": "Specialty Finishing",
+      "support": 294,
+      "static_conf": 0.983,
+      "temporal_conf_12m": 0.0374,
+      "temporal_minus_static": -0.9456,
+      "median_delay_d": 96,
+      "strong_temporal": false
+    },
+    {
+      "x": "Display/Installation",
+      "y": "Flat Sheets",
+      "support": 59,
+      "static_conf": 0.8983,
+      "temporal_conf_12m": 0.0339,
+      "temporal_minus_static": -0.8644,
+      "median_delay_d": 136.0,
+      "strong_temporal": false
+    },
+    {
+      "x": "Embellishment",
+      "y": "Flat Sheets",
+      "support": 755,
+      "static_conf": 0.9722,
+      "temporal_conf_12m": 0.0278,
+      "temporal_minus_static": -0.9444,
+      "median_delay_d": 29,
+      "strong_temporal": false
+    },
+    {
+      "x": "Hard Cover Books",
+      "y": "Flat Sheets",
+      "support": 294,
+      "static_conf": 0.983,
+      "temporal_conf_12m": 0.0272,
+      "temporal_minus_static": -0.9558,
+      "median_delay_d": 20.0,
+      "strong_temporal": false
+    },
+    {
+      "x": "Hard Cover Books",
+      "y": "Display/Installation",
+      "support": 294,
+      "static_conf": 0.0646,
+      "temporal_conf_12m": 0.0238,
+      "temporal_minus_static": -0.0408,
+      "median_delay_d": 59,
+      "strong_temporal": false
+    },
+    {
+      "x": "Wide Format",
+      "y": "Display/Installation",
+      "support": 788,
+      "static_conf": 0.0533,
+      "temporal_conf_12m": 0.019,
+      "temporal_minus_static": -0.0343,
+      "median_delay_d": 92,
+      "strong_temporal": false
+    },
+    {
+      "x": "Embellishment",
+      "y": "Display/Installation",
+      "support": 755,
+      "static_conf": 0.0517,
+      "temporal_conf_12m": 0.0146,
+      "temporal_minus_static": -0.0371,
+      "median_delay_d": 59,
+      "strong_temporal": false
+    },
+    {
+      "x": "Design Services",
+      "y": "Display/Installation",
+      "support": 1851,
+      "static_conf": 0.0303,
+      "temporal_conf_12m": 0.0119,
+      "temporal_minus_static": -0.0184,
+      "median_delay_d": 76.0,
+      "strong_temporal": false
+    },
+    {
+      "x": "Flat Sheets",
+      "y": "Display/Installation",
+      "support": 1934,
+      "static_conf": 0.0274,
+      "temporal_conf_12m": 0.0109,
+      "temporal_minus_static": -0.0165,
+      "median_delay_d": 84,
+      "strong_temporal": false
+    },
+    {
+      "x": "Specialty Finishing",
+      "y": "Display/Installation",
+      "support": 1953,
+      "static_conf": 0.0276,
+      "temporal_conf_12m": 0.0102,
+      "temporal_minus_static": -0.0174,
+      "median_delay_d": 69.0,
+      "strong_temporal": false
+    },
+    {
+      "x": "Soft Cover Books",
+      "y": "Display/Installation",
+      "support": 565,
+      "static_conf": 0.0442,
+      "temporal_conf_12m": 0.0053,
+      "temporal_minus_static": -0.0389,
+      "median_delay_d": 84,
+      "strong_temporal": false
+    },
+    {
+      "x": "Soft Cover Books",
+      "y": "Flat Sheets",
+      "support": 565,
+      "static_conf": 0.9982,
+      "temporal_conf_12m": 0.0018,
+      "temporal_minus_static": -0.9964,
+      "median_delay_d": 8,
+      "strong_temporal": false
+    }
+  ],
+  "step3_direction_insights": [],
+  "step3_hardcover_focus": [
+    {
+      "pair": "Hard Cover Books -> Soft Cover Books",
+      "forward": {
+        "x": "Hard Cover Books",
+        "y": "Soft Cover Books",
+        "support": 294,
+        "conf_6m": 0.0884,
+        "conf_12m": 0.1429,
+        "n_y_after_6m": 26,
+        "n_y_after_12m": 42,
+        "median_delay_d": 118.0,
+        "p25_delay_d": 46.2,
+        "p75_delay_d": 227.0,
+        "static_conf": 0.5986
+      },
+      "reverse": {
+        "x": "Soft Cover Books",
+        "y": "Hard Cover Books",
+        "support": 565,
+        "conf_6m": 0.0407,
+        "conf_12m": 0.0796,
+        "n_y_after_6m": 23,
+        "n_y_after_12m": 45,
+        "median_delay_d": 180,
+        "p25_delay_d": 77.0,
+        "p75_delay_d": 254.0,
+        "static_conf": 0.3115,
+        "label": "Soft Cover Books -> Hard Cover Books"
+      }
+    },
+    {
+      "pair": "Hard Cover Books -> Embellishment",
+      "forward": {
+        "x": "Hard Cover Books",
+        "y": "Embellishment",
+        "support": 294,
+        "conf_6m": 0.0782,
+        "conf_12m": 0.0952,
+        "n_y_after_6m": 23,
+        "n_y_after_12m": 28,
+        "median_delay_d": 101.5,
+        "p25_delay_d": 37.5,
+        "p75_delay_d": 177.8,
+        "static_conf": 0.6633
+      },
+      "reverse": {
+        "x": "Embellishment",
+        "y": "Hard Cover Books",
+        "support": 755,
+        "conf_6m": 0.049,
+        "conf_12m": 0.0848,
+        "n_y_after_6m": 37,
+        "n_y_after_12m": 64,
+        "median_delay_d": 161.0,
+        "p25_delay_d": 26.8,
+        "p75_delay_d": 261.2,
+        "static_conf": 0.2583,
+        "label": "Embellishment -> Hard Cover Books"
+      }
+    },
+    {
+      "pair": "Hard Cover Books -> Wide Format",
+      "forward": {
+        "x": "Hard Cover Books",
+        "y": "Wide Format",
+        "support": 294,
+        "conf_6m": 0.1122,
+        "conf_12m": 0.1497,
+        "n_y_after_6m": 33,
+        "n_y_after_12m": 44,
+        "median_delay_d": 66.0,
+        "p25_delay_d": 23.8,
+        "p75_delay_d": 183.5,
+        "static_conf": 0.7143
+      },
+      "reverse": {
+        "x": "Wide Format",
+        "y": "Hard Cover Books",
+        "support": 788,
+        "conf_6m": 0.033,
+        "conf_12m": 0.0584,
+        "n_y_after_6m": 26,
+        "n_y_after_12m": 46,
+        "median_delay_d": 115.5,
+        "p25_delay_d": 27.5,
+        "p75_delay_d": 218.8,
+        "static_conf": 0.2665,
+        "label": "Wide Format -> Hard Cover Books"
+      }
+    }
+  ],
+  "step4_live_triggers": [],
+  "step5_backtest": {
+    "per_rule": [],
+    "aggregate": {
+      "weighted_hit_rate_12m": null,
+      "weighted_base_rate": null,
+      "lift": null,
+      "n_observations": 0,
+      "verdict": "NO STRONG FORWARD-SEQUENCE RULES EXIST at support>=30 / conf_12m>=25%. Capability co-occurrence is strong but NOT temporally ordered \u2014 customers adopt their capability mix early/together, not in a predictable X-then-Y sequence. A 'what next' timing engine is not supported by this data; the static basket's value is breadth-gap detection, not sequence prediction.",
+      "thresholds": {
+        "support_min": 30,
+        "conf_12m_min": 0.25
+      }
+    }
+  }
+}

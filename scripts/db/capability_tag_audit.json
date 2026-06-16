@@ -1,0 +1,4946 @@
+{
+  "generated": "2026-06-12",
+  "taxonomy": {
+    "Embellishment": [
+      "foil",
+      "scodix",
+      "spot uv",
+      "emboss",
+      "deboss",
+      "stamping die",
+      "hot foil",
+      "digital foil"
+    ],
+    "Wide Format": [
+      "wide format",
+      "wf print",
+      "zund",
+      "large format",
+      "banner",
+      "pull up",
+      "decal",
+      "vinyl",
+      "mesh",
+      "swissq",
+      "laminate 6",
+      "laminate setup",
+      "groove cut",
+      "eyelet",
+      "hanging kit",
+      "poles",
+      "application tape",
+      "top-cut",
+      "top cut"
+    ],
+    "Hard Cover Books": [
+      "casebind",
+      "casing",
+      "text block to cover",
+      "head & tail",
+      "head and tail",
+      "end paper",
+      "fusing board"
+    ],
+    "Soft Cover Books": [
+      "perfect bind",
+      "saddle stitch",
+      "saddle sew",
+      "wire bind",
+      "pur bind",
+      "false cover",
+      "section",
+      "oversew",
+      "padding",
+      "coil bind",
+      "spiral",
+      "wire-o",
+      "hand saddle"
+    ],
+    "Display/Installation": [
+      "install",
+      "signage"
+    ],
+    "Design Services": [
+      "prepress",
+      "pre-press",
+      "artwork",
+      "preflight",
+      "proof",
+      "mock-up",
+      "mockup",
+      "layout",
+      "variable data setup",
+      "complexity",
+      "online setup",
+      "internal setup",
+      "online admin"
+    ],
+    "Specialty Finishing": [
+      "cello",
+      "soft-touch",
+      "soft touch",
+      "velvet",
+      "anti-scuff",
+      "scuff",
+      "varnish",
+      "matt",
+      "gloss",
+      "fuse",
+      "mount",
+      "round corner",
+      "die cut",
+      "die-cut",
+      "laser",
+      "perforat",
+      "nip",
+      "d-ring",
+      "magnet",
+      "ribbon",
+      "packag",
+      "precoat",
+      "coat",
+      "laminat"
+    ]
+  },
+  "capabilities": {
+    "Design Services": {
+      "total_ops": 77309,
+      "distinct_ops": 128,
+      "genuine_ops": 73915,
+      "misbundled_ops": 3394,
+      "genuine_fraction_pct": 95.6,
+      "misbundled_to": {
+        "Wide Format": 3033,
+        "Soft Cover Books": 255,
+        "Hard Cover Books": 66,
+        "Specialty Finishing": 40
+      },
+      "polluted": false,
+      "op_assessment": [
+        {
+          "op": "Prepress",
+          "ops": 27943,
+          "companies": 2598,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Artwork preflight",
+          "ops": 14698,
+          "companies": 2170,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "PDF Proof",
+          "ops": 9218,
+          "companies": 1284,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Setup",
+          "ops": 6641,
+          "companies": 1072,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Maui Artwork setup",
+          "ops": 4007,
+          "companies": 6,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Large format preflight",
+          "ops": 3028,
+          "companies": 697,
+          "assessment": "MIS-BUNDLED -> Wide Format"
+        },
+        {
+          "op": "Artwork and layout",
+          "ops": 2293,
+          "companies": 581,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "PDF proof only",
+          "ops": 1384,
+          "companies": 440,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Online setup",
+          "ops": 1038,
+          "companies": 7,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Internal setup",
+          "ops": 1026,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Online Administration Fee",
+          "ops": 947,
+          "companies": 238,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "1 x Digital Printed Proof Mock-up",
+          "ops": 675,
+          "companies": 269,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Ink Stock Draw",
+          "ops": 568,
+          "companies": 69,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Variable data Setup & Design",
+          "ops": 568,
+          "companies": 98,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "BC Setup",
+          "ops": 310,
+          "companies": 146,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Prepress Complexity 1",
+          "ops": 252,
+          "companies": 121,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 100",
+          "ops": 187,
+          "companies": 109,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management",
+          "ops": 180,
+          "companies": 79,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Paper Stock Draw",
+          "ops": 162,
+          "companies": 22,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Saddle sewn binding - loose threads",
+          "ops": 161,
+          "companies": 77,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Management @ 150",
+          "ops": 150,
+          "companies": 80,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Prepress Complexity 2",
+          "ops": 138,
+          "companies": 83,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 200",
+          "ops": 127,
+          "companies": 70,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 50",
+          "ops": 127,
+          "companies": 69,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Technical design, knife adjustments and related PrePress.",
+          "ops": 126,
+          "companies": 70,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Express Setup",
+          "ops": 120,
+          "companies": 12,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "2 x Sets Digital Printed Proof Sheets",
+          "ops": 118,
+          "companies": 59,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Saddle sewn binding - tied ends",
+          "ops": 94,
+          "companies": 53,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Case Binding Setup",
+          "ops": 93,
+          "companies": 38,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Outsource (2) @ 1",
+          "ops": 91,
+          "companies": 20,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 250",
+          "ops": 76,
+          "companies": 52,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Adds set-up charge + per unit cost to add a head & tail band to a book.",
+          "ops": 66,
+          "companies": 39,
+          "assessment": "MIS-BUNDLED -> Hard Cover Books"
+        },
+        {
+          "op": "Management @ 300",
+          "ops": 62,
+          "companies": 36,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Prepress Complexity 3",
+          "ops": 55,
+          "companies": 30,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 75",
+          "ops": 46,
+          "companies": 32,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 500",
+          "ops": 43,
+          "companies": 18,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 350",
+          "ops": 40,
+          "companies": 27,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Rainbow Celloglaze",
+          "ops": 40,
+          "companies": 7,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Management @ 120",
+          "ops": 34,
+          "companies": 26,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 80",
+          "ops": 33,
+          "companies": 29,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "How Many Kinds",
+          "ops": 20,
+          "companies": 14,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 125",
+          "ops": 19,
+          "companies": 16,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 90",
+          "ops": 17,
+          "companies": 12,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "PMS Colour Chart Proofing",
+          "ops": 16,
+          "companies": 7,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 60",
+          "ops": 15,
+          "companies": 12,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 900",
+          "ops": 14,
+          "companies": 5,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Proofing Setup",
+          "ops": 14,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Adds set-up charge + per-corner charge to join edges of grooved boxes with heat-activated tape machine.   x 4",
+          "ops": 13,
+          "companies": 8,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Existing Knife",
+          "ops": 11,
+          "companies": 7,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 400",
+          "ops": 10,
+          "companies": 9,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 180",
+          "ops": 9,
+          "companies": 5,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 20",
+          "ops": 9,
+          "companies": 8,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Typesetting or layout",
+          "ops": 9,
+          "companies": 7,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 130",
+          "ops": 8,
+          "companies": 4,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 1000",
+          "ops": 7,
+          "companies": 4,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 40",
+          "ops": 7,
+          "companies": 7,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Burbia inkjet setup",
+          "ops": 6,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 30",
+          "ops": 6,
+          "companies": 6,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 750",
+          "ops": 6,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "LF Zund simple cut to shape",
+          "ops": 5,
+          "companies": 3,
+          "assessment": "MIS-BUNDLED -> Wide Format"
+        },
+        {
+          "op": "Management @ 600",
+          "ops": 5,
+          "companies": 4,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 70",
+          "ops": 5,
+          "companies": 4,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Outsource (2) @ 0",
+          "ops": 5,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 1200",
+          "ops": 4,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 160",
+          "ops": 4,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 25",
+          "ops": 4,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 35",
+          "ops": 4,
+          "companies": 4,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Outsource (2)",
+          "ops": 4,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 1500",
+          "ops": 3,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 175",
+          "ops": 3,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 210",
+          "ops": 3,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 325",
+          "ops": 3,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 55",
+          "ops": 3,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 800",
+          "ops": 3,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Outsource (2) @ 350",
+          "ops": 3,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Print Complexity 1 - Any White Ink",
+          "ops": 3,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Includes a digitally printed proof on job stocks",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "includes variable data names from supplied appropriate CSV file",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 152",
+          "ops": 2,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 155",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 195",
+          "ops": 2,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 220",
+          "ops": 2,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 45",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 650",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 850",
+          "ops": 2,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "New project setup fee",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Outsource (2) @ 390",
+          "ops": 2,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Outsource (2) @ 850",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Adds set-up charge + per-corner charge to join edges of grooved boxes with heat-activated tape machine.   x 3",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hard Copy Proof Mockup (free type)",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 0",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 10",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 124.45",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 1390",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 15",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 196",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 2000",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 225",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 240",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 2500",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 275",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 3000",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 490",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 645",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Management @ 85",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Outsource (2) @ 1000",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Outsource (2) @ 10045.45",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Outsource (2) @ 1100",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Outsource (2) @ 120",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Outsource (2) @ 1416.55",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Outsource (2) @ 150",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Outsource (2) @ 2000",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Outsource (2) @ 225",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Outsource (2) @ 239",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Outsource (2) @ 264",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Outsource (2) @ 2966.6",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Outsource (2) @ 300",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Outsource (2) @ 306",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Outsource (2) @ 3115",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Outsource (2) @ 40",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Outsource (2) @ 4300",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Outsource (2) @ 50",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Outsource (2) @ 572",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Outsource (2) @ 799",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Outsource (2) @ 918",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Outsource (2) @ 990",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Printing",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Typesetting and layout",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        }
+      ],
+      "base_rate_current_pct": 85.3,
+      "base_rate_corrected_pct": 94.2
+    },
+    "Display/Installation": {
+      "total_ops": 539,
+      "distinct_ops": 17,
+      "genuine_ops": 539,
+      "misbundled_ops": 0,
+      "genuine_fraction_pct": 100.0,
+      "misbundled_to": {},
+      "polluted": false,
+      "op_assessment": [
+        {
+          "op": "Install",
+          "ops": 120,
+          "companies": 37,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Paper Draw",
+          "ops": 117,
+          "companies": 72,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Ink Draw",
+          "ops": 115,
+          "companies": 72,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Printing",
+          "ops": 107,
+          "companies": 71,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Installer",
+          "ops": 53,
+          "companies": 21,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hourly install rate 1 man",
+          "ops": 9,
+          "companies": 7,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hourly install rate 1 man @ 1.5",
+          "ops": 4,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hourly install rate 2 man",
+          "ops": 4,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hourly install rate 1 man @ 0.3",
+          "ops": 2,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hourly install rate 1 man @ 2",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hourly install rate 1 man @ 2.5",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hourly install rate 1 man @ 2.75",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hourly install rate 2 man @ 1",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hourly install rate 2 man @ 2",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hourly install rate 2 man @ 3",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hourly install rate 2 man @ 4",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hourly install rate 2 man @ 6",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        }
+      ],
+      "base_rate_current_pct": 2.6,
+      "base_rate_corrected_pct": 3.2
+    },
+    "Embellishment": {
+      "total_ops": 8184,
+      "distinct_ops": 47,
+      "genuine_ops": 1099,
+      "misbundled_ops": 7085,
+      "genuine_fraction_pct": 13.4,
+      "misbundled_to": {
+        "Specialty Finishing": 7085
+      },
+      "polluted": true,
+      "op_assessment": [
+        {
+          "op": "Matte",
+          "ops": 1832,
+          "companies": 506,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Anti-scuff matte",
+          "ops": 1105,
+          "companies": 307,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Gloss",
+          "ops": 756,
+          "companies": 168,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Matt cello",
+          "ops": 654,
+          "companies": 259,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Soft-touch",
+          "ops": 628,
+          "companies": 177,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "scuff-resistant matte celloglaze",
+          "ops": 487,
+          "companies": 193,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Laser through cut",
+          "ops": 437,
+          "companies": 128,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Digital foil - Gold",
+          "ops": 285,
+          "companies": 141,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Velvet celloglaze",
+          "ops": 256,
+          "companies": 111,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Gloss celloglaze",
+          "ops": 233,
+          "companies": 81,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Anti-scuff gloss",
+          "ops": 193,
+          "companies": 21,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "(blank)",
+          "ops": 141,
+          "companies": 59,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "silver celloglaze",
+          "ops": 134,
+          "companies": 50,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Matte cello",
+          "ops": 104,
+          "companies": 65,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Digital foil - Gold (SINGLE SIDE ONLY)",
+          "ops": 103,
+          "companies": 52,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Biodegradable Matt Cello",
+          "ops": 89,
+          "companies": 25,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Digital foil - Silver",
+          "ops": 62,
+          "companies": 37,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Laser cutting $110",
+          "ops": 62,
+          "companies": 40,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Printing",
+          "ops": 61,
+          "companies": 41,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Creation of stamping die only",
+          "ops": 55,
+          "companies": 41,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Matte laminate",
+          "ops": 54,
+          "companies": 28,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Ink Draw",
+          "ops": 45,
+          "companies": 30,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Paper Draw",
+          "ops": 44,
+          "companies": 30,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hot foil stamping",
+          "ops": 42,
+          "companies": 33,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Debossing",
+          "ops": 36,
+          "companies": 22,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Digital foil - Coloured",
+          "ops": 32,
+          "companies": 17,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Digital foil - Rose Gold",
+          "ops": 31,
+          "companies": 23,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Embossing with die and counter",
+          "ops": 25,
+          "companies": 17,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Digital foil - Copper",
+          "ops": 22,
+          "companies": 16,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Digital foil - Silver (SINGLE SIDE ONLY)",
+          "ops": 20,
+          "companies": 14,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Scuff-resistant gloss celloglaze",
+          "ops": 20,
+          "companies": 8,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Digital foil - Coloured (SINGLE SIDE ONLY)",
+          "ops": 18,
+          "companies": 11,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Paper Stock Draw",
+          "ops": 18,
+          "companies": 13,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Ink Stock Draw",
+          "ops": 16,
+          "companies": 10,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "gold celloglaze",
+          "ops": 13,
+          "companies": 8,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "White Board Lamination",
+          "ops": 12,
+          "companies": 3,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Rough Touch Matt Cello",
+          "ops": 11,
+          "companies": 7,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Creation of debossing die only",
+          "ops": 10,
+          "companies": 9,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Digital foil - Copper (SINGLE SIDE ONLY)",
+          "ops": 10,
+          "companies": 8,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Emboss with counter",
+          "ops": 9,
+          "companies": 8,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Custom shape cut",
+          "ops": 6,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Gloss sleeking",
+          "ops": 4,
+          "companies": 4,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "debossing",
+          "ops": 3,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Digital foil - Rose Gold (SINGLE SIDE ONLY)",
+          "ops": 3,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Digital foil proof",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Permanent gloss laminate",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Traditional Foiling/Deboss Internal",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        }
+      ],
+      "base_rate_current_pct": 34.8,
+      "base_rate_corrected_pct": 15.3
+    },
+    "Flat Sheets": {
+      "total_ops": 123537,
+      "distinct_ops": 31,
+      "genuine_ops": 112753,
+      "misbundled_ops": 10784,
+      "genuine_fraction_pct": 91.3,
+      "misbundled_to": {
+        "Design Services": 10780,
+        "Embellishment": 4
+      },
+      "polluted": false,
+      "op_assessment": [
+        {
+          "op": "Printing",
+          "ops": 42523,
+          "companies": 2929,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Paper Stock Draw",
+          "ops": 20114,
+          "companies": 1303,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Ink Stock Draw",
+          "ops": 18635,
+          "companies": 1261,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Paper Draw",
+          "ops": 16611,
+          "companies": 1655,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Ink Draw",
+          "ops": 14706,
+          "companies": 1507,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Proofing",
+          "ops": 3706,
+          "companies": 598,
+          "assessment": "MIS-BUNDLED -> Design Services"
+        },
+        {
+          "op": "PDF proof only",
+          "ops": 2556,
+          "companies": 759,
+          "assessment": "MIS-BUNDLED -> Design Services"
+        },
+        {
+          "op": "1 x Set Digital Printed Proof Sheets",
+          "ops": 1195,
+          "companies": 397,
+          "assessment": "MIS-BUNDLED -> Design Services"
+        },
+        {
+          "op": "Includes a digitally printed proof on job stocks",
+          "ops": 1189,
+          "companies": 477,
+          "assessment": "MIS-BUNDLED -> Design Services"
+        },
+        {
+          "op": "Internal Proofing",
+          "ops": 907,
+          "companies": 261,
+          "assessment": "MIS-BUNDLED -> Design Services"
+        },
+        {
+          "op": "2 x Set Digital Printed Proof Sheets",
+          "ops": 525,
+          "companies": 129,
+          "assessment": "MIS-BUNDLED -> Design Services"
+        },
+        {
+          "op": "Proofing Requirements",
+          "ops": 414,
+          "companies": 143,
+          "assessment": "MIS-BUNDLED -> Design Services"
+        },
+        {
+          "op": "Includes a full mockup and printed proof on specified paper",
+          "ops": 164,
+          "companies": 98,
+          "assessment": "MIS-BUNDLED -> Design Services"
+        },
+        {
+          "op": "1 x Set Digital Printed Proof",
+          "ops": 112,
+          "companies": 54,
+          "assessment": "MIS-BUNDLED -> Design Services"
+        },
+        {
+          "op": "includes variable data names from supplied appropriate CSV file",
+          "ops": 90,
+          "companies": 58,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Supply Collated Sets",
+          "ops": 20,
+          "companies": 7,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Ink Mixing $450",
+          "ops": 15,
+          "companies": 8,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Supply Uncollated Sets",
+          "ops": 15,
+          "companies": 5,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Paper Additional Picking Fee",
+          "ops": 7,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "1 Set x B2 Proof Sheets",
+          "ops": 5,
+          "companies": 5,
+          "assessment": "MIS-BUNDLED -> Design Services"
+        },
+        {
+          "op": "HP Indigo digital print",
+          "ops": 5,
+          "companies": 5,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Ink Mixing $300",
+          "ops": 5,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Digital foil proof",
+          "ops": 4,
+          "companies": 3,
+          "assessment": "MIS-BUNDLED -> Embellishment"
+        },
+        {
+          "op": "Ink Mixing $75",
+          "ops": 4,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Includes an epson proof for indicative colour",
+          "ops": 3,
+          "companies": 2,
+          "assessment": "MIS-BUNDLED -> Design Services"
+        },
+        {
+          "op": "Ink Mixing $150",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "1 Set x A3 Proof Sheets",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "MIS-BUNDLED -> Design Services"
+        },
+        {
+          "op": "1 x Digital Printed Proof Mock-up",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "MIS-BUNDLED -> Design Services"
+        },
+        {
+          "op": "2 Sets x B2 Proof Sheets",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "MIS-BUNDLED -> Design Services"
+        },
+        {
+          "op": "Emicote Cover",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Variable data Setup & Design",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "MIS-BUNDLED -> Design Services"
+        }
+      ],
+      "base_rate_current_pct": 89.4,
+      "base_rate_corrected_pct": 85.5
+    },
+    "Hard Cover Books": {
+      "total_ops": 4186,
+      "distinct_ops": 103,
+      "genuine_ops": 1553,
+      "misbundled_ops": 2633,
+      "genuine_fraction_pct": 37.1,
+      "misbundled_to": {
+        "Specialty Finishing": 1498,
+        "Soft Cover Books": 632,
+        "Embellishment": 503
+      },
+      "polluted": true,
+      "op_assessment": [
+        {
+          "op": "Fuse back to back",
+          "ops": 1132,
+          "companies": 354,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Hand Foil / Deboss inhouse",
+          "ops": 498,
+          "companies": 136,
+          "assessment": "MIS-BUNDLED -> Embellishment"
+        },
+        {
+          "op": "Casebinding",
+          "ops": 476,
+          "companies": 207,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Adds set-up charge + custom per item price to wrap/hand casebind (time based).",
+          "ops": 365,
+          "companies": 116,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Fuse or mounting",
+          "ops": 190,
+          "companies": 58,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Adds set-up charge + per book price to apply end papers. Excludes Stock.",
+          "ops": 185,
+          "companies": 75,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Adds set-up charge + m2 area rate + per item price to glue Text Block to Cover by hand, Includes Nipping.",
+          "ops": 166,
+          "companies": 59,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Perfect binding",
+          "ops": 112,
+          "companies": 56,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Adds set-up charge + per unit cost to add a head & tail band to a book.",
+          "ops": 97,
+          "companies": 21,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Adds set-up charge + per unit perimeter charge. Excludes boards.",
+          "ops": 79,
+          "companies": 35,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section",
+          "ops": 61,
+          "companies": 29,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Adds set-up charge + per unit price to attach one D-ring. You must manually enter the item charge based on the D-ring size/colour.",
+          "ops": 54,
+          "companies": 24,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Section sewing binding 450x450mm Max Size",
+          "ops": 53,
+          "companies": 34,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Saddle sewn binding -tied ends",
+          "ops": 50,
+          "companies": 36,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Adds set-up charge + per magnet price to drill and insert. Includes magnets (10mm x 1.5mm standard magnet only).",
+          "ops": 46,
+          "companies": 29,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Adds set-up charge + per item price to apply ribbons. Includes ribbon (up to 500mm length - house colours only). x 1",
+          "ops": 42,
+          "companies": 18,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Hand Saddle Stitch",
+          "ops": 40,
+          "companies": 26,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Oversewn exposed spine (loose ends)",
+          "ops": 40,
+          "companies": 25,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Section sewing binding  OUTSOURCE",
+          "ops": 40,
+          "companies": 31,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Adds discounted PUR set-up charge + per unit price to false cover PUR bind a section sewn text block or PUR-only text block.",
+          "ops": 38,
+          "companies": 30,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Oversewn exposed spine (tied ends)",
+          "ops": 38,
+          "companies": 25,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Saddle sewn binding - loose threads",
+          "ops": 38,
+          "companies": 29,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Adds set-up charge + m2 area rate + per item price to glue Text Block to Cover by hand.",
+          "ops": 33,
+          "companies": 23,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand perfect bound",
+          "ops": 21,
+          "companies": 11,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing binding",
+          "ops": 19,
+          "companies": 18,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Adds set-up charge + per book price to nip the spine.",
+          "ops": 16,
+          "companies": 12,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Fusing board to board",
+          "ops": 14,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing binding 440x350mm Max Size",
+          "ops": 14,
+          "companies": 8,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Layflat - collate",
+          "ops": 13,
+          "companies": 9,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Plain glued",
+          "ops": 13,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Adds set-up charge + per item price to apply ribbons. Includes ribbon (up to 500mm length - house colours only). x 2",
+          "ops": 11,
+          "companies": 5,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Oversewn wrapped cover (tied ends)",
+          "ops": 11,
+          "companies": 10,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "SECTION - Manual Section Sewing",
+          "ops": 11,
+          "companies": 10,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Layflat covers",
+          "ops": 10,
+          "companies": 8,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Thread - black",
+          "ops": 10,
+          "companies": 6,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Oversewn DIFFICULT wrapped cover (tied ends)",
+          "ops": 9,
+          "companies": 8,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Chicago screws x 3",
+          "ops": 8,
+          "companies": 5,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Wrapped cover hidden thread",
+          "ops": 8,
+          "companies": 7,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Chicago screws x 4",
+          "ops": 7,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Oversewn DIFFICULT exposed spine (loose ends)",
+          "ops": 7,
+          "companies": 4,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Wire - Black",
+          "ops": 7,
+          "companies": 4,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Chicago screws",
+          "ops": 6,
+          "companies": 5,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "JOB - Manual Section Sewing",
+          "ops": 6,
+          "companies": 4,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "mixing (+$49.00)",
+          "ops": 5,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing folding @ 4",
+          "ops": 5,
+          "companies": 4,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Wire - White",
+          "ops": 5,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "1 x Book Ribbon",
+          "ops": 3,
+          "companies": 2,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Oversewn wrapped cover (loose ends)",
+          "ops": 3,
+          "companies": 3,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Section sewing folding 243x348mm Max Size Portrait @ 8",
+          "ops": 3,
+          "companies": 3,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Traditional Foiling/Deboss Internal",
+          "ops": 3,
+          "companies": 1,
+          "assessment": "MIS-BUNDLED -> Embellishment"
+        },
+        {
+          "op": "Chicago screws x 2",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Embossing with die and counter",
+          "ops": 2,
+          "companies": 1,
+          "assessment": "MIS-BUNDLED -> Embellishment"
+        },
+        {
+          "op": "Hand perfect bound x 32",
+          "ops": 2,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Round Corner x2",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Section sewing binding 300x420mm Max Size Portrait",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Section sewing folding @ 3",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Section sewing folding @ 7",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Section sewing folding @ 8",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Thread - dark blue",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Thread - red",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "White",
+          "ops": 2,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Wire binding 2:1",
+          "ops": 2,
+          "companies": 1,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "(blank)",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Cello",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "DO NOT USE -Section sewing folding 243x348mm Max Size Portrait @ 10",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Fire Red (+$49.00)",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Fusing online",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand Case Binding",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand perfect bound x 17",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Head & Tail Bands",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Layflat Foldlays/hr (Child)",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Layflat Fusing (parent)",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Layflat Units (child)",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Multiple Paper Types - 440x350mm Max",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Oversewn DIFFICULT exposed spine (tied ends)",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Padding only",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Round Corner x2 x 2",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Saddle sewn binding - tied ends",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Saddle stitching",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Saddle stitching 248x355mm Max Size Portrait",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "score and folded",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "score and folded x1",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing binding 230x312mm Max Size Portrait",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Section sewing folding",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Section sewing folding @ 10",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Section sewing folding @ 14",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Section sewing folding @ 15",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Section sewing folding @ 20",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Section sewing folding @ 21",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Section sewing folding @ 5",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Section sewing folding @ 6",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Section sewing folding 230x312mm Max Size Portrait @ 10",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Section sewing folding 243x348mm Max Size Portrait @ 10",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Section sewing folding 243x348mm Max Size Portrait @ 11",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Section sewing folding 243x348mm Max Size Portrait @ 19",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Section sewing folding 243x348mm Max Size Portrait @ 20",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Section sewing folding 243x348mm Max Size Portrait @ 21",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Section sewing folding 243x348mm Max Size Portrait @ 3",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Section sewing folding 243x348mm Max Size Portrait @ 6",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Section sewing folding 243x348mm Max Size Portrait @ 7",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Thread - blue",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Thread - brown",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Thread - gold",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        }
+      ],
+      "base_rate_current_pct": 13.8,
+      "base_rate_corrected_pct": 8.3
+    },
+    "Soft Cover Books": {
+      "total_ops": 7794,
+      "distinct_ops": 135,
+      "genuine_ops": 6471,
+      "misbundled_ops": 1323,
+      "genuine_fraction_pct": 83.0,
+      "misbundled_to": {
+        "Hard Cover Books": 994,
+        "Specialty Finishing": 329
+      },
+      "polluted": false,
+      "op_assessment": [
+        {
+          "op": "Perfect binding",
+          "ops": 2168,
+          "companies": 521,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Adds set-up charge + custom per item price to wrap/hand casebind (time based).",
+          "ops": 541,
+          "companies": 154,
+          "assessment": "MIS-BUNDLED -> Hard Cover Books"
+        },
+        {
+          "op": "Saddle stitching 248x355mm Max Size Portrait",
+          "ops": 497,
+          "companies": 200,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Saddle stitching",
+          "ops": 458,
+          "companies": 194,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Saddle stitching 248x355mm Max Size Portrait **300GSM GRAIN DIR**",
+          "ops": 417,
+          "companies": 133,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Wire binding 2:1",
+          "ops": 256,
+          "companies": 88,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section",
+          "ops": 247,
+          "companies": 74,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing binding 450x450mm Max Size",
+          "ops": 247,
+          "companies": 112,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Adds set-up charge + per book price to apply end papers. Excludes Stock.",
+          "ops": 232,
+          "companies": 96,
+          "assessment": "MIS-BUNDLED -> Hard Cover Books"
+        },
+        {
+          "op": "Hand Saddle Stitch (NEEDS CREASING ON ALL SHEETS)",
+          "ops": 210,
+          "companies": 90,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Saddle stitching 230x312mm Max Size Portrait",
+          "ops": 170,
+          "companies": 89,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Adds set-up charge + m2 area rate + per item price to glue Text Block to Cover by hand, Includes Nipping.",
+          "ops": 163,
+          "companies": 60,
+          "assessment": "MIS-BUNDLED -> Hard Cover Books"
+        },
+        {
+          "op": "Wire binding 3:1",
+          "ops": 143,
+          "companies": 68,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand Saddle Stitch",
+          "ops": 124,
+          "companies": 54,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Padding",
+          "ops": 120,
+          "companies": 26,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Adds discounted PUR set-up charge + per unit price to false cover PUR bind a section sewn text block or PUR-only text block.",
+          "ops": 99,
+          "companies": 70,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Cello",
+          "ops": 99,
+          "companies": 54,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Padding only",
+          "ops": 94,
+          "companies": 54,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Adds set-up charge + per unit price to attach one D-ring. You must manually enter the item charge based on the D-ring size/colour.",
+          "ops": 86,
+          "companies": 34,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Oversewn exposed spine (loose ends)",
+          "ops": 83,
+          "companies": 34,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Saddle Sewing and Oversewing - Loose, Tied",
+          "ops": 78,
+          "companies": 41,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Adds set-up charge + per magnet price to drill and insert. Includes magnets (10mm x 1.5mm standard magnet only).",
+          "ops": 64,
+          "companies": 26,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Thread - white",
+          "ops": 63,
+          "companies": 14,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Oversewn exposed spine (tied ends)",
+          "ops": 60,
+          "companies": 23,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Adds set-up charge + m2 area rate + per item price to glue Text Block to Cover by hand.",
+          "ops": 58,
+          "companies": 48,
+          "assessment": "MIS-BUNDLED -> Hard Cover Books"
+        },
+        {
+          "op": "Wire - Black",
+          "ops": 53,
+          "companies": 20,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing binding 440x350mm Max Size",
+          "ops": 50,
+          "companies": 19,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "JOB - Manual Section Sewing",
+          "ops": 43,
+          "companies": 15,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "White",
+          "ops": 42,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Adds set-up charge + per item price to apply ribbons. Includes ribbon (up to 500mm length - house colours only). x 1",
+          "ops": 40,
+          "companies": 30,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Saddle stitch bind",
+          "ops": 40,
+          "companies": 27,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Oversewn wrapped cover (loose ends)",
+          "ops": 38,
+          "companies": 12,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Adds set-up charge + per book price to nip the spine.",
+          "ops": 36,
+          "companies": 32,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Section sewing binding",
+          "ops": 36,
+          "companies": 27,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Saddle sewn binding - tied ends",
+          "ops": 33,
+          "companies": 14,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "SECTION - Manual Section Sewing",
+          "ops": 32,
+          "companies": 15,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Chicago screws x 4",
+          "ops": 31,
+          "companies": 15,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing binding 245x350mm Max Size Portrait",
+          "ops": 31,
+          "companies": 11,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Drilling x4 Hole",
+          "ops": 29,
+          "companies": 9,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Chicago screws x 3",
+          "ops": 26,
+          "companies": 13,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Saddle sewn binding - loose threads",
+          "ops": 25,
+          "companies": 17,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Plasticoil",
+          "ops": 24,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing folding 243x348mm Max Size Portrait @ 10",
+          "ops": 20,
+          "companies": 16,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Wire - Silver",
+          "ops": 20,
+          "companies": 7,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Oversewn wrapped cover (tied ends)",
+          "ops": 18,
+          "companies": 11,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Drilling x1 Hole",
+          "ops": 17,
+          "companies": 15,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Oversewn DIFFICULT wrapped cover (tied ends)",
+          "ops": 15,
+          "companies": 13,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing folding 243x348mm Max Size Portrait @ 5",
+          "ops": 14,
+          "companies": 12,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing folding 243x348mm Max Size Portrait @ 4",
+          "ops": 13,
+          "companies": 11,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Wire - White",
+          "ops": 12,
+          "companies": 8,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing folding",
+          "ops": 11,
+          "companies": 11,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing folding 243x348mm Max Size Portrait @ 6",
+          "ops": 10,
+          "companies": 9,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Thread - black",
+          "ops": 10,
+          "companies": 6,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Wrapped cover hidden thread",
+          "ops": 10,
+          "companies": 9,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Oversewn DIFFICULT exposed spine (tied ends)",
+          "ops": 8,
+          "companies": 6,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing folding 243x348mm Max Size Portrait @ 7",
+          "ops": 8,
+          "companies": 7,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Thread - brown",
+          "ops": 8,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Thread - orange",
+          "ops": 8,
+          "companies": 6,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Thread - red",
+          "ops": 8,
+          "companies": 6,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Saddle Sewn, Machine Tied Ends",
+          "ops": 7,
+          "companies": 7,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing folding 243x348mm Max Size Portrait @ 11",
+          "ops": 7,
+          "companies": 5,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Jet black (+$49.00)",
+          "ops": 6,
+          "companies": 5,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Layflat covers",
+          "ops": 6,
+          "companies": 4,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing folding 243x348mm Max Size Portrait @ 8",
+          "ops": 6,
+          "companies": 5,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Chicago screws x 1",
+          "ops": 5,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Drilling x2 Hole",
+          "ops": 5,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Drilling x3 Hole",
+          "ops": 5,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Thread - blue",
+          "ops": 5,
+          "companies": 4,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Adds set-up charge + per item price to apply ribbons. Includes ribbon (up to 500mm length - house colours only). x 2",
+          "ops": 4,
+          "companies": 2,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Hand perfect bound x 40",
+          "ops": 4,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand Saddle Stitch (NEEDS CREASING)",
+          "ops": 4,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Layflat Foldlays/hr (Child)",
+          "ops": 4,
+          "companies": 4,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Layflat Fusing (parent)",
+          "ops": 4,
+          "companies": 4,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Layflat Units (child)",
+          "ops": 4,
+          "companies": 4,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Light pink  (+$49.00)",
+          "ops": 4,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Oversewn DIFFICULT wrapped cover (loose ends)",
+          "ops": 4,
+          "companies": 4,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing folding 243x348mm Max Size Portrait @ 13",
+          "ops": 4,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing folding 243x348mm Max Size Portrait @ 14",
+          "ops": 4,
+          "companies": 4,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing folding 243x348mm Max Size Portrait @ 9",
+          "ops": 4,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Thread - dark green",
+          "ops": 4,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Thread - yellow",
+          "ops": 4,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Black Staples",
+          "ops": 3,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Chicago screws x 2",
+          "ops": 3,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "DO NOT USE -Section sewing folding 243x348mm Max Size Portrait @ 10",
+          "ops": 3,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand assembled covers",
+          "ops": 3,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing folding @ 11",
+          "ops": 3,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing folding @ 12",
+          "ops": 3,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing folding @ 7",
+          "ops": 3,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing folding 243x348mm Max Size Portrait @ 1",
+          "ops": 3,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing folding 243x348mm Max Size Portrait @ 15",
+          "ops": 3,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing folding 243x348mm Max Size Portrait @ 16",
+          "ops": 3,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Canary Yellow (+$49.00)",
+          "ops": 2,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Chicago screws x 8",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Dark Green (+$49.00)",
+          "ops": 2,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Fire Red (+$49.00)",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand perfect bound x 10",
+          "ops": 2,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Navy Blue (+$49.00)",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Salmon Pink (+$49.00)",
+          "ops": 2,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing folding @ 16",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing folding @ 5",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing folding @ 6",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing folding @ 8",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing folding @ 9",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing folding 243x348mm Max Size Portrait",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing folding 243x348mm Max Size Portrait @ 12",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing folding 243x348mm Max Size Portrait @ 17",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing folding 243x348mm Max Size Portrait @ 20",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing folding 243x348mm Max Size Portrait @ 21",
+          "ops": 2,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing folding 243x348mm Max Size Portrait @ 22",
+          "ops": 2,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing folding 243x348mm Max Size Portrait @ 26",
+          "ops": 2,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Thread - gold",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "12mm KNURLED BODIES NICKLE w/screws",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Aqua (+$49.00)",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "DO NOT USE -Section sewing folding 243x348mm Max Size Portrait @ 20",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "DO NOT USE -Section sewing folding 243x348mm Max Size Portrait @ 4",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand perfect bound x 5",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hot Pink (+$49.00)",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Multiple Paper Types - 440x350mm Max",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Orange (+$49.00)",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Purple (+$49.00)",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Saddle Sewn, Hand Tied Ends",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Saddle Sewn, Loose Ends",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing binding 230x312mm Max Size Portrait",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing folding @ 10",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing folding @ 13",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing folding @ 18",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing folding @ 19",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing folding @ 3",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing folding @ 4",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing folding 243x348mm Max Size Portrait @ 23",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section sewing folding 243x348mm Max Size Portrait @ 25",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Thread - dark blue",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Thread - grey",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Thread - light green",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Thread - purple",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        }
+      ],
+      "base_rate_current_pct": 26.3,
+      "base_rate_corrected_pct": 27.2
+    },
+    "Specialty Finishing": {
+      "total_ops": 84681,
+      "distinct_ops": 197,
+      "genuine_ops": 84243,
+      "misbundled_ops": 438,
+      "genuine_fraction_pct": 99.5,
+      "misbundled_to": {
+        "Design Services": 143,
+        "Hard Cover Books": 128,
+        "Embellishment": 104,
+        "Wide Format": 59,
+        "Soft Cover Books": 4
+      },
+      "polluted": false,
+      "op_assessment": [
+        {
+          "op": "Packaging",
+          "ops": 23855,
+          "companies": 2251,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "H&B Pre-coat",
+          "ops": 13987,
+          "companies": 1104,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Sapphire coat internal",
+          "ops": 6114,
+          "companies": 1315,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Includes local delivery by regular courier",
+          "ops": 5650,
+          "companies": 857,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Max height 500mm",
+          "ops": 4583,
+          "companies": 722,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Includes delivery by regular road freight",
+          "ops": 3043,
+          "companies": 697,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Precoat Internal House Stocks",
+          "ops": 3000,
+          "companies": 545,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Package Flat",
+          "ops": 2474,
+          "companies": 265,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Client to collect",
+          "ops": 1820,
+          "companies": 398,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Trim to size & Bulk pack",
+          "ops": 1719,
+          "companies": 9,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Harris Bruno Precoat - Inhouse",
+          "ops": 1556,
+          "companies": 412,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "NO Trimming",
+          "ops": 1519,
+          "companies": 127,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Cello",
+          "ops": 1200,
+          "companies": 306,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Trim and pack",
+          "ops": 1175,
+          "companies": 22,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Per unit finishing",
+          "ops": 1095,
+          "companies": 281,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Max height 360mm",
+          "ops": 890,
+          "companies": 306,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Harris & Bruno Postcoat - Aqueous (MIN 200gsm)",
+          "ops": 715,
+          "companies": 199,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Packing onto Pallets",
+          "ops": 570,
+          "companies": 33,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Multiplies with quantity.",
+          "ops": 520,
+          "companies": 173,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Includes delivery by overnight express",
+          "ops": 506,
+          "companies": 83,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Does not multiply with quantity.",
+          "ops": 414,
+          "companies": 132,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Round corners all sides",
+          "ops": 396,
+          "companies": 145,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Bulk Packing onto Pallets",
+          "ops": 392,
+          "companies": 12,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Drilling x 4",
+          "ops": 347,
+          "companies": 74,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "score and folded x1",
+          "ops": 311,
+          "companies": 147,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Additional Guillotine Final Book Trim\n",
+          "ops": 297,
+          "companies": 110,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "(blank)",
+          "ops": 283,
+          "companies": 128,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Custom Item per unit (1)",
+          "ops": 279,
+          "companies": 94,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Paper Banding",
+          "ops": 268,
+          "companies": 84,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Attach Strut",
+          "ops": 255,
+          "companies": 44,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Drilling x 1",
+          "ops": 244,
+          "companies": 96,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Finishing hand assembly",
+          "ops": 244,
+          "companies": 123,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Trim & Pack 250 per box",
+          "ops": 231,
+          "companies": 114,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Finishing hand asembly",
+          "ops": 228,
+          "companies": 117,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Max height 520mm",
+          "ops": 192,
+          "companies": 95,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Crease & Fold x1 Position",
+          "ops": 184,
+          "companies": 94,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Creasing or score x1",
+          "ops": 172,
+          "companies": 90,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Gloss",
+          "ops": 167,
+          "companies": 14,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Includes delivery by urgent courier",
+          "ops": 146,
+          "companies": 64,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Fuse back to back",
+          "ops": 140,
+          "companies": 57,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Includes delivery of proof and final job by regular road freight",
+          "ops": 139,
+          "companies": 44,
+          "assessment": "MIS-BUNDLED -> Design Services"
+        },
+        {
+          "op": "Tape application",
+          "ops": 135,
+          "companies": 71,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Job Hand Collation",
+          "ops": 133,
+          "companies": 42,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand tape x 1 Pieces",
+          "ops": 123,
+          "companies": 62,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Drilling x 2",
+          "ops": 121,
+          "companies": 41,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Perforated",
+          "ops": 117,
+          "companies": 36,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Drilling x 3",
+          "ops": 116,
+          "companies": 35,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Finishing hand aseembly",
+          "ops": 114,
+          "companies": 65,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Drilling",
+          "ops": 108,
+          "companies": 53,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "score and folded",
+          "ops": 105,
+          "companies": 68,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Harris & Bruno Postcoat - Aqueous",
+          "ops": 102,
+          "companies": 51,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Creasing or score x2",
+          "ops": 100,
+          "companies": 32,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Paper wrapping",
+          "ops": 98,
+          "companies": 9,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand Collate x 2",
+          "ops": 86,
+          "companies": 26,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand Foil / Deboss inhouse",
+          "ops": 84,
+          "companies": 45,
+          "assessment": "MIS-BUNDLED -> Embellishment"
+        },
+        {
+          "op": "Trim to size & Pack 250 per box",
+          "ops": 83,
+          "companies": 35,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Creasing or score x4",
+          "ops": 76,
+          "companies": 49,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Casebinding",
+          "ops": 73,
+          "companies": 33,
+          "assessment": "MIS-BUNDLED -> Hard Cover Books"
+        },
+        {
+          "op": "Crease & Fold x2 Positions",
+          "ops": 69,
+          "companies": 33,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Includes delivery by fast courier",
+          "ops": 66,
+          "companies": 36,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Crease/Fold",
+          "ops": 64,
+          "companies": 32,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand tape x 2 Pieces",
+          "ops": 63,
+          "companies": 39,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Attach A4 strut",
+          "ops": 61,
+          "companies": 23,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Anti-scuff matte",
+          "ops": 60,
+          "companies": 30,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Soft-touch",
+          "ops": 59,
+          "companies": 15,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Matte",
+          "ops": 57,
+          "companies": 37,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Adds set-up charge + custom per item price to wrap/hand casebind (time based).",
+          "ops": 55,
+          "companies": 21,
+          "assessment": "MIS-BUNDLED -> Hard Cover Books"
+        },
+        {
+          "op": "Hand tapex 1 Pieces",
+          "ops": 54,
+          "companies": 34,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand Collate x 1",
+          "ops": 52,
+          "companies": 26,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "None",
+          "ops": 42,
+          "companies": 10,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Crease & Fold x4 Positions",
+          "ops": 38,
+          "companies": 23,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand tapex 2 Pieces",
+          "ops": 36,
+          "companies": 26,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Corner:",
+          "ops": 31,
+          "companies": 19,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Application tape for decals",
+          "ops": 29,
+          "companies": 19,
+          "assessment": "MIS-BUNDLED -> Wide Format"
+        },
+        {
+          "op": "Crease & Fold x3 Positions",
+          "ops": 27,
+          "companies": 17,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Adds set-up charge + per magnet price to drill and insert. Includes magnets (10mm x 1.5mm standard magnet only).",
+          "ops": 24,
+          "companies": 19,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Eyelets",
+          "ops": 22,
+          "companies": 16,
+          "assessment": "MIS-BUNDLED -> Wide Format"
+        },
+        {
+          "op": "Round Corner x2 x 2",
+          "ops": 22,
+          "companies": 9,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Additional Guillotine Embellishment Pre-trim",
+          "ops": 20,
+          "companies": 10,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Creasing or score x3",
+          "ops": 20,
+          "companies": 17,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand tape x 4 Pieces",
+          "ops": 20,
+          "companies": 11,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Creasing or score x5",
+          "ops": 19,
+          "companies": 17,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Velcro",
+          "ops": 19,
+          "companies": 11,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Digital foil - Gold (SINGLE SIDE ONLY)",
+          "ops": 18,
+          "companies": 12,
+          "assessment": "MIS-BUNDLED -> Embellishment"
+        },
+        {
+          "op": "Hand Crease x3",
+          "ops": 18,
+          "companies": 13,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Die-cutting",
+          "ops": 16,
+          "companies": 10,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Roll & Packed in Tubes / 1",
+          "ops": 16,
+          "companies": 9,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand tape (Red Tape)",
+          "ops": 15,
+          "companies": 11,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Rounded corners",
+          "ops": 15,
+          "companies": 11,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Collation",
+          "ops": 14,
+          "companies": 9,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Corner cut x2 Corners",
+          "ops": 14,
+          "companies": 5,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Harris & Bruno Postcoat - UV (MIN 200gsm)",
+          "ops": 14,
+          "companies": 7,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand Collate x 4",
+          "ops": 13,
+          "companies": 7,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand Collate x 6",
+          "ops": 13,
+          "companies": 7,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Round corner x2",
+          "ops": 13,
+          "companies": 6,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Anti-scuff gloss",
+          "ops": 12,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Round Corner x2 x 4",
+          "ops": 12,
+          "companies": 9,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Adds setup charge + per-edge charge for metal edging boxes.",
+          "ops": 11,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Drilling x 5",
+          "ops": 11,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand Crease x1",
+          "ops": 11,
+          "companies": 9,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Maui Jim Certificate Packing",
+          "ops": 11,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Drilling x 6",
+          "ops": 10,
+          "companies": 5,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand Crease x2",
+          "ops": 10,
+          "companies": 10,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Roll & Packed in Tubes",
+          "ops": 10,
+          "companies": 5,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "silver celloglaze",
+          "ops": 10,
+          "companies": 5,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Adds set-up charge + per-corner charge to join edges of grooved boxes with heat-activated tape machine. x 4",
+          "ops": 9,
+          "companies": 4,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand tape x 3 Pieces",
+          "ops": 9,
+          "companies": 8,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand Collate x 3",
+          "ops": 8,
+          "companies": 5,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand Collate x 8",
+          "ops": 8,
+          "companies": 5,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Harris & Bruno Postcoat - UV",
+          "ops": 8,
+          "companies": 5,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Adds set-up charge + per unit perimeter charge. Excludes boards.",
+          "ops": 7,
+          "companies": 5,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand Collate x 5",
+          "ops": 7,
+          "companies": 5,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand tapex 10 Pieces",
+          "ops": 7,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Round Corner x2 x 1",
+          "ops": 7,
+          "companies": 4,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Adds set-up charge + per item price to apply ribbons. Includes ribbon (up to 500mm length - house colours only). x 1",
+          "ops": 6,
+          "companies": 5,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Diecut knife",
+          "ops": 6,
+          "companies": 6,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand Collate x 7",
+          "ops": 6,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand tapex 3 Pieces",
+          "ops": 6,
+          "companies": 6,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Printing",
+          "ops": 6,
+          "companies": 5,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Roll & Packed in Tubes / 2",
+          "ops": 6,
+          "companies": 4,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Rough Touch Matt Cello",
+          "ops": 6,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Round corner x1",
+          "ops": 6,
+          "companies": 5,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Attach large format strut",
+          "ops": 5,
+          "companies": 4,
+          "assessment": "MIS-BUNDLED -> Wide Format"
+        },
+        {
+          "op": "Hand Collate x 12",
+          "ops": 5,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand tape",
+          "ops": 5,
+          "companies": 4,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Paper Stock Draw",
+          "ops": 5,
+          "companies": 4,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "POLY Double Sided Tape 12mm x 50m",
+          "ops": 5,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "process number 1 @ 15",
+          "ops": 5,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Roll & Packed in Tubes / 5",
+          "ops": 5,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Sapphire coat external",
+          "ops": 5,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand Collate x 50",
+          "ops": 4,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand tape x 10 Pieces",
+          "ops": 4,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "process number 1 @ 80",
+          "ops": 4,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Proof, courier and price revision",
+          "ops": 4,
+          "companies": 4,
+          "assessment": "MIS-BUNDLED -> Design Services"
+        },
+        {
+          "op": "1 x Book Ribbon",
+          "ops": 3,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Adds set-up charge + per unit price to attach one D-ring. You must manually enter the item charge based on the D-ring size/colour.",
+          "ops": 3,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Crease & Fold x5 Positions",
+          "ops": 3,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Drilling x 8",
+          "ops": 3,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Fuse or mounting",
+          "ops": 3,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand Collate x 11",
+          "ops": 3,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand Lay Box Lid onto SwissQ",
+          "ops": 3,
+          "companies": 2,
+          "assessment": "MIS-BUNDLED -> Wide Format"
+        },
+        {
+          "op": "Layflat - collate",
+          "ops": 3,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "process number 1 @ 50",
+          "ops": 3,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "1MM Black Hat Elastic",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Biodegradable Matt Cello",
+          "ops": 2,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Custom Item per unit (2)",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Fusing online",
+          "ops": 2,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand Collate x 10",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand Collate x 14",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand Collate x 16",
+          "ops": 2,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand tape x 15 Pieces",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand tape x 5 Pieces",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Paper Draw",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Post Print pre Finish(section)",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "process number 1 @ 70",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Rainbow Celloglaze",
+          "ops": 2,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Roll & Packed in Tubes / 10",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Roll & Packed in Tubes / 4",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Section Hand Collation",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "MIS-BUNDLED -> Soft Cover Books"
+        },
+        {
+          "op": "Adds set-up charge + per-corner charge to join edges of grooved boxes with heat-activated tape machine. x 8",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Digital foil - Coloured (SINGLE SIDE ONLY)",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "MIS-BUNDLED -> Embellishment"
+        },
+        {
+          "op": "Digital foil - Silver (SINGLE SIDE ONLY)",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "MIS-BUNDLED -> Embellishment"
+        },
+        {
+          "op": "Drilling x 12",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Drilling x 9",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Existing Knife",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Extra - A4 Carton / Box",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand Collate x 0.7",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand Collate x 15",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand Collate x 19",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand Collate x 20",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand Collate x 22",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand Collate x 240",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand Collate x 28",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand Collate x 41",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand Collate x 55",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand Collate x 9",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand tapex 20 Pieces",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand tapex 22 Pieces",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand tapex 5 Pieces",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "left flat no folding",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Pre-Trim - Side operation",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "process number 1 @ 100",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "process number 1 @ 125",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "process number 1 @ 160",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "process number 1 @ 165",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "process number 1 @ 20",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "process number 1 @ 200",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "process number 1 @ 30",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "process number 1 @ 349",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "process number 1 @ 35",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "process number 1 @ 400",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "process number 1 @ 405",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "process number 1 @ 897.2",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Roll & Packed in Tubes / 11",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Roll & Packed in Tubes / 150",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Roll & Packed in Tubes / 69",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Roll & Packed in Tubes / 7",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        }
+      ],
+      "base_rate_current_pct": 90.2,
+      "base_rate_corrected_pct": 97.5
+    },
+    "Wide Format": {
+      "total_ops": 48134,
+      "distinct_ops": 78,
+      "genuine_ops": 47857,
+      "misbundled_ops": 277,
+      "genuine_fraction_pct": 99.4,
+      "misbundled_to": {
+        "Specialty Finishing": 277
+      },
+      "polluted": false,
+      "op_assessment": [
+        {
+          "op": "Printing",
+          "ops": 12157,
+          "companies": 1273,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Paper Stock Draw",
+          "ops": 6387,
+          "companies": 604,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Zund large format cutting",
+          "ops": 6059,
+          "companies": 796,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Ink Stock Draw",
+          "ops": 5774,
+          "companies": 581,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Paper Draw",
+          "ops": 4174,
+          "companies": 666,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Ink Draw",
+          "ops": 4068,
+          "companies": 647,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Guillotining",
+          "ops": 2842,
+          "companies": 518,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Guillotine",
+          "ops": 2689,
+          "companies": 377,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Matt laminate 6 yr",
+          "ops": 439,
+          "companies": 16,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Digital top-cut to shape",
+          "ops": 351,
+          "companies": 149,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Clear Plastic Rails / Supply Only + hanging kit",
+          "ops": 328,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "SwissQ Spot Gloss Hi-Build Varnish",
+          "ops": 318,
+          "companies": 101,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Poles with metal eyelets / Supply Only + hanging kit",
+          "ops": 297,
+          "companies": 4,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand Lay onto SwissQ",
+          "ops": 236,
+          "companies": 84,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Adds laminate setup + labour charge per m2. ***Excludes media - add chosen laminate in separate section @ same size as underlying media.",
+          "ops": 181,
+          "companies": 40,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Application tape for decals",
+          "ops": 180,
+          "companies": 74,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Groove cuts",
+          "ops": 179,
+          "companies": 45,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Guillotining Pre-Trim",
+          "ops": 156,
+          "companies": 81,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Adds laminate setup + labour charge per m2. Excludes media.",
+          "ops": 138,
+          "companies": 51,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Guillotine Pre-Trim",
+          "ops": 138,
+          "companies": 57,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Pull up banner silver base economy",
+          "ops": 117,
+          "companies": 54,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "SwissQ Spot Gloss Varnish",
+          "ops": 117,
+          "companies": 56,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Zund large format bevel cutting",
+          "ops": 112,
+          "companies": 58,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Mounting + Double sided adhesive film",
+          "ops": 94,
+          "companies": 41,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Zund cutting ( foam time )",
+          "ops": 53,
+          "companies": 25,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Mounting only please add mount film",
+          "ops": 51,
+          "companies": 26,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Contour cut decal - moderate",
+          "ops": 41,
+          "companies": 23,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Hand Lay Box Lid onto SwissQ",
+          "ops": 34,
+          "companies": 20,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "(blank)",
+          "ops": 25,
+          "companies": 17,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Contour cut decal - simple",
+          "ops": 25,
+          "companies": 15,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "LF Zund simple cut to shape",
+          "ops": 25,
+          "companies": 18,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Matt laminate",
+          "ops": 25,
+          "companies": 17,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Zund foam cut ( length )",
+          "ops": 23,
+          "companies": 17,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "mounting 2mm screenboard",
+          "ops": 19,
+          "companies": 5,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Gloss laminate",
+          "ops": 18,
+          "companies": 10,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Zund routing ( metal length)",
+          "ops": 17,
+          "companies": 6,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Edge Tape Black 10mm",
+          "ops": 16,
+          "companies": 8,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Clear Aluminium Rails / Supply Only + hanging kit",
+          "ops": 14,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Edge Tape Black 19mm",
+          "ops": 13,
+          "companies": 5,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Finishing hand aseembly",
+          "ops": 13,
+          "companies": 7,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "TEST Zund (Parent)",
+          "ops": 12,
+          "companies": 7,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "TEST Zund Cutting (Child Section)",
+          "ops": 12,
+          "companies": 7,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "TEST Zund Interm Setup (Child Section)",
+          "ops": 12,
+          "companies": 7,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Laminate no stock",
+          "ops": 11,
+          "companies": 8,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "mounting foamcore white 5mm",
+          "ops": 11,
+          "companies": 6,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Profile Cut",
+          "ops": 11,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Permanent matte laminate",
+          "ops": 10,
+          "companies": 7,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Floor Over Laminate (R9 Slip Rating)",
+          "ops": 9,
+          "companies": 8,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "large format magnetic film",
+          "ops": 7,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "mounting kappa 5mm",
+          "ops": 7,
+          "companies": 5,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Unit cost - Posters",
+          "ops": 7,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Contour cut decal - intricate",
+          "ops": 6,
+          "companies": 5,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Mounting kappaboard",
+          "ops": 6,
+          "companies": 3,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "mounting PVC foam 3mm",
+          "ops": 6,
+          "companies": 3,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Zund routing ( wood time)",
+          "ops": 6,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Mini-Zund (Parent)",
+          "ops": 5,
+          "companies": 4,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Mini-Zund Cutting (Child Section)",
+          "ops": 5,
+          "companies": 4,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Mini-Zund Interm Setup (Child Section)",
+          "ops": 5,
+          "companies": 4,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Adds set-up charge + per-eyelet charge.  x 2",
+          "ops": 4,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Adds set-up charge + per-eyelet charge.  x 4",
+          "ops": 4,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "High res inkjet print",
+          "ops": 4,
+          "companies": 4,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Adds set-up charge + per-eyelet charge. x 4",
+          "ops": 3,
+          "companies": 2,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Mounting foamcore 10mm",
+          "ops": 3,
+          "companies": 3,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "White Board Lamination",
+          "ops": 3,
+          "companies": 3,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Zund Cutting",
+          "ops": 3,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Zund routing ( metal time)",
+          "ops": 3,
+          "companies": 3,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Adds set-up charge + per-eyelet charge.  x 6",
+          "ops": 2,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Clear Plastic Rails / Supply Only",
+          "ops": 2,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Computer cutting vinyl + Weeding + Tape application",
+          "ops": 2,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "mounting foamcore black 5mm",
+          "ops": 2,
+          "companies": 2,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Adds set-up charge + per-eyelet charge.  x 3",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Aluminium Rails / Supply Only + hanging kit",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "BETA Edge Printing",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "foam with aluminium layer",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Mounting + Yupo electrostat",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "Permanent gloss laminate",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "MIS-BUNDLED -> Specialty Finishing"
+        },
+        {
+          "op": "SwissQ Priming",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        },
+        {
+          "op": "Vinyl Cut - Time",
+          "ops": 1,
+          "companies": 1,
+          "assessment": "GENUINE"
+        }
+      ],
+      "base_rate_current_pct": 36.6,
+      "base_rate_corrected_pct": 37.3
+    }
+  },
+  "polluted_flags": [
+    "Embellishment",
+    "Hard Cover Books"
+  ],
+  "base_rates": {
+    "universe_current": 2174,
+    "universe_corrected": 2200,
+    "current": {
+      "Design Services": 85.3,
+      "Display / Installation": 0.2,
+      "Display/Installation": 2.6,
+      "Embellishment": 34.8,
+      "Flat Sheets": 89.4,
+      "Hard Cover Books": 13.8,
+      "Soft Cover Books": 26.3,
+      "Specialty Finishing": 90.2,
+      "Wide Format": 36.6
+    },
+    "corrected": {
+      "Design Services": 94.2,
+      "Display/Installation": 3.2,
+      "Embellishment": 15.3,
+      "Flat Sheets": 85.5,
+      "Hard Cover Books": 8.3,
+      "Soft Cover Books": 27.2,
+      "Specialty Finishing": 97.5,
+      "Wide Format": 37.3
+    }
+  },
+  "rules_surviving_25pct_floor": {
+    "current_count": 42,
+    "corrected_count": 37,
+    "corrected_rules": [
+      {
+        "from": "Hard Cover Books",
+        "to": "Specialty Finishing",
+        "conf": 100.0,
+        "support": 182,
+        "lift": 1.03
+      },
+      {
+        "from": "Embellishment",
+        "to": "Specialty Finishing",
+        "conf": 99.7,
+        "support": 335,
+        "lift": 1.02
+      },
+      {
+        "from": "Soft Cover Books",
+        "to": "Flat Sheets",
+        "conf": 99.2,
+        "support": 593,
+        "lift": 1.16
+      },
+      {
+        "from": "Soft Cover Books",
+        "to": "Specialty Finishing",
+        "conf": 99.2,
+        "support": 593,
+        "lift": 1.02
+      },
+      {
+        "from": "Embellishment",
+        "to": "Design Services",
+        "conf": 99.1,
+        "support": 333,
+        "lift": 1.05
+      },
+      {
+        "from": "Embellishment",
+        "to": "Flat Sheets",
+        "conf": 99.1,
+        "support": 333,
+        "lift": 1.16
+      },
+      {
+        "from": "Soft Cover Books",
+        "to": "Design Services",
+        "conf": 99.0,
+        "support": 592,
+        "lift": 1.05
+      },
+      {
+        "from": "Wide Format",
+        "to": "Specialty Finishing",
+        "conf": 99.0,
+        "support": 812,
+        "lift": 1.02
+      },
+      {
+        "from": "Flat Sheets",
+        "to": "Specialty Finishing",
+        "conf": 98.8,
+        "support": 1859,
+        "lift": 1.01
+      },
+      {
+        "from": "Display/Installation",
+        "to": "Specialty Finishing",
+        "conf": 98.6,
+        "support": 70,
+        "lift": 1.01
+      },
+      {
+        "from": "Wide Format",
+        "to": "Design Services",
+        "conf": 98.2,
+        "support": 805,
+        "lift": 1.04
+      },
+      {
+        "from": "Hard Cover Books",
+        "to": "Design Services",
+        "conf": 97.8,
+        "support": 178,
+        "lift": 1.04
+      },
+      {
+        "from": "Hard Cover Books",
+        "to": "Flat Sheets",
+        "conf": 97.8,
+        "support": 178,
+        "lift": 1.14
+      },
+      {
+        "from": "Design Services",
+        "to": "Specialty Finishing",
+        "conf": 97.7,
+        "support": 2025,
+        "lift": 1.0
+      },
+      {
+        "from": "Flat Sheets",
+        "to": "Design Services",
+        "conf": 96.7,
+        "support": 1820,
+        "lift": 1.03
+      },
+      {
+        "from": "Display/Installation",
+        "to": "Design Services",
+        "conf": 95.8,
+        "support": 68,
+        "lift": 1.02
+      },
+      {
+        "from": "Specialty Finishing",
+        "to": "Design Services",
+        "conf": 94.4,
+        "support": 2025,
+        "lift": 1.0
+      },
+      {
+        "from": "Display/Installation",
+        "to": "Flat Sheets",
+        "conf": 88.7,
+        "support": 63,
+        "lift": 1.04
+      },
+      {
+        "from": "Design Services",
+        "to": "Flat Sheets",
+        "conf": 87.8,
+        "support": 1820,
+        "lift": 1.03
+      },
+      {
+        "from": "Specialty Finishing",
+        "to": "Flat Sheets",
+        "conf": 86.7,
+        "support": 1859,
+        "lift": 1.01
+      },
+      {
+        "from": "Hard Cover Books",
+        "to": "Wide Format",
+        "conf": 84.1,
+        "support": 153,
+        "lift": 2.26
+      },
+      {
+        "from": "Display/Installation",
+        "to": "Wide Format",
+        "conf": 76.1,
+        "support": 54,
+        "lift": 2.04
+      },
+      {
+        "from": "Hard Cover Books",
+        "to": "Soft Cover Books",
+        "conf": 75.3,
+        "support": 137,
+        "lift": 2.77
+      },
+      {
+        "from": "Hard Cover Books",
+        "to": "Embellishment",
+        "conf": 60.4,
+        "support": 110,
+        "lift": 3.96
+      },
+      {
+        "from": "Embellishment",
+        "to": "Wide Format",
+        "conf": 57.7,
+        "support": 194,
+        "lift": 1.55
+      },
+      {
+        "from": "Embellishment",
+        "to": "Soft Cover Books",
+        "conf": 55.1,
+        "support": 185,
+        "lift": 2.03
+      },
+      {
+        "from": "Soft Cover Books",
+        "to": "Wide Format",
+        "conf": 52.0,
+        "support": 311,
+        "lift": 1.4
+      },
+      {
+        "from": "Display/Installation",
+        "to": "Embellishment",
+        "conf": 46.5,
+        "support": 33,
+        "lift": 3.04
+      },
+      {
+        "from": "Display/Installation",
+        "to": "Soft Cover Books",
+        "conf": 45.1,
+        "support": 32,
+        "lift": 1.66
+      },
+      {
+        "from": "Design Services",
+        "to": "Wide Format",
+        "conf": 38.8,
+        "support": 805,
+        "lift": 1.04
+      },
+      {
+        "from": "Specialty Finishing",
+        "to": "Wide Format",
+        "conf": 37.9,
+        "support": 812,
+        "lift": 1.02
+      },
+      {
+        "from": "Wide Format",
+        "to": "Soft Cover Books",
+        "conf": 37.9,
+        "support": 311,
+        "lift": 1.4
+      },
+      {
+        "from": "Embellishment",
+        "to": "Hard Cover Books",
+        "conf": 32.7,
+        "support": 110,
+        "lift": 3.96
+      },
+      {
+        "from": "Flat Sheets",
+        "to": "Soft Cover Books",
+        "conf": 31.5,
+        "support": 593,
+        "lift": 1.16
+      },
+      {
+        "from": "Soft Cover Books",
+        "to": "Embellishment",
+        "conf": 30.9,
+        "support": 185,
+        "lift": 2.03
+      },
+      {
+        "from": "Design Services",
+        "to": "Soft Cover Books",
+        "conf": 28.6,
+        "support": 592,
+        "lift": 1.05
+      },
+      {
+        "from": "Specialty Finishing",
+        "to": "Soft Cover Books",
+        "conf": 27.7,
+        "support": 593,
+        "lift": 1.02
+      }
+    ]
+  }
+}

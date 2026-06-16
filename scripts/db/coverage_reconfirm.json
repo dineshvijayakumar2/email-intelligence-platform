@@ -1,0 +1,118 @@
+{
+  "window": [
+    "2025-12-01",
+    "2026-05-15"
+  ],
+  "near_silent_max": 3,
+  "revenue_method": "max(sell_ex_tax) per quote_no across revisions",
+  "baseline_supplied": {
+    "Linda": {
+      "won_rev_pct": 99.6
+    },
+    "Ehab": {
+      "won_rev_pct": 92.0
+    },
+    "Nic": {
+      "quote_pct": 42.0,
+      "no_qnum_pct": 65.0
+    },
+    "Kenneth": {
+      "quote_pct": 25.0,
+      "no_qnum_pct": 79.0
+    }
+  },
+  "part1_2_linda_ehab": {
+    "Linda": {
+      "distinct_quotes": 935,
+      "linked": 494,
+      "quote_coverage_pct": 52.8,
+      "won_quotes": 423,
+      "won_linked": 232,
+      "won_quote_coverage_pct": 54.8,
+      "won_recoverable": 395,
+      "lost_quotes": 512,
+      "lost_linked": 262,
+      "lost_quote_coverage_pct": 51.2,
+      "won_revenue_total": 912034.35,
+      "won_revenue_linked": 579079.35,
+      "won_revenue_coverage_pct": 63.5,
+      "won_revenue_recoverable": 895573.35,
+      "won_revenue_recoverable_pct": 98.2,
+      "cell_linked_won": 232,
+      "cell_linked_lost": 262
+    },
+    "Ehab": {
+      "distinct_quotes": 1219,
+      "linked": 675,
+      "quote_coverage_pct": 55.4,
+      "won_quotes": 397,
+      "won_linked": 254,
+      "won_quote_coverage_pct": 64.0,
+      "won_recoverable": 312,
+      "lost_quotes": 822,
+      "lost_linked": 421,
+      "lost_quote_coverage_pct": 51.2,
+      "won_revenue_total": 733059.61,
+      "won_revenue_linked": 521124.06,
+      "won_revenue_coverage_pct": 71.1,
+      "won_revenue_recoverable": 590665.51,
+      "won_revenue_recoverable_pct": 80.6,
+      "cell_linked_won": 254,
+      "cell_linked_lost": 421
+    }
+  },
+  "part3_nic_kenneth": {
+    "Nic": {
+      "distinct_quotes": 658,
+      "linked": 118,
+      "quote_coverage_pct": 17.9,
+      "unlinked": 540,
+      "no_qnum_in_any_email": 152,
+      "no_qnum_pct_of_unlinked": 28.1,
+      "num_customers": 195,
+      "mailbox_split_counts": {
+        "own_named": 14329,
+        "hello": 10215,
+        "other": 40563,
+        "total": 65107
+      },
+      "mailbox_split_pct": {
+        "own_named_pct": 22.0,
+        "hello_pct": 15.7,
+        "other_pct": 62.3
+      },
+      "unlinked_classification": {
+        "qnum_in_email": 388,
+        "present_no_qnum": 104,
+        "near_silent": 41,
+        "unresolved": 7
+      }
+    },
+    "Kenneth": {
+      "distinct_quotes": 350,
+      "linked": 21,
+      "quote_coverage_pct": 6.0,
+      "unlinked": 329,
+      "no_qnum_in_any_email": 282,
+      "no_qnum_pct_of_unlinked": 85.7,
+      "num_customers": 93,
+      "mailbox_split_counts": {
+        "own_named": 14664,
+        "hello": 10065,
+        "other": 46668,
+        "total": 71397
+      },
+      "mailbox_split_pct": {
+        "own_named_pct": 20.5,
+        "hello_pct": 14.1,
+        "other_pct": 65.4
+      },
+      "unlinked_classification": {
+        "qnum_in_email": 47,
+        "present_no_qnum": 244,
+        "near_silent": 28,
+        "unresolved": 10
+      }
+    }
+  }
+}

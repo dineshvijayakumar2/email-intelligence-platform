@@ -1,0 +1,59 @@
+{
+  "generated_at": "2026-06-03T11:54:36.142725+00:00",
+  "dry_run": false,
+  "qb_customers": [
+    {
+      "id": "c83f1064-4d56-4b79-8a5b-9badd2cb5bd8",
+      "field": "matched_company_id",
+      "old": "97f176bb-837a-414b-a642-eff6df050e3c"
+    },
+    {
+      "id": "fcfeabd4-12a6-49f7-a65a-63fc38fa97ed",
+      "field": "matched_company_id",
+      "old": null
+    },
+    {
+      "id": "ca48fb0a-d0c2-4336-8342-e2382f362bf6",
+      "field": "matched_company_id",
+      "old": "699e984f-6eef-48e8-90ad-a0945aa23097"
+    },
+    {
+      "id": "86656286-6699-4cab-a4ec-9d4505601a36",
+      "field": "matched_company_id",
+      "old": null
+    },
+    {
+      "id": "e90b22f1-932e-42a5-b5ff-b0babb365049",
+      "field": "matched_company_id",
+      "old": "a8d221b3-f92e-4b53-ba84-bb8e994e5cf7"
+    },
+    {
+      "id": "cf8f48b3-e5fe-4642-b326-3d1d1d5fff47",
+      "field": "matched_company_id",
+      "old": null
+    }
+  ],
+  "companies": [
+    {
+      "id": "97f176bb-837a-414b-a642-eff6df050e3c",
+      "old_qb_customer_id": "34343",
+      "old_qb_customer_code": "C21323",
+      "old_qb_match_method": "email_lookup",
+      "old_qb_matched_at": "2026-06-03T07:32:49.841723+00:00"
+    },
+    {
+      "id": "699e984f-6eef-48e8-90ad-a0945aa23097",
+      "old_qb_customer_id": "33854",
+      "old_qb_customer_code": "C17428",
+      "old_qb_match_method": "email_lookup",
+      "old_qb_matched_at": "2026-06-03T07:32:49.841723+00:00"
+    },
+    {
+      "id": "a8d221b3-f92e-4b53-ba84-bb8e994e5cf7",
+      "old_qb_customer_id": "30694",
+      "old_qb_customer_code": "C17584",
+      "old_qb_match_method": "email_lookup",
+      "old_qb_matched_at": "2026-06-03T07:32:49.841723+00:00"
+    }
+  ]
+}

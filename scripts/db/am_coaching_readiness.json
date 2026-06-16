@@ -1,0 +1,987 @@
+{
+  "task": "12.3 AM-coaching data-readiness audit",
+  "corpus": {
+    "ai_rows": 299069,
+    "emails_total": 198479,
+    "general_enquiry_pct": 53.0,
+    "has_buying_signal_pct": 0.081,
+    "key_topics_nonempty_pct": 0.432,
+    "sentiment_score_nonzero_pct": 0.095
+  },
+  "data_quality_findings": [
+    {
+      "finding": "thread_status.mailbox_id is 86% NULL (silent-zero)",
+      "detail": "66,010 thread_status rows; only 9,269 carry a mailbox_id (all Linda's box). Any per-AM metric read straight off thread_status.mailbox_id is zero for 3 of 4 mailbox AMs. Attribute via canonical_thread_id instead.",
+      "impact": "would have fabricated 'no thread data' for Nic/Ehab/Kenneth"
+    },
+    {
+      "finding": "buying-signal & key_topics effectively empty",
+      "detail": "has_buying_signal true on 243/299,069 (0.08%); key_topics non-empty on 1,292 (0.43%).",
+      "impact": "tone/topic/buying-signal coaching needs fresh extraction, not the existing columns"
+    },
+    {
+      "finding": "sentiment_score effectively all-zero; categorical sentiment ~neutral-degenerate",
+      "detail": "sentiment_score non-zero on 283/299,069; neutral share 72%.",
+      "impact": "sentiment-trajectory not buildable from current data (low ROI to backfill)"
+    },
+    {
+      "finding": "intent dominated by general_enquiry catch-all",
+      "detail": "general_enquiry 53% of AI rows; intent non-null 81%.",
+      "impact": "intent-mix coaching is coarse until the catch-all is re-classified"
+    },
+    {
+      "finding": "Mary Serratore-Howe & Peter Musarra have no mailbox",
+      "detail": "no email-derived signal exists for them at all; QB book 104 / 327 companies, quotes 586 / 29 in window.",
+      "impact": "cannot be coached on any email behaviour; QB-outcome coaching only"
+    },
+    {
+      "finding": "Ehab mailbox trails ~3 weeks; response-metric population uneven",
+      "detail": "Ehab last email 2026-05-21 (others to 06-12). email_response_metrics population ranges widely across AMs (Nic notably low) \u2014 paired-reply metrics are partial.",
+      "impact": "recency-sensitive comparisons need a common cut-off; latency coverage varies"
+    }
+  ],
+  "generated_window_quotes": [
+    "2025-12-01",
+    "2026-05-15"
+  ],
+  "today": "2026-06-12",
+  "method": {
+    "am_email_attribution": "emails.mailbox_id -> mailboxes.user_id -> user_profiles.name (suffixed)",
+    "am_quote_attribution": "qb_quotes.quote_am_name (no suffix)",
+    "structural_constraint": "only 4 of 6 target AMs have mailboxes; Mary/Peter email signal absent by construction",
+    "thresholds": {
+      "comparison_min_emails": 5000,
+      "stale_if_last_before": "2026-05-12"
+    },
+    "egress": "all aggregates server-side via throwaway RPCs; small jsonb only"
+  },
+  "mailbox_classification": {
+    "5f3afeb3-a5f7-44b8-b657-ec972c92911d": {
+      "display": "Nic Doyle | Carbon8",
+      "am_key": "Nic Doyle"
+    },
+    "71ebdbc8-c3ca-4802-942e-948975c736ea": {
+      "display": "Jeff Love | Carbon8",
+      "am_key": "__other__"
+    },
+    "e1abc287-805b-4cee-8f95-0b47e1cd8f99": {
+      "display": "Linda D'Arcy | Carbon8",
+      "am_key": "Linda D'Arcy"
+    },
+    "c1157f56-79a0-4f0b-9dcf-2db257f0d5c4": {
+      "display": "Hello (shared)",
+      "am_key": "__shared_hello__"
+    },
+    "1332eba5-9121-4b55-91db-a37dd81d5d85": {
+      "display": "Kenneth Beck-Pedersen | Carbon8",
+      "am_key": "Kenneth Beck-Pedersen"
+    },
+    "92eba92f-b6be-4fbf-8c49-9f3b7c72ea74": {
+      "display": "Ehab Kamel | Carbon8",
+      "am_key": "Ehab Kamel"
+    },
+    "3e09b3d0-5fb2-4499-819f-cc5f0c35b94e": {
+      "display": "Production Department | Carbon8",
+      "am_key": "__other__"
+    }
+  },
+  "am_records": {
+    "Nic Doyle": {
+      "is_target_am": true,
+      "has_mailbox": true,
+      "mailbox_count": 1,
+      "coverage": {
+        "emails_total": 24393,
+        "outbound": 11017,
+        "inbound": 13376,
+        "distinct_companies": 851,
+        "distinct_threads": 9956,
+        "date_first": "2018-06-01",
+        "date_last": "2026-06-12",
+        "last90_emails": 8416,
+        "last30_emails": 2708,
+        "pct_classified": 99.9,
+        "pct_intent_nonnull": 83.6,
+        "pct_threaded": 100.0,
+        "pct_threading_header": 60.0,
+        "pct_company_linked": 98.6,
+        "evenness": {
+          "active_months": 48,
+          "cv": 1.89,
+          "first": "2018-06",
+          "last": "2026-06",
+          "min_month": 1,
+          "max_month": 3001
+        }
+      },
+      "structural": {
+        "initiation": {
+          "computable": true,
+          "basis": "emails.is_outbound + canonical_thread_id (first-in-thread direction)",
+          "population_pct": 100.0
+        },
+        "response_latency": {
+          "computable": true,
+          "basis": "email_response_metrics (response_time_seconds, business-hours variant)",
+          "rows": 1001,
+          "pct_of_inbound": 7.5,
+          "bh_population_pct": 100.0
+        },
+        "thread_depth_exchange": {
+          "computable": true,
+          "basis": "emails.canonical_thread_id (emails-per-thread, two-sided exchange). NOT thread_status (mailbox_id 86% NULL).",
+          "threads": 9639,
+          "multi_message_pct": 39.7,
+          "two_sided_exchange_pct": 26.5,
+          "avg_emails_per_thread": 2.51,
+          "median_emails_per_thread": 1.0
+        },
+        "follow_up_cadence": {
+          "computable": true,
+          "basis": "outbound emails over time per thread/contact (derived from sent_date)",
+          "population_pct": 100.0
+        },
+        "resolution": {
+          "computable": true,
+          "basis": "thread_status.status attributed via canonical_thread_id -> plurality mailbox (thread_status.mailbox_id unusable). Status meaningful but ~61% 'dropped' corpus-wide => likely stale, recompute before coaching on it.",
+          "threads_with_status_row": 2420,
+          "status_coverage_of_threads_pct": 25.1,
+          "status_population_pct": 100.0,
+          "status_dist": {
+            "urgent": 355,
+            "dropped": 9,
+            "ongoing": 132,
+            "complete": 230,
+            "escalation": 64,
+            "awaiting_response": 465,
+            "revenue_opportunity": 40,
+            "awaiting_our_response": 1125
+          }
+        }
+      },
+      "content": {
+        "ai_rows": 24364,
+        "intent_nonnull_pct": 83.7,
+        "general_enquiry_pct": 52.3,
+        "sentiment_nonnull_pct": 83.7,
+        "sentiment_neutral_pct": 73.7,
+        "sentiment_score_nonzero_pct": 0.0,
+        "has_buying_signal_pct": 0.1,
+        "business_signal_pct": 38.9,
+        "urgency_nonnull_pct": 83.7,
+        "key_topics_nonempty_pct": 0.3,
+        "thread_role_nonnull_pct": 0.2
+      },
+      "outcome": {
+        "qb_book_companies": 2072,
+        "quotes": {
+          "won": 264,
+          "lost": 394,
+          "linked": 337,
+          "quotes": 658,
+          "won_value": 449179,
+          "won_linked": 163,
+          "won_value_linked": 279829
+        }
+      },
+      "readiness": {
+        "tier": "READY-WITH-CAVEATS",
+        "reason": "uneven (CV 1.89)",
+        "comparison_ready": true
+      }
+    },
+    "Linda D'Arcy": {
+      "is_target_am": true,
+      "has_mailbox": true,
+      "mailbox_count": 1,
+      "coverage": {
+        "emails_total": 39878,
+        "outbound": 17395,
+        "inbound": 22483,
+        "distinct_companies": 716,
+        "distinct_threads": 13446,
+        "date_first": "2023-09-03",
+        "date_last": "2026-06-12",
+        "last90_emails": 14623,
+        "last30_emails": 4564,
+        "pct_classified": 100.0,
+        "pct_intent_nonnull": 91.7,
+        "pct_threaded": 99.9,
+        "pct_threading_header": 48.4,
+        "pct_company_linked": 99.3,
+        "evenness": {
+          "active_months": 34,
+          "cv": 1.42,
+          "first": "2023-09",
+          "last": "2026-06",
+          "min_month": 35,
+          "max_month": 5035
+        }
+      },
+      "structural": {
+        "initiation": {
+          "computable": true,
+          "basis": "emails.is_outbound + canonical_thread_id (first-in-thread direction)",
+          "population_pct": 99.9
+        },
+        "response_latency": {
+          "computable": true,
+          "basis": "email_response_metrics (response_time_seconds, business-hours variant)",
+          "rows": 10767,
+          "pct_of_inbound": 47.9,
+          "bh_population_pct": 100.0
+        },
+        "thread_depth_exchange": {
+          "computable": true,
+          "basis": "emails.canonical_thread_id (emails-per-thread, two-sided exchange). NOT thread_status (mailbox_id 86% NULL).",
+          "threads": 13446,
+          "multi_message_pct": 53.2,
+          "two_sided_exchange_pct": 37.0,
+          "avg_emails_per_thread": 2.96,
+          "median_emails_per_thread": 2.0
+        },
+        "follow_up_cadence": {
+          "computable": true,
+          "basis": "outbound emails over time per thread/contact (derived from sent_date)",
+          "population_pct": 99.9
+        },
+        "resolution": {
+          "computable": true,
+          "basis": "thread_status.status attributed via canonical_thread_id -> plurality mailbox (thread_status.mailbox_id unusable). Status meaningful but ~61% 'dropped' corpus-wide => likely stale, recompute before coaching on it.",
+          "threads_with_status_row": 12522,
+          "status_coverage_of_threads_pct": 93.1,
+          "status_population_pct": 100.0,
+          "status_dist": {
+            "urgent": 645,
+            "closing": 2,
+            "dropped": 8253,
+            "ongoing": 272,
+            "overdue": 928,
+            "complete": 337,
+            "escalation": 202,
+            "awaiting_response": 822,
+            "revenue_opportunity": 78,
+            "awaiting_our_response": 983
+          }
+        }
+      },
+      "content": {
+        "ai_rows": 39872,
+        "intent_nonnull_pct": 91.7,
+        "general_enquiry_pct": 54.2,
+        "sentiment_nonnull_pct": 91.7,
+        "sentiment_neutral_pct": 76.9,
+        "sentiment_score_nonzero_pct": 0.0,
+        "has_buying_signal_pct": 0.0,
+        "business_signal_pct": 48.1,
+        "urgency_nonnull_pct": 91.7,
+        "key_topics_nonempty_pct": 0.1,
+        "thread_role_nonnull_pct": 0.1
+      },
+      "outcome": {
+        "qb_book_companies": 454,
+        "quotes": {
+          "won": 424,
+          "lost": 512,
+          "linked": 498,
+          "quotes": 936,
+          "won_value": 913180,
+          "won_linked": 233,
+          "won_value_linked": 582245
+        }
+      },
+      "readiness": {
+        "tier": "READY-WITH-CAVEATS",
+        "reason": "uneven (CV 1.42)",
+        "comparison_ready": true
+      }
+    },
+    "Ehab Kamel": {
+      "is_target_am": true,
+      "has_mailbox": true,
+      "mailbox_count": 1,
+      "coverage": {
+        "emails_total": 48506,
+        "outbound": 20710,
+        "inbound": 27796,
+        "distinct_companies": 987,
+        "distinct_threads": 15444,
+        "date_first": "2022-08-02",
+        "date_last": "2026-05-21",
+        "last90_emails": 4632,
+        "last30_emails": 598,
+        "pct_classified": 100.0,
+        "pct_intent_nonnull": 80.6,
+        "pct_threaded": 100.0,
+        "pct_threading_header": 63.4,
+        "pct_company_linked": 96.2,
+        "evenness": {
+          "active_months": 46,
+          "cv": 1.14,
+          "first": "2022-08",
+          "last": "2026-05",
+          "min_month": 4,
+          "max_month": 3495
+        }
+      },
+      "structural": {
+        "initiation": {
+          "computable": true,
+          "basis": "emails.is_outbound + canonical_thread_id (first-in-thread direction)",
+          "population_pct": 100.0
+        },
+        "response_latency": {
+          "computable": true,
+          "basis": "email_response_metrics (response_time_seconds, business-hours variant)",
+          "rows": 16011,
+          "pct_of_inbound": 57.6,
+          "bh_population_pct": 99.9
+        },
+        "thread_depth_exchange": {
+          "computable": true,
+          "basis": "emails.canonical_thread_id (emails-per-thread, two-sided exchange). NOT thread_status (mailbox_id 86% NULL).",
+          "threads": 15347,
+          "multi_message_pct": 49.8,
+          "two_sided_exchange_pct": 34.3,
+          "avg_emails_per_thread": 3.19,
+          "median_emails_per_thread": 1.0
+        },
+        "follow_up_cadence": {
+          "computable": true,
+          "basis": "outbound emails over time per thread/contact (derived from sent_date)",
+          "population_pct": 100.0
+        },
+        "resolution": {
+          "computable": true,
+          "basis": "thread_status.status attributed via canonical_thread_id -> plurality mailbox (thread_status.mailbox_id unusable). Status meaningful but ~61% 'dropped' corpus-wide => likely stale, recompute before coaching on it.",
+          "threads_with_status_row": 10251,
+          "status_coverage_of_threads_pct": 66.8,
+          "status_population_pct": 100.0,
+          "status_dist": {
+            "urgent": 336,
+            "closing": 2,
+            "dropped": 8417,
+            "ongoing": 150,
+            "overdue": 446,
+            "complete": 16,
+            "escalation": 110,
+            "awaiting_response": 504,
+            "revenue_opportunity": 35,
+            "awaiting_our_response": 235
+          }
+        }
+      },
+      "content": {
+        "ai_rows": 48506,
+        "intent_nonnull_pct": 80.6,
+        "general_enquiry_pct": 42.0,
+        "sentiment_nonnull_pct": 80.6,
+        "sentiment_neutral_pct": 66.7,
+        "sentiment_score_nonzero_pct": 0.4,
+        "has_buying_signal_pct": 0.3,
+        "business_signal_pct": 39.7,
+        "urgency_nonnull_pct": 80.6,
+        "key_topics_nonempty_pct": 1.4,
+        "thread_role_nonnull_pct": 1.4
+      },
+      "outcome": {
+        "qb_book_companies": 776,
+        "quotes": {
+          "won": 396,
+          "lost": 823,
+          "linked": 676,
+          "quotes": 1219,
+          "won_value": 730716,
+          "won_linked": 254,
+          "won_value_linked": 521124
+        }
+      },
+      "readiness": {
+        "tier": "READY-WITH-CAVEATS",
+        "reason": "uneven (CV 1.14)",
+        "comparison_ready": true
+      }
+    },
+    "Kenneth Beck-Pedersen": {
+      "is_target_am": true,
+      "has_mailbox": true,
+      "mailbox_count": 1,
+      "coverage": {
+        "emails_total": 30843,
+        "outbound": 11616,
+        "inbound": 19227,
+        "distinct_companies": 1647,
+        "distinct_threads": 13077,
+        "date_first": "2013-07-15",
+        "date_last": "2026-05-16",
+        "last90_emails": 7645,
+        "last30_emails": 462,
+        "pct_classified": 99.9,
+        "pct_intent_nonnull": 85.3,
+        "pct_threaded": 100.0,
+        "pct_threading_header": 57.1,
+        "pct_company_linked": 99.6,
+        "evenness": {
+          "active_months": 152,
+          "cv": 3.1,
+          "first": "2013-07",
+          "last": "2026-05",
+          "min_month": 1,
+          "max_month": 3733
+        }
+      },
+      "structural": {
+        "initiation": {
+          "computable": true,
+          "basis": "emails.is_outbound + canonical_thread_id (first-in-thread direction)",
+          "population_pct": 100.0
+        },
+        "response_latency": {
+          "computable": true,
+          "basis": "email_response_metrics (response_time_seconds, business-hours variant)",
+          "rows": 8592,
+          "pct_of_inbound": 44.7,
+          "bh_population_pct": 99.9
+        },
+        "thread_depth_exchange": {
+          "computable": true,
+          "basis": "emails.canonical_thread_id (emails-per-thread, two-sided exchange). NOT thread_status (mailbox_id 86% NULL).",
+          "threads": 12751,
+          "multi_message_pct": 36.4,
+          "two_sided_exchange_pct": 23.1,
+          "avg_emails_per_thread": 2.4,
+          "median_emails_per_thread": 1.0
+        },
+        "follow_up_cadence": {
+          "computable": true,
+          "basis": "outbound emails over time per thread/contact (derived from sent_date)",
+          "population_pct": 100.0
+        },
+        "resolution": {
+          "computable": true,
+          "basis": "thread_status.status attributed via canonical_thread_id -> plurality mailbox (thread_status.mailbox_id unusable). Status meaningful but ~61% 'dropped' corpus-wide => likely stale, recompute before coaching on it.",
+          "threads_with_status_row": 2720,
+          "status_coverage_of_threads_pct": 21.3,
+          "status_population_pct": 100.0,
+          "status_dist": {
+            "urgent": 190,
+            "closing": 5,
+            "dropped": 35,
+            "ongoing": 291,
+            "overdue": 1,
+            "complete": 114,
+            "escalation": 74,
+            "awaiting_response": 578,
+            "revenue_opportunity": 11,
+            "awaiting_our_response": 1421
+          }
+        }
+      },
+      "content": {
+        "ai_rows": 30822,
+        "intent_nonnull_pct": 85.4,
+        "general_enquiry_pct": 65.1,
+        "sentiment_nonnull_pct": 85.4,
+        "sentiment_neutral_pct": 73.4,
+        "sentiment_score_nonzero_pct": 0.3,
+        "has_buying_signal_pct": 0.1,
+        "business_signal_pct": 22.2,
+        "urgency_nonnull_pct": 85.4,
+        "key_topics_nonempty_pct": 0.7,
+        "thread_role_nonnull_pct": 0.7
+      },
+      "outcome": {
+        "qb_book_companies": 426,
+        "quotes": {
+          "won": 186,
+          "lost": 164,
+          "linked": 22,
+          "quotes": 350,
+          "won_value": 271997,
+          "won_linked": 10,
+          "won_value_linked": 9709
+        }
+      },
+      "readiness": {
+        "tier": "READY-WITH-CAVEATS",
+        "reason": "uneven (CV 3.1)",
+        "comparison_ready": true
+      }
+    },
+    "Mary Serratore-Howe": {
+      "is_target_am": true,
+      "has_mailbox": false,
+      "mailbox_count": 0,
+      "coverage": {
+        "emails_total": 0,
+        "outbound": 0,
+        "inbound": 0,
+        "distinct_companies": 0,
+        "distinct_threads": 0,
+        "date_first": null,
+        "date_last": null,
+        "last90_emails": 0,
+        "last30_emails": 0,
+        "pct_classified": null,
+        "pct_intent_nonnull": null,
+        "pct_threaded": null,
+        "pct_threading_header": null,
+        "pct_company_linked": null,
+        "evenness": {
+          "active_months": 0,
+          "cv": null,
+          "first": null,
+          "last": null
+        }
+      },
+      "structural": {
+        "initiation": {
+          "computable": false,
+          "basis": "emails.is_outbound + canonical_thread_id (first-in-thread direction)",
+          "population_pct": null
+        },
+        "response_latency": {
+          "computable": false,
+          "basis": "email_response_metrics (response_time_seconds, business-hours variant)",
+          "rows": 0,
+          "pct_of_inbound": null,
+          "bh_population_pct": null
+        },
+        "thread_depth_exchange": {
+          "computable": false,
+          "basis": "emails.canonical_thread_id (emails-per-thread, two-sided exchange). NOT thread_status (mailbox_id 86% NULL).",
+          "threads": 0,
+          "multi_message_pct": null,
+          "two_sided_exchange_pct": null,
+          "avg_emails_per_thread": null,
+          "median_emails_per_thread": null
+        },
+        "follow_up_cadence": {
+          "computable": false,
+          "basis": "outbound emails over time per thread/contact (derived from sent_date)",
+          "population_pct": null
+        },
+        "resolution": {
+          "computable": false,
+          "basis": "thread_status.status attributed via canonical_thread_id -> plurality mailbox (thread_status.mailbox_id unusable). Status meaningful but ~61% 'dropped' corpus-wide => likely stale, recompute before coaching on it.",
+          "threads_with_status_row": 0,
+          "status_coverage_of_threads_pct": null,
+          "status_population_pct": null,
+          "status_dist": {}
+        }
+      },
+      "content": {
+        "ai_rows": 0,
+        "intent_nonnull_pct": null,
+        "general_enquiry_pct": null,
+        "sentiment_nonnull_pct": null,
+        "sentiment_neutral_pct": null,
+        "sentiment_score_nonzero_pct": null,
+        "has_buying_signal_pct": null,
+        "business_signal_pct": null,
+        "urgency_nonnull_pct": null,
+        "key_topics_nonempty_pct": null,
+        "thread_role_nonnull_pct": null
+      },
+      "outcome": {
+        "qb_book_companies": 104,
+        "quotes": {
+          "won": 431,
+          "lost": 155,
+          "linked": 15,
+          "quotes": 586,
+          "won_value": 169703,
+          "won_linked": 9,
+          "won_value_linked": 12914
+        }
+      },
+      "readiness": {
+        "tier": "NOT-EMAIL-READY (structural)",
+        "reason": "no mailbox \u2014 every email-derived signal absent by construction; coach only on QB outcomes or via a shared/other-box proxy",
+        "comparison_ready": false
+      }
+    },
+    "Peter Musarra": {
+      "is_target_am": true,
+      "has_mailbox": false,
+      "mailbox_count": 0,
+      "coverage": {
+        "emails_total": 0,
+        "outbound": 0,
+        "inbound": 0,
+        "distinct_companies": 0,
+        "distinct_threads": 0,
+        "date_first": null,
+        "date_last": null,
+        "last90_emails": 0,
+        "last30_emails": 0,
+        "pct_classified": null,
+        "pct_intent_nonnull": null,
+        "pct_threaded": null,
+        "pct_threading_header": null,
+        "pct_company_linked": null,
+        "evenness": {
+          "active_months": 0,
+          "cv": null,
+          "first": null,
+          "last": null
+        }
+      },
+      "structural": {
+        "initiation": {
+          "computable": false,
+          "basis": "emails.is_outbound + canonical_thread_id (first-in-thread direction)",
+          "population_pct": null
+        },
+        "response_latency": {
+          "computable": false,
+          "basis": "email_response_metrics (response_time_seconds, business-hours variant)",
+          "rows": 0,
+          "pct_of_inbound": null,
+          "bh_population_pct": null
+        },
+        "thread_depth_exchange": {
+          "computable": false,
+          "basis": "emails.canonical_thread_id (emails-per-thread, two-sided exchange). NOT thread_status (mailbox_id 86% NULL).",
+          "threads": 0,
+          "multi_message_pct": null,
+          "two_sided_exchange_pct": null,
+          "avg_emails_per_thread": null,
+          "median_emails_per_thread": null
+        },
+        "follow_up_cadence": {
+          "computable": false,
+          "basis": "outbound emails over time per thread/contact (derived from sent_date)",
+          "population_pct": null
+        },
+        "resolution": {
+          "computable": false,
+          "basis": "thread_status.status attributed via canonical_thread_id -> plurality mailbox (thread_status.mailbox_id unusable). Status meaningful but ~61% 'dropped' corpus-wide => likely stale, recompute before coaching on it.",
+          "threads_with_status_row": 0,
+          "status_coverage_of_threads_pct": null,
+          "status_population_pct": null,
+          "status_dist": {}
+        }
+      },
+      "content": {
+        "ai_rows": 0,
+        "intent_nonnull_pct": null,
+        "general_enquiry_pct": null,
+        "sentiment_nonnull_pct": null,
+        "sentiment_neutral_pct": null,
+        "sentiment_score_nonzero_pct": null,
+        "has_buying_signal_pct": null,
+        "business_signal_pct": null,
+        "urgency_nonnull_pct": null,
+        "key_topics_nonempty_pct": null,
+        "thread_role_nonnull_pct": null
+      },
+      "outcome": {
+        "qb_book_companies": 327,
+        "quotes": {
+          "won": 11,
+          "lost": 18,
+          "linked": 9,
+          "quotes": 29,
+          "won_value": 172652,
+          "won_linked": 3,
+          "won_value_linked": 106115
+        }
+      },
+      "readiness": {
+        "tier": "NOT-EMAIL-READY (structural)",
+        "reason": "no mailbox \u2014 every email-derived signal absent by construction; coach only on QB outcomes or via a shared/other-box proxy",
+        "comparison_ready": false
+      }
+    },
+    "__shared_hello__": {
+      "is_target_am": false,
+      "has_mailbox": true,
+      "mailbox_count": 1,
+      "coverage": {
+        "emails_total": 44153,
+        "outbound": 1022,
+        "inbound": 43131,
+        "distinct_companies": 2575,
+        "distinct_threads": 23777,
+        "date_first": "2020-08-18",
+        "date_last": "2026-05-20",
+        "last90_emails": 2203,
+        "last30_emails": 241,
+        "pct_classified": 100.0,
+        "pct_intent_nonnull": 84.0,
+        "pct_threaded": 100.0,
+        "pct_threading_header": 13.6,
+        "pct_company_linked": 99.5,
+        "evenness": {
+          "active_months": 70,
+          "cv": 1.02,
+          "first": "2020-08",
+          "last": "2026-05",
+          "min_month": 23,
+          "max_month": 2998
+        }
+      },
+      "structural": {
+        "initiation": {
+          "computable": true,
+          "basis": "emails.is_outbound + canonical_thread_id (first-in-thread direction)",
+          "population_pct": 100.0
+        },
+        "response_latency": {
+          "computable": true,
+          "basis": "email_response_metrics (response_time_seconds, business-hours variant)",
+          "rows": 1631,
+          "pct_of_inbound": 3.8,
+          "bh_population_pct": 99.6
+        },
+        "thread_depth_exchange": {
+          "computable": true,
+          "basis": "emails.canonical_thread_id (emails-per-thread, two-sided exchange). NOT thread_status (mailbox_id 86% NULL).",
+          "threads": 23523,
+          "multi_message_pct": 28.0,
+          "two_sided_exchange_pct": 2.0,
+          "avg_emails_per_thread": 1.88,
+          "median_emails_per_thread": 1.0
+        },
+        "follow_up_cadence": {
+          "computable": true,
+          "basis": "outbound emails over time per thread/contact (derived from sent_date)",
+          "population_pct": 100.0
+        },
+        "resolution": {
+          "computable": true,
+          "basis": "thread_status.status attributed via canonical_thread_id -> plurality mailbox (thread_status.mailbox_id unusable). Status meaningful but ~61% 'dropped' corpus-wide => likely stale, recompute before coaching on it.",
+          "threads_with_status_row": 1275,
+          "status_coverage_of_threads_pct": 5.4,
+          "status_population_pct": 100.0,
+          "status_dist": {
+            "urgent": 25,
+            "dropped": 859,
+            "ongoing": 55,
+            "overdue": 5,
+            "complete": 2,
+            "escalation": 9,
+            "awaiting_response": 51,
+            "revenue_opportunity": 6,
+            "awaiting_our_response": 263
+          }
+        }
+      },
+      "content": {
+        "ai_rows": 144813,
+        "intent_nonnull_pct": 78.8,
+        "general_enquiry_pct": 54.6,
+        "sentiment_nonnull_pct": 78.8,
+        "sentiment_neutral_pct": 73.0,
+        "sentiment_score_nonzero_pct": 0.0,
+        "has_buying_signal_pct": 0.0,
+        "business_signal_pct": 25.6,
+        "urgency_nonnull_pct": 78.8,
+        "key_topics_nonempty_pct": 0.2,
+        "thread_role_nonnull_pct": 0.2
+      },
+      "outcome": {
+        "qb_book_companies": null,
+        "quotes": {}
+      }
+    },
+    "__other__": {
+      "is_target_am": false,
+      "has_mailbox": true,
+      "mailbox_count": 2,
+      "coverage": {
+        "emails_total": 10706,
+        "outbound": 3730,
+        "inbound": 6976,
+        "distinct_companies": 167,
+        "distinct_threads": 4308,
+        "date_first": "2023-11-07",
+        "date_last": "2026-06-12",
+        "last90_emails": 7690,
+        "last30_emails": 1772,
+        "pct_classified": 99.9,
+        "pct_intent_nonnull": 55.1,
+        "pct_threaded": 100.0,
+        "pct_threading_header": 31.6,
+        "pct_company_linked": 91.3,
+        "evenness": {
+          "active_months": 21,
+          "cv": 1.96,
+          "first": "2023-11",
+          "last": "2026-06",
+          "min_month": 1,
+          "max_month": 3350
+        }
+      },
+      "structural": {
+        "initiation": {
+          "computable": true,
+          "basis": "emails.is_outbound + canonical_thread_id (first-in-thread direction)",
+          "population_pct": 100.0
+        },
+        "response_latency": {
+          "computable": true,
+          "basis": "email_response_metrics (response_time_seconds, business-hours variant)",
+          "rows": 1171,
+          "pct_of_inbound": 16.8,
+          "bh_population_pct": 100.0
+        },
+        "thread_depth_exchange": {
+          "computable": true,
+          "basis": "emails.canonical_thread_id (emails-per-thread, two-sided exchange). NOT thread_status (mailbox_id 86% NULL).",
+          "threads": 4262,
+          "multi_message_pct": 43.8,
+          "two_sided_exchange_pct": 25.7,
+          "avg_emails_per_thread": null,
+          "median_emails_per_thread": null
+        },
+        "follow_up_cadence": {
+          "computable": true,
+          "basis": "outbound emails over time per thread/contact (derived from sent_date)",
+          "population_pct": 100.0
+        },
+        "resolution": {
+          "computable": true,
+          "basis": "thread_status.status attributed via canonical_thread_id -> plurality mailbox (thread_status.mailbox_id unusable). Status meaningful but ~61% 'dropped' corpus-wide => likely stale, recompute before coaching on it.",
+          "threads_with_status_row": 2381,
+          "status_coverage_of_threads_pct": 55.9,
+          "status_population_pct": 100.0,
+          "status_dist": {
+            "urgent": 248,
+            "dropped": 2,
+            "ongoing": 190,
+            "complete": 148,
+            "escalation": 15,
+            "awaiting_response": 532,
+            "revenue_opportunity": 4,
+            "awaiting_our_response": 1240,
+            "overdue": 2
+          }
+        }
+      },
+      "content": {
+        "ai_rows": 10692,
+        "intent_nonnull_pct": 55.1,
+        "general_enquiry_pct": 44.9,
+        "sentiment_nonnull_pct": 55.1,
+        "sentiment_neutral_pct": 48.5,
+        "sentiment_score_nonzero_pct": 0.0,
+        "has_buying_signal_pct": 0.0,
+        "business_signal_pct": 15.6,
+        "urgency_nonnull_pct": 55.1,
+        "key_topics_nonempty_pct": 0.0,
+        "thread_role_nonnull_pct": 0.0
+      },
+      "outcome": {
+        "qb_book_companies": null,
+        "quotes": {}
+      }
+    }
+  },
+  "watch_records": {
+    "Nathan Brown": {
+      "qb_book_companies": 694,
+      "quotes": {
+        "won": 6,
+        "lost": 12,
+        "linked": 7,
+        "quotes": 18,
+        "won_value": 3832,
+        "won_linked": 2,
+        "won_value_linked": 2485
+      },
+      "note": "departed/house name \u2014 present in QB attribution only; not coachable"
+    },
+    "Daniel Hall": {
+      "qb_book_companies": 225,
+      "quotes": {},
+      "note": "departed/house name \u2014 present in QB attribution only; not coachable"
+    },
+    "The Carbon8 Team": {
+      "qb_book_companies": 8193,
+      "quotes": {
+        "won": 8,
+        "lost": 26,
+        "linked": 6,
+        "quotes": 34,
+        "won_value": 18175,
+        "won_linked": 1,
+        "won_value_linked": 8095
+      },
+      "note": "departed/house name \u2014 present in QB attribution only; not coachable"
+    }
+  },
+  "feature_readiness": [
+    {
+      "feature": "thread initiation",
+      "class": "structural",
+      "state": "READY-NOW",
+      "needs": "none",
+      "note": "is_outbound + canonical_thread_id present on ~all threaded email"
+    },
+    {
+      "feature": "response latency (raw + business-hours)",
+      "class": "structural",
+      "state": "READY-NOW (partial population)",
+      "needs": "none for covered subset",
+      "note": "email_response_metrics is 54.6K rows vs ~262K emails \u2014 only paired replies; population per AM reported as % of inbound"
+    },
+    {
+      "feature": "thread depth / exchange count",
+      "class": "structural",
+      "state": "READY-NOW",
+      "needs": "compute from emails (not thread_status)",
+      "note": "emails.canonical_thread_id => emails-per-thread + two-sided exchange. DO NOT use thread_status: its mailbox_id is 86% NULL (only Linda's box), a silent-zero."
+    },
+    {
+      "feature": "follow-up cadence",
+      "class": "structural",
+      "state": "READY-NOW (derived)",
+      "needs": "small aggregation job",
+      "note": "derive from outbound sent_date sequences per thread/contact; no extraction"
+    },
+    {
+      "feature": "resolution / thread status",
+      "class": "structural",
+      "state": "READY-WITH-CAVEAT",
+      "needs": "attribute via canonical_thread_id; consider recompute",
+      "note": "thread_status.status (10 states) covers ~84% of canonical threads but must be joined by canonical_thread_id (mailbox_id unusable). ~61% 'dropped' corpus-wide looks stale."
+    },
+    {
+      "feature": "intent lifecycle",
+      "class": "content",
+      "state": "DEGRADED",
+      "needs": "re-classify general_enquiry catch-all",
+      "note": "intent ~100% populated but general_enquiry dominates (~52% corpus, email_feature_audit); coarse taxonomy limits coaching on intent mix"
+    },
+    {
+      "feature": "sentiment trajectory",
+      "class": "content",
+      "state": "NOT-USABLE",
+      "needs": "numeric score backfill (LOW ROI)",
+      "note": "categorical sentiment ~neutral-degenerate; sentiment_score effectively all-zero"
+    },
+    {
+      "feature": "tone / specificity / consultative-ratio (AM2 coaching)",
+      "class": "content",
+      "state": "DOESN'T-EXIST",
+      "needs": "new LLM pass over OUTBOUND emails",
+      "note": "no tone/structure/specificity fields; pilot before spend (\u00a710.12)"
+    },
+    {
+      "feature": "response substance (Q3)",
+      "class": "content",
+      "state": "DOESN'T-EXIST",
+      "needs": "new LLM pass over reply threads",
+      "note": "needed for relationship-account AMs where volume/cadence don't separate won/lost (project_won_lost_archetype)"
+    },
+    {
+      "feature": "buying / business signal flags + key_topics",
+      "class": "content",
+      "state": "NOT-USABLE (near-empty)",
+      "needs": "re-extract if needed",
+      "note": "measured corpus-wide: has_buying_signal fires on 243/299,069 (0.08%); key_topics non-empty on 1,292 (0.43%). 'Empty at scale' confirmed \u2014 not a per-AM artifact."
+    }
+  ]
+}
