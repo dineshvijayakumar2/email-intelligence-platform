@@ -4,20 +4,30 @@
 
 Syncs email from Gmail and Outlook, runs AI analysis on every email, and surfaces actionable insights about customers, deals, and relationship health — enriched with QuickBase CRM data.
 
+> ## ⚠️ Archived — June 2026
+>
+> The client engagement has concluded; this platform is **no longer in active development or production**. This repository is a **preserved private snapshot**, kept for reference and handoff. For the detailed as-built state, see the living docs: **[PLATFORM_PROGRESS](docs/PLATFORM_PROGRESS.md)** · **[HOW_IT_WORKS](docs/HOW_IT_WORKS.md)** · **[AM_COACHING_LEDGER](docs/AM_COACHING_LEDGER.md)** · **[OUTREACH_PROJECT_LEDGER](docs/OUTREACH_PROJECT_LEDGER.md)**. Database backup & restore: **[DATABASE_BACKUP_RESTORE](docs/DATABASE_BACKUP_RESTORE.md)**.
+
 ---
 
 ## Project Status
 
-| Sprint | Scope | Status |
-|--------|-------|--------|
+| Sprint / Phase | Scope | Status |
+|----------------|-------|--------|
 | Stage 1 | Email extraction (MBOX/PST/OLM), rule-based tagging, Redis, Railway | ✅ Complete (Jan 2026) |
 | Sprint 1 | Auth, RBAC, Gmail/Outlook LIVE sync | ✅ Complete (Feb 2026) |
 | Sprint 2 | 13-step extraction pipeline, 30 analytics endpoints, analytics frontend | ✅ Complete (Feb 2026) |
 | Sprint 3 | QB integration, AI pipeline, strategic digest, prompt system | ✅ Complete (Mar 2026) |
-| Sprint 4 | Sales Intelligence: QB Operations, Customer Profile, Recommendation Engine, Vector AI + Chat Agent | 🔲 In Progress (Mar 2026) |
-| Invite User System | Admin-controlled onboarding, restrict open sign-up | 🔲 Planned |
+| Sprint 4 | Sales Intelligence: QB Operations, Customer Profile, recommendations, Vector AI + Chat Agent | ✅ Complete (Mar 2026) |
+| Post-S4 data & UI | QB email-first matching, CC/BCC linking, canonical threads, TanStack Query/Table, SSE, shadcn/ui migration | ✅ Complete (Apr 2026) |
+| Phase 2 Retrieval | Hybrid retriever (BM25 + vector + RRF), pgvector HNSW, embedding-audit columns | ✅ Complete (Apr 2026) |
+| Insights & Actions Engine | Seasonality, capability rhythm, strike rate, cross-contact gaps, AI Chat Agent, Data Health dashboard | ✅ Core complete (Apr–Jun 2026) |
+| AM Coaching — Tier-A | Structural metrics: exchange velocity, responsiveness, multithreading, follow-up persistence (self-view API) | ✅ Complete (Jun 2026) |
+| AM Coaching — Tier-B content | Discovery / consultative / answer-responsiveness signals | ❌ Validated **hollow** — not shipped (Jun 2026) |
+| Outreach / cross-sell deck | Capability-aware per-AM outreach cards + industry-fit filter | ✅ Shipped (Jun 2026) |
+| AM self-view UI (15.4) · Mgmt view (15.5) · Invite system | Coaching dashboards, comparative view, admin onboarding | 🔲 Planned — not built |
 
-**Production:** Railway · **Backend:** FastAPI (Python 3.13), ~150+ API endpoints · **Frontend:** React/TypeScript, 30+ pages · **Database:** Supabase PostgreSQL, ~34 tables
+**Stack:** Railway (prod) · **Backend:** FastAPI (Python 3.13), ~150+ endpoints · **Frontend:** React/TypeScript — shadcn/ui + Tailwind (migrated off Ant Design), 30+ pages · **Database:** Supabase PostgreSQL (pgvector), ~40 tables
 
 ---
 
@@ -233,6 +243,58 @@ frontend/src/
 
 ---
 
+## Post-Sprint-4 Work (April–June 2026)
+
+After Sprint 4 the platform moved from "data display" toward an **insights & actions** engine, alongside heavy data-integrity and UX work. Full history: [docs/PLATFORM_PROGRESS.md](docs/PLATFORM_PROGRESS.md), [docs/AM_COACHING_LEDGER.md](docs/AM_COACHING_LEDGER.md), [docs/OUTREACH_PROJECT_LEDGER.md](docs/OUTREACH_PROJECT_LEDGER.md).
+
+### Data Integrity & Matching
+- **QB email-first matching** — synced QuickBase "Unique Emails"; email-based matching replaced name-only (RPC batch writes, ~500× fewer HTTP calls)
+- **CC/BCC linking** — all recipients (not just sender/primary) linked to contacts + companies
+- **Canonical thread resolution** — 4-tier signal stack merges threads across mailboxes (`canonical_thread_id`); fixed the `thread_status.mailbox_id` silent-zero (mig 117)
+- **QB formula-tag integration** — 6 QB formula fields (capability / process / machine-tier, etc.) synced, with a platform classifier fallback
+- **QB Match Review UI** (`/manage/quickbase-matches`) — confirm / skip / override fuzzy candidates
+- **Data-quality sprint** — contact↔company link rate 31% → 83.5%; dual-ID contamination fix across 5 tables (migs 118–119); duplicate-company merge (240 groups, FKs repointed); email-count canonicalization (mig 117)
+
+### Platform & UX Upgrades
+- **TanStack Query + Table** replacing the Ant Design data layer (deferred loading, server-side pagination/sort)
+- **SSE streaming** for real-time job progress (WebSocket fallback, Redis-backed)
+- **UI overhaul** — Ant Design → **shadcn/ui + Tailwind** (35+ files; zero antd remaining)
+- **Nav restructure** — Customers / Insights / Manage, with legacy redirects
+
+### Hybrid Retrieval & Vectors
+- **Hybrid retriever** — BM25 + vector + **RRF fusion** (mig 057), configurable weights
+- **pgvector HNSW** on emails, companies, operations, quotes (768-dim) with embedding-audit columns (`embedding_model`, `embedded_at`, mig 097)
+- **BulkIndexManager** — drops/recreates HNSW indexes around large re-embeds
+
+### Insights & Actions Engine ("Sales Intelligence")
+- **Seasonality engine** — monthly/quarterly demand per company (`get_seasonality`)
+- **Capability rhythm** — per-capability reorder interval + overdue detection (`get_capability_rhythm`)
+- **Strike rate** — quote → job conversion, per contact, YoY trend
+- **Cross-contact gap analysis** — capabilities the company buys that a given contact hasn't been quoted for ("untapped capabilities")
+- **AI Chat Agent** (`/insights/agent`) — LangGraph ReAct with 12 tools (portfolio, email/semantic search, company/contact/thread/quote lookup), multi-model
+- **Data Health / IO-budget dashboard** — table sizes, query performance, egress tracking
+- *Market-basket (Level-2) recommendations: framework built, not surfaced*
+
+### Outreach / Cross-Sell Deck (shipped June 2026)
+- **Capability classifier (Layer 1)** corrected — operation-name keyword rules (gate verified vs audit: 242 Embellishment / 183 Hard Cover)
+- **Industry-fit filter** — per-customer buying profile (13-bucket vocabulary) suppresses mismatched pitches, with the suppression reason shown to reps for transparency
+- **Per-AM outreach cards** — 50 capability-ranked opportunities per AM, occasion-based cadence, trailing-12-month revenue, feedback columns; **6 per-AM Word docs shipped**
+
+### AM Communication-Quality Coaching
+- **Tier-A structural metrics (self-referential)** — exchange velocity, responsiveness, multithreading, follow-up persistence: `am_structural_metrics` RPC (mig 126), `am_coaching_service.py`, endpoint `GET /ai/coaching/am/{id}/structural`
+- **Data fixes that unblocked it** — business-hours latency recompute (mig 122; positive-BH 13.4% → 94.3%) and the response-time **canonical-thread pairing fix** (corrected two AMs' latencies ~5–8× by pairing within `canonical_thread_id`, not the provider `thread_id`)
+- **Tier-B content pilot** (discovery / consultative / answer-responsiveness) — **validated HOLLOW**: blind gpt-4o scoring of 100 won + 100 lost emails found won ≈ lost on all three (Cliff's δ ≈ 0, CIs straddle 0). Decision: **do not scale**; the coaching surface stays structural-only
+- AM self-view dashboard (15.4) and management comparative view (15.5): **planned, not built**
+
+### Known Limitations & Not-Shipped (as of archival)
+- **Invite / onboarding system** — designed ([INVITE_USER_SMTPLESS.md](docs/INVITE_USER_SMTPLESS.md)), not built
+- **Digests & embeddings are manual-trigger** — daily/strategic digests and email vectorization run on demand, not on a schedule / not auto-on-arrival
+- **Notifications** — infrastructure built but dispatch disabled
+- **Stalled mailboxes** — two AM mailboxes' OAuth expired mid-May 2026; cross-AM comparisons are flagged unreliable until re-auth
+- **`calculate_all_contact_initiation_ratios`** still shares the provider-`thread_id` bug (lower-severity; fix scoped but not applied)
+
+---
+
 ## Gmail LIVE Sync
 
 | Method | Endpoint | Purpose |
@@ -302,6 +364,10 @@ SELECT update_folder_counts();
 |-----|---------|
 | [docs/CLAUDE.md](docs/CLAUDE.md) | Development guidelines for Claude Code |
 | [docs/PLATFORM_PROGRESS.md](docs/PLATFORM_PROGRESS.md) | Full DB schema, API routers, all features with columns |
+| [docs/HOW_IT_WORKS.md](docs/HOW_IT_WORKS.md) | End-to-end "how each capability works" reference |
+| [docs/AM_COACHING_LEDGER.md](docs/AM_COACHING_LEDGER.md) | AM communication-quality coaching — full decision log |
+| [docs/OUTREACH_PROJECT_LEDGER.md](docs/OUTREACH_PROJECT_LEDGER.md) | Outreach / cross-sell deck — full decision log |
+| [docs/DATABASE_BACKUP_RESTORE.md](docs/DATABASE_BACKUP_RESTORE.md) | Database backup + restore runbook (archival) |
 | [docs/TODO.md](docs/TODO.md) | Active task list + Sprint 4 implementation checklist |
 | [docs/UPDATE_CONTEXT.md](docs/UPDATE_CONTEXT.md) | Session handoff + current sprint status |
 | [docs/INVITE_USER_SMTPLESS.md](docs/INVITE_USER_SMTPLESS.md) | Invite user system design (planned) |
@@ -314,19 +380,19 @@ SELECT update_folder_counts();
 | Layer | Technology |
 |-------|-----------|
 | Backend | FastAPI (Python 3.13), Uvicorn, Pydantic |
-| Database | Supabase PostgreSQL (pgvector for Sprint 4), ~34 tables |
+| Database | Supabase PostgreSQL (pgvector), ~40 tables |
 | Auth | Supabase Auth, PyJWT (ES256/HS256) |
 | Cache | Redis 7.0+ (required) |
 | AI | Claude Haiku/Sonnet (Anthropic) + Gemini 2.0 Flash (Google) |
 | Orchestration | LangChain, LangGraph (ReAct agent) |
-| Embeddings | Google `text-embedding-004` via `langchain-google-genai` (Sprint 4) |
+| Embeddings | 768-dim vectors — Google / OpenAI (configurable), pgvector HNSW |
 | CRM | QuickBase API (6 tables) |
 | Cloud Storage | Google Drive API (OAuth2 streaming) |
-| Frontend | React 18 + TypeScript, Vite, Ant Design 5.x, Recharts |
+| Frontend | React 18 + TypeScript, Vite, shadcn/ui + Tailwind CSS, Recharts |
 | Production | Railway (backend + Redis), Supabase Cloud |
 
 ---
 
-**Stage 1–3 Complete · Sprint 4 In Progress**
+**Stages 1–4 complete · post-launch Insights / Coaching / Outreach work delivered · Tier-B content validated hollow · Archived June 2026**
 
-*Last Updated: March 19, 2026*
+*Last updated: June 2026 — project archived. See [docs/PLATFORM_PROGRESS.md](docs/PLATFORM_PROGRESS.md) and the project ledgers for the full as-built state.*
